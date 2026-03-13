@@ -46,4 +46,7 @@ pub enum PapError {
 
     #[error("serialization error: {0}")]
     Serialization(String),
+
+    #[error("auto-approval policy exceeds mandate scope")]
+    PolicyExceedsMandate,
 }

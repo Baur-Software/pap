@@ -65,11 +65,13 @@ pap/
 ### pap-core
 
 `Scope` — Schema.org action references, deny-by-default. Schema.org describes the what; the protocol governs under what terms.
-`Mandate` — Hierarchical delegation with chain verification. Scope cannot exceed parent. TTL cannot exceed parent.
+`Mandate` — Hierarchical delegation with chain verification. Scope cannot exceed parent. TTL cannot exceed parent. Optional `payment_proof` for privacy-preserving payment (Chaumian ecash / Lightning).
 `DecayState` — Active / Degraded / ReadOnly / Suspended. Progressive scope reduction on non-renewal.
 `CapabilityToken` — Single-use, bound to target DID + action + nonce. Not a billable unit.
 `Session` — State machine: Initiated / Open / Executed / Closed.
 `TransactionReceipt` — Co-signed by both parties. Property references only, never values.
+`ContinuityToken` — Encrypted vendor state handed to the orchestrator at session close. Principal controls TTL and deletion. Vendor retains nothing.
+`AutoApprovalPolicy` — Principal-authored policy for micro-transactions. Cannot exceed mandate scope. Zero additional disclosure by default.
 
 ### pap-credential
 
@@ -112,6 +114,20 @@ The search example demonstrates the full protocol flow with zero personal disclo
 
 The receipt is auditable by both principals. No platform stored anything.
 
+## Protocol Extensions
+
+The following extensions are part of the PAP design but not required for a minimal compliant implementation. Each is evaluated against a single test: does this reduce or expand the attack surface for incumbent platform capture?
+
+**Privacy-Preserving Payment** — Chaumian ecash or Lightning preimage proofs. The vendor receives proof of value transfer but nothing that identifies the payer. Mandates carry an optional `payment_proof` field. Explicitly excluded: fiat-linked rails identifiable by the payment processor.
+
+**Continuity Tokens** — Encrypted vendor state handed to the orchestrator at session close for long-term relationships (returns, support, subscriptions). The principal controls the TTL. The vendor cannot write without the principal presenting the token. Delete the token to sever the relationship.
+
+**Auto-Approval Tiers** — Principal-authored policies for micro-transactions. A policy cannot be more permissive than the underlying mandate. An agent cannot trigger a policy change by requesting it. Default: zero additional disclosure required.
+
+**Hardware-Constrained Principals** — Confidential computing enclaves (Nitro, SEV, TDX) as a declared fallback for principals without sufficient local hardware. Not equivalent to local — the spec is honest about the trust assumption. The enclave provider must not be the same entity as any marketplace agent.
+
+**Institutional Recovery Nodes** — Banks, legal firms, and notaries can participate as threshold nodes in M-of-N social recovery. Cannot be single points of recovery. Explicitly excluded: institutions that are also platform operators, cloud providers, or advertising networks.
+
 ## What This Replaces
 
 **A2A** authenticates agents as platform entities, not as mandate-holders for human principals.
@@ -121,6 +137,14 @@ The receipt is auditable by both principals. No platform stored anything.
 None enforce context minimization at the protocol level. None define session ephemerality as a protocol guarantee. All are compatible with token economy monetization.
 
 PAP has no token economy. The capability token is a single-use cryptographic proof, not a billable unit. When inference runs locally and sessions are ephemeral, there is no persistent relationship to monetize.
+
+## The Capture Test
+
+Any proposal that routes principal context through infrastructure owned by incumbent platforms is out of scope, regardless of the cryptographic framing around it. Every major internet protocol that started with user sovereignty has been captured by the entities with the largest infrastructure footprint.
+
+**Explicit non-goals:** compatibility with token economy monetization; enclave-as-equivalent-to-local; identity recovery through platform operators; payment mechanisms linkable to principal identity; central registries for agent discovery; mandate structures allowing runtime scope expansion; UI standards permitting arbitrary code execution in the orchestrator; any extension that trades trust guarantees for adoption ease.
+
+Good feedback makes the protocol harder to capture. Proposals that introduce new trusted third parties, centralize discovery, soften disclosure enforcement, or create compatibility with metering models should be evaluated as potential capture vectors first and protocol improvements second.
 
 ## Specification
 

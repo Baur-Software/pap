@@ -72,6 +72,12 @@ pub struct Mandate {
     pub decay_state: DecayState,
     /// Issuance timestamp
     pub issued_at: DateTime<Utc>,
+    /// Optional payment proof (Chaumian ecash blind-signed token or
+    /// Lightning preimage). Presented alongside capability token in
+    /// the session handshake. Unlinkable from principal identity.
+    /// See PAP v0.1 spec section 9.1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_proof: Option<String>,
     /// Ed25519 signature by the issuer (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -97,6 +103,7 @@ impl Mandate {
             ttl,
             decay_state: DecayState::Active,
             issued_at: now,
+            payment_proof: None,
             signature: None,
         }
     }
@@ -128,6 +135,7 @@ impl Mandate {
             ttl,
             decay_state: DecayState::Active,
             issued_at: now,
+            payment_proof: None,
             signature: None,
         })
     }
@@ -220,6 +228,7 @@ impl Mandate {
             "disclosure_set": self.disclosure_set,
             "ttl": self.ttl.to_rfc3339(),
             "issued_at": self.issued_at.to_rfc3339(),
+            "payment_proof": self.payment_proof,
         });
         serde_json::to_vec(&canonical).expect("canonical serialization cannot fail")
     }
