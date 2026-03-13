@@ -1,0 +1,15 @@
+[package]
+name = "pap-did"
+description = "DID document generation and session keypairs for the Principal Agent Protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bs58 = { workspace = true }
+thiserror = { workspace = true }
