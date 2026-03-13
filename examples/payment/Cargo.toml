@@ -1,0 +1,19 @@
+[package]
+name = "pap-payment-example"
+description = "Payment PoC demonstrating payment_proof, auto-approval policies, and continuity tokens"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "payment"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-credential = { workspace = true }
+pap-marketplace = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }

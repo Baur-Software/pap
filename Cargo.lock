@@ -408,6 +408,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pap-delegation-chain-example"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pap-core",
+ "pap-did",
+ "serde_json",
+]
+
+[[package]]
 name = "pap-did"
 version = "0.1.0"
 dependencies = [
@@ -437,7 +447,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "pap-payment-example"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pap-core",
+ "pap-credential",
+ "pap-did",
+ "pap-marketplace",
+ "serde_json",
+]
+
+[[package]]
 name = "pap-search-example"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pap-core",
+ "pap-credential",
+ "pap-did",
+ "pap-marketplace",
+ "serde_json",
+]
+
+[[package]]
+name = "pap-travel-booking-example"
 version = "0.1.0"
 dependencies = [
  "chrono",

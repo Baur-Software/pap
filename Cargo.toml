@@ -6,6 +6,9 @@ members = [
     "crates/pap-credential",
     "crates/pap-marketplace",
     "examples/search",
+    "examples/travel-booking",
+    "examples/delegation-chain",
+    "examples/payment",
 ]
 
 [workspace.package]

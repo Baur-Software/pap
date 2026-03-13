@@ -91,13 +91,20 @@ git clone https://github.com/Baur-Software/pap.git
 cd pap
 cargo test
 
-# Run the search example
-cargo run --bin search
+# Run the examples
+cargo run --bin search            # Zero-disclosure search
+cargo run --bin travel-booking    # SD-JWT selective disclosure
+cargo run --bin delegation-chain  # Multi-hop trust hierarchy
+cargo run --bin payment           # Ecash + auto-approval + continuity
 ```
 
-## The Search Example
+## Examples
 
-The search example demonstrates the full protocol flow with zero personal disclosure — the simplest meaningful transaction that proves the trust model works end to end.
+Four end-to-end examples demonstrate the full protocol surface. Each exercises protocol features the others do not.
+
+### `search` — Zero-Disclosure Transaction
+
+The simplest meaningful transaction that proves the trust model works end to end: a web search with zero personal disclosure.
 
 1. Principal generates an Ed25519 keypair and DID document
 2. Principal issues a root mandate to the orchestrator (scope: `schema:SearchAction`)
@@ -113,6 +120,42 @@ The search example demonstrates the full protocol flow with zero personal disclo
 12. Session closes — ephemeral keys discarded, nonce consumed
 
 The receipt is auditable by both principals. No platform stored anything.
+
+### `travel-booking` — Selective Disclosure
+
+A flight booking that requires personal context — proving the disclosure controls work under real constraints.
+
+**Key features demonstrated:**
+- SD-JWT selective disclosure: 2 of 4 claims revealed (name + nationality), email + telephone withheld
+- W3C Verifiable Credential envelope wrapping the mandate
+- Marketplace disclosure filtering: agents requiring more than the mandate permits are filtered out before mandate issuance
+- `session_only` and `no_retention` enforcement on disclosed data
+- Receipt records property references only — "Alice Baur" and "US" never appear in the receipt
+
+### `delegation-chain` — Hierarchical Trust
+
+A 4-level mandate hierarchy for a travel orchestrator decomposing a trip into sub-tasks.
+
+**Key features demonstrated:**
+- Principal → Orchestrator → Trip Planner → Booking Agent (4 levels)
+- Scope narrows at each level: `[Search, Reserve(Flight), Reserve(Lodging), Pay]` → `[Search, Reserve(Flight)]` → `[Reserve(Flight)]`
+- TTL shrinks at each level: 4h → 3h → 2h (broader mandate = shorter life)
+- Full chain verification across all levels (signatures, parent hashes, scope containment, TTL monotonicity)
+- Three rejected delegations: scope exceeded, TTL exceeded, cross-object-type
+- Decay state transitions: Active → Degraded → ReadOnly → Suspended
+- Renewal restores Active from Degraded/ReadOnly; Suspended requires principal review
+
+### `payment` — Protocol Extensions
+
+A digital purchase demonstrating the extensions from PAP spec sections 9.1, 9.3, and 9.4.
+
+**Key features demonstrated:**
+- `payment_proof` field: Chaumian ecash blind-signed token (vendor cannot identify payer)
+- Value-capped scope conditions: `max_value: $50`, `requires_confirmation_above: $20`
+- Auto-approval policies: principal-authored, validated against mandate scope, rejected if policy exceeds mandate
+- $12.99 purchase auto-approved (below $20 threshold), zero personal disclosure
+- Continuity token: encrypted vendor state handed to orchestrator at session close, principal-controlled 90-day TTL
+- Relationship severance: principal deletes the token. Done.
 
 ## Protocol Extensions
 
