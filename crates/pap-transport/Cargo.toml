@@ -1,0 +1,25 @@
+[package]
+name = "pap-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Transport trait and HTTP implementation for PAP agent communication"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-credential = { workspace = true }
+pap-proto = { workspace = true }
+ed25519-dalek = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }

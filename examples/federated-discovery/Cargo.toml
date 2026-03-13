@@ -1,0 +1,21 @@
+[package]
+name = "pap-federated-discovery-example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "federated-discovery"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-marketplace = { workspace = true }
+pap-federation = { workspace = true }
+ed25519-dalek = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }

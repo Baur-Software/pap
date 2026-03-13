@@ -5,10 +5,17 @@ members = [
     "crates/pap-core",
     "crates/pap-credential",
     "crates/pap-marketplace",
+    "crates/pap-webauthn",
+    "crates/pap-proto",
+    "crates/pap-transport",
+    "crates/pap-federation",
     "examples/search",
     "examples/travel-booking",
     "examples/delegation-chain",
     "examples/payment",
+    "examples/webauthn-ceremony",
+    "examples/networked-search",
+    "examples/federated-discovery",
 ]
 
 [workspace.package]
@@ -22,6 +29,10 @@ pap-did = { path = "crates/pap-did" }
 pap-core = { path = "crates/pap-core" }
 pap-credential = { path = "crates/pap-credential" }
 pap-marketplace = { path = "crates/pap-marketplace" }
+pap-webauthn = { path = "crates/pap-webauthn" }
+pap-proto = { path = "crates/pap-proto" }
+pap-transport = { path = "crates/pap-transport" }
+pap-federation = { path = "crates/pap-federation" }
 
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
@@ -34,3 +45,6 @@ multibase = "0.9"
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+reqwest = { version = "=0.12.12", default-features = false, features = ["json", "rustls-tls"] }
