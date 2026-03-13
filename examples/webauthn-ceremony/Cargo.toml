@@ -1,0 +1,19 @@
+[package]
+name = "pap-webauthn-ceremony-example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "webauthn-ceremony"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-webauthn = { workspace = true }
+ed25519-dalek = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }

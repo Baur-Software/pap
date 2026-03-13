@@ -1,0 +1,20 @@
+[package]
+name = "pap-proto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Transport-agnostic protocol messages and envelope for PAP"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-credential = { workspace = true }
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
