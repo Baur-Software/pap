@@ -85,7 +85,7 @@ async fn handle_announce(
         FederationMessage::Announce { advertisement } => {
             let hash = advertisement.hash();
             let mut registry = state.registry.lock().unwrap();
-            let accepted = registry.merge_remote(vec![advertisement]) > 0;
+            let accepted = registry.merge_remote(vec![*advertisement]) > 0;
             Json(FederationMessage::AnnounceAck { hash, accepted })
         }
         _ => Json(FederationMessage::AnnounceAck {
