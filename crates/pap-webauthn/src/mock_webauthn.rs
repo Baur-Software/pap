@@ -62,7 +62,7 @@ pub fn create_credential(rp_id: &str, _user_name: &str) -> (MockWebAuthnSigner, 
     // Credential ID: SHA-256(rp_id || public_key) — deterministic but unique
     let mut hasher = Sha256::new();
     hasher.update(rp_id.as_bytes());
-    hasher.update(&public_key);
+    hasher.update(public_key);
     let credential_id = hasher.finalize().to_vec();
 
     let user_handle = Uuid::new_v4().as_bytes().to_vec();
