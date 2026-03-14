@@ -112,9 +112,7 @@ fn main() {
             &signer
                 .verifying_key()
                 .to_bytes()
-                .iter()
-                .copied()
-                .collect::<Vec<_>>()
+                .to_vec()
                 .try_into()
                 .unwrap_or([0u8; 32]),
         ));
