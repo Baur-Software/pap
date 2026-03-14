@@ -18,7 +18,7 @@ pub enum FederationMessage {
 
     /// Announce a new local advertisement to a peer.
     Announce {
-        advertisement: AgentAdvertisement,
+        advertisement: Box<AgentAdvertisement>,
     },
 
     /// Acknowledge an announcement.
@@ -85,7 +85,7 @@ impl FederationClient {
         );
 
         let msg = FederationMessage::Announce {
-            advertisement: ad.clone(),
+            advertisement: Box::new(ad.clone()),
         };
 
         let resp = self

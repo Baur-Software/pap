@@ -156,7 +156,7 @@ mod tests {
                 advertisements: vec![ad.clone()],
             },
             FederationMessage::Announce {
-                advertisement: ad,
+                advertisement: Box::new(ad),
             },
             FederationMessage::AnnounceAck {
                 hash: "abc123".into(),
