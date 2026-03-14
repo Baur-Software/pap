@@ -1,0 +1,125 @@
+# PAP Receipt Viewer — audit interface for transaction disclosure logs.
+# Proxies to the orchestrator's /receipts endpoint with a formatted view.
+FROM rust:1.82-slim AS builder
+
+WORKDIR /build
+
+RUN mkdir -p /build/receipt-viewer/src && \
+    cat > /build/receipt-viewer/src/main.rs << 'MAIN'
+use axum::response::Html;
+
+#[tokio::main]
+async fn main() {
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:9090".into());
+    let orchestrator_url = std::env::var("ORCHESTRATOR_URL").unwrap_or_else(|_| "http://orchestrator:9010".into());
+
+    println!("PAP Receipt Viewer starting on {bind_addr}");
+    println!("  Orchestrator: {orchestrator_url}");
+
+    let app = axum::Router::new()
+        .route("/", axum::routing::get({
+            let orchestrator_url = orchestrator_url.clone();
+            move || {
+                let orchestrator_url = orchestrator_url.clone();
+                async move {
+                    Html(format!(r#"<!DOCTYPE html>
+<html><head><title>PAP Receipt Viewer</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background: #0a0a0a; color: #e0e0e0; }}
+  h1 {{ color: #4fc3f7; }}
+  .receipt {{ background: #1a1a2e; border: 1px solid #333; border-radius: 8px; padding: 1rem; margin: 1rem 0; }}
+  .zero-disclosure {{ border-left: 4px solid #4caf50; }}
+  .has-disclosure {{ border-left: 4px solid #ff9800; }}
+  .field {{ color: #888; font-size: 0.85em; }}
+  .value {{ color: #e0e0e0; }}
+  .badge {{ display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }}
+  .badge-green {{ background: #1b5e20; color: #a5d6a7; }}
+  .badge-orange {{ background: #e65100; color: #ffcc80; }}
+  pre {{ background: #111; padding: 0.5rem; border-radius: 4px; overflow-x: auto; }}
+  #receipts {{ min-height: 200px; }}
+</style>
+</head><body>
+<h1>PAP Transaction Receipts</h1>
+<p>Disclosure audit trail. Each receipt shows what <em>types</em> of data were shared. Never values.</p>
+<div id="receipts">Loading...</div>
+<script>
+async function loadReceipts() {{
+  try {{
+    const resp = await fetch('/api/receipts');
+    const data = await resp.json();
+    const el = document.getElementById('receipts');
+    if (!data.receipts || data.receipts.length === 0) {{
+      el.innerHTML = '<p style="color:#888">No transactions yet. Send a query to the orchestrator.</p>';
+      return;
+    }}
+    el.innerHTML = data.receipts.map((r, i) => `
+      <div class="receipt ${{r.disclosed_by_initiator && r.disclosed_by_initiator.length > 0 ? 'has-disclosure' : 'zero-disclosure'}}">
+        <div><span class="field">Transaction #${{i+1}}</span> &mdash;
+          <span class="badge ${{r.disclosed_by_initiator && r.disclosed_by_initiator.length > 0 ? 'badge-orange' : 'badge-green'}}">
+            ${{r.disclosed_by_initiator && r.disclosed_by_initiator.length > 0 ? r.disclosed_by_initiator.length + ' fields disclosed' : 'Zero disclosure'}}
+          </span>
+        </div>
+        <div><span class="field">Action:</span> <span class="value">${{r.action}}</span></div>
+        <div><span class="field">Tool:</span> <span class="value">${{r.tool}}</span></div>
+        <div><span class="field">Disclosed by initiator:</span> <span class="value">${{JSON.stringify(r.disclosed_by_initiator)}}</span></div>
+        <div><span class="field">Disclosed by receiver:</span> <span class="value">${{JSON.stringify(r.disclosed_by_receiver)}}</span></div>
+        <div><span class="field">Session DID:</span> <span class="value">${{r.session_did}}</span></div>
+        <div><span class="field">Time:</span> <span class="value">${{r.timestamp}}</span></div>
+      </div>
+    `).join('');
+  }} catch (e) {{
+    document.getElementById('receipts').innerHTML = '<p style="color:#f44336">Error loading receipts: ' + e.message + '</p>';
+  }}
+}}
+loadReceipts();
+setInterval(loadReceipts, 5000);
+</script></body></html>"#))
+                }
+            }
+        }))
+        .route("/api/receipts", axum::routing::get({
+            let orchestrator_url = orchestrator_url.clone();
+            move || {
+                let orchestrator_url = orchestrator_url.clone();
+                async move {
+                    let client = reqwest::Client::new();
+                    match client.get(format!("{orchestrator_url}/receipts")).send().await {
+                        Ok(resp) => {
+                            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+                            axum::Json(body)
+                        }
+                        Err(_) => axum::Json(serde_json::json!({"receipts": [], "error": "orchestrator unavailable"})),
+                    }
+                }
+            }
+        }))
+        .route("/health", axum::routing::get(|| async {
+            axum::Json(serde_json::json!({"status": "ok", "service": "pap-receipt-viewer"}))
+        }));
+
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+    println!("  Listening on {bind_addr}");
+    axum::serve(listener, app).await.unwrap();
+}
+MAIN
+
+RUN cat > /build/receipt-viewer/Cargo.toml << 'TOML'
+[package]
+name = "pap-receipt-viewer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+axum = { version = "0.8", features = ["json"] }
+reqwest = { version = "=0.12.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json = "1"
+TOML
+
+RUN cd /build/receipt-viewer && cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/receipt-viewer/target/release/pap-receipt-viewer /usr/local/bin/
+EXPOSE 9090
+CMD ["pap-receipt-viewer"]

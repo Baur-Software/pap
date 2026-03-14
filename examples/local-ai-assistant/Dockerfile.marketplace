@@ -1,0 +1,58 @@
+# PAP Marketplace Registry — serves as the agent discovery layer.
+# Runs a FederationServer exposing /federation/query, /announce, /peers.
+FROM rust:1.82-slim AS builder
+
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY examples/ examples/
+
+# Build only the marketplace binary
+RUN cargo build --release --bin pap-marketplace-server 2>/dev/null || true
+
+# If no standalone binary, build a small wrapper
+RUN cat > src_main.rs << 'MAIN'
+use std::sync::{Arc, Mutex};
+use pap_federation::{FederatedRegistry, FederationServer};
+
+#[tokio::main]
+async fn main() {
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:9000".into());
+    let port: u16 = bind_addr.split(':').last().unwrap().parse().unwrap();
+
+    println!("PAP Marketplace starting on {bind_addr}");
+
+    let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
+    let server = FederationServer::new(registry, port);
+
+    let router = server.router();
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+    println!("PAP Marketplace listening on {bind_addr}");
+    axum::serve(listener, router).await.unwrap();
+}
+MAIN
+
+# Create a minimal Cargo.toml for the marketplace server
+RUN mkdir -p /build/marketplace-server/src && \
+    mv src_main.rs /build/marketplace-server/src/main.rs && \
+    cat > /build/marketplace-server/Cargo.toml << 'TOML'
+[package]
+name = "pap-marketplace-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pap-federation = { path = "/build/crates/pap-federation" }
+pap-marketplace = { path = "/build/crates/pap-marketplace" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+axum = "0.8"
+TOML
+
+RUN cd /build/marketplace-server && cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/marketplace-server/target/release/pap-marketplace-server /usr/local/bin/
+ENV BIND_ADDR=0.0.0.0:9000
+EXPOSE 9000
+CMD ["pap-marketplace-server"]
