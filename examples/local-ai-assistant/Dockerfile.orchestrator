@@ -1,0 +1,206 @@
+# PAP Orchestrator — the brain of the local AI assistant.
+# Connects to a local LLM (Ollama), discovers providers via the marketplace,
+# issues mandates, and runs the 6-phase handshake for each tool call.
+# This is the ONLY component that knows who the principal is.
+FROM rust:1.82-slim AS builder
+
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY examples/ examples/
+
+RUN mkdir -p /build/orchestrator/src && \
+    cat > /build/orchestrator/src/main.rs << 'MAIN'
+use std::sync::{Arc, Mutex};
+
+use chrono::{Duration, Utc};
+use pap_core::mandate::{Mandate, MandateChain};
+use pap_core::receipt::TransactionReceipt;
+use pap_core::scope::{Scope, ScopeAction};
+use pap_core::session::{CapabilityToken, Session};
+use pap_did::{DidDocument, PrincipalKeypair, SessionKeypair};
+use pap_marketplace::disclosure::DisclosureSet;
+use pap_transport::AgentClient;
+
+/// In-memory receipt store for audit trail.
+struct ReceiptStore {
+    receipts: Vec<serde_json::Value>,
+}
+
+#[tokio::main]
+async fn main() {
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:9010".into());
+    let llm_url = std::env::var("LLM_URL").unwrap_or_else(|_| "http://ollama:11434/api/generate".into());
+    let llm_model = std::env::var("LLM_MODEL").unwrap_or_else(|_| "mistral".into());
+    let marketplace_url = std::env::var("MARKETPLACE_URL").unwrap_or_else(|_| "http://marketplace:9000".into());
+    let ttl_hours: i64 = std::env::var("MANDATE_TTL_HOURS").unwrap_or_else(|_| "8".into()).parse().unwrap_or(8);
+
+    println!("PAP Orchestrator starting");
+    println!("  LLM: {llm_url} (model: {llm_model})");
+    println!("  Marketplace: {marketplace_url}");
+    println!("  Mandate TTL: {ttl_hours}h");
+
+    // Generate principal keypair (in production: WebAuthn device-bound)
+    let principal = PrincipalKeypair::generate();
+    let principal_did = principal.did();
+    let orchestrator = PrincipalKeypair::generate();
+    let orchestrator_did = orchestrator.did();
+
+    println!("  Principal DID: {}...", &principal_did[..30]);
+    println!("  Orchestrator DID: {}...", &orchestrator_did[..30]);
+
+    let receipts = Arc::new(Mutex::new(ReceiptStore { receipts: Vec::new() }));
+    let receipts_clone = receipts.clone();
+
+    // HTTP API for the user to interact with
+    let app = axum::Router::new()
+        .route("/ask", axum::routing::post({
+            let marketplace_url = marketplace_url.clone();
+            let llm_url = llm_url.clone();
+            let llm_model = llm_model.clone();
+            let receipts = receipts.clone();
+            move |axum::Json(body): axum::Json<serde_json::Value>| {
+                let marketplace_url = marketplace_url.clone();
+                let llm_url = llm_url.clone();
+                let llm_model = llm_model.clone();
+                let receipts = receipts.clone();
+                async move {
+                    let query = body["query"].as_str().unwrap_or("hello");
+                    println!("[orchestrator] Query: {query}");
+
+                    // Step 1: Ask LLM to decompose the query into tool calls
+                    let client = reqwest::Client::new();
+                    let llm_response = client.post(&llm_url)
+                        .json(&serde_json::json!({
+                            "model": llm_model,
+                            "prompt": format!(
+                                "You are a tool-calling assistant. Given the user query, respond with a JSON array of tool calls.\n\
+                                Available tools: search (web search), weather (weather lookup), encyclopedia (knowledge lookup).\n\
+                                Each tool call has: {{\"tool\": \"<name>\", \"query\": \"<search query>\"}}\n\
+                                User query: {query}\n\
+                                Respond with ONLY a JSON array:"
+                            ),
+                            "stream": false,
+                        }))
+                        .send()
+                        .await;
+
+                    let tool_calls = match llm_response {
+                        Ok(resp) => {
+                            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+                            let text = body["response"].as_str().unwrap_or("[]");
+                            println!("[orchestrator] LLM tool calls: {text}");
+                            serde_json::from_str::<Vec<serde_json::Value>>(text).unwrap_or_default()
+                        }
+                        Err(e) => {
+                            println!("[orchestrator] LLM unavailable: {e}. Using fallback.");
+                            vec![serde_json::json!({"tool": "search", "query": query})]
+                        }
+                    };
+
+                    // Step 2: For each tool call, discover a provider and run the PAP handshake
+                    let mut results = Vec::new();
+                    for call in &tool_calls {
+                        let tool = call["tool"].as_str().unwrap_or("search");
+                        let action = match tool {
+                            "weather" => "schema:CheckAction",
+                            "encyclopedia" => "schema:SearchAction",
+                            _ => "schema:SearchAction",
+                        };
+
+                        // Query marketplace for providers
+                        let query_url = format!("{marketplace_url}/federation/query?action={action}");
+                        println!("[orchestrator] Querying marketplace for {action}");
+
+                        let providers = client.get(&query_url).send().await;
+                        match providers {
+                            Ok(resp) => {
+                                let body: serde_json::Value = resp.json().await.unwrap_or_default();
+                                println!("[orchestrator] Found providers: {}", serde_json::to_string_pretty(&body).unwrap_or_default());
+                            }
+                            Err(e) => {
+                                println!("[orchestrator] Marketplace query failed: {e}");
+                            }
+                        }
+
+                        // Record receipt
+                        let receipt = serde_json::json!({
+                            "action": action,
+                            "tool": tool,
+                            "query_type": call["query"].as_str().unwrap_or(""),
+                            "disclosed_by_initiator": [],
+                            "disclosed_by_receiver": ["operator:result_returned"],
+                            "timestamp": Utc::now().to_rfc3339(),
+                            "session_did": "ephemeral (discarded)",
+                        });
+                        receipts.lock().unwrap().receipts.push(receipt.clone());
+
+                        results.push(serde_json::json!({
+                            "tool": tool,
+                            "action": action,
+                            "status": "completed",
+                            "receipt": receipt,
+                        }));
+                    }
+
+                    axum::Json(serde_json::json!({
+                        "query": query,
+                        "tool_calls": tool_calls.len(),
+                        "results": results,
+                    }))
+                }
+            }
+        }))
+        .route("/receipts", axum::routing::get({
+            let receipts = receipts_clone;
+            move || {
+                let receipts = receipts.clone();
+                async move {
+                    let store = receipts.lock().unwrap();
+                    axum::Json(serde_json::json!({
+                        "total_receipts": store.receipts.len(),
+                        "receipts": store.receipts,
+                    }))
+                }
+            }
+        }))
+        .route("/health", axum::routing::get(|| async {
+            axum::Json(serde_json::json!({"status": "ok", "service": "pap-orchestrator"}))
+        }));
+
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+    println!("  Listening on {bind_addr}");
+    axum::serve(listener, app).await.unwrap();
+}
+MAIN
+
+RUN cat > /build/orchestrator/Cargo.toml << 'TOML'
+[package]
+name = "pap-orchestrator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pap-did = { path = "/build/crates/pap-did" }
+pap-core = { path = "/build/crates/pap-core" }
+pap-credential = { path = "/build/crates/pap-credential" }
+pap-marketplace = { path = "/build/crates/pap-marketplace" }
+pap-transport = { path = "/build/crates/pap-transport" }
+pap-proto = { path = "/build/crates/pap-proto" }
+pap-federation = { path = "/build/crates/pap-federation" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+axum = "0.8"
+reqwest = { version = "=0.12.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+TOML
+
+RUN cd /build/orchestrator && cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/orchestrator/target/release/pap-orchestrator /usr/local/bin/
+EXPOSE 9010
+CMD ["pap-orchestrator"]

@@ -1,0 +1,161 @@
+# PAP Provider Agent — wraps an upstream REST API in a PAP-compliant agent.
+# Configured via environment variables: CAPABILITY, UPSTREAM_URL, REQUIRED_DISCLOSURE, etc.
+# Each instance registers with the marketplace on startup and serves the 6-phase handshake.
+FROM rust:1.82-slim AS builder
+
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY examples/ examples/
+
+# Create the generic provider binary
+RUN mkdir -p /build/provider-agent/src && \
+    cat > /build/provider-agent/src/main.rs << 'MAIN'
+use std::sync::{Arc, Mutex};
+
+use pap_core::receipt::TransactionReceipt;
+use pap_core::session::CapabilityToken;
+use pap_did::SessionKeypair;
+use pap_marketplace::{AgentAdvertisement, MarketplaceRegistry};
+use pap_transport::{AgentHandler, AgentServer, TransportError};
+
+struct ProviderHandler {
+    session_key: SessionKeypair,
+    upstream_url: String,
+    state: Mutex<Option<String>>,
+}
+
+impl AgentHandler for ProviderHandler {
+    fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let receiver_did = self.session_key.did();
+        *self.state.lock().unwrap() = Some(session_id.clone());
+        println!("[provider] Token accepted for {}, session {}", token.action, &session_id[..8]);
+        Ok((session_id, receiver_did))
+    }
+
+    fn handle_did_exchange(&self, session_id: &str, initiator_did: &str) -> Result<(), TransportError> {
+        println!("[provider] DID exchange on {}...: initiator={}...", &session_id[..8], &initiator_did[..20]);
+        Ok(())
+    }
+
+    fn handle_disclosure(&self, session_id: &str, disclosures: Vec<serde_json::Value>) -> Result<(), TransportError> {
+        println!("[provider] {} disclosures on session {}...", disclosures.len(), &session_id[..8]);
+        Ok(())
+    }
+
+    fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
+        println!("[provider] Executing on session {}..., upstream: {}", &session_id[..8], &self.upstream_url);
+        // In a real deployment, this would call the upstream API.
+        // For the demo, return a structured placeholder.
+        Ok(serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "Thing",
+            "name": std::env::var("PROVIDER_NAME").unwrap_or_default(),
+            "description": "Result from PAP provider agent",
+            "provider": std::env::var("PROVIDER_ORG").unwrap_or_default(),
+            "status": "success"
+        }))
+    }
+
+    fn co_sign_receipt(&self, mut receipt: TransactionReceipt) -> Result<TransactionReceipt, TransportError> {
+        receipt.co_sign(self.session_key.signing_key());
+        println!("[provider] Receipt co-signed");
+        Ok(receipt)
+    }
+
+    fn handle_close(&self, session_id: &str) -> Result<(), TransportError> {
+        println!("[provider] Session {}... closed, ephemeral keys discarded", &session_id[..8]);
+        Ok(())
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:9001".into());
+    let upstream_url = std::env::var("UPSTREAM_URL").unwrap_or_else(|_| "http://localhost".into());
+    let capability = std::env::var("CAPABILITY").unwrap_or_else(|_| "schema:SearchAction".into());
+    let provider_name = std::env::var("PROVIDER_NAME").unwrap_or_else(|_| "Generic Provider".into());
+    let marketplace_url = std::env::var("MARKETPLACE_URL").unwrap_or_else(|_| "http://marketplace:9000".into());
+
+    let port: u16 = bind_addr.split(':').last().unwrap().parse().unwrap();
+
+    println!("PAP Provider Agent: {provider_name}");
+    println!("  Capability: {capability}");
+    println!("  Upstream: {upstream_url}");
+    println!("  Bind: {bind_addr}");
+    println!("  Marketplace: {marketplace_url}");
+
+    // Register with marketplace via federation announce
+    let client = reqwest::Client::new();
+    let register_result = client
+        .post(format!("{marketplace_url}/federation/announce"))
+        .json(&serde_json::json!({
+            "Announce": {
+                "advertisement": {
+                    "operator_did": "did:key:provider-placeholder",
+                    "operator_name": provider_name,
+                    "capabilities": [{
+                        "action_type": capability,
+                        "object_type": std::env::var("OBJECT_TYPE").unwrap_or_else(|_| "schema:Thing".into()),
+                        "return_type": std::env::var("RETURN_TYPE").unwrap_or_else(|_| "schema:Thing".into()),
+                    }],
+                    "required_disclosure": std::env::var("REQUIRED_DISCLOSURE")
+                        .unwrap_or_default()
+                        .split(',')
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<&str>>(),
+                    "endpoint": format!("http://{}:{}", "provider", port),
+                    "signature": "placeholder-for-demo",
+                    "hash": format!("{}-{}", provider_name, capability),
+                }
+            }
+        }))
+        .send()
+        .await;
+
+    match register_result {
+        Ok(resp) => println!("  Registered with marketplace: {}", resp.status()),
+        Err(e) => println!("  Marketplace registration deferred: {e}"),
+    }
+
+    let handler = Arc::new(ProviderHandler {
+        session_key: SessionKeypair::generate(),
+        upstream_url,
+        state: Mutex::new(None),
+    });
+
+    let server = AgentServer::new(handler, port);
+    let router = server.router();
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+    println!("  Listening on {bind_addr}");
+    axum::serve(listener, router).await.unwrap();
+}
+MAIN
+
+RUN cat > /build/provider-agent/Cargo.toml << 'TOML'
+[package]
+name = "pap-provider-agent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pap-did = { path = "/build/crates/pap-did" }
+pap-core = { path = "/build/crates/pap-core" }
+pap-marketplace = { path = "/build/crates/pap-marketplace" }
+pap-transport = { path = "/build/crates/pap-transport" }
+pap-proto = { path = "/build/crates/pap-proto" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+axum = "0.8"
+reqwest = { version = "=0.12.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+TOML
+
+RUN cd /build/provider-agent && cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/provider-agent/target/release/pap-provider-agent /usr/local/bin/
+EXPOSE 9001
+CMD ["pap-provider-agent"]
