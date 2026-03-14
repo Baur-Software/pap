@@ -1,0 +1,35 @@
+# SearXNG settings for PAP demo — private search with no tracking
+use_default_settings: true
+
+general:
+  instance_name: "PAP Private Search"
+
+search:
+  safe_search: 0
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "pap-demo-secret"
+  limiter: false
+
+ui:
+  static_use_hash: true
+
+engines:
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+  - name: wikidata
+    engine: wikidata
+    shortcut: wd
+    disabled: false

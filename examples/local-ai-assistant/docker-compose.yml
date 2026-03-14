@@ -1,0 +1,169 @@
+# PAP Local AI Assistant — Docker Compose Example
+#
+# Demonstrates: A personal AI assistant running a local LLM (Ollama)
+# that uses PAP to query external services with zero identity disclosure.
+#
+# What this proves:
+# - Your AI runs locally. Your prompts never leave your machine.
+# - External tool use goes through PAP's 6-phase handshake.
+# - Each service sees only what the mandate permits (SD-JWT selective disclosure).
+# - Each session uses ephemeral DIDs — services cannot correlate your queries.
+# - Receipts log what *types* of data were shared, never the values.
+#
+# Usage:
+#   docker compose up -d
+#   docker exec ollama ollama pull mistral
+#   curl http://localhost:9010/ask -d '{"query": "What is the weather in Seattle?"}'
+#
+# Architecture:
+#   [You] -> [Ollama LLM] -> [PAP Orchestrator] -> [Marketplace] -> [Provider Agents]
+#                                                        |
+#                                    +------------------+------------------+
+#                                    |                  |                  |
+#                              [SearXNG Agent]   [Weather Agent]   [Wikipedia Agent]
+#                              (private search)   (OpenWeatherMap)  (encyclopedia)
+
+version: "3.9"
+
+services:
+  # ─── Local LLM (your AI, your hardware, your data) ──────────────
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  # ─── Private Search (no query logging, no tracking) ─────────────
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8888:8080"
+    environment:
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-pap-demo-secret}
+    volumes:
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+    restart: unless-stopped
+
+  # ─── PAP Marketplace (agent discovery, disclosure filtering) ────
+  marketplace:
+    build:
+      context: ../../
+      dockerfile: examples/local-ai-assistant/Dockerfile.marketplace
+    ports:
+      - "9000:9000"
+    environment:
+      - RUST_LOG=info
+      - BIND_ADDR=0.0.0.0:9000
+    restart: unless-stopped
+
+  # ─── Provider: Private Search Agent ─────────────────────────────
+  # Wraps SearXNG in a PAP-compliant agent. Requires zero disclosure.
+  search-provider:
+    build:
+      context: ../../
+      dockerfile: examples/local-ai-assistant/Dockerfile.provider
+    ports:
+      - "9001:9001"
+    environment:
+      - PROVIDER_NAME=Private Search Agent
+      - PROVIDER_ORG=SearXNG (self-hosted)
+      - UPSTREAM_URL=http://searxng:8080/search?q={query}&format=json
+      - CAPABILITY=schema:SearchAction
+      - OBJECT_TYPE=schema:WebPage
+      - REQUIRED_DISCLOSURE=  # Empty = zero disclosure required
+      - RETURN_TYPE=schema:SearchResult
+      - BIND_ADDR=0.0.0.0:9001
+      - MARKETPLACE_URL=http://marketplace:9000
+    depends_on:
+      - marketplace
+      - searxng
+    restart: unless-stopped
+
+  # ─── Provider: Weather Agent ────────────────────────────────────
+  # Wraps OpenWeatherMap API. Requires only: location (city name).
+  # Does NOT require: name, email, device ID, or any personal info.
+  weather-provider:
+    build:
+      context: ../../
+      dockerfile: examples/local-ai-assistant/Dockerfile.provider
+    ports:
+      - "9002:9002"
+    environment:
+      - PROVIDER_NAME=Weather Lookup Agent
+      - PROVIDER_ORG=OpenWeatherMap
+      - UPSTREAM_URL=https://api.openweathermap.org/data/2.5/weather?q={location}&appid=${OPENWEATHER_API_KEY:-demo}&units=imperial
+      - CAPABILITY=schema:CheckAction
+      - OBJECT_TYPE=schema:Weather
+      - REQUIRED_DISCLOSURE=schema:Place.name  # Only needs city name
+      - RETURN_TYPE=schema:WeatherReport
+      - BIND_ADDR=0.0.0.0:9002
+      - MARKETPLACE_URL=http://marketplace:9000
+    depends_on:
+      - marketplace
+    restart: unless-stopped
+
+  # ─── Provider: Wikipedia Agent ──────────────────────────────────
+  # Wraps Wikipedia API. Free, public, zero disclosure.
+  wikipedia-provider:
+    build:
+      context: ../../
+      dockerfile: examples/local-ai-assistant/Dockerfile.provider
+    ports:
+      - "9003:9003"
+    environment:
+      - PROVIDER_NAME=Encyclopedia Agent
+      - PROVIDER_ORG=Wikipedia
+      - UPSTREAM_URL=https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={query}&format=json
+      - CAPABILITY=schema:SearchAction
+      - OBJECT_TYPE=schema:Article
+      - REQUIRED_DISCLOSURE=  # Zero disclosure
+      - RETURN_TYPE=schema:Article
+      - BIND_ADDR=0.0.0.0:9003
+      - MARKETPLACE_URL=http://marketplace:9000
+    depends_on:
+      - marketplace
+    restart: unless-stopped
+
+  # ─── PAP Orchestrator Agent ─────────────────────────────────────
+  # The brain: issues mandates, discovers providers, runs handshakes.
+  # This is the ONLY component that knows who you are.
+  orchestrator:
+    build:
+      context: ../../
+      dockerfile: examples/local-ai-assistant/Dockerfile.orchestrator
+    ports:
+      - "9010:9010"
+    environment:
+      - RUST_LOG=info
+      - LLM_URL=http://ollama:11434/api/generate
+      - LLM_MODEL=mistral
+      - MARKETPLACE_URL=http://marketplace:9000
+      - MANDATE_TTL_HOURS=8
+      - AUTO_APPROVE_ZERO_DISCLOSURE=true
+      - BIND_ADDR=0.0.0.0:9010
+    depends_on:
+      - ollama
+      - marketplace
+      - search-provider
+      - weather-provider
+      - wikipedia-provider
+    restart: unless-stopped
+
+  # ─── Receipt Viewer (audit what was disclosed) ──────────────────
+  receipt-viewer:
+    build:
+      context: ../../
+      dockerfile: examples/local-ai-assistant/Dockerfile.receipt-viewer
+    ports:
+      - "9090:9090"
+    environment:
+      - ORCHESTRATOR_URL=http://orchestrator:9010
+      - BIND_ADDR=0.0.0.0:9090
+    depends_on:
+      - orchestrator
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
