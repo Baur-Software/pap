@@ -282,17 +282,19 @@ impl MandateChain {
         }
         root.verify(&keys[0])?;
 
-        for i in 1..self.mandates.len() {
-            let parent = &self.mandates[i - 1];
-            let child = &self.mandates[i];
-
+        for (i, (parent, (child, key))) in self
+            .mandates
+            .iter()
+            .zip(self.mandates.iter().skip(1).zip(keys.iter().skip(1)))
+            .enumerate()
+        {
             let expected_hash = parent.hash();
             match &child.parent_mandate_hash {
                 Some(h) if h == &expected_hash => {}
                 _ => {
                     return Err(PapError::ChainVerificationFailed(format!(
                         "mandate {} parent hash mismatch",
-                        i
+                        i + 1
                     )));
                 }
             }
@@ -305,7 +307,7 @@ impl MandateChain {
                 return Err(PapError::DelegationExceedsTtl);
             }
 
-            child.verify(&keys[i])?;
+            child.verify(key)?;
         }
 
         Ok(())
