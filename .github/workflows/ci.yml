@@ -8,9 +8,17 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -Dwarnings
 
 jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --all-targets
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -23,7 +31,6 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -35,7 +42,6 @@ jobs:
   fmt:
     name: Format
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -44,15 +50,16 @@ jobs:
       - run: cargo fmt --all -- --check
 
   examples:
-    name: Examples
+    name: Run Examples
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --workspace --examples
-      # Run the in-memory examples (they exit after completion)
-      - run: cargo run --bin search
-      - run: cargo run --bin travel-booking
-      - run: cargo run --bin delegation-chain
-      - run: cargo run --bin payment
+      - run: cargo run -p pap-search-example
+      - run: cargo run -p pap-travel-booking-example
+      - run: cargo run -p pap-delegation-chain-example
+      - run: cargo run -p pap-payment-example
+      - run: cargo run -p pap-webauthn-ceremony-example
+      - run: cargo run -p pap-networked-search-example
+      - run: cargo run -p pap-federated-discovery-example

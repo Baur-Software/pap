@@ -29,9 +29,8 @@ mod tests {
         let message = b"hello PAP";
         let sig_bytes = signer.sign(message).unwrap();
 
-        let signature = ed25519_dalek::Signature::from_bytes(
-            sig_bytes.as_slice().try_into().unwrap(),
-        );
+        let signature =
+            ed25519_dalek::Signature::from_bytes(sig_bytes.as_slice().try_into().unwrap());
         signer.verifying_key().verify(message, &signature).unwrap();
     }
 
@@ -94,9 +93,8 @@ mod tests {
         let message = b"sign this with webauthn";
 
         let sig_bytes = signer.sign(message).unwrap();
-        let signature = ed25519_dalek::Signature::from_bytes(
-            sig_bytes.as_slice().try_into().unwrap(),
-        );
+        let signature =
+            ed25519_dalek::Signature::from_bytes(sig_bytes.as_slice().try_into().unwrap());
         signer.verifying_key().verify(message, &signature).unwrap();
     }
 
@@ -116,9 +114,8 @@ mod tests {
             let sig = signer.sign(msg).unwrap();
             assert_eq!(sig.len(), 64);
 
-            let signature = ed25519_dalek::Signature::from_bytes(
-                sig.as_slice().try_into().unwrap(),
-            );
+            let signature =
+                ed25519_dalek::Signature::from_bytes(sig.as_slice().try_into().unwrap());
             signer.verifying_key().verify(msg, &signature).unwrap();
         }
     }

@@ -51,7 +51,10 @@ impl AgentHandler for SearchAgentHandler {
         let mut state = self.state.lock().unwrap();
         state.session_id = Some(session_id.clone());
 
-        println!("  [server] Token accepted, session: {}...", &session_id[..8]);
+        println!(
+            "  [server] Token accepted, session: {}...",
+            &session_id[..8]
+        );
         Ok((session_id, receiver_did))
     }
 
@@ -86,7 +89,10 @@ impl AgentHandler for SearchAgentHandler {
     }
 
     fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        println!("  [server] Executing search on session {}...", &session_id[..8]);
+        println!(
+            "  [server] Executing search on session {}...",
+            &session_id[..8]
+        );
 
         let result = serde_json::json!({
             "@context": "https://schema.org",
@@ -203,7 +209,10 @@ async fn main() {
         } => {
             println!("  [client] Token accepted!");
             println!("  [client] Session ID: {}...", &session_id[..8]);
-            println!("  [client] Receiver session DID: {}...", &receiver_session_did[..20]);
+            println!(
+                "  [client] Receiver session DID: {}...",
+                &receiver_session_did[..20]
+            );
             (session_id, receiver_session_did)
         }
         ProtocolMessage::TokenRejected { reason } => {
@@ -230,10 +239,7 @@ async fn main() {
 
     // Phase 3: Disclosure (zero for search)
     println!("  Phase 3: Disclosure (zero-disclosure search)");
-    let disc_response = client
-        .send_disclosures(&session_id, vec![])
-        .await
-        .unwrap();
+    let disc_response = client.send_disclosures(&session_id, vec![]).await.unwrap();
     match disc_response {
         ProtocolMessage::DisclosureAccepted => {
             println!("  [client] Zero disclosures accepted");
@@ -247,9 +253,7 @@ async fn main() {
     let exec_response = client.request_execution(&session_id).await.unwrap();
     match exec_response {
         ProtocolMessage::ExecutionResult { result } => {
-            let items = result["mainEntity"]["numberOfItems"]
-                .as_i64()
-                .unwrap_or(0);
+            let items = result["mainEntity"]["numberOfItems"].as_i64().unwrap_or(0);
             println!("  [client] Received {} search results", items);
             println!(
                 "  [client] Result:\n{}\n",
@@ -292,10 +296,7 @@ async fn main() {
 
     receipt.co_sign(initiator_session.signing_key());
 
-    let receipt_response = client
-        .exchange_receipt(&session_id, receipt)
-        .await
-        .unwrap();
+    let receipt_response = client.exchange_receipt(&session_id, receipt).await.unwrap();
     match receipt_response {
         ProtocolMessage::ReceiptCoSigned { receipt } => {
             println!("  [client] Receipt co-signed by receiver");

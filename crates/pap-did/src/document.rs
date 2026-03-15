@@ -32,7 +32,10 @@ impl DidDocument {
         let key_id = format!("{did}#key-1");
 
         // publicKeyMultibase: z-base58btc encoded raw public key
-        let multibase = format!("z{}", bs58::encode(keypair.public_key_bytes()).into_string());
+        let multibase = format!(
+            "z{}",
+            bs58::encode(keypair.public_key_bytes()).into_string()
+        );
 
         Self {
             context: "https://www.w3.org/ns/did/v1".into(),
@@ -70,7 +73,10 @@ mod tests {
         assert_eq!(doc.context, "https://www.w3.org/ns/did/v1");
         assert!(doc.id.starts_with("did:key:z"));
         assert_eq!(doc.verification_method.len(), 1);
-        assert_eq!(doc.verification_method[0].key_type, "Ed25519VerificationKey2020");
+        assert_eq!(
+            doc.verification_method[0].key_type,
+            "Ed25519VerificationKey2020"
+        );
         assert_eq!(doc.authentication.len(), 1);
         assert_eq!(doc.authentication[0], doc.verification_method[0].id);
     }

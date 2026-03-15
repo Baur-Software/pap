@@ -1,4 +1,4 @@
-use ed25519_dalek::{Signer, Verifier, VerifyingKey, Signature};
+use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -61,9 +61,8 @@ impl SelectiveDisclosureJwt {
         let bytes = self.commitment_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
-        self.signature = Some(
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()),
-        );
+        self.signature =
+            Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
     }
 
     /// Verify the SD-JWT signature.
@@ -76,14 +75,10 @@ impl SelectiveDisclosureJwt {
         let sig_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(sig_b64)
             .map_err(|e| CredentialError::VerificationFailed(e.to_string()))?;
-        let signature = Signature::from_bytes(
-            sig_bytes
-                .as_slice()
-                .try_into()
-                .map_err(|_| {
-                    CredentialError::VerificationFailed("invalid signature length".into())
-                })?,
-        );
+        let signature =
+            Signature::from_bytes(sig_bytes.as_slice().try_into().map_err(|_| {
+                CredentialError::VerificationFailed("invalid signature length".into())
+            })?);
         let bytes = self.commitment_bytes();
         verifying_key
             .verify(&bytes, &signature)
@@ -188,11 +183,11 @@ mod tests {
             .did();
         let mut claims = HashMap::new();
         claims.insert("schema:name".into(), serde_json::json!("Alice"));
-        claims.insert("schema:email".into(), serde_json::json!("alice@example.com"));
         claims.insert(
-            "schema:nationality".into(),
-            serde_json::json!("Wonderland"),
+            "schema:email".into(),
+            serde_json::json!("alice@example.com"),
         );
+        claims.insert("schema:nationality".into(), serde_json::json!("Wonderland"));
 
         let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
         sd_jwt.sign(&key);

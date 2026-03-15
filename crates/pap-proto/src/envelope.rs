@@ -107,13 +107,11 @@ impl Envelope {
 
     /// Serialize to JSON bytes for transport.
     pub fn to_bytes(&self) -> Result<Vec<u8>, ProtoError> {
-        serde_json::to_vec(self)
-            .map_err(|e| ProtoError::SerializationError(e.to_string()))
+        serde_json::to_vec(self).map_err(|e| ProtoError::SerializationError(e.to_string()))
     }
 
     /// Deserialize from JSON bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProtoError> {
-        serde_json::from_slice(bytes)
-            .map_err(|e| ProtoError::SerializationError(e.to_string()))
+        serde_json::from_slice(bytes).map_err(|e| ProtoError::SerializationError(e.to_string()))
     }
 }

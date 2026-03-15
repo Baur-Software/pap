@@ -153,9 +153,8 @@ impl Mandate {
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
-        self.signature = Some(
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()),
-        );
+        self.signature =
+            Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
     }
 
     /// Verify this mandate's signature against the issuer's public key.

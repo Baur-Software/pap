@@ -137,10 +137,8 @@ mod tests {
         assert_eq!(results[0].name, "Open Agent");
 
         // With name available, both match
-        let results = registry.query_local_satisfiable(
-            "schema:SearchAction",
-            &["schema:Person.name".into()],
-        );
+        let results =
+            registry.query_local_satisfiable("schema:SearchAction", &["schema:Person.name".into()]);
         assert_eq!(results.len(), 2);
     }
 

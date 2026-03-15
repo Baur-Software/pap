@@ -124,10 +124,7 @@ impl AgentClient {
     }
 
     /// Phase 6: Close the session.
-    pub async fn close_session(
-        &self,
-        session_id: &str,
-    ) -> Result<ProtocolMessage, TransportError> {
+    pub async fn close_session(&self, session_id: &str) -> Result<ProtocolMessage, TransportError> {
         let msg = ProtocolMessage::SessionClose {
             session_id: session_id.to_string(),
         };

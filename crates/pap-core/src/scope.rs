@@ -77,7 +77,7 @@ impl Scope {
                 parent_action.action == child_action.action
                     && match (&parent_action.object, &child_action.object) {
                         (Some(p), Some(c)) => p == c,
-                        (None, _) => true,  // parent unconstrained
+                        (None, _) => true,        // parent unconstrained
                         (Some(_), None) => false, // child broader than parent
                     }
             })
@@ -185,15 +185,17 @@ mod tests {
 
     #[test]
     fn child_cannot_exceed_parent_object() {
-        let parent = Scope::new(vec![
-            ScopeAction::with_object("schema:ReserveAction", "schema:Flight"),
-        ]);
+        let parent = Scope::new(vec![ScopeAction::with_object(
+            "schema:ReserveAction",
+            "schema:Flight",
+        )]);
         let child = Scope::new(vec![ScopeAction::new("schema:ReserveAction")]);
         assert!(!parent.contains(&child));
 
-        let child_ok = Scope::new(vec![
-            ScopeAction::with_object("schema:ReserveAction", "schema:Flight"),
-        ]);
+        let child_ok = Scope::new(vec![ScopeAction::with_object(
+            "schema:ReserveAction",
+            "schema:Flight",
+        )]);
         assert!(parent.contains(&child_ok));
     }
 
@@ -216,13 +218,9 @@ mod tests {
 
     #[test]
     fn disclosure_entry_builder() {
-        let entry = DisclosureEntry::new(
-            "schema:Person",
-            vec!["schema:name".into()],
-            vec![],
-        )
-        .session_only()
-        .no_retention();
+        let entry = DisclosureEntry::new("schema:Person", vec!["schema:name".into()], vec![])
+            .session_only()
+            .no_retention();
 
         assert!(entry.session_only);
         assert!(entry.no_retention);

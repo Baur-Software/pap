@@ -91,29 +91,25 @@ impl AgentAdvertisement {
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
-        self.signature = Some(
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()),
-        );
+        self.signature =
+            Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
     }
 
     /// Verify the advertisement's signature.
     pub fn verify(&self, verifying_key: &VerifyingKey) -> Result<(), MarketplaceError> {
-        let sig_b64 = self
-            .signature
-            .as_ref()
-            .ok_or_else(|| {
-                MarketplaceError::InvalidAdvertisement("unsigned advertisement".into())
-            })?;
+        let sig_b64 = self.signature.as_ref().ok_or_else(|| {
+            MarketplaceError::InvalidAdvertisement("unsigned advertisement".into())
+        })?;
         use base64::Engine;
         let sig_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(sig_b64)
-            .map_err(|e: base64::DecodeError| MarketplaceError::VerificationFailed(e.to_string()))?;
+            .map_err(|e: base64::DecodeError| {
+                MarketplaceError::VerificationFailed(e.to_string())
+            })?;
         let sig_array: [u8; 64] = sig_bytes
             .as_slice()
             .try_into()
-            .map_err(|_| {
-                MarketplaceError::VerificationFailed("invalid signature length".into())
-            })?;
+            .map_err(|_| MarketplaceError::VerificationFailed("invalid signature length".into()))?;
         let signature = Signature::from_bytes(&sig_array);
         let bytes = self.canonical_bytes();
         verifying_key
@@ -221,7 +217,10 @@ mod tests {
             &did,
             vec!["schema:ReserveAction".into()],
             vec!["schema:Flight".into()],
-            vec!["schema:Person.name".into(), "schema:Person.nationality".into()],
+            vec![
+                "schema:Person.name".into(),
+                "schema:Person.nationality".into(),
+            ],
             vec!["schema:Flight".into(), "schema:Ticket".into()],
         );
 

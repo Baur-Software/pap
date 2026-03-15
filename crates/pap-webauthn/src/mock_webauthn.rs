@@ -54,7 +54,10 @@ impl MockWebAuthnSigner {
 ///
 /// Returns a signer (which holds the private key) and the credential
 /// (which is the relying party's view of the registered authenticator).
-pub fn create_credential(rp_id: &str, _user_name: &str) -> (MockWebAuthnSigner, WebAuthnCredential) {
+pub fn create_credential(
+    rp_id: &str,
+    _user_name: &str,
+) -> (MockWebAuthnSigner, WebAuthnCredential) {
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
     let public_key = verifying_key.to_bytes();
@@ -165,13 +168,12 @@ pub fn verify_assertion(
     let verifying_key = VerifyingKey::from_bytes(&credential.public_key)
         .map_err(|e| WebAuthnError::InvalidCredential(format!("bad public key: {e}")))?;
 
-    let signature = ed25519_dalek::Signature::from_bytes(
-        response
-            .signature
-            .as_slice()
-            .try_into()
-            .map_err(|_| WebAuthnError::VerificationFailed("invalid signature length".into()))?,
-    );
+    let signature =
+        ed25519_dalek::Signature::from_bytes(
+            response.signature.as_slice().try_into().map_err(|_| {
+                WebAuthnError::VerificationFailed("invalid signature length".into())
+            })?,
+        );
 
     verifying_key
         .verify(&signed_data, &signature)

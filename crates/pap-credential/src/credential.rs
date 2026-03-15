@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{Signer, Verifier, VerifyingKey, Signature};
+use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -60,10 +60,7 @@ impl VerifiableCredential {
                 "https://www.w3.org/ns/credentials/examples/v2".into(),
             ],
             id: format!("urn:uuid:{}", uuid::Uuid::new_v4()),
-            credential_type: vec![
-                "VerifiableCredential".into(),
-                "PAPMandateCredential".into(),
-            ],
+            credential_type: vec!["VerifiableCredential".into(), "PAPMandateCredential".into()],
             issuer: issuer_did.to_string(),
             issuance_date: Utc::now(),
             expiration_date: expiration,
@@ -98,12 +95,10 @@ impl VerifiableCredential {
             .decode(&proof.proof_value)
             .map_err(|e| CredentialError::VerificationFailed(e.to_string()))?;
 
-        let signature = Signature::from_bytes(
-            sig_bytes
-                .as_slice()
-                .try_into()
-                .map_err(|_| CredentialError::VerificationFailed("invalid signature length".into()))?,
-        );
+        let signature =
+            Signature::from_bytes(sig_bytes.as_slice().try_into().map_err(|_| {
+                CredentialError::VerificationFailed("invalid signature length".into())
+            })?);
 
         let bytes = self.canonical_bytes();
         verifying_key
@@ -204,7 +199,9 @@ mod tests {
             None,
         );
 
-        assert!(vc.context.contains(&"https://www.w3.org/ns/credentials/v2".into()));
+        assert!(vc
+            .context
+            .contains(&"https://www.w3.org/ns/credentials/v2".into()));
         assert!(vc.credential_type.contains(&"VerifiableCredential".into()));
         assert!(vc.credential_type.contains(&"PAPMandateCredential".into()));
         assert_eq!(vc.issuer, did);

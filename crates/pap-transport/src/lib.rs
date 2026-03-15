@@ -21,8 +21,14 @@ mod tests {
         registry.register("did:key:zABC", "http://127.0.0.1:8080");
         registry.register("did:key:zDEF", "http://127.0.0.1:8081");
 
-        assert_eq!(registry.resolve("did:key:zABC"), Some("http://127.0.0.1:8080"));
-        assert_eq!(registry.resolve("did:key:zDEF"), Some("http://127.0.0.1:8081"));
+        assert_eq!(
+            registry.resolve("did:key:zABC"),
+            Some("http://127.0.0.1:8080")
+        );
+        assert_eq!(
+            registry.resolve("did:key:zDEF"),
+            Some("http://127.0.0.1:8081")
+        );
         assert_eq!(registry.resolve("did:key:zMissing"), None);
         assert_eq!(registry.len(), 2);
     }

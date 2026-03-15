@@ -43,22 +43,21 @@ fn main() {
     let orchestrator_did = orchestrator.did();
     let ttl = Utc::now() + Duration::hours(2);
 
-    let disclosure_set = DisclosureSet::new(vec![
-        DisclosureEntry::new(
-            "schema:Person",
-            vec!["schema:name".into(), "schema:nationality".into()],
-            vec!["schema:email".into(), "schema:telephone".into()],
-        )
-        .session_only()
-        .no_retention(),
-    ]);
+    let disclosure_set = DisclosureSet::new(vec![DisclosureEntry::new(
+        "schema:Person",
+        vec!["schema:name".into(), "schema:nationality".into()],
+        vec!["schema:email".into(), "schema:telephone".into()],
+    )
+    .session_only()
+    .no_retention()]);
 
     let mut root_mandate = Mandate::issue_root(
         principal_did.clone(),
         orchestrator_did.clone(),
-        Scope::new(vec![
-            ScopeAction::with_object("schema:ReserveAction", "schema:Flight"),
-        ]),
+        Scope::new(vec![ScopeAction::with_object(
+            "schema:ReserveAction",
+            "schema:Flight",
+        )]),
         disclosure_set.clone(),
         ttl,
     );
@@ -103,7 +102,10 @@ fn main() {
         &flight_operator_did,
         vec!["schema:ReserveAction".into()],
         vec!["schema:Flight".into()],
-        vec!["schema:Person.name".into(), "schema:Person.nationality".into()],
+        vec![
+            "schema:Person.name".into(),
+            "schema:Person.nationality".into(),
+        ],
         vec!["schema:Flight".into(), "schema:Ticket".into()],
     );
     flight_ad.sign(flight_operator.signing_key());
@@ -155,11 +157,18 @@ fn main() {
 
     // Query: ReserveAction agents satisfiable by our disclosure profile
     let all_reserve = registry.query_by_action("schema:ReserveAction");
-    println!("  All agents supporting schema:ReserveAction: {}", all_reserve.len());
+    println!(
+        "  All agents supporting schema:ReserveAction: {}",
+        all_reserve.len()
+    );
     for ad in &all_reserve {
         let satisfies = ad.disclosure_satisfiable(&available);
-        println!("    - {} (requires: {:?}) {}", ad.name, ad.requires_disclosure,
-            if satisfies { "✓" } else { "✗" });
+        println!(
+            "    - {} (requires: {:?}) {}",
+            ad.name,
+            ad.requires_disclosure,
+            if satisfies { "✓" } else { "✗" }
+        );
     }
 
     let satisfiable = registry.query_satisfiable("schema:ReserveAction", &available);
@@ -189,9 +198,10 @@ fn main() {
     let mut task_mandate = root_mandate
         .delegate(
             initiating_agent_did.clone(),
-            Scope::new(vec![
-                ScopeAction::with_object("schema:ReserveAction", "schema:Flight"),
-            ]),
+            Scope::new(vec![ScopeAction::with_object(
+                "schema:ReserveAction",
+                "schema:Flight",
+            )]),
             disclosure_set.clone(),
             ttl - Duration::minutes(30),
         )
@@ -203,12 +213,9 @@ fn main() {
 
     // ─── Step 6: Session Handshake ──────────────────────────────────
     println!("Step 6: Session initiation and ephemeral DID exchange");
-    let mut session = Session::initiate(
-        &token,
-        &flight_operator_did,
-        &orchestrator.verifying_key(),
-    )
-    .expect("session initiation failed");
+    let mut session =
+        Session::initiate(&token, &flight_operator_did, &orchestrator.verifying_key())
+            .expect("session initiation failed");
 
     let initiator_session = SessionKeypair::generate();
     let receiver_session = SessionKeypair::generate();
@@ -224,7 +231,10 @@ fn main() {
 
     let mut claims = HashMap::new();
     claims.insert("schema:name".into(), serde_json::json!("Alice Baur"));
-    claims.insert("schema:email".into(), serde_json::json!("alice@example.com"));
+    claims.insert(
+        "schema:email".into(),
+        serde_json::json!("alice@example.com"),
+    );
     claims.insert("schema:nationality".into(), serde_json::json!("US"));
     claims.insert("schema:telephone".into(), serde_json::json!("+1-555-0100"));
 
@@ -274,14 +284,20 @@ fn main() {
         "ticketToken": "qr://SKYBOOK-ABCD1234"
     });
     println!("  State: {}", session.state);
-    println!("  Result:\n{}\n", serde_json::to_string_pretty(&booking_result).unwrap());
+    println!(
+        "  Result:\n{}\n",
+        serde_json::to_string_pretty(&booking_result).unwrap()
+    );
 
     // ─── Step 9: Transaction Receipt ────────────────────────────────
     println!("Step 9: Both agents co-sign transaction receipt");
     let mut receipt = TransactionReceipt::from_session(
         &session,
         // Property REFERENCES only — never the values
-        vec!["schema:Person.name".into(), "schema:Person.nationality".into()],
+        vec![
+            "schema:Person.name".into(),
+            "schema:Person.nationality".into(),
+        ],
         vec!["operator:reservation_confirmed".into()],
         "schema:ReserveAction executed on schema:Flight".into(),
         "schema:FlightReservation returned".into(),
@@ -298,9 +314,15 @@ fn main() {
         .expect("receipt verification failed");
 
     println!("  Receipt co-signed and verified");
-    println!("  Disclosed by initiator: {:?}", receipt.disclosed_by_initiator);
+    println!(
+        "  Disclosed by initiator: {:?}",
+        receipt.disclosed_by_initiator
+    );
     println!("  ↑ Property REFERENCES only — \"Alice Baur\" and \"US\" are NOT in the receipt");
-    println!("  Disclosed by receiver: {:?}", receipt.disclosed_by_receiver);
+    println!(
+        "  Disclosed by receiver: {:?}",
+        receipt.disclosed_by_receiver
+    );
     println!();
 
     // ─── Step 10: Session Close ─────────────────────────────────────

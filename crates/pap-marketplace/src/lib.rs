@@ -6,9 +6,9 @@
 //! for the PoC, with federation planned for later.
 
 mod advertisement;
-mod registry;
 mod error;
+mod registry;
 
 pub use advertisement::AgentAdvertisement;
-pub use registry::MarketplaceRegistry;
 pub use error::MarketplaceError;
+pub use registry::MarketplaceRegistry;

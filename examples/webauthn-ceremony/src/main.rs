@@ -83,8 +83,7 @@ fn main() {
         let did = signer.did();
         let msg = b"trait object interchangeability test";
         let sig = signer.sign(msg).unwrap();
-        let signature =
-            ed25519_dalek::Signature::from_bytes(sig.as_slice().try_into().unwrap());
+        let signature = ed25519_dalek::Signature::from_bytes(sig.as_slice().try_into().unwrap());
         signer.verifying_key().verify(msg, &signature).unwrap();
         println!("  {name}: DID={} sign/verify=passed", &did[..30]);
     }
