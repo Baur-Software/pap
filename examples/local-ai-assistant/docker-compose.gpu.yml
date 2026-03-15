@@ -1,0 +1,27 @@
+# docker-compose.gpu.yml — NVIDIA GPU acceleration for Ollama
+#
+# Overlay this file to enable GPU pass-through. Everything else is unchanged.
+#
+# Requirements:
+#   - NVIDIA GPU with drivers installed
+#   - NVIDIA Container Toolkit
+#     Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#     Quick:   sudo apt install nvidia-container-toolkit && sudo nvidia-ctk runtime configure --runtime=docker
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Verify GPU is visible inside container:
+#   docker exec ollama nvidia-smi
+
+version: "3.9"
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all          # use all available GPUs; set to 1 for single-GPU
+              capabilities: [gpu]
