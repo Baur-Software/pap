@@ -402,6 +402,36 @@
       background: rgba(20,184,166,.1); color: var(--teal);
     }
 
+    /* ─── Python SDK ─────────────────────────────────────────────────── */
+    .python-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+      align-items: start;
+    }
+    .python-features {
+      list-style: none; display: flex; flex-direction: column; gap: 14px;
+    }
+    .python-features li {
+      font-size: .9rem; color: var(--muted); line-height: 1.6;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .python-features li::before {
+      content: ''; display: inline-block;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--amber); flex-shrink: 0; margin-top: 8px;
+    }
+    .python-install {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: .9rem;
+      margin-top: 20px;
+    }
+    .python-install .prompt { color: var(--amber); }
+    .python-install .cmd { color: var(--text); }
+    @media (max-width: 768px) {
+      .python-grid { grid-template-columns: 1fr; }
+    }
+
     /* ─── Examples ────────────────────────────────────────────────────── */
     .examples-grid {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
@@ -687,6 +717,7 @@
       <li><a href="#problem">Problem</a></li>
       <li><a href="#how">Protocol</a></li>
       <li><a href="#stack">Stack</a></li>
+      <li><a href="#python">Python</a></li>
       <li><a href="#examples">Examples</a></li>
       <li><a href="#compare">Compare</a></li>
       <li><a href="#start">Quick Start</a></li>
@@ -731,11 +762,11 @@
         </div>
         <div class="hero-stats">
           <div>
-            <div class="hero-stat-value gradient-text">8</div>
-            <div class="hero-stat-label">Rust Crates</div>
+            <div class="hero-stat-value gradient-text">9</div>
+            <div class="hero-stat-label">Crates (Rust + Python)</div>
           </div>
           <div>
-            <div class="hero-stat-value gradient-text">7</div>
+            <div class="hero-stat-value gradient-text">8</div>
             <div class="hero-stat-label">Working Examples</div>
           </div>
           <div>
@@ -1062,8 +1093,8 @@
     <div class="reveal" style="margin-bottom: 40px;">
       <div class="section-label">Crate Structure</div>
       <h2 class="section-title" id="crates-heading">
-        <span class="gradient-text">8 focused crates.</span><br />
-        Zero bloat.
+        <span class="gradient-text">9 focused crates.</span><br />
+        Rust core + Python SDK.
       </h2>
     </div>
     <div class="crates-grid">
@@ -1099,6 +1130,89 @@
         <div class="crate-name">pap-webauthn</div>
         <div class="crate-desc">WebAuthn signer abstraction with software fallback and mock authenticator for testing.</div>
       </div>
+      <div class="crate-card reveal" style="border-color: rgba(245,158,11,.3);">
+        <div class="crate-name" style="color: var(--amber);">pap-python</div>
+        <div class="crate-desc">Python bindings via PyO3. <code>pip install pap</code>. Full mandate chain, delegation, and verification from Python.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── PYTHON SDK ───────────────────────────────────────────────────── -->
+<section id="python" class="section" aria-labelledby="python-heading">
+  <div class="container">
+    <div class="python-grid">
+      <div class="reveal">
+        <div class="section-label" style="color: var(--amber);">Python SDK</div>
+        <h2 class="section-title" id="python-heading">
+          Full protocol.<br />
+          <span class="gradient-text">From Python.</span>
+        </h2>
+        <p class="section-sub">
+          PyO3 bindings expose the entire Rust core to Python. Generate keypairs,
+          issue mandates, delegate to sub-agents, and verify chains &mdash; all with
+          native Python types and exceptions.
+        </p>
+        <div class="python-install">
+          <span class="prompt">$</span>
+          <span class="cmd">pip install pap</span>
+        </div>
+        <ul class="python-features" style="margin-top: 28px;">
+          <li>PrincipalKeypair &amp; SessionKeypair with <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">did:key</code> derivation</li>
+          <li>Scope, DisclosureSet, and Mandate with full chain verification</li>
+          <li>Typed exceptions: PapSignatureError, PapScopeError, PapSessionError</li>
+          <li>Mixed keypair types in chain verification (principal + session)</li>
+          <li>Build from source with <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">maturin develop</code> &mdash; Rust 1.75+, Python 3.8+</li>
+        </ul>
+      </div>
+
+      <div class="code-block reveal reveal-delay-1">
+        <div class="code-header">
+          <div class="code-dots" aria-hidden="true">
+            <div class="code-dot"></div>
+            <div class="code-dot"></div>
+            <div class="code-dot"></div>
+          </div>
+          <div class="code-title">python</div>
+          <button class="code-copy" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+        </div>
+        <div class="code-body">
+<pre><span class="kw">from</span> pap <span class="kw">import</span> (
+    PrincipalKeypair, SessionKeypair,
+    Scope, ScopeAction, DisclosureSet,
+    Mandate, MandateChain,
+)
+
+<span class="c"># 1. Generate the principal's root keypair</span>
+principal = PrincipalKeypair.generate()
+<span class="fn">print</span>(principal.did())  <span class="c"># did:key:z6Mk...</span>
+
+<span class="c"># 2. Define what the agent is allowed to do</span>
+scope = Scope([ScopeAction(<span class="st">"schema:SearchAction"</span>)])
+ds = DisclosureSet.empty()
+
+<span class="c"># 3. Issue and sign a root mandate</span>
+mandate = Mandate.issue_root(
+    principal.did(), <span class="st">"did:key:zagent"</span>,
+    scope, ds, ttl
+)
+mandate.sign(principal)
+
+<span class="c"># 4. Delegate to a sub-agent (scope &lt;= parent)</span>
+agent_key = SessionKeypair.generate()
+child = mandate.delegate(
+    agent_key.did(), scope, ds, ttl
+)
+child.sign_with_session_key(agent_key)
+
+<span class="c"># 5. Verify the full chain</span>
+chain = MandateChain(mandate)
+chain.push(child)
+chain.verify_chain([principal, agent_key])</pre>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -1111,7 +1225,7 @@
     <div class="reveal" style="margin-bottom: 48px;">
       <div class="section-label">Working Examples</div>
       <h2 class="section-title" id="examples-heading">
-        Seven scenarios.<br />
+        Eight scenarios.<br />
         <span class="gradient-text">Clone and run today.</span>
       </h2>
       <p class="section-sub">
@@ -1194,7 +1308,19 @@
         <div class="example-cmd">cargo run --bin federated-discovery</div>
       </div>
 
-      <div class="example-card reveal" style="grid-column: 1 / -1; max-width: 560px;">
+      <div class="example-card reveal">
+        <div class="example-icon" aria-hidden="true">🔑</div>
+        <div class="example-name">WebAuthn Ceremony</div>
+        <div class="example-desc">Device-bound key generation using the WebAuthn API. Mock authenticator for testing. The production path for principal keypairs.</div>
+        <ul class="example-features">
+          <li>WebAuthn-based key generation</li>
+          <li>Mock authenticator for CI/testing</li>
+          <li>Software fallback signer</li>
+        </ul>
+        <div class="example-cmd">cargo run --bin webauthn-ceremony</div>
+      </div>
+
+      <div class="example-card reveal reveal-delay-1" style="grid-column: 1 / -1; max-width: 560px;">
         <div style="display: flex; gap: 16px; align-items: flex-start;">
           <div class="example-icon" aria-hidden="true">🐳</div>
           <div style="flex: 1;">
@@ -1416,7 +1542,17 @@ curl http://localhost:9090/receipts</pre>
       <div class="section-label">Resources</div>
       <h2 class="section-title" id="resources-heading">Go deeper</h2>
     </div>
-    <div style="display: grid; grid-template-columns: repeat(3,1fr); gap: 20px;" class="reveal reveal-delay-1">
+    <div style="display: grid; grid-template-columns: repeat(2,1fr); gap: 20px;" class="reveal reveal-delay-1">
+      <a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease; border-color: rgba(99,102,241,.3);">
+        <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:10px;">Guide</div>
+        <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Add PAP to Your Existing Agent</div>
+        <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">18-minute integration tutorial. Wrap your REST API as a PAP provider, add client handshake to your orchestrator, register with a marketplace. Python + Rust examples.</div>
+      </a>
+      <a href="https://github.com/Baur-Software/pap/blob/main/crates/pap-python/README.md" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease; border-color: rgba(245,158,11,.3);">
+        <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:10px;">SDK</div>
+        <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Python SDK Documentation</div>
+        <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">PyO3 bindings reference. Keypair generation, mandate issuance, delegation, chain verification, and the full exception hierarchy.</div>
+      </a>
       <a href="https://baursoftware.com/your-agent-works-for-a-platform-it-should-work-for-you/" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease;">
         <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--indigo); margin-bottom:10px;">Blog</div>
         <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Your Agent Works for a Platform. It Should Work for You.</div>
@@ -1427,10 +1563,10 @@ curl http://localhost:9090/receipts</pre>
         <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Show Me the Agents: PAP in Practice</div>
         <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">Real-world scenarios and docker-compose examples. Shopping, medical queries, B2B data rooms.</div>
       </a>
-      <a href="https://baursoftware.com/the-tollbooth-model-is-over/" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease;">
-        <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--indigo); margin-bottom:10px;">Blog</div>
-        <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">The Tollbooth Model Is Over</div>
-        <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">Economic context for why the platform-as-intermediary model fails for agent-driven internet.</div>
+    </div>
+    <div style="text-align: center; margin-top: 20px;" class="reveal reveal-delay-2">
+      <a href="https://baursoftware.com/the-tollbooth-model-is-over/" target="_blank" rel="noopener" style="font-size:.88rem; color:var(--muted);">
+        Also: <span style="color:var(--indigo);">The Tollbooth Model Is Over</span> &mdash; Economic context for agent-driven internet
       </a>
     </div>
   </div>
@@ -1478,8 +1614,10 @@ curl http://localhost:9090/receipts</pre>
         <div class="footer-col-title">Code</div>
         <ul class="footer-links">
           <li><a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub Repository</a></li>
+          <li><a href="#python">Python SDK</a></li>
           <li><a href="#examples">Examples</a></li>
           <li><a href="#start">Quick Start</a></li>
+          <li><a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener">Integration Guide</a></li>
           <li><a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a></li>
         </ul>
       </div>
@@ -1487,9 +1625,9 @@ curl http://localhost:9090/receipts</pre>
         <div class="footer-col-title">Reading</div>
         <ul class="footer-links">
           <li><a href="https://baursoftware.com/pap" target="_blank" rel="noopener">Specification</a></li>
+          <li><a href="https://github.com/Baur-Software/pap/blob/main/crates/pap-python/README.md" target="_blank" rel="noopener">Python SDK Docs</a></li>
           <li><a href="https://baursoftware.com/your-agent-works-for-a-platform-it-should-work-for-you/" target="_blank" rel="noopener">Introduction Post</a></li>
           <li><a href="https://baursoftware.com/show-me-the-agents-pap-in-practice/" target="_blank" rel="noopener">PAP in Practice</a></li>
-          <li><a href="https://baursoftware.com/the-tollbooth-model-is-over/" target="_blank" rel="noopener">The Tollbooth Model</a></li>
         </ul>
       </div>
     </div>
