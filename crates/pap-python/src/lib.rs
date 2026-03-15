@@ -24,16 +24,36 @@ use std::collections::HashMap;
 // Custom exception hierarchy
 // ---------------------------------------------------------------------------
 
-pyo3::create_exception!(pap._pap, PapError, pyo3::exceptions::PyException,
-    "Base exception for all PAP protocol errors.");
-pyo3::create_exception!(pap._pap, PapSignatureError, PapError,
-    "Raised when a signature is missing, invalid, or verification fails.");
-pyo3::create_exception!(pap._pap, PapScopeError, PapError,
-    "Raised when a delegation would exceed the parent scope or TTL.");
-pyo3::create_exception!(pap._pap, PapSessionError, PapError,
-    "Raised on invalid session state transitions or nonce replay.");
-pyo3::create_exception!(pap._pap, PapTransportError, PapError,
-    "Raised on HTTP transport failures or unexpected server responses.");
+pyo3::create_exception!(
+    pap._pap,
+    PapError,
+    pyo3::exceptions::PyException,
+    "Base exception for all PAP protocol errors."
+);
+pyo3::create_exception!(
+    pap._pap,
+    PapSignatureError,
+    PapError,
+    "Raised when a signature is missing, invalid, or verification fails."
+);
+pyo3::create_exception!(
+    pap._pap,
+    PapScopeError,
+    PapError,
+    "Raised when a delegation would exceed the parent scope or TTL."
+);
+pyo3::create_exception!(
+    pap._pap,
+    PapSessionError,
+    PapError,
+    "Raised on invalid session state transitions or nonce replay."
+);
+pyo3::create_exception!(
+    pap._pap,
+    PapTransportError,
+    PapError,
+    "Raised on HTTP transport failures or unexpected server responses."
+);
 
 // ---------------------------------------------------------------------------
 // Global tokio runtime for blocking on async transport methods
@@ -270,9 +290,7 @@ impl Scope {
     #[new]
     fn new(actions: Vec<PyRef<ScopeAction>>) -> Self {
         Self {
-            inner: pap_core::scope::Scope::new(
-                actions.iter().map(|a| a.inner.clone()).collect(),
-            ),
+            inner: pap_core::scope::Scope::new(actions.iter().map(|a| a.inner.clone()).collect()),
         }
     }
 
@@ -305,7 +323,14 @@ impl Scope {
 
     fn __repr__(&self) -> String {
         let actions: Vec<_> = self.inner.actions.iter().map(|a| &a.action).collect();
-        format!("Scope({})", actions.iter().map(|a| format!("'{}'", a)).collect::<Vec<_>>().join(", "))
+        format!(
+            "Scope({})",
+            actions
+                .iter()
+                .map(|a| format!("'{}'", a))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -579,8 +604,7 @@ impl Mandate {
 
     /// Serialize to JSON string.
     fn to_json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&self.inner)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+        serde_json::to_string_pretty(&self.inner).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// Deserialize from JSON string.
@@ -648,7 +672,9 @@ impl Mandate {
     fn __repr__(&self) -> String {
         format!(
             "Mandate(principal='{}', agent='{}', ttl='{}')",
-            self.inner.principal_did, self.inner.agent_did, self.inner.ttl.to_rfc3339()
+            self.inner.principal_did,
+            self.inner.agent_did,
+            self.inner.ttl.to_rfc3339()
         )
     }
 }
@@ -749,7 +775,12 @@ impl CapabilityToken {
     ///   issuer_did: DID of the orchestrator issuing the token
     ///   expires_at: expiry timestamp as ISO 8601 string
     #[staticmethod]
-    fn mint(target_did: String, action: String, issuer_did: String, expires_at: &str) -> PyResult<Self> {
+    fn mint(
+        target_did: String,
+        action: String,
+        issuer_did: String,
+        expires_at: &str,
+    ) -> PyResult<Self> {
         let ttl_dt = parse_dt(expires_at)?;
         Ok(Self {
             inner: pap_core::session::CapabilityToken::mint(target_did, action, issuer_did, ttl_dt),
@@ -776,8 +807,7 @@ impl CapabilityToken {
 
     /// Serialize to JSON string.
     fn to_json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&self.inner)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+        serde_json::to_string_pretty(&self.inner).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// Deserialize from JSON string.
@@ -879,7 +909,11 @@ impl Session {
     }
 
     /// Open the session by recording both parties' ephemeral session DIDs.
-    fn open(&mut self, initiator_session_did: String, receiver_session_did: String) -> PyResult<()> {
+    fn open(
+        &mut self,
+        initiator_session_did: String,
+        receiver_session_did: String,
+    ) -> PyResult<()> {
         self.inner
             .open(initiator_session_did, receiver_session_did)
             .map_err(|e| PapSessionError::new_err(e.to_string()))
@@ -1104,8 +1138,7 @@ impl Disclosure {
 
     /// The claim value as a JSON string.
     fn value_json(&self) -> PyResult<String> {
-        serde_json::to_string(&self.inner.value)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+        serde_json::to_string(&self.inner.value).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// SHA-256 hash of this disclosure (base64url, no padding).
@@ -1167,12 +1200,14 @@ impl SelectiveDisclosureJwt {
     }
 
     /// Verify that the given disclosures match the signed commitments.
-    fn verify_disclosures(&self, disclosures: Vec<PyRef<Disclosure>>, public_key_bytes: &[u8]) -> PyResult<()> {
+    fn verify_disclosures(
+        &self,
+        disclosures: Vec<PyRef<Disclosure>>,
+        public_key_bytes: &[u8],
+    ) -> PyResult<()> {
         let key = verifying_key_from_bytes(public_key_bytes)?;
-        let ds: Vec<pap_credential::Disclosure> = disclosures
-            .iter()
-            .map(|d| d.inner.clone())
-            .collect();
+        let ds: Vec<pap_credential::Disclosure> =
+            disclosures.iter().map(|d| d.inner.clone()).collect();
         self.inner
             .verify_disclosures(&ds, &key)
             .map_err(|e| PyValueError::new_err(e.to_string()))
@@ -1180,7 +1215,11 @@ impl SelectiveDisclosureJwt {
 
     /// List all claim keys in this SD-JWT.
     fn claim_keys(&self) -> Vec<String> {
-        self.inner.claim_keys().into_iter().map(|s| s.to_string()).collect()
+        self.inner
+            .claim_keys()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     #[getter]
@@ -1350,7 +1389,9 @@ impl MarketplaceRegistry {
         self.inner
             .query_by_action(action)
             .into_iter()
-            .map(|inner| AgentAdvertisement { inner: inner.clone() })
+            .map(|inner| AgentAdvertisement {
+                inner: inner.clone(),
+            })
             .collect()
     }
 
@@ -1364,7 +1405,9 @@ impl MarketplaceRegistry {
         self.inner
             .query_satisfiable(action, &available_properties)
             .into_iter()
-            .map(|inner| AgentAdvertisement { inner: inner.clone() })
+            .map(|inner| AgentAdvertisement {
+                inner: inner.clone(),
+            })
             .collect()
     }
 
@@ -1426,7 +1469,10 @@ impl AgentClient {
     /// Phase 2 — Send the initiator's ephemeral session DID. Returns JSON string.
     fn exchange_did(&self, session_id: &str, initiator_session_did: &str) -> PyResult<String> {
         let result = RT
-            .block_on(self.inner.exchange_did(session_id, initiator_session_did.to_string()))
+            .block_on(
+                self.inner
+                    .exchange_did(session_id, initiator_session_did.to_string()),
+            )
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1459,7 +1505,11 @@ impl AgentClient {
     }
 
     /// Phase 5 — Send receipt for co-signing. Returns the co-signed receipt as JSON.
-    fn exchange_receipt(&self, session_id: &str, receipt: PyRef<TransactionReceipt>) -> PyResult<String> {
+    fn exchange_receipt(
+        &self,
+        session_id: &str,
+        receipt: PyRef<TransactionReceipt>,
+    ) -> PyResult<String> {
         let receipt_inner = receipt.inner.clone();
         let result = RT
             .block_on(self.inner.exchange_receipt(session_id, receipt_inner))
@@ -1489,10 +1539,19 @@ impl AgentClient {
 fn _pap(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Exception hierarchy (register before classes so they can be caught in tests)
     m.add("PapError", m.py().get_type_bound::<PapError>())?;
-    m.add("PapSignatureError", m.py().get_type_bound::<PapSignatureError>())?;
+    m.add(
+        "PapSignatureError",
+        m.py().get_type_bound::<PapSignatureError>(),
+    )?;
     m.add("PapScopeError", m.py().get_type_bound::<PapScopeError>())?;
-    m.add("PapSessionError", m.py().get_type_bound::<PapSessionError>())?;
-    m.add("PapTransportError", m.py().get_type_bound::<PapTransportError>())?;
+    m.add(
+        "PapSessionError",
+        m.py().get_type_bound::<PapSessionError>(),
+    )?;
+    m.add(
+        "PapTransportError",
+        m.py().get_type_bound::<PapTransportError>(),
+    )?;
 
     // Keys
     m.add_class::<PrincipalKeypair>()?;
