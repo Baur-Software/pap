@@ -7,6 +7,11 @@
 //! - Marketplace registry query
 //! - AgentClient HTTP transport
 //! - Transaction receipt handling
+#![allow(clippy::useless_conversion)]
+// PyO3 0.22's `create_exception!` macro emits `cfg(gil-refs)` checks that
+// trigger `unexpected_cfgs` on recent Rust nightlies. They are harmless —
+// silence them so `cargo check` has a clean output.
+#![allow(unexpected_cfgs)]
 
 use chrono::DateTime;
 use ed25519_dalek::VerifyingKey;
@@ -14,6 +19,21 @@ use once_cell::sync::Lazy;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::collections::HashMap;
+
+// ---------------------------------------------------------------------------
+// Custom exception hierarchy
+// ---------------------------------------------------------------------------
+
+pyo3::create_exception!(pap._pap, PapError, pyo3::exceptions::PyException,
+    "Base exception for all PAP protocol errors.");
+pyo3::create_exception!(pap._pap, PapSignatureError, PapError,
+    "Raised when a signature is missing, invalid, or verification fails.");
+pyo3::create_exception!(pap._pap, PapScopeError, PapError,
+    "Raised when a delegation would exceed the parent scope or TTL.");
+pyo3::create_exception!(pap._pap, PapSessionError, PapError,
+    "Raised on invalid session state transitions or nonce replay.");
+pyo3::create_exception!(pap._pap, PapTransportError, PapError,
+    "Raised on HTTP transport failures or unexpected server responses.");
 
 // ---------------------------------------------------------------------------
 // Global tokio runtime for blocking on async transport methods
@@ -84,11 +104,6 @@ impl PrincipalKeypair {
     /// Raw 32-byte public key bytes.
     fn public_key_bytes(&self) -> Vec<u8> {
         self.inner.public_key_bytes().to_vec()
-    }
-
-    /// Raw 32-byte secret key bytes (handle with care).
-    fn secret_key_bytes(&self) -> Vec<u8> {
-        self.inner.signing_key().to_bytes().to_vec()
     }
 
     /// Sign arbitrary bytes. Returns 64-byte Ed25519 signature.
@@ -322,22 +337,18 @@ impl DisclosureEntry {
     }
 
     /// Mark this entry as session-only (data valid only during the session).
-    fn session_only(mut slf: PyRefMut<Self>) -> PyRefMut<Self> {
-        let inner = std::mem::replace(
-            &mut slf.inner,
-            pap_core::scope::DisclosureEntry::new("", vec![], vec![]),
-        );
-        slf.inner = inner.session_only();
+    ///
+    /// Returns `self` for chaining: `entry.session_only().no_retention()`
+    fn session_only(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner.session_only = true;
         slf
     }
 
     /// Mark this entry as no-retention (receiver must not store the data).
-    fn no_retention(mut slf: PyRefMut<Self>) -> PyRefMut<Self> {
-        let inner = std::mem::replace(
-            &mut slf.inner,
-            pap_core::scope::DisclosureEntry::new("", vec![], vec![]),
-        );
-        slf.inner = inner.no_retention();
+    ///
+    /// Returns `self` for chaining: `entry.session_only().no_retention()`
+    fn no_retention(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner.no_retention = true;
         slf
     }
 
@@ -516,7 +527,7 @@ impl Mandate {
                 ttl_dt,
             )
             .map(|inner| Mandate { inner })
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapScopeError::new_err(e.to_string()))
     }
 
     /// Sign this mandate with the issuer's keypair.
@@ -534,14 +545,14 @@ impl Mandate {
         let key = verifying_key_from_bytes(public_key_bytes)?;
         self.inner
             .verify(&key)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Verify using a PrincipalKeypair (extracts public key automatically).
     fn verify_with_keypair(&self, keypair: PyRef<PrincipalKeypair>) -> PyResult<()> {
         self.inner
             .verify(&keypair.inner.verifying_key())
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// SHA-256 hash of this mandate's canonical form (base64url, no padding).
@@ -684,15 +695,26 @@ impl MandateChain {
 
     /// Verify the entire chain. Pass one keypair per mandate (root first).
     ///
+    /// Each element may be a `PrincipalKeypair` (root / long-term key) or a
+    /// `SessionKeypair` (ephemeral key used for sub-delegations).
+    ///
     /// Verifies: parent hashes, scope containment, TTL ordering, signatures.
-    fn verify_chain(&self, keypairs: Vec<PyRef<PrincipalKeypair>>) -> PyResult<()> {
-        let keys: Vec<VerifyingKey> = keypairs
-            .iter()
-            .map(|kp| kp.inner.verifying_key())
-            .collect();
+    fn verify_chain(&self, py: Python<'_>, keypairs: Vec<PyObject>) -> PyResult<()> {
+        let mut keys: Vec<VerifyingKey> = Vec::with_capacity(keypairs.len());
+        for kp in &keypairs {
+            if let Ok(pk) = kp.extract::<PyRef<PrincipalKeypair>>(py) {
+                keys.push(pk.inner.verifying_key());
+            } else if let Ok(sk) = kp.extract::<PyRef<SessionKeypair>>(py) {
+                keys.push(sk.inner.verifying_key());
+            } else {
+                return Err(PyValueError::new_err(
+                    "each keypair must be a PrincipalKeypair or SessionKeypair",
+                ));
+            }
+        }
         self.inner
             .verify_chain(&keys)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Number of mandates in the chain.
@@ -829,7 +851,11 @@ pub enum SessionState {
 
 /// A protocol session between two agents, tracking state transitions
 /// and consuming nonces.
-#[pyclass(module = "pap._pap")]
+///
+/// `unsendable` because `pap_core::session::Session` contains a `HashSet`
+/// of consumed nonces which is not `Send`. Each `Session` must be used
+/// from the same Python thread that created it.
+#[pyclass(module = "pap._pap", unsendable)]
 pub struct Session {
     pub(crate) inner: pap_core::session::Session,
 }
@@ -849,28 +875,28 @@ impl Session {
         let key = verifying_key_from_bytes(issuer_public_key_bytes)?;
         pap_core::session::Session::initiate(&token.inner, receiver_did, &key)
             .map(|inner| Session { inner })
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapSessionError::new_err(e.to_string()))
     }
 
     /// Open the session by recording both parties' ephemeral session DIDs.
     fn open(&mut self, initiator_session_did: String, receiver_session_did: String) -> PyResult<()> {
         self.inner
             .open(initiator_session_did, receiver_session_did)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapSessionError::new_err(e.to_string()))
     }
 
     /// Mark the session as executed.
     fn execute(&mut self) -> PyResult<()> {
         self.inner
             .execute()
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapSessionError::new_err(e.to_string()))
     }
 
     /// Close the session.
     fn close(&mut self) -> PyResult<()> {
         self.inner
             .close()
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| PapSessionError::new_err(e.to_string()))
     }
 
     /// Returns True if the given nonce has been consumed in this session.
@@ -1364,6 +1390,9 @@ impl MarketplaceRegistry {
 #[pyclass(module = "pap._pap")]
 pub struct AgentClient {
     inner: pap_transport::AgentClient,
+    /// Stored so `__repr__` can show the URL without needing access to the
+    /// private field inside `pap_transport::AgentClient`.
+    base_url: String,
 }
 
 #[pymethods]
@@ -1373,7 +1402,14 @@ impl AgentClient {
     fn new(base_url: &str) -> Self {
         Self {
             inner: pap_transport::AgentClient::new(base_url),
+            base_url: base_url.to_string(),
         }
+    }
+
+    /// The base URL this client connects to.
+    #[getter]
+    fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     /// Phase 1 — Present a capability token. Returns the response as a JSON string.
@@ -1383,7 +1419,7 @@ impl AgentClient {
         let token_inner = token.inner.clone();
         let result = RT
             .block_on(self.inner.present_token(token_inner))
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -1391,19 +1427,26 @@ impl AgentClient {
     fn exchange_did(&self, session_id: &str, initiator_session_did: &str) -> PyResult<String> {
         let result = RT
             .block_on(self.inner.exchange_did(session_id, initiator_session_did.to_string()))
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
-    /// Phase 3 — Send selective disclosures as a JSON array string. Returns JSON string.
+    /// Phase 3 — Send selective disclosures. Returns JSON string acknowledgement.
     ///
-    /// Pass `"[]"` for zero-disclosure sessions.
-    fn send_disclosures(&self, session_id: &str, disclosures_json: &str) -> PyResult<String> {
-        let disclosures: Vec<serde_json::Value> = serde_json::from_str(disclosures_json)
-            .map_err(|e| PyValueError::new_err(format!("invalid disclosures JSON: {}", e)))?;
-        let result = RT
-            .block_on(self.inner.send_disclosures(session_id, disclosures))
+    /// Pass an empty list (`[]`) for zero-disclosure sessions.
+    fn send_disclosures(
+        &self,
+        session_id: &str,
+        disclosures: Vec<PyRef<Disclosure>>,
+    ) -> PyResult<String> {
+        let values: Vec<serde_json::Value> = disclosures
+            .iter()
+            .map(|d| serde_json::to_value(&d.inner))
+            .collect::<Result<_, _>>()
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let result = RT
+            .block_on(self.inner.send_disclosures(session_id, values))
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -1411,7 +1454,7 @@ impl AgentClient {
     fn request_execution(&self, session_id: &str) -> PyResult<String> {
         let result = RT
             .block_on(self.inner.request_execution(session_id))
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -1420,7 +1463,7 @@ impl AgentClient {
         let receipt_inner = receipt.inner.clone();
         let result = RT
             .block_on(self.inner.exchange_receipt(session_id, receipt_inner))
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -1428,12 +1471,12 @@ impl AgentClient {
     fn close_session(&self, session_id: &str) -> PyResult<String> {
         let result = RT
             .block_on(self.inner.close_session(session_id))
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     fn __repr__(&self) -> String {
-        "AgentClient(...)".to_string()
+        format!("AgentClient(base_url='{}')", self.base_url)
     }
 }
 
@@ -1444,6 +1487,13 @@ impl AgentClient {
 /// Python bindings for the Principal Agent Protocol (PAP).
 #[pymodule]
 fn _pap(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Exception hierarchy (register before classes so they can be caught in tests)
+    m.add("PapError", m.py().get_type_bound::<PapError>())?;
+    m.add("PapSignatureError", m.py().get_type_bound::<PapSignatureError>())?;
+    m.add("PapScopeError", m.py().get_type_bound::<PapScopeError>())?;
+    m.add("PapSessionError", m.py().get_type_bound::<PapSessionError>())?;
+    m.add("PapTransportError", m.py().get_type_bound::<PapTransportError>())?;
+
     // Keys
     m.add_class::<PrincipalKeypair>()?;
     m.add_class::<SessionKeypair>()?;

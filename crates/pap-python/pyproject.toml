@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "pap"
 version = "0.1.0"
 description = "Python SDK for the Principal Agent Protocol (PAP)"
-readme = "../../README.md"
+readme = "README.md"
 license = { text = "MIT OR Apache-2.0" }
 requires-python = ">=3.8"
 keywords = ["ai", "agents", "delegation", "did", "security", "protocol"]

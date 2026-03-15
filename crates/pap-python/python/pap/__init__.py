@@ -27,12 +27,19 @@ Quick start
 >>> mandate.sign(principal)
 >>>
 >>> # 4. Verify
->>> mandate.verify_with_keypair(principal)  # raises ValueError on failure
+>>> mandate.verify_with_keypair(principal)  # raises PapSignatureError on failure
 
-All classes are re-exported from the compiled Rust extension (`pap._pap`).
+All classes and exceptions are re-exported from the compiled Rust extension
+(``pap._pap``).
 """
 
 from pap._pap import (  # noqa: F401
+    # Exceptions
+    PapError,
+    PapSignatureError,
+    PapScopeError,
+    PapSessionError,
+    PapTransportError,
     # Keys
     PrincipalKeypair,
     SessionKeypair,
@@ -65,6 +72,13 @@ from pap._pap import (  # noqa: F401
 )
 
 __all__ = [
+    # Exceptions
+    "PapError",
+    "PapSignatureError",
+    "PapScopeError",
+    "PapSessionError",
+    "PapTransportError",
+    # Keys
     "PrincipalKeypair",
     "SessionKeypair",
     "public_key_to_did",

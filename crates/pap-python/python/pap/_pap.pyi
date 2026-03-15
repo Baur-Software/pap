@@ -7,7 +7,55 @@ Principal Agent Protocol Python SDK.
 
 from __future__ import annotations
 from enum import IntEnum
-from typing import Optional
+from typing import Optional, Union
+
+# ---------------------------------------------------------------------------
+# Exception hierarchy
+# ---------------------------------------------------------------------------
+
+class PapError(Exception):
+    """Base exception for all PAP protocol errors.
+
+    All PAP-specific exceptions inherit from this class, so you can catch
+    the base to handle any protocol error::
+
+        try:
+            mandate.verify(public_key_bytes)
+        except PapError as exc:
+            print(f"PAP error: {exc}")
+    """
+
+class PapSignatureError(PapError):
+    """Raised when a signature is missing, invalid, or verification fails.
+
+    Thrown by: ``Mandate.verify()``, ``Mandate.verify_with_keypair()``,
+    ``MandateChain.verify_chain()``, ``CapabilityToken.verify_signature()``,
+    ``SelectiveDisclosureJwt.verify_signature()``,
+    ``SelectiveDisclosureJwt.verify_disclosures()``,
+    ``TransactionReceipt.verify_both()``.
+    """
+
+class PapScopeError(PapError):
+    """Raised when a delegation would exceed the parent scope or TTL.
+
+    Thrown by: ``Mandate.delegate()``.
+    """
+
+class PapSessionError(PapError):
+    """Raised on invalid session state transitions or nonce replay.
+
+    Thrown by: ``Session.initiate()``, ``Session.open()``,
+    ``Session.execute()``, ``Session.close()``.
+    """
+
+class PapTransportError(PapError):
+    """Raised on HTTP transport failures or unexpected server responses.
+
+    Thrown by all ``AgentClient`` phase methods (``present_token``,
+    ``exchange_did``, ``send_disclosures``, ``request_execution``,
+    ``exchange_receipt``, ``close_session``).
+    """
+
 
 # ---------------------------------------------------------------------------
 # Keys
@@ -40,10 +88,6 @@ class PrincipalKeypair:
 
     def public_key_bytes(self) -> bytes:
         """Return the raw 32-byte public key."""
-        ...
-
-    def secret_key_bytes(self) -> bytes:
-        """Return the raw 32-byte secret key. Handle with care."""
         ...
 
     def sign(self, message: bytes) -> bytes:
@@ -176,6 +220,11 @@ class DisclosureEntry:
 
     Specifies which properties of a Schema.org type an agent holds and
     under what retention constraints they may be shared.
+
+    Supports builder-style chaining::
+
+        entry = DisclosureEntry("schema:Person", ["schema:name"], [])
+        entry = entry.session_only().no_retention()
     """
 
     def __init__(
@@ -194,11 +243,17 @@ class DisclosureEntry:
         ...
 
     def session_only(self) -> DisclosureEntry:
-        """Mark this entry as session-only (data valid only during session)."""
+        """Mark this entry as session-only (data valid only during session).
+
+        Mutates and returns ``self`` for builder-style chaining.
+        """
         ...
 
     def no_retention(self) -> DisclosureEntry:
-        """Mark this entry as no-retention (receiver must not store data)."""
+        """Mark this entry as no-retention (receiver must not store data).
+
+        Mutates and returns ``self`` for builder-style chaining.
+        """
         ...
 
     @property
@@ -311,7 +366,7 @@ class Mandate:
         Enforces: ``child.scope ⊆ self.scope`` and ``child.ttl ≤ self.ttl``.
 
         Raises:
-            ValueError: if scope or TTL would exceed parent.
+            PapScopeError: if scope or TTL would exceed parent.
         """
         ...
 
@@ -327,7 +382,7 @@ class Mandate:
         """Verify this mandate's signature using 32-byte public key bytes.
 
         Raises:
-            ValueError: if the signature is invalid.
+            PapSignatureError: if the signature is invalid.
         """
         ...
 
@@ -335,7 +390,7 @@ class Mandate:
         """Verify this mandate's signature using a PrincipalKeypair.
 
         Raises:
-            ValueError: if the signature is invalid.
+            PapSignatureError: if the signature is invalid.
         """
         ...
 
@@ -442,13 +497,19 @@ class MandateChain:
         """Return the root mandate in the chain."""
         ...
 
-    def verify_chain(self, keypairs: list[PrincipalKeypair]) -> None:
+    def verify_chain(
+        self, keypairs: list[Union[PrincipalKeypair, SessionKeypair]]
+    ) -> None:
         """Verify the entire chain. Pass one keypair per mandate (root first).
+
+        Each element may be a ``PrincipalKeypair`` (root / long-term key) or a
+        ``SessionKeypair`` (ephemeral key used for sub-delegations).
 
         Verifies: parent hashes, scope containment, TTL ordering, and signatures.
 
         Raises:
-            ValueError: if any link in the chain is invalid.
+            PapSignatureError: if any link in the chain is invalid.
+            ValueError: if a keypair has an unexpected type.
         """
         ...
 
@@ -567,6 +628,9 @@ class Session:
 
     Tracks state transitions (Initiated → Open → Executed → Closed)
     and prevents nonce replay.
+
+    Note:
+        ``Session`` is **not thread-safe** — use it from a single Python thread.
     """
 
     @staticmethod
@@ -585,7 +649,7 @@ class Session:
             issuer_public_key_bytes: 32-byte public key of the token issuer
 
         Raises:
-            ValueError: if the token is invalid, expired, or nonce replayed.
+            PapSessionError: if the token is invalid, expired, or nonce replayed.
         """
         ...
 
@@ -593,7 +657,7 @@ class Session:
         """Open the session by recording both parties' ephemeral DIDs.
 
         Raises:
-            ValueError: if the session is not in Initiated state.
+            PapSessionError: if the session is not in Initiated state.
         """
         ...
 
@@ -601,7 +665,7 @@ class Session:
         """Mark the session as executed.
 
         Raises:
-            ValueError: if the session is not in Open state.
+            PapSessionError: if the session is not in Open state.
         """
         ...
 
@@ -609,7 +673,7 @@ class Session:
         """Close the session.
 
         Raises:
-            ValueError: if the session is already Closed.
+            PapSessionError: if the session is already Closed.
         """
         ...
 
@@ -997,6 +1061,11 @@ class AgentClient:
         """
         ...
 
+    @property
+    def base_url(self) -> str:
+        """The base URL this client connects to."""
+        ...
+
     def present_token(self, token: CapabilityToken) -> str:
         """Phase 1 — Present a capability token.
 
@@ -1005,7 +1074,7 @@ class AgentClient:
             "session_id": "...", "receiver_session_did": "..."}``
 
         Raises:
-            ValueError: on connection failure or invalid response.
+            PapTransportError: on connection failure or invalid response.
         """
         ...
 
@@ -1016,22 +1085,24 @@ class AgentClient:
             JSON string acknowledgement.
 
         Raises:
-            ValueError: on connection failure or invalid response.
+            PapTransportError: on connection failure or invalid response.
         """
         ...
 
-    def send_disclosures(self, session_id: str, disclosures_json: str) -> str:
+    def send_disclosures(
+        self, session_id: str, disclosures: list[Disclosure]
+    ) -> str:
         """Phase 3 — Send selective disclosures.
 
         Args:
             session_id: session identifier from phase 1
-            disclosures_json: JSON array of disclosure objects, or ``"[]"`` for zero-disclosure
+            disclosures: list of ``Disclosure`` objects, or ``[]`` for zero-disclosure
 
         Returns:
             JSON string acknowledgement.
 
         Raises:
-            ValueError: on connection failure or invalid response.
+            PapTransportError: on connection failure or invalid response.
         """
         ...
 
@@ -1042,7 +1113,7 @@ class AgentClient:
             JSON string with execution result.
 
         Raises:
-            ValueError: on connection failure or invalid response.
+            PapTransportError: on connection failure or invalid response.
         """
         ...
 
@@ -1053,7 +1124,7 @@ class AgentClient:
             JSON string with co-signed receipt.
 
         Raises:
-            ValueError: on connection failure or invalid response.
+            PapTransportError: on connection failure or invalid response.
         """
         ...
 
@@ -1064,6 +1135,6 @@ class AgentClient:
             JSON string confirmation.
 
         Raises:
-            ValueError: on connection failure or invalid response.
+            PapTransportError: on connection failure or invalid response.
         """
         ...
