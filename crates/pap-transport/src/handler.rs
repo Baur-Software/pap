@@ -11,10 +11,7 @@ use crate::error::TransportError;
 pub trait AgentHandler: Send + Sync {
     /// Phase 1: Validate an incoming capability token.
     /// Returns (session_id, receiver_session_did) on acceptance.
-    fn handle_token(
-        &self,
-        token: CapabilityToken,
-    ) -> Result<(String, String), TransportError>;
+    fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError>;
 
     /// Phase 2: Receive the initiator's ephemeral session DID.
     fn handle_did_exchange(
@@ -31,10 +28,7 @@ pub trait AgentHandler: Send + Sync {
     ) -> Result<(), TransportError>;
 
     /// Phase 4: Execute the requested action and return a result.
-    fn execute(
-        &self,
-        session_id: &str,
-    ) -> Result<serde_json::Value, TransportError>;
+    fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError>;
 
     /// Phase 5: Co-sign a receipt from the initiator.
     fn co_sign_receipt(
@@ -43,8 +37,5 @@ pub trait AgentHandler: Send + Sync {
     ) -> Result<TransactionReceipt, TransportError>;
 
     /// Phase 6: Handle session close.
-    fn handle_close(
-        &self,
-        session_id: &str,
-    ) -> Result<(), TransportError>;
+    fn handle_close(&self, session_id: &str) -> Result<(), TransportError>;
 }

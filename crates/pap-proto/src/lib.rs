@@ -134,13 +134,7 @@ mod tests {
     #[test]
     fn envelope_sequence_preserved() {
         for seq in [0, 1, 42, u64::MAX] {
-            let env = Envelope::new(
-                "s",
-                "a",
-                "b",
-                seq,
-                ProtocolMessage::SessionClosed,
-            );
+            let env = Envelope::new("s", "a", "b", seq, ProtocolMessage::SessionClosed);
             let bytes = env.to_bytes().unwrap();
             let restored = Envelope::from_bytes(&bytes).unwrap();
             assert_eq!(restored.sequence, seq);
@@ -156,8 +150,14 @@ mod tests {
             .message_type(),
             "TokenPresentation"
         );
-        assert_eq!(ProtocolMessage::SessionDidAck.message_type(), "SessionDidAck");
-        assert_eq!(ProtocolMessage::SessionClosed.message_type(), "SessionClosed");
+        assert_eq!(
+            ProtocolMessage::SessionDidAck.message_type(),
+            "SessionDidAck"
+        );
+        assert_eq!(
+            ProtocolMessage::SessionClosed.message_type(),
+            "SessionClosed"
+        );
     }
 
     fn dummy_token() -> CapabilityToken {

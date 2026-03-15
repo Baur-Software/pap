@@ -119,7 +119,10 @@ fn main() {
     task_mandate.sign(orchestrator.signing_key());
     println!("  Initiating agent DID: {initiating_agent_did}");
     println!("  Scope: [schema:SearchAction]");
-    println!("  Parent mandate hash: {}", task_mandate.parent_mandate_hash.as_ref().unwrap());
+    println!(
+        "  Parent mandate hash: {}",
+        task_mandate.parent_mandate_hash.as_ref().unwrap()
+    );
     println!();
 
     // Build and verify the mandate chain
@@ -127,25 +130,22 @@ fn main() {
         mandates: vec![root_mandate.clone(), task_mandate.clone()],
     };
     chain
-        .verify_chain(&[
-            principal.verifying_key(),
-            orchestrator.verifying_key(),
-        ])
+        .verify_chain(&[principal.verifying_key(), orchestrator.verifying_key()])
         .expect("mandate chain verification failed");
     println!("  Mandate chain verified: root -> orchestrator -> initiating agent");
     println!();
 
     // ─── Step 6: Token Presentation ─────────────────────────────────
     println!("Step 6: Initiating agent presents capability token to search agent");
-    let mut session = Session::initiate(
-        &token,
-        &search_operator_did,
-        &orchestrator.verifying_key(),
-    )
-    .expect("session initiation failed");
+    let mut session =
+        Session::initiate(&token, &search_operator_did, &orchestrator.verifying_key())
+            .expect("session initiation failed");
     println!("  Session ID: {}", session.id);
     println!("  State: {}", session.state);
-    println!("  Nonce consumed: {}", session.is_nonce_consumed(&token.nonce));
+    println!(
+        "  Nonce consumed: {}",
+        session.is_nonce_consumed(&token.nonce)
+    );
     println!();
 
     // ─── Step 7: Ephemeral Session DID Exchange ─────────────────────
@@ -197,7 +197,10 @@ fn main() {
         }
     });
     println!("  State: {}", session.state);
-    println!("  Results:\n{}\n", serde_json::to_string_pretty(&search_results).unwrap());
+    println!(
+        "  Results:\n{}\n",
+        serde_json::to_string_pretty(&search_results).unwrap()
+    );
 
     // ─── Step 10: Transaction Receipt ───────────────────────────────
     println!("Step 10: Both agents co-sign transaction receipt");
@@ -221,8 +224,14 @@ fn main() {
         )
         .expect("receipt verification failed");
     println!("  Receipt co-signed and verified");
-    println!("  Disclosed by initiator: {:?} (nothing)", receipt.disclosed_by_initiator);
-    println!("  Disclosed by receiver: {:?}", receipt.disclosed_by_receiver);
+    println!(
+        "  Disclosed by initiator: {:?} (nothing)",
+        receipt.disclosed_by_initiator
+    );
+    println!(
+        "  Disclosed by receiver: {:?}",
+        receipt.disclosed_by_receiver
+    );
     println!();
 
     // ─── Step 11: Session Close ─────────────────────────────────────

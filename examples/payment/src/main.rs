@@ -34,23 +34,17 @@ fn main() {
 
     // Scope includes PayAction with value conditions
     let mut pay_action = ScopeAction::new("schema:PayAction");
-    pay_action.conditions.insert(
-        "max_value".into(),
-        serde_json::json!(50),
-    );
-    pay_action.conditions.insert(
-        "currency".into(),
-        serde_json::json!("USD"),
-    );
-    pay_action.conditions.insert(
-        "requires_confirmation_above".into(),
-        serde_json::json!(20),
-    );
+    pay_action
+        .conditions
+        .insert("max_value".into(), serde_json::json!(50));
+    pay_action
+        .conditions
+        .insert("currency".into(), serde_json::json!("USD"));
+    pay_action
+        .conditions
+        .insert("requires_confirmation_above".into(), serde_json::json!(20));
 
-    let mandate_scope = Scope::new(vec![
-        ScopeAction::new("schema:SearchAction"),
-        pay_action,
-    ]);
+    let mandate_scope = Scope::new(vec![ScopeAction::new("schema:SearchAction"), pay_action]);
 
     let mut root_mandate = Mandate::issue_root(
         principal_did.clone(),
@@ -63,7 +57,9 @@ fn main() {
     // Attach a payment proof — a blind-signed Chaumian ecash token
     // In production this would be a real token from a mint.
     // The vendor receives proof of value transfer but nothing that identifies the payer.
-    root_mandate.payment_proof = Some("ecash:blind:v1:mint=example.com:amount=50:token=ZGVtby1ibGluZC1zaWduZWQtdG9rZW4".into());
+    root_mandate.payment_proof = Some(
+        "ecash:blind:v1:mint=example.com:amount=50:token=ZGVtby1ibGluZC1zaWduZWQtdG9rZW4".into(),
+    );
     root_mandate.sign(principal.signing_key());
 
     println!("  Principal DID: {principal_did}");
@@ -90,20 +86,28 @@ fn main() {
     .with_max_value(20.0);
 
     // Both policies must be subsets of the mandate scope
-    search_policy.validate_against_mandate(&mandate_scope).unwrap();
+    search_policy
+        .validate_against_mandate(&mandate_scope)
+        .unwrap();
     pay_policy.validate_against_mandate(&mandate_scope).unwrap();
 
     println!("  Policy 1: \"{}\"", search_policy.name);
     println!("    Scope: [SearchAction]");
     println!("    Max value: none (search has no monetary value)");
-    println!("    Zero additional disclosure: {}", search_policy.zero_additional_disclosure);
+    println!(
+        "    Zero additional disclosure: {}",
+        search_policy.zero_additional_disclosure
+    );
     println!("    Validated against mandate: ✓");
     println!();
 
     println!("  Policy 2: \"{}\"", pay_policy.name);
     println!("    Scope: [PayAction]");
     println!("    Max value: ${:.2}", pay_policy.max_value.unwrap());
-    println!("    Zero additional disclosure: {}", pay_policy.zero_additional_disclosure);
+    println!(
+        "    Zero additional disclosure: {}",
+        pay_policy.zero_additional_disclosure
+    );
     println!("    Validated against mandate: ✓");
     println!();
 
@@ -147,7 +151,10 @@ fn main() {
 
     let matches = registry.query_satisfiable("schema:PayAction", &[]);
     assert_eq!(matches.len(), 1);
-    println!("  Vendor: {} (operator: {})", matches[0].name, matches[0].provider.did);
+    println!(
+        "  Vendor: {} (operator: {})",
+        matches[0].name, matches[0].provider.did
+    );
     println!("  Disclosure required: [] (none — digital purchase)");
     println!();
 
@@ -160,12 +167,9 @@ fn main() {
     );
     token.sign(orchestrator.signing_key());
 
-    let mut session = Session::initiate(
-        &token,
-        &vendor_operator_did,
-        &orchestrator.verifying_key(),
-    )
-    .expect("session initiation failed");
+    let mut session =
+        Session::initiate(&token, &vendor_operator_did, &orchestrator.verifying_key())
+            .expect("session initiation failed");
 
     let initiator_session = SessionKeypair::generate();
     let receiver_session = SessionKeypair::generate();
@@ -204,7 +208,10 @@ fn main() {
     println!("  Auto-approved: yes (policy: \"{}\")", pay_policy.name);
     println!("  Principal confirmation required: no");
     println!("  Payment proof: ecash blind-signed token (vendor cannot identify payer)");
-    println!("  Result:\n{}\n", serde_json::to_string_pretty(&purchase_result).unwrap());
+    println!(
+        "  Result:\n{}\n",
+        serde_json::to_string_pretty(&purchase_result).unwrap()
+    );
 
     // ─── Step 5: Transaction Receipt ────────────────────────────────
     println!("Step 5: Co-signed transaction receipt");
@@ -230,8 +237,14 @@ fn main() {
         .expect("receipt verification failed");
 
     println!("  Receipt co-signed and verified");
-    println!("  Disclosed by initiator: {:?} (nothing)", receipt.disclosed_by_initiator);
-    println!("  Disclosed by receiver: {:?}", receipt.disclosed_by_receiver);
+    println!(
+        "  Disclosed by initiator: {:?} (nothing)",
+        receipt.disclosed_by_initiator
+    );
+    println!(
+        "  Disclosed by receiver: {:?}",
+        receipt.disclosed_by_receiver
+    );
     println!();
 
     // ─── Step 6: Continuity Token ───────────────────────────────────
@@ -247,7 +260,10 @@ fn main() {
         Utc::now() + Duration::days(90), // principal sets the TTL, not the vendor
     );
 
-    println!("  Schema type: {} (orchestrator can inspect shape without decrypting)", continuity.schema_type);
+    println!(
+        "  Schema type: {} (orchestrator can inspect shape without decrypting)",
+        continuity.schema_type
+    );
     println!("  Vendor DID: {}", continuity.vendor_did);
     println!("  TTL: 90 days (set by PRINCIPAL, not vendor)");
     println!("  Expired: {}", continuity.is_expired());

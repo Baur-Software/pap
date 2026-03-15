@@ -6,9 +6,9 @@
 //! - SD-JWT: https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-08.txt
 
 mod credential;
-mod sd_jwt;
 mod error;
+mod sd_jwt;
 
 pub use credential::VerifiableCredential;
-pub use sd_jwt::SelectiveDisclosureJwt;
 pub use error::CredentialError;
+pub use sd_jwt::SelectiveDisclosureJwt;

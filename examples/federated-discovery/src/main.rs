@@ -13,9 +13,7 @@
 use std::sync::{Arc, Mutex};
 
 use pap_did::PrincipalKeypair;
-use pap_federation::{
-    FederatedRegistry, FederationClient, FederationServer, RegistryPeer,
-};
+use pap_federation::{FederatedRegistry, FederationClient, FederationServer, RegistryPeer};
 use pap_marketplace::AgentAdvertisement;
 
 fn make_signed_ad(name: &str, provider: &str, action: &str) -> AgentAdvertisement {
@@ -42,27 +40,33 @@ async fn main() {
     // ─── Step 1: Registry A Setup ─────────────────────────────────────
     println!("Step 1: Registry A — local search agent");
     let registry_a = Arc::new(Mutex::new(FederatedRegistry::new()));
-    let search_ad = make_signed_ad(
-        "WebSearch Agent",
-        "SearchCorp",
-        "schema:SearchAction",
-    );
-    registry_a.lock().unwrap().register_local(search_ad.clone()).unwrap();
+    let search_ad = make_signed_ad("WebSearch Agent", "SearchCorp", "schema:SearchAction");
+    registry_a
+        .lock()
+        .unwrap()
+        .register_local(search_ad.clone())
+        .unwrap();
     println!("  Registered: WebSearch Agent (schema:SearchAction)");
-    println!("  Registry A has {} agent(s)", registry_a.lock().unwrap().len());
+    println!(
+        "  Registry A has {} agent(s)",
+        registry_a.lock().unwrap().len()
+    );
     println!();
 
     // ─── Step 2: Registry B Setup ─────────────────────────────────────
     println!("Step 2: Registry B — local payment agent");
     let registry_b = Arc::new(Mutex::new(FederatedRegistry::new()));
-    let payment_ad = make_signed_ad(
-        "PaymentProcessor Agent",
-        "PayCorp",
-        "schema:PayAction",
-    );
-    registry_b.lock().unwrap().register_local(payment_ad).unwrap();
+    let payment_ad = make_signed_ad("PaymentProcessor Agent", "PayCorp", "schema:PayAction");
+    registry_b
+        .lock()
+        .unwrap()
+        .register_local(payment_ad)
+        .unwrap();
     println!("  Registered: PaymentProcessor Agent (schema:PayAction)");
-    println!("  Registry B has {} agent(s)", registry_b.lock().unwrap().len());
+    println!(
+        "  Registry B has {} agent(s)",
+        registry_b.lock().unwrap().len()
+    );
     println!();
 
     // ─── Step 3: Start Federation Servers ─────────────────────────────
@@ -95,11 +99,11 @@ async fn main() {
     println!("Step 4: Register peers (bidirectional)");
     registry_a.lock().unwrap().add_peer(RegistryPeer::new(
         "did:key:zRegistryB",
-        &format!("http://127.0.0.1:{port_b}"),
+        format!("http://127.0.0.1:{port_b}"),
     ));
     registry_b.lock().unwrap().add_peer(RegistryPeer::new(
         "did:key:zRegistryA",
-        &format!("http://127.0.0.1:{port_a}"),
+        format!("http://127.0.0.1:{port_a}"),
     ));
     println!("  Registry A knows about Registry B");
     println!("  Registry B knows about Registry A");
@@ -109,17 +113,17 @@ async fn main() {
     println!("Step 5: Registry B syncs search agents from Registry A");
 
     let client = FederationClient::new();
-    let peer_a = RegistryPeer::new(
-        "did:key:zRegistryA",
-        &format!("http://127.0.0.1:{port_a}"),
-    );
+    let peer_a = RegistryPeer::new("did:key:zRegistryA", format!("http://127.0.0.1:{port_a}"));
 
     let remote_ads = client
         .sync_action(&peer_a, "schema:SearchAction")
         .await
         .unwrap();
 
-    println!("  Received {} advertisement(s) from Registry A", remote_ads.len());
+    println!(
+        "  Received {} advertisement(s) from Registry A",
+        remote_ads.len()
+    );
 
     let merged = registry_b.lock().unwrap().merge_remote(remote_ads);
     println!("  Merged {} new advertisement(s) into Registry B", merged);
@@ -131,10 +135,14 @@ async fn main() {
 
     // ─── Step 6: Query Federated Registry ─────────────────────────────
     println!("Step 6: Orchestrator queries Registry B for search agents");
-    let registry_b_guard = registry_b.lock().unwrap();
-    let search_results = registry_b_guard.query_local("schema:SearchAction");
-    let search_names: Vec<_> = search_results.iter().map(|ad| ad.name.clone()).collect();
-    drop(registry_b_guard);
+    let search_names: Vec<_> = {
+        let guard = registry_b.lock().unwrap();
+        guard
+            .query_local("schema:SearchAction")
+            .iter()
+            .map(|ad| ad.name.clone())
+            .collect()
+    };
     println!("  Found: {search_names:?}");
     println!("  WebSearch Agent was only registered on Registry A");
     println!("  but is now discoverable through Registry B via federation!");
@@ -142,16 +150,9 @@ async fn main() {
 
     // ─── Step 7: Announcement ─────────────────────────────────────────
     println!("Step 7: Registry A announces a new agent to Registry B");
-    let new_ad = make_signed_ad(
-        "DeepSearch Agent",
-        "SearchCorp",
-        "schema:SearchAction",
-    );
+    let new_ad = make_signed_ad("DeepSearch Agent", "SearchCorp", "schema:SearchAction");
 
-    let peer_b = RegistryPeer::new(
-        "did:key:zRegistryB",
-        &format!("http://127.0.0.1:{port_b}"),
-    );
+    let peer_b = RegistryPeer::new("did:key:zRegistryB", format!("http://127.0.0.1:{port_b}"));
 
     let accepted = client.announce(&peer_b, &new_ad).await.unwrap();
     println!("  Announced: DeepSearch Agent");

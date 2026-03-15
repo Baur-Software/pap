@@ -39,10 +39,7 @@ impl FederatedRegistry {
 
     /// Register a local advertisement (same as `MarketplaceRegistry::register`
     /// but also tracks the hash for dedup).
-    pub fn register_local(
-        &mut self,
-        ad: AgentAdvertisement,
-    ) -> Result<(), FederationError> {
+    pub fn register_local(&mut self, ad: AgentAdvertisement) -> Result<(), FederationError> {
         let hash = ad.hash();
         if self.seen_hashes.contains(&hash) {
             return Err(FederationError::DuplicateAdvertisement(hash));
@@ -72,10 +69,7 @@ impl FederatedRegistry {
     ///
     /// Deduplicates by content hash. Unsigned advertisements are rejected.
     /// Returns the number of new advertisements actually merged.
-    pub fn merge_remote(
-        &mut self,
-        advertisements: Vec<AgentAdvertisement>,
-    ) -> usize {
+    pub fn merge_remote(&mut self, advertisements: Vec<AgentAdvertisement>) -> usize {
         let mut merged = 0;
         for ad in advertisements {
             let hash = ad.hash();

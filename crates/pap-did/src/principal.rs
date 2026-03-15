@@ -1,4 +1,4 @@
-use ed25519_dalek::{SigningKey, VerifyingKey, Signer, Verifier, Signature};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 
 use crate::DidError;

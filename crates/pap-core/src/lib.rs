@@ -7,11 +7,11 @@
 //! - `extensions` — continuity tokens, auto-approval policies (spec section 9)
 //! - `error` — protocol error types
 
-pub mod scope;
-pub mod mandate;
-pub mod session;
-pub mod receipt;
-pub mod extensions;
 pub mod error;
+pub mod extensions;
+pub mod mandate;
+pub mod receipt;
+pub mod scope;
+pub mod session;
 
 pub use error::PapError;

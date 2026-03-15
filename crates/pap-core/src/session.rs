@@ -97,9 +97,8 @@ impl CapabilityToken {
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
-        self.signature = Some(
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()),
-        );
+        self.signature =
+            Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
     }
 
     /// Verify the token's signature.
@@ -360,8 +359,7 @@ mod tests {
         token.sign(&issuer_key);
 
         let nonce = token.nonce.clone();
-        let session =
-            Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
         assert!(session.is_nonce_consumed(&nonce));
     }
 

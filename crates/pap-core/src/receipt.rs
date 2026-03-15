@@ -85,9 +85,8 @@ impl TransactionReceipt {
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
-        self.signatures.push(
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()),
-        );
+        self.signatures
+            .push(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
     }
 
     /// Verify a specific signature on the receipt.

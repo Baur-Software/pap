@@ -42,19 +42,17 @@ fn main() {
         ScopeAction::new("schema:PayAction"),
     ]);
 
-    let root_disclosure = DisclosureSet::new(vec![
-        DisclosureEntry::new(
-            "schema:Person",
-            vec![
-                "schema:name".into(),
-                "schema:nationality".into(),
-                "schema:birthDate".into(),
-            ],
-            vec!["schema:email".into(), "schema:telephone".into()],
-        )
-        .session_only()
-        .no_retention(),
-    ]);
+    let root_disclosure = DisclosureSet::new(vec![DisclosureEntry::new(
+        "schema:Person",
+        vec![
+            "schema:name".into(),
+            "schema:nationality".into(),
+            "schema:birthDate".into(),
+        ],
+        vec!["schema:email".into(), "schema:telephone".into()],
+    )
+    .session_only()
+    .no_retention()]);
 
     let mut root_mandate = Mandate::issue_root(
         principal_did.clone(),
@@ -82,19 +80,17 @@ fn main() {
         ScopeAction::with_object("schema:ReserveAction", "schema:Flight"),
     ]);
 
-    let planner_disclosure = DisclosureSet::new(vec![
-        DisclosureEntry::new(
-            "schema:Person",
-            vec!["schema:name".into(), "schema:nationality".into()],
-            vec![
-                "schema:email".into(),
-                "schema:telephone".into(),
-                "schema:birthDate".into(), // further restricted: no birthDate
-            ],
-        )
-        .session_only()
-        .no_retention(),
-    ]);
+    let planner_disclosure = DisclosureSet::new(vec![DisclosureEntry::new(
+        "schema:Person",
+        vec!["schema:name".into(), "schema:nationality".into()],
+        vec![
+            "schema:email".into(),
+            "schema:telephone".into(),
+            "schema:birthDate".into(), // further restricted: no birthDate
+        ],
+    )
+    .session_only()
+    .no_retention()]);
 
     let planner_ttl = root_ttl - Duration::hours(1); // 3 hours (shorter than parent)
     let mut planner_mandate = root_mandate
@@ -110,7 +106,10 @@ fn main() {
     println!("  DID: {planner_did}");
     println!("  Scope: [SearchAction, ReserveAction(Flight)] — no lodging, no pay");
     println!("  TTL: 3 hours (parent: 4 hours)");
-    println!("  Parent hash: {}", planner_mandate.parent_mandate_hash.as_ref().unwrap());
+    println!(
+        "  Parent hash: {}",
+        planner_mandate.parent_mandate_hash.as_ref().unwrap()
+    );
     println!("  Disclosure narrowed: birthDate moved to prohibited");
     println!();
 
@@ -120,23 +119,22 @@ fn main() {
     let booking_agent_did = booking_agent.did();
 
     // Most restricted: reserve flights only (no search)
-    let booking_scope = Scope::new(vec![
-        ScopeAction::with_object("schema:ReserveAction", "schema:Flight"),
-    ]);
+    let booking_scope = Scope::new(vec![ScopeAction::with_object(
+        "schema:ReserveAction",
+        "schema:Flight",
+    )]);
 
-    let booking_disclosure = DisclosureSet::new(vec![
-        DisclosureEntry::new(
-            "schema:Person",
-            vec!["schema:name".into(), "schema:nationality".into()],
-            vec![
-                "schema:email".into(),
-                "schema:telephone".into(),
-                "schema:birthDate".into(),
-            ],
-        )
-        .session_only()
-        .no_retention(),
-    ]);
+    let booking_disclosure = DisclosureSet::new(vec![DisclosureEntry::new(
+        "schema:Person",
+        vec!["schema:name".into(), "schema:nationality".into()],
+        vec![
+            "schema:email".into(),
+            "schema:telephone".into(),
+            "schema:birthDate".into(),
+        ],
+    )
+    .session_only()
+    .no_retention()]);
 
     let booking_ttl = planner_ttl - Duration::hours(1); // 2 hours
     let mut booking_mandate = planner_mandate
@@ -152,7 +150,10 @@ fn main() {
     println!("  DID: {booking_agent_did}");
     println!("  Scope: [ReserveAction(Flight)] — no search capability");
     println!("  TTL: 2 hours (parent: 3 hours, root: 4 hours)");
-    println!("  Parent hash: {}", booking_mandate.parent_mandate_hash.as_ref().unwrap());
+    println!(
+        "  Parent hash: {}",
+        booking_mandate.parent_mandate_hash.as_ref().unwrap()
+    );
     println!();
 
     // ─── Chain Verification ─────────────────────────────────────────
@@ -229,9 +230,10 @@ fn main() {
     // Attempt 3: Planner tries to delegate ReserveAction(LodgingBusiness) — not in planner scope
     let result = planner_mandate.delegate(
         sub_agent.did(),
-        Scope::new(vec![
-            ScopeAction::with_object("schema:ReserveAction", "schema:LodgingBusiness"),
-        ]),
+        Scope::new(vec![ScopeAction::with_object(
+            "schema:ReserveAction",
+            "schema:LodgingBusiness",
+        )]),
         DisclosureSet::empty(),
         planner_ttl - Duration::minutes(30),
     );

@@ -105,11 +105,7 @@ mod tests {
     fn register_and_query() {
         let mut registry = MarketplaceRegistry::new();
 
-        let search_ad = make_signed_ad(
-            "Search Agent",
-            vec!["schema:SearchAction".into()],
-            vec![],
-        );
+        let search_ad = make_signed_ad("Search Agent", vec!["schema:SearchAction".into()], vec![]);
         let pay_ad = make_signed_ad(
             "Payment Agent",
             vec!["schema:PayAction".into()],
@@ -155,10 +151,8 @@ mod tests {
         assert_eq!(results[0].name, "Open Search");
 
         // With name available, both should match
-        let results = registry.query_satisfiable(
-            "schema:SearchAction",
-            &["schema:Person.name".into()],
-        );
+        let results =
+            registry.query_satisfiable("schema:SearchAction", &["schema:Person.name".into()]);
         assert_eq!(results.len(), 2);
     }
 

@@ -12,9 +12,7 @@ use serde::{Deserialize, Serialize};
 pub enum ProtocolMessage {
     // ── Phase 1: Token Presentation ──────────────────────────────
     /// Initiator presents a capability token to the receiving agent.
-    TokenPresentation {
-        token: CapabilityToken,
-    },
+    TokenPresentation { token: CapabilityToken },
 
     /// Receiver accepts the token and returns a session ID + its
     /// ephemeral session DID.
@@ -24,15 +22,11 @@ pub enum ProtocolMessage {
     },
 
     /// Receiver rejects the token with a reason.
-    TokenRejected {
-        reason: String,
-    },
+    TokenRejected { reason: String },
 
     // ── Phase 2: Ephemeral DID Exchange ──────────────────────────
     /// Initiator sends its ephemeral session DID.
-    SessionDidExchange {
-        initiator_session_did: String,
-    },
+    SessionDidExchange { initiator_session_did: String },
 
     /// Receiver acknowledges the DID exchange. Session is now Open.
     SessionDidAck,
@@ -40,45 +34,32 @@ pub enum ProtocolMessage {
     // ── Phase 3: Disclosure ──────────────────────────────────────
     /// Initiator offers selective disclosures (SD-JWT claim values).
     /// Empty vec for zero-disclosure sessions.
-    DisclosureOffer {
-        disclosures: Vec<serde_json::Value>,
-    },
+    DisclosureOffer { disclosures: Vec<serde_json::Value> },
 
     /// Receiver acknowledges disclosures.
     DisclosureAccepted,
 
     // ── Phase 4: Execution ───────────────────────────────────────
     /// Receiver returns the execution result (Schema.org JSON-LD).
-    ExecutionResult {
-        result: serde_json::Value,
-    },
+    ExecutionResult { result: serde_json::Value },
 
     // ── Phase 5: Receipt Co-signing ──────────────────────────────
     /// Initiator sends its half-signed receipt for the receiver to co-sign.
-    ReceiptForCoSign {
-        receipt: TransactionReceipt,
-    },
+    ReceiptForCoSign { receipt: TransactionReceipt },
 
     /// Receiver returns the fully co-signed receipt.
-    ReceiptCoSigned {
-        receipt: TransactionReceipt,
-    },
+    ReceiptCoSigned { receipt: TransactionReceipt },
 
     // ── Phase 6: Close ───────────────────────────────────────────
     /// Either side initiates session close.
-    SessionClose {
-        session_id: String,
-    },
+    SessionClose { session_id: String },
 
     /// Acknowledgement of session close. Ephemeral keys discarded.
     SessionClosed,
 
     // ── Error ────────────────────────────────────────────────────
     /// Protocol-level error at any phase.
-    Error {
-        code: String,
-        message: String,
-    },
+    Error { code: String, message: String },
 }
 
 impl ProtocolMessage {

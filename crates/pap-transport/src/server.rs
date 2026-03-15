@@ -62,19 +62,15 @@ async fn handle_token(
     Json(msg): Json<ProtocolMessage>,
 ) -> Result<Json<ProtocolMessage>, StatusCode> {
     match msg {
-        ProtocolMessage::TokenPresentation { token } => {
-            match state.handler.handle_token(token) {
-                Ok((session_id, receiver_session_did)) => Ok(Json(
-                    ProtocolMessage::TokenAccepted {
-                        session_id,
-                        receiver_session_did,
-                    },
-                )),
-                Err(e) => Ok(Json(ProtocolMessage::TokenRejected {
-                    reason: e.to_string(),
-                })),
-            }
-        }
+        ProtocolMessage::TokenPresentation { token } => match state.handler.handle_token(token) {
+            Ok((session_id, receiver_session_did)) => Ok(Json(ProtocolMessage::TokenAccepted {
+                session_id,
+                receiver_session_did,
+            })),
+            Err(e) => Ok(Json(ProtocolMessage::TokenRejected {
+                reason: e.to_string(),
+            })),
+        },
         _ => Err(StatusCode::BAD_REQUEST),
     }
 }

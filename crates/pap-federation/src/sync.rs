@@ -69,7 +69,9 @@ impl FederationClient {
 
         match msg {
             FederationMessage::QueryResponse { advertisements } => Ok(advertisements),
-            _ => Err(FederationError::SyncFailed("unexpected response type".into())),
+            _ => Err(FederationError::SyncFailed(
+                "unexpected response type".into(),
+            )),
         }
     }
 
@@ -112,10 +114,7 @@ impl FederationClient {
         &self,
         peer: &RegistryPeer,
     ) -> Result<Vec<RegistryPeer>, FederationError> {
-        let url = format!(
-            "{}/federation/peers",
-            peer.endpoint.trim_end_matches('/')
-        );
+        let url = format!("{}/federation/peers", peer.endpoint.trim_end_matches('/'));
 
         let resp = self
             .client
@@ -131,7 +130,9 @@ impl FederationClient {
 
         match msg {
             FederationMessage::PeerListResponse { peers } => Ok(peers),
-            _ => Err(FederationError::SyncFailed("unexpected response type".into())),
+            _ => Err(FederationError::SyncFailed(
+                "unexpected response type".into(),
+            )),
         }
     }
 }
