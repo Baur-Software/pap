@@ -12,8 +12,14 @@
 #
 # Usage:
 #   docker compose up -d
-#   docker exec ollama ollama pull mistral
-#   curl http://localhost:9010/ask -d '{"query": "What is the weather in Seattle?"}'
+#   curl http://localhost:9010/ask -H "Content-Type: application/json" \
+#        -d '{"query": "What is the weather in Seattle?"}'
+#
+# Configuration (optional):
+#   cp .env.example .env   # then edit .env to set LLM_MODEL, API keys, etc.
+#
+# GPU acceleration (NVIDIA):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 #
 # Architecture:
 #   [You] -> [Ollama LLM] -> [PAP Orchestrator] -> [Marketplace] -> [Provider Agents]
@@ -34,6 +40,27 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    healthcheck:
+      # `ollama list` connects to the local API and exits 0 when the server is ready.
+      # No curl required — uses the ollama binary already in the image.
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # ─── Pull LLM model (runs once; orchestrator waits for completion) ──
+  # This replaces the manual `docker exec ollama ollama pull mistral` step.
+  # Set LLM_MODEL in .env (or export it) to change the model.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    command: ["pull", "${LLM_MODEL:-mistral}"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    restart: "no"
 
   # ─── Private Search (no query logging, no tracking) ─────────────
   searxng:
@@ -129,6 +156,7 @@ services:
   # ─── PAP Orchestrator Agent ─────────────────────────────────────
   # The brain: issues mandates, discovers providers, runs handshakes.
   # This is the ONLY component that knows who you are.
+  # Waits for ollama-pull to complete before starting — no cold-start LLM errors.
   orchestrator:
     build:
       context: ../../
@@ -138,17 +166,22 @@ services:
     environment:
       - RUST_LOG=info
       - LLM_URL=http://ollama:11434/api/generate
-      - LLM_MODEL=mistral
+      - LLM_MODEL=${LLM_MODEL:-mistral}
       - MARKETPLACE_URL=http://marketplace:9000
       - MANDATE_TTL_HOURS=8
       - AUTO_APPROVE_ZERO_DISCLOSURE=true
       - BIND_ADDR=0.0.0.0:9010
     depends_on:
-      - ollama
-      - marketplace
-      - search-provider
-      - weather-provider
-      - wikipedia-provider
+      ollama-pull:
+        condition: service_completed_successfully
+      marketplace:
+        condition: service_started
+      search-provider:
+        condition: service_started
+      weather-provider:
+        condition: service_started
+      wikipedia-provider:
+        condition: service_started
     restart: unless-stopped
 
   # ─── Receipt Viewer (audit what was disclosed) ──────────────────
