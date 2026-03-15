@@ -9,6 +9,7 @@ members = [
     "crates/pap-proto",
     "crates/pap-transport",
     "crates/pap-federation",
+    "crates/pap-python",
     "examples/search",
     "examples/travel-booking",
     "examples/delegation-chain",
@@ -48,3 +49,9 @@ uuid = { version = "1", features = ["v4"] }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 reqwest = { version = "=0.12.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Local patch to work around Windows registry permission issue on this machine.
+# The icu_locale_core crate in the cargo cache has unreadable src/ files;
+# this redirects to an extracted copy. Remove once registry is repaired.
+[patch.crates-io]
+icu_locale_core = { path = "vendor-icu" }

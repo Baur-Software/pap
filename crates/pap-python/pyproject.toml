@@ -1,0 +1,42 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "pap"
+version = "0.1.0"
+description = "Python SDK for the Principal Agent Protocol (PAP)"
+readme = "README.md"
+license = { text = "MIT OR Apache-2.0" }
+requires-python = ">=3.8"
+keywords = ["ai", "agents", "delegation", "did", "security", "protocol"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/Baur-Software/pap"
+Repository = "https://github.com/Baur-Software/pap"
+Issues = "https://github.com/Baur-Software/pap/issues"
+
+[tool.maturin]
+# The Rust extension module lives at pap._pap
+module-name = "pap._pap"
+# Python source tree
+python-source = "python"
+# Enable the PyO3 extension-module feature
+features = ["pyo3/extension-module"]
+# Stable ABI — one wheel works across CPython 3.8+
+bindings = "pyo3"

@@ -11,4 +11,5 @@ mod sd_jwt;
 
 pub use credential::VerifiableCredential;
 pub use error::CredentialError;
+pub use sd_jwt::Disclosure;
 pub use sd_jwt::SelectiveDisclosureJwt;
