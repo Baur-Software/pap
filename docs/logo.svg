@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 420" width="500" height="420">
+  <defs>
+    <!-- Left wing: cyan-blue outer edge to lime-green fill -->
+    <linearGradient id="leftWingGrad" x1="0%" y1="15%" x2="90%" y2="85%">
+      <stop offset="0%"   stop-color="#18c0ec"/>
+      <stop offset="42%"  stop-color="#45d46c"/>
+      <stop offset="100%" stop-color="#2ec46a"/>
+    </linearGradient>
+    <!-- Left inner leaf: bright yellow-green to medium green -->
+    <radialGradient id="leftInnerGrad" cx="42%" cy="46%" r="55%">
+      <stop offset="0%"   stop-color="#c0e840"/>
+      <stop offset="50%"  stop-color="#60d055"/>
+      <stop offset="100%" stop-color="#24b050"/>
+    </radialGradient>
+    <!-- Right wing: deep orange outer to golden-yellow fill -->
+    <linearGradient id="rightWingGrad" x1="100%" y1="15%" x2="10%" y2="85%">
+      <stop offset="0%"   stop-color="#f05808"/>
+      <stop offset="40%"  stop-color="#f5a818"/>
+      <stop offset="100%" stop-color="#ffd030"/>
+    </linearGradient>
+    <!-- Right inner leaf: warm yellow to burnt orange -->
+    <radialGradient id="rightInnerGrad" cx="58%" cy="46%" r="55%">
+      <stop offset="0%"   stop-color="#ffe040"/>
+      <stop offset="50%"  stop-color="#f59018"/>
+      <stop offset="100%" stop-color="#d84808"/>
+    </radialGradient>
+    <!-- Left lower wing: lavender to deep purple -->
+    <radialGradient id="leftLowerGrad" cx="36%" cy="30%" r="65%">
+      <stop offset="0%"   stop-color="#cc88f0"/>
+      <stop offset="100%" stop-color="#6820a8"/>
+    </radialGradient>
+    <!-- Right lower wing: violet to deep purple -->
+    <radialGradient id="rightLowerGrad" cx="36%" cy="30%" r="65%">
+      <stop offset="0%"   stop-color="#d870f5"/>
+      <stop offset="100%" stop-color="#7a20b8"/>
+    </radialGradient>
+  </defs>
+
+  <!-- LEFT UPPER WING -->
+  <path d="
+    M250,230
+    C240,200 210,140 160,90
+    C118,48  68,30  38,50
+    C10,68   18,112 54,148
+    C86,180  150,210 210,226
+    C228,231 242,231 250,230 Z"
+    fill="url(#leftWingGrad)" opacity="0.98"/>
+
+  <!-- Left inner leaf -->
+  <path d="
+    M250,230
+    C240,205 218,158 188,118
+    C164,86  134,72  116,84
+    C96,98   106,134 134,164
+    C160,190 206,216 240,228 Z"
+    fill="url(#leftInnerGrad)" opacity="0.90"/>
+
+  <!-- RIGHT UPPER WING -->
+  <path d="
+    M250,230
+    C260,200 290,140 340,90
+    C382,48  432,30  462,50
+    C490,68  482,112 446,148
+    C414,180 350,210 290,226
+    C272,231 258,231 250,230 Z"
+    fill="url(#rightWingGrad)" opacity="0.98"/>
+
+  <!-- Right inner leaf -->
+  <path d="
+    M250,230
+    C260,205 282,158 312,118
+    C336,86  366,72  384,84
+    C404,98  394,134 366,164
+    C340,190 294,216 260,228 Z"
+    fill="url(#rightInnerGrad)" opacity="0.90"/>
+
+  <!-- LEFT LOWER WING (purple circle) -->
+  <circle cx="196" cy="306" r="74" fill="url(#leftLowerGrad)" opacity="0.96"/>
+
+  <!-- RIGHT LOWER WING (purple circle) -->
+  <circle cx="304" cy="306" r="74" fill="url(#rightLowerGrad)" opacity="0.96"/>
+
+  <!-- BODY CENTER BLEND -->
+  <ellipse cx="250" cy="270" rx="18" ry="38" fill="#7018b0" opacity="0.40"/>
+
+  <!-- LEFT ANTENNA -->
+  <path d="M246,218 C242,196 232,172 238,148"
+        stroke="#30c858" stroke-width="5" fill="none"
+        stroke-linecap="round"/>
+  <ellipse cx="237" cy="143" rx="7" ry="9"
+           fill="#30c858" transform="rotate(-20,237,143)"/>
+
+  <!-- RIGHT ANTENNA -->
+  <path d="M254,218 C258,196 268,172 262,148"
+        stroke="#f06818" stroke-width="5" fill="none"
+        stroke-linecap="round"/>
+  <ellipse cx="263" cy="143" rx="7" ry="9"
+           fill="#f06818" transform="rotate(20,263,143)"/>
+</svg>

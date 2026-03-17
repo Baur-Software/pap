@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.svg" alt="PAP logo" width="160"/>
+</p>
+
 # PAP — Principal Agent Protocol
 
 A principal-first, zero-trust agent negotiation protocol for the open web.
