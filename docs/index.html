@@ -136,10 +136,20 @@
       height: 64px; display: flex; align-items: center; justify-content: space-between;
     }
     .nav-logo {
-      font-size: 1.25rem; font-weight: 800; letter-spacing: -.03em;
-      background: linear-gradient(135deg, var(--indigo), var(--violet));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; text-decoration: none;
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      height: 100%;
+      padding: 8px 0;
+    }
+    .nav-logo img {
+      height: 40px;
+      width: auto;
+      object-fit: contain;
+      transition: transform 0.2s ease;
+    }
+    .nav-logo img:hover {
+      transform: scale(1.05);
     }
     .nav-links {
       display: flex; align-items: center; gap: 8px; list-style: none;
@@ -699,11 +709,13 @@
       .nav-links { display: none; }
       .hero-stats { gap: 20px; }
       .cta-banner { padding: 40px 24px; }
+      .nav-logo img { height: 36px; }
     }
     @media (max-width: 480px) {
       .crates-grid { grid-template-columns: 1fr; }
       .hero-actions { flex-direction: column; }
       .hero-actions .btn { width: 100%; justify-content: center; }
+      .nav-logo img { height: 32px; }
     }
   </style>
 </head>
@@ -712,7 +724,11 @@
 <!-- ─── NAV ─────────────────────────────────────────────────────────── -->
 <nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="#" class="nav-logo">PAP</a>
+    <a href="#" class="nav-logo">
+      <!-- Logo image: Download from https://github.com/user-attachments/assets/51e636fd-d247-4ef8-aa56-9981ea79b504 
+           and save as docs/assets/images/pap-logo.png for production use. See docs/assets/images/README.md -->
+      <img src="assets/images/pap-logo.png" alt="PAP Logo - Principal Agent Protocol" />
+    </a>
     <ul class="nav-links" role="list">
       <li><a href="#problem">Problem</a></li>
       <li><a href="#how">Protocol</a></li>
