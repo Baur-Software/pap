@@ -1,99 +1,132 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 420" width="500" height="420">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 290" width="400" height="290">
   <defs>
-    <!-- Left wing: cyan-blue outer edge to lime-green fill -->
-    <linearGradient id="leftWingGrad" x1="0%" y1="15%" x2="90%" y2="85%">
-      <stop offset="0%"   stop-color="#18c0ec"/>
-      <stop offset="42%"  stop-color="#45d46c"/>
-      <stop offset="100%" stop-color="#2ec46a"/>
+    <!--
+      LEFT OUTER WING
+      Horizontal gradient so the sky-blue rim is uniformly vivid from the
+      top to the bottom of the wing's outer edge.  Stays clearly blue for
+      the first ~30 % of the wing width (the rim), then transitions through
+      teal into lime-green toward the body.
+    -->
+    <linearGradient id="g1" gradientUnits="userSpaceOnUse"
+                    x1="5" y1="110" x2="200" y2="110">
+      <stop offset="0%"   stop-color="#18B4F8"/>
+      <stop offset="28%"  stop-color="#22BCF2"/>
+      <stop offset="48%"  stop-color="#2EC8D8"/>
+      <stop offset="100%" stop-color="#68D038"/>
     </linearGradient>
-    <!-- Left inner leaf: bright yellow-green to medium green -->
-    <radialGradient id="leftInnerGrad" cx="42%" cy="46%" r="55%">
-      <stop offset="0%"   stop-color="#c0e840"/>
-      <stop offset="50%"  stop-color="#60d055"/>
-      <stop offset="100%" stop-color="#24b050"/>
+
+    <!--
+      LEFT INNER LEAF
+      Bright lime-green radial gradient — the main interior colour.
+    -->
+    <radialGradient id="g2" gradientUnits="userSpaceOnUse"
+                    cx="148" cy="112" r="72">
+      <stop offset="0%"   stop-color="#A8DF38"/>
+      <stop offset="52%"  stop-color="#52C242"/>
+      <stop offset="100%" stop-color="#28A845"/>
     </radialGradient>
-    <!-- Right wing: deep orange outer to golden-yellow fill -->
-    <linearGradient id="rightWingGrad" x1="100%" y1="15%" x2="10%" y2="85%">
-      <stop offset="0%"   stop-color="#f05808"/>
-      <stop offset="40%"  stop-color="#f5a818"/>
-      <stop offset="100%" stop-color="#ffd030"/>
+
+    <!--
+      RIGHT OUTER WING
+      Mirror of g1 — vivid orange-red outer rim, fading to golden-yellow.
+    -->
+    <linearGradient id="g3" gradientUnits="userSpaceOnUse"
+                    x1="395" y1="110" x2="200" y2="110">
+      <stop offset="0%"   stop-color="#F43012"/>
+      <stop offset="28%"  stop-color="#F56020"/>
+      <stop offset="48%"  stop-color="#F58830"/>
+      <stop offset="100%" stop-color="#FFD020"/>
     </linearGradient>
-    <!-- Right inner leaf: warm yellow to burnt orange -->
-    <radialGradient id="rightInnerGrad" cx="58%" cy="46%" r="55%">
-      <stop offset="0%"   stop-color="#ffe040"/>
-      <stop offset="50%"  stop-color="#f59018"/>
-      <stop offset="100%" stop-color="#d84808"/>
+
+    <!--
+      RIGHT INNER SHAPE
+      Bright golden-yellow radial gradient — mirror of g2.
+    -->
+    <radialGradient id="g4" gradientUnits="userSpaceOnUse"
+                    cx="252" cy="112" r="72">
+      <stop offset="0%"   stop-color="#FFE028"/>
+      <stop offset="52%"  stop-color="#F59820"/>
+      <stop offset="100%" stop-color="#E06010"/>
     </radialGradient>
-    <!-- Left lower wing: lavender to deep purple -->
-    <radialGradient id="leftLowerGrad" cx="36%" cy="30%" r="65%">
-      <stop offset="0%"   stop-color="#cc88f0"/>
-      <stop offset="100%" stop-color="#6820a8"/>
+
+    <!-- LEFT LOWER CIRCLE: light lavender inner highlight → deep purple outer edge.
+         Gradient centre is offset upper-left of the circle centre (155,233)
+         to produce the same 3-D lit-from-upper-left appearance as the original. -->
+    <radialGradient id="g5" gradientUnits="userSpaceOnUse"
+                    cx="140" cy="215" r="57">
+      <stop offset="0%"   stop-color="#CA6ED8"/>
+      <stop offset="100%" stop-color="#6818A8"/>
     </radialGradient>
-    <!-- Right lower wing: violet to deep purple -->
-    <radialGradient id="rightLowerGrad" cx="36%" cy="30%" r="65%">
-      <stop offset="0%"   stop-color="#d870f5"/>
-      <stop offset="100%" stop-color="#7a20b8"/>
+
+    <!-- RIGHT LOWER CIRCLE: light violet inner highlight → deep violet outer edge.
+         Same offset technique as g5, mirrored to the right. -->
+    <radialGradient id="g6" gradientUnits="userSpaceOnUse"
+                    cx="260" cy="215" r="57">
+      <stop offset="0%"   stop-color="#D868E8"/>
+      <stop offset="100%" stop-color="#8018B8"/>
     </radialGradient>
   </defs>
 
-  <!-- LEFT UPPER WING -->
+  <!-- ══ LAYER 1: LOWER WINGS ═══════════════════════════════════════════ -->
+  <circle cx="155" cy="233" r="57" fill="url(#g5)"/>
+  <circle cx="245" cy="233" r="57" fill="url(#g6)"/>
+
+  <!-- ══ LAYER 2: ANTENNA STEMS (behind all wing fills) ════════════════
+       Drawn before the wings so the stems are naturally hidden wherever
+       they fall inside the wing fill areas.  Only the slender portions
+       that exit above the wing's upper edge remain visible.               -->
+  <path d="M 198,168 C 196,150 193,122 190,94 C 188,70 187,52 185,41"
+        stroke="#38C858" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M 202,168 C 204,150 207,122 210,94 C 212,70 213,52 215,41"
+        stroke="#F05520" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+  <!-- ══ LAYER 3: UPPER WINGS ═══════════════════════════════════════════
+       These fills paint over the antenna stems where the stems cross
+       the wing gradient areas near the body junction.                     -->
+
+  <!-- Left outer wing -->
   <path d="
-    M250,230
-    C240,200 210,140 160,90
-    C118,48  68,30  38,50
-    C10,68   18,112 54,148
-    C86,180  150,210 210,226
-    C228,231 242,231 250,230 Z"
-    fill="url(#leftWingGrad)" opacity="0.98"/>
+    M 200,175
+    C 188,148 158,102 120,62
+    C 95,38   60,32   35,48
+    C 12,62   5,95    12,130
+    C 18,160  62,180  125,182
+    C 160,184 185,180 200,175 Z"
+    fill="url(#g1)"/>
 
   <!-- Left inner leaf -->
   <path d="
-    M250,230
-    C240,205 218,158 188,118
-    C164,86  134,72  116,84
-    C96,98   106,134 134,164
-    C160,190 206,216 240,228 Z"
-    fill="url(#leftInnerGrad)" opacity="0.90"/>
+    M 200,175
+    C 196,158 178,120 155,88
+    C 134,60  106,52  88,66
+    C 70,80   74,116  97,148
+    C 118,170 161,179 200,175 Z"
+    fill="url(#g2)"/>
 
-  <!-- RIGHT UPPER WING -->
+  <!-- Right outer wing (mirror of left) -->
   <path d="
-    M250,230
-    C260,200 290,140 340,90
-    C382,48  432,30  462,50
-    C490,68  482,112 446,148
-    C414,180 350,210 290,226
-    C272,231 258,231 250,230 Z"
-    fill="url(#rightWingGrad)" opacity="0.98"/>
+    M 200,175
+    C 212,148 242,102 280,62
+    C 305,38  340,32  365,48
+    C 388,62  395,95  388,130
+    C 382,160 338,180 275,182
+    C 240,184 215,180 200,175 Z"
+    fill="url(#g3)"/>
 
-  <!-- Right inner leaf -->
+  <!-- Right inner shape (mirror of left inner leaf) -->
   <path d="
-    M250,230
-    C260,205 282,158 312,118
-    C336,86  366,72  384,84
-    C404,98  394,134 366,164
-    C340,190 294,216 260,228 Z"
-    fill="url(#rightInnerGrad)" opacity="0.90"/>
+    M 200,175
+    C 204,158 222,120 245,88
+    C 266,60  294,52  312,66
+    C 330,80  326,116 303,148
+    C 282,170 239,179 200,175 Z"
+    fill="url(#g4)"/>
 
-  <!-- LEFT LOWER WING (purple circle) -->
-  <circle cx="196" cy="306" r="74" fill="url(#leftLowerGrad)" opacity="0.96"/>
-
-  <!-- RIGHT LOWER WING (purple circle) -->
-  <circle cx="304" cy="306" r="74" fill="url(#rightLowerGrad)" opacity="0.96"/>
-
-  <!-- BODY CENTER BLEND -->
-  <ellipse cx="250" cy="270" rx="18" ry="38" fill="#7018b0" opacity="0.40"/>
-
-  <!-- LEFT ANTENNA -->
-  <path d="M246,218 C242,196 232,172 238,148"
-        stroke="#30c858" stroke-width="5" fill="none"
-        stroke-linecap="round"/>
-  <ellipse cx="237" cy="143" rx="7" ry="9"
-           fill="#30c858" transform="rotate(-20,237,143)"/>
-
-  <!-- RIGHT ANTENNA -->
-  <path d="M254,218 C258,196 268,172 262,148"
-        stroke="#f06818" stroke-width="5" fill="none"
-        stroke-linecap="round"/>
-  <ellipse cx="263" cy="143" rx="7" ry="9"
-           fill="#f06818" transform="rotate(20,263,143)"/>
+  <!-- ══ LAYER 4: ANTENNA TIPS (in front of everything) ════════════════
+       Small teardrop tips float just above the wing peaks, matching the
+       rim colour of their respective wing.                                -->
+  <ellipse cx="184" cy="36" rx="4.5" ry="7"
+           fill="#38C858" transform="rotate(-12,184,36)"/>
+  <ellipse cx="216" cy="36" rx="4.5" ry="7"
+           fill="#F05520" transform="rotate(12,216,36)"/>
 </svg>
