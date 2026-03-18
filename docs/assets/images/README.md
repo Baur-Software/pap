@@ -26,7 +26,4 @@ The logo is styled to:
 ### Installation Instructions
 1. Download the butterfly logo from the URL above
 2. Save it as `pap-logo.png` in this directory (`docs/assets/images/`)
-3. The website will automatically use the local image
-
-### Fallback
-Until the local image is added, the HTML temporarily uses the GitHub user-attachments URL. This should be replaced with the local file for production use.
+3. The website will automatically display the logo once the file is in place
