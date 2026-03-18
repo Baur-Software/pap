@@ -1539,19 +1539,10 @@ impl AgentClient {
 fn _pap(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Exception hierarchy (register before classes so they can be caught in tests)
     m.add("PapError", m.py().get_type::<PapError>())?;
-    m.add(
-        "PapSignatureError",
-        m.py().get_type::<PapSignatureError>(),
-    )?;
+    m.add("PapSignatureError", m.py().get_type::<PapSignatureError>())?;
     m.add("PapScopeError", m.py().get_type::<PapScopeError>())?;
-    m.add(
-        "PapSessionError",
-        m.py().get_type::<PapSessionError>(),
-    )?;
-    m.add(
-        "PapTransportError",
-        m.py().get_type::<PapTransportError>(),
-    )?;
+    m.add("PapSessionError", m.py().get_type::<PapSessionError>())?;
+    m.add("PapTransportError", m.py().get_type::<PapTransportError>())?;
 
     // Keys
     m.add_class::<PrincipalKeypair>()?;

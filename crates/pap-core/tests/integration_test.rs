@@ -72,7 +72,9 @@ fn end_to_end_session_flow_with_receipt() {
     let init_sess_did = did_from_key(&init_sess_key);
     let recv_sess_did = did_from_key(&recv_sess_key);
 
-    session.open(init_sess_did.clone(), recv_sess_did.clone()).unwrap();
+    session
+        .open(init_sess_did.clone(), recv_sess_did.clone())
+        .unwrap();
     assert_eq!(session.state, SessionState::Open);
 
     session.execute().unwrap();
@@ -269,8 +271,11 @@ fn session_nonce_replay_prevention() {
 fn auto_approval_policy_value_cap_enforcement() {
     let mandate_scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
 
-    let policy = AutoApprovalPolicy::new("Small purchases", Scope::new(vec![ScopeAction::new("schema:PayAction")]))
-        .with_max_value(50.0);
+    let policy = AutoApprovalPolicy::new(
+        "Small purchases",
+        Scope::new(vec![ScopeAction::new("schema:PayAction")]),
+    )
+    .with_max_value(50.0);
 
     assert_eq!(policy.max_value, Some(50.0));
     assert!(policy.validate_against_mandate(&mandate_scope).is_ok());
@@ -308,8 +313,14 @@ fn disclosure_set_property_reference_only() {
     ));
 
     assert_eq!(disclosure_set.entries.len(), 2);
-    assert_eq!(disclosure_set.entries[0].permitted_properties[0], "schema:name");
-    assert_eq!(disclosure_set.entries[1].permitted_properties[0], "schema:email");
+    assert_eq!(
+        disclosure_set.entries[0].permitted_properties[0],
+        "schema:name"
+    );
+    assert_eq!(
+        disclosure_set.entries[1].permitted_properties[0],
+        "schema:email"
+    );
 }
 
 #[test]
@@ -331,7 +342,9 @@ fn receipt_zero_disclosure_transaction() {
     let mut session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
     // Open the session with DIDs
-    session.open(did_from_key(&init_key), did_from_key(&recv_key)).unwrap();
+    session
+        .open(did_from_key(&init_key), did_from_key(&recv_key))
+        .unwrap();
     session.execute().unwrap();
 
     let mut receipt = TransactionReceipt::from_session(
@@ -348,7 +361,9 @@ fn receipt_zero_disclosure_transaction() {
     receipt.co_sign(&init_key);
     receipt.co_sign(&recv_key);
 
-    assert!(receipt.verify_both(&init_key.verifying_key(), &recv_key.verifying_key()).is_ok());
+    assert!(receipt
+        .verify_both(&init_key.verifying_key(), &recv_key.verifying_key())
+        .is_ok());
 }
 
 #[test]

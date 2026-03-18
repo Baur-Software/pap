@@ -2,7 +2,7 @@
 
 use chrono::{Duration, Utc};
 use ed25519_dalek::SigningKey;
-use pap_credential::{CredentialError, Disclosure, SelectiveDisclosureJwt, VerifiableCredential};
+use pap_credential::{Disclosure, SelectiveDisclosureJwt, VerifiableCredential};
 use rand::rngs::OsRng;
 use std::collections::HashMap;
 
@@ -51,11 +51,8 @@ fn vc_unsigned_verification_fails() {
     let key = make_keypair();
     let did = did_from_key(&key);
 
-    let vc = VerifiableCredential::from_mandate(
-        &did,
-        serde_json::json!({"id": "did:key:zagent"}),
-        None,
-    );
+    let vc =
+        VerifiableCredential::from_mandate(&did, serde_json::json!({"id": "did:key:zagent"}), None);
 
     // No signature, should fail
     assert!(vc.verify(&key.verifying_key()).is_err());
@@ -115,7 +112,10 @@ fn sd_jwt_full_disclosure_flow() {
 
     let mut claims = HashMap::new();
     claims.insert("schema:name".into(), serde_json::json!("Alice"));
-    claims.insert("schema:email".into(), serde_json::json!("alice@example.com"));
+    claims.insert(
+        "schema:email".into(),
+        serde_json::json!("alice@example.com"),
+    );
     claims.insert("schema:address".into(), serde_json::json!("123 Main St"));
 
     let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
