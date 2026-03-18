@@ -202,12 +202,30 @@
       50% { opacity: .7; transform: translateX(-50%) scale(1.05); }
     }
     .hero-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 64px; align-items: center;
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+      align-items: center;
       padding: 80px 0;
+      max-width: 900px;
+      margin: 0 auto;
+      text-align: center;
     }
     .hero-eyebrow {
       display: flex; align-items: center; gap: 12px; margin-bottom: 24px;
+      justify-content: center;
+    }
+    .hero-logo {
+      margin-bottom: 32px;
+    }
+    .hero-logo img {
+      height: 120px;
+      width: auto;
+      object-fit: contain;
+      transition: transform 0.3s ease;
+    }
+    .hero-logo img:hover {
+      transform: scale(1.02);
     }
     .hero-title {
       font-size: clamp(2.5rem, 6vw, 4.25rem);
@@ -216,12 +234,16 @@
     }
     .hero-subtitle {
       font-size: 1.2rem; color: var(--muted);
-      line-height: 1.7; margin-bottom: 36px; max-width: 520px;
+      line-height: 1.7; margin-bottom: 36px; max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
     }
-    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 48px; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 48px; justify-content: center; }
     .hero-stats {
       display: flex; gap: 32px; padding-top: 36px;
       border-top: 1px solid var(--border);
+      justify-content: center;
+      flex-wrap: wrap;
     }
     .hero-stat-value {
       font-size: 1.5rem; font-weight: 800; letter-spacing: -.03em;
@@ -696,8 +718,6 @@
       .footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
     }
     @media (max-width: 768px) {
-      .hero-grid { grid-template-columns: 1fr; gap: 48px; }
-      .trust-visual { display: none; }
       .protocol-grid { grid-template-columns: 1fr; }
       .constraints-header { grid-template-columns: 1fr; gap: 32px; }
       .constraints-grid { grid-template-columns: 1fr; }
@@ -753,6 +773,9 @@
 
       <!-- Left: Copy -->
       <div>
+        <div class="hero-logo">
+          <img src="https://github.com/user-attachments/assets/51e636fd-d247-4ef8-aa56-9981ea79b504" alt="PAP Logo - Principal Agent Protocol" />
+        </div>
         <div class="hero-eyebrow">
           <span class="badge">v0.1.0</span>
           <span class="badge badge-green">Open Source</span>
@@ -765,7 +788,7 @@
         <p class="hero-subtitle">
           Every agent protocol in production today was designed to serve
           platform operators, not human principals. PAP fixes the root cause —
-          cryptographically.
+          cryptographically. It's time to build AI systems that answer to you, not to the platform.
         </p>
         <div class="hero-actions">
           <a href="https://github.com/Baur-Software/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
@@ -791,60 +814,6 @@
             <div class="hero-stat-value gradient-text">MIT</div>
             <div class="hero-stat-label">License</div>
           </div>
-        </div>
-      </div>
-
-      <!-- Right: Trust Chain Visual -->
-      <div class="trust-visual" aria-label="Trust hierarchy diagram">
-        <div class="trust-visual-title">Trust Hierarchy</div>
-
-        <div class="trust-node">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-root"></div>
-            <div class="trust-connector"></div>
-          </div>
-          <div>
-            <div class="trust-label">Human Principal</div>
-            <div class="trust-desc">Device-bound keypair · Root of trust · WebAuthn</div>
-          </div>
-        </div>
-
-        <div class="trust-node trust-indent-1">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-orch"></div>
-            <div class="trust-connector"></div>
-          </div>
-          <div>
-            <div class="trust-label">Orchestrator Agent</div>
-            <div class="trust-desc">Root mandate · Full principal context · Signs sub-mandates</div>
-          </div>
-        </div>
-
-        <div class="trust-node trust-indent-2">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-down"></div>
-            <div class="trust-connector"></div>
-          </div>
-          <div>
-            <div class="trust-label">Downstream Agents</div>
-            <div class="trust-desc">Scoped task mandates · TTL bounded · Scope ≤ parent</div>
-          </div>
-        </div>
-
-        <div class="trust-node trust-indent-3">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-market"></div>
-          </div>
-          <div>
-            <div class="trust-label" style="color:var(--muted)">Marketplace Agents</div>
-            <div class="trust-desc">Own principal chains · Federated discovery</div>
-          </div>
-        </div>
-
-        <div class="handshake-label">
-          <div>// Transactions are handshakes between</div>
-          <div>// two mandate chains, not two agents.</div>
-          <div style="margin-top:8px; color: var(--teal)">5 constraints · enforced at protocol level</div>
         </div>
       </div>
 
@@ -1006,6 +975,80 @@
         <div class="constraint-num">05</div>
         <div class="constraint-title">Non-Renewal Is Revocation</div>
         <div class="constraint-body" style="max-width: 640px;">A mandate that isn't renewed doesn't need a revocation notice. It degrades progressively — Active → Degraded → ReadOnly → Suspended — and then it stops. The principal sees the degradation, not a surprise cutoff. Revocation is the natural state; continuation requires active consent.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── TRUST HIERARCHY ───────────────────────────────────────────────── -->
+<section class="section" aria-labelledby="trust-heading">
+  <div class="container">
+    <div class="reveal" style="margin-bottom: 48px;">
+      <div class="section-label">Trust Model</div>
+      <h2 class="section-title" id="trust-heading">
+        Trust hierarchy<br />
+        <span class="gradient-text">from human to agent</span>
+      </h2>
+      <p class="section-sub">
+        Every agent chain starts with a human principal. Trust flows down through
+        cryptographically signed mandates, each more restrictive than its parent.
+      </p>
+    </div>
+
+    <div style="max-width: 700px; margin: 0 auto;">
+      <div class="trust-visual reveal reveal-delay-1" aria-label="Trust hierarchy diagram">
+        <div class="trust-visual-title">Trust Hierarchy</div>
+
+        <div class="trust-node">
+          <div class="trust-node-line">
+            <div class="trust-dot trust-dot-root"></div>
+            <div class="trust-connector"></div>
+          </div>
+          <div>
+            <div class="trust-label">Human Principal</div>
+            <div class="trust-desc">Device-bound keypair · Root of trust · WebAuthn</div>
+          </div>
+        </div>
+
+        <div class="trust-node trust-indent-1">
+          <div class="trust-node-line">
+            <div class="trust-dot trust-dot-orch"></div>
+            <div class="trust-connector"></div>
+          </div>
+          <div>
+            <div class="trust-label">Orchestrator Agent</div>
+            <div class="trust-desc">Root mandate · Full principal context · Signs sub-mandates</div>
+          </div>
+        </div>
+
+        <div class="trust-node trust-indent-2">
+          <div class="trust-node-line">
+            <div class="trust-dot trust-dot-down"></div>
+            <div class="trust-connector"></div>
+          </div>
+          <div>
+            <div class="trust-label">Downstream Agents</div>
+            <div class="trust-desc">Scoped task mandates · TTL bounded · Scope ≤ parent</div>
+          </div>
+        </div>
+
+        <div class="trust-node trust-indent-3">
+          <div class="trust-node-line">
+            <div class="trust-dot trust-dot-market"></div>
+          </div>
+          <div>
+            <div class="trust-label" style="color:var(--muted)">Marketplace Agents</div>
+            <div class="trust-desc">Own principal chains · Federated discovery</div>
+          </div>
+        </div>
+
+        <div class="handshake-label">
+          <div>// Transactions are handshakes between</div>
+          <div>// two mandate chains, not two agents.</div>
+          <div style="margin-top:8px; color: var(--teal)">5 constraints · enforced at protocol level</div>
+        </div>
       </div>
     </div>
   </div>
