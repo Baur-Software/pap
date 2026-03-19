@@ -12,8 +12,8 @@ pub struct OrchestratorState {
     pub error: RwSignal<Option<String>>,
 }
 
-impl OrchestratorState {
-    pub fn new() -> Self {
+impl Default for OrchestratorState {
+    fn default() -> Self {
         Self {
             config: RwSignal::new(OrchestratorConfig::default()),
             status: RwSignal::new(OrchestratorStatus::DemoOnly),

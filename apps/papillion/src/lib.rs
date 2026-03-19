@@ -25,6 +25,14 @@ pub fn run() {
             commands::orchestrator::get_orchestrator_status,
             commands::orchestrator::get_setup_state,
             commands::orchestrator::list_scenarios,
+            commands::orchestrator::run_demo_scenario,
+            commands::orchestrator::list_completed_runs,
+            commands::identity::export_key,
+            commands::identity::import_key,
+            commands::identity::get_key_backup_status,
+            commands::identity::add_successor,
+            commands::identity::list_successors,
+            commands::identity::remove_successor,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillion");

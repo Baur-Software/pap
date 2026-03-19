@@ -17,9 +17,9 @@ use papillion_shared::{IdentityInfo, OrchestratorStatus};
 
 #[component]
 pub fn App() -> impl IntoView {
-    let identity_state = IdentityState::new();
-    let registry_state = RegistryState::new();
-    let orchestrator_state = OrchestratorState::new();
+    let identity_state = IdentityState::default();
+    let registry_state = RegistryState::default();
+    let orchestrator_state = OrchestratorState::default();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);

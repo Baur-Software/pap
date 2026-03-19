@@ -1,18 +1,22 @@
+use std::collections::HashMap;
+
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_marketplace::AgentAdvertisement;
 
 /// Seed a FederatedRegistry with demo agents for the built-in `pap://demo` registry.
-/// Each agent is signed with an ephemeral keypair so signature verification works.
-pub fn seed_demo_registry() -> FederatedRegistry {
+/// Returns the registry and the agent keypairs (retained for demo runner co-signing).
+pub fn seed_demo_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeypair>) {
     let mut registry = FederatedRegistry::new();
+    let mut keypairs = HashMap::new();
 
     let mut register = |name: &str,
                         provider: &str,
                         capabilities: Vec<String>,
                         object_types: Vec<String>,
                         requires_disclosure: Vec<String>,
-                        returns: Vec<String>| {
+                        returns: Vec<String>,
+                        keypairs: &mut HashMap<String, PrincipalKeypair>| {
         let kp = PrincipalKeypair::generate();
         let did = kp.did();
         let mut ad = AgentAdvertisement::new(
@@ -28,6 +32,7 @@ pub fn seed_demo_registry() -> FederatedRegistry {
         registry
             .register_local(ad)
             .expect("demo seed registration should not fail");
+        keypairs.insert(name.to_string(), kp);
     };
 
     // Web Search Agent — zero disclosure
@@ -38,6 +43,7 @@ pub fn seed_demo_registry() -> FederatedRegistry {
         vec!["schema:WebPage".into()],
         vec![],
         vec!["schema:SearchResult".into()],
+        &mut keypairs,
     );
 
     // Flight Booking Agent — requires name + nationality
@@ -51,6 +57,7 @@ pub fn seed_demo_registry() -> FederatedRegistry {
             "schema:Person.nationality".into(),
         ],
         vec!["schema:Ticket".into()],
+        &mut keypairs,
     );
 
     // Hotel Booking Agent — requires name only
@@ -61,6 +68,7 @@ pub fn seed_demo_registry() -> FederatedRegistry {
         vec!["schema:LodgingReservation".into()],
         vec!["schema:Person.name".into()],
         vec!["schema:Reservation".into()],
+        &mut keypairs,
     );
 
     // Payment Agent — zero disclosure
@@ -71,6 +79,7 @@ pub fn seed_demo_registry() -> FederatedRegistry {
         vec!["schema:Invoice".into()],
         vec![],
         vec!["schema:Invoice".into()],
+        &mut keypairs,
     );
 
     // Local AI Assistant — zero disclosure
@@ -81,7 +90,8 @@ pub fn seed_demo_registry() -> FederatedRegistry {
         vec!["schema:Question".into()],
         vec![],
         vec!["schema:Answer".into()],
+        &mut keypairs,
     );
 
-    registry
+    (registry, keypairs)
 }

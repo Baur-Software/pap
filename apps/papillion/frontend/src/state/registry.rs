@@ -12,8 +12,8 @@ pub struct RegistryState {
     pub error: RwSignal<Option<String>>,
 }
 
-impl RegistryState {
-    pub fn new() -> Self {
+impl Default for RegistryState {
+    fn default() -> Self {
         Self {
             current_url: RwSignal::new(String::new()),
             info: RwSignal::new(None),

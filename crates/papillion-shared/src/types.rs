@@ -203,3 +203,52 @@ pub struct ScenarioCard {
     pub requires_disclosure: Vec<String>,
     pub returns: Vec<String>,
 }
+
+// ── Demo runner types ─────────────────────────────────────
+
+/// Result of running a demo scenario through the full 6-step handshake.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DemoRunResult {
+    pub scenario_id: String,
+    pub agent_name: String,
+    pub steps: Vec<DemoStepResult>,
+    pub receipt: Option<ReceiptInfo>,
+    pub completed_at: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+/// Result of a single handshake step.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DemoStepResult {
+    pub step_number: u8,
+    pub step_name: String,
+    pub status: String,
+    pub detail: Option<String>,
+    pub timestamp: String,
+}
+
+// ── Identity management types ─────────────────────────────
+
+/// Exported key material (base64url-encoded 32-byte seed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportedKey {
+    pub seed_b64: String,
+    pub did: String,
+    pub exported_at: String,
+}
+
+/// A forward-looking successor designation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuccessorDesignation {
+    pub successor_did: String,
+    pub relationship: String,
+    pub notes: String,
+    pub created_at: String,
+}
+
+/// Whether the key has been backed up.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyBackupStatus {
+    pub backed_up: bool,
+}

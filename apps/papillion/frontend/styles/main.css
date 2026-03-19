@@ -451,3 +451,128 @@ body {
     color: var(--accent);
     border-bottom-color: var(--accent);
 }
+
+/* Handshake step states */
+.handshake-step.completed {
+    border-left-color: var(--success);
+}
+
+.handshake-step.active {
+    border-left-color: var(--accent);
+}
+
+.handshake-step.failed {
+    border-left-color: var(--error);
+}
+
+.handshake-step-number.completed {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+}
+
+.handshake-step-number.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+.handshake-step-number.failed {
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
+}
+
+.handshake-step.completed .handshake-step-label {
+    color: var(--text-primary);
+}
+
+.handshake-step.active .handshake-step-label {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* Run button */
+.btn-run {
+    background: var(--success);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-run:hover:not(:disabled) {
+    background: #00d2a0;
+}
+
+.btn-run:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Step detail text */
+.step-detail {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    word-break: break-all;
+}
+
+/* Backup warning banner */
+.backup-warning {
+    background: rgba(253, 203, 110, 0.12);
+    border: 1px solid var(--warning);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.backup-warning strong {
+    color: var(--warning);
+    font-size: 13px;
+}
+
+.backup-warning p {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+/* Key display */
+.key-display {
+    display: block;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--text-primary);
+    word-break: break-all;
+    user-select: all;
+    -webkit-user-select: all;
+}
+
+/* Successor entry */
+.successor-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.successor-entry:last-of-type {
+    border-bottom: none;
+}
