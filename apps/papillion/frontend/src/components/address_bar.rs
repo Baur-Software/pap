@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::registry::RegistryState;
-use papillion_shared::RegistryInfo;
+use papillion_shared::{AgentInfo, RegistryInfo};
 
 #[component]
 pub fn AddressBar() -> impl IntoView {
@@ -27,12 +27,29 @@ pub fn AddressBar() -> impl IntoView {
                 }
                 match bridge::invoke::<Args, RegistryInfo>(
                     "navigate_registry",
-                    &Args { url: value },
+                    &Args {
+                        url: value.clone(),
+                    },
                 )
                 .await
                 {
                     Ok(info) => {
                         registry.info.set(Some(info));
+                        // Auto-load agents after successful navigation
+                        #[derive(serde::Serialize)]
+                        struct ListArgs {
+                            registry_url: String,
+                        }
+                        if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
+                            "list_agents",
+                            &ListArgs {
+                                registry_url: value,
+                            },
+                        )
+                        .await
+                        {
+                            registry.agents.set(agents);
+                        }
                     }
                     Err(e) => {
                         registry.error.set(Some(e));

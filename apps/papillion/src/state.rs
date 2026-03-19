@@ -4,6 +4,10 @@ use std::sync::RwLock;
 use pap_federation::FederatedRegistry;
 use pap_webauthn::PrincipalSigner;
 
+use crate::seed::seed_demo_registry;
+
+pub const DEMO_REGISTRY_URL: &str = "pap://demo";
+
 /// Application state managed by Tauri.
 pub struct AppState {
     /// The principal's signer (None until identity is created/loaded).
@@ -18,10 +22,13 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
+        let mut registries = HashMap::new();
+        registries.insert(DEMO_REGISTRY_URL.to_string(), seed_demo_registry());
+
         Self {
             signer: RwLock::new(None),
-            registries: RwLock::new(HashMap::new()),
-            bookmarks: RwLock::new(Vec::new()),
+            registries: RwLock::new(registries),
+            bookmarks: RwLock::new(vec![DEMO_REGISTRY_URL.to_string()]),
         }
     }
 }

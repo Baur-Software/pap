@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::error::PapillionError;
-use crate::state::AppState;
+use crate::state::{AppState, DEMO_REGISTRY_URL};
 use papillion_shared::{AgentInfo, PeerInfo, RegistryInfo};
 
 use pap_federation::{FederatedRegistry, FederationClient, RegistryPeer};
@@ -38,6 +38,22 @@ pub async fn navigate_registry(
     state: State<'_, AppState>,
     url: String,
 ) -> Result<RegistryInfo, PapillionError> {
+    // Short-circuit for the built-in demo registry
+    if url.trim() == DEMO_REGISTRY_URL {
+        let registries = state
+            .registries
+            .read()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let registry = registries
+            .get(DEMO_REGISTRY_URL)
+            .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
+        return Ok(RegistryInfo {
+            url: DEMO_REGISTRY_URL.to_string(),
+            agent_count: registry.len(),
+            peer_count: registry.peers().len(),
+        });
+    }
+
     let endpoint = resolve_url(&url);
     let peer = RegistryPeer::new("unknown", &endpoint);
     let client = FederationClient::new();
@@ -123,6 +139,22 @@ pub async fn sync_agents(
     registry_url: String,
     action: String,
 ) -> Result<RegistryInfo, PapillionError> {
+    // Demo registry is pre-seeded, no sync needed
+    if registry_url.trim() == DEMO_REGISTRY_URL {
+        let registries = state
+            .registries
+            .read()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let registry = registries
+            .get(DEMO_REGISTRY_URL)
+            .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
+        return Ok(RegistryInfo {
+            url: DEMO_REGISTRY_URL.to_string(),
+            agent_count: registry.len(),
+            peer_count: registry.peers().len(),
+        });
+    }
+
     let endpoint = resolve_url(&registry_url);
     let peer = RegistryPeer::new("unknown", &endpoint);
     let client = FederationClient::new();
@@ -156,6 +188,11 @@ pub async fn discover_peers(
     state: State<'_, AppState>,
     registry_url: String,
 ) -> Result<Vec<PeerInfo>, PapillionError> {
+    // Demo registry has no real peers
+    if registry_url.trim() == DEMO_REGISTRY_URL {
+        return Ok(Vec::new());
+    }
+
     let endpoint = resolve_url(&registry_url);
     let peer = RegistryPeer::new("unknown", &endpoint);
     let client = FederationClient::new();
