@@ -47,6 +47,7 @@ pub fn ActivityPage() -> impl IntoView {
                         let agent_name = run.agent_name.clone();
                         let completed_at = run.completed_at.clone();
                         let receipt = run.receipt.clone();
+                        let receipt_url = run.receipt_url.clone();
                         view! {
                             <div class="card" style="margin-bottom: 12px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -73,7 +74,7 @@ pub fn ActivityPage() -> impl IntoView {
                                                 <span style="color: var(--text-secondary);">"Action: "</span>
                                                 <code>{r.action}</code>
                                             </div>
-                                            <div>
+                                            <div style="margin-bottom: 4px;">
                                                 <span style="color: var(--text-secondary);">"Co-signed: "</span>
                                                 <span class="badge badge-success">{co_sign_label}</span>
                                                 <span style="color: var(--text-secondary); margin-left: 12px;">"Disclosed: "</span>
@@ -81,6 +82,12 @@ pub fn ActivityPage() -> impl IntoView {
                                             </div>
                                         </div>
                                     }
+                                })}
+                                {receipt_url.map(|u| view! {
+                                    <div style="font-size: 12px; margin-top: 4px;">
+                                        <span style="color: var(--text-secondary);">"Receipt: "</span>
+                                        <code class="receipt-url">{u}</code>
+                                    </div>
                                 })}
                             </div>
                         }

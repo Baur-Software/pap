@@ -320,11 +320,14 @@ pub fn run_demo_scenario(
         timestamp: now_str(),
     });
 
+    let receipt_url = format!("pap://demo/receipts/{}", receipt_info.session_id);
+
     let result = DemoRunResult {
         scenario_id,
         agent_name: agent_name.clone(),
         steps,
         receipt: Some(receipt_info),
+        receipt_url: Some(receipt_url),
         completed_at: now_str(),
         success: true,
         error: None,

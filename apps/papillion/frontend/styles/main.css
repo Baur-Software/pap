@@ -576,3 +576,15 @@ body {
 .successor-entry:last-of-type {
     border-bottom: none;
 }
+
+/* Receipt URL */
+.receipt-url {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: rgba(108, 92, 231, 0.4);
+    text-underline-offset: 2px;
+    user-select: all;
+    -webkit-user-select: all;
+}

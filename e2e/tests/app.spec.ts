@@ -127,8 +127,11 @@ test.describe("Scenario page", () => {
 
     // Receipt card should appear
     await expect(page.locator("text=Transaction Receipt")).toBeVisible();
-    await expect(page.locator("code").filter({ hasText: "session-abc123" })).toBeVisible();
+    await expect(page.locator("code").filter({ hasText: /^session-abc123$/ })).toBeVisible();
     await expect(page.locator("code").filter({ hasText: "weather.lookup" }).first()).toBeVisible();
+
+    // Receipt URL should be visible
+    await expect(page.locator(".receipt-url")).toContainText("pap://demo/receipts/session-abc123");
   });
 
   test("back button returns to home", async ({ page }) => {

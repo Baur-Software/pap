@@ -179,7 +179,10 @@ pub fn ScenarioPage() -> impl IntoView {
 
                         // Show receipt after completion
                         <Show when=move || run_result.get().is_some()>
-                            {move || run_result.get().and_then(|r| r.receipt).map(|receipt| view! {
+                            {move || run_result.get().and_then(|r| {
+                                let url = r.receipt_url.clone();
+                                r.receipt.map(|receipt| (receipt, url))
+                            }).map(|(receipt, url)| view! {
                                 <div class="card" style="margin-bottom: 16px;">
                                     <h3 style="font-size: 14px; margin-bottom: 12px;">"Transaction Receipt"</h3>
                                     <div style="font-size: 12px; margin-bottom: 8px;">
@@ -194,7 +197,7 @@ pub fn ScenarioPage() -> impl IntoView {
                                         <span style="color: var(--text-secondary);">"Co-signed: "</span>
                                         <span class="badge badge-success">{if receipt.co_signed { "Yes" } else { "No" }}</span>
                                     </div>
-                                    <div style="font-size: 12px;">
+                                    <div style="font-size: 12px; margin-bottom: 8px;">
                                         <span style="color: var(--text-secondary);">"Disclosed: "</span>
                                         {if receipt.property_refs.is_empty() {
                                             "None (zero disclosure)".to_string()
@@ -202,6 +205,12 @@ pub fn ScenarioPage() -> impl IntoView {
                                             receipt.property_refs.join(", ")
                                         }}
                                     </div>
+                                    {url.map(|u| view! {
+                                        <div style="font-size: 12px; margin-top: 4px;">
+                                            <span style="color: var(--text-secondary);">"Receipt: "</span>
+                                            <code class="receipt-url">{u}</code>
+                                        </div>
+                                    })}
                                 </div>
                             })}
                         </Show>

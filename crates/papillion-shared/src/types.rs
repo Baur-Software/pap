@@ -213,6 +213,7 @@ pub struct DemoRunResult {
     pub agent_name: String,
     pub steps: Vec<DemoStepResult>,
     pub receipt: Option<ReceiptInfo>,
+    pub receipt_url: Option<String>,
     pub completed_at: String,
     pub success: bool,
     pub error: Option<String>,
