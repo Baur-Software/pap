@@ -3,13 +3,14 @@ use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session};
 use pap_did::{PrincipalKeypair, SessionKeypair};
+use serde::Deserialize;
 use tauri::State;
 
 use crate::error::PapillionError;
 use crate::state::{AppState, DEMO_REGISTRY_URL};
 use papillion_shared::{
     DemoRunResult, DemoStepResult, OrchestratorConfig, OrchestratorStatus, ReceiptInfo,
-    ScenarioCard, SetupState,
+    ScenarioCard, SearchResult, SetupState,
 };
 
 /// Get the current orchestrator configuration.
@@ -139,11 +140,84 @@ pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
     ])
 }
 
+// ── DuckDuckGo JSON API types ────────────────────────────────
+
+#[derive(Deserialize)]
+struct DdgResponse {
+    #[serde(rename = "AbstractText")]
+    abstract_text: String,
+    #[serde(rename = "AbstractURL")]
+    abstract_url: String,
+    #[serde(rename = "AbstractSource")]
+    abstract_source: String,
+    #[serde(rename = "RelatedTopics")]
+    related_topics: Vec<DdgTopic>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DdgTopic {
+    Result { #[serde(rename = "Text")] text: String, #[serde(rename = "FirstURL")] first_url: String },
+    Group { #[serde(rename = "Topics")] topics: Vec<DdgTopic>, #[serde(rename = "Name")] _name: String },
+}
+
+/// Perform a real web search via DuckDuckGo Instant Answer JSON API.
+async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
+    let client = reqwest::Client::builder()
+        .user_agent("Papillion/0.1 (PAP Browser)")
+        .build()
+        .map_err(|e| PapillionError::from(e.to_string()))?;
+
+    let resp: DdgResponse = client
+        .get("https://api.duckduckgo.com/")
+        .query(&[("q", query), ("format", "json"), ("no_html", "1"), ("skip_disambig", "1")])
+        .send()
+        .await
+        .map_err(|e| PapillionError::from(e.to_string()))?
+        .json()
+        .await
+        .map_err(|e| PapillionError::from(e.to_string()))?;
+
+    let mut results = Vec::new();
+
+    // Include the abstract if present
+    if !resp.abstract_text.is_empty() {
+        results.push(SearchResult {
+            title: resp.abstract_source.clone(),
+            url: resp.abstract_url.clone(),
+            snippet: resp.abstract_text,
+        });
+    }
+
+    // Flatten related topics
+    fn collect_topics(topics: &[DdgTopic], out: &mut Vec<SearchResult>) {
+        for topic in topics {
+            match topic {
+                DdgTopic::Result { text, first_url } => {
+                    out.push(SearchResult {
+                        title: text.chars().take(80).collect::<String>(),
+                        url: first_url.clone(),
+                        snippet: text.clone(),
+                    });
+                }
+                DdgTopic::Group { topics, .. } => collect_topics(topics, out),
+            }
+            if out.len() >= 10 {
+                return;
+            }
+        }
+    }
+    collect_topics(&resp.related_topics, &mut results);
+
+    Ok(results)
+}
+
 /// Run a demo scenario through the full 6-step PAP handshake.
 #[tauri::command]
-pub fn run_demo_scenario(
+pub async fn run_demo_scenario(
     state: State<'_, AppState>,
     scenario_id: String,
+    query: Option<String>,
 ) -> Result<DemoRunResult, PapillionError> {
     let now_str = || Utc::now().to_rfc3339();
 
@@ -161,20 +235,34 @@ pub fn run_demo_scenario(
     let mut steps = Vec::new();
 
     // ── Step 1: Discover agent ──────────────────────────────
-    let registries = state
-        .registries
-        .read()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
-    let registry = registries
-        .get(DEMO_REGISTRY_URL)
-        .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
-    let agent_ad = registry
-        .all_advertisements()
-        .iter()
-        .find(|ad| ad.name == *agent_name)
-        .ok_or_else(|| PapillionError::from("Agent not found in registry"))?
-        .clone();
-    let agent_did = agent_ad.provider.did.clone();
+    // Extract data from locks in a block so guards are dropped before any .await
+    let (agent_did, principal_kp) = {
+        let registries = state
+            .registries
+            .read()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let registry = registries
+            .get(DEMO_REGISTRY_URL)
+            .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
+        let agent_ad = registry
+            .all_advertisements()
+            .iter()
+            .find(|ad| ad.name == *agent_name)
+            .ok_or_else(|| PapillionError::from("Agent not found in registry"))?
+            .clone();
+        let did = agent_ad.provider.did.clone();
+
+        let seed_lock = state
+            .principal_seed
+            .read()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let seed = seed_lock
+            .as_ref()
+            .ok_or_else(|| PapillionError::from("No identity configured"))?;
+        let kp = PrincipalKeypair::from_bytes(seed)
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        (did, kp)
+    };
 
     steps.push(DemoStepResult {
         step_number: 1,
@@ -184,16 +272,6 @@ pub fn run_demo_scenario(
         timestamp: now_str(),
     });
 
-    // Get principal signing key from stored seed
-    let seed_lock = state
-        .principal_seed
-        .read()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
-    let seed = seed_lock
-        .as_ref()
-        .ok_or_else(|| PapillionError::from("No identity configured"))?;
-    let principal_kp = PrincipalKeypair::from_bytes(seed)
-        .map_err(|e| PapillionError::from(e.to_string()))?;
     let principal_did = principal_kp.did();
 
     // ── Step 2: Issue mandate ───────────────────────────────
@@ -256,18 +334,33 @@ pub fn run_demo_scenario(
     });
 
     // ── Step 4: Exchange data ───────────────────────────────
+    let mut search_results: Option<Vec<SearchResult>> = None;
+    let step4_detail = if scenario_id == "search" {
+        if let Some(ref q) = query {
+            match web_search(q).await {
+                Ok(results) => {
+                    let count = results.len();
+                    search_results = Some(results);
+                    format!("Query: \"{}\" \u{2014} {} results via zero-disclosure session", q, count)
+                }
+                Err(e) => format!("Search failed: {}", e),
+            }
+        } else {
+            "No query provided".into()
+        }
+    } else if scenario.requires_disclosure.is_empty() {
+        "Zero disclosure \u{2014} no personal data exchanged".into()
+    } else {
+        format!(
+            "Disclosed {} properties via PAP trust chain",
+            scenario.requires_disclosure.len()
+        )
+    };
     steps.push(DemoStepResult {
         step_number: 4,
         step_name: "Exchange data".into(),
         status: "completed".into(),
-        detail: Some(if scenario.requires_disclosure.is_empty() {
-            "Zero disclosure — no personal data exchanged".into()
-        } else {
-            format!(
-                "Disclosed {} properties via PAP trust chain",
-                scenario.requires_disclosure.len()
-            )
-        }),
+        detail: Some(step4_detail),
         timestamp: now_str(),
     });
 
@@ -328,6 +421,8 @@ pub fn run_demo_scenario(
         steps,
         receipt: Some(receipt_info),
         receipt_url: Some(receipt_url),
+        query,
+        search_results,
         completed_at: now_str(),
         success: true,
         error: None,
