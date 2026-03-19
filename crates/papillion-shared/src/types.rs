@@ -214,9 +214,19 @@ pub struct DemoRunResult {
     pub steps: Vec<DemoStepResult>,
     pub receipt: Option<ReceiptInfo>,
     pub receipt_url: Option<String>,
+    pub query: Option<String>,
+    pub search_results: Option<Vec<SearchResult>>,
     pub completed_at: String,
     pub success: bool,
     pub error: Option<String>,
+}
+
+/// A web search result returned by the search agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchResult {
+    pub title: String,
+    pub url: String,
+    pub snippet: String,
 }
 
 /// Result of a single handshake step.
