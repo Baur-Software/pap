@@ -143,3 +143,63 @@ impl Default for AppSettings {
         }
     }
 }
+
+// ── Orchestrator types ──────────────────────────────────────
+
+/// LLM provider for the orchestrator.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub enum LlmProvider {
+    BuiltIn,
+    Ollama { endpoint: String, model: String },
+    OpenAiCompatible { endpoint: String, api_key: String, model: String },
+    #[default]
+    None,
+}
+
+/// Orchestrator configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrchestratorConfig {
+    pub llm_provider: LlmProvider,
+    pub mandate_ttl_hours: u64,
+    pub auto_approve_zero_disclosure: bool,
+}
+
+impl Default for OrchestratorConfig {
+    fn default() -> Self {
+        Self {
+            llm_provider: LlmProvider::None,
+            mandate_ttl_hours: 8,
+            auto_approve_zero_disclosure: true,
+        }
+    }
+}
+
+/// Orchestrator runtime status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum OrchestratorStatus {
+    Unconfigured,
+    Disconnected,
+    Ready,
+    DemoOnly,
+}
+
+/// First-run setup state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetupState {
+    pub identity_created: bool,
+    pub llm_configured: bool,
+    pub setup_complete: bool,
+}
+
+/// A user-facing scenario card for the Home page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScenarioCard {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub icon: String,
+    pub agent_name: String,
+    pub action_type: String,
+    pub requires_disclosure: Vec<String>,
+    pub returns: Vec<String>,
+}

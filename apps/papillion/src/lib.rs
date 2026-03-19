@@ -20,6 +20,11 @@ pub fn run() {
             commands::registry::discover_peers,
             commands::registry::add_bookmark,
             commands::registry::list_bookmarks,
+            commands::orchestrator::get_orchestrator_config,
+            commands::orchestrator::configure_orchestrator,
+            commands::orchestrator::get_orchestrator_status,
+            commands::orchestrator::get_setup_state,
+            commands::orchestrator::list_scenarios,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillion");
