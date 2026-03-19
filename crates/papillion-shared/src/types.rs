@@ -149,7 +149,6 @@ impl Default for AppSettings {
 /// LLM provider for the orchestrator.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum LlmProvider {
-    BuiltIn,
     Ollama { endpoint: String, model: String },
     OpenAiCompatible { endpoint: String, api_key: String, model: String },
     #[default]

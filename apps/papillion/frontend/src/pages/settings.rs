@@ -61,7 +61,6 @@ fn GeneralTab() -> impl IntoView {
     Effect::new(move || {
         let config = orchestrator.config.get();
         match &config.llm_provider {
-            LlmProvider::BuiltIn => selected.set("builtin".into()),
             LlmProvider::Ollama { endpoint, model } => {
                 selected.set("ollama".into());
                 ollama_endpoint.set(endpoint.clone());
@@ -83,7 +82,6 @@ fn GeneralTab() -> impl IntoView {
 
     let save = move |_| {
         let provider = match selected.get().as_str() {
-            "builtin" => LlmProvider::BuiltIn,
             "ollama" => LlmProvider::Ollama {
                 endpoint: ollama_endpoint.get(),
                 model: ollama_model.get(),
@@ -132,7 +130,6 @@ fn GeneralTab() -> impl IntoView {
                 prop:value=move || selected.get()
             >
                 <option value="none">"None (Demo Mode)"</option>
-                <option value="builtin">"Built-in (coming soon)"</option>
                 <option value="ollama">"Ollama"</option>
                 <option value="openai">"OpenAI-compatible"</option>
             </select>

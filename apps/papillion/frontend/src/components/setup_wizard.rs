@@ -42,7 +42,6 @@ pub fn SetupWizard() -> impl IntoView {
     let save_config = move |_| {
         let provider = selected_provider.get();
         let llm = match provider.as_str() {
-            "builtin" => papillion_shared::LlmProvider::BuiltIn,
             "ollama" => papillion_shared::LlmProvider::Ollama {
                 endpoint: ollama_endpoint.get(),
                 model: ollama_model.get(),
@@ -95,13 +94,6 @@ pub fn SetupWizard() -> impl IntoView {
                     </p>
 
                     <div class="setup-options">
-                        <div
-                            class=move || if selected_provider.get() == "builtin" { "setup-option selected" } else { "setup-option" }
-                            on:click=move |_| selected_provider.set("builtin".into())
-                        >
-                            <div class="setup-option-title">"Built-in (coming soon)"</div>
-                            <div class="setup-option-desc">"Lightweight local model for basic tasks"</div>
-                        </div>
                         <div
                             class=move || if selected_provider.get() == "ollama" { "setup-option selected" } else { "setup-option" }
                             on:click=move |_| selected_provider.set("ollama".into())

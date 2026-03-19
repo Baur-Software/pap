@@ -232,6 +232,9 @@ window.__TAURI__ = {
             agents: [],
           };
 
+        case 'check_llm_connection':
+          return 'Hello! I am a mock LLM response.';
+
         default:
           console.warn('[tauri-mock] unhandled command:', cmd);
           return null;

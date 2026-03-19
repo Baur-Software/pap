@@ -27,6 +27,7 @@ pub fn run() {
             commands::orchestrator::list_scenarios,
             commands::orchestrator::run_demo_scenario,
             commands::orchestrator::list_completed_runs,
+            commands::llm::check_llm_connection,
             commands::identity::export_key,
             commands::identity::import_key,
             commands::identity::get_key_backup_status,
