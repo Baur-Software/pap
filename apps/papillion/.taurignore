@@ -1,6 +1,2 @@
-frontend/dist
-frontend/target
-frontend/src
-frontend/styles
-frontend/assets
-icons
+frontend/
+icons/
