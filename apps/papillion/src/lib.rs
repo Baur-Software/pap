@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod error;
+pub mod seed;
 pub mod state;
 
 use state::AppState;

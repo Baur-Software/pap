@@ -24,6 +24,7 @@ pub fn App() -> impl IntoView {
         <Router>
             <div class="app-shell">
                 <header class="header">
+                    <img src="logo.png" alt="Papillion" class="header-logo" />
                     <h1>"Papillion"</h1>
                     <AddressBar />
                 </header>

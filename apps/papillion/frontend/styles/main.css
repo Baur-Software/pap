@@ -49,6 +49,12 @@ body {
     -webkit-app-region: drag;
 }
 
+.header-logo {
+    height: 28px;
+    width: 28px;
+    -webkit-app-region: no-drag;
+}
+
 .header h1 {
     font-size: 14px;
     font-weight: 600;
