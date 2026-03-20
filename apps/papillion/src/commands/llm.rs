@@ -148,3 +148,118 @@ async fn openai_chat(
         .map(|c| c.message.content)
         .ok_or_else(|| PapillionError::from("No response from model"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── chat routing ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn chat_builtin_returns_error() {
+        let provider = LlmProvider::BuiltIn {
+            model_id: "test".into(),
+        };
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+        }];
+        let result = chat(&provider, &messages).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message.contains("on-device inference"));
+    }
+
+    #[tokio::test]
+    async fn chat_none_returns_error() {
+        let provider = LlmProvider::None;
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+        }];
+        let result = chat(&provider, &messages).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message.contains("No LLM provider"));
+    }
+
+    // ── ChatMessage ───────────────────────────────────────
+
+    #[test]
+    fn chat_message_serializes() {
+        let msg = ChatMessage {
+            role: "user".into(),
+            content: "Hello".into(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("user"));
+        assert!(json.contains("Hello"));
+    }
+
+    #[test]
+    fn chat_message_clone() {
+        let msg = ChatMessage {
+            role: "assistant".into(),
+            content: "Hi there".into(),
+        };
+        let cloned = msg.clone();
+        assert_eq!(cloned.role, "assistant");
+        assert_eq!(cloned.content, "Hi there");
+    }
+
+    // ── OllamaRequest serialization ───────────────────────
+
+    #[test]
+    fn ollama_request_serializes() {
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "test".into(),
+        }];
+        let req = OllamaRequest {
+            model: "llama3",
+            messages: &messages,
+            stream: false,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("llama3"));
+        assert!(json.contains("\"stream\":false"));
+    }
+
+    // ── OpenAiRequest serialization ───────────────────────
+
+    #[test]
+    fn openai_request_serializes() {
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "test".into(),
+        }];
+        let req = OpenAiRequest {
+            model: "gpt-4o",
+            messages: &messages,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("gpt-4o"));
+    }
+
+    // ── Response deserialization ───────────────────────────
+
+    #[test]
+    fn ollama_response_deserializes() {
+        let json = r#"{"message": {"content": "Hello!"}}"#;
+        let resp: OllamaResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.message.content, "Hello!");
+    }
+
+    #[test]
+    fn openai_response_deserializes() {
+        let json = r#"{"choices": [{"message": {"content": "Hi there"}}]}"#;
+        let resp: OpenAiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.choices.len(), 1);
+        assert_eq!(resp.choices[0].message.content, "Hi there");
+    }
+
+    #[test]
+    fn openai_response_empty_choices() {
+        let json = r#"{"choices": []}"#;
+        let resp: OpenAiResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.choices.is_empty());
+    }
+}

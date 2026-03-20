@@ -56,3 +56,94 @@ impl Default for AppState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn demo_registry_url_is_pap_demo() {
+        assert_eq!(DEMO_REGISTRY_URL, "pap://demo");
+    }
+
+    #[test]
+    fn default_state_has_identity() {
+        let state = AppState::default();
+        let signer = state.signer.read().unwrap();
+        assert!(signer.is_some());
+    }
+
+    #[test]
+    fn default_state_has_seed() {
+        let state = AppState::default();
+        let seed = state.principal_seed.read().unwrap();
+        assert!(seed.is_some());
+        assert_eq!(seed.as_ref().unwrap().len(), 32);
+    }
+
+    #[test]
+    fn default_state_has_demo_registry() {
+        let state = AppState::default();
+        let registries = state.registries.read().unwrap();
+        assert!(registries.contains_key(DEMO_REGISTRY_URL));
+    }
+
+    #[test]
+    fn default_state_demo_registry_has_agents() {
+        let state = AppState::default();
+        let registries = state.registries.read().unwrap();
+        let demo = registries.get(DEMO_REGISTRY_URL).unwrap();
+        assert_eq!(demo.len(), 5);
+    }
+
+    #[test]
+    fn default_state_has_demo_bookmark() {
+        let state = AppState::default();
+        let bookmarks = state.bookmarks.read().unwrap();
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0], DEMO_REGISTRY_URL);
+    }
+
+    #[test]
+    fn default_state_orchestrator_config_is_builtin() {
+        let state = AppState::default();
+        let config = state.orchestrator_config.read().unwrap();
+        assert!(matches!(config.llm_provider, papillion_shared::LlmProvider::BuiltIn { .. }));
+    }
+
+    #[test]
+    fn default_state_has_agent_keypairs() {
+        let state = AppState::default();
+        let keypairs = state.demo_agent_keypairs.read().unwrap();
+        assert_eq!(keypairs.len(), 5);
+    }
+
+    #[test]
+    fn default_state_no_completed_runs() {
+        let state = AppState::default();
+        let runs = state.completed_runs.read().unwrap();
+        assert!(runs.is_empty());
+    }
+
+    #[test]
+    fn default_state_key_not_backed_up() {
+        let state = AppState::default();
+        let backed_up = state.key_backed_up.read().unwrap();
+        assert!(!*backed_up);
+    }
+
+    #[test]
+    fn default_state_no_successors() {
+        let state = AppState::default();
+        let successors = state.successor_designations.read().unwrap();
+        assert!(successors.is_empty());
+    }
+
+    #[test]
+    fn default_state_identity_did_starts_with_prefix() {
+        let state = AppState::default();
+        let signer = state.signer.read().unwrap();
+        let did = signer.as_ref().unwrap().did();
+        assert!(did.starts_with("did:key:z"), "DID should start with did:key:z, got {did}");
+    }
+}

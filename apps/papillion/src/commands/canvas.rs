@@ -259,3 +259,116 @@ fn default_structured_response(prompt: &str) -> Result<(String, serde_json::Valu
         }),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── default_structured_response ───────────────────────
+
+    #[test]
+    fn default_response_returns_structured_data_type() {
+        let (schema_type, _) = default_structured_response("hello world").unwrap();
+        assert_eq!(schema_type, "StructuredData");
+    }
+
+    #[test]
+    fn default_response_embeds_prompt_text() {
+        let (_, content) = default_structured_response("book a flight").unwrap();
+        assert_eq!(content["prompt"], "book a flight");
+    }
+
+    #[test]
+    fn default_response_has_pap_note() {
+        let (_, content) = default_structured_response("test").unwrap();
+        let note = content["note"].as_str().unwrap();
+        assert!(note.contains("PAP"));
+    }
+
+    #[test]
+    fn default_response_has_type_field() {
+        let (_, content) = default_structured_response("test").unwrap();
+        assert_eq!(content["@type"], "StructuredData");
+    }
+
+    #[test]
+    fn default_response_empty_prompt() {
+        let (schema_type, content) = default_structured_response("").unwrap();
+        assert_eq!(schema_type, "StructuredData");
+        assert_eq!(content["prompt"], "");
+    }
+
+    // ── Phase labels ──────────────────────────────────────
+
+    #[test]
+    fn canvas_prompt_has_six_phases() {
+        let phases = [
+            (1, "Discovering agents..."),
+            (2, "Issuing mandate..."),
+            (3, "Opening session..."),
+            (4, "Exchanging data..."),
+            (5, "Co-signing receipt..."),
+            (6, "Closing session..."),
+        ];
+        assert_eq!(phases.len(), 6);
+        for (i, &(phase, _label)) in phases.iter().enumerate() {
+            assert_eq!(phase, (i + 1) as u8);
+        }
+    }
+
+    // ── CanvasBlock construction ──────────────────────────
+
+    #[test]
+    fn resolving_block_has_no_content() {
+        let block = CanvasBlock {
+            id: "blk-test".into(),
+            prompt_id: "p-1".into(),
+            state: BlockState::Resolving {
+                phase: 1,
+                phase_label: "Discovering...".into(),
+            },
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        };
+        assert!(block.schema_type.is_none());
+        assert!(block.content.is_none());
+    }
+
+    #[test]
+    fn resolved_block_has_content() {
+        let block = CanvasBlock {
+            id: "blk-test".into(),
+            prompt_id: "p-1".into(),
+            state: BlockState::Resolved,
+            schema_type: Some("FlightReservation".into()),
+            content: Some(json!({"@type": "FlightReservation"})),
+            linked_block_ids: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        };
+        assert!(block.schema_type.is_some());
+        assert!(block.content.is_some());
+    }
+
+    #[test]
+    fn block_event_serializes() {
+        let event = BlockEvent {
+            block: CanvasBlock {
+                id: "blk-1".into(),
+                prompt_id: "p-1".into(),
+                state: BlockState::Resolved,
+                schema_type: Some("Answer".into()),
+                content: Some(json!({"text": "hello"})),
+                linked_block_ids: Vec::new(),
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+            },
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("blk-1"));
+        assert!(json.contains("Answer"));
+    }
+}

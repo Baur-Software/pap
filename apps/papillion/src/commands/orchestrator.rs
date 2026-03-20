@@ -505,3 +505,154 @@ pub fn list_completed_runs(
         .map_err(|e| PapillionError::from(e.to_string()))?;
     Ok(runs.clone())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── list_scenarios ────────────────────────────────────
+
+    #[test]
+    fn list_scenarios_returns_five_cards() {
+        let cards = list_scenarios().unwrap();
+        assert_eq!(cards.len(), 5);
+    }
+
+    #[test]
+    fn scenario_ids_are_unique() {
+        let cards = list_scenarios().unwrap();
+        let mut ids: Vec<&str> = cards.iter().map(|c| c.id.as_str()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), cards.len());
+    }
+
+    #[test]
+    fn all_scenarios_have_required_fields() {
+        for card in list_scenarios().unwrap() {
+            assert!(!card.id.is_empty(), "id must be set");
+            assert!(!card.title.is_empty(), "title must be set");
+            assert!(!card.description.is_empty(), "description must be set");
+            assert!(!card.icon.is_empty(), "icon must be set");
+            assert!(!card.agent_name.is_empty(), "agent_name must be set");
+            assert!(
+                card.action_type.starts_with("schema:"),
+                "action_type should be a schema.org action"
+            );
+            assert!(!card.returns.is_empty(), "returns must have at least one item");
+        }
+    }
+
+    #[test]
+    fn search_scenario_is_zero_disclosure() {
+        let cards = list_scenarios().unwrap();
+        let search = cards.iter().find(|c| c.id == "search").unwrap();
+        assert!(search.requires_disclosure.is_empty());
+    }
+
+    #[test]
+    fn flight_scenario_requires_name_and_nationality() {
+        let cards = list_scenarios().unwrap();
+        let flight = cards.iter().find(|c| c.id == "flight").unwrap();
+        assert_eq!(flight.requires_disclosure.len(), 2);
+        assert!(flight
+            .requires_disclosure
+            .contains(&"schema:Person.name".to_string()));
+        assert!(flight
+            .requires_disclosure
+            .contains(&"schema:Person.nationality".to_string()));
+    }
+
+    #[test]
+    fn hotel_scenario_requires_name_only() {
+        let cards = list_scenarios().unwrap();
+        let hotel = cards.iter().find(|c| c.id == "hotel").unwrap();
+        assert_eq!(hotel.requires_disclosure.len(), 1);
+        assert_eq!(hotel.requires_disclosure[0], "schema:Person.name");
+    }
+
+    #[test]
+    fn payment_scenario_is_zero_disclosure() {
+        let cards = list_scenarios().unwrap();
+        let payment = cards.iter().find(|c| c.id == "payment").unwrap();
+        assert!(payment.requires_disclosure.is_empty());
+    }
+
+    #[test]
+    fn ai_scenario_is_zero_disclosure() {
+        let cards = list_scenarios().unwrap();
+        let ai = cards.iter().find(|c| c.id == "ai").unwrap();
+        assert!(ai.requires_disclosure.is_empty());
+    }
+
+    // ── list_builtin_models ───────────────────────────────
+
+    #[test]
+    fn list_builtin_models_delegates_to_catalog() {
+        let models = list_builtin_models().unwrap();
+        let catalog = builtin_model_catalog();
+        assert_eq!(models.len(), catalog.len());
+        assert_eq!(models[0].id, catalog[0].id);
+    }
+
+    // ── DdgTopic deserialization ──────────────────────────
+
+    #[test]
+    fn ddg_topic_result_deserializes() {
+        let json = r#"{"Text": "Hello world", "FirstURL": "https://example.com"}"#;
+        let topic: DdgTopic = serde_json::from_str(json).unwrap();
+        match topic {
+            DdgTopic::Result { text, first_url } => {
+                assert_eq!(text, "Hello world");
+                assert_eq!(first_url, "https://example.com");
+            }
+            DdgTopic::Group { .. } => panic!("Expected Result variant"),
+        }
+    }
+
+    #[test]
+    fn ddg_topic_group_deserializes() {
+        let json = r#"{
+            "Name": "Related",
+            "Topics": [
+                {"Text": "Sub topic", "FirstURL": "https://sub.example.com"}
+            ]
+        }"#;
+        let topic: DdgTopic = serde_json::from_str(json).unwrap();
+        match topic {
+            DdgTopic::Group { topics, .. } => {
+                assert_eq!(topics.len(), 1);
+            }
+            DdgTopic::Result { .. } => panic!("Expected Group variant"),
+        }
+    }
+
+    #[test]
+    fn ddg_response_deserializes() {
+        let json = r#"{
+            "AbstractText": "Test abstract",
+            "AbstractURL": "https://example.com",
+            "AbstractSource": "Wikipedia",
+            "RelatedTopics": []
+        }"#;
+        let resp: DdgResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.abstract_text, "Test abstract");
+        assert_eq!(resp.abstract_source, "Wikipedia");
+        assert!(resp.related_topics.is_empty());
+    }
+
+    #[test]
+    fn ddg_response_with_topics() {
+        let json = r#"{
+            "AbstractText": "",
+            "AbstractURL": "",
+            "AbstractSource": "",
+            "RelatedTopics": [
+                {"Text": "Topic 1", "FirstURL": "https://t1.com"},
+                {"Text": "Topic 2", "FirstURL": "https://t2.com"}
+            ]
+        }"#;
+        let resp: DdgResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.related_topics.len(), 2);
+    }
+}

@@ -95,3 +95,117 @@ pub fn seed_demo_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeyp
 
     (registry, keypairs)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seed_creates_five_agents() {
+        let (registry, _) = seed_demo_registry();
+        assert_eq!(registry.len(), 5);
+    }
+
+    #[test]
+    fn seed_creates_matching_keypairs() {
+        let (_, keypairs) = seed_demo_registry();
+        assert_eq!(keypairs.len(), 5);
+    }
+
+    #[test]
+    fn seed_agent_names_match_keypair_keys() {
+        let (registry, keypairs) = seed_demo_registry();
+        let expected_names = [
+            "Web Search Agent",
+            "Flight Booking Agent",
+            "Hotel Booking Agent",
+            "Payment Agent",
+            "Local AI Assistant",
+        ];
+        for name in &expected_names {
+            assert!(keypairs.contains_key(*name), "Missing keypair for {name}");
+        }
+        let ads = registry.all_advertisements();
+        for name in &expected_names {
+            assert!(
+                ads.iter().any(|ad| ad.name == *name),
+                "Missing advertisement for {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn seed_agents_have_valid_dids() {
+        let (_, keypairs) = seed_demo_registry();
+        for (name, kp) in &keypairs {
+            let did = kp.did();
+            assert!(
+                did.starts_with("did:key:z"),
+                "Agent '{name}' DID should start with did:key:z, got {did}"
+            );
+        }
+    }
+
+    #[test]
+    fn seed_search_agent_is_zero_disclosure() {
+        let (registry, _) = seed_demo_registry();
+        let ads = registry.all_advertisements();
+        let search = ads.iter().find(|a| a.name == "Web Search Agent").unwrap();
+        assert!(search.requires_disclosure.is_empty());
+    }
+
+    #[test]
+    fn seed_flight_agent_requires_disclosure() {
+        let (registry, _) = seed_demo_registry();
+        let ads = registry.all_advertisements();
+        let flight = ads
+            .iter()
+            .find(|a| a.name == "Flight Booking Agent")
+            .unwrap();
+        assert_eq!(flight.requires_disclosure.len(), 2);
+    }
+
+    #[test]
+    fn seed_agents_are_signed() {
+        let (registry, _) = seed_demo_registry();
+        let ads = registry.all_advertisements();
+        for ad in ads {
+            // Signed advertisements have a non-empty hash
+            assert!(!ad.hash().is_empty(), "Ad for {} should be signed", ad.name);
+        }
+    }
+
+    #[test]
+    fn seed_agents_have_capabilities() {
+        let (registry, _) = seed_demo_registry();
+        let ads = registry.all_advertisements();
+        for ad in ads {
+            assert!(
+                !ad.capability.is_empty(),
+                "Agent {} should have at least one capability",
+                ad.name
+            );
+            for cap in &ad.capability {
+                assert!(
+                    cap.starts_with("schema:"),
+                    "Capability should be a schema.org action"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn seed_registry_can_query_search_action() {
+        let (registry, _) = seed_demo_registry();
+        let results = registry.query_local("schema:SearchAction");
+        assert!(!results.is_empty());
+        assert!(results.iter().any(|a| a.name == "Web Search Agent"));
+    }
+
+    #[test]
+    fn seed_registry_can_query_reserve_action() {
+        let (registry, _) = seed_demo_registry();
+        let results = registry.query_local("schema:ReserveAction");
+        assert_eq!(results.len(), 2, "flight + hotel agents");
+    }
+}

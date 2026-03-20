@@ -256,3 +256,98 @@ pub fn list_bookmarks(state: State<'_, AppState>) -> Result<Vec<String>, Papilli
 
     Ok(bookmarks.clone())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── resolve_url ───────────────────────────────────────
+
+    #[test]
+    fn resolve_pap_protocol_url() {
+        let result = resolve_url("pap://registry.example.com");
+        assert_eq!(result, "http://registry.example.com");
+    }
+
+    #[test]
+    fn resolve_http_url() {
+        let result = resolve_url("http://registry.example.com");
+        assert_eq!(result, "http://registry.example.com");
+    }
+
+    #[test]
+    fn resolve_https_url() {
+        let result = resolve_url("https://registry.example.com");
+        assert_eq!(result, "http://registry.example.com");
+    }
+
+    #[test]
+    fn resolve_url_strips_trailing_slash() {
+        let result = resolve_url("pap://registry.example.com/");
+        assert_eq!(result, "http://registry.example.com");
+    }
+
+    #[test]
+    fn resolve_url_trims_whitespace() {
+        let result = resolve_url("  pap://registry.example.com  ");
+        assert_eq!(result, "http://registry.example.com");
+    }
+
+    #[test]
+    fn resolve_bare_hostname() {
+        let result = resolve_url("registry.example.com");
+        assert_eq!(result, "http://registry.example.com");
+    }
+
+    #[test]
+    fn resolve_url_with_port() {
+        let result = resolve_url("pap://localhost:8080");
+        assert_eq!(result, "http://localhost:8080");
+    }
+
+    // ── ad_to_info ────────────────────────────────────────
+
+    #[test]
+    fn ad_to_info_maps_fields_correctly() {
+        let kp = pap_did::PrincipalKeypair::generate();
+        let mut ad = pap_marketplace::AgentAdvertisement::new(
+            "Test Agent",
+            "TestCorp",
+            &kp.did(),
+            vec!["schema:SearchAction".into()],
+            vec!["schema:WebPage".into()],
+            vec!["schema:Person.name".into()],
+            vec!["schema:SearchResult".into()],
+        );
+        ad.sign(kp.signing_key());
+
+        let info = ad_to_info(&ad);
+        assert_eq!(info.name, "Test Agent");
+        assert_eq!(info.provider_name, "TestCorp");
+        assert_eq!(info.capabilities, vec!["schema:SearchAction"]);
+        assert_eq!(info.object_types, vec!["schema:WebPage"]);
+        assert_eq!(info.requires_disclosure, vec!["schema:Person.name"]);
+        assert_eq!(info.returns, vec!["schema:SearchResult"]);
+        assert!(info.endpoint.is_none());
+        assert!(!info.content_hash.is_empty());
+    }
+
+    #[test]
+    fn ad_to_info_zero_disclosure_agent() {
+        let kp = pap_did::PrincipalKeypair::generate();
+        let mut ad = pap_marketplace::AgentAdvertisement::new(
+            "Privacy Agent",
+            "PrivCorp",
+            &kp.did(),
+            vec!["schema:PayAction".into()],
+            vec![],
+            vec![],
+            vec!["schema:Invoice".into()],
+        );
+        ad.sign(kp.signing_key());
+
+        let info = ad_to_info(&ad);
+        assert!(info.requires_disclosure.is_empty());
+        assert!(info.object_types.is_empty());
+    }
+}

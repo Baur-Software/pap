@@ -548,4 +548,476 @@ mod tests {
         let back: BuiltInModelInfo = serde_json::from_str(&json).unwrap();
         assert_eq!(info, back);
     }
+
+    // ── AppSettings default ───────────────────────────────
+
+    #[test]
+    fn app_settings_default_values() {
+        let settings = AppSettings::default();
+        assert_eq!(settings.default_ttl_hours, 24);
+        assert_eq!(settings.theme, "dark");
+        assert!(settings.bookmarks.is_empty());
+    }
+
+    #[test]
+    fn app_settings_roundtrip_json() {
+        let settings = AppSettings {
+            default_ttl_hours: 48,
+            theme: "light".into(),
+            bookmarks: vec!["pap://registry.example".into()],
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let back: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.default_ttl_hours, 48);
+        assert_eq!(back.theme, "light");
+        assert_eq!(back.bookmarks.len(), 1);
+    }
+
+    // ── BlockState serde ──────────────────────────────────
+
+    #[test]
+    fn block_state_resolving_roundtrip_json() {
+        let state = BlockState::Resolving {
+            phase: 3,
+            phase_label: "Opening session...".into(),
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let back: BlockState = serde_json::from_str(&json).unwrap();
+        assert_eq!(state, back);
+    }
+
+    #[test]
+    fn block_state_resolved_roundtrip_json() {
+        let state = BlockState::Resolved;
+        let json = serde_json::to_string(&state).unwrap();
+        let back: BlockState = serde_json::from_str(&json).unwrap();
+        assert_eq!(state, back);
+    }
+
+    #[test]
+    fn block_state_failed_roundtrip_json() {
+        let state = BlockState::Failed {
+            phase: 4,
+            reason: "Agent unreachable".into(),
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let back: BlockState = serde_json::from_str(&json).unwrap();
+        assert_eq!(state, back);
+    }
+
+    #[test]
+    fn block_state_variants_are_distinct() {
+        let resolving = BlockState::Resolving {
+            phase: 1,
+            phase_label: "test".into(),
+        };
+        let resolved = BlockState::Resolved;
+        let failed = BlockState::Failed {
+            phase: 1,
+            reason: "test".into(),
+        };
+        assert_ne!(resolving, resolved);
+        assert_ne!(resolving, failed);
+        assert_ne!(resolved, failed);
+    }
+
+    // ── CanvasBlock serde ─────────────────────────────────
+
+    #[test]
+    fn canvas_block_resolving_roundtrip_json() {
+        let block = CanvasBlock {
+            id: "blk-1".into(),
+            prompt_id: "p-1".into(),
+            state: BlockState::Resolving {
+                phase: 2,
+                phase_label: "Issuing mandate...".into(),
+            },
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&block).unwrap();
+        let back: CanvasBlock = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, "blk-1");
+        assert_eq!(back.prompt_id, "p-1");
+        assert!(back.schema_type.is_none());
+        assert!(back.content.is_none());
+        assert!(back.linked_block_ids.is_empty());
+    }
+
+    #[test]
+    fn canvas_block_resolved_with_content() {
+        let content = serde_json::json!({
+            "@type": "FlightReservation",
+            "departureAirport": "SAN"
+        });
+        let block = CanvasBlock {
+            id: "blk-2".into(),
+            prompt_id: "p-1".into(),
+            state: BlockState::Resolved,
+            schema_type: Some("FlightReservation".into()),
+            content: Some(content.clone()),
+            linked_block_ids: vec!["blk-3".into()],
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:01Z".into(),
+        };
+        let json = serde_json::to_string(&block).unwrap();
+        let back: CanvasBlock = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.schema_type.as_deref(), Some("FlightReservation"));
+        assert_eq!(back.content.unwrap()["departureAirport"], "SAN");
+        assert_eq!(back.linked_block_ids, vec!["blk-3"]);
+    }
+
+    #[test]
+    fn canvas_block_failed_state() {
+        let block = CanvasBlock {
+            id: "blk-fail".into(),
+            prompt_id: "p-1".into(),
+            state: BlockState::Failed {
+                phase: 5,
+                reason: "Receipt co-sign rejected".into(),
+            },
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&block).unwrap();
+        let back: CanvasBlock = serde_json::from_str(&json).unwrap();
+        match back.state {
+            BlockState::Failed { phase, reason } => {
+                assert_eq!(phase, 5);
+                assert_eq!(reason, "Receipt co-sign rejected");
+            }
+            other => panic!("Expected Failed, got {other:?}"),
+        }
+    }
+
+    // ── Canvas serde ──────────────────────────────────────
+
+    #[test]
+    fn canvas_roundtrip_json() {
+        let canvas = Canvas {
+            id: "c-1".into(),
+            name: "Flight to Tokyo".into(),
+            blocks: vec![CanvasBlock {
+                id: "blk-1".into(),
+                prompt_id: "p-1".into(),
+                state: BlockState::Resolved,
+                schema_type: Some("FlightReservation".into()),
+                content: Some(serde_json::json!({"@type": "FlightReservation"})),
+                linked_block_ids: Vec::new(),
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+            }],
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&canvas).unwrap();
+        let back: Canvas = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, "c-1");
+        assert_eq!(back.name, "Flight to Tokyo");
+        assert_eq!(back.blocks.len(), 1);
+    }
+
+    #[test]
+    fn canvas_empty_blocks() {
+        let canvas = Canvas {
+            id: "c-empty".into(),
+            name: "New Canvas".into(),
+            blocks: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&canvas).unwrap();
+        let back: Canvas = serde_json::from_str(&json).unwrap();
+        assert!(back.blocks.is_empty());
+    }
+
+    // ── CanvasPrompt serde ────────────────────────────────
+
+    #[test]
+    fn canvas_prompt_roundtrip_json() {
+        let prompt = CanvasPrompt {
+            id: "p-1".into(),
+            text: "Find me a flight to Tokyo".into(),
+            reshape_block_id: None,
+            canvas_id: "c-1".into(),
+            submitted_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&prompt).unwrap();
+        let back: CanvasPrompt = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, "p-1");
+        assert_eq!(back.text, "Find me a flight to Tokyo");
+        assert!(back.reshape_block_id.is_none());
+    }
+
+    #[test]
+    fn canvas_prompt_with_reshape() {
+        let prompt = CanvasPrompt {
+            id: "p-2".into(),
+            text: "Make it cheaper".into(),
+            reshape_block_id: Some("blk-1".into()),
+            canvas_id: "c-1".into(),
+            submitted_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&prompt).unwrap();
+        let back: CanvasPrompt = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.reshape_block_id.as_deref(), Some("blk-1"));
+    }
+
+    // ── BlockEvent serde ──────────────────────────────────
+
+    #[test]
+    fn block_event_wraps_block() {
+        let event = BlockEvent {
+            block: CanvasBlock {
+                id: "blk-ev".into(),
+                prompt_id: "p-1".into(),
+                state: BlockState::Resolved,
+                schema_type: Some("Answer".into()),
+                content: Some(serde_json::json!({"text": "42"})),
+                linked_block_ids: Vec::new(),
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+            },
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: BlockEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.block.id, "blk-ev");
+        assert_eq!(back.block.schema_type.as_deref(), Some("Answer"));
+    }
+
+    // ── SetupState serde ──────────────────────────────────
+
+    #[test]
+    fn setup_state_roundtrip_json() {
+        let state = SetupState {
+            identity_created: true,
+            llm_configured: false,
+            setup_complete: false,
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let back: SetupState = serde_json::from_str(&json).unwrap();
+        assert!(back.identity_created);
+        assert!(!back.llm_configured);
+        assert!(!back.setup_complete);
+    }
+
+    // ── ScenarioCard serde ────────────────────────────────
+
+    #[test]
+    fn scenario_card_roundtrip_json() {
+        let card = ScenarioCard {
+            id: "search".into(),
+            title: "Web Search".into(),
+            description: "Search the web".into(),
+            icon: "\u{1F50D}".into(),
+            agent_name: "Web Search Agent".into(),
+            action_type: "schema:SearchAction".into(),
+            requires_disclosure: vec![],
+            returns: vec!["schema:SearchResult".into()],
+        };
+        let json = serde_json::to_string(&card).unwrap();
+        let back: ScenarioCard = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, "search");
+        assert!(back.requires_disclosure.is_empty());
+        assert_eq!(back.returns, vec!["schema:SearchResult"]);
+    }
+
+    // ── OrchestratorStatus all variants ───────────────────
+
+    #[test]
+    fn status_unconfigured_roundtrip() {
+        let status = OrchestratorStatus::Unconfigured;
+        let json = serde_json::to_string(&status).unwrap();
+        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, back);
+    }
+
+    #[test]
+    fn status_disconnected_roundtrip() {
+        let status = OrchestratorStatus::Disconnected;
+        let json = serde_json::to_string(&status).unwrap();
+        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, back);
+    }
+
+    #[test]
+    fn status_demo_only_roundtrip() {
+        let status = OrchestratorStatus::DemoOnly;
+        let json = serde_json::to_string(&status).unwrap();
+        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, back);
+    }
+
+    // ── DemoRunResult serde ───────────────────────────────
+
+    #[test]
+    fn demo_run_result_roundtrip_json() {
+        let result = DemoRunResult {
+            scenario_id: "search".into(),
+            agent_name: "Web Search Agent".into(),
+            steps: vec![DemoStepResult {
+                step_number: 1,
+                step_name: "Discover agent".into(),
+                status: "completed".into(),
+                detail: Some("Found agent".into()),
+                timestamp: "2026-01-01T00:00:00Z".into(),
+            }],
+            receipt: None,
+            receipt_url: None,
+            query: Some("test query".into()),
+            search_results: None,
+            completed_at: "2026-01-01T00:00:00Z".into(),
+            success: true,
+            error: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let back: DemoRunResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.scenario_id, "search");
+        assert!(back.success);
+        assert_eq!(back.steps.len(), 1);
+        assert_eq!(back.steps[0].step_number, 1);
+    }
+
+    // ── SearchResult serde ────────────────────────────────
+
+    #[test]
+    fn search_result_roundtrip_json() {
+        let result = SearchResult {
+            title: "Test Page".into(),
+            url: "https://example.com".into(),
+            snippet: "A test snippet".into(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let back: SearchResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.title, "Test Page");
+        assert_eq!(back.url, "https://example.com");
+    }
+
+    // ── Identity types serde ──────────────────────────────
+
+    #[test]
+    fn identity_info_roundtrip_json() {
+        let info = IdentityInfo {
+            did: "did:pap:abc123".into(),
+            public_key_b64: "dGVzdA".into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let back: IdentityInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.did, "did:pap:abc123");
+    }
+
+    #[test]
+    fn exported_key_roundtrip_json() {
+        let key = ExportedKey {
+            seed_b64: "dGVzdHNlZWQ".into(),
+            did: "did:pap:abc123".into(),
+            exported_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&key).unwrap();
+        let back: ExportedKey = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.seed_b64, "dGVzdHNlZWQ");
+    }
+
+    #[test]
+    fn successor_designation_roundtrip_json() {
+        let succ = SuccessorDesignation {
+            successor_did: "did:pap:new".into(),
+            relationship: "heir".into(),
+            notes: "My successor".into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&succ).unwrap();
+        let back: SuccessorDesignation = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.relationship, "heir");
+    }
+
+    #[test]
+    fn key_backup_status_roundtrip_json() {
+        let status = KeyBackupStatus { backed_up: true };
+        let json = serde_json::to_string(&status).unwrap();
+        let back: KeyBackupStatus = serde_json::from_str(&json).unwrap();
+        assert!(back.backed_up);
+    }
+
+    // ── Pipeline types serde ──────────────────────────────
+
+    #[test]
+    fn pipeline_info_roundtrip_json() {
+        let pipeline = PipelineInfo {
+            id: "pipe-1".into(),
+            name: "Test Pipeline".into(),
+            nodes: vec![PipelineNodeInfo {
+                id: "n-1".into(),
+                agent_hash: "hash123".into(),
+                agent_name: "Agent1".into(),
+                position_x: 100.0,
+                position_y: 200.0,
+            }],
+            edges: vec![PipelineEdgeInfo {
+                from_node: "n-1".into(),
+                to_node: "n-2".into(),
+            }],
+            created_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&pipeline).unwrap();
+        let back: PipelineInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, "Test Pipeline");
+        assert_eq!(back.nodes.len(), 1);
+        assert_eq!(back.nodes[0].position_x, 100.0);
+        assert_eq!(back.edges.len(), 1);
+    }
+
+    // ── RegistryInfo serde ────────────────────────────────
+
+    #[test]
+    fn registry_info_roundtrip_json() {
+        let info = RegistryInfo {
+            url: "pap://demo".into(),
+            agent_count: 5,
+            peer_count: 3,
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let back: RegistryInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.url, "pap://demo");
+        assert_eq!(back.agent_count, 5);
+    }
+
+    // ── Receipt types serde ───────────────────────────────
+
+    #[test]
+    fn receipt_info_roundtrip_json() {
+        let info = ReceiptInfo {
+            session_id: "sess-1".into(),
+            action: "schema:SearchAction".into(),
+            initiator_did: "did:pap:init".into(),
+            receiver_did: "did:pap:recv".into(),
+            property_refs: vec!["schema:Person.name".into()],
+            co_signed: true,
+            timestamp: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let back: ReceiptInfo = serde_json::from_str(&json).unwrap();
+        assert!(back.co_signed);
+        assert_eq!(back.property_refs.len(), 1);
+    }
+
+    #[test]
+    fn receipt_verification_roundtrip_json() {
+        let result = ReceiptVerificationResult {
+            session_id: "sess-1".into(),
+            initiator_signature_valid: true,
+            receiver_signature_valid: false,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let back: ReceiptVerificationResult = serde_json::from_str(&json).unwrap();
+        assert!(back.initiator_signature_valid);
+        assert!(!back.receiver_signature_valid);
+    }
 }
