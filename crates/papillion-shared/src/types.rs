@@ -196,16 +196,15 @@ pub enum LlmProvider {
     /// HuggingFace Hub, then runs entirely offline.
     #[serde(alias = "BuiltIn")]
     BuiltIn { model_id: String },
+    /// Mistral API — first-class support for Mistral's OpenAI-compatible
+    /// endpoint at api.mistral.ai. Requires an API key.
+    Mistral { api_key: String, model: String },
     /// External Ollama instance (requires HTTP). Use only if you already
     /// run Ollama and understand the privacy trade-off.
     Ollama { endpoint: String, model: String },
     /// Any OpenAI-compatible HTTP API (requires network + API key).
-    OpenAiCompatible {
-        endpoint: String,
-        api_key: String,
-        model: String,
-    },
-    /// No LLM configured — keyword fallback only.
+    OpenAiCompatible { endpoint: String, api_key: String, model: String },
+    /// No LLM configured.
     None,
 }
 
@@ -241,12 +240,9 @@ pub enum OrchestratorStatus {
     Unconfigured,
     Disconnected,
     /// Model is being downloaded from HuggingFace Hub.
-    Downloading {
-        progress_pct: u8,
-    },
+    Downloading { progress_pct: u8 },
     /// Model loaded, ready for inference.
     Ready,
-    Offline,
 }
 
 /// First-run setup state.
@@ -345,14 +341,14 @@ pub struct ScenarioCard {
     pub returns: Vec<String>,
 }
 
-// ── Handshake runner types ─────────────────────────────────
+// ── Scenario runner types ────────────────────────────────
 
-/// Result of running a scenario through the full 6-step PAP handshake.
+/// Result of running a scenario through the full 6-step handshake.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RunResult {
+pub struct ScenarioRunResult {
     pub scenario_id: String,
     pub agent_name: String,
-    pub steps: Vec<StepResult>,
+    pub steps: Vec<ScenarioStepResult>,
     pub receipt: Option<ReceiptInfo>,
     pub receipt_url: Option<String>,
     pub query: Option<String>,
@@ -372,7 +368,7 @@ pub struct SearchResult {
 
 /// Result of a single handshake step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StepResult {
+pub struct ScenarioStepResult {
     pub step_number: u8,
     pub step_name: String,
     pub status: String,
@@ -852,22 +848,14 @@ mod tests {
         assert_eq!(status, back);
     }
 
-    #[test]
-    fn status_offline_roundtrip() {
-        let status = OrchestratorStatus::Offline;
-        let json = serde_json::to_string(&status).unwrap();
-        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
-        assert_eq!(status, back);
-    }
-
-    // ── RunResult serde ────────────────────────────────────
+    // ── ScenarioRunResult serde ───────────────────────────
 
     #[test]
-    fn run_result_roundtrip_json() {
-        let result = RunResult {
+    fn scenario_run_result_roundtrip_json() {
+        let result = ScenarioRunResult {
             scenario_id: "search".into(),
             agent_name: "Web Search Agent".into(),
-            steps: vec![StepResult {
+            steps: vec![ScenarioStepResult {
                 step_number: 1,
                 step_name: "Discover agent".into(),
                 status: "completed".into(),
@@ -883,7 +871,7 @@ mod tests {
             error: None,
         };
         let json = serde_json::to_string(&result).unwrap();
-        let back: RunResult = serde_json::from_str(&json).unwrap();
+        let back: ScenarioRunResult = serde_json::from_str(&json).unwrap();
         assert_eq!(back.scenario_id, "search");
         assert!(back.success);
         assert_eq!(back.steps.len(), 1);

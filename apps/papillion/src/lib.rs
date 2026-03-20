@@ -4,13 +4,31 @@ pub mod inference;
 pub mod seed;
 pub mod state;
 
+use pap_did::PrincipalKeypair;
+use pap_webauthn::SoftwareSigner;
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let app_state = AppState::default();
+
+    // Auto-create a principal identity on first launch so the app is
+    // immediately usable without requiring a manual setup step.
+    {
+        let mut signer = app_state.signer.write().unwrap();
+        if signer.is_none() {
+            let keypair = PrincipalKeypair::generate();
+            let raw_seed = keypair.signing_key().to_bytes();
+            *signer = Some(Box::new(SoftwareSigner::from_keypair(keypair)));
+            drop(signer);
+            let mut seed = app_state.principal_seed.write().unwrap();
+            *seed = Some(raw_seed);
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
-        .manage(AppState::default())
+        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::identity::create_identity,
             commands::identity::get_identity,

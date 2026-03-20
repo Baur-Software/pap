@@ -53,6 +53,8 @@ fn GeneralTab() -> impl IntoView {
     let selected = RwSignal::new("builtin".to_string());
     let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
     let builtin_models = RwSignal::new(Vec::<BuiltInModelInfo>::new());
+    let mistral_key = RwSignal::new(String::new());
+    let mistral_model = RwSignal::new("mistral-small-latest".to_string());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
     let ollama_model = RwSignal::new("llama3.2:1b".to_string());
     let openai_endpoint = RwSignal::new(String::new());
@@ -67,6 +69,11 @@ fn GeneralTab() -> impl IntoView {
             LlmProvider::BuiltIn { model_id } => {
                 selected.set("builtin".into());
                 builtin_model.set(model_id.clone());
+            }
+            LlmProvider::Mistral { api_key, model } => {
+                selected.set("mistral".into());
+                mistral_key.set(api_key.clone());
+                mistral_model.set(model.clone());
             }
             LlmProvider::Ollama { endpoint, model } => {
                 selected.set("ollama".into());
@@ -99,6 +106,10 @@ fn GeneralTab() -> impl IntoView {
         let provider = match selected.get().as_str() {
             "builtin" => LlmProvider::BuiltIn {
                 model_id: builtin_model.get(),
+            },
+            "mistral" => LlmProvider::Mistral {
+                api_key: mistral_key.get(),
+                model: mistral_model.get(),
             },
             "ollama" => LlmProvider::Ollama {
                 endpoint: ollama_endpoint.get(),
@@ -158,9 +169,10 @@ fn GeneralTab() -> impl IntoView {
                 prop:value=move || selected.get()
             >
                 <option value="builtin">"Built-in (Recommended)"</option>
+                <option value="mistral">"Mistral API"</option>
                 <option value="ollama">"Ollama (requires HTTP)"</option>
                 <option value="openai">"OpenAI-compatible (requires network)"</option>
-                <option value="none">"None (Offline)"</option>
+                <option value="none">"None"</option>
             </select>
 
             // Built-in model picker
@@ -189,11 +201,32 @@ fn GeneralTab() -> impl IntoView {
             </Show>
 
             // Privacy warning for HTTP-based providers
-            <Show when=move || selected.get() == "ollama" || selected.get() == "openai">
+            <Show when=move || selected.get() == "mistral" || selected.get() == "ollama" || selected.get() == "openai">
                 <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid rgba(255, 170, 0, 0.25); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
                     <p style="font-size: 12px; color: var(--warning);">
                         "HTTP-based providers send orchestrator prompts outside this process. "
                         "This weakens PAP\u{2019}s zero-trust guarantees \u{2014} consider the built-in model for full privacy."
+                    </p>
+                </div>
+            </Show>
+
+            <Show when=move || selected.get() == "mistral">
+                <div class="setup-inputs">
+                    <label>"API Key"</label>
+                    <input
+                        type="password"
+                        placeholder="your Mistral API key"
+                        prop:value=move || mistral_key.get()
+                        on:input=move |ev| mistral_key.set(event_target_value(&ev))
+                    />
+                    <label>"Model"</label>
+                    <input
+                        type="text"
+                        prop:value=move || mistral_model.get()
+                        on:input=move |ev| mistral_model.set(event_target_value(&ev))
+                    />
+                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                        "Get an API key at console.mistral.ai. Models: mistral-small-latest, mistral-large-latest"
                     </p>
                 </div>
             </Show>

@@ -1,8 +1,7 @@
-use leptos::ev;
-use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::prelude::*;
 use leptos_router::components::{Route, Router, Routes};
 use leptos_router::path;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
@@ -47,13 +46,20 @@ pub fn App() -> impl IntoView {
         });
     });
 
-    // Global keyboard listener for ⌘K — uses Leptos' window_event_listener
-    // so signal updates properly trigger reactive re-renders.
-    let _keyboard_handle = window_event_listener(ev::keydown, move |e| {
-        if (e.meta_key() || e.ctrl_key()) && e.key() == "k" {
-            e.prevent_default();
-            canvas_state.palette_open.update(|v| *v = !*v);
-        }
+    // Global keyboard listener for ⌘K
+    Effect::new(move || {
+        let cb = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
+            if (e.meta_key() || e.ctrl_key()) && e.key() == "k" {
+                e.prevent_default();
+                canvas_state.palette_open.update(|v| *v = !*v);
+            }
+        });
+        let window = web_sys::window().unwrap();
+        let _ = window.add_event_listener_with_callback(
+            "keydown",
+            cb.as_ref().unchecked_ref(),
+        );
+        cb.forget(); // Leak intentionally — lives for app lifetime
     });
 
     let orchestrator_for_status = orchestrator_state;
@@ -63,7 +69,6 @@ pub fn App() -> impl IntoView {
             // Can't format dynamically in a simple closure, just show "Downloading..."
             if progress_pct > 0 { "Downloading..." } else { "Downloading..." }
         }
-        OrchestratorStatus::Offline => "Offline",
         OrchestratorStatus::Disconnected => "Disconnected",
         OrchestratorStatus::Unconfigured => "Unconfigured",
     };

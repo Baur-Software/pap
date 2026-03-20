@@ -2,15 +2,15 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
-use papillion_shared::RunResult;
+use papillion_shared::ScenarioRunResult;
 
 #[component]
 pub fn ActivityPage() -> impl IntoView {
-    let runs = RwSignal::new(Vec::<RunResult>::new());
+    let runs = RwSignal::new(Vec::<ScenarioRunResult>::new());
 
     Effect::new(move || {
         spawn_local(async move {
-            match bridge::invoke_no_args::<Vec<RunResult>>("list_completed_runs").await {
+            match bridge::invoke_no_args::<Vec<ScenarioRunResult>>("list_completed_runs").await {
                 Ok(results) => runs.set(results),
                 Err(e) => {
                     web_sys::console::error_1(&format!("Failed to load runs: {e}").into())

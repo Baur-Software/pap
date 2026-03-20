@@ -14,7 +14,8 @@ pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, Papil
     let keypair = PrincipalKeypair::generate();
     let did = keypair.did();
     let pub_key_bytes = keypair.verifying_key().to_bytes();
-    let pub_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(pub_key_bytes);
+    let pub_key_b64 =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(pub_key_bytes);
     let raw_seed = keypair.signing_key().to_bytes();
     let signer = SoftwareSigner::from_keypair(keypair);
 
@@ -115,8 +116,8 @@ pub fn import_key(
         .try_into()
         .map_err(|_| PapillionError::from("Seed must be exactly 32 bytes"))?;
 
-    let keypair =
-        PrincipalKeypair::from_bytes(&seed).map_err(|e| PapillionError::from(e.to_string()))?;
+    let keypair = PrincipalKeypair::from_bytes(&seed)
+        .map_err(|e| PapillionError::from(e.to_string()))?;
 
     let did = keypair.did();
     let pub_key_b64 =

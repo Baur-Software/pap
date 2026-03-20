@@ -6,14 +6,14 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::orchestrator::OrchestratorState;
-use papillion_shared::RunResult;
+use papillion_shared::ScenarioRunResult;
 
 #[component]
 pub fn ScenarioPage() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let navigate = use_navigate();
     let current_step = RwSignal::new(0u8);
-    let run_result = RwSignal::new(None::<RunResult>);
+    let run_result = RwSignal::new(None::<ScenarioRunResult>);
     let running = RwSignal::new(false);
     let run_error = RwSignal::new(None::<String>);
 
@@ -119,7 +119,7 @@ pub fn ScenarioPage() -> impl IntoView {
                                             current_step.set(1);
 
                                             spawn_local(async move {
-                                                match bridge::invoke::<serde_json::Value, RunResult>(
+                                                match bridge::invoke::<serde_json::Value, ScenarioRunResult>(
                                                     "run_scenario",
                                                     &serde_json::json!({ "scenarioId": sid }),
                                                 ).await {
@@ -165,7 +165,7 @@ pub fn ScenarioPage() -> impl IntoView {
                                         } else if current_step.get() >= 7 {
                                             "Completed"
                                         } else {
-                                            "Run Handshake"
+                                            "Run Scenario"
                                         }
                                     }}
                                 </button>
@@ -237,7 +237,7 @@ fn HandshakeStep(
     number: u8,
     label: &'static str,
     current_step: RwSignal<u8>,
-    result: RwSignal<Option<RunResult>>,
+    result: RwSignal<Option<ScenarioRunResult>>,
 ) -> impl IntoView {
     let status = move || {
         let current = current_step.get();

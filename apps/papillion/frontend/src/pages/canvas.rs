@@ -1,7 +1,13 @@
 use leptos::prelude::*;
+use leptos::{ev, html};
+use leptos_router::hooks::use_navigate;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 
 use crate::components::block_renderer::BlockRenderer;
 use crate::state::canvas::CanvasState;
+use crate::state::orchestrator::OrchestratorState;
+use papillion_shared::OrchestratorStatus;
 
 const INSPIRATION_LINES: &[&str] = &[
     "People are booking travel without giving away their passport number",
@@ -9,9 +15,18 @@ const INSPIRATION_LINES: &[&str] = &[
     "The token economy is on your machine",
 ];
 
+const GHOST_EXAMPLES: &[&str] = &[
+    "Book a flight SAN \u{2192} SJC",
+    "Compare hotel rates in Tokyo",
+    "Find a PAP-compatible payment agent",
+    "Search the web without disclosure",
+    "Ask AI about zero-trust protocols",
+];
+
 #[component]
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
+    let orchestrator = expect_context::<OrchestratorState>();
 
     let blocks = move || {
         canvas_state
@@ -22,12 +37,10 @@ pub fn CanvasPage() -> impl IntoView {
 
     let has_blocks = move || !blocks().is_empty();
 
-    // Open palette on first visit if no canvases exist
-    Effect::new(move || {
-        if canvas_state.canvases.get().is_empty() && !canvas_state.palette_open.get() {
-            canvas_state.palette_open.set(true);
-        }
-    });
+    let is_ready = move || matches!(
+        orchestrator.status.get(),
+        OrchestratorStatus::Ready
+    );
 
     // Group blocks by semantic links for rendering
     let grouped_blocks = move || {
@@ -68,9 +81,12 @@ pub fn CanvasPage() -> impl IntoView {
                             view! { <div class="inspiration-line">{line}</div> }
                         }).collect::<Vec<_>>()}
                     </div>
-                    <div class="canvas-shortcut-hint">
-                        "Press " <kbd>"\u{2318}K"</kbd> " to start building"
-                    </div>
+                    <Show
+                        when=is_ready
+                        fallback=move || view! { <SetupPrompt /> }
+                    >
+                        <InlinePrompt />
+                    </Show>
                 </div>
             }>
                 <div class="canvas-blocks">
@@ -98,7 +114,114 @@ pub fn CanvasPage() -> impl IntoView {
                         }}
                     </For>
                 </div>
+                // Inline prompt at bottom when blocks exist
+                <InlinePrompt />
             </Show>
+        </div>
+    }
+}
+
+/// Prompt input embedded directly in the canvas — not an overlay.
+#[component]
+fn InlinePrompt() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let input_ref = NodeRef::<html::Input>::new();
+    let input_value = RwSignal::new(String::new());
+
+    let submit = move || {
+        let text = input_value.get();
+        if text.trim().is_empty() {
+            return;
+        }
+        canvas_state.submit_prompt(text.clone());
+        input_value.set(String::new());
+    };
+
+    let on_keydown = move |e: ev::KeyboardEvent| {
+        if e.key() == "Enter" {
+            submit();
+        }
+    };
+
+    let click_suggestion = move |text: &'static str| {
+        input_value.set(text.to_string());
+        if let Some(el) = input_ref.get() {
+            let _ = el.focus();
+        }
+    };
+
+    // Auto-focus the input after DOM renders
+    Effect::new(move || {
+        let ir = input_ref;
+        let cb = Closure::once(move || {
+            if let Some(el) = ir.get() {
+                let _ = el.focus();
+            }
+        });
+        let window = web_sys::window().unwrap();
+        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            cb.as_ref().unchecked_ref(),
+            50,
+        );
+        cb.forget();
+    });
+
+    view! {
+        <div class="canvas-prompt">
+            <div class="canvas-prompt-header">
+                <span class="palette-icon">{"\u{2318}"}</span>
+                <span class="palette-label">"What do you want to build?"</span>
+            </div>
+            <input
+                node_ref=input_ref
+                class="palette-input"
+                type="text"
+                placeholder="Type your prompt..."
+                prop:value=move || input_value.get()
+                on:input=move |e| {
+                    input_value.set(event_target_value(&e));
+                }
+                on:keydown=on_keydown
+            />
+            <Show when=move || input_value.get().is_empty()>
+                <div class="palette-suggestions">
+                    {GHOST_EXAMPLES.iter().map(|&text| {
+                        let t = text;
+                        view! {
+                            <button
+                                class="palette-suggestion"
+                                on:click=move |_| click_suggestion(t)
+                            >
+                                {t}
+                            </button>
+                        }
+                    }).collect::<Vec<_>>()}
+                </div>
+            </Show>
+        </div>
+    }
+}
+
+/// Shown when LLM isn't configured — directs user to Settings.
+#[component]
+fn SetupPrompt() -> impl IntoView {
+    let navigate = use_navigate();
+
+    view! {
+        <div class="canvas-prompt canvas-prompt-setup">
+            <p style="font-size: 14px; margin-bottom: 8px;">
+                "Configure an LLM provider to start building."
+            </p>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                "The orchestrator needs a language model to route prompts to agents. "
+                "Choose built-in (on-device) or connect an external provider."
+            </p>
+            <button class="btn btn-primary" on:click=move |_| {
+                let nav = navigate.clone();
+                nav("/settings", Default::default());
+            }>
+                "Open Settings"
+            </button>
         </div>
     }
 }

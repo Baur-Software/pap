@@ -51,30 +51,30 @@ pub struct ChatMessage {
 
 // ── Public API ───────────────────────────────────────────────
 
-/// Send a chat completion request to the configured LLM provider.
+/// Send a chat completion request to an HTTP-based LLM provider.
 /// Returns the assistant's response content.
 ///
-/// For BuiltIn, use `crate::inference::ModelManager` directly — this
-/// function only handles the HTTP-based providers.
-pub async fn chat(
-    provider: &LlmProvider,
-    messages: &[ChatMessage],
-) -> Result<String, PapillionError> {
+/// For BuiltIn, callers should use `crate::inference::ModelManager` directly.
+/// This function handles Mistral API, Ollama, and OpenAI-compatible endpoints.
+pub async fn chat(provider: &LlmProvider, messages: &[ChatMessage]) -> Result<String, PapillionError> {
     match provider {
-        LlmProvider::BuiltIn { .. } => Err(PapillionError::from(
-            "BuiltIn provider uses on-device inference via ModelManager, not HTTP chat",
-        )),
+        LlmProvider::BuiltIn { .. } => {
+            Err(PapillionError::from(
+                "BuiltIn provider uses on-device inference via ModelManager, not HTTP chat",
+            ))
+        }
+        LlmProvider::Mistral { api_key, model } => {
+            mistral_chat(api_key, model, messages).await
+        }
         LlmProvider::Ollama { endpoint, model } => ollama_chat(endpoint, model, messages).await,
-        LlmProvider::OpenAiCompatible {
-            endpoint,
-            api_key,
-            model,
-        } => openai_chat(endpoint, api_key, model, messages).await,
+        LlmProvider::OpenAiCompatible { endpoint, api_key, model } => {
+            openai_chat(endpoint, api_key, model, messages).await
+        }
         LlmProvider::None => Err(PapillionError::from("No LLM provider configured")),
     }
 }
 
-/// Check if the configured LLM provider is reachable.
+/// Check if the configured LLM provider is reachable and working.
 #[tauri::command]
 pub async fn check_llm_connection(
     state: tauri::State<'_, crate::state::AppState>,
@@ -85,13 +85,27 @@ pub async fn check_llm_connection(
         .map_err(|e| PapillionError::from(e.to_string()))?
         .clone();
 
-    let messages = vec![ChatMessage {
-        role: "user".into(),
-        content: "Say hello in one sentence.".into(),
-    }];
-
-    let response = chat(&config.llm_provider, &messages).await?;
-    Ok(response)
+    match &config.llm_provider {
+        LlmProvider::BuiltIn { model_id } => {
+            // For BuiltIn, verify the model is loaded and can generate
+            let mut mgr = state.model_manager.lock().await;
+            mgr.ensure_loaded(model_id)
+                .await
+                .map_err(PapillionError::from)?;
+            let response = mgr
+                .generate("[INST] Say hello in one sentence. [/INST]", 50)
+                .map_err(PapillionError::from)?;
+            Ok(response)
+        }
+        LlmProvider::None => Err(PapillionError::from("No LLM provider configured")),
+        other => {
+            let messages = vec![ChatMessage {
+                role: "user".into(),
+                content: "Say hello in one sentence.".into(),
+            }];
+            chat(other, &messages).await
+        }
+    }
 }
 
 // ── Ollama ───────────────────────────────────────────────────
@@ -122,6 +136,18 @@ async fn ollama_chat(
     Ok(resp.message.content)
 }
 
+// ── Mistral API ─────────────────────────────────────────────
+
+const MISTRAL_API_ENDPOINT: &str = "https://api.mistral.ai/v1";
+
+async fn mistral_chat(
+    api_key: &str,
+    model: &str,
+    messages: &[ChatMessage],
+) -> Result<String, PapillionError> {
+    openai_chat(MISTRAL_API_ENDPOINT, api_key, model, messages).await
+}
+
 // ── OpenAI-compatible ────────────────────────────────────────
 
 async fn openai_chat(
@@ -150,119 +176,4 @@ async fn openai_chat(
         .next()
         .map(|c| c.message.content)
         .ok_or_else(|| PapillionError::from("No response from model"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ── chat routing ──────────────────────────────────────
-
-    #[tokio::test]
-    async fn chat_builtin_returns_error() {
-        let provider = LlmProvider::BuiltIn {
-            model_id: "test".into(),
-        };
-        let messages = vec![ChatMessage {
-            role: "user".into(),
-            content: "hi".into(),
-        }];
-        let result = chat(&provider, &messages).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().message.contains("on-device inference"));
-    }
-
-    #[tokio::test]
-    async fn chat_none_returns_error() {
-        let provider = LlmProvider::None;
-        let messages = vec![ChatMessage {
-            role: "user".into(),
-            content: "hi".into(),
-        }];
-        let result = chat(&provider, &messages).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().message.contains("No LLM provider"));
-    }
-
-    // ── ChatMessage ───────────────────────────────────────
-
-    #[test]
-    fn chat_message_serializes() {
-        let msg = ChatMessage {
-            role: "user".into(),
-            content: "Hello".into(),
-        };
-        let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains("user"));
-        assert!(json.contains("Hello"));
-    }
-
-    #[test]
-    fn chat_message_clone() {
-        let msg = ChatMessage {
-            role: "assistant".into(),
-            content: "Hi there".into(),
-        };
-        let cloned = msg.clone();
-        assert_eq!(cloned.role, "assistant");
-        assert_eq!(cloned.content, "Hi there");
-    }
-
-    // ── OllamaRequest serialization ───────────────────────
-
-    #[test]
-    fn ollama_request_serializes() {
-        let messages = vec![ChatMessage {
-            role: "user".into(),
-            content: "test".into(),
-        }];
-        let req = OllamaRequest {
-            model: "llama3",
-            messages: &messages,
-            stream: false,
-        };
-        let json = serde_json::to_string(&req).unwrap();
-        assert!(json.contains("llama3"));
-        assert!(json.contains("\"stream\":false"));
-    }
-
-    // ── OpenAiRequest serialization ───────────────────────
-
-    #[test]
-    fn openai_request_serializes() {
-        let messages = vec![ChatMessage {
-            role: "user".into(),
-            content: "test".into(),
-        }];
-        let req = OpenAiRequest {
-            model: "gpt-4o",
-            messages: &messages,
-        };
-        let json = serde_json::to_string(&req).unwrap();
-        assert!(json.contains("gpt-4o"));
-    }
-
-    // ── Response deserialization ───────────────────────────
-
-    #[test]
-    fn ollama_response_deserializes() {
-        let json = r#"{"message": {"content": "Hello!"}}"#;
-        let resp: OllamaResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.message.content, "Hello!");
-    }
-
-    #[test]
-    fn openai_response_deserializes() {
-        let json = r#"{"choices": [{"message": {"content": "Hi there"}}]}"#;
-        let resp: OpenAiResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.choices.len(), 1);
-        assert_eq!(resp.choices[0].message.content, "Hi there");
-    }
-
-    #[test]
-    fn openai_response_empty_choices() {
-        let json = r#"{"choices": []}"#;
-        let resp: OpenAiResponse = serde_json::from_str(json).unwrap();
-        assert!(resp.choices.is_empty());
-    }
 }

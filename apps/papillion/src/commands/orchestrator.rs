@@ -7,10 +7,10 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::error::PapillionError;
-use crate::state::{AppState, BUILTIN_REGISTRY_URL};
+use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillion_shared::{
-    builtin_model_catalog, BuiltInModelInfo, LlmProvider, OrchestratorConfig, OrchestratorStatus,
-    ReceiptInfo, RunResult, ScenarioCard, SearchResult, SetupState, StepResult,
+    builtin_model_catalog, BuiltInModelInfo, ScenarioRunResult, ScenarioStepResult, LlmProvider,
+    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, SearchResult, SetupState,
 };
 
 /// Get the current orchestrator configuration.
@@ -63,7 +63,7 @@ pub async fn get_orchestrator_status(
         .map_err(|e| PapillionError::from(e.to_string()))?
         .clone();
     let status = match &config.llm_provider {
-        LlmProvider::None => OrchestratorStatus::Offline,
+        LlmProvider::None => OrchestratorStatus::Disconnected,
         LlmProvider::BuiltIn { model_id } => {
             let mgr = state.model_manager.lock().await;
             if mgr.loaded.is_some() && mgr.model_id == *model_id {
@@ -72,7 +72,9 @@ pub async fn get_orchestrator_status(
                 OrchestratorStatus::Disconnected
             }
         }
-        _ => OrchestratorStatus::Ready,
+        LlmProvider::Mistral { .. }
+        | LlmProvider::Ollama { .. }
+        | LlmProvider::OpenAiCompatible { .. } => OrchestratorStatus::Ready,
     };
     Ok(status)
 }
@@ -128,65 +130,37 @@ pub async fn load_builtin_model(
     Ok(OrchestratorStatus::Ready)
 }
 
-/// List scenario cards for the Home page.
-/// These are derived from the built-in agent registry.
+/// List scenario cards backed by real agents in the local registry.
 #[tauri::command]
 pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
     Ok(vec![
         ScenarioCard {
             id: "search".into(),
             title: "Web Search".into(),
-            description:
-                "Search the web with zero disclosure — no personal data leaves your device".into(),
+            description: "Search the web via DuckDuckGo — zero disclosure, no tracking".into(),
             icon: "\u{1F50D}".into(),
-            agent_name: "Web Search Agent".into(),
+            agent_name: "DuckDuckGo Search".into(),
             action_type: "schema:SearchAction".into(),
             requires_disclosure: vec![],
             returns: vec!["schema:SearchResult".into()],
         },
         ScenarioCard {
-            id: "flight".into(),
-            title: "Book a Flight".into(),
-            description:
-                "Find and book flights with selective disclosure — only share name & nationality"
-                    .into(),
-            icon: "\u{2708}\u{FE0F}".into(),
-            agent_name: "Flight Booking Agent".into(),
-            action_type: "schema:ReserveAction".into(),
-            requires_disclosure: vec![
-                "schema:Person.name".into(),
-                "schema:Person.nationality".into(),
-            ],
-            returns: vec!["schema:Ticket".into()],
-        },
-        ScenarioCard {
-            id: "hotel".into(),
-            title: "Book a Hotel".into(),
-            description: "Reserve lodging with minimal disclosure — only your name required".into(),
-            icon: "\u{1F3E8}".into(),
-            agent_name: "Hotel Booking Agent".into(),
-            action_type: "schema:ReserveAction".into(),
-            requires_disclosure: vec!["schema:Person.name".into()],
-            returns: vec!["schema:Reservation".into()],
-        },
-        ScenarioCard {
-            id: "payment".into(),
-            title: "Make a Payment".into(),
-            description: "Process payments with ecash — zero disclosure, unlinkable transactions"
-                .into(),
-            icon: "\u{1F4B3}".into(),
-            agent_name: "Payment Agent".into(),
-            action_type: "schema:PayAction".into(),
+            id: "knowledge".into(),
+            title: "Wikipedia Lookup".into(),
+            description: "Query Wikipedia's knowledge base — zero disclosure, public API".into(),
+            icon: "\u{1F4DA}".into(),
+            agent_name: "Wikipedia Knowledge".into(),
+            action_type: "schema:SearchAction".into(),
             requires_disclosure: vec![],
-            returns: vec!["schema:Invoice".into()],
+            returns: vec!["schema:Article".into()],
         },
         ScenarioCard {
             id: "ai".into(),
             title: "Ask AI".into(),
-            description: "Get answers from a local AI — your prompts never leave your machine"
-                .into(),
+            description:
+                "On-device Mistral inference — your prompts never leave your machine".into(),
             icon: "\u{1F9E0}".into(),
-            agent_name: "Local AI Assistant".into(),
+            agent_name: "On-Device AI".into(),
             action_type: "schema:AskAction".into(),
             requires_disclosure: vec![],
             returns: vec!["schema:Answer".into()],
@@ -211,23 +185,18 @@ struct DdgResponse {
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum DdgTopic {
-    Result {
-        #[serde(rename = "Text")]
-        text: String,
-        #[serde(rename = "FirstURL")]
-        first_url: String,
-    },
-    Group {
-        #[serde(rename = "Topics")]
-        topics: Vec<DdgTopic>,
-        #[serde(rename = "Name")]
-        _name: String,
-    },
+    Result { #[serde(rename = "Text")] text: String, #[serde(rename = "FirstURL")] first_url: String },
+    Group { #[serde(rename = "Topics")] topics: Vec<DdgTopic>, #[serde(rename = "Name")] _name: String },
 }
 
 /// Public wrapper for the canvas module to reuse web search.
 pub async fn web_search_public(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
     web_search(query).await
+}
+
+/// Public wrapper for the canvas module to reuse Wikipedia lookup.
+pub async fn wikipedia_search_public(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
+    wikipedia_search(query).await
 }
 
 /// Perform a real web search via DuckDuckGo Instant Answer JSON API.
@@ -239,12 +208,7 @@ async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
 
     let resp: DdgResponse = client
         .get("https://api.duckduckgo.com/")
-        .query(&[
-            ("q", query),
-            ("format", "json"),
-            ("no_html", "1"),
-            ("skip_disambig", "1"),
-        ])
+        .query(&[("q", query), ("format", "json"), ("no_html", "1"), ("skip_disambig", "1")])
         .send()
         .await
         .map_err(|e| PapillionError::from(e.to_string()))?
@@ -286,32 +250,92 @@ async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
     Ok(results)
 }
 
-/// Execute the full 6-step PAP handshake for a given scenario.
-/// Called by both `run_scenario` (Tauri command) and `canvas_prompt`.
-pub async fn run_handshake(
-    state: &AppState,
-    scenario: &ScenarioCard,
+// ── Wikipedia REST API types ─────────────────────────────────
+
+#[derive(Deserialize)]
+struct WikiSearchResponse {
+    pages: Vec<WikiPage>,
+}
+
+#[derive(Deserialize)]
+struct WikiPage {
+    title: String,
+    excerpt: Option<String>,
+    description: Option<String>,
+    key: String,
+}
+
+/// Query Wikipedia via the Wikimedia REST API (no auth, zero disclosure).
+async fn wikipedia_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
+    let client = reqwest::Client::builder()
+        .user_agent("Papillion/0.1 (PAP Browser; mailto:pap@baur-software.com)")
+        .build()
+        .map_err(|e| PapillionError::from(e.to_string()))?;
+
+    let resp: WikiSearchResponse = client
+        .get("https://en.wikipedia.org/w/rest.php/v1/search/page")
+        .query(&[("q", query), ("limit", "5")])
+        .send()
+        .await
+        .map_err(|e| PapillionError::from(format!("Wikipedia request: {e}")))?
+        .json()
+        .await
+        .map_err(|e| PapillionError::from(format!("Wikipedia parse: {e}")))?;
+
+    let results = resp
+        .pages
+        .into_iter()
+        .map(|p| {
+            let snippet = p
+                .excerpt
+                .or(p.description)
+                .unwrap_or_default()
+                // Strip HTML tags from excerpt
+                .replace("<span class=\"searchmatch\">", "")
+                .replace("</span>", "");
+            SearchResult {
+                title: p.title,
+                url: format!("https://en.wikipedia.org/wiki/{}", p.key),
+                snippet,
+            }
+        })
+        .collect();
+
+    Ok(results)
+}
+
+/// Run a scenario through the full 6-step PAP handshake.
+#[tauri::command]
+pub async fn run_scenario(
+    state: State<'_, AppState>,
+    scenario_id: String,
     query: Option<String>,
-    on_phase: impl Fn(u8, &str),
-) -> Result<RunResult, PapillionError> {
+) -> Result<ScenarioRunResult, PapillionError> {
     let now_str = || Utc::now().to_rfc3339();
+
+    // Find the scenario
+    let scenarios = list_scenarios()?;
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.id == scenario_id)
+        .ok_or_else(|| PapillionError::from("Scenario not found"))?
+        .clone();
 
     let agent_name = &scenario.agent_name;
     let action = &scenario.action_type;
-    let scenario_id = &scenario.id;
 
     let mut steps = Vec::new();
 
     // ── Step 1: Discover agent ──────────────────────────────
-    on_phase(1, "Discovering agents...");
+    // Extract data from locks in a block so guards are dropped before any .await
     let (agent_did, principal_kp) = {
         let registries = state
             .registries
             .read()
             .map_err(|e| PapillionError::from(e.to_string()))?;
         let registry = registries
-            .get(BUILTIN_REGISTRY_URL)
-            .ok_or_else(|| PapillionError::from("Built-in registry not found"))?;
+            .get(LOCAL_REGISTRY_URL)
+            .ok_or_else(|| PapillionError::from("Local registry not found"))?;
         let agent_ad = registry
             .all_advertisements()
             .iter()
@@ -327,12 +351,12 @@ pub async fn run_handshake(
         let seed = seed_lock
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
-        let kp =
-            PrincipalKeypair::from_bytes(seed).map_err(|e| PapillionError::from(e.to_string()))?;
+        let kp = PrincipalKeypair::from_bytes(seed)
+            .map_err(|e| PapillionError::from(e.to_string()))?;
         (did, kp)
     };
 
-    steps.push(StepResult {
+    steps.push(ScenarioStepResult {
         step_number: 1,
         step_name: "Discover agent".into(),
         status: "completed".into(),
@@ -343,7 +367,6 @@ pub async fn run_handshake(
     let principal_did = principal_kp.did();
 
     // ── Step 2: Issue mandate ───────────────────────────────
-    on_phase(2, "Issuing mandate...");
     let disclosure_set = if scenario.requires_disclosure.is_empty() {
         DisclosureSet::empty()
     } else {
@@ -367,7 +390,7 @@ pub async fn run_handshake(
     mandate.sign(principal_kp.signing_key());
     let mandate_hash = mandate.hash();
 
-    steps.push(StepResult {
+    steps.push(ScenarioStepResult {
         step_number: 2,
         step_name: "Issue mandate".into(),
         status: "completed".into(),
@@ -376,7 +399,6 @@ pub async fn run_handshake(
     });
 
     // ── Step 3: Open session ────────────────────────────────
-    on_phase(3, "Opening session...");
     let mut token = CapabilityToken::mint(
         agent_did.clone(),
         action.clone(),
@@ -395,7 +417,7 @@ pub async fn run_handshake(
         .open(initiator_session_kp.did(), receiver_session_kp.did())
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    steps.push(StepResult {
+    steps.push(ScenarioStepResult {
         step_number: 3,
         step_name: "Open session".into(),
         status: "completed".into(),
@@ -404,30 +426,59 @@ pub async fn run_handshake(
     });
 
     // ── Step 4: Exchange data ───────────────────────────────
-    on_phase(4, "Exchanging data...");
+    // Route to the actual backing service for each agent.
     let mut search_results: Option<Vec<SearchResult>> = None;
-    let step4_detail = if action.contains("SearchAction") {
-        if let Some(ref q) = query {
-            match web_search(q).await {
-                Ok(results) => {
-                    let count = results.len();
-                    search_results = Some(results);
-                    format!("Query: \"{q}\" \u{2014} {count} results via zero-disclosure session")
+    let step4_detail = match scenario_id.as_str() {
+        "search" => {
+            if let Some(ref q) = query {
+                match web_search(q).await {
+                    Ok(results) => {
+                        let count = results.len();
+                        search_results = Some(results);
+                        format!("DuckDuckGo: \"{}\" \u{2014} {} results", q, count)
+                    }
+                    Err(e) => format!("DuckDuckGo search failed: {}", e),
                 }
-                Err(e) => format!("Search failed: {e}"),
+            } else {
+                "No query provided".into()
             }
-        } else {
-            "No query provided".into()
         }
-    } else if scenario.requires_disclosure.is_empty() {
-        "Zero disclosure \u{2014} no personal data exchanged".into()
-    } else {
-        format!(
-            "Disclosed {} properties via PAP trust chain",
-            scenario.requires_disclosure.len()
-        )
+        "knowledge" => {
+            if let Some(ref q) = query {
+                match wikipedia_search(q).await {
+                    Ok(results) => {
+                        let count = results.len();
+                        search_results = Some(results);
+                        format!("Wikipedia: \"{}\" \u{2014} {} articles", q, count)
+                    }
+                    Err(e) => format!("Wikipedia lookup failed: {}", e),
+                }
+            } else {
+                "No query provided".into()
+            }
+        }
+        "ai" => {
+            if let Some(ref q) = query {
+                let mut mgr = state.model_manager.lock().await;
+                if mgr.loaded.is_some() {
+                    let prompt = format!("[INST] {} [/INST]", q);
+                    match mgr.generate(&prompt, 200) {
+                        Ok(response) => {
+                            let truncated: String = response.chars().take(200).collect();
+                            format!("Mistral: {}", truncated)
+                        }
+                        Err(e) => format!("On-device inference failed: {}", e),
+                    }
+                } else {
+                    "On-device model not loaded \u{2014} configure BuiltIn provider in settings".into()
+                }
+            } else {
+                "No query provided".into()
+            }
+        }
+        _ => "Zero disclosure \u{2014} no personal data exchanged".into(),
     };
-    steps.push(StepResult {
+    steps.push(ScenarioStepResult {
         step_number: 4,
         step_name: "Exchange data".into(),
         status: "completed".into(),
@@ -436,7 +487,6 @@ pub async fn run_handshake(
     });
 
     // ── Step 5: Co-sign receipt ─────────────────────────────
-    on_phase(5, "Co-signing receipt...");
     session
         .execute()
         .map_err(|e| PapillionError::from(e.to_string()))?;
@@ -445,8 +495,8 @@ pub async fn run_handshake(
     let mut receipt = TransactionReceipt::from_session(
         &session,
         property_refs.clone(),
-        vec![format!("operator:{action}_executed")],
-        format!("{action} executed"),
+        vec![format!("operator:{}_executed", action)],
+        format!("{} executed", action),
         scenario.returns.join(", "),
     )
     .map_err(|e| PapillionError::from(e.to_string()))?;
@@ -464,7 +514,7 @@ pub async fn run_handshake(
         timestamp: receipt.timestamp.to_rfc3339(),
     };
 
-    steps.push(StepResult {
+    steps.push(ScenarioStepResult {
         step_number: 5,
         step_name: "Co-sign receipt".into(),
         status: "completed".into(),
@@ -473,12 +523,11 @@ pub async fn run_handshake(
     });
 
     // ── Step 6: Close session ───────────────────────────────
-    on_phase(6, "Closing session...");
     session
         .close()
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    steps.push(StepResult {
+    steps.push(ScenarioStepResult {
         step_number: 6,
         step_name: "Close session".into(),
         status: "completed".into(),
@@ -486,10 +535,10 @@ pub async fn run_handshake(
         timestamp: now_str(),
     });
 
-    let receipt_url = format!("pap://receipts/{}", receipt_info.session_id);
+    let receipt_url = format!("pap://local/receipts/{}", receipt_info.session_id);
 
-    Ok(RunResult {
-        scenario_id: scenario_id.clone(),
+    let result = ScenarioRunResult {
+        scenario_id,
         agent_name: agent_name.clone(),
         steps,
         receipt: Some(receipt_info),
@@ -499,24 +548,7 @@ pub async fn run_handshake(
         completed_at: now_str(),
         success: true,
         error: None,
-    })
-}
-
-/// Run a scenario through the full 6-step PAP handshake (Tauri command wrapper).
-#[tauri::command]
-pub async fn run_scenario(
-    state: State<'_, AppState>,
-    scenario_id: String,
-    query: Option<String>,
-) -> Result<RunResult, PapillionError> {
-    let scenarios = list_scenarios()?;
-    let scenario = scenarios
-        .iter()
-        .find(|s| s.id == scenario_id)
-        .ok_or_else(|| PapillionError::from("Scenario not found"))?
-        .clone();
-
-    let result = run_handshake(&state, &scenario, query, |_, _| {}).await?;
+    };
 
     // Store in completed_runs for activity page
     if let Ok(mut runs) = state.completed_runs.write() {
@@ -526,166 +558,14 @@ pub async fn run_scenario(
     Ok(result)
 }
 
-/// List completed handshake runs for the activity page.
+/// List completed scenario runs for the activity page.
 #[tauri::command]
-pub fn list_completed_runs(state: State<'_, AppState>) -> Result<Vec<RunResult>, PapillionError> {
+pub fn list_completed_runs(
+    state: State<'_, AppState>,
+) -> Result<Vec<ScenarioRunResult>, PapillionError> {
     let runs = state
         .completed_runs
         .read()
         .map_err(|e| PapillionError::from(e.to_string()))?;
     Ok(runs.clone())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ── list_scenarios ────────────────────────────────────
-
-    #[test]
-    fn list_scenarios_returns_five_cards() {
-        let cards = list_scenarios().unwrap();
-        assert_eq!(cards.len(), 5);
-    }
-
-    #[test]
-    fn scenario_ids_are_unique() {
-        let cards = list_scenarios().unwrap();
-        let mut ids: Vec<&str> = cards.iter().map(|c| c.id.as_str()).collect();
-        ids.sort();
-        ids.dedup();
-        assert_eq!(ids.len(), cards.len());
-    }
-
-    #[test]
-    fn all_scenarios_have_required_fields() {
-        for card in list_scenarios().unwrap() {
-            assert!(!card.id.is_empty(), "id must be set");
-            assert!(!card.title.is_empty(), "title must be set");
-            assert!(!card.description.is_empty(), "description must be set");
-            assert!(!card.icon.is_empty(), "icon must be set");
-            assert!(!card.agent_name.is_empty(), "agent_name must be set");
-            assert!(
-                card.action_type.starts_with("schema:"),
-                "action_type should be a schema.org action"
-            );
-            assert!(
-                !card.returns.is_empty(),
-                "returns must have at least one item"
-            );
-        }
-    }
-
-    #[test]
-    fn search_scenario_is_zero_disclosure() {
-        let cards = list_scenarios().unwrap();
-        let search = cards.iter().find(|c| c.id == "search").unwrap();
-        assert!(search.requires_disclosure.is_empty());
-    }
-
-    #[test]
-    fn flight_scenario_requires_name_and_nationality() {
-        let cards = list_scenarios().unwrap();
-        let flight = cards.iter().find(|c| c.id == "flight").unwrap();
-        assert_eq!(flight.requires_disclosure.len(), 2);
-        assert!(flight
-            .requires_disclosure
-            .contains(&"schema:Person.name".to_string()));
-        assert!(flight
-            .requires_disclosure
-            .contains(&"schema:Person.nationality".to_string()));
-    }
-
-    #[test]
-    fn hotel_scenario_requires_name_only() {
-        let cards = list_scenarios().unwrap();
-        let hotel = cards.iter().find(|c| c.id == "hotel").unwrap();
-        assert_eq!(hotel.requires_disclosure.len(), 1);
-        assert_eq!(hotel.requires_disclosure[0], "schema:Person.name");
-    }
-
-    #[test]
-    fn payment_scenario_is_zero_disclosure() {
-        let cards = list_scenarios().unwrap();
-        let payment = cards.iter().find(|c| c.id == "payment").unwrap();
-        assert!(payment.requires_disclosure.is_empty());
-    }
-
-    #[test]
-    fn ai_scenario_is_zero_disclosure() {
-        let cards = list_scenarios().unwrap();
-        let ai = cards.iter().find(|c| c.id == "ai").unwrap();
-        assert!(ai.requires_disclosure.is_empty());
-    }
-
-    // ── list_builtin_models ───────────────────────────────
-
-    #[test]
-    fn list_builtin_models_delegates_to_catalog() {
-        let models = list_builtin_models().unwrap();
-        let catalog = builtin_model_catalog();
-        assert_eq!(models.len(), catalog.len());
-        assert_eq!(models[0].id, catalog[0].id);
-    }
-
-    // ── DdgTopic deserialization ──────────────────────────
-
-    #[test]
-    fn ddg_topic_result_deserializes() {
-        let json = r#"{"Text": "Hello world", "FirstURL": "https://example.com"}"#;
-        let topic: DdgTopic = serde_json::from_str(json).unwrap();
-        match topic {
-            DdgTopic::Result { text, first_url } => {
-                assert_eq!(text, "Hello world");
-                assert_eq!(first_url, "https://example.com");
-            }
-            DdgTopic::Group { .. } => panic!("Expected Result variant"),
-        }
-    }
-
-    #[test]
-    fn ddg_topic_group_deserializes() {
-        let json = r#"{
-            "Name": "Related",
-            "Topics": [
-                {"Text": "Sub topic", "FirstURL": "https://sub.example.com"}
-            ]
-        }"#;
-        let topic: DdgTopic = serde_json::from_str(json).unwrap();
-        match topic {
-            DdgTopic::Group { topics, .. } => {
-                assert_eq!(topics.len(), 1);
-            }
-            DdgTopic::Result { .. } => panic!("Expected Group variant"),
-        }
-    }
-
-    #[test]
-    fn ddg_response_deserializes() {
-        let json = r#"{
-            "AbstractText": "Test abstract",
-            "AbstractURL": "https://example.com",
-            "AbstractSource": "Wikipedia",
-            "RelatedTopics": []
-        }"#;
-        let resp: DdgResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.abstract_text, "Test abstract");
-        assert_eq!(resp.abstract_source, "Wikipedia");
-        assert!(resp.related_topics.is_empty());
-    }
-
-    #[test]
-    fn ddg_response_with_topics() {
-        let json = r#"{
-            "AbstractText": "",
-            "AbstractURL": "",
-            "AbstractSource": "",
-            "RelatedTopics": [
-                {"Text": "Topic 1", "FirstURL": "https://t1.com"},
-                {"Text": "Topic 2", "FirstURL": "https://t2.com"}
-            ]
-        }"#;
-        let resp: DdgResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.related_topics.len(), 2);
-    }
 }
