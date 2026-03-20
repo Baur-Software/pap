@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod error;
+pub mod inference;
 pub mod seed;
 pub mod state;
 
@@ -27,6 +28,8 @@ pub fn run() {
             commands::orchestrator::list_scenarios,
             commands::orchestrator::run_demo_scenario,
             commands::orchestrator::list_completed_runs,
+            commands::orchestrator::list_builtin_models,
+            commands::orchestrator::load_builtin_model,
             commands::identity::export_key,
             commands::identity::import_key,
             commands::identity::get_key_backup_status,

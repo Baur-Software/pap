@@ -146,14 +146,71 @@ impl Default for AppSettings {
 
 // ── Orchestrator types ──────────────────────────────────────
 
+/// Known built-in models that ship with Papillion.
+/// Each entry maps to a HuggingFace repo + GGUF filename.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BuiltInModelInfo {
+    pub id: String,
+    pub display_name: String,
+    pub repo: String,
+    pub filename: String,
+    pub size_hint: String,
+}
+
+/// Catalog of known models. The first entry is the default.
+pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
+    vec![
+        BuiltInModelInfo {
+            id: "mistral-7b-instruct".into(),
+            display_name: "Mistral 7B Instruct (Q4)".into(),
+            repo: "TheBloke/Mistral-7B-Instruct-v0.2-GGUF".into(),
+            filename: "mistral-7b-instruct-v0.2.Q4_K_M.gguf".into(),
+            size_hint: "~4.4 GB".into(),
+        },
+        BuiltInModelInfo {
+            id: "phi-3-mini".into(),
+            display_name: "Phi-3 Mini (Q4)".into(),
+            repo: "microsoft/Phi-3-mini-4k-instruct-gguf".into(),
+            filename: "Phi-3-mini-4k-instruct-q4.gguf".into(),
+            size_hint: "~2.3 GB".into(),
+        },
+        BuiltInModelInfo {
+            id: "tinyllama-1.1b".into(),
+            display_name: "TinyLlama 1.1B (Q4)".into(),
+            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+            size_hint: "~0.6 GB".into(),
+        },
+    ]
+}
+
 /// LLM provider for the orchestrator.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+///
+/// The default is `BuiltIn` with Mistral — inference runs locally via Candle
+/// with no HTTP calls, which is the intended PAP architecture. The Ollama and
+/// OpenAI-compatible options are provided for advanced users but require
+/// network access that weakens PAP's zero-trust guarantees.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LlmProvider {
-    BuiltIn,
+    /// On-device inference via Candle. Model is downloaded once from
+    /// HuggingFace Hub, then runs entirely offline.
+    #[serde(alias = "BuiltIn")]
+    BuiltIn { model_id: String },
+    /// External Ollama instance (requires HTTP). Use only if you already
+    /// run Ollama and understand the privacy trade-off.
     Ollama { endpoint: String, model: String },
+    /// Any OpenAI-compatible HTTP API (requires network + API key).
     OpenAiCompatible { endpoint: String, api_key: String, model: String },
-    #[default]
+    /// Demo mode — no LLM, hardcoded scenarios only.
     None,
+}
+
+impl Default for LlmProvider {
+    fn default() -> Self {
+        LlmProvider::BuiltIn {
+            model_id: "mistral-7b-instruct".into(),
+        }
+    }
 }
 
 /// Orchestrator configuration.
@@ -167,7 +224,7 @@ pub struct OrchestratorConfig {
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
-            llm_provider: LlmProvider::None,
+            llm_provider: LlmProvider::default(),
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
         }
@@ -179,6 +236,9 @@ impl Default for OrchestratorConfig {
 pub enum OrchestratorStatus {
     Unconfigured,
     Disconnected,
+    /// Model is being downloaded from HuggingFace Hub.
+    Downloading { progress_pct: u8 },
+    /// Model loaded, ready for inference.
     Ready,
     DemoOnly,
 }

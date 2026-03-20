@@ -8,8 +8,8 @@ use tauri::State;
 use crate::error::PapillionError;
 use crate::state::{AppState, DEMO_REGISTRY_URL};
 use papillion_shared::{
-    DemoRunResult, DemoStepResult, OrchestratorConfig, OrchestratorStatus, ReceiptInfo,
-    ScenarioCard, SetupState,
+    builtin_model_catalog, BuiltInModelInfo, DemoRunResult, DemoStepResult, LlmProvider,
+    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, SetupState,
 };
 
 /// Get the current orchestrator configuration.
@@ -40,15 +40,24 @@ pub fn configure_orchestrator(
 
 /// Get orchestrator status.
 #[tauri::command]
-pub fn get_orchestrator_status(
+pub async fn get_orchestrator_status(
     state: State<'_, AppState>,
 ) -> Result<OrchestratorStatus, PapillionError> {
     let config = state
         .orchestrator_config
         .read()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
+        .map_err(|e| PapillionError::from(e.to_string()))?
+        .clone();
     let status = match &config.llm_provider {
-        papillion_shared::LlmProvider::None => OrchestratorStatus::DemoOnly,
+        LlmProvider::None => OrchestratorStatus::DemoOnly,
+        LlmProvider::BuiltIn { model_id } => {
+            let mgr = state.model_manager.lock().await;
+            if mgr.loaded.is_some() && mgr.model_id == *model_id {
+                OrchestratorStatus::Ready
+            } else {
+                OrchestratorStatus::Disconnected
+            }
+        }
         _ => OrchestratorStatus::Ready,
     };
     Ok(status)
@@ -66,12 +75,43 @@ pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, Papilli
         .orchestrator_config
         .read()
         .map_err(|e| PapillionError::from(e.to_string()))?;
-    let llm_configured = config.llm_provider != papillion_shared::LlmProvider::None;
+    let llm_configured = config.llm_provider != LlmProvider::None;
     Ok(SetupState {
         identity_created: has_identity,
         llm_configured,
         setup_complete: has_identity,
     })
+}
+
+/// List available built-in models.
+#[tauri::command]
+pub fn list_builtin_models() -> Result<Vec<BuiltInModelInfo>, PapillionError> {
+    Ok(builtin_model_catalog())
+}
+
+/// Download and load the configured built-in model. Call this after
+/// configuring a BuiltIn provider to prime the model for inference.
+#[tauri::command]
+pub async fn load_builtin_model(
+    state: State<'_, AppState>,
+) -> Result<OrchestratorStatus, PapillionError> {
+    let model_id = {
+        let config = state
+            .orchestrator_config
+            .read()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        match &config.llm_provider {
+            LlmProvider::BuiltIn { model_id } => model_id.clone(),
+            _ => return Err(PapillionError::from("Provider is not BuiltIn")),
+        }
+    };
+
+    let mut mgr = state.model_manager.lock().await;
+    mgr.ensure_loaded(&model_id)
+        .await
+        .map_err(PapillionError::from)?;
+
+    Ok(OrchestratorStatus::Ready)
 }
 
 /// List demo scenario cards for the Home page.
