@@ -4,7 +4,7 @@ use std::sync::RwLock;
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillion_shared::{RunResult, OrchestratorConfig, SuccessorDesignation};
+use papillion_shared::{OrchestratorConfig, RunResult, SuccessorDesignation};
 
 use crate::inference::ModelManager;
 use crate::seed::seed_registry;
@@ -108,7 +108,10 @@ mod tests {
     fn default_state_orchestrator_config_has_builtin_provider() {
         let state = AppState::default();
         let config = state.orchestrator_config.read().unwrap();
-        assert!(matches!(config.llm_provider, papillion_shared::LlmProvider::BuiltIn { .. }));
+        assert!(matches!(
+            config.llm_provider,
+            papillion_shared::LlmProvider::BuiltIn { .. }
+        ));
     }
 
     #[test]
@@ -144,6 +147,9 @@ mod tests {
         let state = AppState::default();
         let signer = state.signer.read().unwrap();
         let did = signer.as_ref().unwrap().did();
-        assert!(did.starts_with("did:key:z"), "DID should start with did:key:z, got {did}");
+        assert!(
+            did.starts_with("did:key:z"),
+            "DID should start with did:key:z, got {did}"
+        );
     }
 }

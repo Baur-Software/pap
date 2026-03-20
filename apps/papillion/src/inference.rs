@@ -73,23 +73,18 @@ pub async fn download_tokenizer(info: &BuiltInModelInfo) -> Result<PathBuf, Stri
 }
 
 /// Load a downloaded GGUF model into memory, ready for inference.
-pub fn load_model(
-    model_path: &PathBuf,
-    tokenizer_path: &PathBuf,
-) -> Result<LoadedModel, String> {
+pub fn load_model(model_path: &PathBuf, tokenizer_path: &PathBuf) -> Result<LoadedModel, String> {
     let device = Device::Cpu;
 
     // Load GGUF
-    let mut file =
-        std::fs::File::open(model_path).map_err(|e| format!("Open model: {e}"))?;
-    let gguf = gguf_file::Content::read(&mut file)
-        .map_err(|e| format!("Parse GGUF: {e}"))?;
+    let mut file = std::fs::File::open(model_path).map_err(|e| format!("Open model: {e}"))?;
+    let gguf = gguf_file::Content::read(&mut file).map_err(|e| format!("Parse GGUF: {e}"))?;
     let weights = model::ModelWeights::from_gguf(gguf, &mut file, &device)
         .map_err(|e| format!("Load weights: {e}"))?;
 
     // Load tokenizer
-    let tokenizer = Tokenizer::from_file(tokenizer_path)
-        .map_err(|e| format!("Load tokenizer: {e}"))?;
+    let tokenizer =
+        Tokenizer::from_file(tokenizer_path).map_err(|e| format!("Load tokenizer: {e}"))?;
 
     Ok(LoadedModel {
         info: BuiltInModelInfo {
@@ -116,10 +111,7 @@ pub fn generate(
         .encode(prompt, true)
         .map_err(|e| format!("Tokenize: {e}"))?;
     let prompt_tokens = encoding.get_ids();
-    let eos_token = loaded
-        .tokenizer
-        .token_to_id("</s>")
-        .unwrap_or(2);
+    let eos_token = loaded.tokenizer.token_to_id("</s>").unwrap_or(2);
 
     let mut logits_processor = LogitsProcessor::from_sampling(
         42,
@@ -141,9 +133,7 @@ pub fn generate(
             .model
             .forward(&input, prompt_tokens.len())
             .map_err(|e| format!("Forward: {e}"))?;
-        let logits = logits
-            .squeeze(0)
-            .map_err(|e| format!("Squeeze: {e}"))?;
+        let logits = logits.squeeze(0).map_err(|e| format!("Squeeze: {e}"))?;
         let next_token = logits_processor
             .sample(&logits)
             .map_err(|e| format!("Sample: {e}"))?;
@@ -227,8 +217,7 @@ impl ModelManager {
             return Ok(());
         }
 
-        let info = resolve_model(model_id)
-            .ok_or_else(|| format!("Unknown model: {model_id}"))?;
+        let info = resolve_model(model_id).ok_or_else(|| format!("Unknown model: {model_id}"))?;
 
         let model_path = download_model(&info).await?;
         let tokenizer_path = download_tokenizer(&info).await?;
@@ -243,10 +232,7 @@ impl ModelManager {
 
     /// Run inference. Returns an error if no model is loaded.
     pub fn generate(&mut self, prompt: &str, max_tokens: usize) -> Result<String, String> {
-        let model = self
-            .loaded
-            .as_mut()
-            .ok_or("No model loaded")?;
+        let model = self.loaded.as_mut().ok_or("No model loaded")?;
         generate(model, prompt, max_tokens)
     }
 }

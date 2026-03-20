@@ -56,17 +56,20 @@ pub struct ChatMessage {
 ///
 /// For BuiltIn, use `crate::inference::ModelManager` directly — this
 /// function only handles the HTTP-based providers.
-pub async fn chat(provider: &LlmProvider, messages: &[ChatMessage]) -> Result<String, PapillionError> {
+pub async fn chat(
+    provider: &LlmProvider,
+    messages: &[ChatMessage],
+) -> Result<String, PapillionError> {
     match provider {
-        LlmProvider::BuiltIn { .. } => {
-            Err(PapillionError::from(
-                "BuiltIn provider uses on-device inference via ModelManager, not HTTP chat",
-            ))
-        }
+        LlmProvider::BuiltIn { .. } => Err(PapillionError::from(
+            "BuiltIn provider uses on-device inference via ModelManager, not HTTP chat",
+        )),
         LlmProvider::Ollama { endpoint, model } => ollama_chat(endpoint, model, messages).await,
-        LlmProvider::OpenAiCompatible { endpoint, api_key, model } => {
-            openai_chat(endpoint, api_key, model, messages).await
-        }
+        LlmProvider::OpenAiCompatible {
+            endpoint,
+            api_key,
+            model,
+        } => openai_chat(endpoint, api_key, model, messages).await,
         LlmProvider::None => Err(PapillionError::from("No LLM provider configured")),
     }
 }

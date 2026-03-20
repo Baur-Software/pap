@@ -200,7 +200,11 @@ pub enum LlmProvider {
     /// run Ollama and understand the privacy trade-off.
     Ollama { endpoint: String, model: String },
     /// Any OpenAI-compatible HTTP API (requires network + API key).
-    OpenAiCompatible { endpoint: String, api_key: String, model: String },
+    OpenAiCompatible {
+        endpoint: String,
+        api_key: String,
+        model: String,
+    },
     /// No LLM configured — keyword fallback only.
     None,
 }
@@ -237,7 +241,9 @@ pub enum OrchestratorStatus {
     Unconfigured,
     Disconnected,
     /// Model is being downloaded from HuggingFace Hub.
-    Downloading { progress_pct: u8 },
+    Downloading {
+        progress_pct: u8,
+    },
     /// Model loaded, ready for inference.
     Ready,
     Offline,

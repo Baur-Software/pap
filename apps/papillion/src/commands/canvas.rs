@@ -58,15 +58,21 @@ fn classify_prompt(state: &AppState, prompt: &str) -> Option<ScenarioCard> {
     }
 
     // Fallback: match by action keywords against capabilities
-    let action_match = if lower.contains("search") || lower.contains("find") || lower.contains("look") {
-        Some("schema:SearchAction")
-    } else if lower.contains("flight") || lower.contains("fly") || lower.contains("book") || lower.contains("hotel") || lower.contains("stay") {
-        Some("schema:ReserveAction")
-    } else if lower.contains("pay") || lower.contains("payment") || lower.contains("invoice") {
-        Some("schema:PayAction")
-    } else {
-        None
-    };
+    let action_match =
+        if lower.contains("search") || lower.contains("find") || lower.contains("look") {
+            Some("schema:SearchAction")
+        } else if lower.contains("flight")
+            || lower.contains("fly")
+            || lower.contains("book")
+            || lower.contains("hotel")
+            || lower.contains("stay")
+        {
+            Some("schema:ReserveAction")
+        } else if lower.contains("pay") || lower.contains("payment") || lower.contains("invoice") {
+            Some("schema:PayAction")
+        } else {
+            None
+        };
 
     if let Some(action) = action_match {
         let matched_ads = registry.query_local(action);
@@ -120,26 +126,38 @@ pub async fn canvas_prompt(
         match result {
             Ok(run_result) => {
                 // Determine schema type and content from the handshake result
-                let (schema_type, content) = if let Some(ref search_results) = run_result.search_results {
-                    let results_json: Vec<serde_json::Value> = search_results.iter().take(5).map(|r| {
-                        json!({ "title": r.title, "url": r.url, "snippet": r.snippet })
-                    }).collect();
-                    ("SearchResultsPage".to_string(), json!({
-                        "@type": "SearchResultsPage",
-                        "query": text,
-                        "results": results_json
-                    }))
+                let (schema_type, content) = if let Some(ref search_results) =
+                    run_result.search_results
+                {
+                    let results_json: Vec<serde_json::Value> = search_results
+                        .iter()
+                        .take(5)
+                        .map(|r| json!({ "title": r.title, "url": r.url, "snippet": r.snippet }))
+                        .collect();
+                    (
+                        "SearchResultsPage".to_string(),
+                        json!({
+                            "@type": "SearchResultsPage",
+                            "query": text,
+                            "results": results_json
+                        }),
+                    )
                 } else {
-                    let schema = scenario.returns.first()
+                    let schema = scenario
+                        .returns
+                        .first()
                         .map(|s| s.trim_start_matches("schema:").to_string())
                         .unwrap_or_else(|| "StructuredData".into());
-                    (schema.clone(), json!({
-                        "@type": schema,
-                        "agent": run_result.agent_name,
-                        "action": scenario.action_type,
-                        "receipt_url": run_result.receipt_url,
-                        "prompt": text
-                    }))
+                    (
+                        schema.clone(),
+                        json!({
+                            "@type": schema,
+                            "agent": run_result.agent_name,
+                            "action": scenario.action_type,
+                            "receipt_url": run_result.receipt_url,
+                            "prompt": text
+                        }),
+                    )
                 };
 
                 let resolved_block = CanvasBlock {
@@ -152,7 +170,12 @@ pub async fn canvas_prompt(
                     created_at: now_str(),
                     updated_at: now_str(),
                 };
-                let _ = app.emit("block_resolved", BlockEvent { block: resolved_block });
+                let _ = app.emit(
+                    "block_resolved",
+                    BlockEvent {
+                        block: resolved_block,
+                    },
+                );
             }
             Err(e) => {
                 let failed_block = CanvasBlock {
@@ -168,12 +191,23 @@ pub async fn canvas_prompt(
                     created_at: now_str(),
                     updated_at: now_str(),
                 };
-                let _ = app.emit("block_updated", BlockEvent { block: failed_block });
+                let _ = app.emit(
+                    "block_updated",
+                    BlockEvent {
+                        block: failed_block,
+                    },
+                );
             }
         }
     } else {
         // No matching agent — use the on-device LLM directly
-        emit_phase(&app, &block_id, &prompt_id, 2, "Running on-device inference...");
+        emit_phase(
+            &app,
+            &block_id,
+            &prompt_id,
+            2,
+            "Running on-device inference...",
+        );
 
         let (schema_type, content) = {
             let mut mgr = state.model_manager.lock().await;
@@ -202,7 +236,12 @@ pub async fn canvas_prompt(
             created_at: now_str(),
             updated_at: now_str(),
         };
-        let _ = app.emit("block_resolved", BlockEvent { block: resolved_block });
+        let _ = app.emit(
+            "block_resolved",
+            BlockEvent {
+                block: resolved_block,
+            },
+        );
     }
 
     Ok(json!({ "status": "ok", "block_id": block_id }))

@@ -9,9 +9,8 @@ use tauri::State;
 use crate::error::PapillionError;
 use crate::state::{AppState, BUILTIN_REGISTRY_URL};
 use papillion_shared::{
-    builtin_model_catalog, BuiltInModelInfo, LlmProvider,
-    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, RunResult, ScenarioCard, SearchResult,
-    SetupState, StepResult,
+    builtin_model_catalog, BuiltInModelInfo, LlmProvider, OrchestratorConfig, OrchestratorStatus,
+    ReceiptInfo, RunResult, ScenarioCard, SearchResult, SetupState, StepResult,
 };
 
 /// Get the current orchestrator configuration.
@@ -137,8 +136,8 @@ pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
         ScenarioCard {
             id: "search".into(),
             title: "Web Search".into(),
-            description: "Search the web with zero disclosure — no personal data leaves your device"
-                .into(),
+            description:
+                "Search the web with zero disclosure — no personal data leaves your device".into(),
             icon: "\u{1F50D}".into(),
             agent_name: "Web Search Agent".into(),
             action_type: "schema:SearchAction".into(),
@@ -184,8 +183,8 @@ pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
         ScenarioCard {
             id: "ai".into(),
             title: "Ask AI".into(),
-            description:
-                "Get answers from a local AI — your prompts never leave your machine".into(),
+            description: "Get answers from a local AI — your prompts never leave your machine"
+                .into(),
             icon: "\u{1F9E0}".into(),
             agent_name: "Local AI Assistant".into(),
             action_type: "schema:AskAction".into(),
@@ -212,8 +211,18 @@ struct DdgResponse {
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum DdgTopic {
-    Result { #[serde(rename = "Text")] text: String, #[serde(rename = "FirstURL")] first_url: String },
-    Group { #[serde(rename = "Topics")] topics: Vec<DdgTopic>, #[serde(rename = "Name")] _name: String },
+    Result {
+        #[serde(rename = "Text")]
+        text: String,
+        #[serde(rename = "FirstURL")]
+        first_url: String,
+    },
+    Group {
+        #[serde(rename = "Topics")]
+        topics: Vec<DdgTopic>,
+        #[serde(rename = "Name")]
+        _name: String,
+    },
 }
 
 /// Public wrapper for the canvas module to reuse web search.
@@ -230,7 +239,12 @@ async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
 
     let resp: DdgResponse = client
         .get("https://api.duckduckgo.com/")
-        .query(&[("q", query), ("format", "json"), ("no_html", "1"), ("skip_disambig", "1")])
+        .query(&[
+            ("q", query),
+            ("format", "json"),
+            ("no_html", "1"),
+            ("skip_disambig", "1"),
+        ])
         .send()
         .await
         .map_err(|e| PapillionError::from(e.to_string()))?
@@ -313,8 +327,8 @@ pub async fn run_handshake(
         let seed = seed_lock
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
-        let kp = PrincipalKeypair::from_bytes(seed)
-            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let kp =
+            PrincipalKeypair::from_bytes(seed).map_err(|e| PapillionError::from(e.to_string()))?;
         (did, kp)
     };
 
@@ -514,9 +528,7 @@ pub async fn run_scenario(
 
 /// List completed handshake runs for the activity page.
 #[tauri::command]
-pub fn list_completed_runs(
-    state: State<'_, AppState>,
-) -> Result<Vec<RunResult>, PapillionError> {
+pub fn list_completed_runs(state: State<'_, AppState>) -> Result<Vec<RunResult>, PapillionError> {
     let runs = state
         .completed_runs
         .read()
@@ -557,7 +569,10 @@ mod tests {
                 card.action_type.starts_with("schema:"),
                 "action_type should be a schema.org action"
             );
-            assert!(!card.returns.is_empty(), "returns must have at least one item");
+            assert!(
+                !card.returns.is_empty(),
+                "returns must have at least one item"
+            );
         }
     }
 
