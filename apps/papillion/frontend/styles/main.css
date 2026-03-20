@@ -861,14 +861,25 @@ body {
     -webkit-app-region: no-drag;
 }
 
+.topbar-logo {
+    height: 22px;
+    width: 22px;
+    -webkit-app-region: no-drag;
+}
+
 .topbar-menu-btn {
     background: none;
     border: none;
     color: var(--text-2);
     cursor: pointer;
-    padding: var(--sp-xs) var(--sp-sm);
+    padding: var(--sp-sm);
     border-radius: var(--r-sm);
     font-size: 16px;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.15s ease;
     line-height: 1;
 }
@@ -919,11 +930,17 @@ body {
     border: none;
     color: var(--text-2);
     cursor: pointer;
-    padding: var(--sp-xs) var(--sp-sm);
+    padding: var(--sp-sm);
     border-radius: var(--r-sm);
     font-size: 14px;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.15s ease;
     line-height: 1;
+    text-decoration: none;
 }
 
 .topbar-settings-btn:hover {

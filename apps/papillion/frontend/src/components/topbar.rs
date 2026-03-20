@@ -56,6 +56,7 @@ pub fn TopBar() -> impl IntoView {
                 <button class="topbar-menu-btn" on:click=toggle_menu title="Menu">
                     "\u{2630}"
                 </button>
+                <img src="/logo.png" alt="Papillion" class="topbar-logo" />
                 <span class="topbar-identity">{did_display}</span>
             </div>
             <div class="topbar-right">
