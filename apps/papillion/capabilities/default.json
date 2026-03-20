@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for Papillion",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "store:default"
+  ]
+}

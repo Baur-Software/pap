@@ -1,0 +1,41 @@
+[     599ms] [WARNING] The `integrity` attribute is currently ignored for preload destinations that do not support subresource integrity. See https://crbug.com/981419 for more information @ http://localhost:1420/:22
+[     741ms] [ERROR] Failed to check setup state: Tauri runtime not available (command: get_setup_state) @ http://localhost:1420/papillion-ui-32d50cdbe1e2856f.js:352
+[   18399ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ https://www.googleadservices.com/pagead/conversion/16521530460/?gad_source=1&adview_type=1&adview_query_id=CJWPxJfOrpMDFbAtRAgdzCwuWg:0
+[   19572ms] [WARNING] Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://www.youtube.com') does not match the recipient window's origin ('https://www.google.com'). @ https://www.youtube.com/s/player/1ebf2aa6/www-widgetapi.vflset/www-widgetapi.js:209
+[   20096ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ https://googleads.g.doubleclick.net/pagead/id:0
+[   20096ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ https://static.doubleclick.net/instream/ad_status.js:0
+[   20825ms] [WARNING] The `integrity` attribute is currently ignored for preload destinations that do not support subresource integrity. See https://crbug.com/981419 for more information @ http://localhost:1420/:22
+[   20897ms] [ERROR] Failed to check setup state: Tauri runtime not available (command: get_setup_state) @ http://localhost:1420/papillion-ui-32d50cdbe1e2856f.js:352
+[   23538ms] [ERROR] panicked at /rustc/4a4ef493e3a1488c6e321570238084b38948f6db/library/std/src/sys/pal/wasm/../unsupported/time.rs:35:9:
+time not implemented on this platform
+
+Stack:
+
+Error
+    at __wbg_new_227d7c05414eb861 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f.js:569:25)
+    at papillion_ui.wasm.console_error_panic_hook::Error::new::__wbg_new_227d7c05414eb861::h416f9c80e6568a16 externref shim (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[29757]:0x450e45)
+    at papillion_ui.wasm.console_error_panic_hook::Error::new::h22c0ce524f998351 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[17003]:0x3c1723)
+    at papillion_ui.wasm.console_error_panic_hook::hook_impl::hd477f8425e47952f (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[5936]:0x27bcdb)
+    at papillion_ui.wasm.console_error_panic_hook::hook::h41f62d85a7909cb8 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[27334]:0x43f46b)
+    at papillion_ui.wasm.core::ops::function::Fn::call::h7bcc303ccffa1b43 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[22350]:0x40e445)
+    at papillion_ui.wasm.std::panicking::panic_with_hook::hb44ff7a7db1d4a36 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[5761]:0x27346e)
+    at papillion_ui.wasm.std::panicking::panic_handler::{{closure}}::hc45753d38c23abcf (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[10698]:0x32e563)
+    at papillion_ui.wasm.std::sys::backtrace::__rust_end_short_backtrace::hc8287529a3915aa1 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[30251]:0x4524a7)
+    at papillion_ui.wasm.__rustc[4425a7e20b4c8619]::rust_begin_unwind (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[23348]:0x419608)
+
+ @ http://localhost:1420/papillion-ui-32d50cdbe1e2856f.js:360
+[   23546ms] RuntimeError: unreachable
+    at papillion_ui.wasm.__rustc[4425a7e20b4c8619]::__rust_abort (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[30564]:0x452d99)
+    at papillion_ui.wasm.__rustc[4425a7e20b4c8619]::__rust_start_panic (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[30496]:0x452c7f)
+    at papillion_ui.wasm.__rustc[4425a7e20b4c8619]::rust_panic (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[29818]:0x4511d9)
+    at papillion_ui.wasm.std::panicking::panic_with_hook::hb44ff7a7db1d4a36 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[5761]:0x2734a4)
+    at papillion_ui.wasm.std::panicking::panic_handler::{{closure}}::hc45753d38c23abcf (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[10698]:0x32e563)
+    at papillion_ui.wasm.std::sys::backtrace::__rust_end_short_backtrace::hc8287529a3915aa1 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[30251]:0x4524a7)
+    at papillion_ui.wasm.__rustc[4425a7e20b4c8619]::rust_begin_unwind (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[23348]:0x419608)
+    at papillion_ui.wasm.core::panicking::panic_fmt::hb8badb9a939ccf7a (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[19411]:0x3e83fd)
+    at papillion_ui.wasm.std::time::SystemTime::now::hbcec5a9f28279576 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[29820]:0x451204)
+    at papillion_ui.wasm.papillion_ui::state::canvas::generate_id::he5cac77cc6edc5c2 (http://localhost:1420/papillion-ui-32d50cdbe1e2856f_bg.wasm:wasm-function[3348]:0x1e8098)
+[   58880ms] [WARNING] The `integrity` attribute is currently ignored for preload destinations that do not support subresource integrity. See https://crbug.com/981419 for more information @ http://localhost:1420/:22
+[   58985ms] [ERROR] Failed to check setup state: Tauri runtime not available (command: get_setup_state) @ http://localhost:1420/papillion-ui-7bf8e011634f9f2.js:352
+[   71991ms] [WARNING] The `integrity` attribute is currently ignored for preload destinations that do not support subresource integrity. See https://crbug.com/981419 for more information @ http://localhost:1420/:22
+[   72052ms] [ERROR] Failed to check setup state: Tauri runtime not available (command: get_setup_state) @ http://localhost:1420/papillion-ui-7bf8e011634f9f2.js:352

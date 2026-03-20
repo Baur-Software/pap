@@ -1,0 +1,18 @@
+import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./tests",
+  timeout: 30_000,
+  retries: 0,
+  use: {
+    baseURL: "http://localhost:1420",
+    trace: "on-first-retry",
+  },
+  webServer: {
+    command:
+      "cd ../apps/papillion/frontend && trunk serve --port 1420",
+    port: 1420,
+    reuseExistingServer: true,
+    timeout: 120_000,
+  },
+});

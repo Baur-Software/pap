@@ -1,5 +1,6 @@
 [workspace]
 resolver = "2"
+exclude = ["apps/papillion/frontend"]
 members = [
     "crates/pap-did",
     "crates/pap-core",
@@ -10,6 +11,8 @@ members = [
     "crates/pap-transport",
     "crates/pap-federation",
     "crates/pap-python",
+    "crates/papillion-shared",
+    "apps/papillion",
     "examples/search",
     "examples/travel-booking",
     "examples/delegation-chain",
@@ -34,6 +37,7 @@ pap-webauthn = { path = "crates/pap-webauthn" }
 pap-proto = { path = "crates/pap-proto" }
 pap-transport = { path = "crates/pap-transport" }
 pap-federation = { path = "crates/pap-federation" }
+papillion-shared = { path = "crates/papillion-shared" }
 
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
@@ -49,6 +53,10 @@ uuid = { version = "1", features = ["v4"] }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 reqwest = { version = "=0.12.12", default-features = false, features = ["json", "rustls-tls"] }
+candle-core = "0.8"
+candle-transformers = "0.8"
+hf-hub = { version = "0.4", features = ["tokio"] }
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 
 # Local patch to work around Windows registry permission issue on this machine.
 # The icu_locale_core crate in the cargo cache has unreadable src/ files;
