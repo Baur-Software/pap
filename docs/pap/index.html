@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PAP — Principal Agent Protocol</title>
-  <meta name="description" content="A principal-first, zero-trust agent negotiation protocol for the open web. Your agents should work for you, not for the platform." />
+  <meta name="description" content="AI should answer to you, not to a platform. PAP is a zero-trust protocol that gives you cryptographic control over what your AI can do." />
   <meta property="og:title" content="PAP — Principal Agent Protocol" />
-  <meta property="og:description" content="A principal-first, zero-trust agent negotiation protocol. No new cryptography. No token economy. No central registry." />
+  <meta property="og:description" content="AI should answer to you, not to a platform. Zero-trust agent negotiation — no new cryptography, no token economy, no central registry." />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="PAP — Principal Agent Protocol" />
-  <meta name="twitter:description" content="Your agents should work for you, not for the platform." />
+  <meta name="twitter:description" content="AI should answer to you, not to a platform. A zero-trust protocol for agent negotiation." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -756,7 +756,8 @@
       <li><a href="#compare">Compare</a></li>
       <li><a href="#start">Quick Start</a></li>
     </ul>
-    <div class="nav-cta">
+    <div class="nav-cta" style="display:flex;gap:12px;align-items:center;">
+      <a href="../papillion/" style="font-size:.88rem;color:var(--muted);font-weight:500;transition:color .15s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">Papillion</a>
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
         <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
         GitHub
@@ -786,9 +787,10 @@
           Protocol
         </h1>
         <p class="hero-subtitle">
-          Every agent protocol in production today was designed to serve
-          platform operators, not human principals. PAP fixes the root cause —
-          cryptographically. It's time to build AI systems that answer to you, not to the platform.
+          AI is moving from answering questions to taking actions.
+          Every agent protocol in production today was designed for the platform, not for you.
+          PAP fixes that — cryptographically. Set the rules. Control the permissions.
+          See everything that happens.
         </p>
         <div class="hero-actions">
           <a href="https://github.com/Baur-Software/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
@@ -829,12 +831,12 @@
     <div class="problem-intro reveal">
       <div class="section-label">The Problem</div>
       <h2 class="section-title" id="problem-heading">
-        Your agents are leaking<br />
-        <span class="gradient-text">everything about you</span>
+        AI can take action now.<br />
+        <span class="gradient-text">But you're out of the loop.</span>
       </h2>
       <p class="section-sub" style="margin: 0 auto;">
-        AI agents make hundreds of queries on your behalf — exposing your context
-        with every interaction.
+        AI agents make hundreds of decisions on your behalf &mdash; spending money, choosing vendors,
+        sharing your data &mdash; with no control, no visibility, and no receipts.
       </p>
     </div>
 
@@ -901,9 +903,9 @@
           <span class="gradient-text">Enforced by the protocol.</span>
         </h2>
         <p class="section-sub">
-          PAP makes privacy the protocol's problem — not the developer's.
-          The human principal is the root of trust. Every agent carries a
-          cryptographically verifiable mandate from that root.
+          PAP makes control, visibility, and safety the protocol's job &mdash; not the developer's afterthought.
+          You are the root of trust. Every agent carries a
+          cryptographically verifiable mandate from you.
         </p>
         <div style="margin-top: 24px; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); font-size: .85rem; color: var(--muted); line-height: 1.8;">
           <div style="color: var(--text); font-weight: 600; margin-bottom: 8px;">No new cryptography. No token economy. No central registry.</div>
@@ -991,8 +993,9 @@
         <span class="gradient-text">from human to agent</span>
       </h2>
       <p class="section-sub">
-        Every agent chain starts with a human principal. Trust flows down through
+        Every chain of delegation starts with you. Trust flows down through
         cryptographically signed mandates, each more restrictive than its parent.
+        No agent can exceed the permissions you granted.
       </p>
     </div>
 
@@ -1644,6 +1647,7 @@ curl http://localhost:9090/receipts</pre>
         </a>
         <a href="https://baursoftware.com/pap" class="btn btn-outline btn-lg" target="_blank" rel="noopener">Read the Spec →</a>
       </div>
+      <p style="margin-top:24px; font-size:.9rem; color:var(--faint);">Not a developer? <a href="../papillion/" style="color:var(--muted);">See what controlled AI feels like &rarr;</a></p>
     </div>
   </div>
 </section>
@@ -1654,7 +1658,8 @@ curl http://localhost:9090/receipts</pre>
     <div class="footer-grid">
       <div>
         <span class="footer-logo">PAP</span>
-        <p class="footer-tagline">Principal Agent Protocol. A principal-first, zero-trust agent negotiation protocol for the open web.</p>
+        <p class="footer-tagline">Principal Agent Protocol. AI should answer to you, not to a platform. A zero-trust protocol for the open web.</p>
+        <div style="margin-top:12px;"><a href="../papillion/" style="font-size:.85rem;color:var(--indigo);">See Papillion &mdash; the experience of controlled AI &rarr;</a></div>
         <div class="footer-license">Licensed MIT OR Apache-2.0</div>
       </div>
       <div>
