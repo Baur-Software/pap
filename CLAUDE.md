@@ -1,3 +1,13 @@
+# Design System
+
+See DESIGN.md for the complete design system (colors, typography, spacing, schema.org component mapping).
+
+Key rules:
+- Purple `#6c5ce7` is the brand color — never remove or replace it
+- Wing spectrum colors have semantic meaning (teal=resolved, gold=in-progress, coral=error)
+- All JSON-LD content is rendered as text only — never innerHTML
+- Fonts: Satoshi (display), DM Sans (body), JetBrains Mono (code/DIDs)
+
 # gstack
 
 For all web browsing tasks, use the `/browse` skill from gstack. NEVER use `mcp__claude-in-chrome__*` tools.
