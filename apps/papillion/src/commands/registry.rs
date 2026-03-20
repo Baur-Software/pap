@@ -313,7 +313,7 @@ mod tests {
         let mut ad = pap_marketplace::AgentAdvertisement::new(
             "Test Agent",
             "TestCorp",
-            &kp.did(),
+            kp.did(),
             vec!["schema:SearchAction".into()],
             vec!["schema:WebPage".into()],
             vec!["schema:Person.name".into()],
@@ -338,7 +338,7 @@ mod tests {
         let mut ad = pap_marketplace::AgentAdvertisement::new(
             "Privacy Agent",
             "PrivCorp",
-            &kp.did(),
+            kp.did(),
             vec!["schema:PayAction".into()],
             vec![],
             vec![],

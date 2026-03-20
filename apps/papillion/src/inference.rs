@@ -202,6 +202,12 @@ pub struct ModelManager {
     pub model_id: String,
 }
 
+impl Default for ModelManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModelManager {
     pub fn new() -> Self {
         Self {
