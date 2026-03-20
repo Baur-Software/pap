@@ -39,10 +39,12 @@ pub fn CommandPalette() -> impl IntoView {
 
     let on_keydown = move |e: ev::KeyboardEvent| {
         if e.key() == "Escape" {
+            e.prevent_default();
             canvas_state.palette_open.set(false);
             canvas_state.reshape_block_id.set(None);
             input_value.set(String::new());
         } else if e.key() == "Enter" {
+            e.prevent_default();
             submit();
         }
     };
