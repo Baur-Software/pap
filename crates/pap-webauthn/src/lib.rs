@@ -1,9 +1,11 @@
 pub mod error;
+#[cfg(any(test, feature = "mock"))]
 pub mod mock_webauthn;
 pub mod signer;
 pub mod software;
 
 pub use error::WebAuthnError;
+#[cfg(any(test, feature = "mock"))]
 pub use mock_webauthn::{
     create_credential, get_assertion, verify_assertion, AuthenticatorAssertionResponse,
     MockWebAuthnSigner, WebAuthnCredential,

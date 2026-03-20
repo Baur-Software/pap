@@ -262,6 +262,12 @@ pub struct ScenarioCard {
     pub action_type: String,
     pub requires_disclosure: Vec<String>,
     pub returns: Vec<String>,
+    /// Agent DID for real protocol execution.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub agent_did: Option<String>,
+    /// HTTP endpoint for real protocol execution. None = demo agent.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub endpoint: Option<String>,
 }
 
 // ── Demo runner types ─────────────────────────────────────

@@ -35,6 +35,11 @@ pub struct AgentAdvertisement {
     /// Schema.org types this agent returns
     pub returns: Vec<String>,
 
+    /// HTTP endpoint where this agent can be reached for real protocol sessions.
+    /// Operational metadata — excluded from canonical_bytes() (not part of signed identity).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub endpoint: Option<String>,
+
     /// Minimum TTL in seconds for sessions with this agent
     #[serde(default)]
     pub ttl_min: u64,
@@ -80,6 +85,7 @@ impl AgentAdvertisement {
             object_types,
             requires_disclosure,
             returns,
+            endpoint: None,
             ttl_min: 300,
             signed_by: did,
             signature: None,

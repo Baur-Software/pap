@@ -18,5 +18,8 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 
+[features]
+mock = []
+
 [dev-dependencies]
 pap-core = { workspace = true }

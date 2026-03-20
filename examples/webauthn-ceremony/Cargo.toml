@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 pap-did = { workspace = true }
 pap-core = { workspace = true }
-pap-webauthn = { workspace = true }
+pap-webauthn = { workspace = true, features = ["mock"] }
 ed25519-dalek = { workspace = true }
 chrono = { workspace = true }
 serde_json = { workspace = true }

@@ -41,6 +41,11 @@ pub fn ScenarioPage() -> impl IntoView {
                     let disclosure = card.requires_disclosure.clone();
                     let returns = card.returns.clone();
                     let scenario_id_for_run = card.id.clone();
+                    let endpoint_for_run = card.endpoint.clone();
+                    let agent_did_for_run = card.agent_did.clone();
+                    let agent_name_for_run = card.agent_name.clone();
+                    let action_type_for_run = card.action_type.clone();
+                    let disclosure_for_run = card.requires_disclosure.clone();
                     view! {
                         <div class="card" style="margin-bottom: 16px;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
@@ -112,17 +117,43 @@ pub fn ScenarioPage() -> impl IntoView {
                                     disabled={move || running.get() || current_step.get() != 0}
                                     on:click={
                                         let sid = scenario_id_for_run.clone();
+                                        let ep = endpoint_for_run.clone();
+                                        let adid = agent_did_for_run.clone();
+                                        let aname = agent_name_for_run.clone();
+                                        let atype = action_type_for_run.clone();
+                                        let disc = disclosure_for_run.clone();
                                         move |_| {
                                             let sid = sid.clone();
+                                            let ep = ep.clone();
+                                            let adid = adid.clone();
+                                            let aname = aname.clone();
+                                            let atype = atype.clone();
+                                            let disc = disc.clone();
                                             running.set(true);
                                             run_error.set(None);
                                             current_step.set(1);
 
                                             spawn_local(async move {
-                                                match bridge::invoke::<serde_json::Value, DemoRunResult>(
-                                                    "run_demo_scenario",
-                                                    &serde_json::json!({ "scenarioId": sid }),
-                                                ).await {
+                                                let invoke_result = if let Some(endpoint) = ep {
+                                                    // Real agent session via HTTP
+                                                    bridge::invoke::<serde_json::Value, DemoRunResult>(
+                                                        "run_agent_session",
+                                                        &serde_json::json!({
+                                                            "agentEndpoint": endpoint,
+                                                            "agentDid": adid.unwrap_or_default(),
+                                                            "agentName": aname,
+                                                            "actionType": atype,
+                                                            "disclosures": disc,
+                                                        }),
+                                                    ).await
+                                                } else {
+                                                    // Demo path
+                                                    bridge::invoke::<serde_json::Value, DemoRunResult>(
+                                                        "run_demo_scenario",
+                                                        &serde_json::json!({ "scenarioId": sid }),
+                                                    ).await
+                                                };
+                                                match invoke_result {
                                                     Ok(result) => {
                                                         let result_clone = result.clone();
                                                         let total_steps = result.steps.len() as u8;
@@ -165,7 +196,7 @@ pub fn ScenarioPage() -> impl IntoView {
                                         } else if current_step.get() >= 7 {
                                             "Completed"
                                         } else {
-                                            "Run Demo"
+                                            "Run"
                                         }
                                     }}
                                 </button>

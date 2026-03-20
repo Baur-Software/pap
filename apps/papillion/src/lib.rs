@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod error;
 pub mod inference;
+#[cfg(any(test, feature = "demo"))]
 pub mod seed;
 pub mod state;
 
@@ -11,6 +12,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(AppState::default())
+        .setup(|app| {
+            commands::orchestrator::load_persisted_runs(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::identity::create_identity,
             commands::identity::get_identity,
@@ -27,6 +32,7 @@ pub fn run() {
             commands::orchestrator::get_setup_state,
             commands::orchestrator::list_scenarios,
             commands::orchestrator::run_demo_scenario,
+            commands::orchestrator::run_agent_session,
             commands::orchestrator::list_completed_runs,
             commands::llm::check_llm_connection,
             commands::orchestrator::list_builtin_models,

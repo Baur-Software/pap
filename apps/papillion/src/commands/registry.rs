@@ -1,10 +1,23 @@
 use tauri::State;
 
 use crate::error::PapillionError;
-use crate::state::{AppState, DEMO_REGISTRY_URL};
+use crate::state::AppState;
 use papillion_shared::{AgentInfo, PeerInfo, RegistryInfo};
 
 use pap_federation::{FederatedRegistry, FederationClient, RegistryPeer};
+
+/// Check if a URL refers to the built-in demo registry.
+fn is_demo_url(url: &str) -> bool {
+    #[cfg(any(test, feature = "demo"))]
+    {
+        url.trim() == crate::state::DEMO_REGISTRY_URL
+    }
+    #[cfg(not(any(test, feature = "demo")))]
+    {
+        let _ = url;
+        false
+    }
+}
 
 /// Resolve a pap:// URL to an HTTP endpoint.
 fn resolve_url(url: &str) -> String {
@@ -28,7 +41,7 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
         requires_disclosure: ad.requires_disclosure.clone(),
         returns: ad.returns.clone(),
         content_hash: ad.hash(),
-        endpoint: None,
+        endpoint: ad.endpoint.clone(),
     }
 }
 
@@ -39,19 +52,22 @@ pub async fn navigate_registry(
     url: String,
 ) -> Result<RegistryInfo, PapillionError> {
     // Short-circuit for the built-in demo registry
-    if url.trim() == DEMO_REGISTRY_URL {
-        let registries = state
-            .registries
-            .read()
-            .map_err(|e| PapillionError::from(e.to_string()))?;
-        let registry = registries
-            .get(DEMO_REGISTRY_URL)
-            .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
-        return Ok(RegistryInfo {
-            url: DEMO_REGISTRY_URL.to_string(),
-            agent_count: registry.len(),
-            peer_count: registry.peers().len(),
-        });
+    if is_demo_url(&url) {
+        #[cfg(any(test, feature = "demo"))]
+        {
+            let registries = state
+                .registries
+                .read()
+                .map_err(|e| PapillionError::from(e.to_string()))?;
+            let registry = registries
+                .get(crate::state::DEMO_REGISTRY_URL)
+                .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
+            return Ok(RegistryInfo {
+                url: crate::state::DEMO_REGISTRY_URL.to_string(),
+                agent_count: registry.len(),
+                peer_count: registry.peers().len(),
+            });
+        }
     }
 
     let endpoint = resolve_url(&url);
@@ -140,19 +156,22 @@ pub async fn sync_agents(
     action: String,
 ) -> Result<RegistryInfo, PapillionError> {
     // Demo registry is pre-seeded, no sync needed
-    if registry_url.trim() == DEMO_REGISTRY_URL {
-        let registries = state
-            .registries
-            .read()
-            .map_err(|e| PapillionError::from(e.to_string()))?;
-        let registry = registries
-            .get(DEMO_REGISTRY_URL)
-            .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
-        return Ok(RegistryInfo {
-            url: DEMO_REGISTRY_URL.to_string(),
-            agent_count: registry.len(),
-            peer_count: registry.peers().len(),
-        });
+    if is_demo_url(&registry_url) {
+        #[cfg(any(test, feature = "demo"))]
+        {
+            let registries = state
+                .registries
+                .read()
+                .map_err(|e| PapillionError::from(e.to_string()))?;
+            let registry = registries
+                .get(crate::state::DEMO_REGISTRY_URL)
+                .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
+            return Ok(RegistryInfo {
+                url: crate::state::DEMO_REGISTRY_URL.to_string(),
+                agent_count: registry.len(),
+                peer_count: registry.peers().len(),
+            });
+        }
     }
 
     let endpoint = resolve_url(&registry_url);
@@ -189,7 +208,7 @@ pub async fn discover_peers(
     registry_url: String,
 ) -> Result<Vec<PeerInfo>, PapillionError> {
     // Demo registry has no real peers
-    if registry_url.trim() == DEMO_REGISTRY_URL {
+    if is_demo_url(&registry_url) {
         return Ok(Vec::new());
     }
 
