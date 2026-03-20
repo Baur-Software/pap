@@ -24,17 +24,30 @@ pub fn get_orchestrator_config(
     Ok(config.clone())
 }
 
-/// Save orchestrator configuration.
+/// Save orchestrator configuration. When the provider is BuiltIn, this
+/// automatically downloads (if needed) and loads the model so the
+/// orchestrator transitions to Ready without a separate call.
 #[tauri::command]
-pub fn configure_orchestrator(
+pub async fn configure_orchestrator(
     state: State<'_, AppState>,
     config: OrchestratorConfig,
 ) -> Result<OrchestratorConfig, PapillionError> {
-    let mut current = state
-        .orchestrator_config
-        .write()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
-    *current = config.clone();
+    {
+        let mut current = state
+            .orchestrator_config
+            .write()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        *current = config.clone();
+    }
+
+    // Auto-load the model when BuiltIn is selected
+    if let LlmProvider::BuiltIn { ref model_id } = config.llm_provider {
+        let mut mgr = state.model_manager.lock().await;
+        mgr.ensure_loaded(model_id)
+            .await
+            .map_err(PapillionError::from)?;
+    }
+
     Ok(config)
 }
 

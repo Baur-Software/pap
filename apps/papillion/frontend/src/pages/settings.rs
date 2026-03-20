@@ -9,7 +9,7 @@ use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use papillion_shared::{
     BuiltInModelInfo, ExportedKey, KeyBackupStatus, LlmProvider, OrchestratorConfig,
-    SuccessorDesignation,
+    OrchestratorStatus, SuccessorDesignation,
 };
 
 #[component]
@@ -128,6 +128,15 @@ fn GeneralTab() -> impl IntoView {
                 Ok(saved_config) => {
                     orchestrator.config.set(saved_config);
                     saved_msg.set(true);
+                    // Refresh sidebar status (model is now loaded if BuiltIn)
+                    if let Ok(status) =
+                        bridge::invoke_no_args::<OrchestratorStatus>(
+                            "get_orchestrator_status",
+                        )
+                        .await
+                    {
+                        orchestrator.status.set(status);
+                    }
                 }
                 Err(e) => {
                     web_sys::console::error_1(&format!("Failed to save: {e}").into());
