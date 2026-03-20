@@ -26,7 +26,7 @@ pub fn run() {
             commands::orchestrator::get_orchestrator_status,
             commands::orchestrator::get_setup_state,
             commands::orchestrator::list_scenarios,
-            commands::orchestrator::run_demo_scenario,
+            commands::orchestrator::run_scenario,
             commands::orchestrator::list_completed_runs,
             commands::llm::check_llm_connection,
             commands::orchestrator::list_builtin_models,

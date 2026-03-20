@@ -201,7 +201,7 @@ pub enum LlmProvider {
     Ollama { endpoint: String, model: String },
     /// Any OpenAI-compatible HTTP API (requires network + API key).
     OpenAiCompatible { endpoint: String, api_key: String, model: String },
-    /// Demo mode — no LLM, hardcoded scenarios only.
+    /// No LLM configured — keyword fallback only.
     None,
 }
 
@@ -240,7 +240,7 @@ pub enum OrchestratorStatus {
     Downloading { progress_pct: u8 },
     /// Model loaded, ready for inference.
     Ready,
-    DemoOnly,
+    Offline,
 }
 
 /// First-run setup state.
@@ -339,14 +339,14 @@ pub struct ScenarioCard {
     pub returns: Vec<String>,
 }
 
-// ── Demo runner types ─────────────────────────────────────
+// ── Handshake runner types ─────────────────────────────────
 
-/// Result of running a demo scenario through the full 6-step handshake.
+/// Result of running a scenario through the full 6-step PAP handshake.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DemoRunResult {
+pub struct RunResult {
     pub scenario_id: String,
     pub agent_name: String,
-    pub steps: Vec<DemoStepResult>,
+    pub steps: Vec<StepResult>,
     pub receipt: Option<ReceiptInfo>,
     pub receipt_url: Option<String>,
     pub query: Option<String>,
@@ -366,7 +366,7 @@ pub struct SearchResult {
 
 /// Result of a single handshake step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DemoStepResult {
+pub struct StepResult {
     pub step_number: u8,
     pub step_name: String,
     pub status: String,
@@ -847,21 +847,21 @@ mod tests {
     }
 
     #[test]
-    fn status_demo_only_roundtrip() {
-        let status = OrchestratorStatus::DemoOnly;
+    fn status_offline_roundtrip() {
+        let status = OrchestratorStatus::Offline;
         let json = serde_json::to_string(&status).unwrap();
         let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
         assert_eq!(status, back);
     }
 
-    // ── DemoRunResult serde ───────────────────────────────
+    // ── RunResult serde ────────────────────────────────────
 
     #[test]
-    fn demo_run_result_roundtrip_json() {
-        let result = DemoRunResult {
+    fn run_result_roundtrip_json() {
+        let result = RunResult {
             scenario_id: "search".into(),
             agent_name: "Web Search Agent".into(),
-            steps: vec![DemoStepResult {
+            steps: vec![StepResult {
                 step_number: 1,
                 step_name: "Discover agent".into(),
                 status: "completed".into(),
@@ -877,7 +877,7 @@ mod tests {
             error: None,
         };
         let json = serde_json::to_string(&result).unwrap();
-        let back: DemoRunResult = serde_json::from_str(&json).unwrap();
+        let back: RunResult = serde_json::from_str(&json).unwrap();
         assert_eq!(back.scenario_id, "search");
         assert!(back.success);
         assert_eq!(back.steps.len(), 1);
@@ -979,13 +979,13 @@ mod tests {
     #[test]
     fn registry_info_roundtrip_json() {
         let info = RegistryInfo {
-            url: "pap://demo".into(),
+            url: "pap://builtin".into(),
             agent_count: 5,
             peer_count: 3,
         };
         let json = serde_json::to_string(&info).unwrap();
         let back: RegistryInfo = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.url, "pap://demo");
+        assert_eq!(back.url, "pap://builtin");
         assert_eq!(back.agent_count, 5);
     }
 

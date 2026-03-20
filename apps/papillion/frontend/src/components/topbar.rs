@@ -31,14 +31,14 @@ pub fn TopBar() -> impl IntoView {
     let status_label = move || match orchestrator.status.get() {
         OrchestratorStatus::Ready => "Ready",
         OrchestratorStatus::Downloading { .. } => "Downloading...",
-        OrchestratorStatus::DemoOnly => "Demo",
+        OrchestratorStatus::Offline => "Offline",
         OrchestratorStatus::Disconnected => "Offline",
         OrchestratorStatus::Unconfigured => "Setup",
     };
 
     let status_class = move || match orchestrator.status.get() {
         OrchestratorStatus::Ready => "topbar-status ready",
-        OrchestratorStatus::DemoOnly => "topbar-status demo",
+        OrchestratorStatus::Offline => "topbar-status offline",
         _ => "topbar-status offline",
     };
 

@@ -3,10 +3,91 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::error::PapillionError;
-use crate::state::AppState;
-use papillion_shared::{BlockEvent, BlockState, CanvasBlock};
+use crate::state::{AppState, BUILTIN_REGISTRY_URL};
+use papillion_shared::{BlockEvent, BlockState, CanvasBlock, ScenarioCard};
 
-/// Submit a prompt to the canvas — creates blocks via the orchestrator.
+/// Emit a phase-update event for a canvas block.
+fn emit_phase(app: &AppHandle, block_id: &str, prompt_id: &str, phase: u8, label: &str) {
+    let now = Utc::now().to_rfc3339();
+    let block = CanvasBlock {
+        id: block_id.to_string(),
+        prompt_id: prompt_id.to_string(),
+        state: BlockState::Resolving {
+            phase,
+            phase_label: label.into(),
+        },
+        schema_type: None,
+        content: None,
+        linked_block_ids: Vec::new(),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    let _ = app.emit("block_updated", BlockEvent { block });
+}
+
+/// Classify a prompt into a matching scenario by checking the registry for
+/// agents whose capabilities or names match keywords in the prompt.
+fn classify_prompt(state: &AppState, prompt: &str) -> Option<ScenarioCard> {
+    let lower = prompt.to_lowercase();
+    let registries = state.registries.read().ok()?;
+    let registry = registries.get(BUILTIN_REGISTRY_URL)?;
+    let ads = registry.all_advertisements();
+
+    // Try matching against each agent's capabilities and name
+    for ad in ads {
+        let name_lower = ad.name.to_lowercase();
+        // Check if any keyword from the agent name appears in the prompt
+        let name_words: Vec<&str> = name_lower.split_whitespace().collect();
+        let matched = name_words.iter().any(|w| {
+            // Skip generic words
+            !matches!(*w, "agent" | "local" | "the" | "a") && lower.contains(w)
+        });
+
+        if matched {
+            return Some(ScenarioCard {
+                id: ad.name.replace(' ', "-").to_lowercase(),
+                title: ad.name.clone(),
+                description: String::new(),
+                icon: String::new(),
+                agent_name: ad.name.clone(),
+                action_type: ad.capability.first().cloned().unwrap_or_default(),
+                requires_disclosure: ad.requires_disclosure.clone(),
+                returns: ad.returns.clone(),
+            });
+        }
+    }
+
+    // Fallback: match by action keywords against capabilities
+    let action_match = if lower.contains("search") || lower.contains("find") || lower.contains("look") {
+        Some("schema:SearchAction")
+    } else if lower.contains("flight") || lower.contains("fly") || lower.contains("book") || lower.contains("hotel") || lower.contains("stay") {
+        Some("schema:ReserveAction")
+    } else if lower.contains("pay") || lower.contains("payment") || lower.contains("invoice") {
+        Some("schema:PayAction")
+    } else {
+        None
+    };
+
+    if let Some(action) = action_match {
+        let matched_ads = registry.query_local(action);
+        if let Some(ad) = matched_ads.first() {
+            return Some(ScenarioCard {
+                id: ad.name.replace(' ', "-").to_lowercase(),
+                title: ad.name.clone(),
+                description: String::new(),
+                icon: String::new(),
+                agent_name: ad.name.clone(),
+                action_type: ad.capability.first().cloned().unwrap_or_default(),
+                requires_disclosure: ad.requires_disclosure.clone(),
+                returns: ad.returns.clone(),
+            });
+        }
+    }
+
+    None
+}
+
+/// Submit a prompt to the canvas — runs the real PAP handshake.
 ///
 /// This command is async: it immediately returns success, then emits Tauri
 /// events as each block progresses through the 6-phase handshake.
@@ -21,55 +102,108 @@ pub async fn canvas_prompt(
 ) -> Result<serde_json::Value, PapillionError> {
     let now_str = || Utc::now().to_rfc3339();
 
-    // Phase progression — simulate the 6-phase PAP handshake
-    // In production, each phase would be a real protocol operation.
-    let phases = [
-        (1, "Discovering agents..."),
-        (2, "Issuing mandate..."),
-        (3, "Opening session..."),
-        (4, "Exchanging data..."),
-        (5, "Co-signing receipt..."),
-        (6, "Closing session..."),
-    ];
+    // Phase 1: Classify intent against the registry
+    emit_phase(&app, &block_id, &prompt_id, 1, "Classifying intent...");
 
-    for &(phase, label) in &phases {
-        // Emit phase update event
-        let block = CanvasBlock {
+    let scenario = classify_prompt(&state, &text);
+
+    if let Some(scenario) = scenario {
+        // We have a matching agent — run the real PAP handshake
+        let result = crate::commands::orchestrator::run_handshake(
+            &state,
+            &scenario,
+            Some(text.clone()),
+            |phase, label| emit_phase(&app, &block_id, &prompt_id, phase, label),
+        )
+        .await;
+
+        match result {
+            Ok(run_result) => {
+                // Determine schema type and content from the handshake result
+                let (schema_type, content) = if let Some(ref search_results) = run_result.search_results {
+                    let results_json: Vec<serde_json::Value> = search_results.iter().take(5).map(|r| {
+                        json!({ "title": r.title, "url": r.url, "snippet": r.snippet })
+                    }).collect();
+                    ("SearchResultsPage".to_string(), json!({
+                        "@type": "SearchResultsPage",
+                        "query": text,
+                        "results": results_json
+                    }))
+                } else {
+                    let schema = scenario.returns.first()
+                        .map(|s| s.trim_start_matches("schema:").to_string())
+                        .unwrap_or_else(|| "StructuredData".into());
+                    (schema.clone(), json!({
+                        "@type": schema,
+                        "agent": run_result.agent_name,
+                        "action": scenario.action_type,
+                        "receipt_url": run_result.receipt_url,
+                        "prompt": text
+                    }))
+                };
+
+                let resolved_block = CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id: prompt_id.clone(),
+                    state: BlockState::Resolved,
+                    schema_type: Some(schema_type),
+                    content: Some(content),
+                    linked_block_ids: Vec::new(),
+                    created_at: now_str(),
+                    updated_at: now_str(),
+                };
+                let _ = app.emit("block_resolved", BlockEvent { block: resolved_block });
+            }
+            Err(e) => {
+                let failed_block = CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id: prompt_id.clone(),
+                    state: BlockState::Failed {
+                        phase: 4,
+                        reason: e.to_string(),
+                    },
+                    schema_type: None,
+                    content: None,
+                    linked_block_ids: Vec::new(),
+                    created_at: now_str(),
+                    updated_at: now_str(),
+                };
+                let _ = app.emit("block_updated", BlockEvent { block: failed_block });
+            }
+        }
+    } else {
+        // No matching agent — use the on-device LLM directly
+        emit_phase(&app, &block_id, &prompt_id, 2, "Running on-device inference...");
+
+        let (schema_type, content) = {
+            let mut mgr = state.model_manager.lock().await;
+            if let Some(ref mut engine) = mgr.loaded {
+                match crate::inference::generate(engine, &text, 200) {
+                    Ok(response) => (
+                        "Answer".into(),
+                        json!({ "@type": "Answer", "text": response }),
+                    ),
+                    Err(_) => fallback_response(&text),
+                }
+            } else {
+                fallback_response(&text)
+            }
+        };
+
+        emit_phase(&app, &block_id, &prompt_id, 6, "Complete");
+
+        let resolved_block = CanvasBlock {
             id: block_id.clone(),
             prompt_id: prompt_id.clone(),
-            state: BlockState::Resolving {
-                phase,
-                phase_label: label.into(),
-            },
-            schema_type: None,
-            content: None,
+            state: BlockState::Resolved,
+            schema_type: Some(schema_type),
+            content: Some(content),
             linked_block_ids: Vec::new(),
             created_at: now_str(),
             updated_at: now_str(),
         };
-
-        let _ = app.emit("block_updated", BlockEvent { block });
-
-        // Brief delay to show phase progression
-        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+        let _ = app.emit("block_resolved", BlockEvent { block: resolved_block });
     }
-
-    // Generate demo content based on the prompt
-    let (schema_type, content) = generate_demo_content(&text, &state).await?;
-
-    // Emit resolved block
-    let resolved_block = CanvasBlock {
-        id: block_id.clone(),
-        prompt_id: prompt_id.clone(),
-        state: BlockState::Resolved,
-        schema_type: Some(schema_type),
-        content: Some(content),
-        linked_block_ids: Vec::new(),
-        created_at: now_str(),
-        updated_at: now_str(),
-    };
-
-    let _ = app.emit("block_resolved", BlockEvent { block: resolved_block });
 
     Ok(json!({ "status": "ok", "block_id": block_id }))
 }
@@ -78,59 +212,21 @@ pub async fn canvas_prompt(
 #[tauri::command]
 pub async fn canvas_reshape(
     app: AppHandle,
-    _state: State<'_, AppState>,
-    _canvas_id: String,
+    state: State<'_, AppState>,
+    canvas_id: String,
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillionError> {
-    let now_str = || Utc::now().to_rfc3339();
-
-    // Re-run through phases
-    for phase in 1..=6u8 {
-        let label = match phase {
-            1 => "Reshaping...",
-            2 => "Updating mandate...",
-            3 => "Re-opening session...",
-            4 => "Exchanging updated data...",
-            5 => "Co-signing receipt...",
-            _ => "Closing session...",
-        };
-        let block = CanvasBlock {
-            id: block_id.clone(),
-            prompt_id: String::new(),
-            state: BlockState::Resolving {
-                phase,
-                phase_label: label.into(),
-            },
-            schema_type: None,
-            content: None,
-            linked_block_ids: Vec::new(),
-            created_at: now_str(),
-            updated_at: now_str(),
-        };
-        let _ = app.emit("block_updated", BlockEvent { block });
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    }
-
-    // Resolve with updated content
-    let resolved = CanvasBlock {
-        id: block_id.clone(),
-        prompt_id: String::new(),
-        state: BlockState::Resolved,
-        schema_type: Some("StructuredData".into()),
-        content: Some(json!({
-            "@type": "StructuredData",
-            "prompt": text,
-            "reshaped": true,
-            "note": "Content reshaped by orchestrator"
-        })),
-        linked_block_ids: Vec::new(),
-        created_at: now_str(),
-        updated_at: now_str(),
-    };
-    let _ = app.emit("block_resolved", BlockEvent { block: resolved });
-
-    Ok(json!({ "status": "ok", "block_id": block_id }))
+    // Re-run through the real handshake with the new prompt
+    canvas_prompt(
+        app,
+        state,
+        canvas_id,
+        format!("reshape-{}", block_id),
+        block_id,
+        text,
+    )
+    .await
 }
 
 /// Retry a failed block.
@@ -141,7 +237,6 @@ pub async fn canvas_retry(
     canvas_id: String,
     block_id: String,
 ) -> Result<serde_json::Value, PapillionError> {
-    // Re-run the same flow as canvas_prompt with a retry context
     canvas_prompt(
         app,
         state,
@@ -153,147 +248,51 @@ pub async fn canvas_retry(
     .await
 }
 
-/// Generate demo content based on prompt keywords.
-/// In production, this would delegate via PAP to real agents.
-async fn generate_demo_content(
-    prompt: &str,
-    state: &State<'_, AppState>,
-) -> Result<(String, serde_json::Value), PapillionError> {
-    let lower = prompt.to_lowercase();
-
-    if lower.contains("flight") || lower.contains("fly") {
-        Ok((
-            "FlightReservation".into(),
-            json!({
-                "@type": "FlightReservation",
-                "departureAirport": "SAN",
-                "arrivalAirport": "SJC",
-                "departureDate": "Mar 30, 11:45 AM",
-                "totalPrice": "49",
-                "airline": "United Airlines \u{00b7} 1h 12m"
-            }),
-        ))
-    } else if lower.contains("hotel") || lower.contains("lodging") || lower.contains("stay") {
-        Ok((
-            "LodgingReservation".into(),
-            json!({
-                "@type": "LodgingReservation",
-                "name": "Park Hyatt Tokyo",
-                "checkinDate": "Mar 30",
-                "checkoutDate": "Apr 2",
-                "totalPrice": "1,240"
-            }),
-        ))
-    } else if lower.contains("search") || lower.contains("find") || lower.contains("look") {
-        // Use the real DuckDuckGo search if possible
-        let query = prompt.replace("search", "").replace("find", "").replace("look up", "").trim().to_string();
-        let results = crate::commands::orchestrator::web_search_public(&query).await;
-        match results {
-            Ok(items) => {
-                let results_json: Vec<serde_json::Value> = items.iter().take(5).map(|r| {
-                    json!({
-                        "title": r.title,
-                        "url": r.url,
-                        "snippet": r.snippet
-                    })
-                }).collect();
-                Ok((
-                    "SearchResultsPage".into(),
-                    json!({
-                        "@type": "SearchResultsPage",
-                        "query": query,
-                        "results": results_json
-                    }),
-                ))
-            }
-            Err(_) => Ok((
-                "SearchResultsPage".into(),
-                json!({
-                    "@type": "SearchResultsPage",
-                    "query": query,
-                    "results": [{
-                        "title": "Search result placeholder",
-                        "url": "https://example.com",
-                        "snippet": "Zero-disclosure search via PAP"
-                    }]
-                }),
-            )),
-        }
-    } else if lower.contains("pay") || lower.contains("payment") {
-        Ok((
-            "Invoice".into(),
-            json!({
-                "@type": "Invoice",
-                "paymentMethod": "ecash (Chaumian)",
-                "totalPrice": "0.00",
-                "note": "Zero-disclosure payment \u{2014} vendor cannot identify payer"
-            }),
-        ))
-    } else {
-        // Default: use the on-device LLM if available
-        let mut mgr = state.model_manager.lock().await;
-        if let Some(ref mut engine) = mgr.loaded {
-            match crate::inference::generate(engine, prompt, 200) {
-                Ok(response) => Ok((
-                    "Answer".into(),
-                    json!({
-                        "@type": "Answer",
-                        "text": response
-                    }),
-                )),
-                Err(_) => default_structured_response(prompt),
-            }
-        } else {
-            default_structured_response(prompt)
-        }
-    }
-}
-
-fn default_structured_response(prompt: &str) -> Result<(String, serde_json::Value), PapillionError> {
-    Ok((
+fn fallback_response(prompt: &str) -> (String, serde_json::Value) {
+    (
         "StructuredData".into(),
         json!({
             "@type": "StructuredData",
             "prompt": prompt,
             "note": "On-device orchestrator processed this request via PAP"
         }),
-    ))
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // ── default_structured_response ───────────────────────
+    // ── fallback_response ───────────────────────────────────
 
     #[test]
-    fn default_response_returns_structured_data_type() {
-        let (schema_type, _) = default_structured_response("hello world").unwrap();
+    fn fallback_response_returns_structured_data_type() {
+        let (schema_type, _) = fallback_response("hello world");
         assert_eq!(schema_type, "StructuredData");
     }
 
     #[test]
-    fn default_response_embeds_prompt_text() {
-        let (_, content) = default_structured_response("book a flight").unwrap();
+    fn fallback_response_embeds_prompt_text() {
+        let (_, content) = fallback_response("book a flight");
         assert_eq!(content["prompt"], "book a flight");
     }
 
     #[test]
-    fn default_response_has_pap_note() {
-        let (_, content) = default_structured_response("test").unwrap();
+    fn fallback_response_has_pap_note() {
+        let (_, content) = fallback_response("test");
         let note = content["note"].as_str().unwrap();
         assert!(note.contains("PAP"));
     }
 
     #[test]
-    fn default_response_has_type_field() {
-        let (_, content) = default_structured_response("test").unwrap();
+    fn fallback_response_has_type_field() {
+        let (_, content) = fallback_response("test");
         assert_eq!(content["@type"], "StructuredData");
     }
 
     #[test]
-    fn default_response_empty_prompt() {
-        let (schema_type, content) = default_structured_response("").unwrap();
+    fn fallback_response_empty_prompt() {
+        let (schema_type, content) = fallback_response("");
         assert_eq!(schema_type, "StructuredData");
         assert_eq!(content["prompt"], "");
     }
@@ -301,9 +300,9 @@ mod tests {
     // ── Phase labels ──────────────────────────────────────
 
     #[test]
-    fn canvas_prompt_has_six_phases() {
+    fn handshake_has_six_phases() {
         let phases = [
-            (1, "Discovering agents..."),
+            (1, "Classifying intent..."),
             (2, "Issuing mandate..."),
             (3, "Opening session..."),
             (4, "Exchanging data..."),

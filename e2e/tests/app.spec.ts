@@ -22,7 +22,7 @@ test.describe("App shell", () => {
 
   test("shows orchestrator status badge", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".status-badge")).toContainText("Demo Mode");
+    await expect(page.locator(".status-badge")).toContainText("Offline");
   });
 
   test("header shows Papillion title", async ({ page }) => {
@@ -95,9 +95,9 @@ test.describe("Scenario page", () => {
     // 6 handshake steps
     await expect(page.locator(".handshake-step")).toHaveCount(6);
 
-    // Run Demo button
+    // Run Handshake button
     await expect(page.locator(".btn-run")).toBeVisible();
-    await expect(page.locator(".btn-run")).toHaveText("Run Demo");
+    await expect(page.locator(".btn-run")).toHaveText("Run Handshake");
   });
 
   test("shows zero disclosure message for weather", async ({ page }) => {
@@ -108,16 +108,16 @@ test.describe("Scenario page", () => {
     ).toBeVisible();
   });
 
-  test("Run Demo executes handshake and shows receipt", async ({ page }) => {
+  test("Run Handshake executes handshake and shows receipt", async ({ page }) => {
     await page.goto("/");
     await page.locator(".scenario-card").first().click();
     await expect(page.locator(".btn-run")).toBeVisible();
 
-    // Click Run Demo
+    // Click Run Handshake
     await page.locator(".btn-run").click();
 
     // Button should show Running... or Completed
-    await expect(page.locator(".btn-run")).not.toHaveText("Run Demo");
+    await expect(page.locator(".btn-run")).not.toHaveText("Run Handshake");
 
     // Wait for all steps to animate (6 steps * 300ms + buffer)
     await page.waitForTimeout(3000);
@@ -131,7 +131,7 @@ test.describe("Scenario page", () => {
     await expect(page.locator("code").filter({ hasText: "weather.lookup" }).first()).toBeVisible();
 
     // Receipt URL should be visible
-    await expect(page.locator(".receipt-url")).toContainText("pap://demo/receipts/session-abc123");
+    await expect(page.locator(".receipt-url")).toContainText("pap://receipts/session-abc123");
   });
 
   test("back button returns to home", async ({ page }) => {

@@ -4,9 +4,9 @@ use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_marketplace::AgentAdvertisement;
 
-/// Seed a FederatedRegistry with demo agents for the built-in `pap://demo` registry.
-/// Returns the registry and the agent keypairs (retained for demo runner co-signing).
-pub fn seed_demo_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeypair>) {
+/// Seed a FederatedRegistry with built-in agents for the `pap://builtin` registry.
+/// Returns the registry and the agent keypairs (retained for co-signing handshakes).
+pub fn seed_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeypair>) {
     let mut registry = FederatedRegistry::new();
     let mut keypairs = HashMap::new();
 
@@ -31,7 +31,7 @@ pub fn seed_demo_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeyp
         ad.sign(kp.signing_key());
         registry
             .register_local(ad)
-            .expect("demo seed registration should not fail");
+            .expect("seed registration should not fail");
         keypairs.insert(name.to_string(), kp);
     };
 
@@ -102,19 +102,19 @@ mod tests {
 
     #[test]
     fn seed_creates_five_agents() {
-        let (registry, _) = seed_demo_registry();
+        let (registry, _) = seed_registry();
         assert_eq!(registry.len(), 5);
     }
 
     #[test]
     fn seed_creates_matching_keypairs() {
-        let (_, keypairs) = seed_demo_registry();
+        let (_, keypairs) = seed_registry();
         assert_eq!(keypairs.len(), 5);
     }
 
     #[test]
     fn seed_agent_names_match_keypair_keys() {
-        let (registry, keypairs) = seed_demo_registry();
+        let (registry, keypairs) = seed_registry();
         let expected_names = [
             "Web Search Agent",
             "Flight Booking Agent",
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn seed_agents_have_valid_dids() {
-        let (_, keypairs) = seed_demo_registry();
+        let (_, keypairs) = seed_registry();
         for (name, kp) in &keypairs {
             let did = kp.did();
             assert!(
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn seed_search_agent_is_zero_disclosure() {
-        let (registry, _) = seed_demo_registry();
+        let (registry, _) = seed_registry();
         let ads = registry.all_advertisements();
         let search = ads.iter().find(|a| a.name == "Web Search Agent").unwrap();
         assert!(search.requires_disclosure.is_empty());
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn seed_flight_agent_requires_disclosure() {
-        let (registry, _) = seed_demo_registry();
+        let (registry, _) = seed_registry();
         let ads = registry.all_advertisements();
         let flight = ads
             .iter()
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn seed_agents_are_signed() {
-        let (registry, _) = seed_demo_registry();
+        let (registry, _) = seed_registry();
         let ads = registry.all_advertisements();
         for ad in ads {
             // Signed advertisements have a non-empty hash
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn seed_agents_have_capabilities() {
-        let (registry, _) = seed_demo_registry();
+        let (registry, _) = seed_registry();
         let ads = registry.all_advertisements();
         for ad in ads {
             assert!(
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn seed_registry_can_query_search_action() {
-        let (registry, _) = seed_demo_registry();
+        let (registry, _) = seed_registry();
         let results = registry.query_local("schema:SearchAction");
         assert!(!results.is_empty());
         assert!(results.iter().any(|a| a.name == "Web Search Agent"));
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn seed_registry_can_query_reserve_action() {
-        let (registry, _) = seed_demo_registry();
+        let (registry, _) = seed_registry();
         let results = registry.query_local("schema:ReserveAction");
         assert_eq!(results.len(), 2, "flight + hotel agents");
     }

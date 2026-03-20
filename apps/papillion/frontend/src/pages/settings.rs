@@ -160,7 +160,7 @@ fn GeneralTab() -> impl IntoView {
                 <option value="builtin">"Built-in (Recommended)"</option>
                 <option value="ollama">"Ollama (requires HTTP)"</option>
                 <option value="openai">"OpenAI-compatible (requires network)"</option>
-                <option value="none">"None (Demo Mode)"</option>
+                <option value="none">"None (Offline)"</option>
             </select>
 
             // Built-in model picker

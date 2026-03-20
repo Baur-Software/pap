@@ -16,7 +16,7 @@ impl Default for OrchestratorState {
     fn default() -> Self {
         Self {
             config: RwSignal::new(OrchestratorConfig::default()),
-            status: RwSignal::new(OrchestratorStatus::DemoOnly),
+            status: RwSignal::new(OrchestratorStatus::Offline),
             scenarios: RwSignal::new(Vec::new()),
             setup_state: RwSignal::new(None),
             selected_scenario: RwSignal::new(None),

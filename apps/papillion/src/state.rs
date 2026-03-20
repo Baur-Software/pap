@@ -4,12 +4,12 @@ use std::sync::RwLock;
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillion_shared::{DemoRunResult, OrchestratorConfig, SuccessorDesignation};
+use papillion_shared::{RunResult, OrchestratorConfig, SuccessorDesignation};
 
 use crate::inference::ModelManager;
-use crate::seed::seed_demo_registry;
+use crate::seed::seed_registry;
 
-pub const DEMO_REGISTRY_URL: &str = "pap://demo";
+pub const BUILTIN_REGISTRY_URL: &str = "pap://builtin";
 
 /// Application state managed by Tauri.
 pub struct AppState {
@@ -21,10 +21,10 @@ pub struct AppState {
     pub orchestrator_config: RwLock<OrchestratorConfig>,
     /// On-device Candle model for the BuiltIn LLM provider.
     pub model_manager: tokio::sync::Mutex<ModelManager>,
-    /// Demo agent keypairs retained for simulating both sides of the handshake.
-    pub demo_agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
-    /// Completed demo run results for the activity feed.
-    pub completed_runs: RwLock<Vec<DemoRunResult>>,
+    /// Agent keypairs retained for co-signing both sides of the handshake.
+    pub agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
+    /// Completed handshake run results for the activity feed.
+    pub completed_runs: RwLock<Vec<RunResult>>,
     /// Whether the principal key has been exported/backed up.
     pub key_backed_up: RwLock<bool>,
     /// Forward-looking successor designations.
@@ -34,8 +34,8 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let mut registries = HashMap::new();
-        let (registry, agent_keypairs) = seed_demo_registry();
-        registries.insert(DEMO_REGISTRY_URL.to_string(), registry);
+        let (registry, agent_keypairs) = seed_registry();
+        registries.insert(BUILTIN_REGISTRY_URL.to_string(), registry);
 
         // Auto-generate identity on startup
         let keypair = PrincipalKeypair::generate();
@@ -46,10 +46,10 @@ impl Default for AppState {
             signer: RwLock::new(Some(Box::new(signer))),
             principal_seed: RwLock::new(Some(raw_seed)),
             registries: RwLock::new(registries),
-            bookmarks: RwLock::new(vec![DEMO_REGISTRY_URL.to_string()]),
+            bookmarks: RwLock::new(vec![BUILTIN_REGISTRY_URL.to_string()]),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager: tokio::sync::Mutex::new(ModelManager::new()),
-            demo_agent_keypairs: RwLock::new(agent_keypairs),
+            agent_keypairs: RwLock::new(agent_keypairs),
             completed_runs: RwLock::new(Vec::new()),
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
@@ -62,8 +62,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn demo_registry_url_is_pap_demo() {
-        assert_eq!(DEMO_REGISTRY_URL, "pap://demo");
+    fn builtin_registry_url_is_pap_builtin() {
+        assert_eq!(BUILTIN_REGISTRY_URL, "pap://builtin");
     }
 
     #[test]
@@ -82,30 +82,30 @@ mod tests {
     }
 
     #[test]
-    fn default_state_has_demo_registry() {
+    fn default_state_has_builtin_registry() {
         let state = AppState::default();
         let registries = state.registries.read().unwrap();
-        assert!(registries.contains_key(DEMO_REGISTRY_URL));
+        assert!(registries.contains_key(BUILTIN_REGISTRY_URL));
     }
 
     #[test]
-    fn default_state_demo_registry_has_agents() {
+    fn default_state_builtin_registry_has_agents() {
         let state = AppState::default();
         let registries = state.registries.read().unwrap();
-        let demo = registries.get(DEMO_REGISTRY_URL).unwrap();
-        assert_eq!(demo.len(), 5);
+        let builtin = registries.get(BUILTIN_REGISTRY_URL).unwrap();
+        assert_eq!(builtin.len(), 5);
     }
 
     #[test]
-    fn default_state_has_demo_bookmark() {
+    fn default_state_has_builtin_bookmark() {
         let state = AppState::default();
         let bookmarks = state.bookmarks.read().unwrap();
         assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0], DEMO_REGISTRY_URL);
+        assert_eq!(bookmarks[0], BUILTIN_REGISTRY_URL);
     }
 
     #[test]
-    fn default_state_orchestrator_config_is_builtin() {
+    fn default_state_orchestrator_config_has_builtin_provider() {
         let state = AppState::default();
         let config = state.orchestrator_config.read().unwrap();
         assert!(matches!(config.llm_provider, papillion_shared::LlmProvider::BuiltIn { .. }));
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn default_state_has_agent_keypairs() {
         let state = AppState::default();
-        let keypairs = state.demo_agent_keypairs.read().unwrap();
+        let keypairs = state.agent_keypairs.read().unwrap();
         assert_eq!(keypairs.len(), 5);
     }
 

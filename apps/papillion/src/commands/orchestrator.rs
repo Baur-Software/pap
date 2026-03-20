@@ -7,10 +7,11 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::error::PapillionError;
-use crate::state::{AppState, DEMO_REGISTRY_URL};
+use crate::state::{AppState, BUILTIN_REGISTRY_URL};
 use papillion_shared::{
-    builtin_model_catalog, BuiltInModelInfo, DemoRunResult, DemoStepResult, LlmProvider,
-    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, SearchResult, SetupState,
+    builtin_model_catalog, BuiltInModelInfo, LlmProvider,
+    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, RunResult, ScenarioCard, SearchResult,
+    SetupState, StepResult,
 };
 
 /// Get the current orchestrator configuration.
@@ -63,7 +64,7 @@ pub async fn get_orchestrator_status(
         .map_err(|e| PapillionError::from(e.to_string()))?
         .clone();
     let status = match &config.llm_provider {
-        LlmProvider::None => OrchestratorStatus::DemoOnly,
+        LlmProvider::None => OrchestratorStatus::Offline,
         LlmProvider::BuiltIn { model_id } => {
             let mgr = state.model_manager.lock().await;
             if mgr.loaded.is_some() && mgr.model_id == *model_id {
@@ -128,7 +129,8 @@ pub async fn load_builtin_model(
     Ok(OrchestratorStatus::Ready)
 }
 
-/// List demo scenario cards for the Home page.
+/// List scenario cards for the Home page.
+/// These are derived from the built-in agent registry.
 #[tauri::command]
 pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
     Ok(vec![
@@ -270,38 +272,32 @@ async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
     Ok(results)
 }
 
-/// Run a demo scenario through the full 6-step PAP handshake.
-#[tauri::command]
-pub async fn run_demo_scenario(
-    state: State<'_, AppState>,
-    scenario_id: String,
+/// Execute the full 6-step PAP handshake for a given scenario.
+/// Called by both `run_scenario` (Tauri command) and `canvas_prompt`.
+pub async fn run_handshake(
+    state: &AppState,
+    scenario: &ScenarioCard,
     query: Option<String>,
-) -> Result<DemoRunResult, PapillionError> {
+    on_phase: impl Fn(u8, &str),
+) -> Result<RunResult, PapillionError> {
     let now_str = || Utc::now().to_rfc3339();
-
-    // Find the scenario
-    let scenarios = list_scenarios()?;
-    let scenario = scenarios
-        .iter()
-        .find(|s| s.id == scenario_id)
-        .ok_or_else(|| PapillionError::from("Scenario not found"))?
-        .clone();
 
     let agent_name = &scenario.agent_name;
     let action = &scenario.action_type;
+    let scenario_id = &scenario.id;
 
     let mut steps = Vec::new();
 
     // ── Step 1: Discover agent ──────────────────────────────
-    // Extract data from locks in a block so guards are dropped before any .await
+    on_phase(1, "Discovering agents...");
     let (agent_did, principal_kp) = {
         let registries = state
             .registries
             .read()
             .map_err(|e| PapillionError::from(e.to_string()))?;
         let registry = registries
-            .get(DEMO_REGISTRY_URL)
-            .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
+            .get(BUILTIN_REGISTRY_URL)
+            .ok_or_else(|| PapillionError::from("Built-in registry not found"))?;
         let agent_ad = registry
             .all_advertisements()
             .iter()
@@ -322,7 +318,7 @@ pub async fn run_demo_scenario(
         (did, kp)
     };
 
-    steps.push(DemoStepResult {
+    steps.push(StepResult {
         step_number: 1,
         step_name: "Discover agent".into(),
         status: "completed".into(),
@@ -333,6 +329,7 @@ pub async fn run_demo_scenario(
     let principal_did = principal_kp.did();
 
     // ── Step 2: Issue mandate ───────────────────────────────
+    on_phase(2, "Issuing mandate...");
     let disclosure_set = if scenario.requires_disclosure.is_empty() {
         DisclosureSet::empty()
     } else {
@@ -356,7 +353,7 @@ pub async fn run_demo_scenario(
     mandate.sign(principal_kp.signing_key());
     let mandate_hash = mandate.hash();
 
-    steps.push(DemoStepResult {
+    steps.push(StepResult {
         step_number: 2,
         step_name: "Issue mandate".into(),
         status: "completed".into(),
@@ -365,6 +362,7 @@ pub async fn run_demo_scenario(
     });
 
     // ── Step 3: Open session ────────────────────────────────
+    on_phase(3, "Opening session...");
     let mut token = CapabilityToken::mint(
         agent_did.clone(),
         action.clone(),
@@ -383,7 +381,7 @@ pub async fn run_demo_scenario(
         .open(initiator_session_kp.did(), receiver_session_kp.did())
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    steps.push(DemoStepResult {
+    steps.push(StepResult {
         step_number: 3,
         step_name: "Open session".into(),
         status: "completed".into(),
@@ -392,16 +390,17 @@ pub async fn run_demo_scenario(
     });
 
     // ── Step 4: Exchange data ───────────────────────────────
+    on_phase(4, "Exchanging data...");
     let mut search_results: Option<Vec<SearchResult>> = None;
-    let step4_detail = if scenario_id == "search" {
+    let step4_detail = if action.contains("SearchAction") {
         if let Some(ref q) = query {
             match web_search(q).await {
                 Ok(results) => {
                     let count = results.len();
                     search_results = Some(results);
-                    format!("Query: \"{}\" \u{2014} {} results via zero-disclosure session", q, count)
+                    format!("Query: \"{q}\" \u{2014} {count} results via zero-disclosure session")
                 }
-                Err(e) => format!("Search failed: {}", e),
+                Err(e) => format!("Search failed: {e}"),
             }
         } else {
             "No query provided".into()
@@ -414,7 +413,7 @@ pub async fn run_demo_scenario(
             scenario.requires_disclosure.len()
         )
     };
-    steps.push(DemoStepResult {
+    steps.push(StepResult {
         step_number: 4,
         step_name: "Exchange data".into(),
         status: "completed".into(),
@@ -423,6 +422,7 @@ pub async fn run_demo_scenario(
     });
 
     // ── Step 5: Co-sign receipt ─────────────────────────────
+    on_phase(5, "Co-signing receipt...");
     session
         .execute()
         .map_err(|e| PapillionError::from(e.to_string()))?;
@@ -431,8 +431,8 @@ pub async fn run_demo_scenario(
     let mut receipt = TransactionReceipt::from_session(
         &session,
         property_refs.clone(),
-        vec![format!("operator:{}_executed", action)],
-        format!("{} executed", action),
+        vec![format!("operator:{action}_executed")],
+        format!("{action} executed"),
         scenario.returns.join(", "),
     )
     .map_err(|e| PapillionError::from(e.to_string()))?;
@@ -450,7 +450,7 @@ pub async fn run_demo_scenario(
         timestamp: receipt.timestamp.to_rfc3339(),
     };
 
-    steps.push(DemoStepResult {
+    steps.push(StepResult {
         step_number: 5,
         step_name: "Co-sign receipt".into(),
         status: "completed".into(),
@@ -459,11 +459,12 @@ pub async fn run_demo_scenario(
     });
 
     // ── Step 6: Close session ───────────────────────────────
+    on_phase(6, "Closing session...");
     session
         .close()
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    steps.push(DemoStepResult {
+    steps.push(StepResult {
         step_number: 6,
         step_name: "Close session".into(),
         status: "completed".into(),
@@ -471,10 +472,10 @@ pub async fn run_demo_scenario(
         timestamp: now_str(),
     });
 
-    let receipt_url = format!("pap://demo/receipts/{}", receipt_info.session_id);
+    let receipt_url = format!("pap://receipts/{}", receipt_info.session_id);
 
-    let result = DemoRunResult {
-        scenario_id,
+    Ok(RunResult {
+        scenario_id: scenario_id.clone(),
         agent_name: agent_name.clone(),
         steps,
         receipt: Some(receipt_info),
@@ -484,7 +485,24 @@ pub async fn run_demo_scenario(
         completed_at: now_str(),
         success: true,
         error: None,
-    };
+    })
+}
+
+/// Run a scenario through the full 6-step PAP handshake (Tauri command wrapper).
+#[tauri::command]
+pub async fn run_scenario(
+    state: State<'_, AppState>,
+    scenario_id: String,
+    query: Option<String>,
+) -> Result<RunResult, PapillionError> {
+    let scenarios = list_scenarios()?;
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.id == scenario_id)
+        .ok_or_else(|| PapillionError::from("Scenario not found"))?
+        .clone();
+
+    let result = run_handshake(&state, &scenario, query, |_, _| {}).await?;
 
     // Store in completed_runs for activity page
     if let Ok(mut runs) = state.completed_runs.write() {
@@ -494,11 +512,11 @@ pub async fn run_demo_scenario(
     Ok(result)
 }
 
-/// List completed demo runs for the activity page.
+/// List completed handshake runs for the activity page.
 #[tauri::command]
 pub fn list_completed_runs(
     state: State<'_, AppState>,
-) -> Result<Vec<DemoRunResult>, PapillionError> {
+) -> Result<Vec<RunResult>, PapillionError> {
     let runs = state
         .completed_runs
         .read()

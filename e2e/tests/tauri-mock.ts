@@ -48,7 +48,7 @@ const SCENARIOS: Record<string, unknown>[] = [
   },
 ];
 
-const ORCHESTRATOR_STATUS = "DemoOnly";
+const ORCHESTRATOR_STATUS = "Offline";
 
 const ORCHESTRATOR_CONFIG: Record<string, unknown> = {
   llm_provider: "None",
@@ -58,7 +58,7 @@ const ORCHESTRATOR_CONFIG: Record<string, unknown> = {
 
 const BACKUP_STATUS = { backed_up: false };
 
-function makeDemoRunResult(scenarioId: string): Record<string, unknown> {
+function makeRunResult(scenarioId: string): Record<string, unknown> {
   const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0];
   const now = new Date().toISOString();
   return {
@@ -69,7 +69,7 @@ function makeDemoRunResult(scenarioId: string): Record<string, unknown> {
         step_number: 1,
         step_name: "Discover Agent",
         status: "completed",
-        detail: `Found ${scenario.agent_name} in demo registry`,
+        detail: `Found ${scenario.agent_name} in builtin registry`,
         timestamp: now,
       },
       {
@@ -117,7 +117,7 @@ function makeDemoRunResult(scenarioId: string): Record<string, unknown> {
       co_signed: true,
       timestamp: now,
     },
-    receipt_url: "pap://demo/receipts/session-abc123",
+    receipt_url: "pap://receipts/session-abc123",
     completed_at: now,
     success: true,
     error: null,
@@ -156,7 +156,7 @@ window.__TAURI__ = {
         case 'configure_orchestrator':
           return args?.config ?? CONFIG;
 
-        case 'run_demo_scenario': {
+        case 'run_scenario': {
           const sid = args?.scenarioId ?? 'weather';
           const scenario = SCENARIOS.find(s => s.id === sid) || SCENARIOS[0];
           const now = new Date().toISOString();
@@ -180,7 +180,7 @@ window.__TAURI__ = {
               co_signed: true,
               timestamp: now,
             },
-            receipt_url: 'pap://demo/receipts/session-abc123',
+            receipt_url: 'pap://receipts/session-abc123',
             completed_at: now,
             success: true,
             error: null,
@@ -228,7 +228,7 @@ window.__TAURI__ = {
 
         case 'browse_registry':
           return {
-            info: { url: args?.url ?? 'pap://demo', agent_count: 3, peer_count: 0 },
+            info: { url: args?.url ?? 'pap://builtin', agent_count: 3, peer_count: 0 },
             agents: [],
           };
 
