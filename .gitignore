@@ -3,3 +3,4 @@ apps/papillion/frontend/target
 apps/papillion/frontend/dist
 .DS_STORE
 .gstack/
+.playwright-mcp/
