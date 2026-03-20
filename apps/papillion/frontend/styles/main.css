@@ -180,6 +180,19 @@ button, input, select, textarea {
     color: inherit;
 }
 
+/* Global focus-visible ring */
+:focus-visible {
+    outline: 2px solid var(--purple);
+    outline-offset: 2px;
+}
+
+/* Inputs and selects get the glow treatment */
+input:focus, select:focus, textarea:focus {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 2px var(--purple-glow);
+    outline: none;
+}
+
 body {
     font-family: var(--font-body);
     font-size: 15px;
