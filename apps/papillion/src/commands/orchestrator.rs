@@ -214,6 +214,11 @@ enum DdgTopic {
     Group { #[serde(rename = "Topics")] topics: Vec<DdgTopic>, #[serde(rename = "Name")] _name: String },
 }
 
+/// Public wrapper for the canvas module to reuse web search.
+pub async fn web_search_public(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
+    web_search(query).await
+}
+
 /// Perform a real web search via DuckDuckGo Instant Answer JSON API.
 async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
     let client = reqwest::Client::builder()

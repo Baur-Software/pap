@@ -37,6 +37,9 @@ pub fn run() {
             commands::identity::add_successor,
             commands::identity::list_successors,
             commands::identity::remove_successor,
+            commands::canvas::canvas_prompt,
+            commands::canvas::canvas_reshape,
+            commands::canvas::canvas_retry,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillion");
