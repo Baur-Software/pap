@@ -313,3 +313,154 @@ pub struct SuccessorDesignation {
 pub struct KeyBackupStatus {
     pub backed_up: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Model catalog ────────────────────────────────────────
+
+    #[test]
+    fn catalog_is_non_empty() {
+        let catalog = builtin_model_catalog();
+        assert!(!catalog.is_empty());
+    }
+
+    #[test]
+    fn catalog_default_is_mistral() {
+        let catalog = builtin_model_catalog();
+        assert_eq!(catalog[0].id, "mistral-7b-instruct");
+    }
+
+    #[test]
+    fn catalog_ids_are_unique() {
+        let catalog = builtin_model_catalog();
+        let mut ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), catalog.len());
+    }
+
+    #[test]
+    fn catalog_entries_have_required_fields() {
+        for m in builtin_model_catalog() {
+            assert!(!m.id.is_empty(), "id must be set");
+            assert!(!m.display_name.is_empty(), "display_name must be set");
+            assert!(!m.repo.is_empty(), "repo must be set");
+            assert!(m.filename.ends_with(".gguf"), "filename must be .gguf");
+            assert!(!m.size_hint.is_empty(), "size_hint must be set");
+        }
+    }
+
+    // ── LlmProvider default & serde ─────────────────────────
+
+    #[test]
+    fn llm_provider_default_is_builtin_mistral() {
+        let provider = LlmProvider::default();
+        match &provider {
+            LlmProvider::BuiltIn { model_id } => {
+                assert_eq!(model_id, "mistral-7b-instruct");
+            }
+            other => panic!("Expected BuiltIn, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn llm_provider_none_not_equal_to_builtin() {
+        assert_ne!(LlmProvider::None, LlmProvider::default());
+    }
+
+    #[test]
+    fn llm_provider_builtin_roundtrip_json() {
+        let provider = LlmProvider::BuiltIn {
+            model_id: "phi-3-mini".into(),
+        };
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    #[test]
+    fn llm_provider_ollama_roundtrip_json() {
+        let provider = LlmProvider::Ollama {
+            endpoint: "http://localhost:11434".into(),
+            model: "llama3.2:1b".into(),
+        };
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    #[test]
+    fn llm_provider_openai_roundtrip_json() {
+        let provider = LlmProvider::OpenAiCompatible {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: "sk-test".into(),
+            model: "gpt-4o".into(),
+        };
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    #[test]
+    fn llm_provider_none_roundtrip_json() {
+        let provider = LlmProvider::None;
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    // ── OrchestratorConfig default ──────────────────────────
+
+    #[test]
+    fn orchestrator_config_default_uses_builtin() {
+        let config = OrchestratorConfig::default();
+        assert!(matches!(config.llm_provider, LlmProvider::BuiltIn { .. }));
+        assert_eq!(config.mandate_ttl_hours, 8);
+        assert!(config.auto_approve_zero_disclosure);
+    }
+
+    #[test]
+    fn orchestrator_config_roundtrip_json() {
+        let config = OrchestratorConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        let back: OrchestratorConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config.llm_provider, back.llm_provider);
+        assert_eq!(config.mandate_ttl_hours, back.mandate_ttl_hours);
+    }
+
+    // ── OrchestratorStatus serde ────────────────────────────
+
+    #[test]
+    fn status_downloading_roundtrip_json() {
+        let status = OrchestratorStatus::Downloading { progress_pct: 42 };
+        let json = serde_json::to_string(&status).unwrap();
+        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, back);
+    }
+
+    #[test]
+    fn status_ready_roundtrip_json() {
+        let status = OrchestratorStatus::Ready;
+        let json = serde_json::to_string(&status).unwrap();
+        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, back);
+    }
+
+    // ── BuiltInModelInfo serde ──────────────────────────────
+
+    #[test]
+    fn model_info_roundtrip_json() {
+        let info = BuiltInModelInfo {
+            id: "test-model".into(),
+            display_name: "Test Model".into(),
+            repo: "test/repo".into(),
+            filename: "test.gguf".into(),
+            size_hint: "~1 GB".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let back: BuiltInModelInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(info, back);
+    }
+}

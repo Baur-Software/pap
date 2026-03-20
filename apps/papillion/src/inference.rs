@@ -250,3 +250,131 @@ impl ModelManager {
         generate(model, prompt, max_tokens)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── resolve_model ───────────────────────────────────────
+
+    #[test]
+    fn resolve_known_model() {
+        let info = resolve_model("mistral-7b-instruct").expect("should resolve");
+        assert_eq!(info.id, "mistral-7b-instruct");
+        assert!(info.filename.ends_with(".gguf"));
+        assert!(info.repo.contains("Mistral"));
+    }
+
+    #[test]
+    fn resolve_all_catalog_models() {
+        for entry in builtin_model_catalog() {
+            let resolved = resolve_model(&entry.id);
+            assert!(resolved.is_some(), "failed to resolve {}", entry.id);
+            assert_eq!(resolved.unwrap().id, entry.id);
+        }
+    }
+
+    #[test]
+    fn resolve_unknown_model_returns_none() {
+        assert!(resolve_model("nonexistent-model-xyz").is_none());
+    }
+
+    #[test]
+    fn resolve_empty_string_returns_none() {
+        assert!(resolve_model("").is_none());
+    }
+
+    // ── build_orchestrator_prompt ────────────────────────────
+
+    #[test]
+    fn prompt_contains_user_query() {
+        let prompt = build_orchestrator_prompt("find cheap flights to Paris", &[]);
+        assert!(prompt.contains("find cheap flights to Paris"));
+    }
+
+    #[test]
+    fn prompt_uses_inst_tags() {
+        let prompt = build_orchestrator_prompt("test", &[]);
+        assert!(prompt.starts_with("[INST]"));
+        assert!(prompt.ends_with("[/INST]"));
+    }
+
+    #[test]
+    fn prompt_includes_tool_definitions() {
+        let tools = vec![
+            ToolDef {
+                name: "web_search".into(),
+                description: "Search the web".into(),
+                action_type: "schema:SearchAction".into(),
+            },
+            ToolDef {
+                name: "book_flight".into(),
+                description: "Book a flight".into(),
+                action_type: "schema:ReserveAction".into(),
+            },
+        ];
+        let prompt = build_orchestrator_prompt("fly to tokyo", &tools);
+        assert!(prompt.contains("web_search"));
+        assert!(prompt.contains("book_flight"));
+        assert!(prompt.contains("schema:SearchAction"));
+        assert!(prompt.contains("schema:ReserveAction"));
+    }
+
+    #[test]
+    fn prompt_with_no_tools_still_valid() {
+        let prompt = build_orchestrator_prompt("hello", &[]);
+        assert!(prompt.contains("[INST]"));
+        assert!(prompt.contains("hello"));
+        assert!(prompt.contains("Available tools:"));
+    }
+
+    #[test]
+    fn prompt_contains_json_example() {
+        let prompt = build_orchestrator_prompt("test", &[]);
+        assert!(prompt.contains(r#""tool""#));
+        assert!(prompt.contains(r#""query""#));
+    }
+
+    // ── ModelManager ────────────────────────────────────────
+
+    #[test]
+    fn model_manager_starts_unloaded() {
+        let mgr = ModelManager::new();
+        assert!(mgr.loaded.is_none());
+        assert!(mgr.model_id.is_empty());
+    }
+
+    #[test]
+    fn model_manager_generate_fails_without_model() {
+        let mut mgr = ModelManager::new();
+        let result = mgr.generate("hello", 10);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("No model loaded"));
+    }
+
+    // ── load_model error paths ──────────────────────────────
+
+    #[test]
+    fn load_model_fails_on_missing_file() {
+        let bad_model = PathBuf::from("/nonexistent/model.gguf");
+        let bad_tokenizer = PathBuf::from("/nonexistent/tokenizer.json");
+        let result = load_model(&bad_model, &bad_tokenizer);
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert!(err.contains("Open model"), "unexpected error: {err}");
+    }
+
+    // ── ToolDef ─────────────────────────────────────────────
+
+    #[test]
+    fn tool_def_fields_accessible() {
+        let tool = ToolDef {
+            name: "test".into(),
+            description: "a test tool".into(),
+            action_type: "schema:TestAction".into(),
+        };
+        assert_eq!(tool.name, "test");
+        assert_eq!(tool.description, "a test tool");
+        assert_eq!(tool.action_type, "schema:TestAction");
+    }
+}
