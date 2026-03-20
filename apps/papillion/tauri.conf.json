@@ -7,7 +7,7 @@
     "beforeDevCommand": "cd papillion/frontend && trunk serve --port 1420",
     "beforeBuildCommand": "cd papillion/frontend && trunk build --release",
     "devUrl": "http://localhost:1420",
-    "frontendDist": "papillion/frontend/dist"
+    "frontendDist": "frontend/dist"
   },
   "app": {
     "withGlobalTauri": true,
