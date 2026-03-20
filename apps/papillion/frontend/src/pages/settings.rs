@@ -8,7 +8,8 @@ use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use papillion_shared::{
-    ExportedKey, KeyBackupStatus, LlmProvider, OrchestratorConfig, SuccessorDesignation,
+    BuiltInModelInfo, ExportedKey, KeyBackupStatus, LlmProvider, OrchestratorConfig,
+    OrchestratorStatus, SuccessorDesignation,
 };
 
 #[component]
@@ -49,7 +50,9 @@ pub fn SettingsPage() -> impl IntoView {
 #[component]
 fn GeneralTab() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
-    let selected = RwSignal::new(String::new());
+    let selected = RwSignal::new("builtin".to_string());
+    let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
+    let builtin_models = RwSignal::new(Vec::<BuiltInModelInfo>::new());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
     let ollama_model = RwSignal::new("llama3.2:1b".to_string());
     let openai_endpoint = RwSignal::new(String::new());
@@ -57,10 +60,14 @@ fn GeneralTab() -> impl IntoView {
     let openai_model = RwSignal::new(String::new());
     let saved_msg = RwSignal::new(false);
 
-    // Initialize from current config
+    // Initialize from current config + fetch model catalog
     Effect::new(move || {
         let config = orchestrator.config.get();
         match &config.llm_provider {
+            LlmProvider::BuiltIn { model_id } => {
+                selected.set("builtin".into());
+                builtin_model.set(model_id.clone());
+            }
             LlmProvider::Ollama { endpoint, model } => {
                 selected.set("ollama".into());
                 ollama_endpoint.set(endpoint.clone());
@@ -78,10 +85,21 @@ fn GeneralTab() -> impl IntoView {
             }
             LlmProvider::None => selected.set("none".into()),
         }
+
+        spawn_local(async move {
+            if let Ok(models) =
+                bridge::invoke_no_args::<Vec<BuiltInModelInfo>>("list_builtin_models").await
+            {
+                builtin_models.set(models);
+            }
+        });
     });
 
     let save = move |_| {
         let provider = match selected.get().as_str() {
+            "builtin" => LlmProvider::BuiltIn {
+                model_id: builtin_model.get(),
+            },
             "ollama" => LlmProvider::Ollama {
                 endpoint: ollama_endpoint.get(),
                 model: ollama_model.get(),
@@ -110,6 +128,15 @@ fn GeneralTab() -> impl IntoView {
                 Ok(saved_config) => {
                     orchestrator.config.set(saved_config);
                     saved_msg.set(true);
+                    // Refresh sidebar status (model is now loaded if BuiltIn)
+                    if let Ok(status) =
+                        bridge::invoke_no_args::<OrchestratorStatus>(
+                            "get_orchestrator_status",
+                        )
+                        .await
+                    {
+                        orchestrator.status.set(status);
+                    }
                 }
                 Err(e) => {
                     web_sys::console::error_1(&format!("Failed to save: {e}").into());
@@ -122,17 +149,54 @@ fn GeneralTab() -> impl IntoView {
         <div class="card">
             <h3 style="font-size: 14px; margin-bottom: 12px;">"LLM Provider"</h3>
             <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                "Configure the language model that powers the orchestrator."
+                "Configure the language model that powers the orchestrator. "
+                "The built-in option runs entirely on-device with no network calls."
             </p>
             <select
                 style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px; margin-bottom: 16px;"
                 on:change=move |ev| selected.set(event_target_value(&ev))
                 prop:value=move || selected.get()
             >
+                <option value="builtin">"Built-in (Recommended)"</option>
+                <option value="ollama">"Ollama (requires HTTP)"</option>
+                <option value="openai">"OpenAI-compatible (requires network)"</option>
                 <option value="none">"None (Demo Mode)"</option>
-                <option value="ollama">"Ollama"</option>
-                <option value="openai">"OpenAI-compatible"</option>
             </select>
+
+            // Built-in model picker
+            <Show when=move || selected.get() == "builtin">
+                <div class="setup-inputs">
+                    <label>"Model"</label>
+                    <select
+                        style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px;"
+                        on:change=move |ev| builtin_model.set(event_target_value(&ev))
+                        prop:value=move || builtin_model.get()
+                    >
+                        <For
+                            each=move || builtin_models.get()
+                            key=|m| m.id.clone()
+                            let:model
+                        >
+                            <option value={model.id.clone()}>
+                                {format!("{} ({})", model.display_name, model.size_hint)}
+                            </option>
+                        </For>
+                    </select>
+                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                        "Downloaded once from HuggingFace Hub, then cached locally for offline use."
+                    </p>
+                </div>
+            </Show>
+
+            // Privacy warning for HTTP-based providers
+            <Show when=move || selected.get() == "ollama" || selected.get() == "openai">
+                <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid rgba(255, 170, 0, 0.25); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                    <p style="font-size: 12px; color: var(--warning);">
+                        "HTTP-based providers send orchestrator prompts outside this process. "
+                        "This weakens PAP\u{2019}s zero-trust guarantees \u{2014} consider the built-in model for full privacy."
+                    </p>
+                </div>
+            </Show>
 
             <Show when=move || selected.get() == "ollama">
                 <div class="setup-inputs">

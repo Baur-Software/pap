@@ -6,6 +6,7 @@ use pap_federation::FederatedRegistry;
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
 use papillion_shared::{DemoRunResult, OrchestratorConfig, SuccessorDesignation};
 
+use crate::inference::ModelManager;
 use crate::seed::seed_demo_registry;
 
 pub const DEMO_REGISTRY_URL: &str = "pap://demo";
@@ -18,6 +19,8 @@ pub struct AppState {
     pub registries: RwLock<HashMap<String, FederatedRegistry>>,
     pub bookmarks: RwLock<Vec<String>>,
     pub orchestrator_config: RwLock<OrchestratorConfig>,
+    /// On-device Candle model for the BuiltIn LLM provider.
+    pub model_manager: tokio::sync::Mutex<ModelManager>,
     /// Demo agent keypairs retained for simulating both sides of the handshake.
     pub demo_agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
     /// Completed demo run results for the activity feed.
@@ -45,6 +48,7 @@ impl Default for AppState {
             registries: RwLock::new(registries),
             bookmarks: RwLock::new(vec![DEMO_REGISTRY_URL.to_string()]),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
+            model_manager: tokio::sync::Mutex::new(ModelManager::new()),
             demo_agent_keypairs: RwLock::new(agent_keypairs),
             completed_runs: RwLock::new(Vec::new()),
             key_backed_up: RwLock::new(false),

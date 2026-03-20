@@ -146,13 +146,71 @@ impl Default for AppSettings {
 
 // ── Orchestrator types ──────────────────────────────────────
 
+/// Known built-in models that ship with Papillion.
+/// Each entry maps to a HuggingFace repo + GGUF filename.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BuiltInModelInfo {
+    pub id: String,
+    pub display_name: String,
+    pub repo: String,
+    pub filename: String,
+    pub size_hint: String,
+}
+
+/// Catalog of known models. The first entry is the default.
+pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
+    vec![
+        BuiltInModelInfo {
+            id: "mistral-7b-instruct".into(),
+            display_name: "Mistral 7B Instruct (Q4)".into(),
+            repo: "TheBloke/Mistral-7B-Instruct-v0.2-GGUF".into(),
+            filename: "mistral-7b-instruct-v0.2.Q4_K_M.gguf".into(),
+            size_hint: "~4.4 GB".into(),
+        },
+        BuiltInModelInfo {
+            id: "phi-3-mini".into(),
+            display_name: "Phi-3 Mini (Q4)".into(),
+            repo: "microsoft/Phi-3-mini-4k-instruct-gguf".into(),
+            filename: "Phi-3-mini-4k-instruct-q4.gguf".into(),
+            size_hint: "~2.3 GB".into(),
+        },
+        BuiltInModelInfo {
+            id: "tinyllama-1.1b".into(),
+            display_name: "TinyLlama 1.1B (Q4)".into(),
+            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+            size_hint: "~0.6 GB".into(),
+        },
+    ]
+}
+
 /// LLM provider for the orchestrator.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+///
+/// The default is `BuiltIn` with Mistral — inference runs locally via Candle
+/// with no HTTP calls, which is the intended PAP architecture. The Ollama and
+/// OpenAI-compatible options are provided for advanced users but require
+/// network access that weakens PAP's zero-trust guarantees.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LlmProvider {
+    /// On-device inference via Candle. Model is downloaded once from
+    /// HuggingFace Hub, then runs entirely offline.
+    #[serde(alias = "BuiltIn")]
+    BuiltIn { model_id: String },
+    /// External Ollama instance (requires HTTP). Use only if you already
+    /// run Ollama and understand the privacy trade-off.
     Ollama { endpoint: String, model: String },
+    /// Any OpenAI-compatible HTTP API (requires network + API key).
     OpenAiCompatible { endpoint: String, api_key: String, model: String },
-    #[default]
+    /// Demo mode — no LLM, hardcoded scenarios only.
     None,
+}
+
+impl Default for LlmProvider {
+    fn default() -> Self {
+        LlmProvider::BuiltIn {
+            model_id: "mistral-7b-instruct".into(),
+        }
+    }
 }
 
 /// Orchestrator configuration.
@@ -166,7 +224,7 @@ pub struct OrchestratorConfig {
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
-            llm_provider: LlmProvider::None,
+            llm_provider: LlmProvider::default(),
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
         }
@@ -178,6 +236,9 @@ impl Default for OrchestratorConfig {
 pub enum OrchestratorStatus {
     Unconfigured,
     Disconnected,
+    /// Model is being downloaded from HuggingFace Hub.
+    Downloading { progress_pct: u8 },
+    /// Model loaded, ready for inference.
     Ready,
     DemoOnly,
 }
@@ -261,4 +322,155 @@ pub struct SuccessorDesignation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyBackupStatus {
     pub backed_up: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Model catalog ────────────────────────────────────────
+
+    #[test]
+    fn catalog_is_non_empty() {
+        let catalog = builtin_model_catalog();
+        assert!(!catalog.is_empty());
+    }
+
+    #[test]
+    fn catalog_default_is_mistral() {
+        let catalog = builtin_model_catalog();
+        assert_eq!(catalog[0].id, "mistral-7b-instruct");
+    }
+
+    #[test]
+    fn catalog_ids_are_unique() {
+        let catalog = builtin_model_catalog();
+        let mut ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), catalog.len());
+    }
+
+    #[test]
+    fn catalog_entries_have_required_fields() {
+        for m in builtin_model_catalog() {
+            assert!(!m.id.is_empty(), "id must be set");
+            assert!(!m.display_name.is_empty(), "display_name must be set");
+            assert!(!m.repo.is_empty(), "repo must be set");
+            assert!(m.filename.ends_with(".gguf"), "filename must be .gguf");
+            assert!(!m.size_hint.is_empty(), "size_hint must be set");
+        }
+    }
+
+    // ── LlmProvider default & serde ─────────────────────────
+
+    #[test]
+    fn llm_provider_default_is_builtin_mistral() {
+        let provider = LlmProvider::default();
+        match &provider {
+            LlmProvider::BuiltIn { model_id } => {
+                assert_eq!(model_id, "mistral-7b-instruct");
+            }
+            other => panic!("Expected BuiltIn, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn llm_provider_none_not_equal_to_builtin() {
+        assert_ne!(LlmProvider::None, LlmProvider::default());
+    }
+
+    #[test]
+    fn llm_provider_builtin_roundtrip_json() {
+        let provider = LlmProvider::BuiltIn {
+            model_id: "phi-3-mini".into(),
+        };
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    #[test]
+    fn llm_provider_ollama_roundtrip_json() {
+        let provider = LlmProvider::Ollama {
+            endpoint: "http://localhost:11434".into(),
+            model: "llama3.2:1b".into(),
+        };
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    #[test]
+    fn llm_provider_openai_roundtrip_json() {
+        let provider = LlmProvider::OpenAiCompatible {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: "sk-test".into(),
+            model: "gpt-4o".into(),
+        };
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    #[test]
+    fn llm_provider_none_roundtrip_json() {
+        let provider = LlmProvider::None;
+        let json = serde_json::to_string(&provider).unwrap();
+        let back: LlmProvider = serde_json::from_str(&json).unwrap();
+        assert_eq!(provider, back);
+    }
+
+    // ── OrchestratorConfig default ──────────────────────────
+
+    #[test]
+    fn orchestrator_config_default_uses_builtin() {
+        let config = OrchestratorConfig::default();
+        assert!(matches!(config.llm_provider, LlmProvider::BuiltIn { .. }));
+        assert_eq!(config.mandate_ttl_hours, 8);
+        assert!(config.auto_approve_zero_disclosure);
+    }
+
+    #[test]
+    fn orchestrator_config_roundtrip_json() {
+        let config = OrchestratorConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        let back: OrchestratorConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config.llm_provider, back.llm_provider);
+        assert_eq!(config.mandate_ttl_hours, back.mandate_ttl_hours);
+    }
+
+    // ── OrchestratorStatus serde ────────────────────────────
+
+    #[test]
+    fn status_downloading_roundtrip_json() {
+        let status = OrchestratorStatus::Downloading { progress_pct: 42 };
+        let json = serde_json::to_string(&status).unwrap();
+        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, back);
+    }
+
+    #[test]
+    fn status_ready_roundtrip_json() {
+        let status = OrchestratorStatus::Ready;
+        let json = serde_json::to_string(&status).unwrap();
+        let back: OrchestratorStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, back);
+    }
+
+    // ── BuiltInModelInfo serde ──────────────────────────────
+
+    #[test]
+    fn model_info_roundtrip_json() {
+        let info = BuiltInModelInfo {
+            id: "test-model".into(),
+            display_name: "Test Model".into(),
+            repo: "test/repo".into(),
+            filename: "test.gguf".into(),
+            size_hint: "~1 GB".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let back: BuiltInModelInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(info, back);
+    }
 }
