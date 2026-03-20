@@ -66,11 +66,16 @@ pub fn App() -> impl IntoView {
     let status_label = move || match orchestrator_for_status.status.get() {
         OrchestratorStatus::Ready => "Ready",
         OrchestratorStatus::Downloading { progress_pct } => {
-            // Can't format dynamically in a simple closure, just show "Downloading..."
-            if progress_pct > 0 { "Downloading..." } else { "Downloading..." }
+            if progress_pct > 0 { "Downloading\u{2026}" } else { "Downloading\u{2026}" }
         }
         OrchestratorStatus::Disconnected => "Disconnected",
         OrchestratorStatus::Unconfigured => "Unconfigured",
+    };
+    let status_class = move || match orchestrator_for_status.status.get() {
+        OrchestratorStatus::Ready => "status-indicator ready",
+        OrchestratorStatus::Downloading { .. } => "status-indicator working",
+        OrchestratorStatus::Disconnected => "status-indicator offline",
+        OrchestratorStatus::Unconfigured => "status-indicator offline",
     };
 
     view! {
@@ -85,7 +90,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/browse") view=BrowsePage />
                 </Routes>
                 <footer class="status-bar">
-                    <span>{status_label}</span>
+                    <span class=status_class>{status_label}</span>
                 </footer>
             </div>
             <CommandPalette />

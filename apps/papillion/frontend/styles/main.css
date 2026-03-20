@@ -273,12 +273,37 @@ body {
     display: flex;
     align-items: center;
     padding: 0 var(--sp-md);
-    font: var(--text-label);
     font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
     letter-spacing: var(--ls-label);
     text-transform: uppercase;
     color: var(--text-2);
 }
+
+/* Wing spectrum status colors in status bar */
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-xs);
+}
+
+.status-indicator::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-3);
+}
+
+.status-indicator.ready { color: var(--teal); }
+.status-indicator.ready::before { background: var(--teal); }
+
+.status-indicator.working { color: var(--gold); }
+.status-indicator.working::before { background: var(--gold); animation: pulse 1.2s ease-in-out infinite; }
+
+.status-indicator.offline { color: var(--text-3); }
+.status-indicator.offline::before { background: var(--text-3); }
 
 /* ═══════════════════════════════════════════════════════════
    ADDRESS BAR
