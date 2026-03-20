@@ -251,6 +251,81 @@ pub struct SetupState {
     pub setup_complete: bool,
 }
 
+// ── Canvas block types ────────────────────────────────────
+
+/// The state of a canvas block during the PAP handshake lifecycle.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum BlockState {
+    /// Handshake in progress — `phase` is 1..=6.
+    Resolving { phase: u8, phase_label: String },
+    /// Handshake completed, JSON-LD content available.
+    Resolved,
+    /// Handshake failed at a specific phase.
+    Failed { phase: u8, reason: String },
+}
+
+/// A single block on the Papillion canvas.
+///
+/// Created by the backend when the orchestrator delegates a mandate.
+/// Sent to the frontend via Tauri events (`block_created`, `block_updated`,
+/// `block_resolved`, `block_failed`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasBlock {
+    /// Unique block identifier.
+    pub id: String,
+    /// The prompt that spawned this block's mandate chain.
+    pub prompt_id: String,
+    /// Current lifecycle state.
+    pub state: BlockState,
+    /// Schema.org `@type` from the JSON-LD response (e.g. "FlightReservation").
+    /// `None` while resolving.
+    pub schema_type: Option<String>,
+    /// Raw JSON-LD content returned by the agent. `None` while resolving.
+    pub content: Option<serde_json::Value>,
+    /// IDs of semantically linked blocks (same prompt, related data).
+    pub linked_block_ids: Vec<String>,
+    /// When this block was created.
+    pub created_at: String,
+    /// When this block was last updated.
+    pub updated_at: String,
+}
+
+/// A saved canvas — a collection of blocks from prompt sessions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Canvas {
+    /// Unique canvas identifier.
+    pub id: String,
+    /// Auto-generated from the first prompt, or user-renamed.
+    pub name: String,
+    /// Ordered list of blocks on this canvas.
+    pub blocks: Vec<CanvasBlock>,
+    /// When this canvas was created.
+    pub created_at: String,
+    /// When this canvas was last modified.
+    pub updated_at: String,
+}
+
+/// A prompt submitted via the command palette.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasPrompt {
+    /// Unique prompt identifier — blocks reference this.
+    pub id: String,
+    /// The user's raw prompt text.
+    pub text: String,
+    /// If reshaping an existing block, its ID.
+    pub reshape_block_id: Option<String>,
+    /// Canvas this prompt belongs to.
+    pub canvas_id: String,
+    /// When this prompt was submitted.
+    pub submitted_at: String,
+}
+
+/// Tauri event payloads for streaming block updates to the frontend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockEvent {
+    pub block: CanvasBlock,
+}
+
 /// A user-facing scenario card for the Home page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScenarioCard {
