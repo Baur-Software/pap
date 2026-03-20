@@ -196,12 +196,15 @@ pub enum LlmProvider {
     /// HuggingFace Hub, then runs entirely offline.
     #[serde(alias = "BuiltIn")]
     BuiltIn { model_id: String },
+    /// Mistral API — first-class support for Mistral's OpenAI-compatible
+    /// endpoint at api.mistral.ai. Requires an API key.
+    Mistral { api_key: String, model: String },
     /// External Ollama instance (requires HTTP). Use only if you already
     /// run Ollama and understand the privacy trade-off.
     Ollama { endpoint: String, model: String },
     /// Any OpenAI-compatible HTTP API (requires network + API key).
     OpenAiCompatible { endpoint: String, api_key: String, model: String },
-    /// Demo mode — no LLM, hardcoded scenarios only.
+    /// No LLM configured.
     None,
 }
 

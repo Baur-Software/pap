@@ -130,16 +130,22 @@ pub fn generate(
         },
     );
 
+    let prompt_len = prompt_tokens.len();
     let mut all_tokens: Vec<u32> = prompt_tokens.to_vec();
     let mut input = Tensor::new(prompt_tokens, &loaded.device)
         .map_err(|e| format!("Tensor: {e}"))?
         .unsqueeze(0)
         .map_err(|e| format!("Unsqueeze: {e}"))?;
 
+    // Position tracking for rotary embeddings and KV cache:
+    // - First pass processes the full prompt starting at position 0
+    // - Subsequent passes process one token at a time, incrementing position
+    let mut pos = 0usize;
+
     for _ in 0..max_tokens {
         let logits = loaded
             .model
-            .forward(&input, prompt_tokens.len())
+            .forward(&input, pos)
             .map_err(|e| format!("Forward: {e}"))?;
         let logits = logits
             .squeeze(0)
@@ -153,6 +159,15 @@ pub fn generate(
         }
 
         all_tokens.push(next_token);
+
+        // After processing the full prompt, jump to prompt_len;
+        // after each subsequent single token, increment by 1.
+        if pos == 0 {
+            pos = prompt_len;
+        } else {
+            pos += 1;
+        }
+
         input = Tensor::new(&[next_token], &loaded.device)
             .map_err(|e| format!("Tensor: {e}"))?
             .unsqueeze(0)

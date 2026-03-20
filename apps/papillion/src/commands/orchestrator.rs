@@ -63,7 +63,7 @@ pub async fn get_orchestrator_status(
         .map_err(|e| PapillionError::from(e.to_string()))?
         .clone();
     let status = match &config.llm_provider {
-        LlmProvider::None => OrchestratorStatus::DemoOnly,
+        LlmProvider::None => OrchestratorStatus::Disconnected,
         LlmProvider::BuiltIn { model_id } => {
             let mgr = state.model_manager.lock().await;
             if mgr.loaded.is_some() && mgr.model_id == *model_id {
@@ -72,7 +72,9 @@ pub async fn get_orchestrator_status(
                 OrchestratorStatus::Disconnected
             }
         }
-        _ => OrchestratorStatus::Ready,
+        LlmProvider::Mistral { .. }
+        | LlmProvider::Ollama { .. }
+        | LlmProvider::OpenAiCompatible { .. } => OrchestratorStatus::Ready,
     };
     Ok(status)
 }
