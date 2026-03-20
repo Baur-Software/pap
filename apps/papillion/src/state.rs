@@ -4,7 +4,7 @@ use std::sync::RwLock;
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillion_shared::{DemoRunResult, OrchestratorConfig, SuccessorDesignation};
+use papillion_shared::{ScenarioRunResult, OrchestratorConfig, SuccessorDesignation};
 
 use crate::inference::ModelManager;
 use crate::seed::seed_registry;
@@ -24,7 +24,7 @@ pub struct AppState {
     /// Agent keypairs retained for both sides of the PAP handshake.
     pub agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
     /// Completed run results for the activity feed.
-    pub completed_runs: RwLock<Vec<DemoRunResult>>,
+    pub completed_runs: RwLock<Vec<ScenarioRunResult>>,
     /// Whether the principal key has been exported/backed up.
     pub key_backed_up: RwLock<bool>,
     /// Forward-looking successor designations.

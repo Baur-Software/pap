@@ -341,14 +341,14 @@ pub struct ScenarioCard {
     pub returns: Vec<String>,
 }
 
-// ── Demo runner types ─────────────────────────────────────
+// ── Scenario runner types ────────────────────────────────
 
-/// Result of running a demo scenario through the full 6-step handshake.
+/// Result of running a scenario through the full 6-step handshake.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DemoRunResult {
+pub struct ScenarioRunResult {
     pub scenario_id: String,
     pub agent_name: String,
-    pub steps: Vec<DemoStepResult>,
+    pub steps: Vec<ScenarioStepResult>,
     pub receipt: Option<ReceiptInfo>,
     pub receipt_url: Option<String>,
     pub query: Option<String>,
@@ -368,7 +368,7 @@ pub struct SearchResult {
 
 /// Result of a single handshake step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DemoStepResult {
+pub struct ScenarioStepResult {
     pub step_number: u8,
     pub step_name: String,
     pub status: String,

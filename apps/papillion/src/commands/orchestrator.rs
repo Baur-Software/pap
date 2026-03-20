@@ -9,7 +9,7 @@ use tauri::State;
 use crate::error::PapillionError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillion_shared::{
-    builtin_model_catalog, BuiltInModelInfo, DemoRunResult, DemoStepResult, LlmProvider,
+    builtin_model_catalog, BuiltInModelInfo, ScenarioRunResult, ScenarioStepResult, LlmProvider,
     OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, SearchResult, SetupState,
 };
 
@@ -304,13 +304,13 @@ async fn wikipedia_search(query: &str) -> Result<Vec<SearchResult>, PapillionErr
     Ok(results)
 }
 
-/// Run a demo scenario through the full 6-step PAP handshake.
+/// Run a scenario through the full 6-step PAP handshake.
 #[tauri::command]
-pub async fn run_demo_scenario(
+pub async fn run_scenario(
     state: State<'_, AppState>,
     scenario_id: String,
     query: Option<String>,
-) -> Result<DemoRunResult, PapillionError> {
+) -> Result<ScenarioRunResult, PapillionError> {
     let now_str = || Utc::now().to_rfc3339();
 
     // Find the scenario
@@ -356,7 +356,7 @@ pub async fn run_demo_scenario(
         (did, kp)
     };
 
-    steps.push(DemoStepResult {
+    steps.push(ScenarioStepResult {
         step_number: 1,
         step_name: "Discover agent".into(),
         status: "completed".into(),
@@ -390,7 +390,7 @@ pub async fn run_demo_scenario(
     mandate.sign(principal_kp.signing_key());
     let mandate_hash = mandate.hash();
 
-    steps.push(DemoStepResult {
+    steps.push(ScenarioStepResult {
         step_number: 2,
         step_name: "Issue mandate".into(),
         status: "completed".into(),
@@ -417,7 +417,7 @@ pub async fn run_demo_scenario(
         .open(initiator_session_kp.did(), receiver_session_kp.did())
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    steps.push(DemoStepResult {
+    steps.push(ScenarioStepResult {
         step_number: 3,
         step_name: "Open session".into(),
         status: "completed".into(),
@@ -478,7 +478,7 @@ pub async fn run_demo_scenario(
         }
         _ => "Zero disclosure \u{2014} no personal data exchanged".into(),
     };
-    steps.push(DemoStepResult {
+    steps.push(ScenarioStepResult {
         step_number: 4,
         step_name: "Exchange data".into(),
         status: "completed".into(),
@@ -514,7 +514,7 @@ pub async fn run_demo_scenario(
         timestamp: receipt.timestamp.to_rfc3339(),
     };
 
-    steps.push(DemoStepResult {
+    steps.push(ScenarioStepResult {
         step_number: 5,
         step_name: "Co-sign receipt".into(),
         status: "completed".into(),
@@ -527,7 +527,7 @@ pub async fn run_demo_scenario(
         .close()
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    steps.push(DemoStepResult {
+    steps.push(ScenarioStepResult {
         step_number: 6,
         step_name: "Close session".into(),
         status: "completed".into(),
@@ -537,7 +537,7 @@ pub async fn run_demo_scenario(
 
     let receipt_url = format!("pap://local/receipts/{}", receipt_info.session_id);
 
-    let result = DemoRunResult {
+    let result = ScenarioRunResult {
         scenario_id,
         agent_name: agent_name.clone(),
         steps,
@@ -558,11 +558,11 @@ pub async fn run_demo_scenario(
     Ok(result)
 }
 
-/// List completed demo runs for the activity page.
+/// List completed scenario runs for the activity page.
 #[tauri::command]
 pub fn list_completed_runs(
     state: State<'_, AppState>,
-) -> Result<Vec<DemoRunResult>, PapillionError> {
+) -> Result<Vec<ScenarioRunResult>, PapillionError> {
     let runs = state
         .completed_runs
         .read()

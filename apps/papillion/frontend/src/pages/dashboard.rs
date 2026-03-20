@@ -15,7 +15,7 @@ pub fn DashboardPage() -> impl IntoView {
 
     let has_identity = move || identity.info.get().is_some();
 
-    let browse_demo = move |_| {
+    let browse_registry = move |_| {
         let nav = navigate.clone();
         registry.current_url.set("pap://local".to_string());
         registry.loading.set(true);
@@ -67,7 +67,7 @@ pub fn DashboardPage() -> impl IntoView {
                 <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
                     "Browse agents backed by real services: DuckDuckGo search, Wikipedia knowledge, and on-device Mistral AI. Zero disclosure, fully functional."
                 </p>
-                <button class="btn btn-primary" on:click=browse_demo>
+                <button class="btn btn-primary" on:click=browse_registry>
                     "Browse Agents"
                 </button>
             </div>
