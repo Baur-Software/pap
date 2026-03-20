@@ -1,5 +1,7 @@
 use leptos::prelude::*;
 use leptos::{ev, html};
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 
 use crate::state::canvas::CanvasState;
 
@@ -55,13 +57,21 @@ pub fn CommandPalette() -> impl IntoView {
         }
     };
 
-    // Auto-focus when palette opens
+    // Auto-focus when palette opens — delay ensures <Show> has rendered the input
     Effect::new(move || {
         if canvas_state.palette_open.get() {
-            // Small delay to ensure DOM is rendered
-            if let Some(el) = input_ref.get() {
-                let _ = el.focus();
-            }
+            let ir = input_ref;
+            let cb = Closure::once(move || {
+                if let Some(el) = ir.get() {
+                    let _ = el.focus();
+                }
+            });
+            let window = web_sys::window().unwrap();
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                cb.as_ref().unchecked_ref(),
+                50,
+            );
+            cb.forget();
         }
     });
 
