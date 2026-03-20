@@ -360,8 +360,9 @@ body {
     padding: var(--sp-sm) var(--sp-md);
     border-radius: var(--r-md);
     border: none;
-    font: var(--text-ui);
     font-family: var(--font-body);
+    font-size: 13px;
+    min-height: 44px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
@@ -1050,11 +1051,12 @@ body {
 }
 
 .inspiration-line {
-    font: var(--text-body);
-    font-family: var(--font-body);
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 400;
     color: var(--text-2);
     line-height: 1.6;
-    opacity: 0.6;
+    opacity: 0.7;
     animation: inspiration-fade 8s ease-in-out infinite;
 }
 
@@ -1130,6 +1132,21 @@ body {
 .canvas-prompt-setup {
     text-align: center;
     padding: var(--sp-xl) var(--sp-lg);
+}
+
+.setup-heading {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: var(--sp-sm);
+}
+
+.setup-description {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: var(--sp-md);
+    line-height: 1.5;
 }
 
 /* ═══════════════════════════════════════════════════════════
