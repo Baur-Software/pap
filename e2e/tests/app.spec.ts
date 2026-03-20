@@ -17,8 +17,8 @@ test.describe("App shell", () => {
 
   test("shows orchestrator status in top bar", async ({ page }) => {
     await page.goto("/");
-    // Mock returns "Disconnected" → topbar maps to "Offline"
-    await expect(page.locator(".topbar-status")).toContainText("Offline");
+    // Mock returns "Ready" → topbar maps to "Ready"
+    await expect(page.locator(".topbar-status")).toContainText("Ready");
   });
 
   test("shows settings gear link", async ({ page }) => {
@@ -27,8 +27,7 @@ test.describe("App shell", () => {
   });
 
   test("hamburger menu opens and shows nav items", async ({ page }) => {
-    // Navigate to a non-canvas page to avoid the auto-opened command palette
-    await page.goto("/activity");
+    await page.goto("/");
     await page.locator(".topbar-menu-btn").click();
     await expect(page.locator(".menu-dropdown")).toBeVisible();
     await expect(page.locator("text=Browse Registries")).toBeVisible();
@@ -51,34 +50,42 @@ test.describe("Canvas page", () => {
     await expect(page.locator(".inspiration-line").first()).toBeVisible();
   });
 
-  test("shows keyboard shortcut hint", async ({ page }) => {
+  test("shows inline prompt when orchestrator is ready", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".canvas-shortcut-hint")).toBeVisible();
-    await expect(page.locator("kbd")).toContainText("\u{2318}K");
-  });
-
-  test("command palette auto-opens on first visit", async ({ page }) => {
-    await page.goto("/");
-    // Palette auto-opens when no canvases exist
-    await expect(page.locator(".palette")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
     await expect(
       page.locator(".palette-label")
     ).toContainText("What do you want to build?");
   });
 
-  test("command palette shows suggestion buttons", async ({ page }) => {
+  test("inline prompt shows suggestion buttons", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".palette")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
     await expect(page.locator(".palette-suggestion").first()).toBeVisible();
   });
 
-  test("command palette input accepts text", async ({ page }) => {
+  test("inline prompt input accepts text", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".palette")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
     await page.locator(".palette-input").fill("Search for flights");
     await expect(page.locator(".palette-input")).toHaveValue("Search for flights");
     // Suggestions should hide when input has text
     await expect(page.locator(".palette-suggestion").first()).not.toBeVisible();
+  });
+
+  test("shows setup prompt when orchestrator is disconnected", async ({ page }) => {
+    // Override mock to return Disconnected status
+    await page.addInitScript(`
+      const origInvoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = async function(cmd, args) {
+        if (cmd === 'get_orchestrator_status') return 'Disconnected';
+        return origInvoke.call(this, cmd, args);
+      };
+    `);
+    await page.goto("/");
+    await expect(page.locator(".canvas-prompt-setup")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Configure an LLM provider")).toBeVisible();
+    await expect(page.locator("text=Open Settings")).toBeVisible();
   });
 });
 

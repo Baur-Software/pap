@@ -48,7 +48,7 @@ const SCENARIOS: Record<string, unknown>[] = [
   },
 ];
 
-const ORCHESTRATOR_STATUS = "Disconnected";
+const ORCHESTRATOR_STATUS = "Ready";
 
 const ORCHESTRATOR_CONFIG: Record<string, unknown> = {
   llm_provider: "None",
