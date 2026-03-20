@@ -243,7 +243,6 @@ pub enum OrchestratorStatus {
     Downloading { progress_pct: u8 },
     /// Model loaded, ready for inference.
     Ready,
-    DemoOnly,
 }
 
 /// First-run setup state.

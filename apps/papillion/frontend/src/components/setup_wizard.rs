@@ -140,7 +140,7 @@ pub fn SetupWizard() -> impl IntoView {
                             on:click=move |_| selected_provider.set("none".into())
                         >
                             <div class="setup-option-title">"Skip for now"</div>
-                            <div class="setup-option-desc">"Use demo mode without an LLM"</div>
+                            <div class="setup-option-desc">"Search and knowledge agents only, no AI"</div>
                         </div>
                     </div>
 

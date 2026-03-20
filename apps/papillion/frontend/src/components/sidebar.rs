@@ -28,14 +28,12 @@ pub fn Sidebar() -> impl IntoView {
     let status_label = move || match orchestrator.status.get() {
         OrchestratorStatus::Ready => "LLM Connected",
         OrchestratorStatus::Downloading { .. } => "Downloading Model...",
-        OrchestratorStatus::DemoOnly => "Demo Mode",
         OrchestratorStatus::Disconnected => "Disconnected",
         OrchestratorStatus::Unconfigured => "Unconfigured",
     };
 
     let status_class = move || match orchestrator.status.get() {
         OrchestratorStatus::Ready => "status-badge ready",
-        OrchestratorStatus::DemoOnly => "status-badge demo",
         _ => "status-badge offline",
     };
 

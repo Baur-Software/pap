@@ -54,8 +54,8 @@ pub async fn canvas_prompt(
         tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
     }
 
-    // Generate demo content based on the prompt
-    let (schema_type, content) = generate_demo_content(&text, &state).await?;
+    // Route to real agents based on the prompt
+    let (schema_type, content) = route_to_agent(&text, &state).await?;
 
     // Emit resolved block
     let resolved_block = CanvasBlock {
@@ -78,7 +78,7 @@ pub async fn canvas_prompt(
 #[tauri::command]
 pub async fn canvas_reshape(
     app: AppHandle,
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     _canvas_id: String,
     block_id: String,
     text: String,
@@ -112,18 +112,15 @@ pub async fn canvas_reshape(
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     }
 
-    // Resolve with updated content
+    // Route to real agents for the reshaped content
+    let (schema_type, content) = route_to_agent(&text, &state).await?;
+
     let resolved = CanvasBlock {
         id: block_id.clone(),
         prompt_id: String::new(),
         state: BlockState::Resolved,
-        schema_type: Some("StructuredData".into()),
-        content: Some(json!({
-            "@type": "StructuredData",
-            "prompt": text,
-            "reshaped": true,
-            "note": "Content reshaped by orchestrator"
-        })),
+        schema_type: Some(schema_type),
+        content: Some(content),
         linked_block_ids: Vec::new(),
         created_at: now_str(),
         updated_at: now_str(),
@@ -153,109 +150,132 @@ pub async fn canvas_retry(
     .await
 }
 
-/// Generate demo content based on prompt keywords.
-/// In production, this would delegate via PAP to real agents.
-async fn generate_demo_content(
+/// Route a prompt to real agents via PAP.
+///
+/// Uses simple intent detection to select the appropriate agent, then
+/// executes the actual service call. No hardcoded responses.
+async fn route_to_agent(
     prompt: &str,
     state: &State<'_, AppState>,
 ) -> Result<(String, serde_json::Value), PapillionError> {
     let lower = prompt.to_lowercase();
 
-    if lower.contains("flight") || lower.contains("fly") {
-        Ok((
-            "FlightReservation".into(),
-            json!({
-                "@type": "FlightReservation",
-                "departureAirport": "SAN",
-                "arrivalAirport": "SJC",
-                "departureDate": "Mar 30, 11:45 AM",
-                "totalPrice": "49",
-                "airline": "United Airlines \u{00b7} 1h 12m"
-            }),
-        ))
-    } else if lower.contains("hotel") || lower.contains("lodging") || lower.contains("stay") {
-        Ok((
-            "LodgingReservation".into(),
-            json!({
-                "@type": "LodgingReservation",
-                "name": "Park Hyatt Tokyo",
-                "checkinDate": "Mar 30",
-                "checkoutDate": "Apr 2",
-                "totalPrice": "1,240"
-            }),
-        ))
-    } else if lower.contains("search") || lower.contains("find") || lower.contains("look") {
-        // Use the real DuckDuckGo search if possible
-        let query = prompt.replace("search", "").replace("find", "").replace("look up", "").trim().to_string();
-        let results = crate::commands::orchestrator::web_search_public(&query).await;
-        match results {
-            Ok(items) => {
-                let results_json: Vec<serde_json::Value> = items.iter().take(5).map(|r| {
-                    json!({
-                        "title": r.title,
-                        "url": r.url,
-                        "snippet": r.snippet
-                    })
-                }).collect();
-                Ok((
-                    "SearchResultsPage".into(),
-                    json!({
-                        "@type": "SearchResultsPage",
-                        "query": query,
-                        "results": results_json
-                    }),
-                ))
-            }
-            Err(_) => Ok((
-                "SearchResultsPage".into(),
+    // Intent detection: search, knowledge lookup, or general AI query
+    let is_wiki = lower.contains("wikipedia")
+        || lower.contains("wiki")
+        || lower.contains("article about")
+        || lower.contains("tell me about");
+
+    let is_search = lower.contains("search")
+        || lower.contains("find")
+        || lower.contains("look up")
+        || lower.starts_with("what is")
+        || lower.starts_with("who is");
+
+    if is_wiki {
+        let query = prompt
+            .replace("wikipedia", "")
+            .replace("wiki", "")
+            .replace("article about", "")
+            .replace("tell me about", "")
+            .trim()
+            .to_string();
+        let query = if query.is_empty() { prompt.to_string() } else { query };
+        let items = crate::commands::orchestrator::wikipedia_search_public(&query).await?;
+        let results_json: Vec<serde_json::Value> = items
+            .iter()
+            .take(5)
+            .map(|r| {
                 json!({
-                    "@type": "SearchResultsPage",
-                    "query": query,
-                    "results": [{
-                        "title": "Search result placeholder",
-                        "url": "https://example.com",
-                        "snippet": "Zero-disclosure search via PAP"
-                    }]
-                }),
-            )),
-        }
-    } else if lower.contains("pay") || lower.contains("payment") {
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.snippet
+                })
+            })
+            .collect();
         Ok((
-            "Invoice".into(),
+            "SearchResultsPage".into(),
             json!({
-                "@type": "Invoice",
-                "paymentMethod": "ecash (Chaumian)",
-                "totalPrice": "0.00",
-                "note": "Zero-disclosure payment \u{2014} vendor cannot identify payer"
+                "@type": "SearchResultsPage",
+                "agent": "Wikipedia Knowledge",
+                "query": query,
+                "results": results_json
+            }),
+        ))
+    } else if is_search {
+        let query = prompt
+            .replace("search", "")
+            .replace("find", "")
+            .replace("look up", "")
+            .trim()
+            .to_string();
+        let query = if query.is_empty() { prompt.to_string() } else { query };
+        let items = crate::commands::orchestrator::web_search_public(&query).await?;
+        let results_json: Vec<serde_json::Value> = items
+            .iter()
+            .take(5)
+            .map(|r| {
+                json!({
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.snippet
+                })
+            })
+            .collect();
+        Ok((
+            "SearchResultsPage".into(),
+            json!({
+                "@type": "SearchResultsPage",
+                "agent": "DuckDuckGo Search",
+                "query": query,
+                "results": results_json
             }),
         ))
     } else {
-        // Default: use the on-device LLM if available
+        // Default: route to on-device Mistral
         let mut mgr = state.model_manager.lock().await;
-        if let Some(ref mut engine) = mgr.loaded {
-            match crate::inference::generate(engine, prompt, 200) {
+        if mgr.loaded.is_some() {
+            let mistral_prompt = format!("[INST] {} [/INST]", prompt);
+            match mgr.generate(&mistral_prompt, 300) {
                 Ok(response) => Ok((
                     "Answer".into(),
                     json!({
                         "@type": "Answer",
+                        "agent": "On-Device AI",
                         "text": response
                     }),
                 )),
-                Err(_) => default_structured_response(prompt),
+                Err(e) => Err(PapillionError::from(format!("Mistral inference: {e}"))),
             }
         } else {
-            default_structured_response(prompt)
+            // No model loaded — try DuckDuckGo as fallback
+            match crate::commands::orchestrator::web_search_public(prompt).await {
+                Ok(items) if !items.is_empty() => {
+                    let results_json: Vec<serde_json::Value> = items
+                        .iter()
+                        .take(5)
+                        .map(|r| {
+                            json!({
+                                "title": r.title,
+                                "url": r.url,
+                                "snippet": r.snippet
+                            })
+                        })
+                        .collect();
+                    Ok((
+                        "SearchResultsPage".into(),
+                        json!({
+                            "@type": "SearchResultsPage",
+                            "agent": "DuckDuckGo Search",
+                            "query": prompt,
+                            "results": results_json
+                        }),
+                    ))
+                }
+                _ => Err(PapillionError::from(
+                    "No LLM loaded and search returned no results. Configure a provider in Settings.",
+                )),
+            }
         }
     }
-}
-
-fn default_structured_response(prompt: &str) -> Result<(String, serde_json::Value), PapillionError> {
-    Ok((
-        "StructuredData".into(),
-        json!({
-            "@type": "StructuredData",
-            "prompt": prompt,
-            "note": "On-device orchestrator processed this request via PAP"
-        }),
-    ))
 }

@@ -7,7 +7,7 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::error::PapillionError;
-use crate::state::{AppState, DEMO_REGISTRY_URL};
+use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillion_shared::{
     builtin_model_catalog, BuiltInModelInfo, DemoRunResult, DemoStepResult, LlmProvider,
     OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, SearchResult, SetupState,
@@ -130,64 +130,37 @@ pub async fn load_builtin_model(
     Ok(OrchestratorStatus::Ready)
 }
 
-/// List demo scenario cards for the Home page.
+/// List scenario cards backed by real agents in the local registry.
 #[tauri::command]
 pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
     Ok(vec![
         ScenarioCard {
             id: "search".into(),
             title: "Web Search".into(),
-            description: "Search the web with zero disclosure — no personal data leaves your device"
-                .into(),
+            description: "Search the web via DuckDuckGo — zero disclosure, no tracking".into(),
             icon: "\u{1F50D}".into(),
-            agent_name: "Web Search Agent".into(),
+            agent_name: "DuckDuckGo Search".into(),
             action_type: "schema:SearchAction".into(),
             requires_disclosure: vec![],
             returns: vec!["schema:SearchResult".into()],
         },
         ScenarioCard {
-            id: "flight".into(),
-            title: "Book a Flight".into(),
-            description:
-                "Find and book flights with selective disclosure — only share name & nationality"
-                    .into(),
-            icon: "\u{2708}\u{FE0F}".into(),
-            agent_name: "Flight Booking Agent".into(),
-            action_type: "schema:ReserveAction".into(),
-            requires_disclosure: vec![
-                "schema:Person.name".into(),
-                "schema:Person.nationality".into(),
-            ],
-            returns: vec!["schema:Ticket".into()],
-        },
-        ScenarioCard {
-            id: "hotel".into(),
-            title: "Book a Hotel".into(),
-            description: "Reserve lodging with minimal disclosure — only your name required".into(),
-            icon: "\u{1F3E8}".into(),
-            agent_name: "Hotel Booking Agent".into(),
-            action_type: "schema:ReserveAction".into(),
-            requires_disclosure: vec!["schema:Person.name".into()],
-            returns: vec!["schema:Reservation".into()],
-        },
-        ScenarioCard {
-            id: "payment".into(),
-            title: "Make a Payment".into(),
-            description: "Process payments with ecash — zero disclosure, unlinkable transactions"
-                .into(),
-            icon: "\u{1F4B3}".into(),
-            agent_name: "Payment Agent".into(),
-            action_type: "schema:PayAction".into(),
+            id: "knowledge".into(),
+            title: "Wikipedia Lookup".into(),
+            description: "Query Wikipedia's knowledge base — zero disclosure, public API".into(),
+            icon: "\u{1F4DA}".into(),
+            agent_name: "Wikipedia Knowledge".into(),
+            action_type: "schema:SearchAction".into(),
             requires_disclosure: vec![],
-            returns: vec!["schema:Invoice".into()],
+            returns: vec!["schema:Article".into()],
         },
         ScenarioCard {
             id: "ai".into(),
             title: "Ask AI".into(),
             description:
-                "Get answers from a local AI — your prompts never leave your machine".into(),
+                "On-device Mistral inference — your prompts never leave your machine".into(),
             icon: "\u{1F9E0}".into(),
-            agent_name: "Local AI Assistant".into(),
+            agent_name: "On-Device AI".into(),
             action_type: "schema:AskAction".into(),
             requires_disclosure: vec![],
             returns: vec!["schema:Answer".into()],
@@ -219,6 +192,11 @@ enum DdgTopic {
 /// Public wrapper for the canvas module to reuse web search.
 pub async fn web_search_public(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
     web_search(query).await
+}
+
+/// Public wrapper for the canvas module to reuse Wikipedia lookup.
+pub async fn wikipedia_search_public(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
+    wikipedia_search(query).await
 }
 
 /// Perform a real web search via DuckDuckGo Instant Answer JSON API.
@@ -272,6 +250,60 @@ async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
     Ok(results)
 }
 
+// ── Wikipedia REST API types ─────────────────────────────────
+
+#[derive(Deserialize)]
+struct WikiSearchResponse {
+    pages: Vec<WikiPage>,
+}
+
+#[derive(Deserialize)]
+struct WikiPage {
+    title: String,
+    excerpt: Option<String>,
+    description: Option<String>,
+    key: String,
+}
+
+/// Query Wikipedia via the Wikimedia REST API (no auth, zero disclosure).
+async fn wikipedia_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
+    let client = reqwest::Client::builder()
+        .user_agent("Papillion/0.1 (PAP Browser; mailto:pap@baur-software.com)")
+        .build()
+        .map_err(|e| PapillionError::from(e.to_string()))?;
+
+    let resp: WikiSearchResponse = client
+        .get("https://en.wikipedia.org/w/rest.php/v1/search/page")
+        .query(&[("q", query), ("limit", "5")])
+        .send()
+        .await
+        .map_err(|e| PapillionError::from(format!("Wikipedia request: {e}")))?
+        .json()
+        .await
+        .map_err(|e| PapillionError::from(format!("Wikipedia parse: {e}")))?;
+
+    let results = resp
+        .pages
+        .into_iter()
+        .map(|p| {
+            let snippet = p
+                .excerpt
+                .or(p.description)
+                .unwrap_or_default()
+                // Strip HTML tags from excerpt
+                .replace("<span class=\"searchmatch\">", "")
+                .replace("</span>", "");
+            SearchResult {
+                title: p.title,
+                url: format!("https://en.wikipedia.org/wiki/{}", p.key),
+                snippet,
+            }
+        })
+        .collect();
+
+    Ok(results)
+}
+
 /// Run a demo scenario through the full 6-step PAP handshake.
 #[tauri::command]
 pub async fn run_demo_scenario(
@@ -302,8 +334,8 @@ pub async fn run_demo_scenario(
             .read()
             .map_err(|e| PapillionError::from(e.to_string()))?;
         let registry = registries
-            .get(DEMO_REGISTRY_URL)
-            .ok_or_else(|| PapillionError::from("Demo registry not found"))?;
+            .get(LOCAL_REGISTRY_URL)
+            .ok_or_else(|| PapillionError::from("Local registry not found"))?;
         let agent_ad = registry
             .all_advertisements()
             .iter()
@@ -394,27 +426,57 @@ pub async fn run_demo_scenario(
     });
 
     // ── Step 4: Exchange data ───────────────────────────────
+    // Route to the actual backing service for each agent.
     let mut search_results: Option<Vec<SearchResult>> = None;
-    let step4_detail = if scenario_id == "search" {
-        if let Some(ref q) = query {
-            match web_search(q).await {
-                Ok(results) => {
-                    let count = results.len();
-                    search_results = Some(results);
-                    format!("Query: \"{}\" \u{2014} {} results via zero-disclosure session", q, count)
+    let step4_detail = match scenario_id.as_str() {
+        "search" => {
+            if let Some(ref q) = query {
+                match web_search(q).await {
+                    Ok(results) => {
+                        let count = results.len();
+                        search_results = Some(results);
+                        format!("DuckDuckGo: \"{}\" \u{2014} {} results", q, count)
+                    }
+                    Err(e) => format!("DuckDuckGo search failed: {}", e),
                 }
-                Err(e) => format!("Search failed: {}", e),
+            } else {
+                "No query provided".into()
             }
-        } else {
-            "No query provided".into()
         }
-    } else if scenario.requires_disclosure.is_empty() {
-        "Zero disclosure \u{2014} no personal data exchanged".into()
-    } else {
-        format!(
-            "Disclosed {} properties via PAP trust chain",
-            scenario.requires_disclosure.len()
-        )
+        "knowledge" => {
+            if let Some(ref q) = query {
+                match wikipedia_search(q).await {
+                    Ok(results) => {
+                        let count = results.len();
+                        search_results = Some(results);
+                        format!("Wikipedia: \"{}\" \u{2014} {} articles", q, count)
+                    }
+                    Err(e) => format!("Wikipedia lookup failed: {}", e),
+                }
+            } else {
+                "No query provided".into()
+            }
+        }
+        "ai" => {
+            if let Some(ref q) = query {
+                let mut mgr = state.model_manager.lock().await;
+                if mgr.loaded.is_some() {
+                    let prompt = format!("[INST] {} [/INST]", q);
+                    match mgr.generate(&prompt, 200) {
+                        Ok(response) => {
+                            let truncated: String = response.chars().take(200).collect();
+                            format!("Mistral: {}", truncated)
+                        }
+                        Err(e) => format!("On-device inference failed: {}", e),
+                    }
+                } else {
+                    "On-device model not loaded \u{2014} configure BuiltIn provider in settings".into()
+                }
+            } else {
+                "No query provided".into()
+            }
+        }
+        _ => "Zero disclosure \u{2014} no personal data exchanged".into(),
     };
     steps.push(DemoStepResult {
         step_number: 4,
@@ -473,7 +535,7 @@ pub async fn run_demo_scenario(
         timestamp: now_str(),
     });
 
-    let receipt_url = format!("pap://demo/receipts/{}", receipt_info.session_id);
+    let receipt_url = format!("pap://local/receipts/{}", receipt_info.session_id);
 
     let result = DemoRunResult {
         scenario_id,

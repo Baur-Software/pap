@@ -7,9 +7,9 @@ use pap_webauthn::{PrincipalSigner, SoftwareSigner};
 use papillion_shared::{DemoRunResult, OrchestratorConfig, SuccessorDesignation};
 
 use crate::inference::ModelManager;
-use crate::seed::seed_demo_registry;
+use crate::seed::seed_registry;
 
-pub const DEMO_REGISTRY_URL: &str = "pap://demo";
+pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
 /// Application state managed by Tauri.
 pub struct AppState {
@@ -21,9 +21,9 @@ pub struct AppState {
     pub orchestrator_config: RwLock<OrchestratorConfig>,
     /// On-device Candle model for the BuiltIn LLM provider.
     pub model_manager: tokio::sync::Mutex<ModelManager>,
-    /// Demo agent keypairs retained for simulating both sides of the handshake.
-    pub demo_agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
-    /// Completed demo run results for the activity feed.
+    /// Agent keypairs retained for both sides of the PAP handshake.
+    pub agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
+    /// Completed run results for the activity feed.
     pub completed_runs: RwLock<Vec<DemoRunResult>>,
     /// Whether the principal key has been exported/backed up.
     pub key_backed_up: RwLock<bool>,
@@ -34,8 +34,8 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let mut registries = HashMap::new();
-        let (registry, agent_keypairs) = seed_demo_registry();
-        registries.insert(DEMO_REGISTRY_URL.to_string(), registry);
+        let (registry, agent_keypairs) = seed_registry();
+        registries.insert(LOCAL_REGISTRY_URL.to_string(), registry);
 
         // Auto-generate identity on startup
         let keypair = PrincipalKeypair::generate();
@@ -46,10 +46,10 @@ impl Default for AppState {
             signer: RwLock::new(Some(Box::new(signer))),
             principal_seed: RwLock::new(Some(raw_seed)),
             registries: RwLock::new(registries),
-            bookmarks: RwLock::new(vec![DEMO_REGISTRY_URL.to_string()]),
+            bookmarks: RwLock::new(vec![LOCAL_REGISTRY_URL.to_string()]),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager: tokio::sync::Mutex::new(ModelManager::new()),
-            demo_agent_keypairs: RwLock::new(agent_keypairs),
+            agent_keypairs: RwLock::new(agent_keypairs),
             completed_runs: RwLock::new(Vec::new()),
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),

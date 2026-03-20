@@ -69,7 +69,6 @@ pub fn App() -> impl IntoView {
             // Can't format dynamically in a simple closure, just show "Downloading..."
             if progress_pct > 0 { "Downloading..." } else { "Downloading..." }
         }
-        OrchestratorStatus::DemoOnly => "Demo Mode",
         OrchestratorStatus::Disconnected => "Disconnected",
         OrchestratorStatus::Unconfigured => "Unconfigured",
     };
