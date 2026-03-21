@@ -41,17 +41,15 @@ pub async fn configure_orchestrator(
         *current = config.clone();
     }
 
-    // Load the model when BuiltIn is selected so that get_orchestrator_status
-    // returns Ready immediately after this call returns.
+    // Try to load the model when BuiltIn is selected.
+    // Config is already saved — don't fail the save if model loading fails.
     if let LlmProvider::BuiltIn { ref model_id } = config.llm_provider {
-        let resource_dir = state
-            .resource_dir
-            .read()
-            .map_err(|e| PapillionError::from(e.to_string()))?
-            .clone();
-        let mut mgr = state.model_manager.lock().await;
-        mgr.ensure_loaded(model_id, &resource_dir)
-            .map_err(PapillionError::from)?;
+        let resource_dir = state.resource_dir.read()
+            .ok().map(|r| r.clone());
+        if let Some(resource_dir) = resource_dir {
+            let mut mgr = state.model_manager.lock().await;
+            let _ = mgr.ensure_loaded(model_id, &resource_dir);
+        }
     }
 
     Ok(config)
