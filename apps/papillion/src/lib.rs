@@ -10,8 +10,10 @@ pub mod state;
 
 use std::net::SocketAddr;
 
+use pap_did::PrincipalKeypair;
 use pap_federation::{generate_node_identity, FederationServer};
 use pap_transport::AgentServer;
+use pap_webauthn::SoftwareSigner;
 use state::AppState;
 use tauri::Manager;
 
@@ -40,8 +42,18 @@ pub fn run() {
 
             app.manage(app_state);
 
-            // --- Start the TLS federation + agent server ---
-            start_federation_server(app)?;
+            // Spawn federation server on a separate thread with its own tokio runtime.
+            // This avoids blocking the Tauri main thread and provides the async context
+            // that tokio::spawn() requires.
+            let state_clone = state.clone_for_background();
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+                rt.block_on(async {
+                    if let Err(e) = start_federation_server_async(&state_clone).await {
+                        eprintln!("Federation server startup error: {e}");
+                    }
+                });
+            });
 
             Ok(())
         })
@@ -87,8 +99,22 @@ pub fn run() {
 /// Generates a self-signed TLS certificate bound to the node's DID,
 /// builds a combined Axum router with federation + per-agent routes,
 /// and spawns it on a background tokio task.
-fn start_federation_server(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let state = app.state::<AppState>();
+async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
+    // Recreate signer from seed in the background thread context
+    {
+        let mut signer = state.signer.write().unwrap();
+        if signer.is_none() {
+            let seed_bytes = *state
+                .principal_seed
+                .read()
+                .unwrap()
+                .as_ref()
+                .ok_or("No principal seed available")?;
+            let keypair = PrincipalKeypair::from_bytes(&seed_bytes)
+                .map_err(|e| format!("Failed to recreate keypair from seed: {e}"))?;
+            *signer = Some(Box::new(SoftwareSigner::from_keypair(keypair)));
+        }
+    }
 
     // Get the node's DID from the signer
     let node_did = {
