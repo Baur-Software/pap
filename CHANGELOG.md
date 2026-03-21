@@ -5,11 +5,29 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2026-03-21
+
+### Added
+
+- **papillion**: SQLite persistence layer for experience memory — episodes, agent profiles, retention policies, and settings stored across restarts via `rusqlite`
+- **papillion**: Memory-informed agent selection — consults historical agent profiles to calibrate mandate TTL (3x headroom over avg duration) and disclosure sets (minimal refs after 5+ episodes)
+- **papillion**: Agent profile aggregation with exponential moving average (EMA, alpha=0.2) — tracks success rate, quality, duration, and co-sign refusals per agent
+- **papillion**: Principal keypair persistence — Ed25519 seed stored in SQLite settings table, auto-loaded on startup or generated on first launch
+- **papillion**: JSON-LD semantic queries via `json_extract()` on Schema.org typed episode payloads
+- **papillion**: `list_agent_profiles` Tauri command for frontend access to agent performance data
+- **docs**: Memex(RL) architectural comparison — maps PAP's trust-bounded experience memory against Memex(RL) indexed retrieval patterns
 
 ### Changed
 
+- **papillion**: `completed_runs` migrated from in-memory `Vec` to persistent SQLite episodes — scenario history survives app restarts
+- **papillion**: `AppState` now holds `Arc<Database>` instead of `RwLock<Vec<ScenarioRunResult>>`
 - **CLAUDE.md**: Updated with comprehensive project context — PAP is a protocol specification with Rust reference implementation, not SaaS. Added development standards (SOLID, comprehensive testing, no shortcuts, spec-first), core protocol concepts, and architecture documentation.
+
+### Fixed
+
+- **papillion**: Prevented panic on short DID/hash strings in step display — uses `.get(..N).unwrap_or()` instead of direct slice indexing
+
+## [Unreleased]
 
 ### Added
 
