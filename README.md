@@ -57,16 +57,9 @@ git clone https://github.com/Baur-Software/pap.git
 cd pap
 cargo test
 
-# Core protocol examples
-cargo run --bin search               # Zero-disclosure search
-cargo run --bin travel-booking       # SD-JWT selective disclosure
-cargo run --bin delegation-chain     # 4-level trust hierarchy
-cargo run --bin payment              # Ecash + auto-approval + continuity
-
-# Transport & federation
+# Protocol handler examples
 cargo run --bin networked-search     # Full 6-phase handshake over HTTP
 cargo run --bin federated-discovery  # Cross-registry agent discovery
-cargo run --bin webauthn-ceremony    # Device-bound key generation
 ```
 
 ## Protocol Stack
@@ -150,58 +143,11 @@ pap/
 
 ## Examples
 
-Seven examples demonstrate the full protocol surface. Each exercises features the others do not.
-
-### `search` — Zero-Disclosure Transaction
-
-The simplest transaction that proves the trust model works: a web search with zero personal disclosure.
-
-12 protocol steps. Principal generates keypair → issues mandate → marketplace query → capability token → delegation → token presentation → session DID exchange → zero disclosure → execution → co-signed receipt → session close → receipt audit.
-
-```bash
-cargo run --bin search
-```
-
-### `travel-booking` — Selective Disclosure
-
-A flight booking requiring personal context. Proves disclosure controls work under real constraints.
-
-- SD-JWT: 2 of 4 claims revealed (name + nationality). Email + telephone cryptographically withheld.
-- Marketplace filtering: agents requiring more than the mandate permits are excluded before mandate issuance.
-- Receipt: property references only. "Alice Baur" and "US" never appear.
-
-```bash
-cargo run --bin travel-booking
-```
-
-### `delegation-chain` — Hierarchical Trust
-
-4-level mandate hierarchy. Scope narrows and TTL shrinks at each level.
-
-| Level | Agent | Scope | TTL |
-|-------|-------|-------|-----|
-| 0 | Human Principal | (root) | — |
-| 1 | Orchestrator | Search, Reserve(Flight), Reserve(Lodging), Pay | 4h |
-| 2 | Trip Planner | Search, Reserve(Flight) | 3h |
-| 3 | Booking Agent | Reserve(Flight) | 2h |
-
-Three rejected delegations prove the constraints hold. Decay state transitions demonstrate progressive degradation.
-
-```bash
-cargo run --bin delegation-chain
-```
-
-### `payment` — Protocol Extensions
-
-Chaumian ecash payment proof (vendor cannot identify payer), value-capped auto-approval ($12.99 auto-approved below $20 threshold), and continuity tokens (90-day principal-controlled TTL, delete to sever).
-
-```bash
-cargo run --bin payment
-```
+Three examples demonstrate PAP as an actual protocol handler. For in-app scenarios (search, payments, delegation, disclosure), see [Papillion](https://baur-software.github.io/pap/papillion/).
 
 ### `networked-search` — HTTP Transport
 
-Same protocol invariants as the in-memory search, but over HTTP. Single binary spawns an Axum server on a random port, then the client drives the 6-phase handshake. Proves the transport is a thin wrapper — it doesn't change the trust model.
+Full 6-phase PAP handshake over HTTP. Single binary spawns an Axum server on a random port, then the client drives the handshake. Proves the transport is a thin wrapper — it doesn't change the trust model.
 
 ```bash
 cargo run --bin networked-search
@@ -213,14 +159,6 @@ Two independent registries on different ports. Registry A has a search agent. Re
 
 ```bash
 cargo run --bin federated-discovery
-```
-
-### `webauthn-ceremony` — Device-Bound Keys
-
-WebAuthn-based key generation with mock authenticator for testing. Demonstrates the production path for device-bound principal keypairs.
-
-```bash
-cargo run --bin webauthn-ceremony
 ```
 
 ### `local-ai-assistant` — Docker Compose

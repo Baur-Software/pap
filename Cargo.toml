@@ -13,11 +13,6 @@ members = [
     "crates/pap-python",
     "crates/papillion-shared",
     "apps/papillion",
-    "examples/search",
-    "examples/travel-booking",
-    "examples/delegation-chain",
-    "examples/payment",
-    "examples/webauthn-ceremony",
     "examples/networked-search",
     "examples/federated-discovery",
 ]

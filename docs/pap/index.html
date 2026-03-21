@@ -805,7 +805,7 @@
             <div class="hero-stat-label">Crates (Rust + Python)</div>
           </div>
           <div>
-            <div class="hero-stat-value gradient-text">8</div>
+            <div class="hero-stat-value gradient-text">3</div>
             <div class="hero-stat-label">Working Examples</div>
           </div>
           <div>
@@ -1284,78 +1284,30 @@ chain.verify_chain([principal, agent_key])</pre>
     <div class="reveal" style="margin-bottom: 48px;">
       <div class="section-label">Working Examples</div>
       <h2 class="section-title" id="examples-heading">
-        Eight scenarios.<br />
+        Protocol in action.<br />
         <span class="gradient-text">Clone and run today.</span>
       </h2>
       <p class="section-sub">
-        Each example exercises protocol features the others do not.
-        Proving the trust model works in code, not prose.
+        Each example runs PAP as an actual protocol handler over HTTP.
+        For in-app scenarios (search, payments, delegation), see <a href="../papillion/">Papillion</a>.
       </p>
     </div>
 
     <div class="examples-grid">
 
       <div class="example-card reveal">
-        <div class="example-icon" aria-hidden="true">🔍</div>
-        <div class="example-name">Zero-Disclosure Search</div>
-        <div class="example-desc">A web search with zero personal disclosure. 12 protocol steps from keypair generation to co-signed receipt.</div>
-        <ul class="example-features">
-          <li>Full 12-step handshake</li>
-          <li>Zero claims disclosed to search agent</li>
-          <li>Co-signed receipt, property refs only</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin search</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-1">
-        <div class="example-icon" aria-hidden="true">✈️</div>
-        <div class="example-name">Selective Disclosure</div>
-        <div class="example-desc">A flight booking requiring personal context. SD-JWT: 2 of 4 claims revealed. Email + phone cryptographically withheld.</div>
-        <ul class="example-features">
-          <li>SD-JWT: name + nationality only</li>
-          <li>Marketplace filters by satisfiable disclosure</li>
-          <li>Receipt: "Alice Baur" never appears</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin travel-booking</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-2">
-        <div class="example-icon" aria-hidden="true">🔗</div>
-        <div class="example-name">Delegation Chain</div>
-        <div class="example-desc">4-level mandate hierarchy. Scope narrows and TTL shrinks at each level. Three rejected delegations prove the constraints hold.</div>
-        <ul class="example-features">
-          <li>Human → Orchestrator → Trip Planner → Booking</li>
-          <li>3 rejected over-scope delegations</li>
-          <li>Decay state transitions demonstrated</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin delegation-chain</div>
-      </div>
-
-      <div class="example-card reveal">
-        <div class="example-icon" aria-hidden="true">💳</div>
-        <div class="example-name">Payment Extensions</div>
-        <div class="example-desc">Chaumian ecash payment (vendor cannot identify payer), value-capped auto-approval, and continuity tokens with principal-controlled TTL.</div>
-        <ul class="example-features">
-          <li>Ecash: vendor cannot identify payer</li>
-          <li>Auto-approval: $12.99 below $20 threshold</li>
-          <li>Continuity tokens: delete to sever</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin payment</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-1">
         <div class="example-icon" aria-hidden="true">🌐</div>
         <div class="example-name">HTTP Transport</div>
-        <div class="example-desc">Same protocol invariants as the in-memory search, but over HTTP. Single binary, Axum server on a random port, 6-phase handshake.</div>
+        <div class="example-desc">Full 6-phase PAP handshake over HTTP. Single binary, Axum server on a random port. Proves transport is a thin wrapper — trust model unchanged.</div>
         <ul class="example-features">
           <li>Full 6-phase handshake over HTTP</li>
-          <li>Transport is a thin wrapper</li>
+          <li>AgentServer + AgentClient via pap-transport</li>
           <li>Trust model unchanged by transport</li>
         </ul>
         <div class="example-cmd">cargo run --bin networked-search</div>
       </div>
 
-      <div class="example-card reveal reveal-delay-2">
+      <div class="example-card reveal reveal-delay-1">
         <div class="example-icon" aria-hidden="true">🔭</div>
         <div class="example-name">Federated Discovery</div>
         <div class="example-desc">Two independent registries on different ports. Federation sync makes agents from Registry A discoverable through Registry B.</div>
@@ -1367,19 +1319,7 @@ chain.verify_chain([principal, agent_key])</pre>
         <div class="example-cmd">cargo run --bin federated-discovery</div>
       </div>
 
-      <div class="example-card reveal">
-        <div class="example-icon" aria-hidden="true">🔑</div>
-        <div class="example-name">WebAuthn Ceremony</div>
-        <div class="example-desc">Device-bound key generation using the WebAuthn API. Mock authenticator for testing. The production path for principal keypairs.</div>
-        <ul class="example-features">
-          <li>WebAuthn-based key generation</li>
-          <li>Mock authenticator for CI/testing</li>
-          <li>Software fallback signer</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin webauthn-ceremony</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-1" style="grid-column: 1 / -1; max-width: 560px;">
+      <div class="example-card reveal reveal-delay-2" style="grid-column: 1 / -1; max-width: 560px;">
         <div style="display: flex; gap: 16px; align-items: flex-start;">
           <div class="example-icon" aria-hidden="true">🐳</div>
           <div style="flex: 1;">
@@ -1527,8 +1467,8 @@ chain.verify_chain([principal, agent_key])</pre>
         <div class="qs-step">
           <div class="qs-step-num">3</div>
           <div>
-            <div class="qs-step-title">Run any example</div>
-            <div class="qs-step-body">Start with <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">search</code> for the simplest full handshake, or jump to <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">delegation-chain</code> for the trust hierarchy in action.</div>
+            <div class="qs-step-title">Run a protocol example</div>
+            <div class="qs-step-body">Run <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">networked-search</code> for the full 6-phase HTTP handshake, or <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">federated-discovery</code> for cross-registry federation.</div>
           </div>
         </div>
         <div class="qs-step">
@@ -1566,16 +1506,9 @@ cd pap
 <span class="c"># Run the full test suite</span>
 cargo test
 
-<span class="c"># Core protocol examples</span>
-<span class="fn">cargo run</span> --bin search          <span class="c"># Zero-disclosure search</span>
-<span class="fn">cargo run</span> --bin travel-booking  <span class="c"># SD-JWT selective disclosure</span>
-<span class="fn">cargo run</span> --bin delegation-chain <span class="c"># 4-level trust hierarchy</span>
-<span class="fn">cargo run</span> --bin payment         <span class="c"># Ecash + auto-approval</span>
-
-<span class="c"># Transport &amp; federation</span>
+<span class="c"># Protocol handler examples</span>
 <span class="fn">cargo run</span> --bin networked-search    <span class="c"># 6-phase HTTP handshake</span>
 <span class="fn">cargo run</span> --bin federated-discovery <span class="c"># Cross-registry federation</span>
-<span class="fn">cargo run</span> --bin webauthn-ceremony   <span class="c"># Device-bound keys</span>
 
 <span class="c"># Local AI assistant (Docker)</span>
 cd examples/local-ai-assistant
