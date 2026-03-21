@@ -2,13 +2,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
+use base64::Engine;
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_transport::{AgentHandler, EndpointRegistry};
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillion_shared::{OrchestratorConfig, ScenarioRunResult, SuccessorDesignation};
+use papillion_shared::{OrchestratorConfig, SuccessorDesignation};
 
 use crate::agents::{DuckDuckGoAgent, OnDeviceAiAgent, WikipediaAgent};
+use crate::db::Database;
 use crate::inference::ModelManager;
 use crate::seed::seed_registry;
 
@@ -33,8 +35,9 @@ pub struct AppState {
     pub model_manager: Arc<tokio::sync::Mutex<ModelManager>>,
     /// Agent keypairs retained for both sides of the PAP handshake.
     pub agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
-    /// Completed run results for the activity feed.
-    pub completed_runs: RwLock<Vec<ScenarioRunResult>>,
+    /// Persistent SQLite database for experience memory.
+    /// Stores episodes, agent profiles, and retention policies.
+    pub db: Arc<Database>,
     /// Whether the principal key has been exported/backed up.
     pub key_backed_up: RwLock<bool>,
     /// Forward-looking successor designations.
@@ -57,14 +60,51 @@ pub struct AppState {
     pub node_cert_fingerprint: RwLock<String>,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
+impl AppState {
+    /// Create AppState with a persistent database at the given path.
+    pub fn new(db_path: &std::path::Path) -> Self {
+        let db = Database::open(db_path).expect("failed to open experience memory database");
+        Self::with_db(Arc::new(db))
+    }
+
+    fn with_db(db: Arc<Database>) -> Self {
         let (registry, agent_keypairs) = seed_registry();
         let local_registry = Arc::new(Mutex::new(registry));
 
-        // Auto-generate identity on startup
-        let keypair = PrincipalKeypair::generate();
-        let raw_seed = keypair.signing_key().to_bytes();
+        // Try to load persisted seed; generate a new one if none exists
+        let (raw_seed, keypair) = match db.get_setting("principal_seed_b64").ok().flatten() {
+            Some(seed_b64) => {
+                if let Ok(bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                    .decode(&seed_b64)
+                {
+                    if let Ok(seed) = <[u8; 32]>::try_from(bytes.as_slice()) {
+                        if let Ok(kp) = PrincipalKeypair::from_bytes(&seed) {
+                            (seed, kp)
+                        } else {
+                            let kp = PrincipalKeypair::generate();
+                            (kp.signing_key().to_bytes(), kp)
+                        }
+                    } else {
+                        let kp = PrincipalKeypair::generate();
+                        (kp.signing_key().to_bytes(), kp)
+                    }
+                } else {
+                    let kp = PrincipalKeypair::generate();
+                    (kp.signing_key().to_bytes(), kp)
+                }
+            }
+            None => {
+                let kp = PrincipalKeypair::generate();
+                let seed = kp.signing_key().to_bytes();
+                // Persist the newly generated seed
+                let seed_b64 =
+                    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);
+                if let Err(e) = db.set_setting("principal_seed_b64", &seed_b64) {
+                    eprintln!("Failed to persist principal seed: {e}");
+                }
+                (seed, kp)
+            }
+        };
         let signer = SoftwareSigner::from_keypair(keypair);
 
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
@@ -90,7 +130,7 @@ impl Default for AppState {
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager,
             agent_keypairs: RwLock::new(agent_keypairs),
-            completed_runs: RwLock::new(Vec::new()),
+            db,
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
             resource_dir: RwLock::new(PathBuf::new()),
@@ -100,5 +140,15 @@ impl Default for AppState {
             node_endpoint: RwLock::new(String::new()),
             node_cert_fingerprint: RwLock::new(String::new()),
         }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        // Fallback: use a temp database (data lost on restart).
+        // In production, lib.rs uses AppState::new() with app_data_dir.
+        let db =
+            Database::open(&PathBuf::from("papillion.db")).expect("failed to open fallback db");
+        Self::with_db(Arc::new(db))
     }
 }

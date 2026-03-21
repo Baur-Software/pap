@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod commands;
+pub mod db;
 pub mod discovery;
 pub mod error;
 pub mod handshake;
@@ -9,41 +10,35 @@ pub mod state;
 
 use std::net::SocketAddr;
 
-use pap_did::PrincipalKeypair;
 use pap_federation::{generate_node_identity, FederationServer};
 use pap_transport::AgentServer;
-use pap_webauthn::SoftwareSigner;
 use state::AppState;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app_state = AppState::default();
-
-    // Auto-create a principal identity on first launch so the app is
-    // immediately usable without requiring a manual setup step.
-    {
-        let mut signer = app_state.signer.write().unwrap();
-        if signer.is_none() {
-            let keypair = PrincipalKeypair::generate();
-            let raw_seed = keypair.signing_key().to_bytes();
-            *signer = Some(Box::new(SoftwareSigner::from_keypair(keypair)));
-            drop(signer);
-            let mut seed = app_state.principal_seed.write().unwrap();
-            *seed = Some(raw_seed);
-        }
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
-        .manage(app_state)
         .setup(|app| {
+            // Resolve data directory for persistent storage
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app data dir");
+            std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
+            let db_path = data_dir.join("papillion.db");
+
+            // Create AppState with persistent database.
+            // Identity is auto-loaded from SQLite or generated on first launch.
+            let app_state = AppState::new(&db_path);
+
             let resource_dir = app
                 .path()
                 .resource_dir()
                 .expect("failed to resolve resource dir");
-            let state = app.state::<AppState>();
-            *state.resource_dir.write().unwrap() = resource_dir;
+            *app_state.resource_dir.write().unwrap() = resource_dir;
+
+            app.manage(app_state);
 
             // --- Start the TLS federation + agent server ---
             start_federation_server(app)?;
@@ -69,6 +64,7 @@ pub fn run() {
             commands::orchestrator::list_scenarios,
             commands::orchestrator::run_scenario,
             commands::orchestrator::list_completed_runs,
+            commands::orchestrator::list_agent_profiles,
             commands::llm::check_llm_connection,
             commands::orchestrator::list_builtin_models,
             commands::orchestrator::load_builtin_model,
