@@ -19,8 +19,8 @@ pub fn HomePage() -> impl IntoView {
                 match bridge::invoke_no_args::<Vec<ScenarioCard>>("list_scenarios").await {
                     Ok(cards) => scenarios.set(cards),
                     Err(e) => {
-                        web_sys::console::error_1(
-                            &format!("Failed to load scenarios: {e}").into(),
+                        web_sys::console::warn_1(
+                            &format!("list_scenarios: {e}").into(),
                         );
                     }
                 }

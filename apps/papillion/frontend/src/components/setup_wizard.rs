@@ -92,8 +92,8 @@ pub fn SetupWizard() -> impl IntoView {
                     show_wizard.set(false);
                 }
                 Err(e) => {
-                    web_sys::console::error_1(
-                        &format!("Failed to save config: {e}").into(),
+                    web_sys::console::warn_1(
+                        &format!("configure_orchestrator: {e}").into(),
                     );
                 }
             }

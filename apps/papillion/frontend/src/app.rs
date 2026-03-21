@@ -34,10 +34,13 @@ pub fn App() -> impl IntoView {
     Effect::new(move || {
         let identity = identity_state;
         let orchestrator = orchestrator_state;
+        identity.loading.set(true);
         spawn_local(async move {
-            if let Ok(info) = bridge::invoke_no_args::<IdentityInfo>("get_identity").await {
-                identity.info.set(Some(info));
+            match bridge::invoke_no_args::<IdentityInfo>("get_identity").await {
+                Ok(info) => identity.info.set(Some(info)),
+                Err(e) => web_sys::console::warn_1(&format!("get_identity: {e}").into()),
             }
+            identity.loading.set(false);
             if let Ok(status) =
                 bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status").await
             {

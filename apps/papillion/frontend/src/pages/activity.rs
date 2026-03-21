@@ -13,7 +13,7 @@ pub fn ActivityPage() -> impl IntoView {
             match bridge::invoke_no_args::<Vec<ScenarioRunResult>>("list_completed_runs").await {
                 Ok(results) => runs.set(results),
                 Err(e) => {
-                    web_sys::console::error_1(&format!("Failed to load runs: {e}").into())
+                    web_sys::console::warn_1(&format!("list_completed_runs: {e}").into())
                 }
             }
         });

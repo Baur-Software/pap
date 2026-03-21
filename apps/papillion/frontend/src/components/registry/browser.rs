@@ -71,13 +71,38 @@ pub fn RegistryBrowser() -> impl IntoView {
         });
     };
 
+    let friendly_error = move || {
+        error_msg().map(|e| {
+            if e.contains("Tauri IPC") {
+                "Could not reach registry \u{2014} backend unavailable.".to_string()
+            } else {
+                e
+            }
+        })
+    };
+
     view! {
         <div>
-            <Show when=is_connected fallback=move || view! {
-                <div style="text-align: center; padding: 48px 0; color: var(--text-secondary);">
-                    <p style="font-size: 16px; margin-bottom: 8px;">"Enter a registry URL in the address bar"</p>
-                    <p style="font-size: 13px;">"e.g. pap://localhost:8080"</p>
+            // Error display — always visible regardless of connection state
+            {move || friendly_error().map(|e| view! {
+                <div style="background: rgba(225, 112, 85, 0.1); border: 1px solid var(--error); border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: var(--error);">
+                    {e}
                 </div>
+            })}
+
+            <Show when=is_loading fallback=|| ()>
+                <div style="text-align: center; padding: 24px; color: var(--text-secondary);">
+                    "Loading..."
+                </div>
+            </Show>
+
+            <Show when=is_connected fallback=move || view! {
+                <Show when=move || !is_loading()>
+                    <div style="text-align: center; padding: 48px 0; color: var(--text-secondary);">
+                        <p style="font-size: 16px; margin-bottom: 8px;">"Enter a registry URL in the address bar"</p>
+                        <p style="font-size: 13px;">"e.g. pap://localhost:8080"</p>
+                    </div>
+                </Show>
             }>
                 <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
                     <input
@@ -96,18 +121,6 @@ pub fn RegistryBrowser() -> impl IntoView {
                         "Sync"
                     </button>
                 </div>
-
-                {move || error_msg().map(|e| view! {
-                    <div style="background: rgba(225, 112, 85, 0.1); border: 1px solid var(--error); border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: var(--error);">
-                        {e}
-                    </div>
-                })}
-
-                <Show when=is_loading fallback=|| ()>
-                    <div style="text-align: center; padding: 24px; color: var(--text-secondary);">
-                        "Loading..."
-                    </div>
-                </Show>
 
                 {move || {
                     let agent_list = agents();
