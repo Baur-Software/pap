@@ -182,6 +182,117 @@ Most real systems will need both.
 
 ---
 
+## 6. Bringing Them Together: The Orchestrator as Memory Layer
+
+PAP specifies the handshake, mandates, scopes, receipts, and federation. It does not prescribe what the orchestrator does with the information it already has. The trust hierarchy (specification section 3.1) places the orchestrator inside the principal's trust boundary with "full principal context" by design. What it does with that context is an implementation choice, not a protocol concern.
+
+This is where Memex and PAP meet: the orchestrator remembers, the protocol forgets.
+
+### The orchestrator is left to the implementor
+
+Any PAP-compliant orchestrator can add memory without changing the protocol. A minimal orchestrator could forget everything after each session. Papillion — the reference implementation — chooses to remember every mandated interaction on-device, giving users a full picture of their agent relationships.
+
+Papillion already holds past interactions in `AppState.completed_runs` (`apps/papillion/src/state.rs:37`). The question is making this structured, persistent, and useful rather than a flat in-memory log that disappears on restart.
+
+### Why persistence matters for adoption
+
+People will not adopt a protocol they cannot see working. If every interaction is ephemeral and forgotten, the user has no relationship with the system. A persistent memory layer enables:
+
+- "Show me every agent I've authorized" — visible mandate history
+- "Which search agent worked best last month?" — outcome-based agent selection
+- "I never want to disclose my email again" — disclosure patterns inform future scopes
+- "What did that agent do with my data?" — receipt-anchored audit trail
+
+The orchestrator remembers so the protocol can forget. Agents stay stateless. Sessions stay ephemeral. But the user sees their full history.
+
+### The persistence gap
+
+Papillion today is entirely in-memory. `AppState` holds everything in `RwLock<>` — completed runs, principal keypairs, federation caches, bookmarks. All lost on restart. There is no SQLite, no file-based storage, no database backend. The `tauri-plugin-store` dependency exists in `Cargo.toml` but is unused.
+
+The memory layer requires actual persistence: episodes anchored to receipts, agent profiles aggregated from outcomes, principal keypairs auto-saved, retention policies stored durably.
+
+### SQLite + JSON-LD: The natural memory substrate
+
+Every delegated agent in PAP returns JSON-LD — Schema.org typed structured data. This is where Memex's "dereference past evidence" maps cleanly onto PAP:
+
+- **The evidence is JSON-LD.** Every agent result is already structured with `@type`, `@context`, and typed properties.
+- **The index is SQLite.** `json_extract()` queries directly into JSON-LD payloads without an ORM. `json_extract(result, '$.@type')` finds every `schema:SearchResult` across all episodes.
+- **The relationships are Schema.org types.** Contextual patterns emerge from the data: "every time I searched for flights, I then booked a hotel" is a temporal query over typed episodes. `schema:SearchAction` followed by `schema:ReserveAction` with overlapping disclosure refs — the ontology provides the linkage for free.
+- **FTS5 full-text search** over JSON-LD descriptions enables Memex-style semantic retrieval without embeddings.
+- **Single-file database** in `app_data_dir()` — portable, backupable, principal-owned.
+
+The structured data that PAP mandates for interoperability becomes the memory substrate at no additional cost. Schema.org types that exist for agent communication double as the indexing ontology for experience memory.
+
+Encrypted at rest with a key derived from the principal's Ed25519 seed. If the seed is lost, the memory is unrecoverable — the principal controls access to their own history.
+
+### The flow: remember before, forget after
+
+```
+User Intent
+  → Consult past episodes for this action type (what worked?)
+  → Rank agents by outcome history, suggest minimal scope
+  → Discover agents from federation (existing, unchanged)
+  → Issue mandate with informed scope/TTL (existing mechanism)
+  → Execute 6-phase handshake (UNCHANGED — protocol layer untouched)
+  → Record episode: receipt + JSON-LD result → SQLite
+  → Update agent profile with new outcome
+  → Apply retention policy (keep / compress / forget)
+```
+
+Memory operates before phase 1 (informing decisions) and after phase 6 (recording outcomes). The 6-phase handshake is untouched. No protocol messages change. No new information flows to downstream agents.
+
+### What's protocol vs. what's Papillion
+
+**PAP protocol (unchanged):**
+- 6-phase handshake, mandate issuance, scope containment, session lifecycle
+- SD-JWT selective disclosure, receipt structure (refs only), federation sync
+- Downstream agents remain stateless — they have no idea the orchestrator remembers
+
+**Papillion app (implementation choice):**
+- `completed_runs` becomes a persistent SQLite episode store
+- Agent selection goes from first-match to outcome-ranked
+- Scope configuration goes from hardcoded to informed-by-experience
+- TTL calibrated per-agent from observed execution durations
+
+### Mandate decay informed by memory
+
+Memory informs two renewal decisions without changing the decay mechanism:
+
+1. **TTL calibration**: Agent profiles track actual execution durations. A 2-second search agent does not need a 1-hour mandate — a 10-minute TTL with proactive renewal is tighter security.
+2. **Renewal worthiness**: Before renewing a Degraded mandate back to Active, memory answers: "Is this agent worth renewing?" Declining quality scores or increasing failure rates suggest letting the mandate decay.
+
+The `compute_decay_state` method still calculates state from TTL. The `transition_decay` method still validates transitions. Memory informs whether the orchestrator chooses to renew — it does not bypass the mechanism.
+
+### Guarantees
+
+**All PAP protocol guarantees preserved.** Memory never crosses the trust boundary. Downstream agents cannot tell the difference between an orchestrator with memory and one without.
+
+**Added by Papillion's memory layer:**
+- Memory is principal-controlled — the user can view, export, and delete their history
+- Memory is on-device only — never serialized to protocol messages, never transmitted
+- Memory degradation is safe — bad or missing memory leads to suboptimal agent selection, not data leakage
+- Forget is real — deleted episodes are destroyed, not archived or soft-deleted
+
+### Failure modes
+
+| Failure | Impact | Mitigation |
+|---------|--------|------------|
+| Database loss | Falls back to first-match agent selection | Memory is advisory, not authoritative |
+| Stale agent profiles | Agent quality may have changed | Recency weighting + 5-minute federation refresh |
+| Device compromise | Stored episodes readable | At-rest encryption with principal seed. Same threat model as today. |
+
+### Where Memex-style RL could fit (future work)
+
+All optimization targets orchestrator policy, never agent behavior:
+
+- **What to remember**: Did a retained episode improve a subsequent decision?
+- **Which agent to pick**: Outcome quality vs. historical average for that action type
+- **How tight the scope**: Successful handshake with tighter scope = better
+
+This is future work. The immediate value is simpler: Papillion persists mandated interactions in an encrypted, queryable, JSON-LD-indexed store so users can see their agent relationships working.
+
+---
+
 ## Code References
 
 | File | Relevance |
@@ -194,3 +305,5 @@ Most real systems will need both.
 | `pap-credential/src/sd_jwt.rs` | Selective disclosure JWT — per-claim salting and disclosure |
 | `pap-federation/src/registry.rs` | Federated discovery with no central state |
 | `pap-marketplace/src/registry.rs` | Pre-handshake filtering by disclosure requirements |
+| `apps/papillion/src/state.rs` | AppState with in-memory `completed_runs` (persistence gap) |
+| `apps/papillion/src/commands/orchestrator.rs` | Scenario execution, agent selection, mandate issuance |
