@@ -482,11 +482,6 @@ body {
     color: var(--teal);
 }
 
-.status-badge.demo {
-    background: rgba(240, 160, 48, 0.15);
-    color: var(--gold);
-}
-
 .status-badge.offline {
     background: rgba(148, 148, 168, 0.12);
     color: var(--text-2);

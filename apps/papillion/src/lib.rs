@@ -1,5 +1,7 @@
+pub mod agents;
 pub mod commands;
 pub mod error;
+pub mod handshake;
 pub mod inference;
 pub mod seed;
 pub mod state;
