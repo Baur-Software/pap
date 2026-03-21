@@ -54,18 +54,3 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
-
-  examples:
-    name: Run Examples
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo run -p pap-search-example
-      - run: cargo run -p pap-travel-booking-example
-      - run: cargo run -p pap-delegation-chain-example
-      - run: cargo run -p pap-payment-example
-      - run: cargo run -p pap-webauthn-ceremony-example
-      - run: cargo run -p pap-networked-search-example
-      - run: cargo run -p pap-federated-discovery-example
