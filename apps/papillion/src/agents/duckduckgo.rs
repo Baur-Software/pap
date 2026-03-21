@@ -16,11 +16,17 @@ pub struct DuckDuckGoAgent {
     sessions: SessionStore<Option<String>>, // query
 }
 
-impl DuckDuckGoAgent {
-    pub fn new() -> Self {
+impl Default for DuckDuckGoAgent {
+    fn default() -> Self {
         Self {
             sessions: SessionStore::new(),
         }
+    }
+}
+
+impl DuckDuckGoAgent {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -28,7 +34,8 @@ impl AgentHandler for DuckDuckGoAgent {
     fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
         if token.action != "schema:SearchAction" {
             return Err(TransportError::ServerError(format!(
-                "Unsupported action: {}", token.action
+                "Unsupported action: {}",
+                token.action
             )));
         }
 
@@ -67,8 +74,12 @@ impl AgentHandler for DuckDuckGoAgent {
     }
 
     fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let query = self.sessions.with(session_id, |data| data.clone())?
-            .ok_or_else(|| TransportError::ServerError("No query provided in disclosures".into()))?;
+        let query = self
+            .sessions
+            .with(session_id, |data| data.clone())?
+            .ok_or_else(|| {
+                TransportError::ServerError("No query provided in disclosures".into())
+            })?;
 
         let client = reqwest::blocking::Client::builder()
             .user_agent("Papillion/0.1 (PAP Browser)")
@@ -77,7 +88,12 @@ impl AgentHandler for DuckDuckGoAgent {
 
         let resp: DdgResponse = client
             .get("https://api.duckduckgo.com/")
-            .query(&[("q", query.as_str()), ("format", "json"), ("no_html", "1"), ("skip_disambig", "1")])
+            .query(&[
+                ("q", query.as_str()),
+                ("format", "json"),
+                ("no_html", "1"),
+                ("skip_disambig", "1"),
+            ])
             .send()
             .map_err(|e: reqwest::Error| TransportError::ServerError(e.to_string()))?
             .json()
@@ -111,9 +127,7 @@ impl AgentHandler for DuckDuckGoAgent {
         mut receipt: TransactionReceipt,
     ) -> Result<TransactionReceipt, TransportError> {
         // Try to find any active session key; fall back to ephemeral
-        let key = self.sessions.signing_key(
-            &receipt.session_id,
-        );
+        let key = self.sessions.signing_key(&receipt.session_id);
         match key {
             Some(k) => receipt.co_sign(&k),
             None => {
@@ -163,7 +177,9 @@ enum DdgTopic {
 
 fn collect_topics(topics: &[DdgTopic], out: &mut Vec<serde_json::Value>) {
     for topic in topics {
-        if out.len() >= 10 { return; }
+        if out.len() >= 10 {
+            return;
+        }
         match topic {
             DdgTopic::Result { text, first_url } => {
                 out.push(json!({

@@ -37,11 +37,14 @@ impl<T> SessionStore<T> {
         let did = session_key.did();
         let mut map = self.inner.lock().unwrap();
         Self::reap(&mut map);
-        map.insert(session_id, Entry {
-            session_key,
-            created: Instant::now(),
-            data,
-        });
+        map.insert(
+            session_id,
+            Entry {
+                session_key,
+                created: Instant::now(),
+                data,
+            },
+        );
         did
     }
 

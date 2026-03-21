@@ -9,8 +9,8 @@ use tauri::State;
 use crate::error::PapillionError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillion_shared::{
-    builtin_model_catalog, BuiltInModelInfo, ScenarioRunResult, ScenarioStepResult, LlmProvider,
-    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, SearchResult, SetupState,
+    builtin_model_catalog, BuiltInModelInfo, LlmProvider, OrchestratorConfig, OrchestratorStatus,
+    ReceiptInfo, ScenarioCard, ScenarioRunResult, ScenarioStepResult, SearchResult, SetupState,
 };
 
 /// Get the current orchestrator configuration.
@@ -44,8 +44,11 @@ pub async fn configure_orchestrator(
     // Load the model when BuiltIn is selected so that get_orchestrator_status
     // returns Ready immediately after this call returns.
     if let LlmProvider::BuiltIn { ref model_id } = config.llm_provider {
-        let resource_dir = state.resource_dir.read()
-            .map_err(|e| PapillionError::from(e.to_string()))?.clone();
+        let resource_dir = state
+            .resource_dir
+            .read()
+            .map_err(|e| PapillionError::from(e.to_string()))?
+            .clone();
         let mut mgr = state.model_manager.lock().await;
         mgr.ensure_loaded(model_id, &resource_dir)
             .map_err(PapillionError::from)?;
@@ -124,8 +127,11 @@ pub async fn load_builtin_model(
         }
     };
 
-    let resource_dir = state.resource_dir.read()
-        .map_err(|e| PapillionError::from(e.to_string()))?.clone();
+    let resource_dir = state
+        .resource_dir
+        .read()
+        .map_err(|e| PapillionError::from(e.to_string()))?
+        .clone();
     let mut mgr = state.model_manager.lock().await;
     mgr.ensure_loaded(&model_id, &resource_dir)
         .map_err(PapillionError::from)?;
@@ -160,8 +166,7 @@ pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
         ScenarioCard {
             id: "ai".into(),
             title: "Ask AI".into(),
-            description:
-                "On-device inference — your prompts never leave your machine".into(),
+            description: "On-device inference — your prompts never leave your machine".into(),
             icon: "\u{1F9E0}".into(),
             agent_name: "On-Device AI".into(),
             action_type: "schema:AskAction".into(),
@@ -188,8 +193,18 @@ struct DdgResponse {
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum DdgTopic {
-    Result { #[serde(rename = "Text")] text: String, #[serde(rename = "FirstURL")] first_url: String },
-    Group { #[serde(rename = "Topics")] topics: Vec<DdgTopic>, #[serde(rename = "Name")] _name: String },
+    Result {
+        #[serde(rename = "Text")]
+        text: String,
+        #[serde(rename = "FirstURL")]
+        first_url: String,
+    },
+    Group {
+        #[serde(rename = "Topics")]
+        topics: Vec<DdgTopic>,
+        #[serde(rename = "Name")]
+        _name: String,
+    },
 }
 
 /// Public wrapper for the canvas module to reuse web search.
@@ -211,7 +226,12 @@ async fn web_search(query: &str) -> Result<Vec<SearchResult>, PapillionError> {
 
     let resp: DdgResponse = client
         .get("https://api.duckduckgo.com/")
-        .query(&[("q", query), ("format", "json"), ("no_html", "1"), ("skip_disambig", "1")])
+        .query(&[
+            ("q", query),
+            ("format", "json"),
+            ("no_html", "1"),
+            ("skip_disambig", "1"),
+        ])
         .send()
         .await
         .map_err(|e| PapillionError::from(e.to_string()))?
@@ -354,8 +374,8 @@ pub async fn run_scenario(
         let seed = seed_lock
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
-        let kp = PrincipalKeypair::from_bytes(seed)
-            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let kp =
+            PrincipalKeypair::from_bytes(seed).map_err(|e| PapillionError::from(e.to_string()))?;
         (did, kp)
     };
 
@@ -473,7 +493,8 @@ pub async fn run_scenario(
                         Err(e) => format!("On-device inference failed: {}", e),
                     }
                 } else {
-                    "On-device model not loaded \u{2014} configure BuiltIn provider in settings".into()
+                    "On-device model not loaded \u{2014} configure BuiltIn provider in settings"
+                        .into()
                 }
             } else {
                 "No query provided".into()

@@ -16,11 +16,17 @@ pub struct WikipediaAgent {
     sessions: SessionStore<Option<String>>, // query
 }
 
-impl WikipediaAgent {
-    pub fn new() -> Self {
+impl Default for WikipediaAgent {
+    fn default() -> Self {
         Self {
             sessions: SessionStore::new(),
         }
+    }
+}
+
+impl WikipediaAgent {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -28,7 +34,8 @@ impl AgentHandler for WikipediaAgent {
     fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
         if token.action != "schema:SearchAction" {
             return Err(TransportError::ServerError(format!(
-                "Unsupported action: {}", token.action
+                "Unsupported action: {}",
+                token.action
             )));
         }
 
@@ -67,8 +74,12 @@ impl AgentHandler for WikipediaAgent {
     }
 
     fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let query = self.sessions.with(session_id, |data| data.clone())?
-            .ok_or_else(|| TransportError::ServerError("No query provided in disclosures".into()))?;
+        let query = self
+            .sessions
+            .with(session_id, |data| data.clone())?
+            .ok_or_else(|| {
+                TransportError::ServerError("No query provided in disclosures".into())
+            })?;
 
         let client = reqwest::blocking::Client::builder()
             .user_agent("Papillion/0.1 (PAP Browser; mailto:pap@baur-software.com)")
@@ -79,15 +90,22 @@ impl AgentHandler for WikipediaAgent {
             .get("https://en.wikipedia.org/w/rest.php/v1/search/page")
             .query(&[("q", query.as_str()), ("limit", "5")])
             .send()
-            .map_err(|e: reqwest::Error| TransportError::ServerError(format!("Wikipedia request: {e}")))?
+            .map_err(|e: reqwest::Error| {
+                TransportError::ServerError(format!("Wikipedia request: {e}"))
+            })?
             .json()
-            .map_err(|e: reqwest::Error| TransportError::ServerError(format!("Wikipedia parse: {e}")))?;
+            .map_err(|e: reqwest::Error| {
+                TransportError::ServerError(format!("Wikipedia parse: {e}"))
+            })?;
 
         let results: Vec<serde_json::Value> = resp
             .pages
             .into_iter()
             .map(|p| {
-                let snippet = p.excerpt.or(p.description).unwrap_or_default()
+                let snippet = p
+                    .excerpt
+                    .or(p.description)
+                    .unwrap_or_default()
                     .replace("<span class=\"searchmatch\">", "")
                     .replace("</span>", "");
                 json!({
@@ -115,9 +133,7 @@ impl AgentHandler for WikipediaAgent {
         &self,
         mut receipt: TransactionReceipt,
     ) -> Result<TransactionReceipt, TransportError> {
-        let key = self.sessions.signing_key(
-            &receipt.session_id,
-        );
+        let key = self.sessions.signing_key(&receipt.session_id);
         match key {
             Some(k) => receipt.co_sign(&k),
             None => {

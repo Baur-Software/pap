@@ -33,7 +33,8 @@ impl AgentHandler for OnDeviceAiAgent {
     fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
         if token.action != "schema:AskAction" {
             return Err(TransportError::ServerError(format!(
-                "Unsupported action: {}", token.action
+                "Unsupported action: {}",
+                token.action
             )));
         }
 
@@ -72,12 +73,17 @@ impl AgentHandler for OnDeviceAiAgent {
     }
 
     fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let prompt = self.sessions.with(session_id, |data| data.clone())?
-            .ok_or_else(|| TransportError::ServerError("No prompt provided in disclosures".into()))?;
+        let prompt = self
+            .sessions
+            .with(session_id, |data| data.clone())?
+            .ok_or_else(|| {
+                TransportError::ServerError("No prompt provided in disclosures".into())
+            })?;
 
-        let mut mgr = self.model_manager.try_lock().map_err(|_| {
-            TransportError::ServerError("Model manager busy".into())
-        })?;
+        let mut mgr = self
+            .model_manager
+            .try_lock()
+            .map_err(|_| TransportError::ServerError("Model manager busy".into()))?;
 
         if mgr.loaded.is_none() {
             return Err(TransportError::ServerError(
@@ -101,9 +107,7 @@ impl AgentHandler for OnDeviceAiAgent {
         &self,
         mut receipt: TransactionReceipt,
     ) -> Result<TransactionReceipt, TransportError> {
-        let key = self.sessions.signing_key(
-            &receipt.session_id,
-        );
+        let key = self.sessions.signing_key(&receipt.session_id);
         match key {
             Some(k) => receipt.co_sign(&k),
             None => {

@@ -56,20 +56,21 @@ pub struct ChatMessage {
 ///
 /// For BuiltIn, callers should use `crate::inference::ModelManager` directly.
 /// This function handles Mistral API, Ollama, and OpenAI-compatible endpoints.
-pub async fn chat(provider: &LlmProvider, messages: &[ChatMessage]) -> Result<String, PapillionError> {
+pub async fn chat(
+    provider: &LlmProvider,
+    messages: &[ChatMessage],
+) -> Result<String, PapillionError> {
     match provider {
-        LlmProvider::BuiltIn { .. } => {
-            Err(PapillionError::from(
-                "BuiltIn provider uses on-device inference via ModelManager, not HTTP chat",
-            ))
-        }
-        LlmProvider::Mistral { api_key, model } => {
-            mistral_chat(api_key, model, messages).await
-        }
+        LlmProvider::BuiltIn { .. } => Err(PapillionError::from(
+            "BuiltIn provider uses on-device inference via ModelManager, not HTTP chat",
+        )),
+        LlmProvider::Mistral { api_key, model } => mistral_chat(api_key, model, messages).await,
         LlmProvider::Ollama { endpoint, model } => ollama_chat(endpoint, model, messages).await,
-        LlmProvider::OpenAiCompatible { endpoint, api_key, model } => {
-            openai_chat(endpoint, api_key, model, messages).await
-        }
+        LlmProvider::OpenAiCompatible {
+            endpoint,
+            api_key,
+            model,
+        } => openai_chat(endpoint, api_key, model, messages).await,
         LlmProvider::None => Err(PapillionError::from("No LLM provider configured")),
     }
 }
@@ -88,8 +89,11 @@ pub async fn check_llm_connection(
     match &config.llm_provider {
         LlmProvider::BuiltIn { model_id } => {
             // For BuiltIn, verify the model is loaded and can generate
-            let resource_dir = state.resource_dir.read()
-                .map_err(|e| PapillionError::from(e.to_string()))?.clone();
+            let resource_dir = state
+                .resource_dir
+                .read()
+                .map_err(|e| PapillionError::from(e.to_string()))?
+                .clone();
             let mut mgr = state.model_manager.lock().await;
             mgr.ensure_loaded(model_id, &resource_dir)
                 .map_err(PapillionError::from)?;

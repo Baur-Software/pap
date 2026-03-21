@@ -14,11 +14,11 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 use serde_json::json;
 
+use ed25519_dalek::VerifyingKey;
 use pap_core::mandate::Mandate;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session};
-use ed25519_dalek::VerifyingKey;
 use pap_did::{PrincipalKeypair, SessionKeypair};
 use pap_transport::AgentHandler;
 
@@ -49,22 +49,37 @@ struct AuthArtifacts {
     initiator_kp: SessionKeypair,
 }
 
+/// Parameters for running a handshake.
+pub struct HandshakeParams<'a> {
+    pub handler: Arc<dyn AgentHandler>,
+    pub agent_name: &'a str,
+    pub agent_did: &'a str,
+    pub action_type: &'a str,
+    pub query: &'a str,
+    pub principal_kp: &'a PrincipalKeypair,
+    pub requires_disclosure: &'a [String],
+    pub returns: &'a [String],
+    pub on_phase: PhaseCallback,
+    pub on_fail: FailCallback,
+}
+
 /// Run the full 6-phase PAP handshake.
 ///
 /// All agent interaction goes through the handler trait — no downcasting,
 /// no type-specific methods. The query reaches the agent through disclosures.
-pub async fn execute(
-    handler: Arc<dyn AgentHandler>,
-    agent_name: &str,
-    agent_did: &str,
-    action_type: &str,
-    query: &str,
-    principal_kp: &PrincipalKeypair,
-    requires_disclosure: &[String],
-    returns: &[String],
-    on_phase: PhaseCallback,
-    on_fail: FailCallback,
-) -> Result<HandshakeResult, PapillionError> {
+pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, PapillionError> {
+    let HandshakeParams {
+        handler,
+        agent_name,
+        agent_did,
+        action_type,
+        query,
+        principal_kp,
+        requires_disclosure,
+        returns,
+        on_phase,
+        on_fail,
+    } = params;
     let ttl = Utc::now() + Duration::hours(1);
 
     // ── Phases 1–2: Token + Mandate (principal key signs here, then released) ──
@@ -154,18 +169,16 @@ pub async fn execute(
 
     let handler_clone = handler.clone();
     let sid = auth.agent_session_id.clone();
-    let execution_result = tokio::task::spawn_blocking(move || {
-        handler_clone.execute(&sid)
-    })
-    .await
-    .map_err(|e| {
-        on_fail(4, &e.to_string());
-        PapillionError::from(format!("Execution task panicked: {}", e))
-    })?
-    .map_err(|e| {
-        on_fail(4, &e.to_string());
-        PapillionError::from(e.to_string())
-    })?;
+    let execution_result = tokio::task::spawn_blocking(move || handler_clone.execute(&sid))
+        .await
+        .map_err(|e| {
+            on_fail(4, &e.to_string());
+            PapillionError::from(format!("Execution task panicked: {}", e))
+        })?
+        .map_err(|e| {
+            on_fail(4, &e.to_string());
+            PapillionError::from(e.to_string())
+        })?;
 
     // ── Phase 5: Co-sign receipt (session key signs here, then dropped) ──
     on_phase(5, "Co-signing receipt...");
@@ -185,18 +198,19 @@ pub async fn execute(
         receipt_token.sign(receipt_signer.signing_key());
         // receipt_signer drops here (zeroized)
 
-        let mut session = Session::initiate(
-            &receipt_token,
-            agent_did,
-            &auth.principal_verifying_key,
-        )
-        .map_err(|e| {
-            on_fail(5, &e.to_string());
-            PapillionError::from(e.to_string())
-        })?;
+        let mut session =
+            Session::initiate(&receipt_token, agent_did, &auth.principal_verifying_key).map_err(
+                |e| {
+                    on_fail(5, &e.to_string());
+                    PapillionError::from(e.to_string())
+                },
+            )?;
 
         session
-            .open(auth.initiator_did.clone(), auth.receiver_session_did.clone())
+            .open(
+                auth.initiator_did.clone(),
+                auth.receiver_session_did.clone(),
+            )
             .map_err(|e| PapillionError::from(e.to_string()))?;
         session
             .execute()

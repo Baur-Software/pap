@@ -6,7 +6,7 @@ use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_transport::{AgentHandler, EndpointRegistry};
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillion_shared::{ScenarioRunResult, OrchestratorConfig, SuccessorDesignation};
+use papillion_shared::{OrchestratorConfig, ScenarioRunResult, SuccessorDesignation};
 
 use crate::agents::{DuckDuckGoAgent, OnDeviceAiAgent, WikipediaAgent};
 use crate::inference::ModelManager;
@@ -57,10 +57,7 @@ impl Default for AppState {
 
         // Spawn local agents — these are real AgentHandler implementations
         let mut local_agents: HashMap<String, Arc<dyn AgentHandler>> = HashMap::new();
-        local_agents.insert(
-            "DuckDuckGo Search".into(),
-            Arc::new(DuckDuckGoAgent::new()),
-        );
+        local_agents.insert("DuckDuckGo Search".into(), Arc::new(DuckDuckGoAgent::new()));
         local_agents.insert(
             "Wikipedia Knowledge".into(),
             Arc::new(WikipediaAgent::new()),
