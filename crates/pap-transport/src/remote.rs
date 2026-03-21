@@ -44,9 +44,7 @@ impl RemoteAgentHandler {
 
     /// Block on an async future from a sync context.
     fn block_on<F: std::future::Future<Output = T>, T>(f: F) -> T {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(f)
-        })
+        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(f))
     }
 }
 
@@ -64,11 +62,9 @@ impl AgentHandler for RemoteAgentHandler {
                 }
                 Ok((session_id, receiver_session_did))
             }
-            ProtocolMessage::TokenRejected { reason } => {
-                Err(TransportError::InvalidResponse(format!(
-                    "Token rejected: {reason}"
-                )))
-            }
+            ProtocolMessage::TokenRejected { reason } => Err(TransportError::InvalidResponse(
+                format!("Token rejected: {reason}"),
+            )),
             other => Err(TransportError::InvalidResponse(format!(
                 "Unexpected response: {other:?}"
             ))),
@@ -130,10 +126,7 @@ impl AgentHandler for RemoteAgentHandler {
                     "No session_id — handle_token must be called before co_sign_receipt".into(),
                 )
             })?;
-        let resp = Self::block_on(
-            self.client
-                .exchange_receipt(&session_id, receipt),
-        )?;
+        let resp = Self::block_on(self.client.exchange_receipt(&session_id, receipt))?;
         match resp {
             ProtocolMessage::ReceiptCoSigned { receipt } => Ok(receipt),
             other => Err(TransportError::InvalidResponse(format!(

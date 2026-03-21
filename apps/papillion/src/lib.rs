@@ -10,7 +10,7 @@ pub mod state;
 use std::net::SocketAddr;
 
 use pap_did::PrincipalKeypair;
-use pap_federation::{FederationServer, generate_node_identity};
+use pap_federation::{generate_node_identity, FederationServer};
 use pap_transport::AgentServer;
 use pap_webauthn::SoftwareSigner;
 use state::AppState;

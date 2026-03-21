@@ -88,9 +88,8 @@ pub fn did_to_public_key_bytes(did: &str) -> Result<[u8; 32], DidError> {
 /// This is used to verify signatures on artifacts signed by the DID holder.
 pub fn verify_key_from_did(did: &str) -> Result<VerifyingKey, DidError> {
     let bytes = did_to_public_key_bytes(did)?;
-    VerifyingKey::from_bytes(&bytes).map_err(|_| {
-        DidError::InvalidDid("invalid public key bytes".into())
-    })
+    VerifyingKey::from_bytes(&bytes)
+        .map_err(|_| DidError::InvalidDid("invalid public key bytes".into()))
 }
 
 #[cfg(test)]

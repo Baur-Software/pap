@@ -37,14 +37,10 @@ impl PapUrl {
         }
 
         // Strip pap:// prefix if present, then trailing slashes
-        let hostport = trimmed
-            .trim_start_matches("pap://")
-            .trim_end_matches('/');
+        let hostport = trimmed.trim_start_matches("pap://").trim_end_matches('/');
 
         if hostport.is_empty() {
-            return Err(FederationError::InvalidUrl(
-                "empty pap:// URL".into(),
-            ));
+            return Err(FederationError::InvalidUrl("empty pap:// URL".into()));
         }
 
         // Parse host:port

@@ -5,9 +5,7 @@ use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillion_shared::{AgentInfo, PeerInfo, RegistryInfo};
 
 use pap_did::PrincipalKeypair;
-use pap_federation::{
-    FederatedRegistry, FederationClient, PapUrl, RegistryPeer,
-};
+use pap_federation::{FederatedRegistry, FederationClient, PapUrl, RegistryPeer};
 use pap_marketplace::AgentAdvertisement;
 
 /// Convert an AgentAdvertisement to our shared AgentInfo DTO.
@@ -29,9 +27,10 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
 fn find_peer_by_url(peers: &[RegistryPeer], url: &str) -> Option<RegistryPeer> {
     let parsed = PapUrl::parse(url).ok()?;
     let endpoint = parsed.https_endpoint();
-    peers.iter().find(|p| {
-        p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/')
-    }).cloned()
+    peers
+        .iter()
+        .find(|p| p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/'))
+        .cloned()
 }
 
 /// Navigate to a pap:// URL, resolve the peer's identity, and discover peers.
@@ -62,8 +61,7 @@ pub async fn navigate_registry(
         });
     }
 
-    let parsed = PapUrl::parse(&url)
-        .map_err(|e| PapillionError::from(e.to_string()))?;
+    let parsed = PapUrl::parse(&url).map_err(|e| PapillionError::from(e.to_string()))?;
     let endpoint = parsed.https_endpoint();
 
     // Fast path: check if we already know this peer with a pinned fingerprint
@@ -79,13 +77,17 @@ pub async fn navigate_registry(
         // Known peer — use fingerprint-pinned client
         let client = FederationClient::pinned(std::slice::from_ref(&existing))
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        let identity = client.fetch_identity(&endpoint).await
+        let identity = client
+            .fetch_identity(&endpoint)
+            .await
             .map_err(|e| PapillionError::from(e.to_string()))?;
         (existing, identity)
     } else {
         // Unknown peer — TOFU bootstrap (will be replaced by DNS)
         let client = FederationClient::tofu();
-        let identity = client.fetch_identity(&endpoint).await
+        let identity = client
+            .fetch_identity(&endpoint)
+            .await
             .map_err(|e| PapillionError::from(e.to_string()))?;
         let peer = RegistryPeer::with_fingerprint(
             &identity.did,
@@ -152,7 +154,11 @@ pub fn list_agents(
             .local_registry
             .lock()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        return Ok(registry.all_advertisements().iter().map(ad_to_info).collect());
+        return Ok(registry
+            .all_advertisements()
+            .iter()
+            .map(ad_to_info)
+            .collect());
     }
 
     let registries = state
@@ -234,10 +240,9 @@ pub async fn sync_agents(
             .local_registry
             .lock()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        find_peer_by_url(registry.peers(), &registry_url)
-            .ok_or_else(|| PapillionError::from(
-                "Peer not known — navigate to it first".to_string()
-            ))?
+        find_peer_by_url(registry.peers(), &registry_url).ok_or_else(|| {
+            PapillionError::from("Peer not known — navigate to it first".to_string())
+        })?
     };
 
     let client = FederationClient::pinned(std::slice::from_ref(&peer))
@@ -296,10 +301,9 @@ pub async fn discover_peers(
             .local_registry
             .lock()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        find_peer_by_url(registry.peers(), &registry_url)
-            .ok_or_else(|| PapillionError::from(
-                "Peer not known — navigate to it first".to_string()
-            ))?
+        find_peer_by_url(registry.peers(), &registry_url).ok_or_else(|| {
+            PapillionError::from("Peer not known — navigate to it first".to_string())
+        })?
     };
 
     let client = FederationClient::pinned(std::slice::from_ref(&peer))
@@ -421,7 +425,8 @@ pub async fn register_agent(
     };
 
     // Only announce to peers with fingerprints (verified connections)
-    let pinned_peers: Vec<_> = peers.iter()
+    let pinned_peers: Vec<_> = peers
+        .iter()
         .filter(|p| p.cert_fingerprint.is_some())
         .cloned()
         .collect();
@@ -438,9 +443,7 @@ pub async fn register_agent(
 
 /// Get information about this federation node.
 #[tauri::command]
-pub fn get_node_info(
-    state: State<'_, AppState>,
-) -> Result<serde_json::Value, PapillionError> {
+pub fn get_node_info(state: State<'_, AppState>) -> Result<serde_json::Value, PapillionError> {
     let endpoint = state
         .node_endpoint
         .read()

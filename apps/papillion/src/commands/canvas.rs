@@ -5,7 +5,7 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
-use pap_federation::{PapUrl, build_pinned_client};
+use pap_federation::{build_pinned_client, PapUrl};
 use pap_transport::{AgentHandler, RemoteAgentHandler};
 
 use crate::error::PapillionError;
@@ -116,9 +116,7 @@ async fn process_prompt(
                 }
             }
 
-            found.ok_or_else(|| {
-                PapillionError::from(format!("No agent for {}", action_type))
-            })?
+            found.ok_or_else(|| PapillionError::from(format!("No agent for {}", action_type)))?
         }
     };
 
@@ -130,8 +128,7 @@ async fn process_prompt(
     } else if let Some(ref pap_url) = source_url {
         // Agent lives on a remote peer — build a RemoteAgentHandler
         // with fingerprint-pinned TLS from the known peer
-        let parsed = PapUrl::parse(pap_url)
-            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let parsed = PapUrl::parse(pap_url).map_err(|e| PapillionError::from(e.to_string()))?;
         let endpoint = parsed.https_endpoint();
 
         // Find the peer's fingerprint from our local registry
@@ -140,7 +137,9 @@ async fn process_prompt(
                 .local_registry
                 .lock()
                 .map_err(|e| PapillionError::from(e.to_string()))?;
-            local.peers().iter()
+            local
+                .peers()
+                .iter()
                 .find(|p| p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/'))
                 .and_then(|p| p.cert_fingerprint.clone())
         };
@@ -150,8 +149,8 @@ async fn process_prompt(
 
         if let Some(fp) = fingerprint {
             // Pinned TLS — verified connection
-            let http_client = build_pinned_client(&[fp])
-                .map_err(|e| PapillionError::from(e.to_string()))?;
+            let http_client =
+                build_pinned_client(&[fp]).map_err(|e| PapillionError::from(e.to_string()))?;
             Arc::new(RemoteAgentHandler::with_client(&base_url, http_client))
         } else {
             return Err(PapillionError::from(format!(

@@ -12,7 +12,10 @@ pub use registry::FederatedRegistry;
 pub use resolve::PapUrl;
 pub use server::{FederationServer, NodeIdentityResponse};
 pub use sync::{FederationClient, FederationMessage};
-pub use tls::{NodeTlsIdentity, build_pinned_client, build_tofu_client, cert_fingerprint, generate_node_identity};
+pub use tls::{
+    build_pinned_client, build_tofu_client, cert_fingerprint, generate_node_identity,
+    NodeTlsIdentity,
+};
 
 #[cfg(test)]
 mod tests {

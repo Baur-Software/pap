@@ -73,8 +73,7 @@ impl FederationClient {
     /// cert fingerprint and use `pinned()` afterward. Will be replaced
     /// by DNS-based bootstrap (`_pap.hostname` TXT records).
     pub fn tofu() -> Self {
-        let client = crate::tls::build_tofu_client()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let client = crate::tls::build_tofu_client().unwrap_or_else(|_| reqwest::Client::new());
         Self { client }
     }
 
@@ -160,10 +159,7 @@ impl FederationClient {
         &self,
         endpoint: &str,
     ) -> Result<crate::server::NodeIdentityResponse, FederationError> {
-        let url = format!(
-            "{}/federation/identity",
-            endpoint.trim_end_matches('/')
-        );
+        let url = format!("{}/federation/identity", endpoint.trim_end_matches('/'));
 
         let resp = self
             .client
