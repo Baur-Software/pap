@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── 1. Detect new version and create tag ───────────────────────────────
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read workspace version and check for existing tag
+        id: check
+        run: |
+          VERSION=$(sed -n '/\[workspace\.package\]/,/^$/{s/^version *= *"\(.*\)"/\1/p}' Cargo.toml)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          TAG="v${VERSION}"
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version ${VERSION} detected — will tag and release"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          git tag "v${{ steps.check.outputs.version }}"
+          git push origin "v${{ steps.check.outputs.version }}"
+
+  # ── 2. Create a draft GitHub Release ───────────────────────────────────
+  create-release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          echo "${NOTES}" > /tmp/release-notes.md
+
+      - name: Create draft release
+        id: create
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const notes = fs.readFileSync('/tmp/release-notes.md', 'utf8').trim();
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${process.env.VERSION}`,
+              name: `Papillion v${process.env.VERSION}`,
+              body: notes || `See [CHANGELOG](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CHANGELOG.md) for details.`,
+              draft: true,
+              prerelease: false
+            });
+            return data.id;
+
+  # ── 3. Build Tauri desktop app (macOS / Linux / Windows) ───────────────
+  build:
+    needs: [check-version, create-release]
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            tauri_args: --target universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin,wasm32-unknown-unknown
+          - platform: ubuntu-22.04
+            tauri_args: ""
+            rust_targets: wasm32-unknown-unknown
+          - platform: windows-latest
+            tauri_args: ""
+            rust_targets: wasm32-unknown-unknown
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install trunk
+        run: cargo binstall trunk --no-confirm
+
+      - name: Build frontend (WASM)
+        working-directory: apps/papillion/frontend
+        run: trunk build --release
+
+      - name: Build and upload Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/papillion
+          tauriScript: cargo tauri
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: ${{ matrix.tauri_args }} --config "${{ github.workspace }}/.github/tauri-release.conf.json"
+
+  # ── 4. Publish the release (un-draft) ──────────────────────────────────
+  publish:
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: parseInt(process.env.RELEASE_ID),
+              draft: false
+            });
