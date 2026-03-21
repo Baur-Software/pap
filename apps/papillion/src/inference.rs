@@ -63,7 +63,7 @@ pub fn resolve_bundled_tokenizer(resource_dir: &Path) -> Result<PathBuf, String>
 }
 
 /// Load a downloaded GGUF model into memory, ready for inference.
-pub fn load_model(model_path: &PathBuf, tokenizer_path: &PathBuf) -> Result<LoadedModel, String> {
+pub fn load_model(model_path: &Path, tokenizer_path: &Path) -> Result<LoadedModel, String> {
     let device = Device::Cpu;
 
     // Load GGUF
