@@ -20,6 +20,9 @@ uuid = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
+axum-server = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

@@ -11,5 +11,5 @@ mod session;
 pub use document::DidDocument;
 pub use error::DidError;
 pub use principal::PrincipalKeypair;
-pub use principal::{did_to_public_key_bytes, public_key_to_did};
+pub use principal::{did_to_public_key_bytes, public_key_to_did, verify_key_from_did};
 pub use session::SessionKeypair;

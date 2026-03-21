@@ -14,10 +14,26 @@ pub struct AgentClient {
 }
 
 impl AgentClient {
+    /// Create a new agent client with standard TLS settings.
+    ///
+    /// Uses system CA roots. For PAP federation connections (self-signed
+    /// certs), use `with_client()` with a fingerprint-pinned reqwest
+    /// client from `pap_federation::build_pinned_client()`.
     pub fn new(base_url: &str) -> Self {
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             client: reqwest::Client::new(),
+        }
+    }
+
+    /// Create an agent client with a pre-configured reqwest client.
+    ///
+    /// Use this when you need a client with specific TLS settings,
+    /// e.g. pinned peer certificate fingerprints.
+    pub fn with_client(base_url: &str, client: reqwest::Client) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            client,
         }
     }
 

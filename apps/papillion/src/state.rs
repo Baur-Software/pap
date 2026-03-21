@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
@@ -14,12 +14,19 @@ use crate::seed::seed_registry;
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
+/// Default port for the federation + agent TLS server.
+pub const DEFAULT_FEDERATION_PORT: u16 = 7890;
+
 /// Application state managed by Tauri.
 pub struct AppState {
     pub signer: RwLock<Option<Box<dyn PrincipalSigner + Send + Sync>>>,
     /// Raw 32-byte Ed25519 seed for signing and key export.
     pub principal_seed: RwLock<Option<[u8; 32]>>,
+    /// Remote registry caches keyed by URL.
     pub registries: RwLock<HashMap<String, FederatedRegistry>>,
+    /// The node's own registry — shared with the federation HTTP server.
+    /// This is the single source of truth for locally registered agents.
+    pub local_registry: Arc<Mutex<FederatedRegistry>>,
     pub bookmarks: RwLock<Vec<String>>,
     pub orchestrator_config: RwLock<OrchestratorConfig>,
     /// On-device Candle model for the BuiltIn LLM provider.
@@ -40,13 +47,20 @@ pub struct AppState {
     pub local_agents: HashMap<String, Arc<dyn AgentHandler>>,
     /// DID → transport endpoint mapping for agent resolution.
     pub endpoint_registry: RwLock<EndpointRegistry>,
+    /// Port the TLS federation+agent server listens on.
+    pub federation_port: u16,
+    /// The node's TLS-secured endpoint, e.g. `https://0.0.0.0:7890`.
+    /// Set after the server starts.
+    pub node_endpoint: RwLock<String>,
+    /// SHA-256 hex fingerprint of this node's TLS certificate.
+    /// Peers pin this to verify our identity — no CA trust chain.
+    pub node_cert_fingerprint: RwLock<String>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        let mut registries = HashMap::new();
         let (registry, agent_keypairs) = seed_registry();
-        registries.insert(LOCAL_REGISTRY_URL.to_string(), registry);
+        let local_registry = Arc::new(Mutex::new(registry));
 
         // Auto-generate identity on startup
         let keypair = PrincipalKeypair::generate();
@@ -70,7 +84,8 @@ impl Default for AppState {
         Self {
             signer: RwLock::new(Some(Box::new(signer))),
             principal_seed: RwLock::new(Some(raw_seed)),
-            registries: RwLock::new(registries),
+            registries: RwLock::new(HashMap::new()),
+            local_registry,
             bookmarks: RwLock::new(vec![LOCAL_REGISTRY_URL.to_string()]),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager,
@@ -81,6 +96,9 @@ impl Default for AppState {
             resource_dir: RwLock::new(PathBuf::new()),
             local_agents,
             endpoint_registry: RwLock::new(EndpointRegistry::new()),
+            federation_port: DEFAULT_FEDERATION_PORT,
+            node_endpoint: RwLock::new(String::new()),
+            node_cert_fingerprint: RwLock::new(String::new()),
         }
     }
 }

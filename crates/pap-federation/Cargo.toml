@@ -18,6 +18,12 @@ thiserror = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
+rcgen = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+tokio-rustls = { workspace = true }
+axum-server = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
