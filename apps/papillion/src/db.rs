@@ -74,6 +74,8 @@ impl Database {
                 ON episodes(agent_did_hash);
             CREATE INDEX IF NOT EXISTS idx_episodes_recorded_at
                 ON episodes(recorded_at);
+            CREATE INDEX IF NOT EXISTS idx_episodes_action_agent_time
+                ON episodes(action_type, agent_did_hash, recorded_at);
 
             CREATE TABLE IF NOT EXISTS agent_profiles (
                 agent_did_hash        TEXT PRIMARY KEY,
@@ -407,6 +409,7 @@ impl Database {
     // ── JSON-LD Queries ───────────────────────────────────────
 
     /// Search episodes by Schema.org @type in result_json.
+    /// Handles both string form ("@type": "SearchResult") and array form ("@type": ["SearchResult"]).
     pub fn search_by_schema_type(
         &self,
         schema_type: &str,
@@ -425,12 +428,13 @@ impl Database {
                     decay_state, intent_summary, result_json, query, recorded_at
              FROM episodes
              WHERE json_extract(result_json, '$.@type') = ?1
+                OR json_extract(result_json, '$.@type[*]') = ?1
              ORDER BY recorded_at DESC LIMIT ?2",
             )
             .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
 
         let rows = stmt
-            .query_map(params![schema_type, limit as i64], |row| {
+            .query_map(params![schema_type, schema_type, limit as i64], |row| {
                 Ok(Episode {
                     id: row.get(0)?,
                     receipt_session_id: row.get(1)?,
@@ -466,8 +470,9 @@ impl Database {
             .lock()
             .map_err(|e| PapillionError::from(e.to_string()))?;
 
-        // Use LIKE as a simple fallback — FTS5 can be added as a migration later
-        let pattern = format!("%{query}%");
+        // Escape LIKE wildcards to prevent pattern injection: % and _ are special in LIKE
+        let escaped_query = query.replace('%', "\\%").replace('_', "\\_");
+        let pattern = format!("%{escaped_query}%");
         let mut stmt = conn
             .prepare(
                 "SELECT id, receipt_session_id, scenario_id, action_type,
@@ -475,7 +480,7 @@ impl Database {
                     scope_exercised, disclosure_refs, duration_ms,
                     decay_state, intent_summary, result_json, query, recorded_at
              FROM episodes
-             WHERE intent_summary LIKE ?1 OR query LIKE ?1
+             WHERE intent_summary LIKE ?1 ESCAPE '\\' OR query LIKE ?1 ESCAPE '\\'
              ORDER BY recorded_at DESC LIMIT ?2",
             )
             .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
@@ -767,5 +772,106 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn search_by_schema_type_string_form() {
+        // Test M4: String form @type (original behavior)
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        let results = db.search_by_schema_type("SearchResult", 10).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn search_by_schema_type_array_form() {
+        // Test M4: Array form @type (handles ["SearchResult"])
+        let db = test_db();
+        let mut ep = sample_episode("ep-2");
+        ep.result_json = Some(r#"{"@type":["SearchResult","WebPage"],"name":"Result"}"#.to_string());
+        db.insert_episode(&ep).unwrap();
+
+        let results = db.search_by_schema_type("SearchResult", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "ep-2");
+    }
+
+    #[test]
+    fn search_text_with_like_wildcards() {
+        // Test M5: LIKE injection prevention via wildcard escaping
+        let db = test_db();
+        let mut ep = sample_episode("ep-1");
+        ep.intent_summary = Some("search for 100% rust".to_string());
+        ep.query = Some("100% rust".to_string());
+        db.insert_episode(&ep).unwrap();
+
+        // Search with % should match the literal % in the query, not as a wildcard
+        let results = db.search_text("100%", 10).unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Search with _ should also be literal
+        let mut ep2 = sample_episode("ep-2");
+        ep2.intent_summary = Some("search_query".to_string());
+        db.insert_episode(&ep2).unwrap();
+
+        let results = db.search_text("search_query", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "ep-2");
+
+        // Search with _ as pattern should NOT match searchXquery
+        let results = db.search_text("_query", 10).unwrap();
+        // Should not match because _ is escaped
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn search_text_wildcard_doesnt_match_unintended() {
+        // Test M5: Confirm _ doesn't act as wildcard after escaping
+        let db = test_db();
+        let mut ep = sample_episode("ep-1");
+        ep.query = Some("a_b".to_string());
+        db.insert_episode(&ep).unwrap();
+
+        // Search for just _ literally (after escaping in code)
+        let results = db.search_text("_", 10).unwrap();
+        // Should not match because _ is escaped to literal
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn composite_index_exists() {
+        // Test M6: Verify composite index was created
+        let db = test_db();
+        let conn = db.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+             WHERE type='index' AND name='idx_episodes_action_agent_time'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn list_episodes_uses_composite_index() {
+        // Test M6: Verify queries that filter on (action_type, agent_did_hash, recorded_at)
+        // can use the composite index
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        let mut ep2 = sample_episode("ep-2");
+        ep2.action_type = "schema:AskAction".to_string();
+        ep2.agent_did_hash = "hash-other".to_string();
+        db.insert_episode(&ep2).unwrap();
+
+        // Query that benefits from composite index
+        let results = db
+            .list_episodes(Some("schema:SearchAction"), Some("hash-ddg"), 100)
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "ep-1");
     }
 }
