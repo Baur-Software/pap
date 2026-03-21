@@ -5,11 +5,27 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2026-03-21
+
+### Added
+
+- **papillion**: Papillion now remembers your agent interactions across restarts — episodes, agent profiles, and settings persist in a local SQLite database
+- **papillion**: Smarter agent selection — the app learns from past interactions to calibrate mandate TTL and minimize disclosure based on agent track records
+- **papillion**: Agent performance tracking with rolling averages — success rate, quality, duration, and co-sign refusals tracked per agent
+- **papillion**: Your identity persists across restarts — Ed25519 principal keypair auto-saved on first launch, auto-loaded on subsequent starts
+- **papillion**: Semantic queries over stored interactions — search by Schema.org type or free text across your interaction history
+- **papillion**: Agent profiles now accessible from the frontend via `list_agent_profiles` command
+- **docs**: Memex(RL) architectural comparison — maps PAP's trust-bounded experience memory against Memex(RL) indexed retrieval patterns
 
 ### Changed
 
-- **CLAUDE.md**: Updated with comprehensive project context — PAP is a protocol specification with Rust reference implementation, not SaaS. Added development standards (SOLID, comprehensive testing, no shortcuts, spec-first), core protocol concepts, and architecture documentation.
+- **papillion**: Scenario history now persists across app restarts (previously in-memory only)
+
+### Fixed
+
+- **papillion**: Fixed potential panic on short DID/hash strings in step display
+
+## [Unreleased]
 
 ### Added
 

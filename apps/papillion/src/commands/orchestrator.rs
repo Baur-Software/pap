@@ -4,8 +4,11 @@ use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session};
 use pap_did::{PrincipalKeypair, SessionKeypair};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use tauri::State;
+use uuid::Uuid;
 
+use crate::db::{AgentProfile, Episode};
 use crate::error::PapillionError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillion_shared::{
@@ -335,6 +338,7 @@ pub async fn run_scenario(
     query: Option<String>,
 ) -> Result<ScenarioRunResult, PapillionError> {
     let now_str = || Utc::now().to_rfc3339();
+    let start_time = std::time::Instant::now();
 
     // Find the scenario
     let scenarios = list_scenarios()?;
@@ -379,11 +383,49 @@ pub async fn run_scenario(
         (did, kp)
     };
 
+    // ── Memory-informed agent selection ────────────────────
+    // Consult the agent profile (if one exists) to calibrate the mandate.
+    // This is advisory — missing profiles fall back to defaults.
+    let agent_did_hash_for_profile = {
+        let mut hasher = Sha256::new();
+        hasher.update(agent_did.as_bytes());
+        format!("{:x}", hasher.finalize())
+    };
+    let agent_profile = state
+        .db
+        .get_agent_profile(&agent_did_hash_for_profile)
+        .ok()
+        .flatten();
+
+    // Calibrate mandate TTL from historical avg_duration_ms.
+    // Give 3x headroom over the observed average, clamped to [5 min, 4 hours].
+    let ttl_hours = match &agent_profile {
+        Some(p) if p.episode_count >= 3 => {
+            let headroom_ms = p.avg_duration_ms * 3.0;
+            (headroom_ms / 3_600_000.0).clamp(5.0 / 60.0, 4.0)
+        }
+        _ => 1.0, // default: 1 hour
+    };
+
+    let profile_detail = match &agent_profile {
+        Some(p) => format!(
+            " | profile: {:.0}% success, {:.0}ms avg, {} episodes",
+            p.success_rate * 100.0,
+            p.avg_duration_ms,
+            p.episode_count,
+        ),
+        None => " | no prior history".to_string(),
+    };
+
     steps.push(ScenarioStepResult {
         step_number: 1,
         step_name: "Discover agent".into(),
         status: "completed".into(),
-        detail: Some(format!("Found {} ({})", agent_name, &agent_did[..20])),
+        detail: Some(format!(
+            "Found {} ({}){profile_detail}",
+            agent_name,
+            agent_did.get(..20).unwrap_or(&agent_did)
+        )),
         timestamp: now_str(),
     });
 
@@ -393,15 +435,24 @@ pub async fn run_scenario(
     let disclosure_set = if scenario.requires_disclosure.is_empty() {
         DisclosureSet::empty()
     } else {
+        // If we have a profile with known minimal disclosure refs, prefer those
+        let disclosure_props = match &agent_profile {
+            Some(p) if p.episode_count >= 5 => {
+                // Try to parse the stored minimal disclosure refs
+                serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs)
+                    .unwrap_or_else(|_| scenario.requires_disclosure.clone())
+            }
+            _ => scenario.requires_disclosure.clone(),
+        };
         DisclosureSet::new(vec![DisclosureEntry::new(
             "schema:Person",
-            scenario.requires_disclosure.clone(),
+            disclosure_props,
             vec![],
         )])
     };
 
     let scope = Scope::new(vec![ScopeAction::new(action)]);
-    let ttl = Utc::now() + Duration::hours(1);
+    let ttl = Utc::now() + Duration::minutes((ttl_hours * 60.0) as i64);
 
     let mut mandate = pap_core::mandate::Mandate::issue_root(
         principal_did.clone(),
@@ -417,7 +468,10 @@ pub async fn run_scenario(
         step_number: 2,
         step_name: "Issue mandate".into(),
         status: "completed".into(),
-        detail: Some(format!("Mandate: {}...", &mandate_hash[..16])),
+        detail: Some(format!(
+            "Mandate: {}...",
+            mandate_hash.get(..16).unwrap_or(&mandate_hash)
+        )),
         timestamp: now_str(),
     });
 
@@ -444,7 +498,10 @@ pub async fn run_scenario(
         step_number: 3,
         step_name: "Open session".into(),
         status: "completed".into(),
-        detail: Some(format!("Session: {}...", &session.id[..8])),
+        detail: Some(format!(
+            "Session: {}...",
+            session.id.get(..8).unwrap_or(&session.id)
+        )),
         timestamp: now_str(),
     });
 
@@ -574,22 +631,153 @@ pub async fn run_scenario(
         error: None,
     };
 
-    // Store in completed_runs for activity page
-    if let Ok(mut runs) = state.completed_runs.write() {
-        runs.push(result.clone());
+    // ── Record episode to SQLite ──────────────────────────────
+    let duration_ms = start_time.elapsed().as_millis() as i64;
+
+    // Hash the agent DID for indexing (never store raw DID in memory DB)
+    let agent_did_hash = {
+        let mut hasher = Sha256::new();
+        hasher.update(agent_did.as_bytes());
+        format!("{:x}", hasher.finalize())
+    };
+
+    let receipt_session_id = result
+        .receipt
+        .as_ref()
+        .map(|r| r.session_id.clone())
+        .unwrap_or_default();
+
+    let disclosure_refs = result
+        .receipt
+        .as_ref()
+        .map(|r| serde_json::to_string(&r.property_refs).unwrap_or_else(|_| "[]".into()))
+        .unwrap_or_else(|| "[]".into());
+
+    // Store the full ScenarioRunResult as JSON-LD for later reconstruction
+    let result_json = serde_json::to_string(&result).ok();
+
+    let episode = Episode {
+        id: Uuid::new_v4().to_string(),
+        receipt_session_id,
+        scenario_id: result.scenario_id.clone(),
+        action_type: action.to_string(),
+        agent_did_hash: agent_did_hash.clone(),
+        agent_name: result.agent_name.clone(),
+        outcome: if result.success {
+            "success".into()
+        } else {
+            "failure".into()
+        },
+        outcome_detail: result.error.clone(),
+        scope_exercised: serde_json::to_string(&[action.to_string()])
+            .unwrap_or_else(|_| "[]".into()),
+        disclosure_refs,
+        duration_ms,
+        decay_state: "Active".into(),
+        intent_summary: result.query.clone(),
+        result_json,
+        query: result.query.clone(),
+        recorded_at: Utc::now().to_rfc3339(),
+    };
+
+    // Write episode — non-blocking, memory is advisory
+    if let Err(e) = state.db.insert_episode(&episode) {
+        eprintln!("Failed to record episode: {e}");
     }
+
+    // Update agent profile with exponential moving average
+    update_agent_profile(&state, &agent_did_hash, &result.agent_name, &episode);
 
     Ok(result)
 }
 
+/// Update agent profile with rolling EMA statistics.
+fn update_agent_profile(
+    state: &State<'_, AppState>,
+    agent_did_hash: &str,
+    agent_name: &str,
+    episode: &Episode,
+) {
+    const ALPHA: f64 = 0.2; // EMA smoothing factor
+
+    let existing = state.db.get_agent_profile(agent_did_hash).ok().flatten();
+    let success = if episode.outcome == "success" {
+        1.0
+    } else {
+        0.0
+    };
+
+    let profile = match existing {
+        Some(prev) => AgentProfile {
+            agent_did_hash: agent_did_hash.to_string(),
+            agent_name: agent_name.to_string(),
+            success_rate: ALPHA * success + (1.0 - ALPHA) * prev.success_rate,
+            avg_quality: ALPHA * success + (1.0 - ALPHA) * prev.avg_quality,
+            avg_duration_ms: ALPHA * (episode.duration_ms as f64)
+                + (1.0 - ALPHA) * prev.avg_duration_ms,
+            episode_count: prev.episode_count + 1,
+            minimal_disclosure_refs: episode.disclosure_refs.clone(),
+            last_used: episode.recorded_at.clone(),
+            co_sign_refusals: prev.co_sign_refusals,
+        },
+        None => AgentProfile {
+            agent_did_hash: agent_did_hash.to_string(),
+            agent_name: agent_name.to_string(),
+            success_rate: success,
+            avg_quality: success,
+            avg_duration_ms: episode.duration_ms as f64,
+            episode_count: 1,
+            minimal_disclosure_refs: episode.disclosure_refs.clone(),
+            last_used: episode.recorded_at.clone(),
+            co_sign_refusals: 0,
+        },
+    };
+
+    if let Err(e) = state.db.upsert_agent_profile(&profile) {
+        eprintln!("Failed to update agent profile: {e}");
+    }
+}
+
 /// List completed scenario runs for the activity page.
+/// Reads from the persistent SQLite episode store and reconstructs
+/// ScenarioRunResult objects from stored JSON.
 #[tauri::command]
 pub fn list_completed_runs(
     state: State<'_, AppState>,
 ) -> Result<Vec<ScenarioRunResult>, PapillionError> {
-    let runs = state
-        .completed_runs
-        .read()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
-    Ok(runs.clone())
+    let episodes = state.db.list_episodes(None, None, 100)?;
+    let mut results = Vec::new();
+
+    for ep in episodes {
+        // Try to reconstruct from stored JSON first
+        if let Some(ref json) = ep.result_json {
+            if let Ok(run) = serde_json::from_str::<ScenarioRunResult>(json) {
+                results.push(run);
+                continue;
+            }
+        }
+        // Fallback: build a minimal ScenarioRunResult from episode fields
+        results.push(ScenarioRunResult {
+            scenario_id: ep.scenario_id,
+            agent_name: ep.agent_name,
+            steps: vec![],
+            receipt: None,
+            receipt_url: None,
+            query: ep.query,
+            search_results: None,
+            completed_at: ep.recorded_at,
+            success: ep.outcome == "success",
+            error: ep.outcome_detail,
+        });
+    }
+
+    Ok(results)
+}
+
+/// List agent profiles for the frontend.
+#[tauri::command]
+pub fn list_agent_profiles(
+    state: State<'_, AppState>,
+) -> Result<Vec<AgentProfile>, PapillionError> {
+    state.db.list_agent_profiles()
 }
