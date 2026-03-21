@@ -425,7 +425,7 @@ pub async fn run_scenario(
         detail: Some(format!(
             "Found {} ({}){profile_detail}",
             agent_name,
-            &agent_did[..20]
+            agent_did.get(..20).unwrap_or(&agent_did)
         )),
         timestamp: now_str(),
     });
@@ -469,7 +469,7 @@ pub async fn run_scenario(
         step_number: 2,
         step_name: "Issue mandate".into(),
         status: "completed".into(),
-        detail: Some(format!("Mandate: {}...", &mandate_hash[..16])),
+        detail: Some(format!("Mandate: {}...", mandate_hash.get(..16).unwrap_or(&mandate_hash))),
         timestamp: now_str(),
     });
 
@@ -496,7 +496,7 @@ pub async fn run_scenario(
         step_number: 3,
         step_name: "Open session".into(),
         status: "completed".into(),
-        detail: Some(format!("Session: {}...", &session.id[..8])),
+        detail: Some(format!("Session: {}...", session.id.get(..8).unwrap_or(&session.id))),
         timestamp: now_str(),
     });
 
