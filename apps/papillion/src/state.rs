@@ -72,7 +72,9 @@ impl AppState {
             agent_keypairs: RwLock::new(HashMap::new()), // Will be populated on demand
             completed_runs: RwLock::new(self.completed_runs.read().unwrap().clone()),
             key_backed_up: RwLock::new(*self.key_backed_up.read().unwrap()),
-            successor_designations: RwLock::new(self.successor_designations.read().unwrap().clone()),
+            successor_designations: RwLock::new(
+                self.successor_designations.read().unwrap().clone(),
+            ),
             resource_dir: RwLock::new(self.resource_dir.read().unwrap().clone()),
             local_agents: self.local_agents.clone(),
             endpoint_registry: RwLock::new(EndpointRegistry::new()),
