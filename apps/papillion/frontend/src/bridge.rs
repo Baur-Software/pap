@@ -8,7 +8,7 @@ extern "C" {
 }
 
 /// Returns true when running inside Tauri (IPC bridge available).
-fn tauri_available() -> bool {
+pub fn tauri_available() -> bool {
     js_sys::Reflect::get(&web_sys::window().unwrap(), &JsValue::from_str("__TAURI__"))
         .map(|v| !v.is_undefined())
         .unwrap_or(false)

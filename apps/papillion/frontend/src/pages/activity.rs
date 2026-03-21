@@ -9,12 +9,14 @@ pub fn ActivityPage() -> impl IntoView {
     let runs = RwSignal::new(Vec::<ScenarioRunResult>::new());
 
     Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
         spawn_local(async move {
-            match bridge::invoke_no_args::<Vec<ScenarioRunResult>>("list_completed_runs").await {
-                Ok(results) => runs.set(results),
-                Err(e) => {
-                    web_sys::console::warn_1(&format!("list_completed_runs: {e}").into())
-                }
+            if let Ok(results) =
+                bridge::invoke_no_args::<Vec<ScenarioRunResult>>("list_completed_runs").await
+            {
+                runs.set(results);
             }
         });
     });

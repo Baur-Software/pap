@@ -9,6 +9,7 @@ use papillion_shared::{BuiltInModelInfo, OrchestratorConfig, OrchestratorStatus,
 pub fn SetupWizard() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let show_wizard = RwSignal::new(false);
+    let wizard_error = RwSignal::new(None::<String>);
     let selected_provider = RwSignal::new("builtin".to_string());
     let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
     let builtin_models = RwSignal::new(Vec::<BuiltInModelInfo>::new());
@@ -21,7 +22,7 @@ pub fn SetupWizard() -> impl IntoView {
     // Check setup state on mount
     Effect::new(move || {
         let setup = orchestrator.setup_state;
-        if setup.get().is_none() {
+        if setup.get().is_none() && bridge::tauri_available() {
             spawn_local(async move {
                 match bridge::invoke_no_args::<SetupState>("get_setup_state").await {
                     Ok(state) => {
@@ -32,8 +33,8 @@ pub fn SetupWizard() -> impl IntoView {
                         }
                     }
                     Err(e) => {
-                        web_sys::console::warn_1(
-                            &format!("Setup state unavailable: {e}").into(),
+                        web_sys::console::error_1(
+                            &format!("get_setup_state: {e}").into(),
                         );
                     }
                 }
@@ -72,6 +73,7 @@ pub fn SetupWizard() -> impl IntoView {
         };
 
         spawn_local(async move {
+            wizard_error.set(None);
             match bridge::invoke::<serde_json::Value, OrchestratorConfig>(
                 "configure_orchestrator",
                 &serde_json::json!({ "config": config }),
@@ -91,10 +93,8 @@ pub fn SetupWizard() -> impl IntoView {
                     }
                     show_wizard.set(false);
                 }
-                Err(e) => {
-                    web_sys::console::warn_1(
-                        &format!("configure_orchestrator: {e}").into(),
-                    );
+                Err(_) => {
+                    wizard_error.set(Some("Could not save \u{2014} backend unavailable.".into()));
                 }
             }
         });
@@ -221,6 +221,12 @@ pub fn SetupWizard() -> impl IntoView {
                                 on:input=move |ev| openai_model.set(event_target_value(&ev))
                             />
                         </div>
+                    </Show>
+
+                    <Show when=move || wizard_error.get().is_some()>
+                        <p style="color: var(--error); font-size: 12px; margin-top: 12px;">
+                            {move || wizard_error.get().unwrap_or_default()}
+                        </p>
                     </Show>
 
                     <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">

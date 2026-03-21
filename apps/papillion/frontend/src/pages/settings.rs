@@ -94,13 +94,15 @@ fn GeneralTab() -> impl IntoView {
             LlmProvider::None => selected.set("none".into()),
         }
 
-        spawn_local(async move {
-            if let Ok(models) =
-                bridge::invoke_no_args::<Vec<BuiltInModelInfo>>("list_builtin_models").await
-            {
-                builtin_models.set(models);
-            }
-        });
+        if bridge::tauri_available() {
+            spawn_local(async move {
+                if let Ok(models) =
+                    bridge::invoke_no_args::<Vec<BuiltInModelInfo>>("list_builtin_models").await
+                {
+                    builtin_models.set(models);
+                }
+            });
+        }
     });
 
     let save = move |_| {
@@ -152,9 +154,8 @@ fn GeneralTab() -> impl IntoView {
                         orchestrator.status.set(status);
                     }
                 }
-                Err(e) => {
-                    web_sys::console::warn_1(&format!("Failed to save: {e}").into());
-                    save_error.set(Some("Could not save settings — backend unavailable.".into()));
+                Err(_) => {
+                    save_error.set(Some("Could not save settings \u{2014} backend unavailable.".into()));
                 }
             }
         });
@@ -310,6 +311,9 @@ fn IdentityTab() -> impl IntoView {
 
     // Load backup status + successors on mount
     Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
         spawn_local(async move {
             if let Ok(status) =
                 bridge::invoke_no_args::<KeyBackupStatus>("get_key_backup_status").await
@@ -333,8 +337,7 @@ fn IdentityTab() -> impl IntoView {
                     identity.backed_up.set(true);
                     show_export.set(true);
                 }
-                Err(e) => {
-                    web_sys::console::warn_1(&format!("export_key: {e}").into());
+                Err(_) => {
                     export_error.set(Some("Could not export key \u{2014} backend unavailable.".into()));
                 }
             }
@@ -357,7 +360,6 @@ fn IdentityTab() -> impl IntoView {
                     show_import.set(false);
                 }
                 Err(e) => {
-                    web_sys::console::warn_1(&format!("import_key: {e}").into());
                     let msg = if e.contains("Tauri IPC") {
                         "Could not import key \u{2014} backend unavailable.".to_string()
                     } else {
@@ -391,8 +393,7 @@ fn IdentityTab() -> impl IntoView {
                     succ_notes.set(String::new());
                     show_add_successor.set(false);
                 }
-                Err(e) => {
-                    web_sys::console::warn_1(&format!("add_successor: {e}").into());
+                Err(_) => {
                     successor_error.set(Some("Could not add successor \u{2014} backend unavailable.".into()));
                 }
             }
@@ -525,8 +526,7 @@ fn IdentityTab() -> impl IntoView {
                                             &serde_json::json!({ "successorDid": did }),
                                         ).await {
                                             Ok(suc) => identity.successors.set(suc),
-                                            Err(e) => {
-                                                web_sys::console::warn_1(&format!("remove_successor: {e}").into());
+                                            Err(_) => {
                                                 successor_error.set(Some("Could not remove successor \u{2014} backend unavailable.".into()));
                                             }
                                         }
