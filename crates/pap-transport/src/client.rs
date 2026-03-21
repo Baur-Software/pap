@@ -14,18 +14,15 @@ pub struct AgentClient {
 }
 
 impl AgentClient {
-    /// Create a new agent client with default TLS settings.
+    /// Create a new agent client with standard TLS settings.
     ///
-    /// Accepts self-signed certificates — PAP verifies identity
-    /// by DID and cert fingerprint, not CA chain.
+    /// Uses system CA roots. For PAP federation connections (self-signed
+    /// certs), use `with_client()` with a fingerprint-pinned reqwest
+    /// client from `pap_federation::build_pinned_client()`.
     pub fn new(base_url: &str) -> Self {
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
-            client,
+            client: reqwest::Client::new(),
         }
     }
 

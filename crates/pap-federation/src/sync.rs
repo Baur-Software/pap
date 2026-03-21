@@ -33,30 +33,56 @@ pub enum FederationMessage {
 
 /// HTTP(S) client for federation operations.
 ///
-/// Accepts a pre-configured `reqwest::Client` so the caller can set up
-/// TLS cert pinning, custom user-agents, timeouts, etc. Use
-/// `tls::build_federation_client()` to get a client configured for
-/// self-signed cert acceptance.
+/// Two construction modes:
+/// - `pinned(peers)` — fingerprint-pinned TLS. Use for all communication
+///   with verified peers.
+/// - `tofu()` — Trust On First Use. Accepts any cert for bootstrapping
+///   new peer connections. Record the fingerprint and switch to `pinned()`
+///   for subsequent connections.
 pub struct FederationClient {
     client: reqwest::Client,
 }
 
 impl FederationClient {
     /// Create a federation client with a custom reqwest client.
-    ///
-    /// For TLS-pinned connections, pass a client built by
-    /// `tls::build_federation_client()`.
     pub fn with_client(client: reqwest::Client) -> Self {
         Self { client }
     }
 
-    /// Create a federation client with default settings.
+    /// Create a client pinned to known peer fingerprints.
     ///
-    /// Uses `tls::build_federation_client()` which accepts self-signed certs.
-    pub fn new() -> Self {
-        let client = crate::tls::build_federation_client()
+    /// Only connects to servers whose TLS cert SHA-256 fingerprint
+    /// matches a peer in the list. Peers without fingerprints are ignored.
+    pub fn pinned(peers: &[RegistryPeer]) -> Result<Self, FederationError> {
+        let fingerprints: Vec<String> = peers
+            .iter()
+            .filter_map(|p| p.cert_fingerprint.clone())
+            .collect();
+        if fingerprints.is_empty() {
+            return Err(FederationError::ServerError(
+                "no peer fingerprints available for TLS pinning".into(),
+            ));
+        }
+        let client = crate::tls::build_pinned_client(&fingerprints)?;
+        Ok(Self { client })
+    }
+
+    /// Create a TOFU (Trust On First Use) client for bootstrapping.
+    ///
+    /// SECURITY: Only use for initial peer discovery. Record the peer's
+    /// cert fingerprint and use `pinned()` afterward. Will be replaced
+    /// by DNS-based bootstrap (`_pap.hostname` TXT records).
+    pub fn tofu() -> Self {
+        let client = crate::tls::build_tofu_client()
             .unwrap_or_else(|_| reqwest::Client::new());
         Self { client }
+    }
+
+    /// Create a federation client with TOFU settings.
+    ///
+    /// Equivalent to `tofu()`. Prefer `pinned()` for verified peers.
+    pub fn new() -> Self {
+        Self::tofu()
     }
 
     /// Pull advertisements matching an action from a peer.

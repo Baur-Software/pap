@@ -9,10 +9,10 @@ pub mod tls;
 pub use error::FederationError;
 pub use peer::RegistryPeer;
 pub use registry::FederatedRegistry;
-pub use resolve::{PapUrl, ResolvedPeer, resolve_pap_url};
+pub use resolve::PapUrl;
 pub use server::{FederationServer, NodeIdentityResponse};
 pub use sync::{FederationClient, FederationMessage};
-pub use tls::{NodeTlsIdentity, build_federation_client, cert_fingerprint, generate_node_identity};
+pub use tls::{NodeTlsIdentity, build_pinned_client, build_tofu_client, cert_fingerprint, generate_node_identity};
 
 #[cfg(test)]
 mod tests {

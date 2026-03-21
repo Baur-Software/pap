@@ -6,15 +6,94 @@
 //! the SHA-256 fingerprint of the DER-encoded certificate — no CA in
 //! the trust chain. DIDs are the trust root.
 
+use std::collections::HashSet;
+use std::fmt;
 use std::io::BufReader;
 use std::sync::Arc;
 
 use rcgen::{CertificateParams, DnType, KeyPair, SanType};
-use rustls::pki_types::CertificateDer;
-use rustls::ServerConfig;
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::crypto::CryptoProvider;
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{DigitallySignedStruct, ServerConfig, SignatureScheme};
 use sha2::{Digest, Sha256};
 
 use crate::error::FederationError;
+
+/// TLS certificate verifier that pins certificates by SHA-256 fingerprint.
+///
+/// PAP's trust model: DIDs are the trust root, cert fingerprints bind
+/// the TLS identity to the DID. This verifier rejects any certificate
+/// whose SHA-256 fingerprint isn't in the trusted set.
+///
+/// No CA chain, no webpki — just fingerprint pinning.
+struct FingerprintVerifier {
+    accepted: HashSet<String>,
+    provider: Arc<CryptoProvider>,
+}
+
+impl fmt::Debug for FingerprintVerifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FingerprintVerifier")
+            .field("accepted_count", &self.accepted.len())
+            .finish()
+    }
+}
+
+impl ServerCertVerifier for FingerprintVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        let fp = cert_fingerprint(end_entity.as_ref());
+        if self.accepted.contains(&fp) {
+            Ok(ServerCertVerified::assertion())
+        } else {
+            Err(rustls::Error::General(format!(
+                "cert fingerprint {} not in trusted set",
+                fp
+            )))
+        }
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}
 
 /// A node's TLS identity: server config, DER certificate, and fingerprint.
 pub struct NodeTlsIdentity {
@@ -111,19 +190,52 @@ pub fn generate_node_identity(did: &str) -> Result<NodeTlsIdentity, FederationEr
     })
 }
 
-/// Build a reqwest Client that accepts self-signed certs from known peers.
+/// Build a reqwest Client that verifies peers by pinned cert fingerprints.
 ///
-/// In a zero-trust network, we don't rely on CAs. Instead, we accept any
-/// server cert but the caller is responsible for verifying the fingerprint
-/// matches the expected peer's pinned fingerprint after connection.
+/// Only accepts TLS connections where the server's certificate has a SHA-256
+/// fingerprint matching one in the trusted set. No CA dependency — DIDs are
+/// the trust root, cert fingerprints bind the TLS identity.
 ///
-/// For production, this should be replaced with a custom `rustls::ClientConfig`
-/// that verifies fingerprints in the TLS handshake itself. For the first
-/// federation, post-connection fingerprint verification is sufficient.
-pub fn build_federation_client() -> Result<reqwest::Client, FederationError> {
+/// Panics if `trusted_fingerprints` is empty — use `build_tofu_client()`
+/// for bootstrapping new peers.
+pub fn build_pinned_client(
+    trusted_fingerprints: &[String],
+) -> Result<reqwest::Client, FederationError> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let verifier = Arc::new(FingerprintVerifier {
+        accepted: trusted_fingerprints.iter().cloned().collect(),
+        provider: provider.clone(),
+    });
+
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|e| FederationError::ServerError(format!("TLS version config failed: {e}")))?
+        .dangerous()
+        .with_custom_certificate_verifier(verifier)
+        .with_no_client_auth();
+
     reqwest::Client::builder()
         .user_agent("Papillion/0.1 (PAP Federation Node)")
-        .danger_accept_invalid_certs(true) // self-signed — we verify by fingerprint
+        .use_preconfigured_tls(config)
+        .build()
+        .map_err(|e| FederationError::ServerError(format!("HTTP client build failed: {e}")))
+}
+
+/// Build a TOFU (Trust On First Use) client for bootstrapping new peers.
+///
+/// Accepts any server certificate. The caller MUST record the cert
+/// fingerprint and use `build_pinned_client()` for all subsequent
+/// connections. This is a transitional mechanism until DNS-based
+/// bootstrap (`_pap.hostname` TXT records) is implemented.
+///
+/// SECURITY: Only use for initial peer discovery. All subsequent
+/// connections MUST use `build_pinned_client()`.
+pub fn build_tofu_client() -> Result<reqwest::Client, FederationError> {
+    reqwest::Client::builder()
+        .user_agent("Papillion/0.1 (PAP Federation Node)")
+        .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| FederationError::ServerError(format!("HTTP client build failed: {e}")))
 }
@@ -151,8 +263,14 @@ mod tests {
     }
 
     #[test]
-    fn build_client_succeeds() {
-        let client = build_federation_client();
+    fn build_tofu_client_succeeds() {
+        let client = build_tofu_client();
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn build_pinned_client_succeeds() {
+        let client = build_pinned_client(&["abc123def456".into()]);
         assert!(client.is_ok());
     }
 }

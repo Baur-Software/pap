@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use pap_did::verify_key_from_did;
 use pap_marketplace::{AgentAdvertisement, MarketplaceRegistry};
 
 use crate::error::FederationError;
@@ -67,7 +68,8 @@ impl FederatedRegistry {
 
     /// Merge remote advertisements into the local registry.
     ///
-    /// Deduplicates by content hash. Unsigned advertisements are rejected.
+    /// Deduplicates by content hash. Validates cryptographic signatures.
+    /// Unsigned or invalidly-signed advertisements are rejected.
     /// Returns the number of new advertisements actually merged.
     pub fn merge_remote(&mut self, advertisements: Vec<AgentAdvertisement>) -> usize {
         let mut merged = 0;
@@ -76,15 +78,36 @@ impl FederatedRegistry {
             if self.seen_hashes.contains(&hash) {
                 continue;
             }
-            if ad.signature.is_none() {
+
+            // Verify the advertisement's cryptographic signature
+            if !self.verify_advertisement(&ad) {
                 continue;
             }
+
             if self.local.register(ad).is_ok() {
                 self.seen_hashes.insert(hash);
                 merged += 1;
             }
         }
         merged
+    }
+
+    /// Verify an advertisement's Ed25519 signature.
+    ///
+    /// The signature must match the advertised DID's public key.
+    fn verify_advertisement(&self, ad: &AgentAdvertisement) -> bool {
+        // Extract the signing DID
+        let did = &ad.signed_by;
+
+        // Attempt to derive the verifying key from the DID
+        // DIDs are multibase-encoded public keys, so this is a direct extraction
+        let verifying_key = match verify_key_from_did(did) {
+            Ok(key) => key,
+            Err(_) => return false, // Invalid DID
+        };
+
+        // Verify the signature cryptographically
+        ad.verify(&verifying_key).is_ok()
     }
 
     /// Return all advertisements (for serving to federation peers).

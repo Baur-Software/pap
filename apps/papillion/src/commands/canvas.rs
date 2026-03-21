@@ -5,7 +5,7 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
-use pap_federation::PapUrl;
+use pap_federation::{PapUrl, build_pinned_client};
 use pap_transport::{AgentHandler, RemoteAgentHandler};
 
 use crate::error::PapillionError;
@@ -129,11 +129,36 @@ async fn process_prompt(
         h.clone()
     } else if let Some(ref pap_url) = source_url {
         // Agent lives on a remote peer — build a RemoteAgentHandler
+        // with fingerprint-pinned TLS from the known peer
         let parsed = PapUrl::parse(pap_url)
             .map_err(|e| PapillionError::from(e.to_string()))?;
+        let endpoint = parsed.https_endpoint();
+
+        // Find the peer's fingerprint from our local registry
+        let fingerprint = {
+            let local = state
+                .local_registry
+                .lock()
+                .map_err(|e| PapillionError::from(e.to_string()))?;
+            local.peers().iter()
+                .find(|p| p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/'))
+                .and_then(|p| p.cert_fingerprint.clone())
+        };
+
         let slug = agent_name.to_lowercase().replace(' ', "-");
-        let base_url = format!("{}/agents/{}", parsed.https_endpoint(), slug);
-        Arc::new(RemoteAgentHandler::new(&base_url))
+        let base_url = format!("{}/agents/{}", endpoint, slug);
+
+        if let Some(fp) = fingerprint {
+            // Pinned TLS — verified connection
+            let http_client = build_pinned_client(&[fp])
+                .map_err(|e| PapillionError::from(e.to_string()))?;
+            Arc::new(RemoteAgentHandler::with_client(&base_url, http_client))
+        } else {
+            return Err(PapillionError::from(format!(
+                "No cert fingerprint for peer {} — navigate to it first",
+                endpoint
+            )));
+        }
     } else {
         return Err(PapillionError::from(format!(
             "No handler for {}",
