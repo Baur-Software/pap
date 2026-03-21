@@ -383,11 +383,50 @@ pub async fn run_scenario(
         (did, kp)
     };
 
+    // ── Memory-informed agent selection ────────────────────
+    // Consult the agent profile (if one exists) to calibrate the mandate.
+    // This is advisory — missing profiles fall back to defaults.
+    let agent_did_hash_for_profile = {
+        let mut hasher = Sha256::new();
+        hasher.update(agent_did.as_bytes());
+        format!("{:x}", hasher.finalize())
+    };
+    let agent_profile = state
+        .db
+        .get_agent_profile(&agent_did_hash_for_profile)
+        .ok()
+        .flatten();
+
+    // Calibrate mandate TTL from historical avg_duration_ms.
+    // Give 3x headroom over the observed average, clamped to [5 min, 4 hours].
+    let ttl_hours = match &agent_profile {
+        Some(p) if p.episode_count >= 3 => {
+            let headroom_ms = p.avg_duration_ms * 3.0;
+            let hours = (headroom_ms / 3_600_000.0).clamp(5.0 / 60.0, 4.0);
+            hours
+        }
+        _ => 1.0, // default: 1 hour
+    };
+
+    let profile_detail = match &agent_profile {
+        Some(p) => format!(
+            " | profile: {:.0}% success, {:.0}ms avg, {} episodes",
+            p.success_rate * 100.0,
+            p.avg_duration_ms,
+            p.episode_count,
+        ),
+        None => " | no prior history".to_string(),
+    };
+
     steps.push(ScenarioStepResult {
         step_number: 1,
         step_name: "Discover agent".into(),
         status: "completed".into(),
-        detail: Some(format!("Found {} ({})", agent_name, &agent_did[..20])),
+        detail: Some(format!(
+            "Found {} ({}){profile_detail}",
+            agent_name,
+            &agent_did[..20]
+        )),
         timestamp: now_str(),
     });
 
@@ -397,15 +436,24 @@ pub async fn run_scenario(
     let disclosure_set = if scenario.requires_disclosure.is_empty() {
         DisclosureSet::empty()
     } else {
+        // If we have a profile with known minimal disclosure refs, prefer those
+        let disclosure_props = match &agent_profile {
+            Some(p) if p.episode_count >= 5 => {
+                // Try to parse the stored minimal disclosure refs
+                serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs)
+                    .unwrap_or_else(|_| scenario.requires_disclosure.clone())
+            }
+            _ => scenario.requires_disclosure.clone(),
+        };
         DisclosureSet::new(vec![DisclosureEntry::new(
             "schema:Person",
-            scenario.requires_disclosure.clone(),
+            disclosure_props,
             vec![],
         )])
     };
 
     let scope = Scope::new(vec![ScopeAction::new(action)]);
-    let ttl = Utc::now() + Duration::hours(1);
+    let ttl = Utc::now() + Duration::minutes((ttl_hours * 60.0) as i64);
 
     let mut mandate = pap_core::mandate::Mandate::issue_root(
         principal_did.clone(),
