@@ -57,6 +57,34 @@ pub struct AppState {
     pub node_cert_fingerprint: RwLock<String>,
 }
 
+impl AppState {
+    /// Create a clone suitable for moving to a background thread.
+    /// This wraps all the Arc/RwLock fields which are already thread-safe and shareable.
+    pub fn clone_for_background(&self) -> Self {
+        Self {
+            signer: RwLock::new(None), // Signer will be recreated from seed in background thread
+            principal_seed: RwLock::new(*self.principal_seed.read().unwrap()),
+            registries: RwLock::new(HashMap::new()), // Will be populated on demand
+            local_registry: self.local_registry.clone(),
+            bookmarks: RwLock::new(self.bookmarks.read().unwrap().clone()),
+            orchestrator_config: RwLock::new(self.orchestrator_config.read().unwrap().clone()),
+            model_manager: self.model_manager.clone(),
+            agent_keypairs: RwLock::new(HashMap::new()), // Will be populated on demand
+            completed_runs: RwLock::new(self.completed_runs.read().unwrap().clone()),
+            key_backed_up: RwLock::new(*self.key_backed_up.read().unwrap()),
+            successor_designations: RwLock::new(
+                self.successor_designations.read().unwrap().clone(),
+            ),
+            resource_dir: RwLock::new(self.resource_dir.read().unwrap().clone()),
+            local_agents: self.local_agents.clone(),
+            endpoint_registry: RwLock::new(EndpointRegistry::new()),
+            federation_port: self.federation_port,
+            node_endpoint: RwLock::new(self.node_endpoint.read().unwrap().clone()),
+            node_cert_fingerprint: RwLock::new(self.node_cert_fingerprint.read().unwrap().clone()),
+        }
+    }
+}
+
 impl Default for AppState {
     fn default() -> Self {
         let (registry, agent_keypairs) = seed_registry();
