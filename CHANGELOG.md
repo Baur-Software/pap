@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CLAUDE.md**: Updated with comprehensive project context — PAP is a protocol specification with Rust reference implementation, not SaaS. Added development standards (SOLID, comprehensive testing, no shortcuts, spec-first), core protocol concepts, and architecture documentation.
+
 ### Added
 
 - **CI**: GitHub Actions release workflow — auto-tags version bumps on merge to main, builds Tauri desktop app for macOS (universal), Linux, and Windows, creates GitHub Release with platform binaries
