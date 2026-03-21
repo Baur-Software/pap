@@ -59,7 +59,7 @@ pub fn DashboardPage() -> impl IntoView {
     };
 
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"Dashboard"</h2>
 
             <div class="card" style="margin-bottom: 16px;">

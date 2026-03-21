@@ -24,7 +24,7 @@ pub fn ScenarioPage() -> impl IntoView {
     };
 
     view! {
-        <div>
+        <div class="page">
             <button class="btn" style="margin-bottom: 16px; background: var(--bg-tertiary); color: var(--text-secondary);" on:click=go_back>
                 {"\u{2190} Back"}
             </button>

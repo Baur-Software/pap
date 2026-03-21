@@ -4,3 +4,7 @@ apps/papillion/frontend/dist
 .DS_STORE
 .gstack/
 .playwright-mcp/
+
+# Bundled model weights (too large for git — download during setup)
+*.gguf
+apps/papillion/models/tokenizer.json

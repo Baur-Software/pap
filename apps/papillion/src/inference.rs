@@ -5,7 +5,7 @@
 //! This is the intended PAP architecture: the orchestrator decomposes
 //! user queries into tool calls without ever touching the network.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
@@ -33,7 +33,7 @@ pub fn resolve_model(model_id: &str) -> Option<BuiltInModelInfo> {
 /// Resolve the bundled GGUF weights file from the Tauri resource directory.
 /// Expects `{resource_dir}/models/{filename}`.
 pub fn resolve_bundled_model(
-    resource_dir: &PathBuf,
+    resource_dir: &Path,
     info: &BuiltInModelInfo,
 ) -> Result<PathBuf, String> {
     let path = resource_dir.join("models").join(&info.filename);
@@ -50,7 +50,7 @@ pub fn resolve_bundled_model(
 
 /// Resolve the bundled tokenizer from the Tauri resource directory.
 /// Expects `{resource_dir}/models/tokenizer.json`.
-pub fn resolve_bundled_tokenizer(resource_dir: &PathBuf) -> Result<PathBuf, String> {
+pub fn resolve_bundled_tokenizer(resource_dir: &Path) -> Result<PathBuf, String> {
     let path = resource_dir.join("models").join("tokenizer.json");
     if path.exists() {
         Ok(path)
@@ -63,23 +63,18 @@ pub fn resolve_bundled_tokenizer(resource_dir: &PathBuf) -> Result<PathBuf, Stri
 }
 
 /// Load a downloaded GGUF model into memory, ready for inference.
-pub fn load_model(
-    model_path: &PathBuf,
-    tokenizer_path: &PathBuf,
-) -> Result<LoadedModel, String> {
+pub fn load_model(model_path: &PathBuf, tokenizer_path: &PathBuf) -> Result<LoadedModel, String> {
     let device = Device::Cpu;
 
     // Load GGUF
-    let mut file =
-        std::fs::File::open(model_path).map_err(|e| format!("Open model: {e}"))?;
-    let gguf = gguf_file::Content::read(&mut file)
-        .map_err(|e| format!("Parse GGUF: {e}"))?;
+    let mut file = std::fs::File::open(model_path).map_err(|e| format!("Open model: {e}"))?;
+    let gguf = gguf_file::Content::read(&mut file).map_err(|e| format!("Parse GGUF: {e}"))?;
     let weights = model::ModelWeights::from_gguf(gguf, &mut file, &device)
         .map_err(|e| format!("Load weights: {e}"))?;
 
     // Load tokenizer
-    let tokenizer = Tokenizer::from_file(tokenizer_path)
-        .map_err(|e| format!("Load tokenizer: {e}"))?;
+    let tokenizer =
+        Tokenizer::from_file(tokenizer_path).map_err(|e| format!("Load tokenizer: {e}"))?;
 
     Ok(LoadedModel {
         info: BuiltInModelInfo {
@@ -106,10 +101,7 @@ pub fn generate(
         .encode(prompt, true)
         .map_err(|e| format!("Tokenize: {e}"))?;
     let prompt_tokens = encoding.get_ids();
-    let eos_token = loaded
-        .tokenizer
-        .token_to_id("</s>")
-        .unwrap_or(2);
+    let eos_token = loaded.tokenizer.token_to_id("</s>").unwrap_or(2);
 
     let mut logits_processor = LogitsProcessor::from_sampling(
         42,
@@ -137,9 +129,7 @@ pub fn generate(
             .model
             .forward(&input, pos)
             .map_err(|e| format!("Forward: {e}"))?;
-        let logits = logits
-            .squeeze(0)
-            .map_err(|e| format!("Squeeze: {e}"))?;
+        let logits = logits.squeeze(0).map_err(|e| format!("Squeeze: {e}"))?;
         let next_token = logits_processor
             .sample(&logits)
             .map_err(|e| format!("Sample: {e}"))?;
@@ -212,6 +202,7 @@ pub struct ToolDef {
 
 /// Model manager that owns the loaded model behind an Arc for sharing
 /// across Tauri command handlers.
+#[derive(Default)]
 pub struct ModelManager {
     pub loaded: Option<LoadedModel>,
     pub model_id: String,
@@ -219,25 +210,17 @@ pub struct ModelManager {
 
 impl ModelManager {
     pub fn new() -> Self {
-        Self {
-            loaded: None,
-            model_id: String::new(),
-        }
+        Self::default()
     }
 
     /// Load the bundled model from the resource directory.
     /// No-op if already loaded with the same model_id.
-    pub fn ensure_loaded(
-        &mut self,
-        model_id: &str,
-        resource_dir: &PathBuf,
-    ) -> Result<(), String> {
+    pub fn ensure_loaded(&mut self, model_id: &str, resource_dir: &Path) -> Result<(), String> {
         if self.loaded.is_some() && self.model_id == model_id {
             return Ok(());
         }
 
-        let info = resolve_model(model_id)
-            .ok_or_else(|| format!("Unknown model: {model_id}"))?;
+        let info = resolve_model(model_id).ok_or_else(|| format!("Unknown model: {model_id}"))?;
 
         let model_path = resolve_bundled_model(resource_dir, &info)?;
         let tokenizer_path = resolve_bundled_tokenizer(resource_dir)?;
@@ -252,10 +235,7 @@ impl ModelManager {
 
     /// Run inference. Returns an error if no model is loaded.
     pub fn generate(&mut self, prompt: &str, max_tokens: usize) -> Result<String, String> {
-        let model = self
-            .loaded
-            .as_mut()
-            .ok_or("No model loaded")?;
+        let model = self.loaded.as_mut().ok_or("No model loaded")?;
         generate(model, prompt, max_tokens)
     }
 }

@@ -26,7 +26,7 @@ pub fn HomePage() -> impl IntoView {
     });
 
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"What would you like to do?"</h2>
             <div class="scenario-grid">
                 <For

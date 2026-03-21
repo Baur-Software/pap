@@ -39,7 +39,7 @@ pap-transport = { path = "crates/pap-transport" }
 pap-federation = { path = "crates/pap-federation" }
 papillion-shared = { path = "crates/papillion-shared" }
 
-ed25519-dalek = { version = "2", features = ["rand_core"] }
+ed25519-dalek = { version = "2", features = ["rand_core", "zeroize"] }
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

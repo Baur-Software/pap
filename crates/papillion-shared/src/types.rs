@@ -161,15 +161,13 @@ pub struct BuiltInModelInfo {
 
 /// Catalog of models bundled with the app. The first entry is the default.
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
-    vec![
-        BuiltInModelInfo {
-            id: "tinyllama-1.1b".into(),
-            display_name: "TinyLlama 1.1B Chat (Q4)".into(),
-            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
-            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-            size_hint: "~0.6 GB".into(),
-        },
-    ]
+    vec![BuiltInModelInfo {
+        id: "tinyllama-1.1b".into(),
+        display_name: "TinyLlama 1.1B Chat (Q4)".into(),
+        repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+        filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+        size_hint: "~0.6 GB".into(),
+    }]
 }
 
 /// LLM provider for the orchestrator.
@@ -191,7 +189,11 @@ pub enum LlmProvider {
     /// run Ollama and understand the privacy trade-off.
     Ollama { endpoint: String, model: String },
     /// Any OpenAI-compatible HTTP API (requires network + API key).
-    OpenAiCompatible { endpoint: String, api_key: String, model: String },
+    OpenAiCompatible {
+        endpoint: String,
+        api_key: String,
+        model: String,
+    },
     /// No LLM configured.
     None,
 }
@@ -228,7 +230,9 @@ pub enum OrchestratorStatus {
     Unconfigured,
     Disconnected,
     /// Model is being downloaded from HuggingFace Hub.
-    Downloading { progress_pct: u8 },
+    Downloading {
+        progress_pct: u8,
+    },
     /// Model loaded, ready for inference.
     Ready,
 }

@@ -49,6 +49,7 @@ pub fn TopBar() -> impl IntoView {
     };
 
     let canvases = move || canvas_state.canvases.get();
+    let active_id = move || canvas_state.current_canvas_id.get();
 
     view! {
         <div class="topbar">
@@ -70,26 +71,40 @@ pub fn TopBar() -> impl IntoView {
             <div class="menu-backdrop" on:click=close_menu></div>
             <div class="menu-dropdown">
                 <div class="menu-section-label">"Canvases"</div>
+                <A href="/" attr:class="menu-item menu-item-new" on:click=move |_| {
+                    canvas_state.new_canvas();
+                    menu_open.set(false);
+                }>
+                    "+ New Canvas"
+                </A>
                 <For
                     each=canvases
                     key=|c| c.id.clone()
                     let:canvas
                 >
-                    <button
-                        class="menu-item"
-                        on:click=move |_| {
-                            canvas_state.current_canvas_id.set(Some(canvas.id.clone()));
-                            menu_open.set(false);
+                    {
+                        let cid = canvas.id.clone();
+                        let cid_for_class = canvas.id.clone();
+                        view! {
+                            <A
+                                href="/"
+                                attr:class=move || {
+                                    if active_id().as_deref() == Some(&cid_for_class) {
+                                        "menu-item active"
+                                    } else {
+                                        "menu-item"
+                                    }
+                                }
+                                on:click=move |_| {
+                                    canvas_state.current_canvas_id.set(Some(cid.clone()));
+                                    menu_open.set(false);
+                                }
+                            >
+                                {canvas.name.clone()}
+                            </A>
                         }
-                    >
-                        {canvas.name.clone()}
-                    </button>
+                    }
                 </For>
-                <Show when=move || canvases().is_empty()>
-                    <div class="menu-item" style="opacity: 0.4; cursor: default;">
-                        "No canvases yet"
-                    </div>
-                </Show>
                 <div class="menu-divider"></div>
                 <A href="/browse" attr:class="menu-item" on:click=close_menu>
                     "Browse Registries"

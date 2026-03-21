@@ -28,7 +28,7 @@ pub fn ActivityPage() -> impl IntoView {
     };
 
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"Activity"</h2>
             <Show
                 when=move || !runs.get().is_empty()
