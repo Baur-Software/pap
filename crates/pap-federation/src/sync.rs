@@ -125,6 +125,32 @@ impl FederationClient {
         }
     }
 
+    /// Fetch a node's identity from its `/federation/identity` endpoint.
+    ///
+    /// This is the first call when bootstrapping a connection to a new peer.
+    /// Returns the node's DID, endpoint, and cert fingerprint so the caller
+    /// can verify they're talking to who they think they are.
+    pub async fn fetch_identity(
+        &self,
+        endpoint: &str,
+    ) -> Result<crate::server::NodeIdentityResponse, FederationError> {
+        let url = format!(
+            "{}/federation/identity",
+            endpoint.trim_end_matches('/')
+        );
+
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| FederationError::PeerUnreachable(e.to_string()))?;
+
+        resp.json()
+            .await
+            .map_err(|e| FederationError::SyncFailed(e.to_string()))
+    }
+
     /// Discover peers known to a given peer.
     pub async fn discover_peers(
         &self,

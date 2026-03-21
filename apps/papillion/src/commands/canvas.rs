@@ -1,12 +1,16 @@
+use std::sync::Arc;
+
 use chrono::Utc;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
+use pap_federation::PapUrl;
+use pap_transport::{AgentHandler, RemoteAgentHandler};
 
 use crate::error::PapillionError;
 use crate::handshake;
-use crate::state::{AppState, LOCAL_REGISTRY_URL};
+use crate::state::AppState;
 use papillion_shared::{BlockEvent, BlockState, CanvasBlock};
 
 /// Detect intent from a user prompt.
@@ -63,43 +67,79 @@ async fn process_prompt(
 ) -> Result<(String, serde_json::Value), PapillionError> {
     let (action_type, preferred, query) = detect_intent(text);
 
-    // Discover agent from federated registry
-    let (agent_name, agent_did, requires_disclosure, returns) = {
-        let registries = state
-            .registries
-            .read()
+    // Discover agent — try local registry first, then remote registries.
+    // This mirrors how federation works: your node first, then the network.
+    let (agent_name, agent_did, requires_disclosure, returns, source_url) = {
+        // First: search the node's own registry (local agents)
+        let local = state
+            .local_registry
+            .lock()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        let registry = registries
-            .get(LOCAL_REGISTRY_URL)
-            .ok_or_else(|| PapillionError::from("No registry available"))?;
+        let candidates = local.query_local_satisfiable(action_type, &[]);
 
-        let candidates = registry.query_local_satisfiable(action_type, &[]);
-        if candidates.is_empty() {
-            return Err(PapillionError::from(format!(
-                "No agent for {}",
-                action_type
-            )));
-        }
-
-        let agent = candidates
+        if let Some(agent) = candidates
             .iter()
             .find(|a| a.name == preferred)
-            .unwrap_or(&candidates[0]);
+            .or_else(|| candidates.first())
+        {
+            (
+                agent.name.clone(),
+                agent.provider.did.clone(),
+                agent.requires_disclosure.clone(),
+                agent.returns.clone(),
+                None, // local — no source URL
+            )
+        } else {
+            // Not found locally — search synced remote registries
+            drop(local);
+            let registries = state
+                .registries
+                .read()
+                .map_err(|e| PapillionError::from(e.to_string()))?;
 
-        (
-            agent.name.clone(),
-            agent.provider.did.clone(),
-            agent.requires_disclosure.clone(),
-            agent.returns.clone(),
-        )
+            let mut found = None;
+            for (url, registry) in registries.iter() {
+                let remote_candidates = registry.query_local_satisfiable(action_type, &[]);
+                if let Some(agent) = remote_candidates
+                    .iter()
+                    .find(|a| a.name == preferred)
+                    .or_else(|| remote_candidates.first())
+                {
+                    found = Some((
+                        agent.name.clone(),
+                        agent.provider.did.clone(),
+                        agent.requires_disclosure.clone(),
+                        agent.returns.clone(),
+                        Some(url.clone()),
+                    ));
+                    break;
+                }
+            }
+
+            found.ok_or_else(|| {
+                PapillionError::from(format!("No agent for {}", action_type))
+            })?
+        }
     };
 
-    // Resolve local handler (zero-trust: same interface as remote)
-    let handler = state
-        .local_agents
-        .get(&agent_name)
-        .ok_or_else(|| PapillionError::from(format!("No handler for {}", agent_name)))?
-        .clone();
+    // Resolve handler — local handler or remote proxy over TLS.
+    // Same AgentHandler trait, same handshake code path. Zero-trust
+    // doesn't distinguish local from remote.
+    let handler: Arc<dyn AgentHandler> = if let Some(h) = state.local_agents.get(&agent_name) {
+        h.clone()
+    } else if let Some(ref pap_url) = source_url {
+        // Agent lives on a remote peer — build a RemoteAgentHandler
+        let parsed = PapUrl::parse(pap_url)
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let slug = agent_name.to_lowercase().replace(' ', "-");
+        let base_url = format!("{}/agents/{}", parsed.https_endpoint(), slug);
+        Arc::new(RemoteAgentHandler::new(&base_url))
+    } else {
+        return Err(PapillionError::from(format!(
+            "No handler for {}",
+            agent_name
+        )));
+    };
 
     // Get principal keypair
     let principal_kp = {

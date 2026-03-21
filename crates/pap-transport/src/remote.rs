@@ -16,20 +16,29 @@ use crate::handler::AgentHandler;
 ///
 /// Uses `tokio::task::block_in_place` to run async HTTP calls from
 /// within the sync `AgentHandler` trait methods.
+///
+/// Tracks the session_id from phase 1 (handle_token) so that phase 5
+/// (co_sign_receipt) can route the receipt to the correct session
+/// on the remote node.
 pub struct RemoteAgentHandler {
     client: AgentClient,
+    /// Session ID returned by the remote agent in phase 1.
+    /// Stored here because co_sign_receipt doesn't receive it as a parameter.
+    last_session_id: std::sync::Mutex<Option<String>>,
 }
 
 impl RemoteAgentHandler {
     pub fn new(base_url: &str) -> Self {
         Self {
             client: AgentClient::new(base_url),
+            last_session_id: std::sync::Mutex::new(None),
         }
     }
 
     pub fn with_client(base_url: &str, http_client: reqwest::Client) -> Self {
         Self {
             client: AgentClient::with_client(base_url, http_client),
+            last_session_id: std::sync::Mutex::new(None),
         }
     }
 
@@ -48,7 +57,13 @@ impl AgentHandler for RemoteAgentHandler {
             ProtocolMessage::TokenAccepted {
                 session_id,
                 receiver_session_did,
-            } => Ok((session_id, receiver_session_did)),
+            } => {
+                // Store session_id for phase 5 (co_sign_receipt)
+                if let Ok(mut sid) = self.last_session_id.lock() {
+                    *sid = Some(session_id.clone());
+                }
+                Ok((session_id, receiver_session_did))
+            }
             ProtocolMessage::TokenRejected { reason } => {
                 Err(TransportError::InvalidResponse(format!(
                     "Token rejected: {reason}"
@@ -105,9 +120,19 @@ impl AgentHandler for RemoteAgentHandler {
         &self,
         receipt: TransactionReceipt,
     ) -> Result<TransactionReceipt, TransportError> {
+        let session_id = self
+            .last_session_id
+            .lock()
+            .ok()
+            .and_then(|s| s.clone())
+            .ok_or_else(|| {
+                TransportError::InvalidResponse(
+                    "No session_id — handle_token must be called before co_sign_receipt".into(),
+                )
+            })?;
         let resp = Self::block_on(
             self.client
-                .exchange_receipt("_", receipt),
+                .exchange_receipt(&session_id, receipt),
         )?;
         match resp {
             ProtocolMessage::ReceiptCoSigned { receipt } => Ok(receipt),

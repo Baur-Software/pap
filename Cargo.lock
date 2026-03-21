@@ -3193,20 +3193,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pap-federated-discovery-example"
-version = "0.1.0"
-dependencies = [
- "axum",
- "chrono",
- "ed25519-dalek",
- "pap-did",
- "pap-federation",
- "pap-marketplace",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "pap-federation"
 version = "0.1.0"
 dependencies = [

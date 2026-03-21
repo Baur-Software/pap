@@ -12,7 +12,7 @@ use std::net::SocketAddr;
 use pap_did::PrincipalKeypair;
 use pap_federation::{FederationServer, generate_node_identity};
 use pap_transport::AgentServer;
-use pap_webauthn::{PrincipalSigner, SoftwareSigner};
+use pap_webauthn::SoftwareSigner;
 use state::AppState;
 use tauri::Manager;
 
@@ -112,11 +112,17 @@ fn start_federation_server(app: &tauri::App) -> Result<(), Box<dyn std::error::E
 
     let port = state.federation_port;
     let endpoint = format!("https://0.0.0.0:{port}");
-    *state.node_endpoint.write().unwrap() = endpoint;
+    *state.node_endpoint.write().unwrap() = endpoint.clone();
 
     // Build the combined router: federation routes + agent routes
     let registry = state.local_registry.clone();
-    let federation_server = FederationServer::new(registry, port);
+    let federation_server = FederationServer::new(
+        registry,
+        port,
+        node_did.clone(),
+        endpoint,
+        identity.fingerprint.clone(),
+    );
     let mut router = federation_server.router();
 
     // Mount each local agent's handshake endpoints under /agents/{slug}/

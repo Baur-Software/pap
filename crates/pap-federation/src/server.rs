@@ -4,15 +4,31 @@ use std::sync::{Arc, Mutex};
 use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::FederationError;
+use crate::peer::RegistryPeer;
 use crate::registry::FederatedRegistry;
 use crate::sync::FederationMessage;
 
+/// This node's identity as returned by `/federation/identity`.
+///
+/// A connecting node calls this endpoint to learn who it's talking to
+/// before trusting anything else. The `cert_fingerprint` is verified
+/// against the TLS connection's actual certificate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeIdentityResponse {
+    pub did: String,
+    pub endpoint: String,
+    pub cert_fingerprint: String,
+    pub agent_count: usize,
+    pub peer_count: usize,
+}
+
 /// TLS-secured HTTP server for federation endpoints.
 ///
-/// Exposes three routes over HTTPS:
+/// Exposes four routes over HTTPS:
+/// - GET  /federation/identity — this node's DID + cert fingerprint
 /// - GET  /federation/query?action=... — query by action type
 /// - POST /federation/announce — receive an announcement
 /// - GET  /federation/peers — return known peer list
@@ -22,12 +38,18 @@ use crate::sync::FederationMessage;
 pub struct FederationServer {
     registry: Arc<Mutex<FederatedRegistry>>,
     port: u16,
+    node_did: String,
+    node_endpoint: String,
+    cert_fingerprint: String,
     tls_config: Option<axum_server::tls_rustls::RustlsConfig>,
 }
 
 #[derive(Clone)]
-struct AppState {
+struct ServerState {
     registry: Arc<Mutex<FederatedRegistry>>,
+    node_did: String,
+    node_endpoint: String,
+    cert_fingerprint: String,
 }
 
 #[derive(Deserialize)]
@@ -36,10 +58,19 @@ struct QueryParams {
 }
 
 impl FederationServer {
-    pub fn new(registry: Arc<Mutex<FederatedRegistry>>, port: u16) -> Self {
+    pub fn new(
+        registry: Arc<Mutex<FederatedRegistry>>,
+        port: u16,
+        node_did: String,
+        node_endpoint: String,
+        cert_fingerprint: String,
+    ) -> Self {
         Self {
             registry,
             port,
+            node_did,
+            node_endpoint,
+            cert_fingerprint,
             tls_config: None,
         }
     }
@@ -51,11 +82,15 @@ impl FederationServer {
     }
 
     pub fn router(&self) -> Router {
-        let state = AppState {
+        let state = ServerState {
             registry: self.registry.clone(),
+            node_did: self.node_did.clone(),
+            node_endpoint: self.node_endpoint.clone(),
+            cert_fingerprint: self.cert_fingerprint.clone(),
         };
 
         Router::new()
+            .route("/federation/identity", get(handle_identity))
             .route("/federation/query", get(handle_query))
             .route("/federation/announce", post(handle_announce))
             .route("/federation/peers", get(handle_peers))
@@ -83,8 +118,23 @@ impl FederationServer {
     }
 }
 
+/// Returns this node's identity — DID, endpoint, and cert fingerprint.
+///
+/// This is the first thing a connecting node should call. It tells them
+/// who they're talking to and how to verify the TLS certificate is legit.
+async fn handle_identity(State(state): State<ServerState>) -> Json<NodeIdentityResponse> {
+    let registry = state.registry.lock().unwrap();
+    Json(NodeIdentityResponse {
+        did: state.node_did.clone(),
+        endpoint: state.node_endpoint.clone(),
+        cert_fingerprint: state.cert_fingerprint.clone(),
+        agent_count: registry.len(),
+        peer_count: registry.peers().len(),
+    })
+}
+
 async fn handle_query(
-    State(state): State<AppState>,
+    State(state): State<ServerState>,
     Query(params): Query<QueryParams>,
 ) -> Json<FederationMessage> {
     let registry = state.registry.lock().unwrap();
@@ -100,7 +150,7 @@ async fn handle_query(
 }
 
 async fn handle_announce(
-    State(state): State<AppState>,
+    State(state): State<ServerState>,
     Json(msg): Json<FederationMessage>,
 ) -> Json<FederationMessage> {
     match msg {
@@ -117,8 +167,20 @@ async fn handle_announce(
     }
 }
 
-async fn handle_peers(State(state): State<AppState>) -> Json<FederationMessage> {
+async fn handle_peers(State(state): State<ServerState>) -> Json<FederationMessage> {
     let registry = state.registry.lock().unwrap();
-    let peers = registry.peers().to_vec();
+
+    // Include ourselves in the peer list so connecting nodes learn about us
+    let mut peers = registry.peers().to_vec();
+    let self_peer = RegistryPeer::with_fingerprint(
+        &state.node_did,
+        &state.node_endpoint,
+        &state.cert_fingerprint,
+    );
+    // Only add if we're not already in the list
+    if !peers.iter().any(|p| p.did == state.node_did) {
+        peers.push(self_peer);
+    }
+
     Json(FederationMessage::PeerListResponse { peers })
 }

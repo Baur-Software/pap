@@ -19,7 +19,6 @@ members = [
     "examples/payment",
     "examples/webauthn-ceremony",
     "examples/networked-search",
-    "examples/federated-discovery",
 ]
 
 [workspace.package]

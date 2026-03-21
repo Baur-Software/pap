@@ -1,6 +1,7 @@
 pub mod error;
 pub mod peer;
 pub mod registry;
+pub mod resolve;
 pub mod server;
 pub mod sync;
 pub mod tls;
@@ -8,7 +9,8 @@ pub mod tls;
 pub use error::FederationError;
 pub use peer::RegistryPeer;
 pub use registry::FederatedRegistry;
-pub use server::FederationServer;
+pub use resolve::{PapUrl, ResolvedPeer, resolve_pap_url};
+pub use server::{FederationServer, NodeIdentityResponse};
 pub use sync::{FederationClient, FederationMessage};
 pub use tls::{NodeTlsIdentity, build_federation_client, cert_fingerprint, generate_node_identity};
 
