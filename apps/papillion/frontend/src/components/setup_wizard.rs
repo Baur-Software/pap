@@ -13,7 +13,7 @@ pub fn SetupWizard() -> impl IntoView {
     let show_wizard = RwSignal::new(false);
     let wizard_error = RwSignal::new(None::<String>);
     let selected_provider = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
+    let builtin_model = RwSignal::new("tinyllama-1.1b".to_string());
     let builtin_models = RwSignal::new(builtin_model_catalog());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
     let ollama_model = RwSignal::new("llama3.2:1b".to_string());
@@ -115,7 +115,7 @@ pub fn SetupWizard() -> impl IntoView {
                             on:click=move |_| selected_provider.set("builtin".into())
                         >
                             <div class="setup-option-title">"Built-in (Recommended)"</div>
-                            <div class="setup-option-desc">"On-device Mistral model via Candle \u{2014} downloaded once, runs offline"</div>
+                            <div class="setup-option-desc">"On-device TinyLlama via Candle \u{2014} ships bundled, runs fully offline"</div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "ollama" { "setup-option selected" } else { "setup-option" }
@@ -160,17 +160,21 @@ pub fn SetupWizard() -> impl IntoView {
                                 </For>
                             </select>
                             <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                                "The model is downloaded from HuggingFace on first launch, then cached locally."
+                                "Ships with the app. Runs entirely on-device \u{2014} no network calls."
                             </p>
                         </div>
                     </Show>
 
-                    // Privacy warning for HTTP providers
+                    // Security warning for HTTP providers
                     <Show when=move || selected_provider.get() == "ollama" || selected_provider.get() == "openai">
-                        <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid rgba(255, 170, 0, 0.25); border-radius: 6px; padding: 10px 12px; margin-top: 12px;">
-                            <p style="font-size: 12px; color: var(--warning);">
-                                "HTTP-based providers send orchestrator prompts outside this process. "
-                                "This weakens PAP\u{2019}s zero-trust guarantees \u{2014} consider the built-in model for full privacy."
+                        <div style="background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 6px; padding: 10px 12px; margin-top: 12px;">
+                            <p style="font-size: 12px; font-weight: 600; color: var(--error); margin-bottom: 4px;">
+                                "Security disclosure"
+                            </p>
+                            <p style="font-size: 12px; color: var(--text-secondary);">
+                                "The orchestrator has full context over your tokens, keys, and agent actions. "
+                                "Sending prompts to an external API discloses this context to the provider. "
+                                "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
                             </p>
                         </div>
                     </Show>

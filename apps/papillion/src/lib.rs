@@ -7,6 +7,7 @@ pub mod state;
 use pap_did::PrincipalKeypair;
 use pap_webauthn::SoftwareSigner;
 use state::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,6 +30,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(app_state)
+        .setup(|app| {
+            let resource_dir = app
+                .path()
+                .resource_dir()
+                .expect("failed to resolve resource dir");
+            let state = app.state::<AppState>();
+            *state.resource_dir.write().unwrap() = resource_dir;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::identity::create_identity,
             commands::identity::get_identity,

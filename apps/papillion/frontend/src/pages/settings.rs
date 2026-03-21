@@ -51,7 +51,7 @@ pub fn SettingsPage() -> impl IntoView {
 fn GeneralTab() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let selected = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
+    let builtin_model = RwSignal::new("tinyllama-1.1b".to_string());
     let builtin_models = RwSignal::new(builtin_model_catalog());
     let mistral_key = RwSignal::new(String::new());
     let mistral_model = RwSignal::new("mistral-small-latest".to_string());
@@ -190,17 +190,21 @@ fn GeneralTab() -> impl IntoView {
                         </For>
                     </select>
                     <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                        "Downloaded once from HuggingFace Hub, then cached locally for offline use."
+                        "Ships with the app. Runs entirely on-device \u{2014} no network calls."
                     </p>
                 </div>
             </Show>
 
-            // Privacy warning for HTTP-based providers
+            // Security warning for HTTP-based providers
             <Show when=move || selected.get() == "mistral" || selected.get() == "ollama" || selected.get() == "openai">
-                <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid rgba(255, 170, 0, 0.25); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                    <p style="font-size: 12px; color: var(--warning);">
-                        "HTTP-based providers send orchestrator prompts outside this process. "
-                        "This weakens PAP\u{2019}s zero-trust guarantees \u{2014} consider the built-in model for full privacy."
+                <div style="background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                    <p style="font-size: 12px; font-weight: 600; color: var(--error); margin-bottom: 4px;">
+                        "Security disclosure"
+                    </p>
+                    <p style="font-size: 12px; color: var(--text-secondary);">
+                        "The orchestrator has full context over your tokens, keys, and agent actions. "
+                        "Sending prompts to an external API discloses this context to the provider. "
+                        "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
                     </p>
                 </div>
             </Show>

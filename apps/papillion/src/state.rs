@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::RwLock;
 
 use pap_did::PrincipalKeypair;
@@ -29,6 +30,9 @@ pub struct AppState {
     pub key_backed_up: RwLock<bool>,
     /// Forward-looking successor designations.
     pub successor_designations: RwLock<Vec<SuccessorDesignation>>,
+    /// Tauri resource directory (set during app setup).
+    /// Bundled model files live under `{resource_dir}/models/`.
+    pub resource_dir: RwLock<PathBuf>,
 }
 
 impl Default for AppState {
@@ -53,6 +57,7 @@ impl Default for AppState {
             completed_runs: RwLock::new(Vec::new()),
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
+            resource_dir: RwLock::new(PathBuf::new()),
         }
     }
 }
