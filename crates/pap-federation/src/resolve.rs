@@ -1,22 +1,11 @@
-//! PAP URL resolver — turns `pap://` URLs into verified peers.
+//! PAP URL parser — turns `pap://` URLs into host + port.
 //!
 //! `pap://` is not an alias for HTTPS. It's a protocol scheme that
-//! implies trust verification:
-//!
-//! 1. Parse the URL into host + port
-//! 2. Check known peers for a match (already-verified fast path)
-//! 3. If unknown, bootstrap: connect via TLS, call `/federation/identity`
-//! 4. Verify the returned cert fingerprint matches the TLS connection
-//! 5. Return a verified `RegistryPeer` with DID + fingerprint pinned
-//!
-//! The trust root is the DID, not a CA. The cert fingerprint pins
-//! the TLS identity to the DID — if the fingerprint doesn't match
-//! what the node advertises, the connection is rejected.
+//! implies trust verification. This module handles parsing only —
+//! trust establishment (TOFU bootstrap, fingerprint pinning, and
+//! eventually DNS-based resolution) lives in the caller.
 
 use crate::error::FederationError;
-use crate::peer::RegistryPeer;
-use crate::server::NodeIdentityResponse;
-use crate::sync::FederationClient;
 
 /// Default port for PAP federation nodes.
 pub const DEFAULT_PAP_PORT: u16 = 7890;
@@ -87,61 +76,6 @@ impl PapUrl {
     pub fn https_endpoint(&self) -> String {
         format!("https://{}:{}", self.host, self.port)
     }
-}
-
-/// Result of resolving a `pap://` URL.
-#[derive(Debug, Clone)]
-pub struct ResolvedPeer {
-    /// The verified peer identity.
-    pub peer: RegistryPeer,
-    /// The node's identity response (agent count, peer count, etc).
-    pub identity: NodeIdentityResponse,
-}
-
-/// Resolve a `pap://` URL to a verified peer.
-///
-/// This is the core of the PAP protocol's trust establishment:
-///
-/// 1. Parse the URL
-/// 2. Check known peers (fast path — already verified)
-/// 3. If unknown, connect via TLS and call `/federation/identity`
-/// 4. Build a verified `RegistryPeer` with the node's DID + cert fingerprint
-///
-/// The caller should store the returned peer in their registry for
-/// future fast-path resolution.
-pub async fn resolve_pap_url(
-    url: &str,
-    known_peers: &[RegistryPeer],
-) -> Result<ResolvedPeer, FederationError> {
-    let parsed = PapUrl::parse(url)?;
-    let endpoint = parsed.https_endpoint();
-
-    // Fast path: check if we already know this peer by endpoint
-    if let Some(peer) = known_peers.iter().find(|p| {
-        p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/')
-    }) {
-        // Already verified — return cached peer
-        // Still fetch identity to get current agent/peer counts
-        let client = FederationClient::new();
-        let identity = client.fetch_identity(&endpoint).await?;
-        return Ok(ResolvedPeer {
-            peer: peer.clone(),
-            identity,
-        });
-    }
-
-    // Slow path: bootstrap a new peer connection
-    let client = FederationClient::new();
-    let identity = client.fetch_identity(&endpoint).await?;
-
-    // Build a verified peer from the identity response
-    let peer = RegistryPeer::with_fingerprint(
-        &identity.did,
-        &identity.endpoint,
-        &identity.cert_fingerprint,
-    );
-
-    Ok(ResolvedPeer { peer, identity })
 }
 
 #[cfg(test)]
