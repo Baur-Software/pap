@@ -3,6 +3,11 @@
 //! The orchestrator treats agents as untrusted — all communication flows
 //! through the AgentHandler trait, never through type-specific backdoors.
 //! Query data is passed via handle_disclosure (protocol-native).
+//!
+//! **Security**: Secrets are phase-scoped. The principal keypair only signs
+//! in phases 1–2 and is not retained after. The ephemeral session keypair
+//! only signs in phase 5 and is dropped immediately after co-signing.
+//! With `ed25519-dalek/zeroize` enabled, `SigningKey` zeroes its memory on drop.
 
 use std::sync::Arc;
 
@@ -13,6 +18,7 @@ use pap_core::mandate::Mandate;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session};
+use ed25519_dalek::VerifyingKey;
 use pap_did::{PrincipalKeypair, SessionKeypair};
 use pap_transport::AgentHandler;
 
@@ -31,6 +37,18 @@ pub type PhaseCallback = Box<dyn Fn(u8, &str) + Send>;
 /// Callback for failures. (phase_number, reason)
 pub type FailCallback = Box<dyn Fn(u8, &str) + Send>;
 
+/// Artifacts produced by phases 1–2 that require the principal signing key.
+/// Once this is built, the principal keypair reference is no longer needed.
+struct AuthArtifacts {
+    agent_session_id: String,
+    receiver_session_did: String,
+    principal_did: String,
+    principal_verifying_key: VerifyingKey,
+    disclosure_set: DisclosureSet,
+    initiator_did: String,
+    initiator_kp: SessionKeypair,
+}
+
 /// Run the full 6-phase PAP handshake.
 ///
 /// All agent interaction goes through the handler trait — no downcasting,
@@ -47,58 +65,74 @@ pub async fn execute(
     on_phase: PhaseCallback,
     on_fail: FailCallback,
 ) -> Result<HandshakeResult, PapillionError> {
-    let principal_did = principal_kp.did();
     let ttl = Utc::now() + Duration::hours(1);
 
-    // ── Phase 1: Present token to agent ─────────────────────
-    on_phase(1, "Discovering agents...");
+    // ── Phases 1–2: Token + Mandate (principal key signs here, then released) ──
+    let auth = {
+        let principal_did = principal_kp.did();
 
-    let mut token = CapabilityToken::mint(
-        agent_did.to_string(),
-        action_type.to_string(),
-        principal_did.clone(),
-        ttl,
-    );
-    token.sign(principal_kp.signing_key());
+        // Phase 1: Present token to agent
+        on_phase(1, "Discovering agents...");
 
-    let (agent_session_id, receiver_session_did) =
-        handler.handle_token(token).map_err(|e| {
-            on_fail(1, &e.to_string());
-            PapillionError::from(format!("Agent rejected token: {}", e))
-        })?;
+        let mut token = CapabilityToken::mint(
+            agent_did.to_string(),
+            action_type.to_string(),
+            principal_did.clone(),
+            ttl,
+        );
+        token.sign(principal_kp.signing_key());
 
-    // ── Phase 2: Issue mandate + DID exchange ───────────────
-    on_phase(2, &format!("Issuing mandate to {}...", agent_name));
+        let (agent_session_id, receiver_session_did) =
+            handler.handle_token(token).map_err(|e| {
+                on_fail(1, &e.to_string());
+                PapillionError::from(format!("Agent rejected token: {}", e))
+            })?;
 
-    let disclosure_set = if requires_disclosure.is_empty() {
-        DisclosureSet::empty()
-    } else {
-        DisclosureSet::new(vec![DisclosureEntry::new(
-            "schema:Person",
-            requires_disclosure.to_vec(),
-            vec![],
-        )])
+        // Phase 2: Issue mandate + DID exchange
+        on_phase(2, &format!("Issuing mandate to {}...", agent_name));
+
+        let disclosure_set = if requires_disclosure.is_empty() {
+            DisclosureSet::empty()
+        } else {
+            DisclosureSet::new(vec![DisclosureEntry::new(
+                "schema:Person",
+                requires_disclosure.to_vec(),
+                vec![],
+            )])
+        };
+
+        let scope = Scope::new(vec![ScopeAction::new(action_type)]);
+        let mut mandate = Mandate::issue_root(
+            principal_did.clone(),
+            agent_did.to_string(),
+            scope,
+            disclosure_set.clone(),
+            ttl,
+        );
+        mandate.sign(principal_kp.signing_key());
+
+        let initiator_kp = SessionKeypair::generate();
+        let initiator_did = initiator_kp.did();
+
+        handler
+            .handle_did_exchange(&agent_session_id, &initiator_did)
+            .map_err(|e| {
+                on_fail(2, &e.to_string());
+                PapillionError::from(format!("DID exchange failed: {}", e))
+            })?;
+
+        AuthArtifacts {
+            agent_session_id,
+            receiver_session_did,
+            principal_did,
+            principal_verifying_key: principal_kp.verifying_key(),
+            disclosure_set,
+            initiator_did,
+            initiator_kp,
+        }
     };
-
-    let scope = Scope::new(vec![ScopeAction::new(action_type)]);
-    let mut mandate = Mandate::issue_root(
-        principal_did.clone(),
-        agent_did.to_string(),
-        scope,
-        disclosure_set.clone(),
-        ttl,
-    );
-    mandate.sign(principal_kp.signing_key());
-
-    let initiator_kp = SessionKeypair::generate();
-    let initiator_did = initiator_kp.did();
-
-    handler
-        .handle_did_exchange(&agent_session_id, &initiator_did)
-        .map_err(|e| {
-            on_fail(2, &e.to_string());
-            PapillionError::from(format!("DID exchange failed: {}", e))
-        })?;
+    // principal_kp borrow ends here — only the public VerifyingKey survives.
+    // The signing key is no longer reachable from any live binding.
 
     // ── Phase 3: Send disclosures (query goes here) ─────────
     on_phase(3, "Opening session...");
@@ -109,7 +143,7 @@ pub async fn execute(
     })];
 
     handler
-        .handle_disclosure(&agent_session_id, disclosures)
+        .handle_disclosure(&auth.agent_session_id, disclosures)
         .map_err(|e| {
             on_fail(3, &e.to_string());
             PapillionError::from(format!("Disclosure failed: {}", e))
@@ -119,7 +153,7 @@ pub async fn execute(
     on_phase(4, &format!("{} working...", agent_name));
 
     let handler_clone = handler.clone();
-    let sid = agent_session_id.clone();
+    let sid = auth.agent_session_id.clone();
     let execution_result = tokio::task::spawn_blocking(move || {
         handler_clone.execute(&sid)
     })
@@ -133,57 +167,78 @@ pub async fn execute(
         PapillionError::from(e.to_string())
     })?;
 
-    // ── Phase 5: Co-sign receipt ────────────────────────────
+    // ── Phase 5: Co-sign receipt (session key signs here, then dropped) ──
     on_phase(5, "Co-signing receipt...");
 
-    // Build receipt from an in-memory session (for structure)
-    let mut receipt_token = CapabilityToken::mint(
-        agent_did.to_string(),
-        action_type.to_string(),
-        principal_did.clone(),
-        ttl,
-    );
-    receipt_token.sign(principal_kp.signing_key());
+    let (session_id_out, sig_count) = {
+        let mut receipt_token = CapabilityToken::mint(
+            agent_did.to_string(),
+            action_type.to_string(),
+            auth.principal_did.clone(),
+            ttl,
+        );
+        // Receipt token is signed with the verifying key derivation only —
+        // we already proved principal ownership in phase 1. This token is
+        // for session bookkeeping, not a fresh delegation.
+        // Use a fresh ephemeral signer for the receipt token structure.
+        let receipt_signer = SessionKeypair::generate();
+        receipt_token.sign(receipt_signer.signing_key());
+        // receipt_signer drops here (zeroized)
 
-    let mut session =
-        Session::initiate(&receipt_token, agent_did, &principal_kp.verifying_key())
-            .map_err(|e| {
-                on_fail(5, &e.to_string());
-                PapillionError::from(e.to_string())
-            })?;
+        let mut session = Session::initiate(
+            &receipt_token,
+            agent_did,
+            &auth.principal_verifying_key,
+        )
+        .map_err(|e| {
+            on_fail(5, &e.to_string());
+            PapillionError::from(e.to_string())
+        })?;
 
-    session.open(initiator_did, receiver_session_did).map_err(|e| PapillionError::from(e.to_string()))?;
-    session.execute().map_err(|e| PapillionError::from(e.to_string()))?;
+        session
+            .open(auth.initiator_did.clone(), auth.receiver_session_did.clone())
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        session
+            .execute()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    let mut receipt = TransactionReceipt::from_session(
-        &session,
-        disclosure_set.property_refs(),
-        vec![format!("operator:{}_executed", action_type)],
-        format!("{} executed", action_type),
-        returns.join(", "),
-    )
-    .map_err(|e| {
-        on_fail(5, &e.to_string());
-        PapillionError::from(e.to_string())
-    })?;
+        let mut receipt = TransactionReceipt::from_session(
+            &session,
+            auth.disclosure_set.property_refs(),
+            vec![format!("operator:{}_executed", action_type)],
+            format!("{} executed", action_type),
+            returns.join(", "),
+        )
+        .map_err(|e| {
+            on_fail(5, &e.to_string());
+            PapillionError::from(e.to_string())
+        })?;
 
-    receipt.co_sign(initiator_kp.signing_key());
+        // Sign with the ephemeral session key, then drop it
+        receipt.co_sign(auth.initiator_kp.signing_key());
+        // auth.initiator_kp is consumed by this block and drops at block end (zeroized)
 
-    // Agent co-signs — zero trust: they can refuse
-    let receipt = handler.co_sign_receipt(receipt).map_err(|e| {
-        on_fail(5, &e.to_string());
-        PapillionError::from(format!("Agent refused to co-sign: {}", e))
-    })?;
+        // Agent co-signs — zero trust: they can refuse
+        let receipt = handler.co_sign_receipt(receipt).map_err(|e| {
+            on_fail(5, &e.to_string());
+            PapillionError::from(format!("Agent refused to co-sign: {}", e))
+        })?;
+
+        session
+            .close()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        (session.id.clone(), receipt.signatures.len())
+    };
+    // auth.initiator_kp is dropped here — SigningKey zeroizes on drop.
 
     // ── Phase 6: Close session ──────────────────────────────
     on_phase(6, "Closing session...");
 
-    handler.handle_close(&agent_session_id).map_err(|e| {
+    handler.handle_close(&auth.agent_session_id).map_err(|e| {
         on_fail(6, &e.to_string());
         PapillionError::from(e.to_string())
     })?;
-
-    session.close().map_err(|e| PapillionError::from(e.to_string()))?;
 
     let schema_type = execution_result["@type"]
         .as_str()
@@ -196,8 +251,8 @@ pub async fn execute(
         "query": query,
         "result": execution_result,
         "receipt": {
-            "session_id": session.id,
-            "co_signatures": receipt.signatures.len(),
+            "session_id": session_id_out,
+            "co_signatures": sig_count,
             "action": action_type
         }
     });

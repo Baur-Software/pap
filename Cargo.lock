@@ -3274,6 +3274,7 @@ dependencies = [
  "candle-core",
  "candle-transformers",
  "chrono",
+ "ed25519-dalek",
  "pap-core",
  "pap-credential",
  "pap-did",

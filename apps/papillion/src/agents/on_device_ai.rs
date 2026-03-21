@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
@@ -9,25 +8,23 @@ use serde_json::json;
 
 use crate::inference::ModelManager;
 
-struct SessionState {
-    session_key: SessionKeypair,
-    prompt: Option<String>,
-}
+use super::session_store::SessionStore;
 
 /// On-device AI agent.
 ///
 /// Runs inference via Candle on the local TinyLlama model — zero disclosure,
 /// prompts never leave the device. The prompt arrives via `handle_disclosure`.
+/// Sessions are TTL-bounded and reaped automatically.
 pub struct OnDeviceAiAgent {
     model_manager: Arc<tokio::sync::Mutex<ModelManager>>,
-    sessions: Mutex<HashMap<String, SessionState>>,
+    sessions: SessionStore<Option<String>>, // prompt
 }
 
 impl OnDeviceAiAgent {
     pub fn new(model_manager: Arc<tokio::sync::Mutex<ModelManager>>) -> Self {
         Self {
             model_manager,
-            sessions: Mutex::new(HashMap::new()),
+            sessions: SessionStore::new(),
         }
     }
 }
@@ -41,15 +38,8 @@ impl AgentHandler for OnDeviceAiAgent {
         }
 
         let session_id = uuid::Uuid::new_v4().to_string();
-        let session_key = SessionKeypair::generate();
-        let receiver_did = session_key.did();
-
-        self.sessions.lock().unwrap().insert(
-            session_id.clone(),
-            SessionState { session_key, prompt: None },
-        );
-
-        Ok((session_id, receiver_did))
+        let did = self.sessions.insert(session_id.clone(), None);
+        Ok((session_id, did))
     }
 
     fn handle_did_exchange(
@@ -57,7 +47,7 @@ impl AgentHandler for OnDeviceAiAgent {
         session_id: &str,
         _initiator_session_did: &str,
     ) -> Result<(), TransportError> {
-        if !self.sessions.lock().unwrap().contains_key(session_id) {
+        if !self.sessions.exists(session_id) {
             return Err(TransportError::ServerError("Unknown session".into()));
         }
         Ok(())
@@ -68,28 +58,22 @@ impl AgentHandler for OnDeviceAiAgent {
         session_id: &str,
         disclosures: Vec<serde_json::Value>,
     ) -> Result<(), TransportError> {
-        let mut sessions = self.sessions.lock().unwrap();
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| TransportError::ServerError("Unknown session".into()))?;
+        let prompt = disclosures
+            .iter()
+            .find_map(|d| d.get("query").and_then(|v| v.as_str()))
+            .map(String::from);
 
-        for d in &disclosures {
-            if let Some(q) = d.get("query").and_then(|v| v.as_str()) {
-                session.prompt = Some(q.to_string());
-            }
+        if let Some(p) = prompt {
+            self.sessions.with_mut(session_id, |data| {
+                *data = Some(p);
+            })?;
         }
         Ok(())
     }
 
     fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let prompt = {
-            let sessions = self.sessions.lock().unwrap();
-            let session = sessions
-                .get(session_id)
-                .ok_or_else(|| TransportError::ServerError("Unknown session".into()))?;
-            session.prompt.clone()
-                .ok_or_else(|| TransportError::ServerError("No prompt provided in disclosures".into()))?
-        };
+        let prompt = self.sessions.with(session_id, |data| data.clone())?
+            .ok_or_else(|| TransportError::ServerError("No prompt provided in disclosures".into()))?;
 
         let mut mgr = self.model_manager.try_lock().map_err(|_| {
             TransportError::ServerError("Model manager busy".into())
@@ -117,24 +101,21 @@ impl AgentHandler for OnDeviceAiAgent {
         &self,
         mut receipt: TransactionReceipt,
     ) -> Result<TransactionReceipt, TransportError> {
-        let sessions = self.sessions.lock().unwrap();
-        let key = sessions
-            .values()
-            .next()
-            .map(|s| s.session_key.signing_key().clone());
-        drop(sessions);
-
-        if let Some(k) = key {
-            receipt.co_sign(&k);
-        } else {
-            let k = SessionKeypair::generate();
-            receipt.co_sign(k.signing_key());
+        let key = self.sessions.signing_key(
+            &receipt.session_id,
+        );
+        match key {
+            Some(k) => receipt.co_sign(&k),
+            None => {
+                let k = SessionKeypair::generate();
+                receipt.co_sign(k.signing_key());
+            }
         }
         Ok(receipt)
     }
 
     fn handle_close(&self, session_id: &str) -> Result<(), TransportError> {
-        self.sessions.lock().unwrap().remove(session_id);
+        self.sessions.remove(session_id);
         Ok(())
     }
 }

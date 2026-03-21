@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
-
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
 use pap_did::SessionKeypair;
@@ -8,23 +5,21 @@ use pap_transport::{AgentHandler, TransportError};
 use serde::Deserialize;
 use serde_json::json;
 
-struct SessionState {
-    session_key: SessionKeypair,
-    query: Option<String>,
-}
+use super::session_store::SessionStore;
 
 /// DuckDuckGo web search agent.
 ///
 /// Calls the DuckDuckGo Instant Answer JSON API — zero disclosure, no tracking.
 /// The search query arrives via `handle_disclosure` (protocol-native).
+/// Sessions are TTL-bounded and reaped automatically.
 pub struct DuckDuckGoAgent {
-    sessions: Mutex<HashMap<String, SessionState>>,
+    sessions: SessionStore<Option<String>>, // query
 }
 
 impl DuckDuckGoAgent {
     pub fn new() -> Self {
         Self {
-            sessions: Mutex::new(HashMap::new()),
+            sessions: SessionStore::new(),
         }
     }
 }
@@ -38,15 +33,8 @@ impl AgentHandler for DuckDuckGoAgent {
         }
 
         let session_id = uuid::Uuid::new_v4().to_string();
-        let session_key = SessionKeypair::generate();
-        let receiver_did = session_key.did();
-
-        self.sessions.lock().unwrap().insert(
-            session_id.clone(),
-            SessionState { session_key, query: None },
-        );
-
-        Ok((session_id, receiver_did))
+        let did = self.sessions.insert(session_id.clone(), None);
+        Ok((session_id, did))
     }
 
     fn handle_did_exchange(
@@ -54,8 +42,7 @@ impl AgentHandler for DuckDuckGoAgent {
         session_id: &str,
         _initiator_session_did: &str,
     ) -> Result<(), TransportError> {
-        let sessions = self.sessions.lock().unwrap();
-        if !sessions.contains_key(session_id) {
+        if !self.sessions.exists(session_id) {
             return Err(TransportError::ServerError("Unknown session".into()));
         }
         Ok(())
@@ -66,43 +53,35 @@ impl AgentHandler for DuckDuckGoAgent {
         session_id: &str,
         disclosures: Vec<serde_json::Value>,
     ) -> Result<(), TransportError> {
-        let mut sessions = self.sessions.lock().unwrap();
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| TransportError::ServerError("Unknown session".into()))?;
+        let query = disclosures
+            .iter()
+            .find_map(|d| d.get("query").and_then(|v| v.as_str()))
+            .map(String::from);
 
-        // Extract query from disclosures
-        for d in &disclosures {
-            if let Some(q) = d.get("query").and_then(|v| v.as_str()) {
-                session.query = Some(q.to_string());
-            }
+        if let Some(q) = query {
+            self.sessions.with_mut(session_id, |data| {
+                *data = Some(q);
+            })?;
         }
         Ok(())
     }
 
     fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let query = {
-            let sessions = self.sessions.lock().unwrap();
-            let session = sessions
-                .get(session_id)
-                .ok_or_else(|| TransportError::ServerError("Unknown session".into()))?;
-            session.query.clone()
-                .ok_or_else(|| TransportError::ServerError("No query provided in disclosures".into()))?
-        };
+        let query = self.sessions.with(session_id, |data| data.clone())?
+            .ok_or_else(|| TransportError::ServerError("No query provided in disclosures".into()))?;
 
-        // Blocking HTTP call to DuckDuckGo
         let client = reqwest::blocking::Client::builder()
             .user_agent("Papillion/0.1 (PAP Browser)")
             .build()
-            .map_err(|e| TransportError::ServerError(e.to_string()))?;
+            .map_err(|e: reqwest::Error| TransportError::ServerError(e.to_string()))?;
 
         let resp: DdgResponse = client
             .get("https://api.duckduckgo.com/")
             .query(&[("q", query.as_str()), ("format", "json"), ("no_html", "1"), ("skip_disambig", "1")])
             .send()
-            .map_err(|e| TransportError::ServerError(e.to_string()))?
+            .map_err(|e: reqwest::Error| TransportError::ServerError(e.to_string()))?
             .json()
-            .map_err(|e| TransportError::ServerError(e.to_string()))?;
+            .map_err(|e: reqwest::Error| TransportError::ServerError(e.to_string()))?;
 
         let mut results = Vec::new();
         if !resp.abstract_text.is_empty() {
@@ -131,26 +110,22 @@ impl AgentHandler for DuckDuckGoAgent {
         &self,
         mut receipt: TransactionReceipt,
     ) -> Result<TransactionReceipt, TransportError> {
-        // Find the session key for this receipt's session
-        // If session already closed, use a fresh ephemeral key
-        let sessions = self.sessions.lock().unwrap();
-        let key = sessions
-            .values()
-            .next()
-            .map(|s| s.session_key.signing_key().clone());
-        drop(sessions);
-
-        if let Some(k) = key {
-            receipt.co_sign(&k);
-        } else {
-            let k = SessionKeypair::generate();
-            receipt.co_sign(k.signing_key());
+        // Try to find any active session key; fall back to ephemeral
+        let key = self.sessions.signing_key(
+            &receipt.session_id,
+        );
+        match key {
+            Some(k) => receipt.co_sign(&k),
+            None => {
+                let k = SessionKeypair::generate();
+                receipt.co_sign(k.signing_key());
+            }
         }
         Ok(receipt)
     }
 
     fn handle_close(&self, session_id: &str) -> Result<(), TransportError> {
-        self.sessions.lock().unwrap().remove(session_id);
+        self.sessions.remove(session_id);
         Ok(())
     }
 }
