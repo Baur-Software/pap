@@ -144,8 +144,15 @@ fn GeneralTab() -> impl IntoView {
                         orchestrator.status.set(status);
                     }
                 }
-                Err(_) => {
-                    save_error.set(Some("Could not save settings \u{2014} backend unavailable.".into()));
+                Err(e) => {
+                    let msg = if e.contains("Tauri IPC") {
+                        "Could not save settings \u{2014} backend unavailable.".to_string()
+                    } else if e.contains("Bundled model not found") {
+                        "Built-in model file not found. Place the GGUF in the models/ directory.".to_string()
+                    } else {
+                        format!("Save failed: {e}")
+                    };
+                    save_error.set(Some(msg));
                 }
             }
         });
