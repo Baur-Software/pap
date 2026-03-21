@@ -50,20 +50,16 @@ pub fn App() -> impl IntoView {
         });
     });
 
-    // Global keyboard listener for ⌘K — creates a new canvas and navigates home.
-    // Uses History pushState + popstate so the Leptos router picks up the change
-    // without a full page reload (which would tear down WASM).
+    // Global keyboard listener for ⌘K — creates a new canvas
     Effect::new(move || {
         let cb = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
             if (e.meta_key() || e.ctrl_key()) && e.key() == "k" {
                 e.prevent_default();
                 canvas_state.new_canvas();
+                // Navigate to canvas page — use window.location for reliability
+                // from a non-component context (Effects don't have router scope).
                 if let Some(window) = web_sys::window() {
-                    let history = window.history().unwrap();
-                    let _ = history.push_state_with_url(&JsValue::NULL, "", Some("/"));
-                    let _ = window.dispatch_event(
-                        &web_sys::Event::new("popstate").unwrap(),
-                    );
+                    let _ = window.location().set_href("/");
                 }
             }
         });
