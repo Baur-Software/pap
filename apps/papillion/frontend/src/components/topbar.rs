@@ -6,12 +6,6 @@ use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use papillion_shared::OrchestratorStatus;
 
-fn go_home() {
-    if let Some(window) = web_sys::window() {
-        let _ = window.location().set_href("/");
-    }
-}
-
 #[component]
 pub fn TopBar() -> impl IntoView {
     let identity = expect_context::<IdentityState>();
@@ -77,13 +71,12 @@ pub fn TopBar() -> impl IntoView {
             <div class="menu-backdrop" on:click=close_menu></div>
             <div class="menu-dropdown">
                 <div class="menu-section-label">"Canvases"</div>
-                <button class="menu-item menu-item-new" on:click=move |_| {
+                <A href="/" attr:class="menu-item menu-item-new" on:click=move |_| {
                     canvas_state.new_canvas();
                     menu_open.set(false);
-                    go_home();
                 }>
                     "+ New Canvas"
-                </button>
+                </A>
                 <For
                     each=canvases
                     key=|c| c.id.clone()
@@ -93,8 +86,9 @@ pub fn TopBar() -> impl IntoView {
                         let cid = canvas.id.clone();
                         let cid_for_class = canvas.id.clone();
                         view! {
-                            <button
-                                class=move || {
+                            <A
+                                href="/"
+                                attr:class=move || {
                                     if active_id().as_deref() == Some(&cid_for_class) {
                                         "menu-item active"
                                     } else {
@@ -104,11 +98,10 @@ pub fn TopBar() -> impl IntoView {
                                 on:click=move |_| {
                                     canvas_state.current_canvas_id.set(Some(cid.clone()));
                                     menu_open.set(false);
-                                    go_home();
                                 }
                             >
                                 {canvas.name.clone()}
-                            </button>
+                            </A>
                         }
                     }
                 </For>

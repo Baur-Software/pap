@@ -275,11 +275,7 @@ impl CanvasState {
 }
 
 fn generate_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    let ts = js_sys::Date::now() as u64;
     let rand: u32 = (ts as u32).wrapping_mul(2654435761);
     format!("{:x}-{:x}", ts, rand)
 }
