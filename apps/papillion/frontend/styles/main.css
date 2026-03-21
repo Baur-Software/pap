@@ -874,6 +874,14 @@ body {
     width: 100vw;
 }
 
+/* Page content area — inset from viewport edges, scrollable */
+.page {
+    padding: var(--sp-xl) var(--sp-2xl);
+    overflow-y: auto;
+    max-width: 960px;
+    width: 100%;
+}
+
 /* Top bar */
 .topbar {
     background: var(--bg-1);

@@ -17,7 +17,7 @@ pub fn SettingsPage() -> impl IntoView {
     let active_tab = RwSignal::new("general".to_string());
 
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"Settings"</h2>
             <div class="settings-tabs">
                 <button
