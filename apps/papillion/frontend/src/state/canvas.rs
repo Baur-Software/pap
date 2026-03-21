@@ -4,19 +4,19 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 
-/// Global canvas state — tracks canvases, blocks, palette, and prompts.
+/// Global canvas state — tracks canvases, blocks, and prompts.
 #[derive(Clone, Copy)]
 pub struct CanvasState {
     /// All saved canvases.
     pub canvases: RwSignal<Vec<Canvas>>,
     /// The currently active canvas ID.
     pub current_canvas_id: RwSignal<Option<String>>,
-    /// Whether the command palette is open.
-    pub palette_open: RwSignal<bool>,
     /// If re-prompting an existing block, its ID.
     pub reshape_block_id: RwSignal<Option<String>>,
     /// Recent prompts for palette suggestions.
     pub recent_prompts: RwSignal<Vec<String>>,
+    /// Bumped to signal the inline prompt should grab focus.
+    pub focus_prompt: RwSignal<u32>,
 }
 
 impl Default for CanvasState {
@@ -24,14 +24,31 @@ impl Default for CanvasState {
         Self {
             canvases: RwSignal::new(Vec::new()),
             current_canvas_id: RwSignal::new(None),
-            palette_open: RwSignal::new(false),
             reshape_block_id: RwSignal::new(None),
             recent_prompts: RwSignal::new(Vec::new()),
+            focus_prompt: RwSignal::new(0),
         }
     }
 }
 
 impl CanvasState {
+    /// Create a new blank canvas, set it active, and signal the prompt to focus.
+    pub fn new_canvas(&self) -> String {
+        let id = generate_id();
+        let now = now_iso();
+        let canvas = Canvas {
+            id: id.clone(),
+            name: "Untitled canvas".into(),
+            blocks: Vec::new(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.canvases.update(|c| c.push(canvas));
+        self.current_canvas_id.set(Some(id.clone()));
+        self.focus_prompt.update(|n| *n += 1);
+        id
+    }
+
     /// Get the currently active canvas, if any.
     pub fn current_canvas(&self) -> Option<Canvas> {
         let id = self.current_canvas_id.get()?;
@@ -52,6 +69,18 @@ impl CanvasState {
         });
 
         let prompt_id = generate_id();
+
+        // Auto-rename untitled canvases from the first prompt
+        if let Some(id) = current_id.get() {
+            canvases.update(|cs| {
+                if let Some(c) = cs.iter_mut().find(|c| c.id == id) {
+                    if c.name == "Untitled canvas" && c.blocks.is_empty() {
+                        c.name = auto_name_from_prompt(&text);
+                    }
+                }
+            });
+        }
+
         let canvas_id = current_id.get().unwrap_or_else(|| {
             // Create a new canvas auto-named from the prompt
             let new_id = generate_id();

@@ -107,7 +107,6 @@
     --header-height: 48px;
     --status-height: 28px;
     --topbar-height: 36px;
-    --palette-width: 500px;
     --phase-dot-size: 6px;
     --block-max-width: 600px;
 }
@@ -1044,6 +1043,15 @@ body {
     color: var(--purple);
 }
 
+.menu-item-new {
+    color: var(--purple);
+    font-weight: 500;
+}
+
+.menu-item-new:hover {
+    color: var(--purple-hover);
+}
+
 .menu-divider {
     height: 1px;
     background: var(--border);
@@ -1196,39 +1204,8 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   COMMAND PALETTE (overlay — Cmd+K only)
+   PROMPT INPUT — shared styles used by the inline canvas prompt
    ═══════════════════════════════════════════════════════════ */
-
-.palette-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: 15vh;
-    z-index: 500;
-}
-
-.palette {
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    width: var(--palette-width);
-    max-width: 90vw;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    overflow: hidden;
-}
-
-.palette-header {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-sm);
-    padding: var(--sp-sm) var(--sp-md);
-    border-bottom: 1px solid var(--border);
-}
 
 .palette-icon {
     font-size: 14px;
@@ -1239,15 +1216,6 @@ body {
     font: var(--text-small);
     font-family: var(--font-body);
     color: var(--text-2);
-}
-
-.palette-context {
-    font: var(--text-label);
-    font-family: var(--font-mono);
-    color: var(--purple);
-    padding: var(--sp-sm) var(--sp-md);
-    background: var(--purple-muted);
-    border-bottom: 1px solid var(--border);
 }
 
 .palette-input {
@@ -1633,18 +1601,12 @@ body {
         max-width: 100%;
         flex: 1 1 100%;
     }
-    .palette {
-        width: 95vw;
-    }
     .topbar-identity {
         display: none;
     }
 }
 
 @media (min-width: 501px) and (max-width: 900px) {
-    .palette {
-        width: 90vw;
-    }
     .block-group {
         flex-direction: column;
     }

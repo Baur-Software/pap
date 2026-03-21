@@ -5,7 +5,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
-use crate::components::command_palette::CommandPalette;
 use crate::components::setup_wizard::SetupWizard;
 use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
@@ -51,12 +50,17 @@ pub fn App() -> impl IntoView {
         });
     });
 
-    // Global keyboard listener for ⌘K
+    // Global keyboard listener for ⌘K — creates a new canvas
     Effect::new(move || {
         let cb = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
             if (e.meta_key() || e.ctrl_key()) && e.key() == "k" {
                 e.prevent_default();
-                canvas_state.palette_open.update(|v| *v = !*v);
+                canvas_state.new_canvas();
+                // Navigate to canvas page — use window.location for reliability
+                // from a non-component context (Effects don't have router scope).
+                if let Some(window) = web_sys::window() {
+                    let _ = window.location().set_href("/");
+                }
             }
         });
         let window = web_sys::window().unwrap();
@@ -98,7 +102,6 @@ pub fn App() -> impl IntoView {
                     <span class=status_class>{status_label}</span>
                 </footer>
             </div>
-            <CommandPalette />
             <SetupWizard />
         </Router>
     }

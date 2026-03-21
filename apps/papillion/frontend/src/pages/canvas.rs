@@ -150,8 +150,9 @@ fn InlinePrompt() -> impl IntoView {
         }
     };
 
-    // Auto-focus the input after DOM renders
+    // Focus the input on mount and whenever focus_prompt is bumped (e.g. ⌘K)
     Effect::new(move || {
+        let _ = canvas_state.focus_prompt.get(); // subscribe to signal
         let ir = input_ref;
         let cb = Closure::once(move || {
             if let Some(el) = ir.get() {
