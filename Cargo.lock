@@ -3171,16 +3171,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pap-delegation-chain-example"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "pap-core",
- "pap-did",
- "serde_json",
-]
-
-[[package]]
 name = "pap-did"
 version = "0.1.0"
 dependencies = [
@@ -3234,34 +3224,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pap-networked-search-example"
-version = "0.1.0"
-dependencies = [
- "axum",
- "chrono",
- "ed25519-dalek",
- "pap-core",
- "pap-did",
- "pap-proto",
- "pap-transport",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "pap-payment-example"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "pap-core",
- "pap-credential",
- "pap-did",
- "pap-marketplace",
- "serde_json",
-]
-
-[[package]]
 name = "pap-proto"
 version = "0.1.0"
 dependencies = [
@@ -3296,18 +3258,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pap-search-example"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "pap-core",
- "pap-credential",
- "pap-did",
- "pap-marketplace",
- "serde_json",
-]
-
-[[package]]
 name = "pap-transport"
 version = "0.1.0"
 dependencies = [
@@ -3331,18 +3281,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pap-travel-booking-example"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "pap-core",
- "pap-credential",
- "pap-did",
- "pap-marketplace",
- "serde_json",
-]
-
-[[package]]
 name = "pap-webauthn"
 version = "0.1.0"
 dependencies = [
@@ -3357,18 +3295,6 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "uuid",
-]
-
-[[package]]
-name = "pap-webauthn-ceremony-example"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "ed25519-dalek",
- "pap-core",
- "pap-did",
- "pap-webauthn",
- "serde_json",
 ]
 
 [[package]]
