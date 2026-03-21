@@ -175,10 +175,7 @@ impl Database {
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(at) = action_type {
-            sql.push_str(&format!(
-                " AND action_type = ?{}",
-                param_values.len() + 1
-            ));
+            sql.push_str(&format!(" AND action_type = ?{}", param_values.len() + 1));
             param_values.push(Box::new(at.to_string()));
         }
         if let Some(adh) = agent_did_hash {
@@ -227,8 +224,7 @@ impl Database {
 
         let mut episodes = Vec::new();
         for row in rows {
-            episodes
-                .push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            episodes.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
         }
         Ok(episodes)
     }
@@ -362,8 +358,7 @@ impl Database {
 
         let mut profiles = Vec::new();
         for row in rows {
-            profiles
-                .push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            profiles.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
         }
         Ok(profiles)
     }
@@ -459,18 +454,13 @@ impl Database {
 
         let mut episodes = Vec::new();
         for row in rows {
-            episodes
-                .push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            episodes.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
         }
         Ok(episodes)
     }
 
     /// Full-text search over intent_summary and query fields.
-    pub fn search_text(
-        &self,
-        query: &str,
-        limit: usize,
-    ) -> Result<Vec<Episode>, PapillionError> {
+    pub fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, PapillionError> {
         let conn = self
             .conn
             .lock()
@@ -515,8 +505,7 @@ impl Database {
 
         let mut episodes = Vec::new();
         for row in rows {
-            episodes
-                .push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            episodes.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
         }
         Ok(episodes)
     }
@@ -705,17 +694,11 @@ mod tests {
 
         // Set and get
         db.set_setting("test_key", "test_value").unwrap();
-        assert_eq!(
-            db.get_setting("test_key").unwrap().unwrap(),
-            "test_value"
-        );
+        assert_eq!(db.get_setting("test_key").unwrap().unwrap(), "test_value");
 
         // Overwrite
         db.set_setting("test_key", "updated").unwrap();
-        assert_eq!(
-            db.get_setting("test_key").unwrap().unwrap(),
-            "updated"
-        );
+        assert_eq!(db.get_setting("test_key").unwrap().unwrap(), "updated");
     }
 
     #[test]
@@ -760,7 +743,6 @@ mod tests {
 
     #[test]
     fn migration_idempotent() {
-        use std::path::PathBuf;
         let tmp = std::env::temp_dir().join("pap_test_migrate_idempotent.db");
         // Open once — runs migrations
         let db1 = Database::open(&tmp).unwrap();

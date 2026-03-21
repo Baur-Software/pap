@@ -402,8 +402,7 @@ pub async fn run_scenario(
     let ttl_hours = match &agent_profile {
         Some(p) if p.episode_count >= 3 => {
             let headroom_ms = p.avg_duration_ms * 3.0;
-            let hours = (headroom_ms / 3_600_000.0).clamp(5.0 / 60.0, 4.0);
-            hours
+            (headroom_ms / 3_600_000.0).clamp(5.0 / 60.0, 4.0)
         }
         _ => 1.0, // default: 1 hour
     };
@@ -469,7 +468,10 @@ pub async fn run_scenario(
         step_number: 2,
         step_name: "Issue mandate".into(),
         status: "completed".into(),
-        detail: Some(format!("Mandate: {}...", mandate_hash.get(..16).unwrap_or(&mandate_hash))),
+        detail: Some(format!(
+            "Mandate: {}...",
+            mandate_hash.get(..16).unwrap_or(&mandate_hash)
+        )),
         timestamp: now_str(),
     });
 
@@ -496,7 +498,10 @@ pub async fn run_scenario(
         step_number: 3,
         step_name: "Open session".into(),
         status: "completed".into(),
-        detail: Some(format!("Session: {}...", session.id.get(..8).unwrap_or(&session.id))),
+        detail: Some(format!(
+            "Session: {}...",
+            session.id.get(..8).unwrap_or(&session.id)
+        )),
         timestamp: now_str(),
     });
 

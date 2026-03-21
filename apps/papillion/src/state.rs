@@ -100,8 +100,8 @@ impl AppState {
         // Try to load persisted seed; generate a new one if none exists
         let (raw_seed, keypair) = match db.get_setting("principal_seed_b64").ok().flatten() {
             Some(seed_b64) => {
-                if let Ok(bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD
-                    .decode(&seed_b64)
+                if let Ok(bytes) =
+                    base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&seed_b64)
                 {
                     if let Ok(seed) = <[u8; 32]>::try_from(bytes.as_slice()) {
                         if let Ok(kp) = PrincipalKeypair::from_bytes(&seed) {
@@ -123,8 +123,7 @@ impl AppState {
                 let kp = PrincipalKeypair::generate();
                 let seed = kp.signing_key().to_bytes();
                 // Persist the newly generated seed
-                let seed_b64 =
-                    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);
+                let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);
                 if let Err(e) = db.set_setting("principal_seed_b64", &seed_b64) {
                     eprintln!("Failed to persist principal seed: {e}");
                 }
