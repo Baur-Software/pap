@@ -507,7 +507,9 @@ pub async fn run_scenario(
 
     // ── Step 4: Exchange data ───────────────────────────────
     // Route to the actual backing service for each agent.
+    // Track success: data exchange only succeeds if we get results or expected output.
     let mut search_results: Option<Vec<SearchResult>> = None;
+    let mut data_exchange_success = false;
     let step4_detail = match scenario_id.as_str() {
         "search" => {
             if let Some(ref q) = query {
@@ -515,6 +517,7 @@ pub async fn run_scenario(
                     Ok(results) => {
                         let count = results.len();
                         search_results = Some(results);
+                        data_exchange_success = true;
                         format!("DuckDuckGo: \"{}\" \u{2014} {} results", q, count)
                     }
                     Err(e) => format!("DuckDuckGo search failed: {}", e),
@@ -529,6 +532,7 @@ pub async fn run_scenario(
                     Ok(results) => {
                         let count = results.len();
                         search_results = Some(results);
+                        data_exchange_success = true;
                         format!("Wikipedia: \"{}\" \u{2014} {} articles", q, count)
                     }
                     Err(e) => format!("Wikipedia lookup failed: {}", e),
@@ -545,6 +549,7 @@ pub async fn run_scenario(
                     match mgr.generate(&prompt, 200) {
                         Ok(response) => {
                             let truncated: String = response.chars().take(200).collect();
+                            data_exchange_success = true;
                             format!("AI: {}", truncated)
                         }
                         Err(e) => format!("On-device inference failed: {}", e),
@@ -557,7 +562,10 @@ pub async fn run_scenario(
                 "No query provided".into()
             }
         }
-        _ => "Zero disclosure \u{2014} no personal data exchanged".into(),
+        _ => {
+            data_exchange_success = true;
+            "Zero disclosure \u{2014} no personal data exchanged".into()
+        }
     };
     steps.push(ScenarioStepResult {
         step_number: 4,
@@ -627,7 +635,7 @@ pub async fn run_scenario(
         query,
         search_results,
         completed_at: now_str(),
-        success: true,
+        success: data_exchange_success,
         error: None,
     };
 
@@ -691,6 +699,101 @@ pub async fn run_scenario(
     Ok(result)
 }
 
+/// Compute quality metric from episode result completeness (0..1).
+/// Quality measures how much useful data was returned and disclosure minimization:
+/// - 0.0: failure or error
+/// - 0.3–0.6: incomplete (no query provided, model not loaded, etc.)
+/// - 0.7–0.9: partial results (some data but sparse)
+/// - 1.0: complete results (rich data, full mandate scope used)
+fn compute_quality(episode: &Episode) -> f64 {
+    if episode.outcome != "success" {
+        return 0.0;
+    }
+
+    // Try to extract result count or payload size from result_json or outcome_detail
+    let detail = &episode.outcome_detail;
+    if let Some(ref detail_str) = detail {
+        // Look for patterns like "N results" or "N articles"
+        if let Some(pos) = detail_str.find("failed") {
+            return 0.0;
+        }
+        if let Some(pos) = detail_str.find("not loaded") {
+            return 0.3;
+        }
+        if let Some(captures) = detail_str
+            .split_whitespace()
+            .find(|w| w.parse::<i32>().is_ok())
+        {
+            if let Ok(count) = captures.parse::<i32>() {
+                // Map result count to quality: 0 → 0.3, 1-3 → 0.6, 4-9 → 0.85, 10+ → 1.0
+                return match count {
+                    0 => 0.3,
+                    1..=3 => 0.6,
+                    4..=9 => 0.85,
+                    _ => 1.0,
+                };
+            }
+        }
+    }
+
+    // If we have result_json, infer completeness from payload size/structure
+    if let Some(ref json) = episode.result_json {
+        let json_size = json.len();
+        // Small (<100 bytes): minimal, quality 0.5
+        // Medium (100-500): good, quality 0.8
+        // Large (500+): rich, quality 1.0
+        return match json_size {
+            0..=100 => 0.5,
+            101..=500 => 0.8,
+            _ => 1.0,
+        };
+    }
+
+    // No data to judge — conservative estimate
+    0.5
+}
+
+/// Compute minimal disclosure refs as set intersection across all successful episodes.
+/// Returns JSON array of property refs that were sufficient across all successes.
+fn compute_minimal_disclosures(
+    state: &State<'_, AppState>,
+    agent_did_hash: &str,
+) -> String {
+    if let Ok(episodes) = state.db.list_episodes(None, Some(agent_did_hash), 1000) {
+        let successful = episodes
+            .iter()
+            .filter(|ep| ep.outcome == "success")
+            .collect::<Vec<_>>();
+
+        if successful.is_empty() {
+            return "[]".to_string();
+        }
+
+        // Parse disclosure refs from each episode
+        let mut all_refs: Vec<Vec<String>> = successful
+            .iter()
+            .filter_map(|ep| serde_json::from_str(&ep.disclosure_refs).ok())
+            .collect();
+
+        if all_refs.is_empty() {
+            return "[]".to_string();
+        }
+
+        // Compute intersection: refs that appear in ALL successful episodes
+        let intersection = all_refs
+            .iter_mut()
+            .fold(all_refs[0].clone(), |acc, cur| {
+                acc.into_iter()
+                    .filter(|r| cur.contains(r))
+                    .collect()
+            });
+
+        serde_json::to_string(&intersection).unwrap_or_else(|_| "[]".into())
+    } else {
+        "[]".to_string()
+    }
+}
+
 /// Update agent profile with rolling EMA statistics.
 fn update_agent_profile(
     state: &State<'_, AppState>,
@@ -707,16 +810,22 @@ fn update_agent_profile(
         0.0
     };
 
+    // Quality is based on result completeness, not success/failure binary
+    let quality = compute_quality(episode);
+
+    // Compute minimal disclosure set across all successful episodes
+    let minimal_disclosure_refs = compute_minimal_disclosures(state, agent_did_hash);
+
     let profile = match existing {
         Some(prev) => AgentProfile {
             agent_did_hash: agent_did_hash.to_string(),
             agent_name: agent_name.to_string(),
             success_rate: ALPHA * success + (1.0 - ALPHA) * prev.success_rate,
-            avg_quality: ALPHA * success + (1.0 - ALPHA) * prev.avg_quality,
+            avg_quality: ALPHA * quality + (1.0 - ALPHA) * prev.avg_quality,
             avg_duration_ms: ALPHA * (episode.duration_ms as f64)
                 + (1.0 - ALPHA) * prev.avg_duration_ms,
             episode_count: prev.episode_count + 1,
-            minimal_disclosure_refs: episode.disclosure_refs.clone(),
+            minimal_disclosure_refs,
             last_used: episode.recorded_at.clone(),
             co_sign_refusals: prev.co_sign_refusals,
         },
@@ -724,10 +833,10 @@ fn update_agent_profile(
             agent_did_hash: agent_did_hash.to_string(),
             agent_name: agent_name.to_string(),
             success_rate: success,
-            avg_quality: success,
+            avg_quality: quality,
             avg_duration_ms: episode.duration_ms as f64,
             episode_count: 1,
-            minimal_disclosure_refs: episode.disclosure_refs.clone(),
+            minimal_disclosure_refs,
             last_used: episode.recorded_at.clone(),
             co_sign_refusals: 0,
         },
