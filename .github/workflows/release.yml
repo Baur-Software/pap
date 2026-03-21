@@ -136,7 +136,7 @@ jobs:
           projectPath: apps/papillion
           tauriScript: cargo tauri
           releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: ${{ matrix.tauri_args }} --config "${{ github.workspace }}/.github/tauri-release.conf.json"
+          args: ${{ matrix.tauri_args }}
 
   # ── 4. Publish the release (un-draft) ──────────────────────────────────
   publish:
