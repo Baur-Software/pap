@@ -40,12 +40,14 @@ pub fn run() {
                 .expect("failed to resolve resource dir");
             *app_state.resource_dir.write().unwrap() = resource_dir;
 
+            // Clone state for the background federation server before manage() takes ownership.
+            let state_clone = app_state.clone_for_background();
+
             app.manage(app_state);
 
             // Spawn federation server on a separate thread with its own tokio runtime.
             // This avoids blocking the Tauri main thread and provides the async context
             // that tokio::spawn() requires.
-            let state_clone = state.clone_for_background();
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
                 rt.block_on(async {
