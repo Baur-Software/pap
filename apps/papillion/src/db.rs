@@ -698,6 +698,82 @@ mod tests {
     }
 
     #[test]
+    fn settings_crud() {
+        let db = test_db();
+        // Missing key returns None
+        assert!(db.get_setting("nonexistent").unwrap().is_none());
+
+        // Set and get
+        db.set_setting("test_key", "test_value").unwrap();
+        assert_eq!(
+            db.get_setting("test_key").unwrap().unwrap(),
+            "test_value"
+        );
+
+        // Overwrite
+        db.set_setting("test_key", "updated").unwrap();
+        assert_eq!(
+            db.get_setting("test_key").unwrap().unwrap(),
+            "updated"
+        );
+    }
+
+    #[test]
+    fn list_agent_profiles_with_data() {
+        let db = test_db();
+        let p1 = AgentProfile {
+            agent_did_hash: "hash-a".to_string(),
+            agent_name: "Agent A".to_string(),
+            success_rate: 0.9,
+            avg_quality: 0.8,
+            avg_duration_ms: 100.0,
+            episode_count: 5,
+            minimal_disclosure_refs: "[]".to_string(),
+            last_used: "2026-03-21T12:00:00Z".to_string(),
+            co_sign_refusals: 0,
+        };
+        let p2 = AgentProfile {
+            agent_did_hash: "hash-b".to_string(),
+            agent_name: "Agent B".to_string(),
+            ..p1.clone()
+        };
+        db.upsert_agent_profile(&p1).unwrap();
+        db.upsert_agent_profile(&p2).unwrap();
+
+        let profiles = db.list_agent_profiles().unwrap();
+        assert_eq!(profiles.len(), 2);
+    }
+
+    #[test]
+    fn filter_episodes_by_agent_did_hash() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        let mut other = sample_episode("ep-2");
+        other.agent_did_hash = "hash-other".to_string();
+        db.insert_episode(&other).unwrap();
+
+        let filtered = db.list_episodes(None, Some("hash-ddg"), 100).unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].id, "ep-1");
+    }
+
+    #[test]
+    fn migration_idempotent() {
+        use std::path::PathBuf;
+        let tmp = std::env::temp_dir().join("pap_test_migrate_idempotent.db");
+        // Open once — runs migrations
+        let db1 = Database::open(&tmp).unwrap();
+        db1.insert_episode(&sample_episode("ep-1")).unwrap();
+        drop(db1);
+        // Open again — migrations run again via CREATE IF NOT EXISTS
+        let db2 = Database::open(&tmp).unwrap();
+        assert_eq!(db2.episode_count().unwrap(), 1);
+        drop(db2);
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
     fn default_retention_policy_exists() {
         let db = test_db();
         let conn = db.conn.lock().unwrap();
