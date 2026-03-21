@@ -3,7 +3,9 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::orchestrator::OrchestratorState;
-use papillion_shared::{BuiltInModelInfo, OrchestratorConfig, OrchestratorStatus, SetupState};
+use papillion_shared::{
+    builtin_model_catalog, OrchestratorConfig, OrchestratorStatus, SetupState,
+};
 
 #[component]
 pub fn SetupWizard() -> impl IntoView {
@@ -12,7 +14,7 @@ pub fn SetupWizard() -> impl IntoView {
     let wizard_error = RwSignal::new(None::<String>);
     let selected_provider = RwSignal::new("builtin".to_string());
     let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
-    let builtin_models = RwSignal::new(Vec::<BuiltInModelInfo>::new());
+    let builtin_models = RwSignal::new(builtin_model_catalog());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
     let ollama_model = RwSignal::new("llama3.2:1b".to_string());
     let openai_endpoint = RwSignal::new(String::new());
@@ -37,12 +39,6 @@ pub fn SetupWizard() -> impl IntoView {
                             &format!("get_setup_state: {e}").into(),
                         );
                     }
-                }
-                // Fetch available built-in models
-                if let Ok(models) =
-                    bridge::invoke_no_args::<Vec<BuiltInModelInfo>>("list_builtin_models").await
-                {
-                    builtin_models.set(models);
                 }
             });
         }

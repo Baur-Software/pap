@@ -8,8 +8,8 @@ use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use papillion_shared::{
-    BuiltInModelInfo, ExportedKey, KeyBackupStatus, LlmProvider, OrchestratorConfig,
-    OrchestratorStatus, SuccessorDesignation,
+    builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider,
+    OrchestratorConfig, OrchestratorStatus, SuccessorDesignation,
 };
 
 #[component]
@@ -52,7 +52,7 @@ fn GeneralTab() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let selected = RwSignal::new("builtin".to_string());
     let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
-    let builtin_models = RwSignal::new(Vec::<BuiltInModelInfo>::new());
+    let builtin_models = RwSignal::new(builtin_model_catalog());
     let mistral_key = RwSignal::new(String::new());
     let mistral_model = RwSignal::new("mistral-small-latest".to_string());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
@@ -63,7 +63,7 @@ fn GeneralTab() -> impl IntoView {
     let saved_msg = RwSignal::new(false);
     let save_error = RwSignal::new(None::<String>);
 
-    // Initialize from current config + fetch model catalog
+    // Initialize from current config
     Effect::new(move || {
         let config = orchestrator.config.get();
         match &config.llm_provider {
@@ -92,16 +92,6 @@ fn GeneralTab() -> impl IntoView {
                 openai_model.set(model.clone());
             }
             LlmProvider::None => selected.set("none".into()),
-        }
-
-        if bridge::tauri_available() {
-            spawn_local(async move {
-                if let Ok(models) =
-                    bridge::invoke_no_args::<Vec<BuiltInModelInfo>>("list_builtin_models").await
-                {
-                    builtin_models.set(models);
-                }
-            });
         }
     });
 
