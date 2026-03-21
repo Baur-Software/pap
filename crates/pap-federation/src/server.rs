@@ -1,24 +1,28 @@
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use tokio::net::TcpListener;
 
 use crate::error::FederationError;
 use crate::registry::FederatedRegistry;
 use crate::sync::FederationMessage;
 
-/// HTTP server for federation endpoints.
+/// TLS-secured HTTP server for federation endpoints.
 ///
-/// Exposes three routes:
+/// Exposes three routes over HTTPS:
 /// - GET  /federation/query?action=... — query by action type
 /// - POST /federation/announce — receive an announcement
 /// - GET  /federation/peers — return known peer list
+///
+/// All connections are TLS-encrypted using a self-signed certificate
+/// whose fingerprint is published in peer discovery. No CA dependency.
 pub struct FederationServer {
     registry: Arc<Mutex<FederatedRegistry>>,
     port: u16,
+    tls_config: Option<axum_server::tls_rustls::RustlsConfig>,
 }
 
 #[derive(Clone)]
@@ -33,7 +37,17 @@ struct QueryParams {
 
 impl FederationServer {
     pub fn new(registry: Arc<Mutex<FederatedRegistry>>, port: u16) -> Self {
-        Self { registry, port }
+        Self {
+            registry,
+            port,
+            tls_config: None,
+        }
+    }
+
+    /// Set the TLS configuration for this server.
+    pub fn with_tls(mut self, config: axum_server::tls_rustls::RustlsConfig) -> Self {
+        self.tls_config = Some(config);
+        self
     }
 
     pub fn router(&self) -> Router {
@@ -48,16 +62,24 @@ impl FederationServer {
             .with_state(state)
     }
 
+    /// Run the server. TLS if configured, plaintext otherwise (tests only).
     pub async fn run(self) -> Result<(), FederationError> {
         let router = self.router();
-        let addr = format!("127.0.0.1:{}", self.port);
-        let listener = TcpListener::bind(&addr)
-            .await
-            .map_err(|e| FederationError::ServerError(e.to_string()))?;
+        let addr = SocketAddr::from(([0, 0, 0, 0], self.port));
 
-        axum::serve(listener, router)
-            .await
-            .map_err(|e| FederationError::ServerError(e.to_string()))
+        if let Some(tls_config) = self.tls_config {
+            axum_server::bind_rustls(addr, tls_config)
+                .serve(router.into_make_service())
+                .await
+                .map_err(|e| FederationError::ServerError(e.to_string()))
+        } else {
+            let listener = tokio::net::TcpListener::bind(addr)
+                .await
+                .map_err(|e| FederationError::ServerError(e.to_string()))?;
+            axum::serve(listener, router)
+                .await
+                .map_err(|e| FederationError::ServerError(e.to_string()))
+        }
     }
 }
 

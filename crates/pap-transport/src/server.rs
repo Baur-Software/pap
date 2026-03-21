@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
@@ -10,13 +11,14 @@ use tokio::net::TcpListener;
 use crate::error::TransportError;
 use crate::handler::AgentHandler;
 
-/// HTTP server for a receiving PAP agent.
+/// TLS-secured HTTP server for a receiving PAP agent.
 ///
-/// Exposes the six protocol phases as REST endpoints. The transport
-/// is HTTP/JSON but the handler logic is transport-agnostic.
+/// Exposes the six protocol phases as REST endpoints over HTTPS.
+/// The transport is HTTPS/JSON but the handler logic is transport-agnostic.
 pub struct AgentServer {
     handler: Arc<dyn AgentHandler>,
     port: u16,
+    tls_config: Option<axum_server::tls_rustls::RustlsConfig>,
 }
 
 #[derive(Clone)]
@@ -26,7 +28,17 @@ struct AppState {
 
 impl AgentServer {
     pub fn new(handler: Arc<dyn AgentHandler>, port: u16) -> Self {
-        Self { handler, port }
+        Self {
+            handler,
+            port,
+            tls_config: None,
+        }
+    }
+
+    /// Set the TLS configuration for this server.
+    pub fn with_tls(mut self, config: axum_server::tls_rustls::RustlsConfig) -> Self {
+        self.tls_config = Some(config);
+        self
     }
 
     pub fn router(&self) -> Router {
@@ -44,16 +56,24 @@ impl AgentServer {
             .with_state(state)
     }
 
+    /// Run the server. TLS if configured, plaintext otherwise (tests only).
     pub async fn run(self) -> Result<(), TransportError> {
         let router = self.router();
-        let addr = format!("127.0.0.1:{}", self.port);
-        let listener = TcpListener::bind(&addr)
-            .await
-            .map_err(|e| TransportError::ServerError(e.to_string()))?;
+        let addr = SocketAddr::from(([0, 0, 0, 0], self.port));
 
-        axum::serve(listener, router)
-            .await
-            .map_err(|e| TransportError::ServerError(e.to_string()))
+        if let Some(tls_config) = self.tls_config {
+            axum_server::bind_rustls(addr, tls_config)
+                .serve(router.into_make_service())
+                .await
+                .map_err(|e| TransportError::ServerError(e.to_string()))
+        } else {
+            let listener = TcpListener::bind(addr)
+                .await
+                .map_err(|e| TransportError::ServerError(e.to_string()))?;
+            axum::serve(listener, router)
+                .await
+                .map_err(|e| TransportError::ServerError(e.to_string()))
+        }
     }
 }
 

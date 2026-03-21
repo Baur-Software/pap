@@ -31,16 +31,32 @@ pub enum FederationMessage {
     PeerListResponse { peers: Vec<RegistryPeer> },
 }
 
-/// HTTP client for federation operations.
+/// HTTP(S) client for federation operations.
+///
+/// Accepts a pre-configured `reqwest::Client` so the caller can set up
+/// TLS cert pinning, custom user-agents, timeouts, etc. Use
+/// `tls::build_federation_client()` to get a client configured for
+/// self-signed cert acceptance.
 pub struct FederationClient {
     client: reqwest::Client,
 }
 
 impl FederationClient {
+    /// Create a federation client with a custom reqwest client.
+    ///
+    /// For TLS-pinned connections, pass a client built by
+    /// `tls::build_federation_client()`.
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self { client }
+    }
+
+    /// Create a federation client with default settings.
+    ///
+    /// Uses `tls::build_federation_client()` which accepts self-signed certs.
     pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-        }
+        let client = crate::tls::build_federation_client()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { client }
     }
 
     /// Pull advertisements matching an action from a peer.

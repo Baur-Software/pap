@@ -2,12 +2,14 @@ pub mod client;
 pub mod endpoint;
 pub mod error;
 pub mod handler;
+pub mod remote;
 pub mod server;
 
 pub use client::AgentClient;
 pub use endpoint::EndpointRegistry;
 pub use error::TransportError;
 pub use handler::AgentHandler;
+pub use remote::RemoteAgentHandler;
 pub use server::AgentServer;
 
 #[cfg(test)]

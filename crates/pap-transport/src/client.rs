@@ -14,10 +14,29 @@ pub struct AgentClient {
 }
 
 impl AgentClient {
+    /// Create a new agent client with default TLS settings.
+    ///
+    /// Accepts self-signed certificates — PAP verifies identity
+    /// by DID and cert fingerprint, not CA chain.
     pub fn new(base_url: &str) -> Self {
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
-            client: reqwest::Client::new(),
+            client,
+        }
+    }
+
+    /// Create an agent client with a pre-configured reqwest client.
+    ///
+    /// Use this when you need a client with specific TLS settings,
+    /// e.g. pinned peer certificate fingerprints.
+    pub fn with_client(base_url: &str, client: reqwest::Client) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            client,
         }
     }
 

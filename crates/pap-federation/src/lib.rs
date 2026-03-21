@@ -3,12 +3,14 @@ pub mod peer;
 pub mod registry;
 pub mod server;
 pub mod sync;
+pub mod tls;
 
 pub use error::FederationError;
 pub use peer::RegistryPeer;
 pub use registry::FederatedRegistry;
 pub use server::FederationServer;
 pub use sync::{FederationClient, FederationMessage};
+pub use tls::{NodeTlsIdentity, build_federation_client, cert_fingerprint, generate_node_identity};
 
 #[cfg(test)]
 mod tests {
