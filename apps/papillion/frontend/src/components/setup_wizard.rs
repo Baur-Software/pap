@@ -32,8 +32,8 @@ pub fn SetupWizard() -> impl IntoView {
                         }
                     }
                     Err(e) => {
-                        web_sys::console::error_1(
-                            &format!("Failed to check setup state: {e}").into(),
+                        web_sys::console::warn_1(
+                            &format!("Setup state unavailable: {e}").into(),
                         );
                     }
                 }
