@@ -147,36 +147,24 @@ impl Default for AppSettings {
 // ── Orchestrator types ──────────────────────────────────────
 
 /// Known built-in models that ship with Papillion.
-/// Each entry maps to a HuggingFace repo + GGUF filename.
+/// Each entry maps to a bundled GGUF file in the app resources.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BuiltInModelInfo {
     pub id: String,
     pub display_name: String,
+    /// HuggingFace repo this was sourced from (for attribution).
     pub repo: String,
+    /// GGUF filename inside the bundled `models/` resource directory.
     pub filename: String,
     pub size_hint: String,
 }
 
-/// Catalog of known models. The first entry is the default.
+/// Catalog of models bundled with the app. The first entry is the default.
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
     vec![
         BuiltInModelInfo {
-            id: "mistral-7b-instruct".into(),
-            display_name: "Mistral 7B Instruct (Q4)".into(),
-            repo: "TheBloke/Mistral-7B-Instruct-v0.2-GGUF".into(),
-            filename: "mistral-7b-instruct-v0.2.Q4_K_M.gguf".into(),
-            size_hint: "~4.4 GB".into(),
-        },
-        BuiltInModelInfo {
-            id: "phi-3-mini".into(),
-            display_name: "Phi-3 Mini (Q4)".into(),
-            repo: "microsoft/Phi-3-mini-4k-instruct-gguf".into(),
-            filename: "Phi-3-mini-4k-instruct-q4.gguf".into(),
-            size_hint: "~2.3 GB".into(),
-        },
-        BuiltInModelInfo {
             id: "tinyllama-1.1b".into(),
-            display_name: "TinyLlama 1.1B (Q4)".into(),
+            display_name: "TinyLlama 1.1B Chat (Q4)".into(),
             repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
             filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
             size_hint: "~0.6 GB".into(),
@@ -186,14 +174,14 @@ pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
 
 /// LLM provider for the orchestrator.
 ///
-/// The default is `BuiltIn` with Mistral — inference runs locally via Candle
-/// with no HTTP calls, which is the intended PAP architecture. The Ollama and
-/// OpenAI-compatible options are provided for advanced users but require
-/// network access that weakens PAP's zero-trust guarantees.
+/// The default is `BuiltIn` with TinyLlama — inference runs locally via Candle
+/// with no HTTP calls, which is the intended PAP architecture. External API
+/// options (Mistral, Ollama, OpenAI-compatible) work over HTTP but disclose
+/// orchestrator context to third parties.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LlmProvider {
-    /// On-device inference via Candle. Model is downloaded once from
-    /// HuggingFace Hub, then runs entirely offline.
+    /// On-device inference via Candle. Model ships bundled with the app
+    /// and runs entirely offline — no network calls.
     #[serde(alias = "BuiltIn")]
     BuiltIn { model_id: String },
     /// Mistral API — first-class support for Mistral's OpenAI-compatible
@@ -211,7 +199,7 @@ pub enum LlmProvider {
 impl Default for LlmProvider {
     fn default() -> Self {
         LlmProvider::BuiltIn {
-            model_id: "mistral-7b-instruct".into(),
+            model_id: "tinyllama-1.1b".into(),
         }
     }
 }
@@ -414,9 +402,9 @@ mod tests {
     }
 
     #[test]
-    fn catalog_default_is_mistral() {
+    fn catalog_default_is_tinyllama() {
         let catalog = builtin_model_catalog();
-        assert_eq!(catalog[0].id, "mistral-7b-instruct");
+        assert_eq!(catalog[0].id, "tinyllama-1.1b");
     }
 
     #[test]
@@ -442,11 +430,11 @@ mod tests {
     // ── LlmProvider default & serde ─────────────────────────
 
     #[test]
-    fn llm_provider_default_is_builtin_mistral() {
+    fn llm_provider_default_is_builtin_tinyllama() {
         let provider = LlmProvider::default();
         match &provider {
             LlmProvider::BuiltIn { model_id } => {
-                assert_eq!(model_id, "mistral-7b-instruct");
+                assert_eq!(model_id, "tinyllama-1.1b");
             }
             other => panic!("Expected BuiltIn, got {other:?}"),
         }

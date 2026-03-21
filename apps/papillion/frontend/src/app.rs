@@ -34,10 +34,15 @@ pub fn App() -> impl IntoView {
     Effect::new(move || {
         let identity = identity_state;
         let orchestrator = orchestrator_state;
+        if !bridge::tauri_available() {
+            return;
+        }
+        identity.loading.set(true);
         spawn_local(async move {
             if let Ok(info) = bridge::invoke_no_args::<IdentityInfo>("get_identity").await {
                 identity.info.set(Some(info));
             }
+            identity.loading.set(false);
             if let Ok(status) =
                 bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status").await
             {
@@ -66,11 +71,16 @@ pub fn App() -> impl IntoView {
     let status_label = move || match orchestrator_for_status.status.get() {
         OrchestratorStatus::Ready => "Ready",
         OrchestratorStatus::Downloading { progress_pct } => {
-            // Can't format dynamically in a simple closure, just show "Downloading..."
-            if progress_pct > 0 { "Downloading..." } else { "Downloading..." }
+            if progress_pct > 0 { "Downloading\u{2026}" } else { "Downloading\u{2026}" }
         }
         OrchestratorStatus::Disconnected => "Disconnected",
         OrchestratorStatus::Unconfigured => "Unconfigured",
+    };
+    let status_class = move || match orchestrator_for_status.status.get() {
+        OrchestratorStatus::Ready => "status-indicator ready",
+        OrchestratorStatus::Downloading { .. } => "status-indicator working",
+        OrchestratorStatus::Disconnected => "status-indicator offline",
+        OrchestratorStatus::Unconfigured => "status-indicator offline",
     };
 
     view! {
@@ -85,7 +95,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/browse") view=BrowsePage />
                 </Routes>
                 <footer class="status-bar">
-                    <span>{status_label}</span>
+                    <span class=status_class>{status_label}</span>
                 </footer>
             </div>
             <CommandPalette />

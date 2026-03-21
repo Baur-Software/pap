@@ -88,9 +88,10 @@ pub async fn check_llm_connection(
     match &config.llm_provider {
         LlmProvider::BuiltIn { model_id } => {
             // For BuiltIn, verify the model is loaded and can generate
+            let resource_dir = state.resource_dir.read()
+                .map_err(|e| PapillionError::from(e.to_string()))?.clone();
             let mut mgr = state.model_manager.lock().await;
-            mgr.ensure_loaded(model_id)
-                .await
+            mgr.ensure_loaded(model_id, &resource_dir)
                 .map_err(PapillionError::from)?;
             let response = mgr
                 .generate("[INST] Say hello in one sentence. [/INST]", 50)

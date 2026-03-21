@@ -3,15 +3,18 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::orchestrator::OrchestratorState;
-use papillion_shared::{BuiltInModelInfo, OrchestratorConfig, OrchestratorStatus, SetupState};
+use papillion_shared::{
+    builtin_model_catalog, OrchestratorConfig, OrchestratorStatus, SetupState,
+};
 
 #[component]
 pub fn SetupWizard() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let show_wizard = RwSignal::new(false);
+    let wizard_error = RwSignal::new(None::<String>);
     let selected_provider = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
-    let builtin_models = RwSignal::new(Vec::<BuiltInModelInfo>::new());
+    let builtin_model = RwSignal::new("tinyllama-1.1b".to_string());
+    let builtin_models = RwSignal::new(builtin_model_catalog());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
     let ollama_model = RwSignal::new("llama3.2:1b".to_string());
     let openai_endpoint = RwSignal::new(String::new());
@@ -21,7 +24,7 @@ pub fn SetupWizard() -> impl IntoView {
     // Check setup state on mount
     Effect::new(move || {
         let setup = orchestrator.setup_state;
-        if setup.get().is_none() {
+        if setup.get().is_none() && bridge::tauri_available() {
             spawn_local(async move {
                 match bridge::invoke_no_args::<SetupState>("get_setup_state").await {
                     Ok(state) => {
@@ -33,15 +36,9 @@ pub fn SetupWizard() -> impl IntoView {
                     }
                     Err(e) => {
                         web_sys::console::error_1(
-                            &format!("Failed to check setup state: {e}").into(),
+                            &format!("get_setup_state: {e}").into(),
                         );
                     }
-                }
-                // Fetch available built-in models
-                if let Ok(models) =
-                    bridge::invoke_no_args::<Vec<BuiltInModelInfo>>("list_builtin_models").await
-                {
-                    builtin_models.set(models);
                 }
             });
         }
@@ -72,6 +69,7 @@ pub fn SetupWizard() -> impl IntoView {
         };
 
         spawn_local(async move {
+            wizard_error.set(None);
             match bridge::invoke::<serde_json::Value, OrchestratorConfig>(
                 "configure_orchestrator",
                 &serde_json::json!({ "config": config }),
@@ -91,10 +89,8 @@ pub fn SetupWizard() -> impl IntoView {
                     }
                     show_wizard.set(false);
                 }
-                Err(e) => {
-                    web_sys::console::error_1(
-                        &format!("Failed to save config: {e}").into(),
-                    );
+                Err(_) => {
+                    wizard_error.set(Some("Could not save \u{2014} backend unavailable.".into()));
                 }
             }
         });
@@ -119,7 +115,7 @@ pub fn SetupWizard() -> impl IntoView {
                             on:click=move |_| selected_provider.set("builtin".into())
                         >
                             <div class="setup-option-title">"Built-in (Recommended)"</div>
-                            <div class="setup-option-desc">"On-device Mistral model via Candle \u{2014} downloaded once, runs offline"</div>
+                            <div class="setup-option-desc">"On-device TinyLlama via Candle \u{2014} ships bundled, runs fully offline"</div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "ollama" { "setup-option selected" } else { "setup-option" }
@@ -164,17 +160,21 @@ pub fn SetupWizard() -> impl IntoView {
                                 </For>
                             </select>
                             <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                                "The model is downloaded from HuggingFace on first launch, then cached locally."
+                                "Ships with the app. Runs entirely on-device \u{2014} no network calls."
                             </p>
                         </div>
                     </Show>
 
-                    // Privacy warning for HTTP providers
+                    // Security warning for HTTP providers
                     <Show when=move || selected_provider.get() == "ollama" || selected_provider.get() == "openai">
-                        <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid rgba(255, 170, 0, 0.25); border-radius: 6px; padding: 10px 12px; margin-top: 12px;">
-                            <p style="font-size: 12px; color: var(--warning);">
-                                "HTTP-based providers send orchestrator prompts outside this process. "
-                                "This weakens PAP\u{2019}s zero-trust guarantees \u{2014} consider the built-in model for full privacy."
+                        <div style="background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 6px; padding: 10px 12px; margin-top: 12px;">
+                            <p style="font-size: 12px; font-weight: 600; color: var(--error); margin-bottom: 4px;">
+                                "Security disclosure"
+                            </p>
+                            <p style="font-size: 12px; color: var(--text-secondary);">
+                                "The orchestrator has full context over your tokens, keys, and agent actions. "
+                                "Sending prompts to an external API discloses this context to the provider. "
+                                "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
                             </p>
                         </div>
                     </Show>
@@ -221,6 +221,12 @@ pub fn SetupWizard() -> impl IntoView {
                                 on:input=move |ev| openai_model.set(event_target_value(&ev))
                             />
                         </div>
+                    </Show>
+
+                    <Show when=move || wizard_error.get().is_some()>
+                        <p style="color: var(--error); font-size: 12px; margin-top: 12px;">
+                            {move || wizard_error.get().unwrap_or_default()}
+                        </p>
                     </Show>
 
                     <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">

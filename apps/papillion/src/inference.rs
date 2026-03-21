@@ -1,7 +1,7 @@
 //! On-device LLM inference via Candle.
 //!
-//! Downloads GGUF models from HuggingFace Hub on first use, then runs
-//! inference entirely offline — no HTTP calls, no data exfiltration.
+//! Models ship bundled inside the Tauri resource directory under `models/`.
+//! Inference runs entirely offline — no HTTP calls, no data exfiltration.
 //! This is the intended PAP architecture: the orchestrator decomposes
 //! user queries into tool calls without ever touching the network.
 
@@ -30,46 +30,36 @@ pub fn resolve_model(model_id: &str) -> Option<BuiltInModelInfo> {
         .find(|m| m.id == model_id)
 }
 
-/// Download the GGUF weights file from HuggingFace Hub.
-/// Returns the local path to the cached file. Subsequent calls are instant.
-pub async fn download_model(info: &BuiltInModelInfo) -> Result<PathBuf, String> {
-    let repo = info.repo.clone();
-    let filename = info.filename.clone();
-
-    // hf-hub's sync API handles caching internally
-    tokio::task::spawn_blocking(move || {
-        let api = hf_hub::api::sync::Api::new().map_err(|e| format!("HF Hub init: {e}"))?;
-        let repo = api.model(repo);
-        let path = repo
-            .get(&filename)
-            .map_err(|e| format!("Model download: {e}"))?;
+/// Resolve the bundled GGUF weights file from the Tauri resource directory.
+/// Expects `{resource_dir}/models/{filename}`.
+pub fn resolve_bundled_model(
+    resource_dir: &PathBuf,
+    info: &BuiltInModelInfo,
+) -> Result<PathBuf, String> {
+    let path = resource_dir.join("models").join(&info.filename);
+    if path.exists() {
         Ok(path)
-    })
-    .await
-    .map_err(|e| format!("Spawn: {e}"))?
+    } else {
+        Err(format!(
+            "Bundled model not found: {} (expected at {})",
+            info.filename,
+            path.display()
+        ))
+    }
 }
 
-/// Download the tokenizer for a model. Falls back to the model repo's
-/// tokenizer.json, then to the base Mistral tokenizer.
-pub async fn download_tokenizer(info: &BuiltInModelInfo) -> Result<PathBuf, String> {
-    let repo = info.repo.clone();
-
-    tokio::task::spawn_blocking(move || {
-        let api = hf_hub::api::sync::Api::new().map_err(|e| format!("HF Hub init: {e}"))?;
-
-        // Try the model repo first
-        let model_repo = api.model(repo);
-        if let Ok(path) = model_repo.get("tokenizer.json") {
-            return Ok(path);
-        }
-
-        // Fall back to the base Mistral tokenizer
-        let base = api.model("mistralai/Mistral-7B-Instruct-v0.2".into());
-        base.get("tokenizer.json")
-            .map_err(|e| format!("Tokenizer download: {e}"))
-    })
-    .await
-    .map_err(|e| format!("Spawn: {e}"))?
+/// Resolve the bundled tokenizer from the Tauri resource directory.
+/// Expects `{resource_dir}/models/tokenizer.json`.
+pub fn resolve_bundled_tokenizer(resource_dir: &PathBuf) -> Result<PathBuf, String> {
+    let path = resource_dir.join("models").join("tokenizer.json");
+    if path.exists() {
+        Ok(path)
+    } else {
+        Err(format!(
+            "Bundled tokenizer not found (expected at {})",
+            path.display()
+        ))
+    }
 }
 
 /// Load a downloaded GGUF model into memory, ready for inference.
@@ -235,9 +225,13 @@ impl ModelManager {
         }
     }
 
-    /// Ensure the model is downloaded and loaded. No-op if already loaded
-    /// with the same model_id.
-    pub async fn ensure_loaded(&mut self, model_id: &str) -> Result<(), String> {
+    /// Load the bundled model from the resource directory.
+    /// No-op if already loaded with the same model_id.
+    pub fn ensure_loaded(
+        &mut self,
+        model_id: &str,
+        resource_dir: &PathBuf,
+    ) -> Result<(), String> {
         if self.loaded.is_some() && self.model_id == model_id {
             return Ok(());
         }
@@ -245,8 +239,8 @@ impl ModelManager {
         let info = resolve_model(model_id)
             .ok_or_else(|| format!("Unknown model: {model_id}"))?;
 
-        let model_path = download_model(&info).await?;
-        let tokenizer_path = download_tokenizer(&info).await?;
+        let model_path = resolve_bundled_model(resource_dir, &info)?;
+        let tokenizer_path = resolve_bundled_tokenizer(resource_dir)?;
 
         let mut loaded = load_model(&model_path, &tokenizer_path)?;
         loaded.info = info;
@@ -274,10 +268,10 @@ mod tests {
 
     #[test]
     fn resolve_known_model() {
-        let info = resolve_model("mistral-7b-instruct").expect("should resolve");
-        assert_eq!(info.id, "mistral-7b-instruct");
+        let info = resolve_model("tinyllama-1.1b").expect("should resolve");
+        assert_eq!(info.id, "tinyllama-1.1b");
         assert!(info.filename.ends_with(".gguf"));
-        assert!(info.repo.contains("Mistral"));
+        assert!(info.repo.contains("TinyLlama"));
     }
 
     #[test]

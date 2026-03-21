@@ -8,8 +8,8 @@ use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use papillion_shared::{
-    BuiltInModelInfo, ExportedKey, KeyBackupStatus, LlmProvider, OrchestratorConfig,
-    OrchestratorStatus, SuccessorDesignation,
+    builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider,
+    OrchestratorConfig, OrchestratorStatus, SuccessorDesignation,
 };
 
 #[component]
@@ -51,8 +51,8 @@ pub fn SettingsPage() -> impl IntoView {
 fn GeneralTab() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let selected = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("mistral-7b-instruct".to_string());
-    let builtin_models = RwSignal::new(Vec::<BuiltInModelInfo>::new());
+    let builtin_model = RwSignal::new("tinyllama-1.1b".to_string());
+    let builtin_models = RwSignal::new(builtin_model_catalog());
     let mistral_key = RwSignal::new(String::new());
     let mistral_model = RwSignal::new("mistral-small-latest".to_string());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
@@ -61,8 +61,9 @@ fn GeneralTab() -> impl IntoView {
     let openai_key = RwSignal::new(String::new());
     let openai_model = RwSignal::new(String::new());
     let saved_msg = RwSignal::new(false);
+    let save_error = RwSignal::new(None::<String>);
 
-    // Initialize from current config + fetch model catalog
+    // Initialize from current config
     Effect::new(move || {
         let config = orchestrator.config.get();
         match &config.llm_provider {
@@ -92,14 +93,6 @@ fn GeneralTab() -> impl IntoView {
             }
             LlmProvider::None => selected.set("none".into()),
         }
-
-        spawn_local(async move {
-            if let Ok(models) =
-                bridge::invoke_no_args::<Vec<BuiltInModelInfo>>("list_builtin_models").await
-            {
-                builtin_models.set(models);
-            }
-        });
     });
 
     let save = move |_| {
@@ -130,6 +123,8 @@ fn GeneralTab() -> impl IntoView {
         };
 
         spawn_local(async move {
+            save_error.set(None);
+            saved_msg.set(false);
             match bridge::invoke::<serde_json::Value, OrchestratorConfig>(
                 "configure_orchestrator",
                 &serde_json::json!({ "config": config }),
@@ -149,8 +144,8 @@ fn GeneralTab() -> impl IntoView {
                         orchestrator.status.set(status);
                     }
                 }
-                Err(e) => {
-                    web_sys::console::error_1(&format!("Failed to save: {e}").into());
+                Err(_) => {
+                    save_error.set(Some("Could not save settings \u{2014} backend unavailable.".into()));
                 }
             }
         });
@@ -195,17 +190,21 @@ fn GeneralTab() -> impl IntoView {
                         </For>
                     </select>
                     <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                        "Downloaded once from HuggingFace Hub, then cached locally for offline use."
+                        "Ships with the app. Runs entirely on-device \u{2014} no network calls."
                     </p>
                 </div>
             </Show>
 
-            // Privacy warning for HTTP-based providers
+            // Security warning for HTTP-based providers
             <Show when=move || selected.get() == "mistral" || selected.get() == "ollama" || selected.get() == "openai">
-                <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid rgba(255, 170, 0, 0.25); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                    <p style="font-size: 12px; color: var(--warning);">
-                        "HTTP-based providers send orchestrator prompts outside this process. "
-                        "This weakens PAP\u{2019}s zero-trust guarantees \u{2014} consider the built-in model for full privacy."
+                <div style="background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                    <p style="font-size: 12px; font-weight: 600; color: var(--error); margin-bottom: 4px;">
+                        "Security disclosure"
+                    </p>
+                    <p style="font-size: 12px; color: var(--text-secondary);">
+                        "The orchestrator has full context over your tokens, keys, and agent actions. "
+                        "Sending prompts to an external API discloses this context to the provider. "
+                        "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
                     </p>
                 </div>
             </Show>
@@ -279,6 +278,11 @@ fn GeneralTab() -> impl IntoView {
                 <Show when=move || saved_msg.get()>
                     <span style="font-size: 12px; color: var(--success);">"Saved!"</span>
                 </Show>
+                <Show when=move || save_error.get().is_some()>
+                    <span style="font-size: 12px; color: var(--error);">
+                        {move || save_error.get().unwrap_or_default()}
+                    </span>
+                </Show>
             </div>
         </div>
     }
@@ -289,16 +293,21 @@ fn IdentityTab() -> impl IntoView {
     let identity = expect_context::<IdentityState>();
     let exported_key = RwSignal::new(None::<String>);
     let show_export = RwSignal::new(false);
+    let export_error = RwSignal::new(None::<String>);
     let show_import = RwSignal::new(false);
     let import_input = RwSignal::new(String::new());
     let import_error = RwSignal::new(None::<String>);
     let show_add_successor = RwSignal::new(false);
+    let successor_error = RwSignal::new(None::<String>);
     let succ_did = RwSignal::new(String::new());
     let succ_rel = RwSignal::new("executor".to_string());
     let succ_notes = RwSignal::new(String::new());
 
     // Load backup status + successors on mount
     Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
         spawn_local(async move {
             if let Ok(status) =
                 bridge::invoke_no_args::<KeyBackupStatus>("get_key_backup_status").await
@@ -315,13 +324,16 @@ fn IdentityTab() -> impl IntoView {
 
     let handle_export = move |_| {
         spawn_local(async move {
+            export_error.set(None);
             match bridge::invoke_no_args::<ExportedKey>("export_key").await {
                 Ok(key) => {
                     exported_key.set(Some(key.seed_b64));
                     identity.backed_up.set(true);
                     show_export.set(true);
                 }
-                Err(e) => web_sys::console::error_1(&e.into()),
+                Err(_) => {
+                    export_error.set(Some("Could not export key \u{2014} backend unavailable.".into()));
+                }
             }
         });
     };
@@ -329,6 +341,7 @@ fn IdentityTab() -> impl IntoView {
     let handle_import = move |_| {
         let seed = import_input.get();
         spawn_local(async move {
+            import_error.set(None);
             match bridge::invoke::<serde_json::Value, papillion_shared::IdentityInfo>(
                 "import_key",
                 &serde_json::json!({ "seedB64": seed }),
@@ -339,9 +352,15 @@ fn IdentityTab() -> impl IntoView {
                     identity.info.set(Some(info));
                     identity.backed_up.set(true);
                     show_import.set(false);
-                    import_error.set(None);
                 }
-                Err(e) => import_error.set(Some(e)),
+                Err(e) => {
+                    let msg = if e.contains("Tauri IPC") {
+                        "Could not import key \u{2014} backend unavailable.".to_string()
+                    } else {
+                        format!("Import failed: {e}")
+                    };
+                    import_error.set(Some(msg));
+                }
             }
         });
     };
@@ -351,6 +370,7 @@ fn IdentityTab() -> impl IntoView {
         let rel = succ_rel.get();
         let notes = succ_notes.get();
         spawn_local(async move {
+            successor_error.set(None);
             match bridge::invoke::<serde_json::Value, Vec<SuccessorDesignation>>(
                 "add_successor",
                 &serde_json::json!({
@@ -367,7 +387,9 @@ fn IdentityTab() -> impl IntoView {
                     succ_notes.set(String::new());
                     show_add_successor.set(false);
                 }
-                Err(e) => web_sys::console::error_1(&e.into()),
+                Err(_) => {
+                    successor_error.set(Some("Could not add successor \u{2014} backend unavailable.".into()));
+                }
             }
         });
     };
@@ -386,8 +408,14 @@ fn IdentityTab() -> impl IntoView {
             <h3 style="font-size: 14px; margin-bottom: 12px;">"Identity"</h3>
             <Show
                 when=move || identity.info.get().is_some()
-                fallback=|| view! {
-                    <p style="color: var(--text-secondary);">"Loading identity..."</p>
+                fallback=move || view! {
+                    <p style="color: var(--text-secondary);">
+                        {move || if identity.loading.get() {
+                            "Loading identity\u{2026}"
+                        } else {
+                            "No identity loaded. Create one by exporting a key, or import an existing key."
+                        }}
+                    </p>
                 }
             >
                 {move || identity.info.get().map(|info| view! {
@@ -410,6 +438,11 @@ fn IdentityTab() -> impl IntoView {
                     on:click=move |_| show_import.update(|v| *v = !*v)
                 >"Import Key"</button>
             </div>
+            <Show when=move || export_error.get().is_some()>
+                <p style="color: var(--error); font-size: 12px; margin-top: 8px;">
+                    {move || export_error.get().unwrap_or_default()}
+                </p>
+            </Show>
         </div>
 
         // Export display
@@ -481,11 +514,15 @@ fn IdentityTab() -> impl IntoView {
                                 on:click=move |_| {
                                     let did = did_for_remove.clone();
                                     spawn_local(async move {
-                                        if let Ok(suc) = bridge::invoke::<serde_json::Value, Vec<SuccessorDesignation>>(
+                                        successor_error.set(None);
+                                        match bridge::invoke::<serde_json::Value, Vec<SuccessorDesignation>>(
                                             "remove_successor",
                                             &serde_json::json!({ "successorDid": did }),
                                         ).await {
-                                            identity.successors.set(suc);
+                                            Ok(suc) => identity.successors.set(suc),
+                                            Err(_) => {
+                                                successor_error.set(Some("Could not remove successor \u{2014} backend unavailable.".into()));
+                                            }
                                         }
                                     });
                                 }
@@ -494,6 +531,12 @@ fn IdentityTab() -> impl IntoView {
                     }
                 }
             </For>
+
+            <Show when=move || successor_error.get().is_some()>
+                <p style="color: var(--error); font-size: 12px; margin-top: 8px;">
+                    {move || successor_error.get().unwrap_or_default()}
+                </p>
+            </Show>
 
             <Show
                 when=move || show_add_successor.get()

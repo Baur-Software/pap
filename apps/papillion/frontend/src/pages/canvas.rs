@@ -209,10 +209,8 @@ fn SetupPrompt() -> impl IntoView {
 
     view! {
         <div class="canvas-prompt canvas-prompt-setup">
-            <p style="font-size: 14px; margin-bottom: 8px;">
-                "Configure an LLM provider to start building."
-            </p>
-            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+            <h2 class="setup-heading">"Configure an LLM provider to start building."</h2>
+            <p class="setup-description">
                 "The orchestrator needs a language model to route prompts to agents. "
                 "Choose built-in (on-device) or connect an external provider."
             </p>

@@ -43,9 +43,10 @@ pub async fn configure_orchestrator(
 
     // Auto-load the model when BuiltIn is selected
     if let LlmProvider::BuiltIn { ref model_id } = config.llm_provider {
+        let resource_dir = state.resource_dir.read()
+            .map_err(|e| PapillionError::from(e.to_string()))?.clone();
         let mut mgr = state.model_manager.lock().await;
-        mgr.ensure_loaded(model_id)
-            .await
+        mgr.ensure_loaded(model_id, &resource_dir)
             .map_err(PapillionError::from)?;
     }
 
@@ -105,7 +106,7 @@ pub fn list_builtin_models() -> Result<Vec<BuiltInModelInfo>, PapillionError> {
     Ok(builtin_model_catalog())
 }
 
-/// Download and load the configured built-in model. Call this after
+/// Load the configured built-in model from bundled resources. Call this after
 /// configuring a BuiltIn provider to prime the model for inference.
 #[tauri::command]
 pub async fn load_builtin_model(
@@ -122,9 +123,10 @@ pub async fn load_builtin_model(
         }
     };
 
+    let resource_dir = state.resource_dir.read()
+        .map_err(|e| PapillionError::from(e.to_string()))?.clone();
     let mut mgr = state.model_manager.lock().await;
-    mgr.ensure_loaded(&model_id)
-        .await
+    mgr.ensure_loaded(&model_id, &resource_dir)
         .map_err(PapillionError::from)?;
 
     Ok(OrchestratorStatus::Ready)
@@ -158,7 +160,7 @@ pub fn list_scenarios() -> Result<Vec<ScenarioCard>, PapillionError> {
             id: "ai".into(),
             title: "Ask AI".into(),
             description:
-                "On-device Mistral inference — your prompts never leave your machine".into(),
+                "On-device inference — your prompts never leave your machine".into(),
             icon: "\u{1F9E0}".into(),
             agent_name: "On-Device AI".into(),
             action_type: "schema:AskAction".into(),
@@ -465,7 +467,7 @@ pub async fn run_scenario(
                     match mgr.generate(&prompt, 200) {
                         Ok(response) => {
                             let truncated: String = response.chars().take(200).collect();
-                            format!("Mistral: {}", truncated)
+                            format!("AI: {}", truncated)
                         }
                         Err(e) => format!("On-device inference failed: {}", e),
                     }
