@@ -5,6 +5,25 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-03-21
+
+### Added
+
+- **docs**: Papillion marketing site (`docs/papillion/`) — consumer-facing landing page with interactive 6-step purchase demo showing AI operating within user-defined rules (budget, vendor preferences, approval thresholds)
+- **docs**: Dual GitHub Pages architecture — root landing page (`docs/index.html`) routes to Papillion (consumer) and PAP (developer) sub-sites
+- **docs**: PAP technical spec site relocated to `docs/pap/` with cross-links to Papillion for non-developer visitors
+- **docs**: Multi-language SDK roadmap section on PAP site — Rust (shipping), Python/TypeScript/Go/Swift/Kotlin planned
+
+### Changed
+
+- **docs**: PAP site language aligned with Papillion framing — leads with "why" (control, visibility, safety) before "how" (cryptographic protocol), adds "Not a developer?" CTA linking to Papillion
+- **docs**: README simplified — removed example binary references (examples deleted in 0.2.0), added Papillion link for interactive demos
+- **ci**: Release workflow model download switched to HuggingFace hub for reliability
+
+### Removed
+
+- **docs**: Direct API call examples removed from PAP site — Papillion now covers those use cases through its interactive demo
+
 ## [0.3.0] - 2026-03-21
 
 ### Added
