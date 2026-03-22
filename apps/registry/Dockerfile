@@ -60,7 +60,7 @@ RUN sed -i \
 RUN cargo build --release -p pap-registry
 
 # ── Stage 3: Minimal runtime image ──────────────────────────────────────────
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \

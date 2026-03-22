@@ -43,11 +43,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/status", get(get_status))
         .route("/api/agents", get(list_agents))
         .route("/api/agents", post(register_agent))
-        .route("/api/agents/:hash", delete(remove_agent))
+        .route("/api/agents/{hash}", delete(remove_agent))
         .route("/api/peers", get(list_peers))
         .route("/api/peers", post(add_peer))
-        .route("/api/peers/:did", delete(remove_peer))
-        .route("/api/peers/:did/sync", post(sync_peer))
+        .route("/api/peers/{did}", delete(remove_peer))
+        .route("/api/peers/{did}/sync", post(sync_peer))
 }
 
 fn extract_bearer(headers: &HeaderMap) -> Option<&str> {
