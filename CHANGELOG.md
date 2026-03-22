@@ -9,17 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **papillion**: Episode recording now detects actual success/failure during data exchange, no longer hardcoding success on failed API calls — agent profile success rates are now accurate
-- **papillion**: Quality metric now measures result completeness (0.0–1.0 based on result count/payload size) instead of mirroring success rate, enabling distinction between "1 result" vs "25 results"
-- **papillion**: Minimal disclosure refs now computed as set intersection across all successful episodes, enabling progressive disclosure minimization instead of latest-episode overwrite
-- **papillion**: Identity state is now atomic — signer and principal seed are protected by a single `RwLock<IdentityState>` to prevent race conditions where one is updated but not the other
-- **papillion**: Canonical base64 encoding — imported identity seeds are decoded to bytes and re-encoded on export, eliminating issues with non-canonical user input
-
-### Added
-
-- **papillion**: `compute_quality()` function derives quality signals from result count in outcome details and payload size in result JSON
-- **papillion**: `compute_minimal_disclosures()` function computes intersection across successful episode history, tracking truly minimal disclosure set
-- **papillion**: Six integration tests for episode recording data fidelity (success flag detection, quality metrics, disclosure intersection)
+- **papillion**: Prevent silent identity loss on corrupt seed — now returns error instead of silently generating ephemeral keypair
+- **papillion**: DB persist failures no longer swallowed — seed persistence errors propagated to frontend so users know identity creation failed
+- **papillion**: Raw seed material now zeroized on drop to prevent lingering in memory after use (cryptographic hardening)
 
 ## [0.2.2] - 2026-03-21
 

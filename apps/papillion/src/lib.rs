@@ -104,21 +104,20 @@ pub fn run() {
 async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
     // Recreate signer from seed in the background thread context
     {
-        let mut identity = state.identity.write().unwrap();
-        if identity.signer.is_none() {
-            let seed_bytes = identity
-                .principal_seed
-                .ok_or("No principal seed available")?;
-            let keypair = PrincipalKeypair::from_bytes(&seed_bytes)
+        let mut signer = state.signer.write().unwrap();
+        if signer.is_none() {
+            let seed_lock = state.principal_seed.read().unwrap();
+            let seed_ref = seed_lock.as_ref().ok_or("No principal seed available")?;
+            let keypair = PrincipalKeypair::from_bytes(seed_ref)
                 .map_err(|e| format!("Failed to recreate keypair from seed: {e}"))?;
-            identity.signer = Some(Box::new(SoftwareSigner::from_keypair(keypair)));
+            *signer = Some(Box::new(SoftwareSigner::from_keypair(keypair)));
         }
     }
 
     // Get the node's DID from the signer
     let node_did = {
-        let identity = state.identity.read().unwrap();
-        match identity.signer.as_ref() {
+        let signer = state.signer.read().unwrap();
+        match signer.as_ref() {
             Some(s) => s.did(),
             None => return Err("No signer available — cannot start federation server".into()),
         }
