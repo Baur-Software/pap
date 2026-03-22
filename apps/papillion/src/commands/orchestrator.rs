@@ -8,6 +8,14 @@ use sha2::{Digest, Sha256};
 use tauri::State;
 use uuid::Uuid;
 
+/// Compute SHA-256 hash of agent DID for profile indexing.
+/// Never stores raw DID in memory DB.
+fn hash_agent_did(agent_did: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(agent_did.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
 use crate::db::{AgentProfile, Episode};
 use crate::error::PapillionError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
@@ -388,11 +396,7 @@ pub async fn run_scenario(
     // ── Memory-informed agent selection ────────────────────
     // Consult the agent profile (if one exists) to calibrate the mandate.
     // This is advisory — missing profiles fall back to defaults.
-    let agent_did_hash_for_profile = {
-        let mut hasher = Sha256::new();
-        hasher.update(agent_did.as_bytes());
-        format!("{:x}", hasher.finalize())
-    };
+    let agent_did_hash_for_profile = hash_agent_did(&agent_did);
     let agent_profile = state
         .db
         .get_agent_profile(&agent_did_hash_for_profile)
@@ -426,7 +430,7 @@ pub async fn run_scenario(
         detail: Some(format!(
             "Found {} ({}){profile_detail}",
             agent_name,
-            agent_did.get(..20).unwrap_or(&agent_did)
+            agent_did.get(..20).unwrap_or(&agent_did[..])
         )),
         timestamp: now_str(),
     });
@@ -438,11 +442,25 @@ pub async fn run_scenario(
         DisclosureSet::empty()
     } else {
         // If we have a profile with known minimal disclosure refs, prefer those
+        // but only if they are a valid subset of the current scenario's allowed disclosures
         let disclosure_props = match &agent_profile {
             Some(p) if p.episode_count >= 5 => {
                 // Try to parse the stored minimal disclosure refs
-                serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs)
-                    .unwrap_or_else(|_| scenario.requires_disclosure.clone())
+                match serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs) {
+                    Ok(stored_refs) => {
+                        // Validate: all stored refs must be in scenario.requires_disclosure
+                        if stored_refs
+                            .iter()
+                            .all(|r| scenario.requires_disclosure.contains(r))
+                        {
+                            stored_refs
+                        } else {
+                            // Invalid subset — fall back to scenario requirements
+                            scenario.requires_disclosure.clone()
+                        }
+                    }
+                    Err(_) => scenario.requires_disclosure.clone(),
+                }
             }
             _ => scenario.requires_disclosure.clone(),
         };
@@ -472,7 +490,7 @@ pub async fn run_scenario(
         status: "completed".into(),
         detail: Some(format!(
             "Mandate: {}...",
-            mandate_hash.get(..16).unwrap_or(&mandate_hash)
+            mandate_hash.get(..16).unwrap_or(&mandate_hash[..])
         )),
         timestamp: now_str(),
     });
@@ -502,7 +520,7 @@ pub async fn run_scenario(
         status: "completed".into(),
         detail: Some(format!(
             "Session: {}...",
-            session.id.get(..8).unwrap_or(&session.id)
+            session.id.get(..8).unwrap_or(&session.id[..])
         )),
         timestamp: now_str(),
     });
@@ -645,11 +663,7 @@ pub async fn run_scenario(
     let duration_ms = start_time.elapsed().as_millis() as i64;
 
     // Hash the agent DID for indexing (never store raw DID in memory DB)
-    let agent_did_hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(agent_did.as_bytes());
-        format!("{:x}", hasher.finalize())
-    };
+    let agent_did_hash = hash_agent_did(&agent_did);
 
     let receipt_session_id = result
         .receipt
@@ -850,11 +864,22 @@ fn update_agent_profile(
 /// List completed scenario runs for the activity page.
 /// Reads from the persistent SQLite episode store and reconstructs
 /// ScenarioRunResult objects from stored JSON.
+///
+/// # Arguments
+/// * `offset` - Number of records to skip (pagination start). Defaults to 0.
+/// * `limit` - Maximum number of records to return. Defaults to 50, capped at 100.
 #[tauri::command]
 pub fn list_completed_runs(
     state: State<'_, AppState>,
+    offset: Option<u32>,
+    limit: Option<u32>,
 ) -> Result<Vec<ScenarioRunResult>, PapillionError> {
-    let episodes = state.db.list_episodes(None, None, 100)?;
+    let offset = offset.unwrap_or(0);
+    let limit = std::cmp::min(limit.unwrap_or(50), 100) as usize;
+
+    let episodes = state
+        .db
+        .list_episodes(None, None, limit, Some(offset as i64))?;
     let mut results = Vec::new();
 
     for ep in episodes {
