@@ -1,6 +1,6 @@
+use super::renderer::BlockRenderer;
 use leptos::prelude::*;
 use serde_json::Value;
-use super::renderer::BlockRenderer;
 
 /// Extract a string field from JSON-LD content, defaulting to "-".
 fn text_field(content: &Value, key: &str) -> String {

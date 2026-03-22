@@ -3,9 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::orchestrator::OrchestratorState;
-use papillion_shared::{
-    builtin_model_catalog, OrchestratorConfig, OrchestratorStatus, SetupState,
-};
+use papillion_shared::{builtin_model_catalog, OrchestratorConfig, OrchestratorStatus, SetupState};
 
 #[component]
 pub fn SetupWizard() -> impl IntoView {
@@ -35,9 +33,7 @@ pub fn SetupWizard() -> impl IntoView {
                         }
                     }
                     Err(e) => {
-                        web_sys::console::error_1(
-                            &format!("get_setup_state: {e}").into(),
-                        );
+                        web_sys::console::error_1(&format!("get_setup_state: {e}").into());
                     }
                 }
             });
@@ -80,10 +76,8 @@ pub fn SetupWizard() -> impl IntoView {
                     orchestrator.config.set(saved);
                     // Refresh sidebar status (model is now loaded if BuiltIn)
                     if let Ok(status) =
-                        bridge::invoke_no_args::<OrchestratorStatus>(
-                            "get_orchestrator_status",
-                        )
-                        .await
+                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status")
+                            .await
                     {
                         orchestrator.status.set(status);
                     }

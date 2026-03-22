@@ -1,6 +1,6 @@
+use super::renderer::BlockRenderer;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use super::renderer::BlockRenderer;
 
 /// RendererRegistry manages runtime registration of BlockRenderer implementations.
 ///

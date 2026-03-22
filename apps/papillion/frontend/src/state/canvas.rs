@@ -281,7 +281,10 @@ fn generate_id() -> String {
 }
 
 fn now_iso() -> String {
-    js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default()
+    js_sys::Date::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default()
 }
 
 fn auto_name_from_prompt(prompt: &str) -> String {

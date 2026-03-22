@@ -9,8 +9,8 @@ use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use papillion_shared::{
-    builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider,
-    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, SuccessorDesignation,
+    builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, OrchestratorConfig,
+    OrchestratorStatus, ProfileMetadata, SuccessorDesignation,
 };
 
 #[component]
@@ -144,10 +144,8 @@ fn GeneralTab() -> impl IntoView {
                     saved_msg.set(true);
                     // Refresh sidebar status (model is now loaded if BuiltIn)
                     if let Ok(status) =
-                        bridge::invoke_no_args::<OrchestratorStatus>(
-                            "get_orchestrator_status",
-                        )
-                        .await
+                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status")
+                            .await
                     {
                         orchestrator.status.set(status);
                     }
@@ -156,7 +154,8 @@ fn GeneralTab() -> impl IntoView {
                     let msg = if e.contains("Tauri IPC") {
                         "Could not save settings \u{2014} backend unavailable.".to_string()
                     } else if e.contains("Bundled model not found") {
-                        "Built-in model file not found. Place the GGUF in the models/ directory.".to_string()
+                        "Built-in model file not found. Place the GGUF in the models/ directory."
+                            .to_string()
                     } else {
                         format!("Save failed: {e}")
                     };
@@ -347,7 +346,9 @@ fn IdentityTab() -> impl IntoView {
                     show_export.set(true);
                 }
                 Err(_) => {
-                    export_error.set(Some("Could not export key \u{2014} backend unavailable.".into()));
+                    export_error.set(Some(
+                        "Could not export key \u{2014} backend unavailable.".into(),
+                    ));
                 }
             }
         });
@@ -403,7 +404,9 @@ fn IdentityTab() -> impl IntoView {
                     show_add_successor.set(false);
                 }
                 Err(_) => {
-                    successor_error.set(Some("Could not add successor \u{2014} backend unavailable.".into()));
+                    successor_error.set(Some(
+                        "Could not add successor \u{2014} backend unavailable.".into(),
+                    ));
                 }
             }
         });
@@ -640,7 +643,12 @@ fn ProfilesTab() -> impl IntoView {
         create_success.set(false);
 
         spawn_local(async move {
-            match bridge::invoke::<_, ProfileMetadata>("create_profile", &serde_json::json!({ "name": name })).await {
+            match bridge::invoke::<_, ProfileMetadata>(
+                "create_profile",
+                &serde_json::json!({ "name": name }),
+            )
+            .await
+            {
                 Ok(_new_profile) => {
                     new_profile_name.set(String::new());
                     create_success.set(true);
@@ -658,7 +666,12 @@ fn ProfilesTab() -> impl IntoView {
 
     let delete_profile = move |profile_id: String| {
         spawn_local(async move {
-            match bridge::invoke::<_, ()>("delete_profile", &serde_json::json!({ "profile_id": profile_id })).await {
+            match bridge::invoke::<_, ()>(
+                "delete_profile",
+                &serde_json::json!({ "profile_id": profile_id }),
+            )
+            .await
+            {
                 Ok(_) => {
                     delete_confirm_profile_id.set(None);
                     // Reload profiles list

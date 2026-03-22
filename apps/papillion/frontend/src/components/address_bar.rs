@@ -27,9 +27,7 @@ pub fn AddressBar() -> impl IntoView {
                 }
                 match bridge::invoke::<Args, RegistryInfo>(
                     "navigate_registry",
-                    &Args {
-                        url: value.clone(),
-                    },
+                    &Args { url: value.clone() },
                 )
                 .await
                 {

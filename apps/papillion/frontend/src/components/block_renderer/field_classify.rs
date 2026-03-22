@@ -247,10 +247,7 @@ mod tests {
 
     #[test]
     fn classify_list() {
-        assert_eq!(
-            classify_field("items", &json!([1, 2, 3])),
-            FieldKind::List
-        );
+        assert_eq!(classify_field("items", &json!([1, 2, 3])), FieldKind::List);
     }
 
     #[test]

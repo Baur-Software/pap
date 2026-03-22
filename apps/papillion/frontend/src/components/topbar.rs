@@ -51,7 +51,9 @@ pub fn TopBar() -> impl IntoView {
                 identity.info.set(Some(info));
                 // Reload profiles list to update active status
                 use papillion_shared::ProfileMetadata;
-                if let Ok(profiles) = bridge::invoke_no_args::<Vec<ProfileMetadata>>("list_profiles").await {
+                if let Ok(profiles) =
+                    bridge::invoke_no_args::<Vec<ProfileMetadata>>("list_profiles").await
+                {
                     if let Some(active) = profiles.iter().find(|p: &&ProfileMetadata| p.active) {
                         identity.current_profile_id.set(Some(active.id.clone()));
                     }
@@ -97,7 +99,7 @@ pub fn TopBar() -> impl IntoView {
                 <button
                     class="topbar-profile-btn"
                     on:click=move |_| profile_menu_open.update(|v| *v = !*v)
-                    title=move || current_profile_name()
+                    title=current_profile_name
                 >
                     <ProfileAvatar name=current_profile_name() />
                 </button>

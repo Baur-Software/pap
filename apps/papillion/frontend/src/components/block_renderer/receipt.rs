@@ -6,14 +6,8 @@ use serde_json::Value;
 /// as a subtle mono footer below the block content.
 pub fn wrap_with_receipt(content_view: AnyView, receipt: Option<&Value>) -> AnyView {
     let receipt_view = receipt.map(|r| {
-        let session = r
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("-");
-        let sigs = r
-            .get("co_signatures")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+        let session = r.get("session_id").and_then(|v| v.as_str()).unwrap_or("-");
+        let sigs = r.get("co_signatures").and_then(|v| v.as_u64()).unwrap_or(0);
         let action = r
             .get("action")
             .and_then(|v| v.as_str())
