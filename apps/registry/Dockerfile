@@ -37,26 +37,24 @@ COPY crates/pap-did ./crates/pap-did
 COPY crates/pap-marketplace ./crates/pap-marketplace
 COPY crates/pap-federation ./crates/pap-federation
 
-# Stub out workspace members we don't need so Cargo can parse the workspace.
-# These are not compiled — Cargo only reads their Cargo.toml for resolution.
-RUN mkdir -p apps/papillion crates/pap-core crates/pap-credential \
-    crates/pap-transport crates/pap-proto crates/pap-webauthn \
-    crates/pap-python crates/papillion-shared
-
-COPY crates/pap-core/Cargo.toml ./crates/pap-core/Cargo.toml
-COPY crates/pap-credential/Cargo.toml ./crates/pap-credential/Cargo.toml
-COPY crates/pap-transport/Cargo.toml ./crates/pap-transport/Cargo.toml
-COPY crates/pap-proto/Cargo.toml ./crates/pap-proto/Cargo.toml
-COPY crates/pap-webauthn/Cargo.toml ./crates/pap-webauthn/Cargo.toml
-COPY crates/pap-python/Cargo.toml ./crates/pap-python/Cargo.toml
-COPY crates/papillion-shared/Cargo.toml ./crates/papillion-shared/Cargo.toml
-COPY apps/papillion/Cargo.toml ./apps/papillion/Cargo.toml
-
 # The registry app
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src ./apps/registry/src
 
-# Build only pap-registry (other workspace members are not compiled)
+# Patch the workspace to remove members we didn't copy.
+# Cargo must be able to resolve the full workspace graph before building.
+RUN sed -i \
+    -e '/"crates\/pap-core"/d' \
+    -e '/"crates\/pap-credential"/d' \
+    -e '/"crates\/pap-webauthn"/d' \
+    -e '/"crates\/pap-proto"/d' \
+    -e '/"crates\/pap-transport"/d' \
+    -e '/"crates\/pap-python"/d' \
+    -e '/"crates\/papillion-shared"/d' \
+    -e '/"apps\/papillion"/d' \
+    Cargo.toml
+
+# Build only pap-registry
 RUN cargo build --release -p pap-registry
 
 # ── Stage 3: Minimal runtime image ──────────────────────────────────────────
