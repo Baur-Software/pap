@@ -255,6 +255,9 @@ impl AppState {
     /// Load persisted seed from DB or create a new one with persistence.
     /// Returns error on corrupt seed (bad base64, wrong length, or invalid keypair)
     /// so the user must manually recover their identity.
+    ///
+    /// Used by tests to verify seed persistence logic independently.
+    #[allow(dead_code)]
     fn load_or_create_seed(db: &Database) -> Result<([u8; 32], PrincipalKeypair), PapillionError> {
         match db.get_setting("principal_seed_b64")? {
             Some(seed_b64) => {
