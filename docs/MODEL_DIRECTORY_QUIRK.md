@@ -34,18 +34,17 @@ C:\Users\You\AppData\Local\Papillion\models\tinyllama-1.1b.gguf
 
 ### Development Mode (`cargo tauri dev`)
 
-When running `cargo tauri dev`, Tauri resolves `resource_dir()` to:
-```
-{project_root}/src-tauri/resources/
-```
+When running `cargo tauri dev`, Tauri resolves `resource_dir()` to the build output directory, which includes files from `apps/papillion/models/`.
 
 **Action Required:**
 Place bundled model files in:
 ```
-apps/papillion/src-tauri/resources/models/
+apps/papillion/models/
 ```
 
-If this directory doesn't exist, `resolve_bundled_model()` will fail with:
+This directory is copied into the Tauri resource directory during the build process.
+
+If files don't exist in this directory, `resolve_bundled_model()` will fail with:
 ```
 Error: Bundled model not found: tinyllama-1.1b.gguf (expected at /path/to/resources/models/tinyllama-1.1b.gguf)
 ```

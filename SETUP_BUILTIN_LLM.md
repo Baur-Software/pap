@@ -9,23 +9,23 @@
 Download a small quantized model. Recommended: **TinyLLaMA 1.1B** (2.2GB)
 
 ```bash
-# Create the resource directory
-mkdir -p apps/papillion/src-tauri/resources/models
+# Create the models directory
+mkdir -p apps/papillion/models
 
 # Download TinyLLaMA weights (~2.2GB)
-cd apps/papillion/src-tauri/resources/models
+cd apps/papillion/models
 curl -L -O https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 
 # Download tokenizer (shared across all models)
 curl -L -O https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json
 
-cd ../../../../../
+cd ../../
 ```
 
 ## Step 2: Verify File Placement
 
 ```bash
-ls -lh apps/papillion/src-tauri/resources/models/
+ls -lh apps/papillion/models/
 ```
 
 Expected output:
@@ -84,7 +84,7 @@ Bundled model not found: tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf (expected at ...)
 
 ```bash
 # Check file exists
-file apps/papillion/src-tauri/resources/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+file apps/papillion/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 
 # Check Tauri is looking in the right place
 # Run: cargo tauri dev
@@ -95,7 +95,7 @@ file apps/papillion/src-tauri/resources/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.g
 
 ```bash
 # Tokenizer must be named exactly "tokenizer.json"
-ls apps/papillion/src-tauri/resources/models/tokenizer.json
+ls apps/papillion/models/tokenizer.json
 ```
 
 ### Model Load Takes Forever
@@ -106,7 +106,7 @@ TinyLLaMA first-load can take 30-60 seconds (loading 2GB into RAM). Be patient.
 
 Check tokenizer.json is valid JSON:
 ```bash
-python3 -m json.tool apps/papillion/src-tauri/resources/models/tokenizer.json > /dev/null && echo "Valid JSON"
+python3 -m json.tool apps/papillion/models/tokenizer.json > /dev/null && echo "Valid JSON"
 ```
 
 ## Verify It Works
@@ -122,9 +122,9 @@ Once status shows "Ready":
 
 Models are LARGE. **Do NOT commit to git.**
 
-Add to `.gitignore`:
+Check `.gitignore` — should already have:
 ```
-apps/papillion/src-tauri/resources/models/*.gguf
+apps/papillion/models/*.gguf
 ```
 
 (Keep `tokenizer.json` in git, it's only 500KB.)
