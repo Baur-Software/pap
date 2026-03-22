@@ -5,6 +5,20 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-03-21
+
+### Fixed
+
+- **papillion**: Episode recording now detects actual success/failure during data exchange, no longer hardcoding success on failed API calls — agent profile success rates are now accurate
+- **papillion**: Quality metric now measures result completeness (0.0–1.0 based on result count/payload size) instead of mirroring success rate, enabling distinction between "1 result" vs "25 results"
+- **papillion**: Minimal disclosure refs now computed as set intersection across all successful episodes, enabling progressive disclosure minimization instead of latest-episode overwrite
+
+### Added
+
+- **papillion**: `compute_quality()` function derives quality signals from result count in outcome details and payload size in result JSON
+- **papillion**: `compute_minimal_disclosures()` function computes intersection across successful episode history, tracking truly minimal disclosure set
+- **papillion**: Six integration tests for episode recording data fidelity (success flag detection, quality metrics, disclosure intersection)
+
 ## [0.2.2] - 2026-03-21
 
 ### Added
