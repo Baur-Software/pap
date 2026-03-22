@@ -40,7 +40,9 @@ pub fn App() -> impl IntoView {
         identity.loading.set(true);
         spawn_local(async move {
             // Load profile list
-            if let Ok(profiles) = bridge::invoke_no_args::<Vec<ProfileMetadata>>("list_profiles").await {
+            if let Ok(profiles) =
+                bridge::invoke_no_args::<Vec<ProfileMetadata>>("list_profiles").await
+            {
                 if let Some(active) = profiles.iter().find(|p| p.active) {
                     identity.current_profile_id.set(Some(active.id.clone()));
                 }
@@ -93,7 +95,8 @@ pub fn App() -> impl IntoView {
                 let orchestrator = orchestrator_state;
                 spawn_local(async move {
                     if let Ok(status) =
-                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status").await
+                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status")
+                            .await
                     {
                         orchestrator.status.set(status);
                     }
@@ -109,24 +112,20 @@ pub fn App() -> impl IntoView {
     // Uses History pushState + popstate so the Leptos router picks up the change
     // without a full page reload (which would tear down WASM).
     Effect::new(move || {
-        let cb = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
-            if (e.meta_key() || e.ctrl_key()) && e.key() == "k" {
-                e.prevent_default();
-                canvas_state.new_canvas();
-                if let Some(window) = web_sys::window() {
-                    let history = window.history().unwrap();
-                    let _ = history.push_state_with_url(&JsValue::NULL, "", Some("/"));
-                    let _ = window.dispatch_event(
-                        &web_sys::Event::new("popstate").unwrap(),
-                    );
+        let cb =
+            Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
+                if (e.meta_key() || e.ctrl_key()) && e.key() == "k" {
+                    e.prevent_default();
+                    canvas_state.new_canvas();
+                    if let Some(window) = web_sys::window() {
+                        let history = window.history().unwrap();
+                        let _ = history.push_state_with_url(&JsValue::NULL, "", Some("/"));
+                        let _ = window.dispatch_event(&web_sys::Event::new("popstate").unwrap());
+                    }
                 }
-            }
-        });
+            });
         let window = web_sys::window().unwrap();
-        let _ = window.add_event_listener_with_callback(
-            "keydown",
-            cb.as_ref().unchecked_ref(),
-        );
+        let _ = window.add_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
         cb.forget(); // Leak intentionally — lives for app lifetime
     });
 
@@ -134,7 +133,8 @@ pub fn App() -> impl IntoView {
     let status_label = move || match orchestrator_for_status.status.get() {
         OrchestratorStatus::Ready => "Ready",
         OrchestratorStatus::Downloading { progress_pct } => {
-            if progress_pct > 0 { "Downloading\u{2026}" } else { "Downloading\u{2026}" }
+            let _ = progress_pct;
+            "Downloading\u{2026}"
         }
         OrchestratorStatus::Disconnected => "Disconnected",
         OrchestratorStatus::Unconfigured => "Unconfigured",

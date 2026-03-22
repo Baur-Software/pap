@@ -37,10 +37,7 @@ pub fn CanvasPage() -> impl IntoView {
 
     let has_blocks = move || !blocks().is_empty();
 
-    let is_ready = move || matches!(
-        orchestrator.status.get(),
-        OrchestratorStatus::Ready
-    );
+    let is_ready = move || matches!(orchestrator.status.get(), OrchestratorStatus::Ready);
 
     // Group blocks by semantic links for rendering
     let grouped_blocks = move || {
@@ -160,10 +157,8 @@ fn InlinePrompt() -> impl IntoView {
             }
         });
         let window = web_sys::window().unwrap();
-        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-            cb.as_ref().unchecked_ref(),
-            50,
-        );
+        let _ = window
+            .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 50);
         cb.forget();
     });
 

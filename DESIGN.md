@@ -99,7 +99,7 @@ Colors are extracted from the butterfly logo and mapped to semantic meanings.
 
 Agents return JSON-LD with `@type` fields. The frontend renders type-specific card components. All values are rendered as **text only** — never innerHTML — per security spec.
 
-Source: `frontend/src/components/block_renderer.rs`
+Source: `frontend/src/components/block_renderer/` (module directory: `mod.rs`, `blessed.rs`, `generic.rs`, `field_classify.rs`, `receipt.rs`)
 
 ### FlightReservation
 
@@ -142,13 +142,15 @@ CSS: `.typed-search-results`, `.typed-search-item`, `.typed-search-title`, `.typ
 
 ### Answer (on-device LLM)
 
-Text response from the on-device Mistral model. Falls through to the generic structured data renderer as key-value pairs.
+Text response from the on-device Mistral model. Rendered as a clean paragraph via dedicated blessed renderer.
 
-### Generic Fallback
+CSS: `.typed-answer`, `.typed-answer-text`
 
-Any unrecognized `@type` renders as a labeled key-value list. The `@type` label is shown in purple mono text, followed by each non-`@`-prefixed key rendered as `key: value` rows.
+### Generic Renderer
 
-CSS: `.typed-structured`, `.typed-structured-type`, `.typed-structured-field`, `.typed-structured-key`, `.typed-structured-val`
+Any `@type` without a blessed renderer is handled by the schema-driven generic renderer. It classifies each field by shape (date, price, URL, DID, nested typed object, list) and renders with appropriate visual treatment. Recurses into nested objects with a depth limit of 4. CSS classes are sanitized and list items capped at 50.
+
+CSS: `.typed-generic`, `.typed-label`, `.typed-field`, `.typed-key`, `.typed-val`, `.typed-field-date`, `.typed-field-price`, `.typed-field-url`, `.typed-field-did`, `.typed-nested`, `.typed-list`, `.typed-truncated`
 
 ## Block States
 

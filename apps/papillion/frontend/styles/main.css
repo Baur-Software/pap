@@ -1552,14 +1552,15 @@ body {
     line-height: 1.4;
 }
 
-/* StructuredData fallback — raw fields */
-.typed-structured {
+/* ── Generic renderer — recursive schema.org field rendering ── */
+
+.typed-generic {
     display: flex;
     flex-direction: column;
     gap: var(--sp-xs);
 }
 
-.typed-structured-type {
+.typed-label {
     font: var(--text-label);
     font-family: var(--font-mono);
     letter-spacing: var(--ls-label);
@@ -1568,23 +1569,112 @@ body {
     margin-bottom: var(--sp-xs);
 }
 
-.typed-structured-field {
+.typed-fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2xs);
+}
+
+.typed-field {
     display: flex;
     gap: var(--sp-sm);
     font: var(--text-small);
     font-family: var(--font-body);
+    align-items: baseline;
 }
 
-.typed-structured-key {
+.typed-key {
     font: var(--text-label);
     font-family: var(--font-mono);
     color: var(--text-3);
     min-width: 100px;
+    flex-shrink: 0;
 }
 
-.typed-structured-val {
+.typed-val {
     color: var(--text-1);
     word-break: break-word;
+}
+
+/* Semantic field kinds */
+.typed-date {
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+.typed-price {
+    color: var(--teal);
+    font-weight: 600;
+    font-family: var(--font-display);
+}
+
+.typed-url {
+    color: var(--purple);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-decoration: underline;
+    text-decoration-color: rgba(108, 92, 231, 0.3);
+}
+
+.typed-did {
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+/* Nested typed objects — indented with left border */
+.typed-nested {
+    margin-left: var(--sp-md);
+    padding-left: var(--sp-sm);
+    border-left: 2px solid var(--border-subtle);
+    margin-top: var(--sp-xs);
+}
+
+/* Lists of typed items */
+.typed-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-sm);
+}
+
+/* Depth truncation indicator */
+.typed-truncated {
+    color: var(--text-3);
+    font-style: italic;
+}
+
+/* Content wrapper for receipt footer */
+.typed-content-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Receipt metadata footer */
+.typed-receipt {
+    margin-top: var(--sp-sm);
+    padding-top: var(--sp-xs);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: var(--sp-sm);
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    color: var(--text-3);
+}
+
+/* Answer type — on-device AI response */
+.typed-answer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-xs);
+}
+
+.typed-answer-text {
+    font: var(--text-body);
+    font-family: var(--font-body);
+    color: var(--text-1);
+    line-height: 1.5;
+    margin: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════

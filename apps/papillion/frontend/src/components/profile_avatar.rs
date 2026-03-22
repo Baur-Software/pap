@@ -3,9 +3,9 @@ use leptos::prelude::*;
 /// Profile avatar sizes
 #[derive(Clone, Copy, Debug)]
 pub enum AvatarSize {
-    Sm,  // 24px
-    Md,  // 32px
-    Lg,  // 48px
+    Sm, // 24px
+    Md, // 32px
+    Lg, // 48px
 }
 
 impl AvatarSize {
@@ -23,12 +23,12 @@ impl AvatarSize {
 fn profile_color(name: &str) -> &'static str {
     let hash = name.chars().map(|c| c as u32).sum::<u32>() as usize;
     let colors = [
-        "var(--purple)",  // #6c5ce7 - Brand, identity
-        "var(--teal)",    // #2ec4a0 - Trust confirmed
-        "var(--gold)",    // #f0a030 - In-progress
-        "var(--coral)",   // #e8706a - Alert
-        "var(--blue)",    // #5098e0 - Information
-        "var(--rose)",    // #e060a0 - Delight
+        "var(--purple)", // #6c5ce7 - Brand, identity
+        "var(--teal)",   // #2ec4a0 - Trust confirmed
+        "var(--gold)",   // #f0a030 - In-progress
+        "var(--coral)",  // #e8706a - Alert
+        "var(--blue)",   // #5098e0 - Information
+        "var(--rose)",   // #e060a0 - Delight
     ];
     colors[hash % colors.len()]
 }

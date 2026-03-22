@@ -98,16 +98,16 @@ pub async fn get_orchestrator_status(
 /// Check first-run setup state.
 #[tauri::command]
 pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, PapillionError> {
-    let has_identity = state.signer.read().unwrap().is_some();
+    let has_signer = state.signer.read().unwrap().is_some();
     let config = state
         .orchestrator_config
         .read()
         .map_err(|e| PapillionError::from(e.to_string()))?;
     let llm_configured = config.llm_provider != LlmProvider::None;
     Ok(SetupState {
-        identity_created: has_identity,
+        identity_created: has_signer,
         llm_configured,
-        setup_complete: has_identity,
+        setup_complete: has_signer,
     })
 }
 

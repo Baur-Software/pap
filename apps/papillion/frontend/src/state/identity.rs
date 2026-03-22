@@ -19,10 +19,7 @@ impl IdentityState {
     /// Get the current profile metadata
     pub fn current_profile(&self) -> Option<ProfileMetadata> {
         let id = self.current_profile_id.get()?;
-        self.profiles
-            .get()
-            .into_iter()
-            .find(|p| p.id == id)
+        self.profiles.get().into_iter().find(|p| p.id == id)
     }
 }
 
