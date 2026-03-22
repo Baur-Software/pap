@@ -755,10 +755,7 @@ fn compute_quality(episode: &Episode) -> f64 {
 
 /// Compute minimal disclosure refs as set intersection across all successful episodes.
 /// Returns JSON array of property refs that were sufficient across all successes.
-fn compute_minimal_disclosures(
-    state: &State<'_, AppState>,
-    agent_did_hash: &str,
-) -> String {
+fn compute_minimal_disclosures(state: &State<'_, AppState>, agent_did_hash: &str) -> String {
     if let Ok(episodes) = state.db.list_episodes(None, Some(agent_did_hash), 1000) {
         let successful = episodes
             .iter()
@@ -786,9 +783,7 @@ fn compute_minimal_disclosures(
 
         let first = all_refs[0].clone();
         let intersection = all_refs[1..].iter().fold(first, |acc, cur| {
-            acc.into_iter()
-                .filter(|r| cur.contains(r))
-                .collect()
+            acc.into_iter().filter(|r| cur.contains(r)).collect()
         });
 
         serde_json::to_string(&intersection).unwrap_or_else(|_| "[]".into())
