@@ -172,11 +172,11 @@ pub struct BuiltInModelInfo {
 /// Catalog of models bundled with the app. The first entry is the default.
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
     vec![BuiltInModelInfo {
-        id: "mistral-7b".into(),
-        display_name: "Mistral 7B Instruct (Q4)".into(),
-        repo: "TheBloke/Mistral-7B-Instruct-v0.2-GGUF".into(),
-        filename: "mistral-7b-instruct-v0.2.Q4_K_M.gguf".into(),
-        size_hint: "~4.5 GB".into(),
+        id: "tinyllama-1.1b".into(),
+        display_name: "TinyLlama 1.1B Chat (Q4)".into(),
+        repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+        filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+        size_hint: "~0.6 GB".into(),
     }]
 }
 

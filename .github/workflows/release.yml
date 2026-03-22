@@ -128,32 +128,30 @@ jobs:
         working-directory: apps/papillion/frontend
         run: trunk build --release
 
-      - name: Cache Mistral 7B model
+      - name: Cache TinyLlama 1.1B model
         uses: actions/cache@v4
         with:
-          path: apps/papillion/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
-          key: mistral-7b-q4-v1
-          restore-keys: mistral-7b-q4
+          path: apps/papillion/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+          key: tinyllama-1.1b-q4-v1
+          restore-keys: tinyllama-1.1b-q4
 
-      - name: Download Mistral 7B model (if not cached)
-        env:
-          HF_HUB_CACHE: apps/papillion/models
+      - name: Download TinyLlama 1.1B model (if not cached)
         run: |
           MODEL_DIR="apps/papillion/models"
-          MODEL_FILE="$MODEL_DIR/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+          MODEL_FILE="$MODEL_DIR/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 
           if [ ! -f "$MODEL_FILE" ]; then
             mkdir -p "$MODEL_DIR"
             echo "Installing huggingface-hub..."
             pip install huggingface-hub --quiet
 
-            echo "Downloading Mistral 7B model from HuggingFace..."
+            echo "Downloading TinyLlama 1.1B model from HuggingFace..."
             python3 -c "
 from huggingface_hub import hf_hub_download
 import os
 model_file = hf_hub_download(
-    repo_id='TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
-    filename='mistral-7b-instruct-v0.2.Q4_K_M.gguf',
+    repo_id='TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF',
+    filename='tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
     local_dir='apps/papillion/models',
     local_dir_use_symlinks=False
 )
@@ -161,8 +159,8 @@ file_size_gb = os.path.getsize(model_file) / (1024**3)
 print(f'✅ Model downloaded successfully ({file_size_gb:.2f} GB)')
             "
           else
-            file_size_gb=$(du -sh "$MODEL_FILE" | awk '{print $1}')
-            echo "✅ Model already cached at $MODEL_FILE ($file_size_gb)"
+            file_size_gb=$(du -sh \"$MODEL_FILE\" | awk '{print \$1}')
+            echo \"✅ Model cached at $MODEL_FILE ($file_size_gb)\"
           fi
 
       - name: Install cargo-tauri
