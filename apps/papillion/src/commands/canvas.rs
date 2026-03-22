@@ -167,11 +167,12 @@ async fn process_prompt(
 
     // Get principal keypair
     let principal_kp = {
-        let seed = state
-            .principal_seed
+        let identity = state
+            .identity
             .read()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        let seed = seed
+        let seed = identity
+            .principal_seed
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
         PrincipalKeypair::from_bytes(seed).map_err(|e| PapillionError::from(e.to_string()))?
