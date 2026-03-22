@@ -718,6 +718,23 @@ body {
 .status-dot.offline { background: var(--coral); }
 .status-dot.working { background: var(--gold); }
 
+/* --- Pagination --- */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  margin-top: var(--sp-lg);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--border);
+}
+
+.pagination-info {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
 /* --- Responsive --- */
 @media (max-width: 640px) {
   .sidebar { width: 56px; }

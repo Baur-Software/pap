@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 use pap_federation::peer::RegistryPeer;
 use pap_marketplace::AgentAdvertisement;
 
+use crate::db::AgentEntry;
 use crate::state::AppState;
+
+// ── Request / response types ──────────────────────────────────────────────────
 
 /// Registry status and identity — returned by GET /api/status.
 #[derive(Debug, Serialize)]
@@ -28,13 +31,26 @@ pub struct AddPeerRequest {
     pub cert_fingerprint: Option<String>,
 }
 
-/// Agent advertisement paired with its content hash, as returned by GET /api/agents.
-/// The hash is the SHA-256 of the canonical advertisement bytes — the stable ID
-/// used to remove agents via DELETE /api/agents/:hash.
+/// Query params for GET /api/agents.
+#[derive(Debug, Deserialize)]
+pub struct AgentListQuery {
+    pub q: Option<String>,
+    #[serde(default = "default_page")]
+    pub page: u32,
+    #[serde(default = "default_per_page")]
+    pub per_page: u32,
+}
+fn default_page() -> u32 { 1 }
+fn default_per_page() -> u32 { 20 }
+
+/// Paginated agent list response — replaces the old Vec<AgentEntry>.
 #[derive(Debug, Serialize)]
-pub struct AgentEntry {
-    pub hash: String,
-    pub ad: AgentAdvertisement,
+pub struct AgentListResponse {
+    pub items: Vec<AgentEntry>,
+    pub total: u64,
+    pub page: u32,
+    pub per_page: u32,
+    pub total_pages: u32,
 }
 
 /// Assemble the admin API router under `/api`.
@@ -84,23 +100,39 @@ async fn get_status(
     .into_response()
 }
 
+/// List agents with server-side search and pagination.
+/// GET /api/agents?q=<text>&page=<n>&per_page=<n>
 async fn list_agents(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Query(params): Query<AgentListQuery>,
 ) -> Response {
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let registry = state.registry.lock().unwrap();
-    let entries: Vec<AgentEntry> = registry
-        .all_advertisements()
-        .iter()
-        .map(|ad| AgentEntry {
-            hash: ad.hash(),
-            ad: ad.clone(),
-        })
-        .collect();
-    Json(entries).into_response()
+    let per_page = params.per_page.clamp(1, 200);
+    match state
+        .store
+        .search_agents(params.q.as_deref(), params.page, per_page)
+        .await
+    {
+        Ok(page) => {
+            let total_pages = ((page.total as u32).saturating_add(per_page - 1)) / per_page;
+            Json(AgentListResponse {
+                items: page.items,
+                total: page.total,
+                page: page.page,
+                per_page: page.per_page,
+                total_pages: total_pages.max(1),
+            })
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }
 
 async fn register_agent(
@@ -111,16 +143,32 @@ async fn register_agent(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let mut registry = state.registry.lock().unwrap();
-    if !registry.verify_advertisement(&ad) {
-        return (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({"error": "invalid or missing Ed25519 signature — signed_by DID must match the signature"})),
-        )
-            .into_response();
+    // Verify Ed25519 signature before storing.
+    {
+        let registry = state.registry.lock().unwrap();
+        if !registry.verify_advertisement(&ad) {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"error": "invalid or missing Ed25519 signature — signed_by DID must match the signature"})),
+            )
+                .into_response();
+        }
     }
-    match registry.register_local(ad) {
-        Ok(()) => (StatusCode::CREATED, Json(serde_json::json!({"ok": true}))).into_response(),
+    // Register in-memory, then write-through to DB.
+    // Critical: drop the Mutex guard before any .await.
+    let result = {
+        let mut registry = state.registry.lock().unwrap();
+        registry.register_local(ad.clone())
+    };
+    match result {
+        Ok(()) => {
+            let hash = ad.hash();
+            if let Err(e) = state.store.insert_agent(&hash, &ad).await {
+                tracing::error!("DB write-through failed for agent {hash}: {e}");
+            }
+            (StatusCode::CREATED, Json(serde_json::json!({"ok": true, "hash": hash})))
+                .into_response()
+        }
         Err(e) => (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(serde_json::json!({"error": e.to_string()})),
@@ -137,9 +185,14 @@ async fn remove_agent(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let mut registry = state.registry.lock().unwrap();
-    let removed = registry.remove_by_hash(&hash);
+    let removed = {
+        let mut registry = state.registry.lock().unwrap();
+        registry.remove_by_hash(&hash)
+    };
     if removed {
+        if let Err(e) = state.store.delete_agent(&hash).await {
+            tracing::error!("DB delete failed for agent {hash}: {e}");
+        }
         Json(serde_json::json!({"ok": true})).into_response()
     } else {
         (
@@ -150,6 +203,7 @@ async fn remove_agent(
     }
 }
 
+/// List peers — reads from DB so last_sync is always current.
 async fn list_peers(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -157,8 +211,14 @@ async fn list_peers(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let registry = state.registry.lock().unwrap();
-    Json(registry.peers()).into_response()
+    match state.store.load_all_peers().await {
+        Ok(peers) => Json(peers).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }
 
 async fn add_peer(
@@ -173,8 +233,13 @@ async fn add_peer(
         Some(fp) => RegistryPeer::with_fingerprint(&req.did, &req.endpoint, &fp),
         None => RegistryPeer::new(&req.did, &req.endpoint),
     };
-    let mut registry = state.registry.lock().unwrap();
-    registry.add_peer(peer);
+    {
+        let mut registry = state.registry.lock().unwrap();
+        registry.add_peer(peer.clone());
+    }
+    if let Err(e) = state.store.upsert_peer(&peer).await {
+        tracing::error!("DB write-through failed for peer {}: {e}", peer.did);
+    }
     (StatusCode::CREATED, Json(serde_json::json!({"ok": true}))).into_response()
 }
 
@@ -186,11 +251,15 @@ async fn remove_peer(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    // URL-decode the DID (colons are valid in path segments but may be encoded)
-    let did_decoded = urlencoding_decode(&did);
-    let mut registry = state.registry.lock().unwrap();
-    let removed = registry.remove_peer(&did_decoded);
+    let did_decoded = percent_decode(&did);
+    let removed = {
+        let mut registry = state.registry.lock().unwrap();
+        registry.remove_peer(&did_decoded)
+    };
     if removed {
+        if let Err(e) = state.store.delete_peer(&did_decoded).await {
+            tracing::error!("DB delete failed for peer {did_decoded}: {e}");
+        }
         Json(serde_json::json!({"ok": true})).into_response()
     } else {
         (
@@ -209,7 +278,7 @@ async fn sync_peer(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let did_decoded = urlencoding_decode(&did);
+    let did_decoded = percent_decode(&did);
     let endpoint = {
         let registry = state.registry.lock().unwrap();
         registry
@@ -230,9 +299,8 @@ async fn sync_peer(
         }
     };
 
-    // Query the peer for all advertisements (using the query-all approach)
     let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true) // Self-signed certs for federation
+        .danger_accept_invalid_certs(true)
         .build()
         .unwrap();
 
@@ -242,18 +310,43 @@ async fn sync_peer(
         .await
     {
         Ok(resp) => {
-            if let Ok(msg) =
-                resp.json::<pap_federation::sync::FederationMessage>().await
-            {
+            if let Ok(msg) = resp.json::<pap_federation::sync::FederationMessage>().await {
                 if let pap_federation::sync::FederationMessage::QueryResponse {
                     advertisements,
                 } = msg
                 {
-                    let count = {
+                    // Snapshot before-hashes, merge, collect new ads for write-through.
+                    let new_ads = {
                         let mut registry = state.registry.lock().unwrap();
-                        registry.merge_remote(advertisements)
+                        let before: std::collections::HashSet<String> =
+                            registry.all_advertisements().iter().map(|a| a.hash()).collect();
+                        registry.merge_remote(advertisements);
+                        registry
+                            .all_advertisements()
+                            .iter()
+                            .filter(|a| !before.contains(&a.hash()))
+                            .cloned()
+                            .collect::<Vec<_>>()
                     };
-                    return Json(serde_json::json!({"ok": true, "merged": count}))
+
+                    let merged = new_ads.len();
+                    for ad in &new_ads {
+                        let hash = ad.hash();
+                        if let Err(e) = state.store.insert_agent(&hash, ad).await {
+                            tracing::error!("DB write-through failed for synced agent {hash}: {e}");
+                        }
+                    }
+
+                    // Update last_sync timestamp in DB.
+                    if let Err(e) = state
+                        .store
+                        .update_peer_sync_time(&did_decoded, chrono::Utc::now())
+                        .await
+                    {
+                        tracing::warn!("Failed to update last_sync for peer {did_decoded}: {e}");
+                    }
+
+                    return Json(serde_json::json!({"ok": true, "merged": merged}))
                         .into_response();
                 }
             }
@@ -271,21 +364,13 @@ async fn sync_peer(
     }
 }
 
-fn urlencoding_decode(s: &str) -> String {
-    // Simple percent-decoding for DID path segments
-    percent_decode(s)
-}
-
 fn percent_decode(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (
-                hex_val(bytes[i + 1]),
-                hex_val(bytes[i + 2]),
-            ) {
+            if let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
                 result.push((h * 16 + l) as char);
                 i += 3;
                 continue;

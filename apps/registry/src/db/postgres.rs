@@ -1,0 +1,245 @@
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use sqlx::PgPool;
+
+use pap_federation::peer::RegistryPeer;
+use pap_marketplace::AgentAdvertisement;
+
+use super::{AgentEntry, AgentsPage, NodeIdentity};
+
+pub struct PostgresStore {
+    pub pool: PgPool,
+}
+
+impl PostgresStore {
+    pub async fn connect(url: &str) -> Result<Self> {
+        let pool = PgPool::connect(url)
+            .await
+            .with_context(|| format!("Failed to connect to Postgres at {url}"))?;
+        Ok(Self { pool })
+    }
+
+    pub async fn migrate(&self) -> Result<()> {
+        // Run the base schema (creates agents/peers/node_identity tables).
+        // The FTS5 virtual table and triggers in 0001_initial.sql are SQLite-only;
+        // they will fail silently on Postgres via the .ok() below.
+        sqlx::migrate!("src/db/migrations")
+            .run(&self.pool)
+            .await
+            .context("Postgres migration failed")?;
+
+        // Add Postgres-specific full-text search (idempotent).
+        sqlx::query(
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS search_vec tsvector
+             GENERATED ALWAYS AS (
+                 to_tsvector('english',
+                     coalesce(name, '') || ' ' ||
+                     coalesce(provider_name, '') || ' ' ||
+                     coalesce(capability_json, ''))
+             ) STORED",
+        )
+        .execute(&self.pool)
+        .await
+        .ok(); // ignore "column already exists"
+
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS agents_search_gin ON agents USING GIN(search_vec)",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    // ── Node identity ────────────────────────────────────────────────────────
+
+    pub async fn load_identity(&self) -> Result<Option<NodeIdentity>> {
+        let row = sqlx::query_as::<_, (String, Vec<u8>)>(
+            "SELECT did, signing_key FROM node_identity WHERE id = 1",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.and_then(|(did, key_bytes)| {
+            if key_bytes.len() == 32 {
+                let mut bytes = [0u8; 32];
+                bytes.copy_from_slice(&key_bytes);
+                Some(NodeIdentity { did, signing_key_bytes: bytes })
+            } else {
+                None
+            }
+        }))
+    }
+
+    pub async fn save_identity(&self, identity: &NodeIdentity) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO node_identity (id, did, signing_key) VALUES (1, $1, $2)
+             ON CONFLICT(id) DO UPDATE SET did = EXCLUDED.did, signing_key = EXCLUDED.signing_key",
+        )
+        .bind(&identity.did)
+        .bind(identity.signing_key_bytes.as_slice())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    // ── Agents ───────────────────────────────────────────────────────────────
+
+    pub async fn load_all_agents(&self) -> Result<Vec<AgentAdvertisement>> {
+        let rows = sqlx::query_as::<_, (String,)>(
+            "SELECT ad_json FROM agents ORDER BY inserted_at ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|(json,)| {
+                serde_json::from_str(&json).context("Failed to deserialize agent from DB")
+            })
+            .collect()
+    }
+
+    pub async fn insert_agent(&self, hash: &str, ad: &AgentAdvertisement) -> Result<()> {
+        let ad_json = serde_json::to_string(ad)?;
+        let cap_json = serde_json::to_string(&ad.capability)?;
+        sqlx::query(
+            "INSERT INTO agents (hash, ad_json, name, provider_name, capability_json)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT(hash) DO NOTHING",
+        )
+        .bind(hash)
+        .bind(&ad_json)
+        .bind(&ad.name)
+        .bind(&ad.provider.name)
+        .bind(&cap_json)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn delete_agent(&self, hash: &str) -> Result<bool> {
+        let result = sqlx::query("DELETE FROM agents WHERE hash = $1")
+            .bind(hash)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn search_agents(
+        &self,
+        q: Option<&str>,
+        page: u32,
+        per_page: u32,
+    ) -> Result<AgentsPage> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let (total, rows): (u64, Vec<(String, String)>) =
+            if let Some(query) = q.filter(|s| !s.is_empty()) {
+                let total: i64 = sqlx::query_as::<_, (i64,)>(
+                    "SELECT COUNT(*) FROM agents WHERE search_vec @@ plainto_tsquery('english', $1)",
+                )
+                .bind(query)
+                .fetch_one(&self.pool)
+                .await
+                .map(|(n,)| n)
+                .unwrap_or(0);
+
+                let rows = sqlx::query_as::<_, (String, String)>(
+                    "SELECT hash, ad_json FROM agents
+                     WHERE search_vec @@ plainto_tsquery('english', $1)
+                     ORDER BY ts_rank(search_vec, plainto_tsquery('english', $1)) DESC
+                     LIMIT $2 OFFSET $3",
+                )
+                .bind(query)
+                .bind(per_page as i64)
+                .bind(offset as i64)
+                .fetch_all(&self.pool)
+                .await?;
+
+                (total as u64, rows)
+            } else {
+                let total: i64 = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM agents")
+                    .fetch_one(&self.pool)
+                    .await
+                    .map(|(n,)| n)
+                    .unwrap_or(0);
+
+                let rows = sqlx::query_as::<_, (String, String)>(
+                    "SELECT hash, ad_json FROM agents ORDER BY inserted_at DESC LIMIT $1 OFFSET $2",
+                )
+                .bind(per_page as i64)
+                .bind(offset as i64)
+                .fetch_all(&self.pool)
+                .await?;
+
+                (total as u64, rows)
+            };
+
+        let items = rows
+            .into_iter()
+            .map(|(hash, json)| {
+                let ad: AgentAdvertisement =
+                    serde_json::from_str(&json).context("Failed to deserialize agent")?;
+                Ok(AgentEntry { hash, ad })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(AgentsPage { items, total, page, per_page })
+    }
+
+    // ── Peers ────────────────────────────────────────────────────────────────
+
+    pub async fn load_all_peers(&self) -> Result<Vec<RegistryPeer>> {
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
+            "SELECT did, endpoint, cert_fingerprint, last_sync FROM peers",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(did, endpoint, cert_fingerprint, last_sync)| {
+                let last_sync = last_sync
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&Utc));
+                RegistryPeer { did, endpoint, cert_fingerprint, last_sync }
+            })
+            .collect())
+    }
+
+    pub async fn upsert_peer(&self, peer: &RegistryPeer) -> Result<()> {
+        let last_sync = peer.last_sync.map(|t| t.to_rfc3339());
+        sqlx::query(
+            "INSERT INTO peers (did, endpoint, cert_fingerprint, last_sync)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT(did) DO UPDATE SET
+                 endpoint = EXCLUDED.endpoint,
+                 cert_fingerprint = EXCLUDED.cert_fingerprint,
+                 last_sync = EXCLUDED.last_sync",
+        )
+        .bind(&peer.did)
+        .bind(&peer.endpoint)
+        .bind(&peer.cert_fingerprint)
+        .bind(last_sync)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn delete_peer(&self, did: &str) -> Result<bool> {
+        let result = sqlx::query("DELETE FROM peers WHERE did = $1")
+            .bind(did)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn update_peer_sync_time(&self, did: &str, ts: DateTime<Utc>) -> Result<()> {
+        sqlx::query("UPDATE peers SET last_sync = $1 WHERE did = $2")
+            .bind(ts.to_rfc3339())
+            .bind(did)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+}

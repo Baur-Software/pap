@@ -44,11 +44,21 @@ pub struct AgentAdvertisement {
     pub signature: Option<String>,
 }
 
-/// Agent paired with its server-computed content hash, as returned by GET /api/agents.
+/// Agent paired with its server-computed content hash.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentEntry {
     pub hash: String,
     pub ad: AgentAdvertisement,
+}
+
+/// Paginated response from GET /api/agents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentListResponse {
+    pub items: Vec<AgentEntry>,
+    pub total: u64,
+    pub page: u32,
+    pub per_page: u32,
+    pub total_pages: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,8 +168,17 @@ pub async fn fetch_status() -> Result<RegistryStatus, String> {
     fetch_json("/api/status").await
 }
 
-pub async fn fetch_agents() -> Result<Vec<AgentEntry>, String> {
-    fetch_json("/api/agents").await
+pub async fn fetch_agents(
+    q: Option<&str>,
+    page: u32,
+    per_page: u32,
+) -> Result<AgentListResponse, String> {
+    let mut url = format!("/api/agents?page={}&per_page={}", page, per_page);
+    if let Some(q) = q.filter(|s| !s.is_empty()) {
+        let encoded = js_sys::encode_uri_component(q);
+        url.push_str(&format!("&q={}", encoded));
+    }
+    fetch_json(&url).await
 }
 
 pub async fn remove_agent(hash: &str) -> Result<(), String> {

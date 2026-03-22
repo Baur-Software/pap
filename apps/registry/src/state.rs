@@ -3,11 +3,13 @@ use std::sync::{Arc, Mutex};
 use pap_federation::registry::FederatedRegistry;
 
 use crate::config::Config;
+use crate::db::RegistryStore;
 
 /// Shared application state passed into all route handlers.
 #[derive(Clone)]
 pub struct AppState {
     pub registry: Arc<Mutex<FederatedRegistry>>,
+    pub store: Arc<RegistryStore>,
     pub node_did: String,
     pub node_endpoint: String,
     pub cert_fingerprint: String,
@@ -17,12 +19,14 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         registry: Arc<Mutex<FederatedRegistry>>,
+        store: Arc<RegistryStore>,
         node_did: String,
         config: &Config,
         cert_fingerprint: String,
     ) -> Self {
         Self {
             registry,
+            store,
             node_did,
             node_endpoint: config.public_endpoint.clone(),
             cert_fingerprint,

@@ -24,6 +24,7 @@ FROM rust:1.94-slim AS backend-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev ca-certificates \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -64,7 +65,10 @@ FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /data
 
 WORKDIR /app
 
@@ -74,6 +78,9 @@ COPY --from=frontend-builder /build/frontend/dist ./dist
 ENV PAP_REGISTRY_HOST=0.0.0.0
 ENV PAP_REGISTRY_PORT=7890
 ENV PAP_REGISTRY_DIST=/app/dist
+ENV PAP_REGISTRY_DB=/data/registry.db
+
+VOLUME ["/data"]
 
 EXPOSE 7890
 

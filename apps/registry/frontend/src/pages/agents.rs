@@ -2,22 +2,28 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
-use crate::api::{self, AgentEntry};
+use crate::api::{self, AgentEntry, AgentListResponse};
+
+const PER_PAGE: u32 = 20;
 
 #[component]
 pub fn AgentsPage() -> impl IntoView {
-    let agents = RwSignal::new(Vec::<AgentEntry>::new());
+    let response = RwSignal::new(None::<AgentListResponse>);
     let error = RwSignal::new(None::<String>);
     let loading = RwSignal::new(true);
-    let filter = RwSignal::new(String::new());
+    let query = RwSignal::new(String::new());
+    let page = RwSignal::new(1u32);
     let show_register = RwSignal::new(false);
 
     let reload = move || {
         loading.set(true);
+        let q = query.get();
+        let pg = page.get();
         spawn_local(async move {
-            match api::fetch_agents().await {
-                Ok(list) => {
-                    agents.set(list);
+            let q_ref = if q.is_empty() { None } else { Some(q.as_str()) };
+            match api::fetch_agents(q_ref, pg, PER_PAGE).await {
+                Ok(resp) => {
+                    response.set(Some(resp));
                     error.set(None);
                 }
                 Err(e) => error.set(Some(e)),
@@ -27,21 +33,6 @@ pub fn AgentsPage() -> impl IntoView {
     };
 
     Effect::new(move || { reload(); });
-
-    let filtered_agents = move || {
-        let q = filter.get().to_lowercase();
-        agents
-            .get()
-            .into_iter()
-            .filter(|entry| {
-                let a = &entry.ad;
-                q.is_empty()
-                    || a.name.to_lowercase().contains(&q)
-                    || a.provider.name.to_lowercase().contains(&q)
-                    || a.capability.iter().any(|c| c.to_lowercase().contains(&q))
-            })
-            .collect::<Vec<_>>()
-    };
 
     view! {
         <div class="page">
@@ -64,9 +55,13 @@ pub fn AgentsPage() -> impl IntoView {
             <div class="filter-bar">
                 <input
                     class="filter-input"
-                    placeholder="Filter by name, provider, or action…"
-                    prop:value=move || filter.get()
-                    on:input=move |e| filter.set(event_target_value(&e))
+                    placeholder="Search by name, provider, or capability…"
+                    prop:value=move || query.get()
+                    on:input=move |e| {
+                        query.set(event_target_value(&e));
+                        page.set(1);
+                        reload();
+                    }
                 />
                 <button class="btn btn-secondary" on:click=move |_| reload()>
                     "↺ Refresh"
@@ -76,29 +71,57 @@ pub fn AgentsPage() -> impl IntoView {
             {move || if loading.get() {
                 view! { <div class="loading">"Loading agents…"</div> }.into_any()
             } else {
-                let list = filtered_agents();
-                if list.is_empty() {
-                    view! {
-                        <div class="empty-state">
-                            <div class="empty-state-icon">"⬡"</div>
-                            <div class="empty-state-title">"No agents found"</div>
-                            <p style="font-size:13px; color: var(--text-3)">
-                                {if filter.get().is_empty() {
-                                    "No agents are registered yet. Click \"Register Agent\" to add one."
-                                } else {
-                                    "No agents match your filter."
-                                }}
-                            </p>
-                        </div>
-                    }.into_any()
-                } else {
-                    view! {
-                        <div class="agent-list">
-                            {list.into_iter().map(|entry| view! {
-                                <AgentCard entry=entry.clone() on_remove=move || reload() />
-                            }).collect::<Vec<_>>()}
-                        </div>
-                    }.into_any()
+                match response.get() {
+                    None => view! { <div class="empty-state"><div class="empty-state-icon">"⬡"</div><div class="empty-state-title">"No data"</div></div> }.into_any(),
+                    Some(resp) => {
+                        if resp.items.is_empty() {
+                            view! {
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">"⬡"</div>
+                                    <div class="empty-state-title">"No agents found"</div>
+                                    <p style="font-size:13px; color: var(--text-3)">
+                                        {if query.get().is_empty() {
+                                            "No agents are registered yet. Click \"Register Agent\" to add one."
+                                        } else {
+                                            "No agents match your search."
+                                        }}
+                                    </p>
+                                </div>
+                            }.into_any()
+                        } else {
+                            let total = resp.total;
+                            let total_pages = resp.total_pages;
+                            view! {
+                                <div>
+                                    <div class="agent-list">
+                                        {resp.items.into_iter().map(|entry| view! {
+                                            <AgentCard entry=entry.clone() on_remove=move || reload() />
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                    <div class="pagination">
+                                        <button
+                                            class="btn btn-secondary btn-sm"
+                                            disabled=move || page.get() <= 1
+                                            on:click=move |_| { page.update(|p| *p -= 1); reload(); }
+                                        >
+                                            "← Prev"
+                                        </button>
+                                        <span class="pagination-info">
+                                            "Page " {move || page.get()} " of " {total_pages}
+                                            " (" {total} " total)"
+                                        </span>
+                                        <button
+                                            class="btn btn-secondary btn-sm"
+                                            disabled=move || page.get() >= total_pages
+                                            on:click=move |_| { page.update(|p| *p += 1); reload(); }
+                                        >
+                                            "Next →"
+                                        </button>
+                                    </div>
+                                </div>
+                            }.into_any()
+                        }
+                    }
                 }
             }}
 
@@ -213,14 +236,12 @@ fn RegisterModal(
         submitting.set(true);
         error.set(None);
         spawn_local(async move {
-            // Validate the JSON is parseable as AgentAdvertisement
             match serde_json::from_str::<crate::api::AgentAdvertisement>(&json) {
                 Err(e) => {
                     error.set(Some(format!("Invalid JSON: {}", e)));
                     submitting.set(false);
                 }
-                Ok(_ad) => {
-                    // POST raw JSON to server
+                Ok(_) => {
                     let window = web_sys::window().unwrap();
                     let mut opts = web_sys::RequestInit::new();
                     opts.set_method("POST");
@@ -233,17 +254,25 @@ fn RegisterModal(
                         }
                         Ok(req) => {
                             let _ = req.headers().set("Content-Type", "application/json");
-                            match wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&req)).await {
+                            match wasm_bindgen_futures::JsFuture::from(
+                                window.fetch_with_request(&req),
+                            )
+                            .await
+                            {
                                 Err(e) => {
                                     error.set(Some(format!("Fetch error: {:?}", e)));
                                     submitting.set(false);
                                 }
                                 Ok(resp_val) => {
-                                    let resp: web_sys::Response = resp_val.dyn_into().unwrap();
+                                    let resp: web_sys::Response =
+                                        resp_val.dyn_into().unwrap();
                                     if resp.ok() {
                                         on_success.run(());
                                     } else {
-                                        error.set(Some(format!("Server error: HTTP {}", resp.status())));
+                                        error.set(Some(format!(
+                                            "Server error: HTTP {}",
+                                            resp.status()
+                                        )));
                                         submitting.set(false);
                                     }
                                 }
