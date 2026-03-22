@@ -752,7 +752,6 @@
       <li><a href="#how">Protocol</a></li>
       <li><a href="#stack">Stack</a></li>
       <li><a href="#python">Python</a></li>
-      <li><a href="#examples">Examples</a></li>
       <li><a href="#compare">Compare</a></li>
       <li><a href="#start">Quick Start</a></li>
     </ul>
@@ -803,10 +802,6 @@
           <div>
             <div class="hero-stat-value gradient-text">9</div>
             <div class="hero-stat-label">Crates (Rust + Python)</div>
-          </div>
-          <div>
-            <div class="hero-stat-value gradient-text">3</div>
-            <div class="hero-stat-label">Working Examples</div>
           </div>
           <div>
             <div class="hero-stat-value gradient-text">0</div>
@@ -1278,70 +1273,6 @@ chain.verify_chain([principal, agent_key])</pre>
 
 <div class="divider"></div>
 
-<!-- ─── EXAMPLES ─────────────────────────────────────────────────────── -->
-<section id="examples" class="section" aria-labelledby="examples-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 48px;">
-      <div class="section-label">Working Examples</div>
-      <h2 class="section-title" id="examples-heading">
-        Protocol in action.<br />
-        <span class="gradient-text">Clone and run today.</span>
-      </h2>
-      <p class="section-sub">
-        Each example runs PAP as an actual protocol handler over HTTP.
-        For in-app scenarios (search, payments, delegation), see <a href="../papillion/">Papillion</a>.
-      </p>
-    </div>
-
-    <div class="examples-grid">
-
-      <div class="example-card reveal">
-        <div class="example-icon" aria-hidden="true">🌐</div>
-        <div class="example-name">HTTP Transport</div>
-        <div class="example-desc">Full 6-phase PAP handshake over HTTP. Single binary, Axum server on a random port. Proves transport is a thin wrapper — trust model unchanged.</div>
-        <ul class="example-features">
-          <li>Full 6-phase handshake over HTTP</li>
-          <li>AgentServer + AgentClient via pap-transport</li>
-          <li>Trust model unchanged by transport</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin networked-search</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-1">
-        <div class="example-icon" aria-hidden="true">🔭</div>
-        <div class="example-name">Federated Discovery</div>
-        <div class="example-desc">Two independent registries on different ports. Federation sync makes agents from Registry A discoverable through Registry B.</div>
-        <ul class="example-features">
-          <li>Two registries, two ports</li>
-          <li>Push announcements across registries</li>
-          <li>Content-hash dedup prevents duplicates</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin federated-discovery</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-2" style="grid-column: 1 / -1; max-width: 560px;">
-        <div style="display: flex; gap: 16px; align-items: flex-start;">
-          <div class="example-icon" aria-hidden="true">🐳</div>
-          <div style="flex: 1;">
-            <div class="example-name">Local AI Assistant</div>
-            <div class="example-desc" style="margin-bottom: 12px;">Docker Compose: Ollama + SearXNG + PAP marketplace + providers + orchestrator + receipt viewer. Your prompts never leave your machine.</div>
-            <ul class="example-features">
-              <li>Ollama local LLM (pull mistral)</li>
-              <li>SearXNG private search — no Google</li>
-              <li>External tool use via PAP full handshake</li>
-              <li>Receipt viewer: see exactly what was disclosed</li>
-            </ul>
-          </div>
-        </div>
-        <div class="example-cmd" style="margin-top: 12px;">cd examples/local-ai-assistant &amp;&amp; docker compose up -d</div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
 <!-- ─── COMPARISON ────────────────────────────────────────────────────── -->
 <section id="compare" class="section" aria-labelledby="compare-heading">
   <div class="container">
@@ -1467,15 +1398,8 @@ chain.verify_chain([principal, agent_key])</pre>
         <div class="qs-step">
           <div class="qs-step-num">3</div>
           <div>
-            <div class="qs-step-title">Run a protocol example</div>
-            <div class="qs-step-body">Run <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">networked-search</code> for the full 6-phase HTTP handshake, or <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">federated-discovery</code> for cross-registry federation.</div>
-          </div>
-        </div>
-        <div class="qs-step">
-          <div class="qs-step-num">4</div>
-          <div>
-            <div class="qs-step-title">Run the local AI assistant</div>
-            <div class="qs-step-body">Docker Compose brings up the full stack: Ollama, SearXNG, PAP marketplace, providers, and a receipt viewer at <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">localhost:9090</code>.</div>
+            <div class="qs-step-title">See it in action</div>
+            <div class="qs-step-body">Visit <a href="../papillion/" style="color:var(--indigo);">Papillion</a> for interactive demos of search, payments, delegation, and disclosure — all powered by PAP.</div>
           </div>
         </div>
         <div style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap;">
@@ -1506,19 +1430,8 @@ cd pap
 <span class="c"># Run the full test suite</span>
 cargo test
 
-<span class="c"># Protocol handler examples</span>
-<span class="fn">cargo run</span> --bin networked-search    <span class="c"># 6-phase HTTP handshake</span>
-<span class="fn">cargo run</span> --bin federated-discovery <span class="c"># Cross-registry federation</span>
-
-<span class="c"># Local AI assistant (Docker)</span>
-cd examples/local-ai-assistant
-docker compose up -d
-docker exec ollama ollama pull mistral
-<span class="c"># Ask a question — your prompt stays local</span>
-curl http://localhost:9010/ask \
-  -d '{"query":"What is the weather in Seattle?"}'
-<span class="c"># See exactly what was disclosed</span>
-curl http://localhost:9090/receipts</pre>
+<span class="c"># See protocol demos at</span>
+<span class="c"># https://baur-software.github.io/pap/papillion/</span></pre>
         </div>
       </div>
     </div>
@@ -1609,7 +1522,6 @@ curl http://localhost:9090/receipts</pre>
         <ul class="footer-links">
           <li><a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub Repository</a></li>
           <li><a href="#python">Python SDK</a></li>
-          <li><a href="#examples">Examples</a></li>
           <li><a href="#start">Quick Start</a></li>
           <li><a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener">Integration Guide</a></li>
           <li><a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a></li>

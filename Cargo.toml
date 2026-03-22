@@ -13,8 +13,6 @@ members = [
     "crates/pap-python",
     "crates/papillion-shared",
     "apps/papillion",
-    "examples/networked-search",
-    "examples/federated-discovery",
 ]
 
 [workspace.package]

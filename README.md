@@ -56,11 +56,9 @@ Five constraints enforced at the protocol level:
 git clone https://github.com/Baur-Software/pap.git
 cd pap
 cargo test
-
-# Protocol handler examples
-cargo run --bin networked-search     # Full 6-phase handshake over HTTP
-cargo run --bin federated-discovery  # Cross-registry agent discovery
 ```
+
+For interactive demos, see [Papillion](https://baur-software.github.io/pap/papillion/).
 
 ## Protocol Stack
 
@@ -91,15 +89,6 @@ pap/
     pap-transport/    # HTTP client/server for 6-phase handshake
     pap-federation/   # Cross-registry sync, announce, peer exchange
     pap-webauthn/     # WebAuthn signer abstraction + software fallback
-  examples/
-    search/              # Zero-disclosure end-to-end PoC
-    travel-booking/      # SD-JWT selective disclosure
-    delegation-chain/    # 4-level mandate hierarchy
-    payment/             # Ecash + auto-approval + continuity tokens
-    networked-search/    # HTTP transport handshake
-    federated-discovery/ # Cross-registry federation
-    webauthn-ceremony/   # Device-bound key generation
-    local-ai-assistant/  # Docker Compose: Ollama + SearXNG + PAP
 ```
 
 ### pap-did
@@ -140,38 +129,6 @@ pap/
 - `FederatedRegistry` — Local + remote agent tracking with content-hash dedup.
 - `FederationServer` — HTTP endpoints for query, announce, peer discovery.
 - `FederationClient` — Pull sync by action type, push announcements, peer exchange.
-
-## Examples
-
-Three examples demonstrate PAP as an actual protocol handler. For in-app scenarios (search, payments, delegation, disclosure), see [Papillion](https://baur-software.github.io/pap/papillion/).
-
-### `networked-search` — HTTP Transport
-
-Full 6-phase PAP handshake over HTTP. Single binary spawns an Axum server on a random port, then the client drives the handshake. Proves the transport is a thin wrapper — it doesn't change the trust model.
-
-```bash
-cargo run --bin networked-search
-```
-
-### `federated-discovery` — Marketplace Federation
-
-Two independent registries on different ports. Registry A has a search agent. Registry B has a payment agent. Federation sync makes search agents discoverable through Registry B. Push announcements, content-hash dedup, peer discovery.
-
-```bash
-cargo run --bin federated-discovery
-```
-
-### `local-ai-assistant` — Docker Compose
-
-A complete local AI assistant: Ollama (local LLM) + SearXNG (private search) + PAP marketplace + three provider agents + orchestrator + receipt viewer. Your prompts never leave your machine. External tool use goes through PAP's full handshake with selective disclosure.
-
-```bash
-cd examples/local-ai-assistant
-docker compose up -d
-docker exec ollama ollama pull mistral
-curl http://localhost:9010/ask -d '{"query": "What is the weather in Seattle?"}'
-curl http://localhost:9090/receipts  # See what was disclosed
-```
 
 ## What This Replaces
 
