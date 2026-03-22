@@ -159,6 +159,7 @@ impl Database {
         action_type: Option<&str>,
         agent_did_hash: Option<&str>,
         limit: usize,
+        offset: Option<i64>,
     ) -> Result<Vec<Episode>, PapillionError> {
         let conn = self
             .conn
@@ -191,6 +192,11 @@ impl Database {
             param_values.len() + 1
         ));
         param_values.push(Box::new(limit as i64));
+
+        if let Some(off) = offset {
+            sql.push_str(&format!(" OFFSET ?{}", param_values.len() + 1));
+            param_values.push(Box::new(off));
+        }
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|p| p.as_ref()).collect();
@@ -590,7 +596,7 @@ mod tests {
         db.insert_episode(&sample_episode("ep-1")).unwrap();
         db.insert_episode(&sample_episode("ep-2")).unwrap();
 
-        let episodes = db.list_episodes(None, None, 100).unwrap();
+        let episodes = db.list_episodes(None, None, 100, None).unwrap();
         assert_eq!(episodes.len(), 2);
     }
 
@@ -604,7 +610,7 @@ mod tests {
         db.insert_episode(&ask_ep).unwrap();
 
         let search = db
-            .list_episodes(Some("schema:SearchAction"), None, 100)
+            .list_episodes(Some("schema:SearchAction"), None, 100, None)
             .unwrap();
         assert_eq!(search.len(), 1);
         assert_eq!(search[0].id, "ep-1");
@@ -736,7 +742,7 @@ mod tests {
         other.agent_did_hash = "hash-other".to_string();
         db.insert_episode(&other).unwrap();
 
-        let filtered = db.list_episodes(None, Some("hash-ddg"), 100).unwrap();
+        let filtered = db.list_episodes(None, Some("hash-ddg"), 100, None).unwrap();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].id, "ep-1");
     }
