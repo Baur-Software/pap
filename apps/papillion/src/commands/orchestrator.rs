@@ -99,10 +99,9 @@ pub async fn get_orchestrator_status(
 #[tauri::command]
 pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, PapillionError> {
     let has_identity = state
-        .identity
-        .read()
-        .map_err(|e| PapillionError::from(e.to_string()))?
         .signer
+        .read()
+        .unwrap()
         .is_some();
     let config = state
         .orchestrator_config
@@ -380,16 +379,12 @@ pub async fn run_scenario(
             .clone();
         let did = agent_ad.provider.did.clone();
 
-        let identity_lock = state
-            .identity
-            .read()
-            .map_err(|e| PapillionError::from(e.to_string()))?;
-        let seed = identity_lock
-            .principal_seed
+        let seed_guard = state.principal_seed.read().unwrap();
+        let seed = seed_guard
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
-        let kp =
-            PrincipalKeypair::from_bytes(seed).map_err(|e| PapillionError::from(e.to_string()))?;
+        let kp = PrincipalKeypair::from_bytes(&**seed)
+            .map_err(|e| PapillionError::from(format!("Failed to load keypair: {}", e)))?;
         (did, kp)
     };
 
@@ -772,7 +767,7 @@ fn compute_quality(episode: &Episode) -> f64 {
 /// Compute minimal disclosure refs as set intersection across all successful episodes.
 /// Returns JSON array of property refs that were sufficient across all successes.
 fn compute_minimal_disclosures(state: &State<'_, AppState>, agent_did_hash: &str) -> String {
-    if let Ok(episodes) = state.db.list_episodes(None, Some(agent_did_hash), 1000) {
+    if let Ok(episodes) = state.db.list_episodes(None, Some(agent_did_hash), 1000, None) {
         let successful = episodes
             .iter()
             .filter(|ep| ep.outcome == "success")

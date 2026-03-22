@@ -3,6 +3,7 @@ use pap_did::PrincipalKeypair;
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
 use papillion_shared::{IdentityInfo, ProfileMetadata};
 use tauri::State;
+use zeroize::Zeroizing;
 
 use crate::error::PapillionError;
 use crate::state::AppState;
@@ -91,7 +92,7 @@ pub async fn switch_profile(
 
     {
         let mut seed_guard = state.principal_seed.write().unwrap();
-        *seed_guard = Some(seed);
+        *seed_guard = Some(Zeroizing::new(seed));
     }
 
     {
