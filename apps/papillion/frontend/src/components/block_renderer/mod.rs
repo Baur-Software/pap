@@ -1,8 +1,8 @@
 mod field_classify;
 mod generic;
 mod receipt;
-mod renderer;
 mod registry;
+mod renderer;
 mod templates;
 
 use leptos::prelude::*;
@@ -142,36 +142,26 @@ fn PhaseDots(current_phase: u8, #[prop(default = false)] failed: bool) -> impl I
     }
 }
 
-/// Top-level dispatch: unwrap the handshake envelope, route to template or generic renderer,
+/// Top-level dispatch: unwrap the handshake envelope, stream-parse the JSON-LD,
 /// and attach receipt metadata footer.
 ///
 /// The handshake wraps agent output as:
 /// ```json
 /// { "@type": "...", "agent": "...", "query": "...", "result": {payload}, "receipt": {...} }
 /// ```
-fn render_typed_content(schema_type: &str, content: &Value, registry: &Arc<RendererRegistry>) -> AnyView {
+fn render_typed_content(
+    schema_type: &str,
+    content: &Value,
+    registry: &Arc<RendererRegistry>,
+) -> AnyView {
     // Extract the agent's actual result from the handshake envelope.
     // Fall back to the full content if there's no "result" key (direct JSON-LD).
     let payload = content.get("result").unwrap_or(content);
     let receipt_val = content.get("receipt");
 
-    let content_view = dispatch_typed_or_generic(schema_type, payload, 0, registry);
+    // Stream-flatten the JSON-LD tree and render all entries — no depth limit.
+    let entries = generic::flatten_to_entries(schema_type, payload, registry);
+    let content_view = generic::render_stream(entries, registry);
 
     receipt::wrap_with_receipt(content_view, receipt_val)
-}
-
-/// Dispatch to a registered template renderer if one exists, otherwise use the generic renderer.
-/// Called both at the top level and recursively for nested typed objects.
-fn dispatch_typed_or_generic(schema_type: &str, content: &Value, depth: u8, registry: &Arc<RendererRegistry>) -> AnyView {
-    if depth > 4 {
-        return view! { <span class="typed-truncated">"\u{2026}"</span> }.into_any();
-    }
-
-    // Try to find a registered template renderer
-    if let Some(renderer) = registry.get(schema_type) {
-        return renderer.render(content);
-    }
-
-    // Fall back to generic renderer
-    generic::render_generic(schema_type, content, depth, registry)
 }
