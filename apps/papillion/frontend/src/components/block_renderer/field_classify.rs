@@ -43,6 +43,14 @@ pub fn classify_field(key: &str, value: &Value) -> FieldKind {
                 FieldKind::TypedObject {
                     schema_type: t.clone(),
                 }
+            } else if let Some(Value::Array(arr)) = map.get("@type") {
+                if let Some(Value::String(t)) = arr.first() {
+                    FieldKind::TypedObject {
+                        schema_type: t.clone(),
+                    }
+                } else {
+                    FieldKind::Object
+                }
             } else {
                 FieldKind::Object
             }
@@ -248,5 +256,48 @@ mod tests {
     fn camel_to_kebab_cases() {
         assert_eq!(camel_to_kebab("startDate"), "start-date");
         assert_eq!(camel_to_kebab("PostalAddress"), "postal-address");
+    }
+
+    #[test]
+    fn classify_typed_object_array_type() {
+        let obj = json!({"@type": ["Person", "Author"], "name": "Alice"});
+        assert_eq!(
+            classify_field("creator", &obj),
+            FieldKind::TypedObject {
+                schema_type: "Person".into()
+            }
+        );
+    }
+
+    #[test]
+    fn classify_bool_as_scalar() {
+        assert_eq!(classify_field("active", &json!(true)), FieldKind::Scalar);
+    }
+
+    #[test]
+    fn classify_number_non_price() {
+        assert_eq!(classify_field("count", &json!(42)), FieldKind::Scalar);
+    }
+
+    #[test]
+    fn format_datetime_variants() {
+        assert_eq!(format_datetime(&json!("2026-04-15")), "2026-04-15");
+        assert_eq!(
+            format_datetime(&json!("2026-04-15T19:00:00Z")),
+            "2026-04-15 19:00"
+        );
+        assert_eq!(
+            format_datetime(&json!("2026-04-15T19:30:45")),
+            "2026-04-15 19:30:45"
+        );
+        assert_eq!(format_datetime(&json!(12345)), "12345");
+    }
+
+    #[test]
+    fn scalar_to_string_variants() {
+        assert_eq!(scalar_to_string(&json!("hello")), "hello");
+        assert_eq!(scalar_to_string(&json!(42)), "42");
+        assert_eq!(scalar_to_string(&json!(true)), "true");
+        assert_eq!(scalar_to_string(&Value::Null), "null");
     }
 }
