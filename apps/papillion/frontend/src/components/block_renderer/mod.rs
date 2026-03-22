@@ -157,6 +157,6 @@ fn dispatch_typed_or_generic(schema_type: &str, content: &Value, depth: u8) -> A
         "LodgingReservation" => blessed::render_hotel(content),
         "SearchResultsPage" | "SearchAction" => blessed::render_search_results(content),
         "Answer" => blessed::render_answer(content),
-        _ => generic::render_generic(schema_type, content),
+        _ => generic::render_generic(schema_type, content, depth),
     }
 }

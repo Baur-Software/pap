@@ -39,18 +39,8 @@ pub fn classify_field(key: &str, value: &Value) -> FieldKind {
         }
         Value::Bool(_) => FieldKind::Scalar,
         Value::Object(map) => {
-            if let Some(Value::String(t)) = map.get("@type") {
-                FieldKind::TypedObject {
-                    schema_type: t.clone(),
-                }
-            } else if let Some(Value::Array(arr)) = map.get("@type") {
-                if let Some(Value::String(t)) = arr.first() {
-                    FieldKind::TypedObject {
-                        schema_type: t.clone(),
-                    }
-                } else {
-                    FieldKind::Object
-                }
+            if let Some(t) = extract_type(map) {
+                FieldKind::TypedObject { schema_type: t }
             } else {
                 FieldKind::Object
             }
@@ -121,7 +111,25 @@ pub fn camel_to_kebab(key: &str) -> String {
 
 /// Convert PascalCase schema type to lowercase-kebab for CSS (e.g., "PostalAddress" -> "postal-address").
 pub fn schema_type_to_css(t: &str) -> String {
-    camel_to_kebab(t)
+    sanitize_css_class(&camel_to_kebab(t))
+}
+
+/// Sanitize a string for use as a CSS class name.
+/// Strips anything that isn't alphanumeric or a hyphen.
+pub fn sanitize_css_class(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .collect()
+}
+
+/// Extract the primary @type from a JSON-LD object.
+/// Handles both `"@type": "Person"` and `"@type": ["Person", "Author"]`.
+pub fn extract_type(obj: &serde_json::Map<String, Value>) -> Option<String> {
+    match obj.get("@type") {
+        Some(Value::String(t)) => Some(t.clone()),
+        Some(Value::Array(arr)) => arr.first().and_then(|v| v.as_str()).map(|s| s.to_string()),
+        _ => None,
+    }
 }
 
 /// Format an ISO 8601 datetime string for human display.
@@ -299,5 +307,34 @@ mod tests {
         assert_eq!(scalar_to_string(&json!(42)), "42");
         assert_eq!(scalar_to_string(&json!(true)), "true");
         assert_eq!(scalar_to_string(&Value::Null), "null");
+    }
+
+    #[test]
+    fn sanitize_css_strips_special_chars() {
+        assert_eq!(sanitize_css_class("foo-bar"), "foo-bar");
+        assert_eq!(sanitize_css_class("a resolving"), "aresolving");
+        assert_eq!(sanitize_css_class("a\" style=\"x"), "astylex");
+        assert_eq!(sanitize_css_class("normal-type"), "normal-type");
+    }
+
+    #[test]
+    fn extract_type_string() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": "Person"})).unwrap();
+        assert_eq!(extract_type(&obj), Some("Person".to_string()));
+    }
+
+    #[test]
+    fn extract_type_array() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": ["Person", "Author"]})).unwrap();
+        assert_eq!(extract_type(&obj), Some("Person".to_string()));
+    }
+
+    #[test]
+    fn extract_type_missing() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"name": "Alice"})).unwrap();
+        assert_eq!(extract_type(&obj), None);
     }
 }
