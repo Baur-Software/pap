@@ -869,7 +869,9 @@ mod tests {
         ep3.agent_did_hash = "hash-agent-a".to_string();
         db.insert_episode(&ep3).unwrap();
 
-        let episodes = db.list_episodes(None, Some("hash-agent-a"), 100, None).unwrap();
+        let episodes = db
+            .list_episodes(None, Some("hash-agent-a"), 100, None)
+            .unwrap();
         assert_eq!(episodes.len(), 3);
 
         // Parse disclosures and compute intersection
@@ -906,7 +908,9 @@ mod tests {
         ep_failure.agent_did_hash = "hash-agent-b".to_string();
         db.insert_episode(&ep_failure).unwrap();
 
-        let episodes = db.list_episodes(None, Some("hash-agent-b"), 100, None).unwrap();
+        let episodes = db
+            .list_episodes(None, Some("hash-agent-b"), 100, None)
+            .unwrap();
         let successful = episodes
             .iter()
             .filter(|ep| ep.outcome == "success")

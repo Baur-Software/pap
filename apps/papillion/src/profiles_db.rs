@@ -227,9 +227,11 @@ impl ProfilesDatabase {
 
         // Verify profile exists
         let exists: i64 = conn
-            .query_row("SELECT COUNT(*) FROM profiles WHERE id = ?1", params![id], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM profiles WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
             .map_err(|e| PapillionError::from(format!("profiles_db query: {e}")))?;
 
         if exists == 0 {
@@ -242,11 +244,8 @@ impl ProfilesDatabase {
         conn.execute("UPDATE profiles SET active = 0", [])
             .map_err(|e| PapillionError::from(format!("profiles_db update: {e}")))?;
 
-        conn.execute(
-            "UPDATE profiles SET active = 1 WHERE id = ?1",
-            params![id],
-        )
-        .map_err(|e| PapillionError::from(format!("profiles_db update: {e}")))?;
+        conn.execute("UPDATE profiles SET active = 1 WHERE id = ?1", params![id])
+            .map_err(|e| PapillionError::from(format!("profiles_db update: {e}")))?;
 
         // Update last_used timestamp
         let now = chrono::Utc::now().to_rfc3339();
@@ -391,8 +390,7 @@ mod tests {
     #[test]
     fn get_profile_seed() {
         let db = test_db();
-        db.create_profile("p1", "Profile 1", "my_seed_b64")
-            .unwrap();
+        db.create_profile("p1", "Profile 1", "my_seed_b64").unwrap();
 
         let seed = db.get_profile_seed("p1").unwrap().unwrap();
         assert_eq!(seed, "my_seed_b64");

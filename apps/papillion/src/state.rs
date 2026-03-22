@@ -78,7 +78,10 @@ impl AppState {
         let db = Database::open(db_path).expect("failed to open experience memory database");
 
         // Open profiles registry next to the main database
-        let profiles_db_path = db_path.parent().unwrap_or_else(|| std::path::Path::new(".")).join("profiles.db");
+        let profiles_db_path = db_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("profiles.db");
         let profiles_db = ProfilesDatabase::open(&profiles_db_path)
             .expect("failed to open profiles registry database");
 
@@ -173,7 +176,11 @@ impl AppState {
 
         // Load seed for active profile
         let (raw_seed, keypair) = if !active_profile_id.is_empty() {
-            match profiles_db.get_profile_seed(&active_profile_id).ok().flatten() {
+            match profiles_db
+                .get_profile_seed(&active_profile_id)
+                .ok()
+                .flatten()
+            {
                 Some(seed_b64) => {
                     if let Ok(bytes) =
                         base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&seed_b64)

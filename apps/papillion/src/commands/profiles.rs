@@ -39,7 +39,11 @@ pub async fn create_profile(
         .create_profile(&profile_id, &name, &seed_b64)?;
 
     // Update in-memory profiles list
-    state.profiles.write().unwrap().push(profile_metadata.clone());
+    state
+        .profiles
+        .write()
+        .unwrap()
+        .push(profile_metadata.clone());
 
     Ok(profile_metadata)
 }
@@ -225,7 +229,11 @@ pub async fn import_profile_seed(
         .create_profile(&profile_id, &name, &seed_b64)?;
 
     // Update in-memory profiles list
-    state.profiles.write().unwrap().push(profile_metadata.clone());
+    state
+        .profiles
+        .write()
+        .unwrap()
+        .push(profile_metadata.clone());
 
     // Mark key as backed up (since we're importing it)
     {

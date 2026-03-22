@@ -98,11 +98,7 @@ pub async fn get_orchestrator_status(
 /// Check first-run setup state.
 #[tauri::command]
 pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, PapillionError> {
-    let has_identity = state
-        .signer
-        .read()
-        .unwrap()
-        .is_some();
+    let has_identity = state.signer.read().unwrap().is_some();
     let config = state
         .orchestrator_config
         .read()
@@ -383,7 +379,7 @@ pub async fn run_scenario(
         let seed = seed_guard
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
-        let kp = PrincipalKeypair::from_bytes(&**seed)
+        let kp = PrincipalKeypair::from_bytes(seed)
             .map_err(|e| PapillionError::from(format!("Failed to load keypair: {}", e)))?;
         (did, kp)
     };
@@ -767,7 +763,10 @@ fn compute_quality(episode: &Episode) -> f64 {
 /// Compute minimal disclosure refs as set intersection across all successful episodes.
 /// Returns JSON array of property refs that were sufficient across all successes.
 fn compute_minimal_disclosures(state: &State<'_, AppState>, agent_did_hash: &str) -> String {
-    if let Ok(episodes) = state.db.list_episodes(None, Some(agent_did_hash), 1000, None) {
+    if let Ok(episodes) = state
+        .db
+        .list_episodes(None, Some(agent_did_hash), 1000, None)
+    {
         let successful = episodes
             .iter()
             .filter(|ep| ep.outcome == "success")

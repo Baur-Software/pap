@@ -171,7 +171,7 @@ async fn process_prompt(
         let seed = seed_guard
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
-        PrincipalKeypair::from_bytes(&**seed)
+        PrincipalKeypair::from_bytes(seed)
             .map_err(|e| PapillionError::from(format!("Failed to load keypair: {}", e)))?
     };
 
