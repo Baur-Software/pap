@@ -434,6 +434,34 @@
       background: rgba(20,184,166,.1); color: var(--teal);
     }
 
+    /* ─── SDK Grid ────────────────────────────────────────────────────── */
+    .sdk-lang-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+      margin-top: 48px;
+    }
+    .sdk-lang-card {
+      padding: 24px 16px; text-align: center;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      transition: border-color .2s;
+    }
+    .sdk-lang-card:hover { border-color: var(--border2); }
+    .sdk-lang-card.available { border-color: rgba(245,158,11,.3); }
+    .sdk-lang-icon { font-size: 1.6rem; margin-bottom: 10px; }
+    .sdk-lang-name { font-size: .95rem; font-weight: 600; margin-bottom: 4px; }
+    .sdk-lang-status {
+      font-size: .7rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 6px; display: inline-block;
+    }
+    .sdk-lang-status.shipped { background: rgba(245,158,11,.1); color: var(--amber); }
+    .sdk-lang-status.planned { background: rgba(99,102,241,.1); color: var(--indigo); }
+    @media (max-width: 768px) {
+      .sdk-lang-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .sdk-lang-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
     /* ─── Python SDK ─────────────────────────────────────────────────── */
     .python-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
@@ -751,7 +779,7 @@
       <li><a href="#problem">Problem</a></li>
       <li><a href="#how">Protocol</a></li>
       <li><a href="#stack">Stack</a></li>
-      <li><a href="#python">Python</a></li>
+      <li><a href="#sdks">SDKs</a></li>
       <li><a href="#compare">Compare</a></li>
       <li><a href="#start">Quick Start</a></li>
     </ul>
@@ -800,8 +828,8 @@
         </div>
         <div class="hero-stats">
           <div>
-            <div class="hero-stat-value gradient-text">9</div>
-            <div class="hero-stat-label">Crates (Rust + Python)</div>
+            <div class="hero-stat-value gradient-text">6</div>
+            <div class="hero-stat-label">Language SDKs</div>
           </div>
           <div>
             <div class="hero-stat-value gradient-text">0</div>
@@ -1148,7 +1176,7 @@
       <div class="section-label">Crate Structure</div>
       <h2 class="section-title" id="crates-heading">
         <span class="gradient-text">9 focused crates.</span><br />
-        Rust core + Python SDK.
+        Six language SDKs.
       </h2>
     </div>
     <div class="crates-grid">
@@ -1194,7 +1222,55 @@
 
 <div class="divider"></div>
 
-<!-- ─── PYTHON SDK ───────────────────────────────────────────────────── -->
+<!-- ─── LANGUAGE SDKs ─────────────────────────────────────────────────── -->
+<section id="sdks" class="section" aria-labelledby="sdks-heading">
+  <div class="container">
+    <div class="reveal" style="margin-bottom: 0;">
+      <div class="section-label">Language SDKs</div>
+      <h2 class="section-title" id="sdks-heading">
+        One protocol.<br />
+        <span class="gradient-text">Six languages.</span>
+      </h2>
+      <p class="section-sub">The Rust core is the reference implementation. Language SDKs bring the full protocol surface &mdash; keypairs, mandates, delegation, verification &mdash; to your stack.</p>
+    </div>
+    <div class="sdk-lang-grid reveal reveal-delay-1">
+      <div class="sdk-lang-card available">
+        <div class="sdk-lang-icon">&#x1F980;</div>
+        <div class="sdk-lang-name">Rust</div>
+        <span class="sdk-lang-status shipped">Core</span>
+      </div>
+      <div class="sdk-lang-card available">
+        <div class="sdk-lang-icon">&#x1F40D;</div>
+        <div class="sdk-lang-name">Python</div>
+        <span class="sdk-lang-status shipped">Shipped</span>
+      </div>
+      <div class="sdk-lang-card">
+        <div class="sdk-lang-icon">{ts}</div>
+        <div class="sdk-lang-name">TypeScript</div>
+        <span class="sdk-lang-status planned">Planned</span>
+      </div>
+      <div class="sdk-lang-card">
+        <div class="sdk-lang-icon">&#x1F439;</div>
+        <div class="sdk-lang-name">Go</div>
+        <span class="sdk-lang-status planned">Planned</span>
+      </div>
+      <div class="sdk-lang-card">
+        <div class="sdk-lang-icon">&#9749;</div>
+        <div class="sdk-lang-name">Java</div>
+        <span class="sdk-lang-status planned">Planned</span>
+      </div>
+      <div class="sdk-lang-card">
+        <div class="sdk-lang-icon">&#x266F;</div>
+        <div class="sdk-lang-name">C#</div>
+        <span class="sdk-lang-status planned">Planned</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── PYTHON SDK (deep dive) ───────────────────────────────────────── -->
 <section id="python" class="section" aria-labelledby="python-heading">
   <div class="container">
     <div class="python-grid">
@@ -1521,7 +1597,7 @@ cargo test
         <div class="footer-col-title">Code</div>
         <ul class="footer-links">
           <li><a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub Repository</a></li>
-          <li><a href="#python">Python SDK</a></li>
+          <li><a href="#sdks">Language SDKs</a></li>
           <li><a href="#start">Quick Start</a></li>
           <li><a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener">Integration Guide</a></li>
           <li><a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a></li>
