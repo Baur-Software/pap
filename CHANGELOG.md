@@ -5,6 +5,24 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-21
+
+### Added
+
+- **papillion**: Multi-profile identity support — switch between multiple profiles (like browser profiles), each with its own DID and workspace
+- **papillion**: Profile avatars with deterministic colors — visual distinction between profiles with semantic color palette (purple/teal/gold/coral/blue/rose)
+- **papillion**: Profile manager in Settings — create, rename, delete, and switch profiles with last-used timestamps
+- **papillion**: Profile dropdown in TopBar — quick access to all profiles with active profile indicator
+- **papillion**: Complete state isolation per profile — profile switch resets canvas, registries, and orchestrator config for true workspace separation
+- **docs**: Built-in LLM setup guide — quick reference for downloading TinyLLaMA and testing locally
+- **docs**: Tauri resource directory quirk — comprehensive guide explaining platform-specific model bundling behavior (macOS/Windows/Linux)
+- **docs**: Manual QA test plan — 20 comprehensive test cases covering profile creation, switching, isolation, persistence, and edge cases
+
+### Changed
+
+- **papillion**: Profile data now persisted in separate `profiles.db` registry alongside main database
+- **papillion**: Seed zeroization hardened — `Zeroizing<[u8; 32]>` prevents sensitive material from lingering in memory
+
 ## [0.2.3] - 2026-03-21
 
 ### Fixed

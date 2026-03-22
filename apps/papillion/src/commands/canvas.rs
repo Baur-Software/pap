@@ -167,15 +167,12 @@ async fn process_prompt(
 
     // Get principal keypair
     let principal_kp = {
-        let identity = state
-            .identity
-            .read()
-            .map_err(|e| PapillionError::from(e.to_string()))?;
-        let seed = identity
-            .principal_seed
+        let seed_guard = state.principal_seed.read().unwrap();
+        let seed = seed_guard
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
-        PrincipalKeypair::from_bytes(seed).map_err(|e| PapillionError::from(e.to_string()))?
+        PrincipalKeypair::from_bytes(seed)
+            .map_err(|e| PapillionError::from(format!("Failed to load keypair: {}", e)))?
     };
 
     // Phase progress callbacks emit Tauri events

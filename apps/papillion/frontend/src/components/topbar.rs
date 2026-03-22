@@ -1,10 +1,13 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
+use wasm_bindgen_futures::spawn_local;
 
+use crate::bridge;
+use crate::components::profile_avatar::ProfileAvatar;
 use crate::state::canvas::CanvasState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
-use papillion_shared::OrchestratorStatus;
+use papillion_shared::{IdentityInfo, OrchestratorStatus};
 
 #[component]
 pub fn TopBar() -> impl IntoView {
@@ -12,6 +15,7 @@ pub fn TopBar() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let canvas_state = expect_context::<CanvasState>();
     let menu_open = RwSignal::new(false);
+    let profile_menu_open = RwSignal::new(false);
 
     let did_display = move || {
         identity
@@ -26,6 +30,35 @@ pub fn TopBar() -> impl IntoView {
                 }
             })
             .unwrap_or_else(|| "No identity".to_string())
+    };
+
+    let current_profile_name = move || {
+        identity
+            .current_profile()
+            .map(|p| p.name)
+            .unwrap_or_else(|| "Profile".to_string())
+    };
+
+    let switch_profile = move |profile_id: String| {
+        profile_menu_open.set(false);
+        spawn_local(async move {
+            if let Ok(info) = bridge::invoke::<_, IdentityInfo>(
+                "switch_profile",
+                &serde_json::json!({"profile_id": profile_id}),
+            )
+            .await
+            {
+                identity.info.set(Some(info));
+                // Reload profiles list to update active status
+                use papillion_shared::ProfileMetadata;
+                if let Ok(profiles) = bridge::invoke_no_args::<Vec<ProfileMetadata>>("list_profiles").await {
+                    if let Some(active) = profiles.iter().find(|p: &&ProfileMetadata| p.active) {
+                        identity.current_profile_id.set(Some(active.id.clone()));
+                    }
+                    identity.profiles.set(profiles);
+                }
+            }
+        });
     };
 
     let status_label = move || match orchestrator.status.get() {
@@ -61,6 +94,13 @@ pub fn TopBar() -> impl IntoView {
                 <span class="topbar-identity">{did_display}</span>
             </div>
             <div class="topbar-right">
+                <button
+                    class="topbar-profile-btn"
+                    on:click=move |_| profile_menu_open.update(|v| *v = !*v)
+                    title=move || current_profile_name()
+                >
+                    <ProfileAvatar name=current_profile_name() />
+                </button>
                 <span class=status_class>{status_label}</span>
                 <A href="/settings" attr:class="topbar-settings-btn" attr:title="Settings">
                     "\u{2699}"
@@ -111,6 +151,47 @@ pub fn TopBar() -> impl IntoView {
                 </A>
                 <A href="/settings" attr:class="menu-item" on:click=close_menu>
                     "Settings"
+                </A>
+            </div>
+        </Show>
+        <Show when=move || profile_menu_open.get()>
+            <div class="profile-menu-backdrop" on:click=move |_| profile_menu_open.set(false)></div>
+            <div class="profile-menu-dropdown">
+                <div class="profile-menu-section">
+                    <div class="profile-menu-title">"Profiles"</div>
+                    <For
+                        each=move || identity.profiles.get()
+                        key=|p| p.id.clone()
+                        let:profile
+                    >
+                        {
+                            let profile_id = profile.id.clone();
+                            let is_active = profile.active;
+                            let profile_name = profile.name.clone();
+                            view! {
+                                <button
+                                    class=move || {
+                                        if is_active {
+                                            "profile-menu-item active"
+                                        } else {
+                                            "profile-menu-item"
+                                        }
+                                    }
+                                    on:click=move |_| switch_profile(profile_id.clone())
+                                >
+                                    <ProfileAvatar name=profile_name.clone() />
+                                    <span class="profile-menu-name">{profile_name}</span>
+                                    <Show when=move || is_active>
+                                        <span class="profile-menu-active-badge">"\u{2713}"</span>
+                                    </Show>
+                                </button>
+                            }
+                        }
+                    </For>
+                </div>
+                <div class="profile-menu-divider"></div>
+                <A href="/settings?tab=profiles" attr:class="profile-menu-link" on:click=move |_| profile_menu_open.set(false)>
+                    "⚙ Profiles Settings"
                 </A>
             </div>
         </Show>

@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod error;
 pub mod handshake;
 pub mod inference;
+pub mod profiles_db;
 pub mod seed;
 pub mod state;
 
@@ -62,6 +63,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::identity::create_identity,
             commands::identity::get_identity,
+            commands::profiles::list_profiles,
+            commands::profiles::create_profile,
+            commands::profiles::switch_profile,
+            commands::profiles::rename_profile,
+            commands::profiles::delete_profile,
+            commands::profiles::export_profile_seed,
+            commands::profiles::import_profile_seed,
             commands::registry::navigate_registry,
             commands::registry::list_agents,
             commands::registry::search_agents,

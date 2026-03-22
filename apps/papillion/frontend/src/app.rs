@@ -16,7 +16,7 @@ use crate::state::canvas::CanvasState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::registry::RegistryState;
-use papillion_shared::{IdentityInfo, OrchestratorStatus};
+use papillion_shared::{IdentityInfo, OrchestratorStatus, ProfileMetadata};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -29,25 +29,80 @@ pub fn App() -> impl IntoView {
     provide_context(orchestrator_state);
     provide_context(canvas_state);
 
-    // Auto-load identity on startup
+    // Auto-load profiles and identity on startup
     Effect::new(move || {
         let identity = identity_state;
         let orchestrator = orchestrator_state;
         if !bridge::tauri_available() {
             return;
         }
+        identity.profiles_loading.set(true);
         identity.loading.set(true);
         spawn_local(async move {
+            // Load profile list
+            if let Ok(profiles) = bridge::invoke_no_args::<Vec<ProfileMetadata>>("list_profiles").await {
+                if let Some(active) = profiles.iter().find(|p| p.active) {
+                    identity.current_profile_id.set(Some(active.id.clone()));
+                }
+                identity.profiles.set(profiles);
+            }
+            identity.profiles_loading.set(false);
+
+            // Load current identity
             if let Ok(info) = bridge::invoke_no_args::<IdentityInfo>("get_identity").await {
                 identity.info.set(Some(info));
             }
             identity.loading.set(false);
+
+            // Load orchestrator status
             if let Ok(status) =
                 bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status").await
             {
                 orchestrator.status.set(status);
             }
         });
+    });
+
+    // Detect identity (DID) changes and reset all state
+    // This effect triggers when the DID changes, indicating a profile switch
+    // When DID changes, we must reset all profile-scoped state to maintain isolation
+    let previous_did = RwSignal::new(None::<String>);
+    Effect::new(move || {
+        let current_did = identity_state.info.get().map(|i| i.did.clone());
+        let prev_did = previous_did.get();
+
+        // Only reset if we've loaded an identity before and DID actually changed
+        if let (Some(prev), Some(curr)) = (prev_did, &current_did) {
+            if prev != *curr {
+                // DID changed — clear all profile-scoped state
+                // Canvas: Reset to empty workspace
+                canvas_state.canvases.set(Vec::new());
+                canvas_state.current_canvas_id.set(None);
+                canvas_state.reshape_block_id.set(None);
+                canvas_state.recent_prompts.set(Vec::new());
+
+                // Registry: Clear current registry state (will reload on next discovery)
+                registry_state.current_url.set(String::new());
+                registry_state.info.set(None);
+                registry_state.agents.set(Vec::new());
+                registry_state.selected_agent.set(None);
+                registry_state.action_filter.set(String::new());
+                registry_state.error.set(None);
+
+                // Reload orchestrator config for new profile
+                let orchestrator = orchestrator_state;
+                spawn_local(async move {
+                    if let Ok(status) =
+                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status").await
+                    {
+                        orchestrator.status.set(status);
+                    }
+                });
+            }
+        }
+
+        // Track the DID for next comparison
+        previous_did.set(current_did);
     });
 
     // Global keyboard listener for ⌘K — creates a new canvas and navigates home.
