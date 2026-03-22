@@ -41,17 +41,18 @@ COPY crates/pap-federation ./crates/pap-federation
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src ./apps/registry/src
 
-# Patch the workspace to remove members we didn't copy.
-# Cargo must be able to resolve the full workspace graph before building.
+# Patch the workspace members list to remove crates we didn't copy.
+# Anchor to lines that start with whitespace+"quote" (member entries only),
+# so workspace.dependencies entries with the same path are left intact.
 RUN sed -i \
-    -e '/"crates\/pap-core"/d' \
-    -e '/"crates\/pap-credential"/d' \
-    -e '/"crates\/pap-webauthn"/d' \
-    -e '/"crates\/pap-proto"/d' \
-    -e '/"crates\/pap-transport"/d' \
-    -e '/"crates\/pap-python"/d' \
-    -e '/"crates\/papillion-shared"/d' \
-    -e '/"apps\/papillion"/d' \
+    -e '/^[[:space:]]*"crates\/pap-core"/d' \
+    -e '/^[[:space:]]*"crates\/pap-credential"/d' \
+    -e '/^[[:space:]]*"crates\/pap-webauthn"/d' \
+    -e '/^[[:space:]]*"crates\/pap-proto"/d' \
+    -e '/^[[:space:]]*"crates\/pap-transport"/d' \
+    -e '/^[[:space:]]*"crates\/pap-python"/d' \
+    -e '/^[[:space:]]*"crates\/papillion-shared"/d' \
+    -e '/^[[:space:]]*"apps\/papillion"/d' \
     Cargo.toml
 
 # Build only pap-registry
