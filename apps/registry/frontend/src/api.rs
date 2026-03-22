@@ -1,7 +1,7 @@
 /// Shared data types mirroring the backend API shapes.
 /// Kept local to avoid a WASM-incompatible workspace dependency.
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
 
