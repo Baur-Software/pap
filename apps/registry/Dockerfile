@@ -2,7 +2,7 @@
 #   docker build -f apps/registry/Dockerfile -t pap-registry .
 #
 # ── Stage 1: Build the Leptos WASM frontend ─────────────────────────────────
-FROM rust:1.82-slim AS frontend-builder
+FROM rust:1.94-slim AS frontend-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates pkg-config libssl-dev \
@@ -20,7 +20,7 @@ COPY apps/registry/frontend/index.html ./
 RUN trunk build --release
 
 # ── Stage 2: Build the Axum backend ─────────────────────────────────────────
-FROM rust:1.82-slim AS backend-builder
+FROM rust:1.94-slim AS backend-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev ca-certificates \
