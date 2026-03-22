@@ -105,9 +105,9 @@ pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, Papilli
         .map_err(|e| PapillionError::from(e.to_string()))?;
     let llm_configured = config.llm_provider != LlmProvider::None;
     Ok(SetupState {
-        identity_created: has_identity,
+        identity_created: has_signer,
         llm_configured,
-        setup_complete: has_identity,
+        setup_complete: has_signer,
     })
 }
 
