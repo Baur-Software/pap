@@ -95,7 +95,7 @@ impl FederatedRegistry {
     /// Verify an advertisement's Ed25519 signature.
     ///
     /// The signature must match the advertised DID's public key.
-    fn verify_advertisement(&self, ad: &AgentAdvertisement) -> bool {
+    pub fn verify_advertisement(&self, ad: &AgentAdvertisement) -> bool {
         // Extract the signing DID
         let did = &ad.signed_by;
 

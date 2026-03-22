@@ -112,6 +112,13 @@ async fn register_agent(
         return auth_error();
     }
     let mut registry = state.registry.lock().unwrap();
+    if !registry.verify_advertisement(&ad) {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({"error": "invalid or missing Ed25519 signature — signed_by DID must match the signature"})),
+        )
+            .into_response();
+    }
     match registry.register_local(ad) {
         Ok(()) => (StatusCode::CREATED, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => (
