@@ -5,6 +5,13 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-03-21
+
+### Fixed
+
+- **papillion**: Identity state is now atomic — signer and principal seed are protected by a single `RwLock<IdentityState>` to prevent race conditions where one is updated but not the other
+- **papillion**: Canonical base64 encoding — imported identity seeds are decoded to bytes and re-encoded on export, eliminating issues with non-canonical user input
+
 ## [0.2.2] - 2026-03-21
 
 ### Added

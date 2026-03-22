@@ -91,9 +91,10 @@ pub async fn get_orchestrator_status(
 #[tauri::command]
 pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, PapillionError> {
     let has_identity = state
-        .signer
+        .identity
         .read()
         .map_err(|e| PapillionError::from(e.to_string()))?
+        .signer
         .is_some();
     let config = state
         .orchestrator_config
@@ -371,11 +372,12 @@ pub async fn run_scenario(
             .clone();
         let did = agent_ad.provider.did.clone();
 
-        let seed_lock = state
-            .principal_seed
+        let identity_lock = state
+            .identity
             .read()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        let seed = seed_lock
+        let seed = identity_lock
+            .principal_seed
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
         let kp =

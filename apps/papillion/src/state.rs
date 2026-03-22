@@ -19,11 +19,18 @@ pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 /// Default port for the federation + agent TLS server.
 pub const DEFAULT_FEDERATION_PORT: u16 = 7890;
 
+/// Atomic identity state: signer and raw seed stored together to prevent
+/// intermediate states where they diverge.
+pub struct IdentityState {
+    pub signer: Option<Box<dyn PrincipalSigner + Send + Sync>>,
+    pub principal_seed: Option<[u8; 32]>,
+}
+
 /// Application state managed by Tauri.
 pub struct AppState {
-    pub signer: RwLock<Option<Box<dyn PrincipalSigner + Send + Sync>>>,
-    /// Raw 32-byte Ed25519 seed for signing and key export.
-    pub principal_seed: RwLock<Option<[u8; 32]>>,
+    /// Atomic identity state (signer + seed) — protects against intermediate states
+    /// where one is updated but not the other.
+    pub identity: RwLock<IdentityState>,
     /// Remote registry caches keyed by URL.
     pub registries: RwLock<HashMap<String, FederatedRegistry>>,
     /// The node's own registry — shared with the federation HTTP server.
@@ -70,9 +77,12 @@ impl AppState {
     /// Create a clone suitable for moving to a background thread.
     /// This wraps all the Arc/RwLock fields which are already thread-safe and shareable.
     pub fn clone_for_background(&self) -> Self {
+        let current_identity = self.identity.read().unwrap();
         Self {
-            signer: RwLock::new(None), // Signer will be recreated from seed in background thread
-            principal_seed: RwLock::new(*self.principal_seed.read().unwrap()),
+            identity: RwLock::new(IdentityState {
+                signer: None, // Signer will be recreated from seed in background thread
+                principal_seed: current_identity.principal_seed,
+            }),
             registries: RwLock::new(HashMap::new()), // Will be populated on demand
             local_registry: self.local_registry.clone(),
             bookmarks: RwLock::new(self.bookmarks.read().unwrap().clone()),
@@ -147,8 +157,10 @@ impl AppState {
         );
 
         Self {
-            signer: RwLock::new(Some(Box::new(signer))),
-            principal_seed: RwLock::new(Some(raw_seed)),
+            identity: RwLock::new(IdentityState {
+                signer: Some(Box::new(signer)),
+                principal_seed: Some(raw_seed),
+            }),
             registries: RwLock::new(HashMap::new()),
             local_registry,
             bookmarks: RwLock::new(vec![LOCAL_REGISTRY_URL.to_string()]),
