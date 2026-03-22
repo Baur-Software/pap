@@ -446,15 +446,8 @@
       transition: border-color .2s;
     }
     .sdk-lang-card:hover { border-color: var(--border2); }
-    .sdk-lang-card.available { border-color: rgba(245,158,11,.3); }
     .sdk-lang-icon { font-size: 1.6rem; margin-bottom: 10px; }
-    .sdk-lang-name { font-size: .95rem; font-weight: 600; margin-bottom: 4px; }
-    .sdk-lang-status {
-      font-size: .7rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-      padding: 2px 8px; border-radius: 6px; display: inline-block;
-    }
-    .sdk-lang-status.shipped { background: rgba(245,158,11,.1); color: var(--amber); }
-    .sdk-lang-status.planned { background: rgba(99,102,241,.1); color: var(--indigo); }
+    .sdk-lang-name { font-size: .95rem; font-weight: 600; }
     @media (max-width: 768px) {
       .sdk-lang-grid { grid-template-columns: repeat(2, 1fr); }
     }
@@ -1234,35 +1227,29 @@
       <p class="section-sub">The Rust core is the reference implementation. Language SDKs bring the full protocol surface &mdash; keypairs, mandates, delegation, verification &mdash; to your stack.</p>
     </div>
     <div class="sdk-lang-grid reveal reveal-delay-1">
-      <div class="sdk-lang-card available">
+      <div class="sdk-lang-card">
         <div class="sdk-lang-icon">&#x1F980;</div>
         <div class="sdk-lang-name">Rust</div>
-        <span class="sdk-lang-status shipped">Core</span>
       </div>
-      <div class="sdk-lang-card available">
+      <div class="sdk-lang-card">
         <div class="sdk-lang-icon">&#x1F40D;</div>
         <div class="sdk-lang-name">Python</div>
-        <span class="sdk-lang-status shipped">Shipped</span>
       </div>
       <div class="sdk-lang-card">
         <div class="sdk-lang-icon">{ts}</div>
         <div class="sdk-lang-name">TypeScript</div>
-        <span class="sdk-lang-status planned">Planned</span>
       </div>
       <div class="sdk-lang-card">
         <div class="sdk-lang-icon">&#x1F439;</div>
         <div class="sdk-lang-name">Go</div>
-        <span class="sdk-lang-status planned">Planned</span>
       </div>
       <div class="sdk-lang-card">
         <div class="sdk-lang-icon">&#9749;</div>
         <div class="sdk-lang-name">Java</div>
-        <span class="sdk-lang-status planned">Planned</span>
       </div>
       <div class="sdk-lang-card">
         <div class="sdk-lang-icon">&#x266F;</div>
         <div class="sdk-lang-name">C#</div>
-        <span class="sdk-lang-status planned">Planned</span>
       </div>
     </div>
   </div>
