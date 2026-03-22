@@ -136,6 +136,8 @@ jobs:
           restore-keys: mistral-7b-q4
 
       - name: Download Mistral 7B model (if not cached)
+        env:
+          HF_HUB_CACHE: apps/papillion/models
         run: |
           MODEL_DIR="apps/papillion/models"
           MODEL_FILE="$MODEL_DIR/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
@@ -146,10 +148,9 @@ jobs:
             pip install huggingface-hub --quiet
 
             echo "Downloading Mistral 7B model from HuggingFace..."
-            python3 << 'PYTHON_SCRIPT'
+            python3 -c "
 from huggingface_hub import hf_hub_download
 import os
-
 model_file = hf_hub_download(
     repo_id='TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
     filename='mistral-7b-instruct-v0.2.Q4_K_M.gguf',
@@ -158,7 +159,7 @@ model_file = hf_hub_download(
 )
 file_size_gb = os.path.getsize(model_file) / (1024**3)
 print(f'✅ Model downloaded successfully ({file_size_gb:.2f} GB)')
-PYTHON_SCRIPT
+            "
           else
             file_size_gb=$(du -sh "$MODEL_FILE" | awk '{print $1}')
             echo "✅ Model already cached at $MODEL_FILE ($file_size_gb)"
