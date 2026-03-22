@@ -447,7 +447,10 @@ pub async fn run_scenario(
                 match serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs) {
                     Ok(stored_refs) => {
                         // Validate: all stored refs must be in scenario.requires_disclosure
-                        if stored_refs.iter().all(|r| scenario.requires_disclosure.contains(r)) {
+                        if stored_refs
+                            .iter()
+                            .all(|r| scenario.requires_disclosure.contains(r))
+                        {
                             stored_refs
                         } else {
                             // Invalid subset — fall back to scenario requirements
@@ -765,7 +768,9 @@ pub fn list_completed_runs(
     let offset = offset.unwrap_or(0);
     let limit = std::cmp::min(limit.unwrap_or(50), 100) as usize;
 
-    let episodes = state.db.list_episodes(None, None, limit, Some(offset as i64))?;
+    let episodes = state
+        .db
+        .list_episodes(None, None, limit, Some(offset as i64))?;
     let mut results = Vec::new();
 
     for ep in episodes {
