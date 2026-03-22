@@ -793,7 +793,7 @@ mod tests {
         ep_failure.outcome_detail = Some("API error: connection refused".to_string());
         db.insert_episode(&ep_failure).unwrap();
 
-        let episodes = db.list_episodes(None, None, 100).unwrap();
+        let episodes = db.list_episodes(None, None, 100, None).unwrap();
         assert_eq!(episodes.len(), 2);
 
         let success = episodes.iter().find(|e| e.id == "ep-success").unwrap();
@@ -812,7 +812,7 @@ mod tests {
         ep.disclosure_refs = disclosure_json.to_string();
         db.insert_episode(&ep).unwrap();
 
-        let retrieved = db.list_episodes(None, None, 1).unwrap();
+        let retrieved = db.list_episodes(None, None, 1, None).unwrap();
         assert_eq!(retrieved[0].disclosure_refs, disclosure_json);
     }
 
@@ -838,7 +838,7 @@ mod tests {
         );
         db.insert_episode(&ep_large_payload).unwrap();
 
-        let episodes = db.list_episodes(None, None, 100).unwrap();
+        let episodes = db.list_episodes(None, None, 100, None).unwrap();
         assert_eq!(episodes.len(), 3);
 
         // All outcomes still recorded correctly
@@ -869,7 +869,7 @@ mod tests {
         ep3.agent_did_hash = "hash-agent-a".to_string();
         db.insert_episode(&ep3).unwrap();
 
-        let episodes = db.list_episodes(None, Some("hash-agent-a"), 100).unwrap();
+        let episodes = db.list_episodes(None, Some("hash-agent-a"), 100, None).unwrap();
         assert_eq!(episodes.len(), 3);
 
         // Parse disclosures and compute intersection
@@ -906,7 +906,7 @@ mod tests {
         ep_failure.agent_did_hash = "hash-agent-b".to_string();
         db.insert_episode(&ep_failure).unwrap();
 
-        let episodes = db.list_episodes(None, Some("hash-agent-b"), 100).unwrap();
+        let episodes = db.list_episodes(None, Some("hash-agent-b"), 100, None).unwrap();
         let successful = episodes
             .iter()
             .filter(|ep| ep.outcome == "success")

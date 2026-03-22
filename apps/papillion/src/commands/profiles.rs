@@ -238,8 +238,6 @@ pub async fn import_profile_seed(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // Integration tests are better run with a full Tauri app context
     // Unit tests here would need mocking, which Tauri's State doesn't support well
     // See: end-to-end tests in frontend instead
