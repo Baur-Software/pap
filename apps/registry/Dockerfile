@@ -32,8 +32,10 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY vendor-icu ./vendor-icu
 
-# Only the crates pap-registry actually depends on
+# All crates in pap-registry's transitive dependency graph:
+#   pap-registry → pap-federation → pap-marketplace → pap-core → pap-did
 COPY crates/pap-did ./crates/pap-did
+COPY crates/pap-core ./crates/pap-core
 COPY crates/pap-marketplace ./crates/pap-marketplace
 COPY crates/pap-federation ./crates/pap-federation
 
@@ -42,10 +44,9 @@ COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src ./apps/registry/src
 
 # Patch the workspace members list to remove crates we didn't copy.
-# Anchor to lines that start with whitespace+"quote" (member entries only),
-# so workspace.dependencies entries with the same path are left intact.
+# Anchor to lines starting with whitespace+quote (member entries only),
+# so workspace.dependencies path entries are left intact.
 RUN sed -i \
-    -e '/^[[:space:]]*"crates\/pap-core"/d' \
     -e '/^[[:space:]]*"crates\/pap-credential"/d' \
     -e '/^[[:space:]]*"crates\/pap-webauthn"/d' \
     -e '/^[[:space:]]*"crates\/pap-proto"/d' \
