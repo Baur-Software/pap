@@ -128,6 +128,9 @@ jobs:
         working-directory: apps/papillion/frontend
         run: trunk build --release
 
+      - name: Install cargo-tauri
+        run: cargo install tauri-cli --locked
+
       - name: Build and upload Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
