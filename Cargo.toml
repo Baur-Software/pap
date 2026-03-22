@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-exclude = ["apps/papillion/frontend"]
+exclude = ["apps/papillion/frontend", "apps/registry/frontend"]
 members = [
     "crates/pap-did",
     "crates/pap-core",
@@ -13,6 +13,7 @@ members = [
     "crates/pap-python",
     "crates/papillion-shared",
     "apps/papillion",
+    "apps/registry",
 ]
 
 [workspace.package]

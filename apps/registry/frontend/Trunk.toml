@@ -1,0 +1,10 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+[watch]
+watch = ["src", "styles"]
+
+[serve]
+port = 1421
+proxy_backend = "http://127.0.0.1:7890"

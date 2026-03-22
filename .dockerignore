@@ -1,0 +1,12 @@
+target/
+apps/papillion/frontend/target/
+apps/registry/frontend/target/
+apps/papillion/frontend/dist/
+apps/registry/frontend/dist/
+**/*.o
+**/*.so
+.git/
+.gitignore
+e2e/
+docs/
+*.md

@@ -115,6 +115,23 @@ impl FederatedRegistry {
         self.local.all()
     }
 
+    /// Remove an advertisement by content hash. Returns true if removed.
+    pub fn remove_by_hash(&mut self, hash: &str) -> bool {
+        if self.local.remove_by_hash(hash) {
+            self.seen_hashes.remove(hash);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove a federation peer by DID. Returns true if removed.
+    pub fn remove_peer(&mut self, did: &str) -> bool {
+        let before = self.peers.len();
+        self.peers.retain(|p| p.did != did);
+        self.peers.len() < before
+    }
+
     pub fn len(&self) -> usize {
         self.local.len()
     }

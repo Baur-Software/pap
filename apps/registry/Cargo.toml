@@ -1,0 +1,24 @@
+[package]
+name = "pap-registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Hostable PAP-compatible federated agent registry with web management UI"
+
+[[bin]]
+name = "pap-registry"
+path = "src/main.rs"
+
+[dependencies]
+pap-federation = { workspace = true }
+pap-marketplace = { workspace = true }
+pap-did = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
