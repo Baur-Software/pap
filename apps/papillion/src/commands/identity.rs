@@ -32,6 +32,12 @@ pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, Papil
     identity_lock.signer = Some(Box::new(signer));
     identity_lock.principal_seed = Some(raw_seed);
 
+    // Persist the new seed to SQLite
+    let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw_seed);
+    if let Err(e) = state.db.set_setting("principal_seed_b64", &seed_b64) {
+        eprintln!("Failed to persist principal seed: {e}");
+    }
+
     if let Ok(mut backed_up) = state.key_backed_up.write() {
         *backed_up = false;
     }
@@ -125,6 +131,11 @@ pub fn import_key(
         .map_err(|e| PapillionError::from(e.to_string()))?;
     identity_lock.signer = Some(Box::new(signer));
     identity_lock.principal_seed = Some(seed);
+
+    // Persist the imported seed to SQLite
+    if let Err(e) = state.db.set_setting("principal_seed_b64", &seed_b64) {
+        eprintln!("Failed to persist imported seed: {e}");
+    }
 
     if let Ok(mut backed_up) = state.key_backed_up.write() {
         *backed_up = true;
