@@ -66,6 +66,12 @@
     nav .container { display: flex; align-items: center; justify-content: space-between; }
     .logo { font-size: 1.25rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; }
     .logo-butterfly { font-size: 1.4rem; }
+    .dev-badge {
+      font-size: .65rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 6px;
+      background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.25);
+      color: var(--amber);
+    }
     .nav-links { display: flex; align-items: center; gap: 32px; }
     .nav-links a { color: var(--muted); font-size: .9rem; font-weight: 500; }
     .nav-links a:hover { color: var(--text); }
@@ -496,7 +502,7 @@
 <nav id="nav">
   <div class="container">
     <a href="#" class="logo">
-      <span class="logo-butterfly">&#x1F98B;</span> Papillion
+      <span class="logo-butterfly">&#x1F98B;</span> Papillion <span class="dev-badge">In Development</span>
     </a>
     <div class="nav-links">
       <a href="#problem">Why</a>
