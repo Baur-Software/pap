@@ -6,14 +6,14 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::orchestrator::OrchestratorState;
-use papillion_shared::DemoRunResult;
+use papillion_shared::ScenarioRunResult;
 
 #[component]
 pub fn ScenarioPage() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let navigate = use_navigate();
     let current_step = RwSignal::new(0u8);
-    let run_result = RwSignal::new(None::<DemoRunResult>);
+    let run_result = RwSignal::new(None::<ScenarioRunResult>);
     let running = RwSignal::new(false);
     let run_error = RwSignal::new(None::<String>);
 
@@ -24,7 +24,7 @@ pub fn ScenarioPage() -> impl IntoView {
     };
 
     view! {
-        <div>
+        <div class="page">
             <button class="btn" style="margin-bottom: 16px; background: var(--bg-tertiary); color: var(--text-secondary);" on:click=go_back>
                 {"\u{2190} Back"}
             </button>
@@ -119,8 +119,8 @@ pub fn ScenarioPage() -> impl IntoView {
                                             current_step.set(1);
 
                                             spawn_local(async move {
-                                                match bridge::invoke::<serde_json::Value, DemoRunResult>(
-                                                    "run_demo_scenario",
+                                                match bridge::invoke::<serde_json::Value, ScenarioRunResult>(
+                                                    "run_scenario",
                                                     &serde_json::json!({ "scenarioId": sid }),
                                                 ).await {
                                                     Ok(result) => {
@@ -165,7 +165,7 @@ pub fn ScenarioPage() -> impl IntoView {
                                         } else if current_step.get() >= 7 {
                                             "Completed"
                                         } else {
-                                            "Run Demo"
+                                            "Run Scenario"
                                         }
                                     }}
                                 </button>
@@ -237,7 +237,7 @@ fn HandshakeStep(
     number: u8,
     label: &'static str,
     current_step: RwSignal<u8>,
-    result: RwSignal<Option<DemoRunResult>>,
+    result: RwSignal<Option<ScenarioRunResult>>,
 ) -> impl IntoView {
     let status = move || {
         let current = current_step.get();

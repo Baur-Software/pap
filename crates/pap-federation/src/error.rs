@@ -16,4 +16,7 @@ pub enum FederationError {
 
     #[error("server error: {0}")]
     ServerError(String),
+
+    #[error("invalid URL: {0}")]
+    InvalidUrl(String),
 }

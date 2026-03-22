@@ -48,7 +48,7 @@ const SCENARIOS: Record<string, unknown>[] = [
   },
 ];
 
-const ORCHESTRATOR_STATUS = "DemoOnly";
+const ORCHESTRATOR_STATUS = "Ready";
 
 const ORCHESTRATOR_CONFIG: Record<string, unknown> = {
   llm_provider: "None",
@@ -56,73 +56,22 @@ const ORCHESTRATOR_CONFIG: Record<string, unknown> = {
   auto_approve_zero_disclosure: true,
 };
 
-const BACKUP_STATUS = { backed_up: false };
+const SETUP_STATE = {
+  has_identity: true,
+  setup_complete: true,
+  llm_configured: true,
+};
 
-function makeDemoRunResult(scenarioId: string): Record<string, unknown> {
-  const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0];
-  const now = new Date().toISOString();
-  return {
-    scenario_id: scenarioId,
-    agent_name: scenario.agent_name,
-    steps: [
-      {
-        step_number: 1,
-        step_name: "Discover Agent",
-        status: "completed",
-        detail: `Found ${scenario.agent_name} in demo registry`,
-        timestamp: now,
-      },
-      {
-        step_number: 2,
-        step_name: "Issue Mandate",
-        status: "completed",
-        detail: "Root mandate signed",
-        timestamp: now,
-      },
-      {
-        step_number: 3,
-        step_name: "Open Session",
-        status: "completed",
-        detail: "session-abc123",
-        timestamp: now,
-      },
-      {
-        step_number: 4,
-        step_name: "Exchange Data",
-        status: "completed",
-        detail: `Action: ${scenario.action_type}`,
-        timestamp: now,
-      },
-      {
-        step_number: 5,
-        step_name: "Co-sign Receipt",
-        status: "completed",
-        detail: "Both parties signed",
-        timestamp: now,
-      },
-      {
-        step_number: 6,
-        step_name: "Close Session",
-        status: "completed",
-        detail: "Session closed cleanly",
-        timestamp: now,
-      },
-    ],
-    receipt: {
-      session_id: "session-abc123",
-      action: scenario.action_type,
-      initiator_did: IDENTITY.did,
-      receiver_did: "did:key:z6MkAgent999",
-      property_refs: scenario.requires_disclosure,
-      co_signed: true,
-      timestamp: now,
-    },
-    receipt_url: "pap://demo/receipts/session-abc123",
-    completed_at: now,
-    success: true,
-    error: null,
-  };
-}
+const BUILTIN_MODELS = [
+  {
+    id: "mistral-7b-instruct",
+    display_name: "Mistral 7B Instruct",
+    size_hint: "4.1 GB",
+    quant: "Q4_K_M",
+  },
+];
+
+const BACKUP_STATUS = { backed_up: false };
 
 // ── Mock handler ──────────────────────────────────────────────
 
@@ -153,10 +102,16 @@ window.__TAURI__ = {
         case 'get_orchestrator_config':
           return CONFIG;
 
+        case 'get_setup_state':
+          return ${JSON.stringify(SETUP_STATE)};
+
+        case 'list_builtin_models':
+          return ${JSON.stringify(BUILTIN_MODELS)};
+
         case 'configure_orchestrator':
           return args?.config ?? CONFIG;
 
-        case 'run_demo_scenario': {
+        case 'run_scenario': {
           const sid = args?.scenarioId ?? 'weather';
           const scenario = SCENARIOS.find(s => s.id === sid) || SCENARIOS[0];
           const now = new Date().toISOString();
@@ -164,7 +119,7 @@ window.__TAURI__ = {
             scenario_id: sid,
             agent_name: scenario.agent_name,
             steps: [
-              { step_number: 1, step_name: 'Discover Agent', status: 'completed', detail: 'Found ' + scenario.agent_name, timestamp: now },
+              { step_number: 1, step_name: 'Discover Agent', status: 'completed', detail: 'Found ' + scenario.agent_name + ' in registry', timestamp: now },
               { step_number: 2, step_name: 'Issue Mandate', status: 'completed', detail: 'Root mandate signed', timestamp: now },
               { step_number: 3, step_name: 'Open Session', status: 'completed', detail: 'session-abc123', timestamp: now },
               { step_number: 4, step_name: 'Exchange Data', status: 'completed', detail: 'Action: ' + scenario.action_type, timestamp: now },
@@ -180,7 +135,7 @@ window.__TAURI__ = {
               co_signed: true,
               timestamp: now,
             },
-            receipt_url: 'pap://demo/receipts/session-abc123',
+            receipt_url: 'pap://receipts/session-abc123',
             completed_at: now,
             success: true,
             error: null,
@@ -226,11 +181,61 @@ window.__TAURI__ = {
           return window.__TAURI__.core._successors;
         }
 
-        case 'browse_registry':
+        case 'navigate_registry':
           return {
-            info: { url: args?.url ?? 'pap://demo', agent_count: 3, peer_count: 0 },
-            agents: [],
+            url: args?.url ?? 'pap://local',
+            agent_count: 3,
+            peer_count: 0,
           };
+
+        case 'list_agents':
+          return [
+            { name: 'DuckDuckGo Search', did: 'did:key:z6MkDDG', action_types: ['search.web'], requires_disclosure: [], description: 'Web search via DuckDuckGo Instant Answer API' },
+            { name: 'Wikipedia', did: 'did:key:z6MkWiki', action_types: ['knowledge.lookup'], requires_disclosure: [], description: 'Knowledge lookup via Wikipedia REST API' },
+            { name: 'Mistral AI', did: 'did:key:z6MkMistral', action_types: ['ai.inference'], requires_disclosure: [], description: 'On-device inference via Candle' },
+          ];
+
+        case 'search_agents':
+          return [];
+
+        case 'sync_agents':
+          return null;
+
+        case 'discover_peers':
+          return [];
+
+        case 'add_bookmark':
+        case 'list_bookmarks':
+          return [];
+
+        case 'canvas_prompt':
+          return {
+            canvas_id: 'canvas-1',
+            blocks: [
+              {
+                id: 'block-1',
+                block_type: 'text',
+                title: 'Response',
+                content: 'Here is your answer.',
+                status: 'ready',
+                linked_block_ids: [],
+              },
+            ],
+          };
+
+        case 'canvas_reshape':
+        case 'canvas_retry':
+          return {
+            id: args?.blockId ?? 'block-1',
+            block_type: 'text',
+            title: 'Reshaped',
+            content: 'Updated content.',
+            status: 'ready',
+            linked_block_ids: [],
+          };
+
+        case 'load_builtin_model':
+          return null;
 
         case 'check_llm_connection':
           return 'Hello! I am a mock LLM response.';

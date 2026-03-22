@@ -31,16 +31,57 @@ pub enum FederationMessage {
     PeerListResponse { peers: Vec<RegistryPeer> },
 }
 
-/// HTTP client for federation operations.
+/// HTTP(S) client for federation operations.
+///
+/// Two construction modes:
+/// - `pinned(peers)` — fingerprint-pinned TLS. Use for all communication
+///   with verified peers.
+/// - `tofu()` — Trust On First Use. Accepts any cert for bootstrapping
+///   new peer connections. Record the fingerprint and switch to `pinned()`
+///   for subsequent connections.
 pub struct FederationClient {
     client: reqwest::Client,
 }
 
 impl FederationClient {
-    pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
+    /// Create a federation client with a custom reqwest client.
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self { client }
+    }
+
+    /// Create a client pinned to known peer fingerprints.
+    ///
+    /// Only connects to servers whose TLS cert SHA-256 fingerprint
+    /// matches a peer in the list. Peers without fingerprints are ignored.
+    pub fn pinned(peers: &[RegistryPeer]) -> Result<Self, FederationError> {
+        let fingerprints: Vec<String> = peers
+            .iter()
+            .filter_map(|p| p.cert_fingerprint.clone())
+            .collect();
+        if fingerprints.is_empty() {
+            return Err(FederationError::ServerError(
+                "no peer fingerprints available for TLS pinning".into(),
+            ));
         }
+        let client = crate::tls::build_pinned_client(&fingerprints)?;
+        Ok(Self { client })
+    }
+
+    /// Create a TOFU (Trust On First Use) client for bootstrapping.
+    ///
+    /// SECURITY: Only use for initial peer discovery. Record the peer's
+    /// cert fingerprint and use `pinned()` afterward. Will be replaced
+    /// by DNS-based bootstrap (`_pap.hostname` TXT records).
+    pub fn tofu() -> Self {
+        let client = crate::tls::build_tofu_client().unwrap_or_else(|_| reqwest::Client::new());
+        Self { client }
+    }
+
+    /// Create a federation client with TOFU settings.
+    ///
+    /// Equivalent to `tofu()`. Prefer `pinned()` for verified peers.
+    pub fn new() -> Self {
+        Self::tofu()
     }
 
     /// Pull advertisements matching an action from a peer.
@@ -107,6 +148,29 @@ impl FederationClient {
             FederationMessage::AnnounceAck { accepted, .. } => Ok(accepted),
             _ => Err(FederationError::SyncFailed("unexpected ack type".into())),
         }
+    }
+
+    /// Fetch a node's identity from its `/federation/identity` endpoint.
+    ///
+    /// This is the first call when bootstrapping a connection to a new peer.
+    /// Returns the node's DID, endpoint, and cert fingerprint so the caller
+    /// can verify they're talking to who they think they are.
+    pub async fn fetch_identity(
+        &self,
+        endpoint: &str,
+    ) -> Result<crate::server::NodeIdentityResponse, FederationError> {
+        let url = format!("{}/federation/identity", endpoint.trim_end_matches('/'));
+
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| FederationError::PeerUnreachable(e.to_string()))?;
+
+        resp.json()
+            .await
+            .map_err(|e| FederationError::SyncFailed(e.to_string()))
     }
 
     /// Discover peers known to a given peer.

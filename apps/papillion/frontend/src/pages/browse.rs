@@ -6,7 +6,7 @@ use crate::components::registry::browser::RegistryBrowser;
 #[component]
 pub fn BrowsePage() -> impl IntoView {
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"Browse Registries"</h2>
             <RegistryBrowser />
             <AgentDetail />

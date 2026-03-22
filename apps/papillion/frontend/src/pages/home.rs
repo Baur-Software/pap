@@ -14,22 +14,19 @@ pub fn HomePage() -> impl IntoView {
     // Load scenarios on mount
     Effect::new(move || {
         let scenarios = orchestrator.scenarios;
-        if scenarios.get().is_empty() {
+        if scenarios.get().is_empty() && bridge::tauri_available() {
             spawn_local(async move {
-                match bridge::invoke_no_args::<Vec<ScenarioCard>>("list_scenarios").await {
-                    Ok(cards) => scenarios.set(cards),
-                    Err(e) => {
-                        web_sys::console::error_1(
-                            &format!("Failed to load scenarios: {e}").into(),
-                        );
-                    }
+                if let Ok(cards) =
+                    bridge::invoke_no_args::<Vec<ScenarioCard>>("list_scenarios").await
+                {
+                    scenarios.set(cards);
                 }
             });
         }
     });
 
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"What would you like to do?"</h2>
             <div class="scenario-grid">
                 <For

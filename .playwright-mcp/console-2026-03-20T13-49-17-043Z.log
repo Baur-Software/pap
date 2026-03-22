@@ -1,0 +1,2 @@
+[     194ms] [WARNING] The `integrity` attribute is currently ignored for preload destinations that do not support subresource integrity. See https://crbug.com/981419 for more information @ http://localhost:1420/:22
+[     276ms] [ERROR] Failed to check setup state: Tauri runtime not available (command: get_setup_state) @ http://localhost:1420/papillion-ui-76f14b6aa5ced7e4.js:352

@@ -4,9 +4,13 @@ use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_marketplace::AgentAdvertisement;
 
-/// Seed a FederatedRegistry with demo agents for the built-in `pap://demo` registry.
-/// Returns the registry and the agent keypairs (retained for demo runner co-signing).
-pub fn seed_demo_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeypair>) {
+/// Seed the initial federated registry with agents backed by real services.
+///
+/// Every agent here wraps an actual API or on-device capability. No fake
+/// companies, no placeholder agents, no demo data.
+///
+/// Returns the registry and agent keypairs (retained for handshake co-signing).
+pub fn seed_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeypair>) {
     let mut registry = FederatedRegistry::new();
     let mut keypairs = HashMap::new();
 
@@ -31,14 +35,15 @@ pub fn seed_demo_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeyp
         ad.sign(kp.signing_key());
         registry
             .register_local(ad)
-            .expect("demo seed registration should not fail");
+            .expect("registry seed registration should not fail");
         keypairs.insert(name.to_string(), kp);
     };
 
-    // Web Search Agent — zero disclosure
+    // DuckDuckGo Web Search — real API, zero disclosure
+    // Backed by DuckDuckGo Instant Answer JSON API (no tracking, no login).
     register(
-        "Web Search Agent",
-        "SearchCorp",
+        "DuckDuckGo Search",
+        "DuckDuckGo",
         vec!["schema:SearchAction".into()],
         vec!["schema:WebPage".into()],
         vec![],
@@ -46,46 +51,23 @@ pub fn seed_demo_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeyp
         &mut keypairs,
     );
 
-    // Flight Booking Agent — requires name + nationality
+    // Wikipedia Knowledge — real API, zero disclosure
+    // Backed by Wikimedia REST API (public, no auth required).
     register(
-        "Flight Booking Agent",
-        "SkyBook Airlines",
-        vec!["schema:ReserveAction".into()],
-        vec!["schema:Flight".into()],
-        vec![
-            "schema:Person.name".into(),
-            "schema:Person.nationality".into(),
-        ],
-        vec!["schema:Ticket".into()],
-        &mut keypairs,
-    );
-
-    // Hotel Booking Agent — requires name only
-    register(
-        "Hotel Booking Agent",
-        "StayWell Hotels",
-        vec!["schema:ReserveAction".into()],
-        vec!["schema:LodgingReservation".into()],
-        vec!["schema:Person.name".into()],
-        vec!["schema:Reservation".into()],
-        &mut keypairs,
-    );
-
-    // Payment Agent — zero disclosure
-    register(
-        "Payment Agent",
-        "PayCorp",
-        vec!["schema:PayAction".into()],
-        vec!["schema:Invoice".into()],
+        "Wikipedia Knowledge",
+        "Wikimedia Foundation",
+        vec!["schema:SearchAction".into()],
+        vec!["schema:Article".into()],
         vec![],
-        vec!["schema:Invoice".into()],
+        vec!["schema:Article".into()],
         &mut keypairs,
     );
 
-    // Local AI Assistant — zero disclosure
+    // On-Device AI (Mistral) — real inference, zero disclosure
+    // Backed by Candle + Mistral 7B GGUF running entirely on-device.
     register(
-        "Local AI Assistant",
-        "LocalAI",
+        "On-Device AI",
+        "Papillion",
         vec!["schema:AskAction".into()],
         vec!["schema:Question".into()],
         vec![],

@@ -2,19 +2,21 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
-use papillion_shared::DemoRunResult;
+use papillion_shared::ScenarioRunResult;
 
 #[component]
 pub fn ActivityPage() -> impl IntoView {
-    let runs = RwSignal::new(Vec::<DemoRunResult>::new());
+    let runs = RwSignal::new(Vec::<ScenarioRunResult>::new());
 
     Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
         spawn_local(async move {
-            match bridge::invoke_no_args::<Vec<DemoRunResult>>("list_completed_runs").await {
-                Ok(results) => runs.set(results),
-                Err(e) => {
-                    web_sys::console::error_1(&format!("Failed to load runs: {e}").into())
-                }
+            if let Ok(results) =
+                bridge::invoke_no_args::<Vec<ScenarioRunResult>>("list_completed_runs").await
+            {
+                runs.set(results);
             }
         });
     });
@@ -26,7 +28,7 @@ pub fn ActivityPage() -> impl IntoView {
     };
 
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"Activity"</h2>
             <Show
                 when=move || !runs.get().is_empty()

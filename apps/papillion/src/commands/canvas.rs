@@ -1,0 +1,313 @@
+use std::sync::Arc;
+
+use chrono::Utc;
+use serde_json::json;
+use tauri::{AppHandle, Emitter, State};
+
+use pap_did::PrincipalKeypair;
+use pap_federation::{build_pinned_client, PapUrl};
+use pap_transport::{AgentHandler, RemoteAgentHandler};
+
+use crate::error::PapillionError;
+use crate::handshake;
+use crate::state::AppState;
+use papillion_shared::{BlockEvent, BlockState, CanvasBlock};
+
+/// Detect intent from a user prompt.
+/// Returns (action_type, preferred_agent_name, cleaned_query).
+fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
+    let lower = prompt.to_lowercase();
+
+    if lower.contains("wikipedia")
+        || lower.contains("wiki")
+        || lower.contains("article about")
+        || lower.contains("tell me about")
+    {
+        let q = prompt
+            .replace("wikipedia", "")
+            .replace("wiki", "")
+            .replace("article about", "")
+            .replace("tell me about", "")
+            .trim()
+            .to_string();
+        (
+            "schema:SearchAction",
+            "Wikipedia Knowledge",
+            if q.is_empty() { prompt.into() } else { q },
+        )
+    } else if lower.contains("search")
+        || lower.contains("find")
+        || lower.contains("look up")
+        || lower.starts_with("what is")
+        || lower.starts_with("who is")
+    {
+        let q = prompt
+            .replace("search", "")
+            .replace("find", "")
+            .replace("look up", "")
+            .trim()
+            .to_string();
+        (
+            "schema:SearchAction",
+            "DuckDuckGo Search",
+            if q.is_empty() { prompt.into() } else { q },
+        )
+    } else {
+        ("schema:AskAction", "On-Device AI", prompt.to_string())
+    }
+}
+
+/// Discover agent from registry, resolve handler, run handshake.
+async fn process_prompt(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    prompt_id: &str,
+    block_id: &str,
+    text: &str,
+) -> Result<(String, serde_json::Value), PapillionError> {
+    let (action_type, preferred, query) = detect_intent(text);
+
+    // Discover agent — try local registry first, then remote registries.
+    // This mirrors how federation works: your node first, then the network.
+    let (agent_name, agent_did, requires_disclosure, returns, source_url) = {
+        // First: search the node's own registry (local agents)
+        let local = state
+            .local_registry
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+        let candidates = local.query_local_satisfiable(action_type, &[]);
+
+        if let Some(agent) = candidates
+            .iter()
+            .find(|a| a.name == preferred)
+            .or_else(|| candidates.first())
+        {
+            (
+                agent.name.clone(),
+                agent.provider.did.clone(),
+                agent.requires_disclosure.clone(),
+                agent.returns.clone(),
+                None, // local — no source URL
+            )
+        } else {
+            // Not found locally — search synced remote registries
+            drop(local);
+            let registries = state
+                .registries
+                .read()
+                .map_err(|e| PapillionError::from(e.to_string()))?;
+
+            let mut found = None;
+            for (url, registry) in registries.iter() {
+                let remote_candidates = registry.query_local_satisfiable(action_type, &[]);
+                if let Some(agent) = remote_candidates
+                    .iter()
+                    .find(|a| a.name == preferred)
+                    .or_else(|| remote_candidates.first())
+                {
+                    found = Some((
+                        agent.name.clone(),
+                        agent.provider.did.clone(),
+                        agent.requires_disclosure.clone(),
+                        agent.returns.clone(),
+                        Some(url.clone()),
+                    ));
+                    break;
+                }
+            }
+
+            found.ok_or_else(|| PapillionError::from(format!("No agent for {}", action_type)))?
+        }
+    };
+
+    // Resolve handler — local handler or remote proxy over TLS.
+    // Same AgentHandler trait, same handshake code path. Zero-trust
+    // doesn't distinguish local from remote.
+    let handler: Arc<dyn AgentHandler> = if let Some(h) = state.local_agents.get(&agent_name) {
+        h.clone()
+    } else if let Some(ref pap_url) = source_url {
+        // Agent lives on a remote peer — build a RemoteAgentHandler
+        // with fingerprint-pinned TLS from the known peer
+        let parsed = PapUrl::parse(pap_url).map_err(|e| PapillionError::from(e.to_string()))?;
+        let endpoint = parsed.https_endpoint();
+
+        // Find the peer's fingerprint from our local registry
+        let fingerprint = {
+            let local = state
+                .local_registry
+                .lock()
+                .map_err(|e| PapillionError::from(e.to_string()))?;
+            local
+                .peers()
+                .iter()
+                .find(|p| p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/'))
+                .and_then(|p| p.cert_fingerprint.clone())
+        };
+
+        let slug = agent_name.to_lowercase().replace(' ', "-");
+        let base_url = format!("{}/agents/{}", endpoint, slug);
+
+        if let Some(fp) = fingerprint {
+            // Pinned TLS — verified connection
+            let http_client =
+                build_pinned_client(&[fp]).map_err(|e| PapillionError::from(e.to_string()))?;
+            Arc::new(RemoteAgentHandler::with_client(&base_url, http_client))
+        } else {
+            return Err(PapillionError::from(format!(
+                "No cert fingerprint for peer {} — navigate to it first",
+                endpoint
+            )));
+        }
+    } else {
+        return Err(PapillionError::from(format!(
+            "No handler for {}",
+            agent_name
+        )));
+    };
+
+    // Get principal keypair
+    let principal_kp = {
+        let seed_guard = state.principal_seed.read().unwrap();
+        let seed = seed_guard
+            .as_ref()
+            .ok_or_else(|| PapillionError::from("No identity configured"))?;
+        PrincipalKeypair::from_bytes(seed)
+            .map_err(|e| PapillionError::from(format!("Failed to load keypair: {}", e)))?
+    };
+
+    // Phase progress callbacks emit Tauri events
+    let bid = block_id.to_string();
+    let pid = prompt_id.to_string();
+    let app_phase = app.clone();
+    let on_phase: handshake::PhaseCallback = Box::new(move |phase, label| {
+        let now = Utc::now().to_rfc3339();
+        let block = CanvasBlock {
+            id: bid.clone(),
+            prompt_id: pid.clone(),
+            state: BlockState::Resolving {
+                phase,
+                phase_label: label.into(),
+            },
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        let _ = app_phase.emit("block_updated", BlockEvent { block });
+    });
+
+    let bid2 = block_id.to_string();
+    let pid2 = prompt_id.to_string();
+    let app_fail = app.clone();
+    let on_fail: handshake::FailCallback = Box::new(move |phase, reason| {
+        let now = Utc::now().to_rfc3339();
+        let block = CanvasBlock {
+            id: bid2.clone(),
+            prompt_id: pid2.clone(),
+            state: BlockState::Failed {
+                phase,
+                reason: reason.into(),
+            },
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        let _ = app_fail.emit("block_resolved", BlockEvent { block });
+    });
+
+    let result = handshake::execute(handshake::HandshakeParams {
+        handler,
+        agent_name: &agent_name,
+        agent_did: &agent_did,
+        action_type,
+        query: &query,
+        principal_kp: &principal_kp,
+        requires_disclosure: &requires_disclosure,
+        returns: &returns,
+        on_phase,
+        on_fail,
+    })
+    .await?;
+
+    Ok((result.schema_type, result.content))
+}
+
+#[tauri::command]
+pub async fn canvas_prompt(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    _canvas_id: String,
+    prompt_id: String,
+    block_id: String,
+    text: String,
+) -> Result<serde_json::Value, PapillionError> {
+    let (schema_type, content) = process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+
+    let now = Utc::now().to_rfc3339();
+    let _ = app.emit(
+        "block_resolved",
+        BlockEvent {
+            block: CanvasBlock {
+                id: block_id.clone(),
+                prompt_id,
+                state: BlockState::Resolved,
+                schema_type: Some(schema_type),
+                content: Some(content),
+                linked_block_ids: Vec::new(),
+                created_at: now.clone(),
+                updated_at: now,
+            },
+        },
+    );
+    Ok(json!({ "status": "ok", "block_id": block_id }))
+}
+
+#[tauri::command]
+pub async fn canvas_reshape(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    _canvas_id: String,
+    block_id: String,
+    text: String,
+) -> Result<serde_json::Value, PapillionError> {
+    let (schema_type, content) = process_prompt(&app, &state, "", &block_id, &text).await?;
+
+    let now = Utc::now().to_rfc3339();
+    let _ = app.emit(
+        "block_resolved",
+        BlockEvent {
+            block: CanvasBlock {
+                id: block_id.clone(),
+                prompt_id: String::new(),
+                state: BlockState::Resolved,
+                schema_type: Some(schema_type),
+                content: Some(content),
+                linked_block_ids: Vec::new(),
+                created_at: now.clone(),
+                updated_at: now,
+            },
+        },
+    );
+    Ok(json!({ "status": "ok", "block_id": block_id }))
+}
+
+#[tauri::command]
+pub async fn canvas_retry(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    canvas_id: String,
+    block_id: String,
+) -> Result<serde_json::Value, PapillionError> {
+    canvas_prompt(
+        app,
+        state,
+        canvas_id,
+        format!("retry-{}", block_id),
+        block_id,
+        "Retrying previous request...".into(),
+    )
+    .await
+}

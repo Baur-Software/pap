@@ -15,9 +15,9 @@ pub fn DashboardPage() -> impl IntoView {
 
     let has_identity = move || identity.info.get().is_some();
 
-    let browse_demo = move |_| {
+    let browse_registry = move |_| {
         let nav = navigate.clone();
-        registry.current_url.set("pap://demo".to_string());
+        registry.current_url.set("pap://local".to_string());
         registry.loading.set(true);
         registry.error.set(None);
 
@@ -29,7 +29,7 @@ pub fn DashboardPage() -> impl IntoView {
             match bridge::invoke::<Args, RegistryInfo>(
                 "navigate_registry",
                 &Args {
-                    url: "pap://demo".to_string(),
+                    url: "pap://local".to_string(),
                 },
             )
             .await
@@ -43,7 +43,7 @@ pub fn DashboardPage() -> impl IntoView {
                     if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
                         "list_agents",
                         &ListArgs {
-                            registry_url: "pap://demo".to_string(),
+                            registry_url: "pap://local".to_string(),
                         },
                     )
                     .await
@@ -59,16 +59,16 @@ pub fn DashboardPage() -> impl IntoView {
     };
 
     view! {
-        <div>
+        <div class="page">
             <h2 class="page-title">"Dashboard"</h2>
 
             <div class="card" style="margin-bottom: 16px;">
-                <h3 style="font-size: 14px; margin-bottom: 8px;">"Built-in Demo Registry"</h3>
+                <h3 style="font-size: 14px; margin-bottom: 8px;">"Local Agent Registry"</h3>
                 <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                    "Browse 5 pre-loaded demo agents including search, travel booking, payments, and AI assistants. No external services required."
+                    "Browse agents backed by real services: DuckDuckGo search, Wikipedia knowledge, and on-device Mistral AI. Zero disclosure, fully functional."
                 </p>
-                <button class="btn btn-primary" on:click=browse_demo>
-                    "Browse Demo Agents"
+                <button class="btn btn-primary" on:click=browse_registry>
+                    "Browse Agents"
                 </button>
             </div>
 
@@ -78,7 +78,7 @@ pub fn DashboardPage() -> impl IntoView {
                     <div class="card">
                         <p>"Welcome to Papillion \u{2014} the agentic browser."</p>
                         <p style="color: var(--text-secondary); margin-top: 8px;">
-                            "Create an identity in Settings to get started, or browse the demo registry above."
+                            "Create an identity in Settings to get started, or browse the local registry above."
                         </p>
                     </div>
                 }

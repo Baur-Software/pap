@@ -51,19 +51,31 @@ pub struct ChatMessage {
 
 // ── Public API ───────────────────────────────────────────────
 
-/// Send a chat completion request to the configured LLM provider.
+/// Send a chat completion request to an HTTP-based LLM provider.
 /// Returns the assistant's response content.
-pub async fn chat(provider: &LlmProvider, messages: &[ChatMessage]) -> Result<String, PapillionError> {
+///
+/// For BuiltIn, callers should use `crate::inference::ModelManager` directly.
+/// This function handles Mistral API, Ollama, and OpenAI-compatible endpoints.
+pub async fn chat(
+    provider: &LlmProvider,
+    messages: &[ChatMessage],
+) -> Result<String, PapillionError> {
     match provider {
+        LlmProvider::BuiltIn { .. } => Err(PapillionError::from(
+            "BuiltIn provider uses on-device inference via ModelManager, not HTTP chat",
+        )),
+        LlmProvider::Mistral { api_key, model } => mistral_chat(api_key, model, messages).await,
         LlmProvider::Ollama { endpoint, model } => ollama_chat(endpoint, model, messages).await,
-        LlmProvider::OpenAiCompatible { endpoint, api_key, model } => {
-            openai_chat(endpoint, api_key, model, messages).await
-        }
+        LlmProvider::OpenAiCompatible {
+            endpoint,
+            api_key,
+            model,
+        } => openai_chat(endpoint, api_key, model, messages).await,
         LlmProvider::None => Err(PapillionError::from("No LLM provider configured")),
     }
 }
 
-/// Check if the configured LLM provider is reachable.
+/// Check if the configured LLM provider is reachable and working.
 #[tauri::command]
 pub async fn check_llm_connection(
     state: tauri::State<'_, crate::state::AppState>,
@@ -74,13 +86,31 @@ pub async fn check_llm_connection(
         .map_err(|e| PapillionError::from(e.to_string()))?
         .clone();
 
-    let messages = vec![ChatMessage {
-        role: "user".into(),
-        content: "Say hello in one sentence.".into(),
-    }];
-
-    let response = chat(&config.llm_provider, &messages).await?;
-    Ok(response)
+    match &config.llm_provider {
+        LlmProvider::BuiltIn { model_id } => {
+            // For BuiltIn, verify the model is loaded and can generate
+            let resource_dir = state
+                .resource_dir
+                .read()
+                .map_err(|e| PapillionError::from(e.to_string()))?
+                .clone();
+            let mut mgr = state.model_manager.lock().await;
+            mgr.ensure_loaded(model_id, &resource_dir)
+                .map_err(PapillionError::from)?;
+            let response = mgr
+                .generate("[INST] Say hello in one sentence. [/INST]", 50)
+                .map_err(PapillionError::from)?;
+            Ok(response)
+        }
+        LlmProvider::None => Err(PapillionError::from("No LLM provider configured")),
+        other => {
+            let messages = vec![ChatMessage {
+                role: "user".into(),
+                content: "Say hello in one sentence.".into(),
+            }];
+            chat(other, &messages).await
+        }
+    }
 }
 
 // ── Ollama ───────────────────────────────────────────────────
@@ -109,6 +139,18 @@ async fn ollama_chat(
         .map_err(|e| PapillionError::from(format!("Ollama response parse failed: {e}")))?;
 
     Ok(resp.message.content)
+}
+
+// ── Mistral API ─────────────────────────────────────────────
+
+const MISTRAL_API_ENDPOINT: &str = "https://api.mistral.ai/v1";
+
+async fn mistral_chat(
+    api_key: &str,
+    model: &str,
+    messages: &[ChatMessage],
+) -> Result<String, PapillionError> {
+    openai_chat(MISTRAL_API_ENDPOINT, api_key, model, messages).await
 }
 
 // ── OpenAI-compatible ────────────────────────────────────────

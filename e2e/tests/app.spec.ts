@@ -5,146 +5,91 @@ test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
-// ── Navigation & Layout ───────────────────────────────────────
+// ── Top Bar & App Shell ──────────────────────────────────────
 
 test.describe("App shell", () => {
-  test("renders sidebar with identity and nav links", async ({ page }) => {
+  test("renders top bar with identity and status", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".sidebar")).toBeVisible();
-    await expect(page.locator(".identity-badge .label")).toHaveText("Principal");
-    await expect(page.locator(".identity-badge .did")).not.toBeEmpty();
-
-    // Nav items
-    await expect(page.locator('a.nav-item:has-text("Home")')).toBeVisible();
-    await expect(page.locator('a.nav-item:has-text("Activity")')).toBeVisible();
-    await expect(page.locator('a.nav-item:has-text("Settings")')).toBeVisible();
+    await expect(page.locator(".topbar")).toBeVisible();
+    await expect(page.locator(".topbar-identity")).not.toBeEmpty();
+    await expect(page.locator(".topbar-status")).toBeVisible();
   });
 
-  test("shows orchestrator status badge", async ({ page }) => {
+  test("shows orchestrator status in top bar", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".status-badge")).toContainText("Demo Mode");
+    // Mock returns "Ready" → topbar maps to "Ready"
+    await expect(page.locator(".topbar-status")).toContainText("Ready");
   });
 
-  test("header shows Papillion title", async ({ page }) => {
+  test("shows settings gear link", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".header h1")).toContainText("Papillion");
-  });
-});
-
-// ── Home Page ─────────────────────────────────────────────────
-
-test.describe("Home page", () => {
-  test("displays scenario cards", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.locator(".scenario-card")).toHaveCount(3);
+    await expect(page.locator(".topbar-settings-btn")).toBeVisible();
   });
 
-  test("shows scenario titles", async ({ page }) => {
+  test("hamburger menu opens and shows nav items", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".scenario-title").first()).toHaveText(
-      "Check the Weather"
-    );
-    await expect(page.locator(".scenario-title").nth(1)).toHaveText(
-      "Book a Flight"
-    );
-    await expect(page.locator(".scenario-title").nth(2)).toHaveText(
-      "Send Payment"
-    );
+    await page.locator(".topbar-menu-btn").click();
+    await expect(page.locator(".menu-dropdown")).toBeVisible();
+    await expect(page.locator("text=Browse Registries")).toBeVisible();
+    await expect(page.locator(".menu-dropdown >> text=Settings")).toBeVisible();
   });
 
-  test("shows zero disclosure badge for weather scenario", async ({
-    page,
-  }) => {
+  test("shows status bar footer", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.locator(".scenario-card").first().locator(".scenario-disclosure.zero")
-    ).toHaveText("Zero Disclosure");
-  });
-
-  test("shows fields-required badge for booking scenario", async ({
-    page,
-  }) => {
-    await page.goto("/");
-    await expect(
-      page
-        .locator(".scenario-card")
-        .nth(1)
-        .locator(".scenario-disclosure.required")
-    ).toContainText("3 fields required");
-  });
-
-  test("clicking a scenario navigates to scenario page", async ({ page }) => {
-    await page.goto("/");
-    await page.locator(".scenario-card").first().click();
-    await expect(page).toHaveURL(/\/scenario\/weather/);
+    await expect(page.locator(".status-bar")).toBeVisible();
   });
 });
 
-// ── Scenario Page ─────────────────────────────────────────────
+// ── Canvas Page (Home) ───────────────────────────────────────
 
-test.describe("Scenario page", () => {
-  test("shows scenario details and handshake stepper", async ({ page }) => {
+test.describe("Canvas page", () => {
+  test("shows empty state with inspiration lines", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".scenario-card").first().click();
-    await expect(page).toHaveURL(/\/scenario\/weather/);
-
-    // Title + agent name
-    await expect(page.locator("h2")).toContainText("Check the Weather");
-    await expect(page.locator("text=WeatherBot")).toBeVisible();
-
-    // 6 handshake steps
-    await expect(page.locator(".handshake-step")).toHaveCount(6);
-
-    // Run Demo button
-    await expect(page.locator(".btn-run")).toBeVisible();
-    await expect(page.locator(".btn-run")).toHaveText("Run Demo");
+    await expect(page.locator(".canvas-area")).toBeVisible();
+    await expect(page.locator(".canvas-empty")).toBeVisible();
+    await expect(page.locator(".inspiration-line").first()).toBeVisible();
   });
 
-  test("shows zero disclosure message for weather", async ({ page }) => {
+  test("shows inline prompt when orchestrator is ready", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".scenario-card").first().click();
+    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
     await expect(
-      page.locator("text=None \u2014 zero disclosure interaction")
-    ).toBeVisible();
+      page.locator(".palette-label")
+    ).toContainText("What do you want to build?");
   });
 
-  test("Run Demo executes handshake and shows receipt", async ({ page }) => {
+  test("inline prompt shows suggestion buttons", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".scenario-card").first().click();
-    await expect(page.locator(".btn-run")).toBeVisible();
-
-    // Click Run Demo
-    await page.locator(".btn-run").click();
-
-    // Button should show Running... or Completed
-    await expect(page.locator(".btn-run")).not.toHaveText("Run Demo");
-
-    // Wait for all steps to animate (6 steps * 300ms + buffer)
-    await page.waitForTimeout(3000);
-
-    // Button should show Completed
-    await expect(page.locator(".btn-run")).toHaveText("Completed");
-
-    // Receipt card should appear
-    await expect(page.locator("text=Transaction Receipt")).toBeVisible();
-    await expect(page.locator("code").filter({ hasText: /^session-abc123$/ })).toBeVisible();
-    await expect(page.locator("code").filter({ hasText: "weather.lookup" }).first()).toBeVisible();
-
-    // Receipt URL should be visible
-    await expect(page.locator(".receipt-url")).toContainText("pap://demo/receipts/session-abc123");
+    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".palette-suggestion").first()).toBeVisible();
   });
 
-  test("back button returns to home", async ({ page }) => {
+  test("inline prompt input accepts text", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".scenario-card").first().click();
-    await expect(page).toHaveURL(/\/scenario/);
+    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
+    await page.locator(".palette-input").fill("Search for flights");
+    await expect(page.locator(".palette-input")).toHaveValue("Search for flights");
+    // Suggestions should hide when input has text
+    await expect(page.locator(".palette-suggestion").first()).not.toBeVisible();
+  });
 
-    await page.locator("text=\u2190 Back").click();
-    await expect(page).toHaveURL(/\/$/);
+  test("shows setup prompt when orchestrator is disconnected", async ({ page }) => {
+    // Override mock to return Disconnected status
+    await page.addInitScript(`
+      const origInvoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = async function(cmd, args) {
+        if (cmd === 'get_orchestrator_status') return 'Disconnected';
+        return origInvoke.call(this, cmd, args);
+      };
+    `);
+    await page.goto("/");
+    await expect(page.locator(".canvas-prompt-setup")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Configure an LLM provider")).toBeVisible();
+    await expect(page.locator("text=Open Settings")).toBeVisible();
   });
 });
 
-// ── Activity Page ─────────────────────────────────────────────
+// ── Activity Page ────────────────────────────────────────────
 
 test.describe("Activity page", () => {
   test("shows empty state when no runs", async ({ page }) => {
@@ -153,25 +98,9 @@ test.describe("Activity page", () => {
       page.locator("text=No recent activity")
     ).toBeVisible();
   });
-
-  test("shows completed run after running a scenario", async ({ page }) => {
-    // Run a scenario first
-    await page.goto("/");
-    await page.locator(".scenario-card").first().click();
-    await page.locator(".btn-run").click();
-    await page.waitForTimeout(3000);
-
-    // Navigate to activity
-    await page.locator('a.nav-item:has-text("Activity")').click();
-    await expect(page).toHaveURL(/\/activity/);
-
-    // Should show the completed run
-    await expect(page.locator("text=WeatherBot")).toBeVisible();
-    await expect(page.locator("text=Completed")).toBeVisible();
-  });
 });
 
-// ── Settings Page ─────────────────────────────────────────────
+// ── Settings Page ────────────────────────────────────────────
 
 test.describe("Settings page", () => {
   test("renders three tabs", async ({ page }) => {
@@ -185,7 +114,8 @@ test.describe("Settings page", () => {
   test("General tab shows LLM Provider config", async ({ page }) => {
     await page.goto("/settings");
     await expect(page.locator("text=LLM Provider")).toBeVisible();
-    await expect(page.locator("select")).toBeVisible();
+    // Provider select is the first select on the page
+    await expect(page.locator("select").first()).toBeVisible();
   });
 
   test("Identity tab shows identity info and backup warning", async ({
