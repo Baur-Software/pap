@@ -98,7 +98,7 @@ pub async fn get_orchestrator_status(
 /// Check first-run setup state.
 #[tauri::command]
 pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, PapillionError> {
-    let has_identity = state.signer.read().unwrap().is_some();
+    let has_signer = state.signer.read().unwrap().is_some();
     let config = state
         .orchestrator_config
         .read()
