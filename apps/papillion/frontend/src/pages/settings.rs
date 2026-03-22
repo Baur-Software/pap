@@ -3,13 +3,14 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::components::address_bar::AddressBar;
+use crate::components::profile_avatar::ProfileAvatar;
 use crate::components::registry::agent_detail::AgentDetail;
 use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use papillion_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider,
-    OrchestratorConfig, OrchestratorStatus, SuccessorDesignation,
+    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, SuccessorDesignation,
 };
 
 #[component]
@@ -25,6 +26,10 @@ pub fn SettingsPage() -> impl IntoView {
                     on:click=move |_| active_tab.set("general".into())
                 >"General"</button>
                 <button
+                    class=move || if active_tab.get() == "profiles" { "settings-tab active" } else { "settings-tab" }
+                    on:click=move |_| active_tab.set("profiles".into())
+                >"Profiles"</button>
+                <button
                     class=move || if active_tab.get() == "identity" { "settings-tab active" } else { "settings-tab" }
                     on:click=move |_| active_tab.set("identity".into())
                 >"Identity"</button>
@@ -36,6 +41,9 @@ pub fn SettingsPage() -> impl IntoView {
 
             <Show when=move || active_tab.get() == "general">
                 <GeneralTab />
+            </Show>
+            <Show when=move || active_tab.get() == "profiles">
+                <ProfilesTab />
             </Show>
             <Show when=move || active_tab.get() == "identity">
                 <IdentityTab />
@@ -610,5 +618,181 @@ fn AdvancedTab() -> impl IntoView {
             <RegistryBrowser />
             <AgentDetail />
         </div>
+    }
+}
+
+#[component]
+fn ProfilesTab() -> impl IntoView {
+    let identity = expect_context::<IdentityState>();
+    let new_profile_name = RwSignal::new(String::new());
+    let create_error = RwSignal::new(None::<String>);
+    let create_success = RwSignal::new(false);
+    let delete_confirm_profile_id = RwSignal::new(None::<String>);
+
+    let create_profile = move |_| {
+        let name = new_profile_name.get();
+        if name.is_empty() {
+            create_error.set(Some("Profile name cannot be empty".into()));
+            return;
+        }
+
+        create_error.set(None);
+        create_success.set(false);
+
+        spawn_local(async move {
+            match bridge::invoke::<_, ProfileMetadata>("create_profile", &serde_json::json!({ "name": name })).await {
+                Ok(_new_profile) => {
+                    new_profile_name.set(String::new());
+                    create_success.set(true);
+                    // Reload profiles list
+                    if let Ok(profiles) = bridge::invoke_no_args::<Vec<_>>("list_profiles").await {
+                        identity.profiles.set(profiles);
+                    }
+                }
+                Err(e) => {
+                    create_error.set(Some(e));
+                }
+            }
+        });
+    };
+
+    let delete_profile = move |profile_id: String| {
+        spawn_local(async move {
+            match bridge::invoke::<_, ()>("delete_profile", &serde_json::json!({ "profile_id": profile_id })).await {
+                Ok(_) => {
+                    delete_confirm_profile_id.set(None);
+                    // Reload profiles list
+                    if let Ok(profiles) = bridge::invoke_no_args::<Vec<_>>("list_profiles").await {
+                        identity.profiles.set(profiles);
+                    }
+                }
+                Err(_) => {
+                    delete_confirm_profile_id.set(None);
+                }
+            }
+        });
+    };
+
+    view! {
+        <div class="card" style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; margin-bottom: 12px;">"Manage Profiles"</h3>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                "Each profile has its own identity and workspace. Switch between them anytime."
+            </p>
+
+            // Profile list
+            <div style="margin-bottom: 20px;">
+                <For
+                    each=move || identity.profiles.get()
+                    key=|p| p.id.clone()
+                    let:profile
+                >
+                    {
+                        let profile_id_for_delete = profile.id.clone();
+                        let is_active = profile.active;
+                        let profile_name = profile.name.clone();
+                        let created = profile.created_at.clone();
+                        let last_used = profile.last_used.clone();
+
+                        view! {
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px;">
+                                <ProfileAvatar name=profile_name.clone() />
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-size: 13px; font-weight: 500;">{profile_name.clone()}</div>
+                                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+                                        "Created " {created} {if let Some(lu) = &last_used { format!(" • Last used {}", lu) } else { "".into() }}
+                                    </div>
+                                </div>
+                                <Show when=move || is_active>
+                                    <span style="font-size: 11px; background: var(--teal); color: white; padding: 2px 8px; border-radius: 4px;">
+                                        "✓ Active"
+                                    </span>
+                                </Show>
+                                <button
+                                    class="btn"
+                                    style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--error);"
+                                    on:click=move |_| {
+                                        if !is_active {
+                                            delete_confirm_profile_id.set(Some(profile_id_for_delete.clone()));
+                                        }
+                                    }
+                                    disabled=move || is_active
+                                >
+                                    "Delete"
+                                </button>
+                            </div>
+                        }
+                    }
+                </For>
+            </div>
+
+            // Create new profile
+            <div style="border-top: 1px solid var(--border); padding-top: 16px;">
+                <h4 style="font-size: 12px; font-weight: 600; margin-bottom: 8px;">"Create Profile"</h4>
+                <div style="display: flex; gap: 8px;">
+                    <input
+                        type="text"
+                        placeholder="Profile name (e.g., Work, Personal)"
+                        prop:value=move || new_profile_name.get()
+                        on:input=move |ev| new_profile_name.set(event_target_value(&ev))
+                        style="flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px;"
+                    />
+                    <button class="btn btn-primary" on:click=create_profile>
+                        "Create"
+                    </button>
+                </div>
+                <Show when=move || create_error.get().is_some()>
+                    <div style="font-size: 12px; color: var(--error); margin-top: 8px;">
+                        {move || create_error.get().unwrap_or_default()}
+                    </div>
+                </Show>
+                <Show when=move || create_success.get()>
+                    <div style="font-size: 12px; color: var(--success); margin-top: 8px;">
+                        "Profile created!"
+                    </div>
+                </Show>
+            </div>
+        </div>
+
+        // Delete confirmation dialog
+        <Show when=move || delete_confirm_profile_id.get().is_some()>
+            {
+                let profile_id = delete_confirm_profile_id.get().unwrap_or_default();
+                let profile_name = identity.profiles.get()
+                    .iter()
+                    .find(|p| p.id == profile_id)
+                    .map(|p| p.name.clone())
+                    .unwrap_or_else(|| "Unknown".into());
+
+                view! {
+                    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 20px; max-width: 400px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);">
+                            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">
+                                "Delete Profile?"
+                            </h3>
+                            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                                "Are you sure you want to delete \"" {profile_name.clone()} "\"? This cannot be undone. Episodes tied to this profile won't be deleted."
+                            </p>
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <button
+                                    class="btn"
+                                    on:click=move |_| delete_confirm_profile_id.set(None)
+                                    style="background: var(--bg-tertiary);"
+                                >
+                                    "Cancel"
+                                </button>
+                                <button
+                                    class="btn"
+                                    on:click=move |_| delete_profile(profile_id.clone())
+                                    style="background: var(--error); color: white;"
+                                >
+                                    "Delete Profile"
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </Show>
     }
 }
