@@ -128,6 +128,26 @@ jobs:
         working-directory: apps/papillion/frontend
         run: trunk build --release
 
+      - name: Cache TinyLlama model
+        uses: actions/cache@v4
+        with:
+          path: apps/papillion/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+          key: tinyllama-1.1b-q4-v1
+          restore-keys: tinyllama-1.1b-q4
+
+      - name: Download TinyLlama model (if not cached)
+        run: |
+          mkdir -p apps/papillion/models
+          MODEL_FILE="apps/papillion/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+          if [ ! -f "$MODEL_FILE" ]; then
+            echo "Downloading TinyLlama 1.1B model..."
+            python3 -m pip install huggingface-hub -q
+            python3 -m huggingface_hub.cli download TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf --local-dir apps/papillion/models
+            echo "✅ Model cached"
+          else
+            echo "✅ Model already cached"
+          fi
+
       - name: Install cargo-tauri
         run: cargo install tauri-cli --locked
 
