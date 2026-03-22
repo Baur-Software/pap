@@ -5,6 +5,14 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-03-21
+
+### Fixed
+
+- **papillion**: Prevent silent identity loss on corrupt seed — now returns error instead of silently generating ephemeral keypair
+- **papillion**: DB persist failures no longer swallowed — seed persistence errors propagated to frontend so users know identity creation failed
+- **papillion**: Raw seed material now zeroized on drop to prevent lingering in memory after use (cryptographic hardening)
+
 ## [0.2.2] - 2026-03-21
 
 ### Added
