@@ -867,14 +867,15 @@ mod tests {
         assert_eq!(episodes.len(), 3);
 
         // Parse disclosures and compute intersection
-        let mut all_refs: Vec<Vec<String>> = episodes
+        let all_refs: Vec<Vec<String>> = episodes
             .iter()
             .filter_map(|ep| serde_json::from_str(&ep.disclosure_refs).ok())
             .collect();
 
         assert_eq!(all_refs.len(), 3);
 
-        let intersection = all_refs.iter_mut().fold(all_refs[0].clone(), |acc, cur| {
+        let first = all_refs[0].clone();
+        let intersection = all_refs[1..].iter().fold(first, |acc, cur| {
             acc.into_iter().filter(|r| cur.contains(r)).collect()
         });
 

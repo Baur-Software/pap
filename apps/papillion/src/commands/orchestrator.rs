@@ -714,10 +714,10 @@ fn compute_quality(episode: &Episode) -> f64 {
     let detail = &episode.outcome_detail;
     if let Some(ref detail_str) = detail {
         // Look for patterns like "N results" or "N articles"
-        if let Some(pos) = detail_str.find("failed") {
+        if detail_str.contains("failed") {
             return 0.0;
         }
-        if let Some(pos) = detail_str.find("not loaded") {
+        if detail_str.contains("not loaded") {
             return 0.3;
         }
         if let Some(captures) = detail_str
@@ -770,7 +770,7 @@ fn compute_minimal_disclosures(
         }
 
         // Parse disclosure refs from each episode
-        let mut all_refs: Vec<Vec<String>> = successful
+        let all_refs: Vec<Vec<String>> = successful
             .iter()
             .filter_map(|ep| serde_json::from_str(&ep.disclosure_refs).ok())
             .collect();
@@ -780,13 +780,16 @@ fn compute_minimal_disclosures(
         }
 
         // Compute intersection: refs that appear in ALL successful episodes
-        let intersection = all_refs
-            .iter_mut()
-            .fold(all_refs[0].clone(), |acc, cur| {
-                acc.into_iter()
-                    .filter(|r| cur.contains(r))
-                    .collect()
-            });
+        if all_refs.is_empty() {
+            return "[]".to_string();
+        }
+
+        let first = all_refs[0].clone();
+        let intersection = all_refs[1..].iter().fold(first, |acc, cur| {
+            acc.into_iter()
+                .filter(|r| cur.contains(r))
+                .collect()
+        });
 
         serde_json::to_string(&intersection).unwrap_or_else(|_| "[]".into())
     } else {
