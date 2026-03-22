@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **papillion**: Profile manager in Settings — create, rename, delete, and switch profiles with last-used timestamps
 - **papillion**: Profile dropdown in TopBar — quick access to all profiles with active profile indicator
 - **papillion**: Complete state isolation per profile — profile switch resets canvas, registries, and orchestrator config for true workspace separation
+- **papillion-ui**: Schema-driven JSON-LD rendering engine — trait-based registry pattern for custom block renderers; replaces hard-coded dispatch with runtime-registrable templates that handle arbitrary schema.org types by classifying field shapes (dates, prices, URLs, DIDs, nested objects, lists)
+- **papillion-ui**: SOLID-compliant renderer architecture — enables custom templates via registry registration without modifying core code (Open/Closed Principle)
+- **papillion-ui**: Handshake envelope unwrap — extracts agent payload from the PAP handshake wrapper and renders receipt metadata footer (session ID, co-signatures, action)
+- **papillion-ui**: Answer renderer for on-device AI responses displayed as clean paragraph text
+- **papillion-ui**: CSS class sanitization and list item cap (50) to prevent malicious agent payloads from injecting CSS classes or flooding the DOM
 - **docs**: Built-in LLM setup guide — quick reference for downloading TinyLLaMA and testing locally
 - **docs**: Tauri resource directory quirk — comprehensive guide explaining platform-specific model bundling behavior (macOS/Windows/Linux)
 - **docs**: Manual QA test plan — 20 comprehensive test cases covering profile creation, switching, isolation, persistence, and edge cases
@@ -22,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **papillion**: Profile data now persisted in separate `profiles.db` registry alongside main database
 - **papillion**: Seed zeroization hardened — `Zeroizing<[u8; 32]>` prevents sensitive material from lingering in memory
+- **papillion-ui**: Block renderer converted from single file to module directory with trait-based plugin architecture (mod, field_classify, generic, templates, registry, renderer, receipt)
 
 ## [0.2.3] - 2026-03-21
 
