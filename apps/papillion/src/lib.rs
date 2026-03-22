@@ -107,9 +107,7 @@ async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn s
         let mut signer = state.signer.write().unwrap();
         if signer.is_none() {
             let seed_lock = state.principal_seed.read().unwrap();
-            let seed_ref = seed_lock
-                .as_ref()
-                .ok_or("No principal seed available")?;
+            let seed_ref = seed_lock.as_ref().ok_or("No principal seed available")?;
             let keypair = PrincipalKeypair::from_bytes(seed_ref)
                 .map_err(|e| format!("Failed to recreate keypair from seed: {e}"))?;
             *signer = Some(Box::new(SoftwareSigner::from_keypair(keypair)));
