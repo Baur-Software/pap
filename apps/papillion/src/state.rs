@@ -12,7 +12,9 @@ use papillion_shared::{OrchestratorConfig, SuccessorDesignation};
 use crate::agents::{DuckDuckGoAgent, OnDeviceAiAgent, WikipediaAgent};
 use crate::db::Database;
 use crate::inference::ModelManager;
+use crate::profiles_db::ProfilesDatabase;
 use crate::seed::seed_registry;
+use papillion_shared::ProfileMetadata;
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
@@ -24,6 +26,12 @@ pub struct AppState {
     pub signer: RwLock<Option<Box<dyn PrincipalSigner + Send + Sync>>>,
     /// Raw 32-byte Ed25519 seed for signing and key export.
     pub principal_seed: RwLock<Option<[u8; 32]>>,
+    /// Profiles registry database — stores profile metadata and seeds.
+    pub profiles_db: Arc<ProfilesDatabase>,
+    /// Current active profile ID (never None after init).
+    pub active_profile_id: RwLock<String>,
+    /// List of all available profiles.
+    pub profiles: RwLock<Vec<ProfileMetadata>>,
     /// Remote registry caches keyed by URL.
     pub registries: RwLock<HashMap<String, FederatedRegistry>>,
     /// The node's own registry — shared with the federation HTTP server.
@@ -61,10 +69,17 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Create AppState with a persistent database at the given path.
+    /// Create AppState with persistent databases at the given path.
+    /// Sets up profiles registry and initializes with active profile.
     pub fn new(db_path: &std::path::Path) -> Self {
         let db = Database::open(db_path).expect("failed to open experience memory database");
-        Self::with_db(Arc::new(db))
+
+        // Open profiles registry next to the main database
+        let profiles_db_path = db_path.parent().unwrap_or_else(|| std::path::Path::new(".")).join("profiles.db");
+        let profiles_db = ProfilesDatabase::open(&profiles_db_path)
+            .expect("failed to open profiles registry database");
+
+        Self::with_db(Arc::new(db), Arc::new(profiles_db))
     }
 
     /// Create a clone suitable for moving to a background thread.
@@ -73,6 +88,9 @@ impl AppState {
         Self {
             signer: RwLock::new(None), // Signer will be recreated from seed in background thread
             principal_seed: RwLock::new(*self.principal_seed.read().unwrap()),
+            profiles_db: self.profiles_db.clone(),
+            active_profile_id: RwLock::new(self.active_profile_id.read().unwrap().clone()),
+            profiles: RwLock::new(self.profiles.read().unwrap().clone()),
             registries: RwLock::new(HashMap::new()), // Will be populated on demand
             local_registry: self.local_registry.clone(),
             bookmarks: RwLock::new(self.bookmarks.read().unwrap().clone()),
@@ -93,19 +111,77 @@ impl AppState {
         }
     }
 
-    fn with_db(db: Arc<Database>) -> Self {
+    fn with_db(db: Arc<Database>, profiles_db: Arc<ProfilesDatabase>) -> Self {
         let (registry, agent_keypairs) = seed_registry();
         let local_registry = Arc::new(Mutex::new(registry));
 
-        // Try to load persisted seed; generate a new one if none exists
-        let (raw_seed, keypair) = match db.get_setting("principal_seed_b64").ok().flatten() {
-            Some(seed_b64) => {
-                if let Ok(bytes) =
-                    base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&seed_b64)
-                {
-                    if let Ok(seed) = <[u8; 32]>::try_from(bytes.as_slice()) {
-                        if let Ok(kp) = PrincipalKeypair::from_bytes(&seed) {
-                            (seed, kp)
+        // Load or create profiles
+        let profiles = profiles_db.list_profiles().unwrap_or_default();
+        let mut active_profile_id = String::new();
+
+        // If no profiles exist, perform migration from old single-seed storage
+        let profiles = if profiles.is_empty() {
+            // Check if there's an old seed in the settings table (migration case)
+            let migrated_seed_b64 = db.get_setting("principal_seed_b64").ok().flatten();
+
+            // Generate a new profile
+            let profile_id = uuid::Uuid::new_v4().to_string();
+            let now = chrono::Utc::now().to_rfc3339();
+
+            let seed_b64 = if let Some(old_seed) = migrated_seed_b64 {
+                // Migrate existing seed
+                eprintln!("Migrating existing principal seed to profile '{profile_id}'");
+                old_seed
+            } else {
+                // Generate new seed
+                let kp = PrincipalKeypair::generate();
+                let seed = kp.signing_key().to_bytes();
+                base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed)
+            };
+
+            // Create default profile
+            if let Err(e) = profiles_db.create_profile(&profile_id, "Default", &seed_b64) {
+                eprintln!("Failed to create default profile: {e}");
+                vec![]
+            } else if let Err(e) = profiles_db.switch_profile(&profile_id) {
+                eprintln!("Failed to activate default profile: {e}");
+                vec![]
+            } else {
+                active_profile_id = profile_id.clone();
+                vec![papillion_shared::ProfileMetadata {
+                    id: profile_id,
+                    name: "Default".to_string(),
+                    created_at: now,
+                    last_used: None,
+                    active: true,
+                }]
+            }
+        } else {
+            // Use existing profiles
+            if let Some(active) = profiles.iter().find(|p| p.active) {
+                active_profile_id = active.id.clone();
+            } else if let Some(first) = profiles.first() {
+                // No active profile found, use the first one
+                active_profile_id = first.id.clone();
+                let _ = profiles_db.switch_profile(&first.id);
+            }
+            profiles
+        };
+
+        // Load seed for active profile
+        let (raw_seed, keypair) = if !active_profile_id.is_empty() {
+            match profiles_db.get_profile_seed(&active_profile_id).ok().flatten() {
+                Some(seed_b64) => {
+                    if let Ok(bytes) =
+                        base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&seed_b64)
+                    {
+                        if let Ok(seed) = <[u8; 32]>::try_from(bytes.as_slice()) {
+                            if let Ok(kp) = PrincipalKeypair::from_bytes(&seed) {
+                                (seed, kp)
+                            } else {
+                                let kp = PrincipalKeypair::generate();
+                                (kp.signing_key().to_bytes(), kp)
+                            }
                         } else {
                             let kp = PrincipalKeypair::generate();
                             (kp.signing_key().to_bytes(), kp)
@@ -114,22 +190,18 @@ impl AppState {
                         let kp = PrincipalKeypair::generate();
                         (kp.signing_key().to_bytes(), kp)
                     }
-                } else {
+                }
+                None => {
                     let kp = PrincipalKeypair::generate();
                     (kp.signing_key().to_bytes(), kp)
                 }
             }
-            None => {
-                let kp = PrincipalKeypair::generate();
-                let seed = kp.signing_key().to_bytes();
-                // Persist the newly generated seed
-                let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);
-                if let Err(e) = db.set_setting("principal_seed_b64", &seed_b64) {
-                    eprintln!("Failed to persist principal seed: {e}");
-                }
-                (seed, kp)
-            }
+        } else {
+            // Fallback: no profiles available
+            let kp = PrincipalKeypair::generate();
+            (kp.signing_key().to_bytes(), kp)
         };
+
         let signer = SoftwareSigner::from_keypair(keypair);
 
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
@@ -149,6 +221,9 @@ impl AppState {
         Self {
             signer: RwLock::new(Some(Box::new(signer))),
             principal_seed: RwLock::new(Some(raw_seed)),
+            profiles_db,
+            active_profile_id: RwLock::new(active_profile_id),
+            profiles: RwLock::new(profiles),
             registries: RwLock::new(HashMap::new()),
             local_registry,
             bookmarks: RwLock::new(vec![LOCAL_REGISTRY_URL.to_string()]),
@@ -170,10 +245,12 @@ impl AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        // Fallback: use a temp database (data lost on restart).
+        // Fallback: use temp databases (data lost on restart).
         // In production, lib.rs uses AppState::new() with app_data_dir.
         let db =
             Database::open(&PathBuf::from("papillion.db")).expect("failed to open fallback db");
-        Self::with_db(Arc::new(db))
+        let profiles_db = ProfilesDatabase::open(&PathBuf::from("profiles.db"))
+            .expect("failed to open fallback profiles db");
+        Self::with_db(Arc::new(db), Arc::new(profiles_db))
     }
 }

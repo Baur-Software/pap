@@ -8,6 +8,16 @@ pub struct IdentityInfo {
     pub created_at: String,
 }
 
+/// Profile metadata — represents a saved user profile with isolated identity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileMetadata {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub last_used: Option<String>,
+    pub active: bool,
+}
+
 /// Summary of a connected registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryInfo {
