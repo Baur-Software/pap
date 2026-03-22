@@ -1,7 +1,9 @@
 use leptos::prelude::*;
 use serde_json::Value;
+use std::sync::Arc;
 
 use super::dispatch_typed_or_generic;
+use super::registry::RendererRegistry;
 use super::field_classify::{
     camel_to_kebab, classify_field, extract_type, format_datetime, humanize_key,
     sanitize_css_class, scalar_to_string, schema_type_to_css, FieldKind,
@@ -13,11 +15,11 @@ const MAX_DEPTH: u8 = 4;
 /// Render any schema.org type generically by walking its fields recursively.
 /// Fields are classified by shape (date, price, URL, DID, nested object, list)
 /// and given appropriate visual treatment.
-pub fn render_generic(schema_type: &str, content: &Value, depth: u8) -> AnyView {
+pub fn render_generic(schema_type: &str, content: &Value, depth: u8, registry: &Arc<RendererRegistry>) -> AnyView {
     let type_label = schema_type.to_string();
     let css_type = schema_type_to_css(schema_type);
 
-    let fields = render_fields(content, &css_type, depth);
+    let fields = render_fields(content, &css_type, depth, registry);
 
     view! {
         <div class=format!("typed-generic typed-{}", css_type)>
@@ -29,7 +31,7 @@ pub fn render_generic(schema_type: &str, content: &Value, depth: u8) -> AnyView 
 }
 
 /// Render all non-@ fields of a JSON object.
-fn render_fields(value: &Value, parent_css: &str, depth: u8) -> AnyView {
+fn render_fields(value: &Value, parent_css: &str, depth: u8, registry: &Arc<RendererRegistry>) -> AnyView {
     if depth > MAX_DEPTH {
         return render_truncated();
     }
@@ -44,7 +46,7 @@ fn render_fields(value: &Value, parent_css: &str, depth: u8) -> AnyView {
         .filter(|(k, _)| !k.starts_with('@'))
         .map(|(key, val)| {
             let kind = classify_field(key, val);
-            render_field(key, val, &kind, parent_css, depth)
+            render_field(key, val, &kind, parent_css, depth, registry)
         })
         .collect();
 
@@ -55,7 +57,7 @@ fn render_fields(value: &Value, parent_css: &str, depth: u8) -> AnyView {
 }
 
 /// Render a single field based on its classified kind.
-fn render_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str, depth: u8) -> AnyView {
+fn render_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str, depth: u8, registry: &Arc<RendererRegistry>) -> AnyView {
     let css_field = format!(
         "typed-{}-{}",
         parent_css,
@@ -126,7 +128,7 @@ fn render_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str, dept
         }
 
         FieldKind::TypedObject { schema_type } => {
-            let inner = dispatch_typed_or_generic(schema_type, val, depth + 1);
+            let inner = dispatch_typed_or_generic(schema_type, val, depth + 1, registry);
             view! {
                 <div class=format!("typed-nested {}", css_field)>
                     {inner}
@@ -144,10 +146,10 @@ fn render_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str, dept
                 .map(|item| {
                     if let Some(obj) = item.as_object() {
                         if let Some(t) = extract_type(obj) {
-                            return dispatch_typed_or_generic(&t, item, depth + 1);
+                            return dispatch_typed_or_generic(&t, item, depth + 1, registry);
                         }
                     }
-                    render_fields(item, parent_css, depth + 1)
+                    render_fields(item, parent_css, depth + 1, registry)
                 })
                 .collect();
             let more = if capped {
@@ -168,7 +170,7 @@ fn render_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str, dept
         }
 
         FieldKind::Object => {
-            let inner = render_fields(val, parent_css, depth + 1);
+            let inner = render_fields(val, parent_css, depth + 1, registry);
             view! {
                 <div class=format!("typed-nested {}", css_field)>
                     <span class="typed-key">{label}</span>

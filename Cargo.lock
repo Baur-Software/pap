@@ -3180,7 +3180,7 @@ dependencies = [
 
 [[package]]
 name = "pap-core"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3196,7 +3196,7 @@ dependencies = [
 
 [[package]]
 name = "pap-credential"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3213,7 +3213,7 @@ dependencies = [
 
 [[package]]
 name = "pap-did"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "bs58",
  "ed25519-dalek",
@@ -3225,7 +3225,7 @@ dependencies = [
 
 [[package]]
 name = "pap-federation"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "axum",
  "axum-server",
@@ -3249,7 +3249,7 @@ dependencies = [
 
 [[package]]
 name = "pap-marketplace"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3266,7 +3266,7 @@ dependencies = [
 
 [[package]]
 name = "pap-proto"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -3283,7 +3283,7 @@ dependencies = [
 
 [[package]]
 name = "pap-python"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -3300,7 +3300,7 @@ dependencies = [
 
 [[package]]
 name = "pap-transport"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "axum",
  "axum-server",
@@ -3323,7 +3323,7 @@ dependencies = [
 
 [[package]]
 name = "pap-webauthn"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3340,7 +3340,7 @@ dependencies = [
 
 [[package]]
 name = "papillion"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "axum",
  "axum-server",
@@ -3374,7 +3374,7 @@ dependencies = [
 
 [[package]]
 name = "papillion-shared"
-version = "0.3.0"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "serde",

@@ -1,18 +1,33 @@
-mod blessed;
 mod field_classify;
 mod generic;
 mod receipt;
+mod renderer;
+mod registry;
+mod templates;
 
 use leptos::prelude::*;
 use papillion_shared::{BlockState, CanvasBlock};
 use serde_json::Value;
+use std::sync::Arc;
 
 use crate::state::canvas::CanvasState;
+use registry::RendererRegistry;
+
+/// Create and initialize the default renderer registry with shipped templates.
+fn create_default_registry() -> Arc<RendererRegistry> {
+    let registry = Arc::new(RendererRegistry::new());
+    registry.register(Arc::new(templates::FlightTemplate));
+    registry.register(Arc::new(templates::HotelTemplate));
+    registry.register(Arc::new(templates::SearchTemplate));
+    registry.register(Arc::new(templates::AnswerTemplate));
+    registry
+}
 
 /// Render a single canvas block based on its state and JSON-LD @type.
 #[component]
 pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
+    let registry = create_default_registry();
     let block_id = StoredValue::new(block.id.clone());
     let show_reprompt = RwSignal::new(false);
     let reprompt_value = RwSignal::new(String::new());
@@ -64,7 +79,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                 }
                 BlockState::Resolved => {
                     let content_view = match (&block.schema_type, &block.content) {
-                        (Some(t), Some(content)) => render_typed_content(t, content),
+                        (Some(t), Some(content)) => render_typed_content(t, content, &registry),
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Unknown"</span></div> }.into_any(),
                     };
                     view! {
@@ -127,36 +142,36 @@ fn PhaseDots(current_phase: u8, #[prop(default = false)] failed: bool) -> impl I
     }
 }
 
-/// Top-level dispatch: unwrap the handshake envelope, route to blessed or generic renderer,
+/// Top-level dispatch: unwrap the handshake envelope, route to template or generic renderer,
 /// and attach receipt metadata footer.
 ///
 /// The handshake wraps agent output as:
 /// ```json
 /// { "@type": "...", "agent": "...", "query": "...", "result": {payload}, "receipt": {...} }
 /// ```
-fn render_typed_content(schema_type: &str, content: &Value) -> AnyView {
+fn render_typed_content(schema_type: &str, content: &Value, registry: &Arc<RendererRegistry>) -> AnyView {
     // Extract the agent's actual result from the handshake envelope.
     // Fall back to the full content if there's no "result" key (direct JSON-LD).
     let payload = content.get("result").unwrap_or(content);
     let receipt_val = content.get("receipt");
 
-    let content_view = dispatch_typed_or_generic(schema_type, payload, 0);
+    let content_view = dispatch_typed_or_generic(schema_type, payload, 0, registry);
 
     receipt::wrap_with_receipt(content_view, receipt_val)
 }
 
-/// Dispatch to a blessed renderer if one exists, otherwise use the generic renderer.
+/// Dispatch to a registered template renderer if one exists, otherwise use the generic renderer.
 /// Called both at the top level and recursively for nested typed objects.
-fn dispatch_typed_or_generic(schema_type: &str, content: &Value, depth: u8) -> AnyView {
+fn dispatch_typed_or_generic(schema_type: &str, content: &Value, depth: u8, registry: &Arc<RendererRegistry>) -> AnyView {
     if depth > 4 {
         return view! { <span class="typed-truncated">"\u{2026}"</span> }.into_any();
     }
 
-    match schema_type {
-        "FlightReservation" => blessed::render_flight(content),
-        "LodgingReservation" => blessed::render_hotel(content),
-        "SearchResultsPage" | "SearchAction" => blessed::render_search_results(content),
-        "Answer" => blessed::render_answer(content),
-        _ => generic::render_generic(schema_type, content, depth),
+    // Try to find a registered template renderer
+    if let Some(renderer) = registry.get(schema_type) {
+        return renderer.render(content);
     }
+
+    // Fall back to generic renderer
+    generic::render_generic(schema_type, content, depth, registry)
 }
