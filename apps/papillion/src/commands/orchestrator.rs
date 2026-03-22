@@ -8,6 +8,14 @@ use sha2::{Digest, Sha256};
 use tauri::State;
 use uuid::Uuid;
 
+/// Compute SHA-256 hash of agent DID for profile indexing.
+/// Never stores raw DID in memory DB.
+fn hash_agent_did(agent_did: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(agent_did.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
 use crate::db::{AgentProfile, Episode};
 use crate::error::PapillionError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
@@ -91,9 +99,10 @@ pub async fn get_orchestrator_status(
 #[tauri::command]
 pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, PapillionError> {
     let has_identity = state
-        .signer
+        .identity
         .read()
         .map_err(|e| PapillionError::from(e.to_string()))?
+        .signer
         .is_some();
     let config = state
         .orchestrator_config
@@ -371,11 +380,12 @@ pub async fn run_scenario(
             .clone();
         let did = agent_ad.provider.did.clone();
 
-        let seed_lock = state
-            .principal_seed
+        let identity_lock = state
+            .identity
             .read()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        let seed = seed_lock
+        let seed = identity_lock
+            .principal_seed
             .as_ref()
             .ok_or_else(|| PapillionError::from("No identity configured"))?;
         let kp =
@@ -386,11 +396,7 @@ pub async fn run_scenario(
     // ── Memory-informed agent selection ────────────────────
     // Consult the agent profile (if one exists) to calibrate the mandate.
     // This is advisory — missing profiles fall back to defaults.
-    let agent_did_hash_for_profile = {
-        let mut hasher = Sha256::new();
-        hasher.update(agent_did.as_bytes());
-        format!("{:x}", hasher.finalize())
-    };
+    let agent_did_hash_for_profile = hash_agent_did(&agent_did);
     let agent_profile = state
         .db
         .get_agent_profile(&agent_did_hash_for_profile)
@@ -424,7 +430,7 @@ pub async fn run_scenario(
         detail: Some(format!(
             "Found {} ({}){profile_detail}",
             agent_name,
-            agent_did.get(..20).unwrap_or(&agent_did)
+            agent_did.get(..20).unwrap_or(&agent_did[..])
         )),
         timestamp: now_str(),
     });
@@ -436,11 +442,25 @@ pub async fn run_scenario(
         DisclosureSet::empty()
     } else {
         // If we have a profile with known minimal disclosure refs, prefer those
+        // but only if they are a valid subset of the current scenario's allowed disclosures
         let disclosure_props = match &agent_profile {
             Some(p) if p.episode_count >= 5 => {
                 // Try to parse the stored minimal disclosure refs
-                serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs)
-                    .unwrap_or_else(|_| scenario.requires_disclosure.clone())
+                match serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs) {
+                    Ok(stored_refs) => {
+                        // Validate: all stored refs must be in scenario.requires_disclosure
+                        if stored_refs
+                            .iter()
+                            .all(|r| scenario.requires_disclosure.contains(r))
+                        {
+                            stored_refs
+                        } else {
+                            // Invalid subset — fall back to scenario requirements
+                            scenario.requires_disclosure.clone()
+                        }
+                    }
+                    Err(_) => scenario.requires_disclosure.clone(),
+                }
             }
             _ => scenario.requires_disclosure.clone(),
         };
@@ -470,7 +490,7 @@ pub async fn run_scenario(
         status: "completed".into(),
         detail: Some(format!(
             "Mandate: {}...",
-            mandate_hash.get(..16).unwrap_or(&mandate_hash)
+            mandate_hash.get(..16).unwrap_or(&mandate_hash[..])
         )),
         timestamp: now_str(),
     });
@@ -500,14 +520,16 @@ pub async fn run_scenario(
         status: "completed".into(),
         detail: Some(format!(
             "Session: {}...",
-            session.id.get(..8).unwrap_or(&session.id)
+            session.id.get(..8).unwrap_or(&session.id[..])
         )),
         timestamp: now_str(),
     });
 
     // ── Step 4: Exchange data ───────────────────────────────
     // Route to the actual backing service for each agent.
+    // Track success: data exchange only succeeds if we get results or expected output.
     let mut search_results: Option<Vec<SearchResult>> = None;
+    let mut data_exchange_success = false;
     let step4_detail = match scenario_id.as_str() {
         "search" => {
             if let Some(ref q) = query {
@@ -515,6 +537,7 @@ pub async fn run_scenario(
                     Ok(results) => {
                         let count = results.len();
                         search_results = Some(results);
+                        data_exchange_success = true;
                         format!("DuckDuckGo: \"{}\" \u{2014} {} results", q, count)
                     }
                     Err(e) => format!("DuckDuckGo search failed: {}", e),
@@ -529,6 +552,7 @@ pub async fn run_scenario(
                     Ok(results) => {
                         let count = results.len();
                         search_results = Some(results);
+                        data_exchange_success = true;
                         format!("Wikipedia: \"{}\" \u{2014} {} articles", q, count)
                     }
                     Err(e) => format!("Wikipedia lookup failed: {}", e),
@@ -545,6 +569,7 @@ pub async fn run_scenario(
                     match mgr.generate(&prompt, 200) {
                         Ok(response) => {
                             let truncated: String = response.chars().take(200).collect();
+                            data_exchange_success = true;
                             format!("AI: {}", truncated)
                         }
                         Err(e) => format!("On-device inference failed: {}", e),
@@ -557,7 +582,10 @@ pub async fn run_scenario(
                 "No query provided".into()
             }
         }
-        _ => "Zero disclosure \u{2014} no personal data exchanged".into(),
+        _ => {
+            data_exchange_success = true;
+            "Zero disclosure \u{2014} no personal data exchanged".into()
+        }
     };
     steps.push(ScenarioStepResult {
         step_number: 4,
@@ -627,7 +655,7 @@ pub async fn run_scenario(
         query,
         search_results,
         completed_at: now_str(),
-        success: true,
+        success: data_exchange_success,
         error: None,
     };
 
@@ -635,11 +663,7 @@ pub async fn run_scenario(
     let duration_ms = start_time.elapsed().as_millis() as i64;
 
     // Hash the agent DID for indexing (never store raw DID in memory DB)
-    let agent_did_hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(agent_did.as_bytes());
-        format!("{:x}", hasher.finalize())
-    };
+    let agent_did_hash = hash_agent_did(&agent_did);
 
     let receipt_session_id = result
         .receipt
@@ -691,6 +715,99 @@ pub async fn run_scenario(
     Ok(result)
 }
 
+/// Compute quality metric from episode result completeness (0..1).
+/// Quality measures how much useful data was returned and disclosure minimization:
+/// - 0.0: failure or error
+/// - 0.3–0.6: incomplete (no query provided, model not loaded, etc.)
+/// - 0.7–0.9: partial results (some data but sparse)
+/// - 1.0: complete results (rich data, full mandate scope used)
+fn compute_quality(episode: &Episode) -> f64 {
+    if episode.outcome != "success" {
+        return 0.0;
+    }
+
+    // Try to extract result count or payload size from result_json or outcome_detail
+    let detail = &episode.outcome_detail;
+    if let Some(ref detail_str) = detail {
+        // Look for patterns like "N results" or "N articles"
+        if detail_str.contains("failed") {
+            return 0.0;
+        }
+        if detail_str.contains("not loaded") {
+            return 0.3;
+        }
+        if let Some(captures) = detail_str
+            .split_whitespace()
+            .find(|w| w.parse::<i32>().is_ok())
+        {
+            if let Ok(count) = captures.parse::<i32>() {
+                // Map result count to quality: 0 → 0.3, 1-3 → 0.6, 4-9 → 0.85, 10+ → 1.0
+                return match count {
+                    0 => 0.3,
+                    1..=3 => 0.6,
+                    4..=9 => 0.85,
+                    _ => 1.0,
+                };
+            }
+        }
+    }
+
+    // If we have result_json, infer completeness from payload size/structure
+    if let Some(ref json) = episode.result_json {
+        let json_size = json.len();
+        // Small (<100 bytes): minimal, quality 0.5
+        // Medium (100-500): good, quality 0.8
+        // Large (500+): rich, quality 1.0
+        return match json_size {
+            0..=100 => 0.5,
+            101..=500 => 0.8,
+            _ => 1.0,
+        };
+    }
+
+    // No data to judge — conservative estimate
+    0.5
+}
+
+/// Compute minimal disclosure refs as set intersection across all successful episodes.
+/// Returns JSON array of property refs that were sufficient across all successes.
+fn compute_minimal_disclosures(state: &State<'_, AppState>, agent_did_hash: &str) -> String {
+    if let Ok(episodes) = state.db.list_episodes(None, Some(agent_did_hash), 1000) {
+        let successful = episodes
+            .iter()
+            .filter(|ep| ep.outcome == "success")
+            .collect::<Vec<_>>();
+
+        if successful.is_empty() {
+            return "[]".to_string();
+        }
+
+        // Parse disclosure refs from each episode
+        let all_refs: Vec<Vec<String>> = successful
+            .iter()
+            .filter_map(|ep| serde_json::from_str(&ep.disclosure_refs).ok())
+            .collect();
+
+        if all_refs.is_empty() {
+            return "[]".to_string();
+        }
+
+        // Compute intersection: refs that appear in ALL successful episodes
+        if all_refs.is_empty() {
+            return "[]".to_string();
+        }
+
+        let first = all_refs[0].clone();
+        let intersection = all_refs[1..].iter().fold(first, |acc, cur| {
+            acc.into_iter().filter(|r| cur.contains(r)).collect()
+        });
+
+        serde_json::to_string(&intersection).unwrap_or_else(|_| "[]".into())
+    } else {
+        "[]".to_string()
+    }
+}
+
 /// Update agent profile with rolling EMA statistics.
 fn update_agent_profile(
     state: &State<'_, AppState>,
@@ -707,16 +824,22 @@ fn update_agent_profile(
         0.0
     };
 
+    // Quality is based on result completeness, not success/failure binary
+    let quality = compute_quality(episode);
+
+    // Compute minimal disclosure set across all successful episodes
+    let minimal_disclosure_refs = compute_minimal_disclosures(state, agent_did_hash);
+
     let profile = match existing {
         Some(prev) => AgentProfile {
             agent_did_hash: agent_did_hash.to_string(),
             agent_name: agent_name.to_string(),
             success_rate: ALPHA * success + (1.0 - ALPHA) * prev.success_rate,
-            avg_quality: ALPHA * success + (1.0 - ALPHA) * prev.avg_quality,
+            avg_quality: ALPHA * quality + (1.0 - ALPHA) * prev.avg_quality,
             avg_duration_ms: ALPHA * (episode.duration_ms as f64)
                 + (1.0 - ALPHA) * prev.avg_duration_ms,
             episode_count: prev.episode_count + 1,
-            minimal_disclosure_refs: episode.disclosure_refs.clone(),
+            minimal_disclosure_refs,
             last_used: episode.recorded_at.clone(),
             co_sign_refusals: prev.co_sign_refusals,
         },
@@ -724,10 +847,10 @@ fn update_agent_profile(
             agent_did_hash: agent_did_hash.to_string(),
             agent_name: agent_name.to_string(),
             success_rate: success,
-            avg_quality: success,
+            avg_quality: quality,
             avg_duration_ms: episode.duration_ms as f64,
             episode_count: 1,
-            minimal_disclosure_refs: episode.disclosure_refs.clone(),
+            minimal_disclosure_refs,
             last_used: episode.recorded_at.clone(),
             co_sign_refusals: 0,
         },
@@ -741,11 +864,22 @@ fn update_agent_profile(
 /// List completed scenario runs for the activity page.
 /// Reads from the persistent SQLite episode store and reconstructs
 /// ScenarioRunResult objects from stored JSON.
+///
+/// # Arguments
+/// * `offset` - Number of records to skip (pagination start). Defaults to 0.
+/// * `limit` - Maximum number of records to return. Defaults to 50, capped at 100.
 #[tauri::command]
 pub fn list_completed_runs(
     state: State<'_, AppState>,
+    offset: Option<u32>,
+    limit: Option<u32>,
 ) -> Result<Vec<ScenarioRunResult>, PapillionError> {
-    let episodes = state.db.list_episodes(None, None, 100)?;
+    let offset = offset.unwrap_or(0);
+    let limit = std::cmp::min(limit.unwrap_or(50), 100) as usize;
+
+    let episodes = state
+        .db
+        .list_episodes(None, None, limit, Some(offset as i64))?;
     let mut results = Vec::new();
 
     for ep in episodes {

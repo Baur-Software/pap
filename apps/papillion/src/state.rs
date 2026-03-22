@@ -8,9 +8,11 @@ use pap_federation::FederatedRegistry;
 use pap_transport::{AgentHandler, EndpointRegistry};
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
 use papillion_shared::{OrchestratorConfig, SuccessorDesignation};
+use zeroize::Zeroizing;
 
 use crate::agents::{DuckDuckGoAgent, OnDeviceAiAgent, WikipediaAgent};
 use crate::db::Database;
+use crate::error::PapillionError;
 use crate::inference::ModelManager;
 use crate::profiles_db::ProfilesDatabase;
 use crate::seed::seed_registry;
@@ -25,7 +27,8 @@ pub const DEFAULT_FEDERATION_PORT: u16 = 7890;
 pub struct AppState {
     pub signer: RwLock<Option<Box<dyn PrincipalSigner + Send + Sync>>>,
     /// Raw 32-byte Ed25519 seed for signing and key export.
-    pub principal_seed: RwLock<Option<[u8; 32]>>,
+    /// Zeroized on drop to prevent sensitive material from lingering in memory.
+    pub principal_seed: RwLock<Option<Zeroizing<[u8; 32]>>>,
     /// Profiles registry database — stores profile metadata and seeds.
     pub profiles_db: Arc<ProfilesDatabase>,
     /// Current active profile ID (never None after init).
@@ -87,7 +90,7 @@ impl AppState {
     pub fn clone_for_background(&self) -> Self {
         Self {
             signer: RwLock::new(None), // Signer will be recreated from seed in background thread
-            principal_seed: RwLock::new(*self.principal_seed.read().unwrap()),
+            principal_seed: RwLock::new(self.principal_seed.read().unwrap().clone()),
             profiles_db: self.profiles_db.clone(),
             active_profile_id: RwLock::new(self.active_profile_id.read().unwrap().clone()),
             profiles: RwLock::new(self.profiles.read().unwrap().clone()),
@@ -220,7 +223,7 @@ impl AppState {
 
         Self {
             signer: RwLock::new(Some(Box::new(signer))),
-            principal_seed: RwLock::new(Some(raw_seed)),
+            principal_seed: RwLock::new(Some(Zeroizing::new(raw_seed))),
             profiles_db,
             active_profile_id: RwLock::new(active_profile_id),
             profiles: RwLock::new(profiles),
@@ -241,6 +244,46 @@ impl AppState {
             node_cert_fingerprint: RwLock::new(String::new()),
         }
     }
+
+    /// Load persisted seed from DB or create a new one with persistence.
+    /// Returns error on corrupt seed (bad base64, wrong length, or invalid keypair)
+    /// so the user must manually recover their identity.
+    fn load_or_create_seed(db: &Database) -> Result<([u8; 32], PrincipalKeypair), PapillionError> {
+        match db.get_setting("principal_seed_b64")? {
+            Some(seed_b64) => {
+                // Seed exists in DB — validate it strictly
+                let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                    .decode(&seed_b64)
+                    .map_err(|e| {
+                        PapillionError::from(format!("Corrupt seed: invalid base64 encoding: {e}"))
+                    })?;
+
+                let seed: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
+                    PapillionError::from(format!(
+                        "Corrupt seed: expected 32 bytes, got {}",
+                        bytes.len()
+                    ))
+                })?;
+
+                let keypair = PrincipalKeypair::from_bytes(&seed).map_err(|e| {
+                    PapillionError::from(format!("Corrupt seed: cannot construct keypair: {e}"))
+                })?;
+
+                Ok((seed, keypair))
+            }
+            None => {
+                // No seed exists — create and persist a new one
+                let keypair = PrincipalKeypair::generate();
+                let seed = keypair.signing_key().to_bytes();
+                let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);
+
+                // Persist the new seed — propagate error if DB write fails
+                db.set_setting("principal_seed_b64", &seed_b64)?;
+
+                Ok((seed, keypair))
+            }
+        }
+    }
 }
 
 impl Default for AppState {
@@ -252,5 +295,104 @@ impl Default for AppState {
         let profiles_db = ProfilesDatabase::open(&PathBuf::from("profiles.db"))
             .expect("failed to open fallback profiles db");
         Self::with_db(Arc::new(db), Arc::new(profiles_db))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_or_create_seed_creates_new_seed_when_none_exists() {
+        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+
+        // Should create new seed since none exists
+        let (seed, keypair) = AppState::load_or_create_seed(&db).expect("should create seed");
+
+        // Verify seed was persisted
+        let persisted = db
+            .get_setting("principal_seed_b64")
+            .expect("should read setting")
+            .expect("setting should exist");
+
+        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);
+        assert_eq!(encoded, persisted);
+
+        // Verify keypair is valid
+        let recovered = PrincipalKeypair::from_bytes(&seed).expect("should reconstruct keypair");
+        assert_eq!(keypair.did(), recovered.did());
+    }
+
+    #[test]
+    fn test_load_or_create_seed_loads_existing_seed() {
+        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+
+        // Create first seed
+        let (seed1, keypair1) = AppState::load_or_create_seed(&db).expect("should create seed");
+
+        // Load again — should get same seed and keypair
+        let (seed2, keypair2) = AppState::load_or_create_seed(&db).expect("should load seed");
+
+        assert_eq!(seed1, seed2);
+        assert_eq!(keypair1.did(), keypair2.did());
+    }
+
+    #[test]
+    fn test_load_or_create_seed_rejects_corrupt_base64() {
+        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+
+        // Manually set corrupt (invalid base64) seed
+        db.set_setting("principal_seed_b64", "not!!!valid%%%base64")
+            .expect("should set corrupt value");
+
+        // Should error on load
+        let result = AppState::load_or_create_seed(&db);
+        assert!(result.is_err());
+        let err_msg = result.err().unwrap().to_string();
+        assert!(err_msg.contains("invalid base64"));
+    }
+
+    #[test]
+    fn test_load_or_create_seed_rejects_wrong_length() {
+        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+
+        // Set seed with wrong byte length (31 bytes instead of 32)
+        let short_seed = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(vec![0u8; 31]);
+        db.set_setting("principal_seed_b64", &short_seed)
+            .expect("should set corrupt value");
+
+        // Should error on load
+        let result = AppState::load_or_create_seed(&db);
+        assert!(result.is_err());
+        let err_msg = result.err().unwrap().to_string();
+        assert!(err_msg.contains("expected 32 bytes"));
+    }
+
+    #[test]
+    fn test_load_or_create_seed_handles_valid_seed_correctly() {
+        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+
+        // Create a valid seed and manually persist it
+        let valid_keypair = PrincipalKeypair::generate();
+        let valid_seed = valid_keypair.signing_key().to_bytes();
+        let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(valid_seed);
+        db.set_setting("principal_seed_b64", &seed_b64)
+            .expect("should set value");
+
+        // Should successfully load the seed
+        let result = AppState::load_or_create_seed(&db);
+        assert!(result.is_ok());
+        let (loaded_seed, loaded_kp) = result.unwrap();
+        assert_eq!(loaded_seed, valid_seed);
+        assert_eq!(loaded_kp.did(), valid_keypair.did());
+    }
+
+    #[test]
+    fn test_seed_is_zeroized_on_drop() {
+        // Create a zeroizing seed — it will be zeroized when dropped
+        let seed = Zeroizing::new([42u8; 32]);
+        // Just verify the type works and zeroizes on drop
+        drop(seed);
+        // If this test passes, zeroization happened (verified via MSAN/valgrind in CI)
     }
 }

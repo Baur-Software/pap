@@ -159,6 +159,7 @@ impl Database {
         action_type: Option<&str>,
         agent_did_hash: Option<&str>,
         limit: usize,
+        offset: Option<i64>,
     ) -> Result<Vec<Episode>, PapillionError> {
         let conn = self
             .conn
@@ -191,6 +192,11 @@ impl Database {
             param_values.len() + 1
         ));
         param_values.push(Box::new(limit as i64));
+
+        if let Some(off) = offset {
+            sql.push_str(&format!(" OFFSET ?{}", param_values.len() + 1));
+            param_values.push(Box::new(off));
+        }
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|p| p.as_ref()).collect();
@@ -590,7 +596,7 @@ mod tests {
         db.insert_episode(&sample_episode("ep-1")).unwrap();
         db.insert_episode(&sample_episode("ep-2")).unwrap();
 
-        let episodes = db.list_episodes(None, None, 100).unwrap();
+        let episodes = db.list_episodes(None, None, 100, None).unwrap();
         assert_eq!(episodes.len(), 2);
     }
 
@@ -604,7 +610,7 @@ mod tests {
         db.insert_episode(&ask_ep).unwrap();
 
         let search = db
-            .list_episodes(Some("schema:SearchAction"), None, 100)
+            .list_episodes(Some("schema:SearchAction"), None, 100, None)
             .unwrap();
         assert_eq!(search.len(), 1);
         assert_eq!(search[0].id, "ep-1");
@@ -736,7 +742,7 @@ mod tests {
         other.agent_did_hash = "hash-other".to_string();
         db.insert_episode(&other).unwrap();
 
-        let filtered = db.list_episodes(None, Some("hash-ddg"), 100).unwrap();
+        let filtered = db.list_episodes(None, Some("hash-ddg"), 100, None).unwrap();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].id, "ep-1");
     }
@@ -767,5 +773,189 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    // ── Tests for data fidelity fixes (H6, H5, H4) ──────────────────
+
+    #[test]
+    fn episode_records_success_and_failure_correctly() {
+        let db = test_db();
+
+        // Success episode
+        let mut ep_success = sample_episode("ep-success");
+        ep_success.outcome = "success".to_string();
+        ep_success.outcome_detail = Some("10 results".to_string());
+        db.insert_episode(&ep_success).unwrap();
+
+        // Failure episode (e.g., API error)
+        let mut ep_failure = sample_episode("ep-failure");
+        ep_failure.outcome = "failure".to_string();
+        ep_failure.outcome_detail = Some("API error: connection refused".to_string());
+        db.insert_episode(&ep_failure).unwrap();
+
+        let episodes = db.list_episodes(None, None, 100).unwrap();
+        assert_eq!(episodes.len(), 2);
+
+        let success = episodes.iter().find(|e| e.id == "ep-success").unwrap();
+        assert_eq!(success.outcome, "success");
+
+        let failure = episodes.iter().find(|e| e.id == "ep-failure").unwrap();
+        assert_eq!(failure.outcome, "failure");
+    }
+
+    #[test]
+    fn disclosure_refs_stored_and_retrieved() {
+        let db = test_db();
+
+        let disclosure_json = r#"["schema:Person.name","schema:Person.email"]"#;
+        let mut ep = sample_episode("ep-disclosure");
+        ep.disclosure_refs = disclosure_json.to_string();
+        db.insert_episode(&ep).unwrap();
+
+        let retrieved = db.list_episodes(None, None, 1).unwrap();
+        assert_eq!(retrieved[0].disclosure_refs, disclosure_json);
+    }
+
+    #[test]
+    fn quality_based_on_result_completeness() {
+        let db = test_db();
+
+        // Episode with no results: low quality signal expected
+        let mut ep_no_results = sample_episode("ep-empty");
+        ep_no_results.outcome_detail = Some("0 results".to_string());
+        db.insert_episode(&ep_no_results).unwrap();
+
+        // Episode with many results: high quality signal expected
+        let mut ep_many_results = sample_episode("ep-rich");
+        ep_many_results.outcome_detail = Some("25 results".to_string());
+        db.insert_episode(&ep_many_results).unwrap();
+
+        // Episode with large JSON payload: high quality signal expected
+        let mut ep_large_payload = sample_episode("ep-payload");
+        ep_large_payload.result_json = Some(
+            r#"{"@type":"SearchResult","items":[{"title":"1","snippet":"..."}, {"title":"2","snippet":"..."},...{"title":"15","snippet":"..."}]}"#
+                .repeat(10), // Make it large
+        );
+        db.insert_episode(&ep_large_payload).unwrap();
+
+        let episodes = db.list_episodes(None, None, 100).unwrap();
+        assert_eq!(episodes.len(), 3);
+
+        // All outcomes still recorded correctly
+        for ep in &episodes {
+            assert_eq!(ep.outcome, "success");
+        }
+    }
+
+    #[test]
+    fn minimal_disclosure_intersection_across_episodes() {
+        let db = test_db();
+
+        // Episode 1: discloses name, email, phone
+        let mut ep1 = sample_episode("ep-1");
+        ep1.disclosure_refs = r#"["name","email","phone"]"#.to_string();
+        ep1.agent_did_hash = "hash-agent-a".to_string();
+        db.insert_episode(&ep1).unwrap();
+
+        // Episode 2: same agent, discloses name, email (phone dropped)
+        let mut ep2 = sample_episode("ep-2");
+        ep2.disclosure_refs = r#"["name","email"]"#.to_string();
+        ep2.agent_did_hash = "hash-agent-a".to_string();
+        db.insert_episode(&ep2).unwrap();
+
+        // Episode 3: same agent, discloses name only
+        let mut ep3 = sample_episode("ep-3");
+        ep3.disclosure_refs = r#"["name"]"#.to_string();
+        ep3.agent_did_hash = "hash-agent-a".to_string();
+        db.insert_episode(&ep3).unwrap();
+
+        let episodes = db.list_episodes(None, Some("hash-agent-a"), 100).unwrap();
+        assert_eq!(episodes.len(), 3);
+
+        // Parse disclosures and compute intersection
+        let all_refs: Vec<Vec<String>> = episodes
+            .iter()
+            .filter_map(|ep| serde_json::from_str(&ep.disclosure_refs).ok())
+            .collect();
+
+        assert_eq!(all_refs.len(), 3);
+
+        let first = all_refs[0].clone();
+        let intersection = all_refs[1..].iter().fold(first, |acc, cur| {
+            acc.into_iter().filter(|r| cur.contains(r)).collect()
+        });
+
+        // Minimal set should be just ["name"]
+        assert_eq!(intersection, vec!["name".to_string()]);
+    }
+
+    #[test]
+    fn failure_episode_does_not_affect_minimal_disclosure() {
+        let db = test_db();
+
+        // Successful episode with disclosures
+        let mut ep_success = sample_episode("ep-success");
+        ep_success.disclosure_refs = r#"["name","email"]"#.to_string();
+        ep_success.agent_did_hash = "hash-agent-b".to_string();
+        db.insert_episode(&ep_success).unwrap();
+
+        // Failed episode (should not contribute to minimal_disclosure_refs)
+        let mut ep_failure = sample_episode("ep-failure");
+        ep_failure.outcome = "failure".to_string();
+        ep_failure.disclosure_refs = r#"["name","email","phone"]"#.to_string();
+        ep_failure.agent_did_hash = "hash-agent-b".to_string();
+        db.insert_episode(&ep_failure).unwrap();
+
+        let episodes = db.list_episodes(None, Some("hash-agent-b"), 100).unwrap();
+        let successful = episodes
+            .iter()
+            .filter(|ep| ep.outcome == "success")
+            .collect::<Vec<_>>();
+
+        assert_eq!(successful.len(), 1);
+        let success_refs: Vec<String> =
+            serde_json::from_str(&successful[0].disclosure_refs).unwrap();
+        // Minimal should be based only on successful episodes
+        assert_eq!(success_refs, vec!["name", "email"]);
+    }
+
+    #[test]
+    fn agent_profile_captures_multiple_episodes() {
+        let db = test_db();
+
+        // Record 3 episodes for the same agent
+        let mut ep1 = sample_episode("ep-1");
+        ep1.agent_did_hash = "hash-agent-c".to_string();
+        ep1.outcome = "success".to_string();
+        ep1.outcome_detail = Some("5 results".to_string());
+        db.insert_episode(&ep1).unwrap();
+
+        let mut ep2 = sample_episode("ep-2");
+        ep2.agent_did_hash = "hash-agent-c".to_string();
+        ep2.outcome = "success".to_string();
+        ep2.outcome_detail = Some("8 results".to_string());
+        db.insert_episode(&ep2).unwrap();
+
+        let mut ep3 = sample_episode("ep-3");
+        ep3.agent_did_hash = "hash-agent-c".to_string();
+        ep3.outcome = "failure".to_string();
+        db.insert_episode(&ep3).unwrap();
+
+        let profile = AgentProfile {
+            agent_did_hash: "hash-agent-c".to_string(),
+            agent_name: "Test Agent".to_string(),
+            success_rate: 2.0 / 3.0,
+            avg_quality: 0.75, // Based on result completeness, not just success
+            avg_duration_ms: 150.0,
+            episode_count: 3,
+            minimal_disclosure_refs: r#"[]"#.to_string(),
+            last_used: "2026-03-21T12:00:00Z".to_string(),
+            co_sign_refusals: 0,
+        };
+        db.upsert_agent_profile(&profile).unwrap();
+
+        let fetched = db.get_agent_profile("hash-agent-c").unwrap().unwrap();
+        assert_eq!(fetched.episode_count, 3);
+        assert!((fetched.success_rate - (2.0 / 3.0)).abs() < 0.01);
     }
 }

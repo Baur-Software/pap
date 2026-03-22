@@ -1,5 +1,6 @@
 use base64::Engine;
 use tauri::State;
+use zeroize::Zeroizing;
 
 use crate::error::PapillionError;
 use crate::state::AppState;
@@ -9,6 +10,8 @@ use pap_did::PrincipalKeypair;
 use pap_webauthn::SoftwareSigner;
 
 /// Create a new principal identity (generates a new keypair).
+/// Returns error if the new identity cannot be persisted to the database,
+/// preventing the frontend from believing the identity was created when it wasn't.
 #[tauri::command]
 pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, PapillionError> {
     let keypair = PrincipalKeypair::generate();
@@ -18,11 +21,11 @@ pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, Papil
     let raw_seed = keypair.signing_key().to_bytes();
     let signer = SoftwareSigner::from_keypair(keypair);
 
-    let info = IdentityInfo {
-        did: did.clone(),
-        public_key_b64: pub_key_b64,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    };
+    // Persist the new seed to SQLite BEFORE updating in-memory state
+    // This ensures we don't get into a state where the frontend thinks we succeeded
+    // but the seed wasn't actually saved.
+    let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw_seed);
+    state.db.set_setting("principal_seed_b64", &seed_b64)?;
 
     let mut signer_lock = state
         .signer
@@ -34,7 +37,7 @@ pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, Papil
         .principal_seed
         .write()
         .map_err(|e| PapillionError::from(e.to_string()))?;
-    *seed_lock = Some(raw_seed);
+    *seed_lock = Some(Zeroizing::new(raw_seed));
 
     // Persist the new seed to SQLite
     let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw_seed);
@@ -45,6 +48,12 @@ pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, Papil
     if let Ok(mut backed_up) = state.key_backed_up.write() {
         *backed_up = false;
     }
+
+    let info = IdentityInfo {
+        did: did.clone(),
+        public_key_b64: pub_key_b64,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
 
     Ok(info)
 }
@@ -107,6 +116,8 @@ pub fn export_key(state: State<'_, AppState>) -> Result<ExportedKey, PapillionEr
 }
 
 /// Import an identity from a base64url seed, replacing the current one.
+/// Returns error if the imported seed cannot be persisted to the database,
+/// preventing the frontend from believing the identity was imported when it wasn't.
 #[tauri::command]
 pub fn import_key(
     state: State<'_, AppState>,
@@ -124,6 +135,9 @@ pub fn import_key(
     let keypair =
         PrincipalKeypair::from_bytes(&seed).map_err(|e| PapillionError::from(e.to_string()))?;
 
+    // Persist the imported seed to SQLite BEFORE updating in-memory state
+    state.db.set_setting("principal_seed_b64", &seed_b64)?;
+
     let did = keypair.did();
     let pub_key_b64 =
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.verifying_key().to_bytes());
@@ -139,7 +153,7 @@ pub fn import_key(
         .principal_seed
         .write()
         .map_err(|e| PapillionError::from(e.to_string()))?;
-    *seed_lock = Some(seed);
+    *seed_lock = Some(Zeroizing::new(seed));
 
     // Persist the imported seed to SQLite
     if let Err(e) = state.db.set_setting("principal_seed_b64", &seed_b64) {
