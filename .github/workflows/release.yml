@@ -146,7 +146,7 @@ jobs:
             pip install huggingface-hub --quiet
 
             echo "Downloading TinyLlama 1.1B model from HuggingFace..."
-            python3 -c "
+            python3 << 'EOF'
 from huggingface_hub import hf_hub_download
 import os
 model_file = hf_hub_download(
@@ -156,11 +156,10 @@ model_file = hf_hub_download(
     local_dir_use_symlinks=False
 )
 file_size_gb = os.path.getsize(model_file) / (1024**3)
-print(f'✅ Model downloaded successfully ({file_size_gb:.2f} GB)')
-            "
+print(f'✅ Model downloaded ({file_size_gb:.2f} GB)')
+EOF
           else
-            file_size_gb=$(du -sh \"$MODEL_FILE\" | awk '{print \$1}')
-            echo \"✅ Model cached at $MODEL_FILE ($file_size_gb)\"
+            echo "✅ Model already cached"
           fi
 
       - name: Install cargo-tauri
