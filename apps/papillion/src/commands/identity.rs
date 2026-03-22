@@ -24,17 +24,13 @@ pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, Papil
         created_at: chrono::Utc::now().to_rfc3339(),
     };
 
-    let mut signer_lock = state
-        .signer
+    // Atomic update: both signer and seed in single lock acquisition
+    let mut identity_lock = state
+        .identity
         .write()
         .map_err(|e| PapillionError::from(e.to_string()))?;
-    *signer_lock = Some(Box::new(signer));
-
-    let mut seed_lock = state
-        .principal_seed
-        .write()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
-    *seed_lock = Some(raw_seed);
+    identity_lock.signer = Some(Box::new(signer));
+    identity_lock.principal_seed = Some(raw_seed);
 
     // Persist the new seed to SQLite
     let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw_seed);
@@ -52,12 +48,12 @@ pub fn create_identity(state: State<'_, AppState>) -> Result<IdentityInfo, Papil
 /// Get the current principal identity, if one exists.
 #[tauri::command]
 pub fn get_identity(state: State<'_, AppState>) -> Result<Option<IdentityInfo>, PapillionError> {
-    let signer_lock = state
-        .signer
+    let identity_lock = state
+        .identity
         .read()
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
-    match signer_lock.as_ref() {
+    match identity_lock.signer.as_ref() {
         Some(signer) => {
             let did = signer.did();
             let pub_key_bytes = signer.verifying_key().to_bytes();
@@ -76,19 +72,18 @@ pub fn get_identity(state: State<'_, AppState>) -> Result<Option<IdentityInfo>, 
 /// Export the current identity's raw seed as base64url.
 #[tauri::command]
 pub fn export_key(state: State<'_, AppState>) -> Result<ExportedKey, PapillionError> {
-    let seed_lock = state
-        .principal_seed
+    let identity_lock = state
+        .identity
         .read()
         .map_err(|e| PapillionError::from(e.to_string()))?;
-    let seed = seed_lock
+
+    let seed = identity_lock
+        .principal_seed
         .as_ref()
         .ok_or_else(|| PapillionError::from("No identity to export"))?;
 
-    let signer_lock = state
+    let did = identity_lock
         .signer
-        .read()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
-    let did = signer_lock
         .as_ref()
         .ok_or_else(|| PapillionError::from("No identity"))?
         .did();
@@ -129,17 +124,13 @@ pub fn import_key(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.verifying_key().to_bytes());
     let signer = SoftwareSigner::from_keypair(keypair);
 
-    let mut signer_lock = state
-        .signer
+    // Atomic update: both signer and seed in single lock acquisition
+    let mut identity_lock = state
+        .identity
         .write()
         .map_err(|e| PapillionError::from(e.to_string()))?;
-    *signer_lock = Some(Box::new(signer));
-
-    let mut seed_lock = state
-        .principal_seed
-        .write()
-        .map_err(|e| PapillionError::from(e.to_string()))?;
-    *seed_lock = Some(seed);
+    identity_lock.signer = Some(Box::new(signer));
+    identity_lock.principal_seed = Some(seed);
 
     // Persist the imported seed to SQLite
     if let Err(e) = state.db.set_setting("principal_seed_b64", &seed_b64) {
