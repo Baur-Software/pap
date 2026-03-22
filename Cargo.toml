@@ -55,6 +55,7 @@ hex = "0.4"
 candle-core = "0.8"
 candle-transformers = "0.8"
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+zeroize = { version = "1", features = ["derive"] }
 
 # Local patch to work around Windows registry permission issue on this machine.
 # The icu_locale_core crate in the cargo cache has unreadable src/ files;
