@@ -73,6 +73,8 @@ public final class Session implements AutoCloseable {
 
     @Override
     public void close() {
+        // Best-effort protocol close; ignore errors (e.g. already-closed state).
+        PapLib.INSTANCE.pap_session_close(handle);
         PapLib.INSTANCE.pap_session_free(handle);
     }
 }
