@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crystalis — Self-Hosted Agent Registry</title>
+  <meta name="description" content="Crystalis is a self-hostable federated agent registry built on the Principal Agent Protocol. Run your own node, discover agents, and federate with peers." />
+  <meta property="og:title" content="Crystalis — Self-Hosted Agent Registry" />
+  <meta property="og:description" content="Your own federated agent registry. Docker, SQLite or Postgres, DID node identity. Built on PAP." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0c0b14;
+      --surface:   #151420;
+      --surface2:  #1f1e2e;
+      --border:    #2c2b40;
+      --border2:   #353455;
+      --indigo:    #6c5ce7;
+      --violet:    #8b7ff5;
+      --teal:      #2ec4a0;
+      --amber:     #f0a030;
+      --red:       #e8706a;
+      --text:      #eeeef2;
+      --muted:     #9494a8;
+      --faint:     #6a6a80;
+      --code-bg:   #0c0b14;
+      --radius:    8px;
+      --radius-lg: 12px;
+      scroll-behavior: smooth;
+    }
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    .section { padding: 96px 0; }
+    .section-sm { padding: 56px 0; }
+    .divider { height: 1px; background: var(--border); }
+    .gradient-text {
+      background: linear-gradient(135deg, var(--teal), var(--indigo));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 4px 12px; border-radius: 999px;
+      font-size: .75rem; font-weight: 600; letter-spacing: .04em;
+      text-transform: uppercase;
+      background: rgba(46,196,160,.12); color: var(--teal);
+      border: 1px solid rgba(46,196,160,.2);
+    }
+    .badge-purple {
+      background: rgba(108,92,231,.12); color: var(--indigo);
+      border-color: rgba(108,92,231,.2);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: var(--radius);
+      font-size: .95rem; font-weight: 600;
+      transition: all .15s ease; cursor: pointer; border: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-primary {
+      background: var(--teal); color: #0c0b14;
+    }
+    .btn-primary:hover { background: #3ed9b4; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(46,196,160,.3); }
+    .btn-outline {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border2);
+    }
+    .btn-outline:hover { border-color: var(--teal); color: var(--teal); transform: translateY(-1px); }
+    .btn-lg { padding: 14px 32px; font-size: 1rem; }
+
+    /* ─── Nav ─────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(12,11,20,.85);
+      backdrop-filter: blur(16px) saturate(1.5);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 24px;
+      height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; height: 100%; padding: 8px 0;
+    }
+    .nav-logo img { height: 32px; width: auto; object-fit: contain; }
+    .nav-wordmark {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1.1rem; font-weight: 900; letter-spacing: -.03em;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 8px; list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted); font-size: .9rem; font-weight: 500;
+      padding: 6px 12px; border-radius: var(--radius);
+      transition: all .15s ease;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .nav-links a[aria-current="page"] { color: var(--teal); }
+    .nav-cta { display: flex; align-items: center; gap: 10px; }
+    .gh-icon { width: 18px; height: 18px; fill: currentColor; }
+    @media (max-width: 768px) { .nav-links { display: none; } }
+
+    /* ─── Hero ────────────────────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh; display: flex; align-items: center;
+      position: relative; overflow: hidden; padding-top: 64px;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    }
+    .hero-bg::before {
+      content: '';
+      position: absolute; top: -30%; left: 50%; transform: translateX(-50%);
+      width: 900px; height: 900px;
+      background: radial-gradient(ellipse at center,
+        rgba(46,196,160,.1) 0%, rgba(108,92,231,.05) 45%, transparent 70%);
+      animation: pulse-slow 8s ease-in-out infinite;
+    }
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+      50%       { opacity: .7; transform: translateX(-50%) scale(1.05); }
+    }
+    .hero-grid {
+      display: flex; flex-direction: column; gap: 48px; align-items: center;
+      padding: 80px 0; max-width: 860px; margin: 0 auto; text-align: center;
+    }
+    .hero-icon {
+      font-size: 4rem; color: var(--teal); margin-bottom: 8px;
+      filter: drop-shadow(0 0 24px rgba(46,196,160,.4));
+    }
+    .hero-eyebrow {
+      display: flex; align-items: center; gap: 10px; justify-content: center;
+      margin-bottom: 20px;
+    }
+    .hero-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(2.25rem, 5.5vw, 4rem);
+      font-weight: 900; line-height: 1.1; letter-spacing: -.03em;
+      margin-bottom: 24px;
+    }
+    .hero-subtitle {
+      font-size: 1.15rem; color: var(--muted); line-height: 1.7;
+      max-width: 640px; margin: 0 auto 36px;
+    }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    /* ─── Features ────────────────────────────────────────────────────── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+    }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px;
+      position: relative; overflow: hidden;
+      transition: all .2s ease;
+    }
+    .feature-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--teal), transparent);
+    }
+    .feature-card:hover {
+      border-color: rgba(46,196,160,.25); transform: translateY(-2px);
+    }
+    .feature-icon {
+      font-size: 1.4rem; margin-bottom: 12px;
+    }
+    .feature-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: .95rem; font-weight: 700; margin-bottom: 8px;
+    }
+    .feature-desc {
+      font-size: .82rem; color: var(--muted); line-height: 1.6;
+    }
+    @media (max-width: 768px) { .features-grid { grid-template-columns: 1fr; } }
+
+    /* ─── Deploy ──────────────────────────────────────────────────────── */
+    .deploy-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start;
+    }
+    .code-block {
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: rgba(255,255,255,.03);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-dots { display: flex; gap: 6px; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-dot:nth-child(1) { background: #ff5f57; }
+    .code-dot:nth-child(2) { background: #febc2e; }
+    .code-dot:nth-child(3) { background: #28c840; }
+    .code-title { font-size: .75rem; color: var(--faint); font-family: 'JetBrains Mono', monospace; }
+    .code-body { padding: 20px; overflow-x: auto; }
+    .code-body pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .82rem; line-height: 1.8; color: var(--text); white-space: pre;
+    }
+    .c  { color: var(--faint); }
+    .kw { color: var(--teal); }
+    .st { color: var(--violet); }
+    .deploy-steps { display: flex; flex-direction: column; gap: 20px; }
+    .deploy-step { display: flex; gap: 16px; align-items: flex-start; }
+    .deploy-step-num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(46,196,160,.12); border: 1px solid rgba(46,196,160,.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 800; color: var(--teal); flex-shrink: 0;
+    }
+    .deploy-step-title { font-size: .95rem; font-weight: 700; margin-bottom: 4px; }
+    .deploy-step-body { font-size: .85rem; color: var(--muted); line-height: 1.6; }
+    @media (max-width: 768px) { .deploy-grid { grid-template-columns: 1fr; } }
+
+    /* ─── Section labels ──────────────────────────────────────────────── */
+    .section-label {
+      font-size: .72rem; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--teal); margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(1.75rem, 4vw, 2.75rem);
+      font-weight: 700; line-height: 1.2; margin-bottom: 20px; letter-spacing: -.02em;
+    }
+    .section-sub {
+      font-size: 1.05rem; color: var(--muted); line-height: 1.7;
+      max-width: 560px; margin-bottom: 48px;
+    }
+
+    /* ─── Papillion link ──────────────────────────────────────────────── */
+    .papillion-link {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; flex-wrap: wrap;
+      transition: border-color .2s ease;
+    }
+    .papillion-link:hover { border-color: rgba(108,92,231,.3); }
+    .papillion-link-left { display: flex; align-items: center; gap: 12px; }
+    .papillion-link-left img { width: 36px; height: 36px; }
+    .papillion-link-name {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: .95rem; font-weight: 700;
+    }
+    .papillion-link-desc { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+
+    /* ─── Footer ──────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border); padding: 40px 0;
+    }
+    .footer-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1rem; font-weight: 900; letter-spacing: -.02em;
+      background: linear-gradient(135deg, var(--teal), var(--indigo));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a { font-size: .85rem; color: var(--muted); transition: color .15s; }
+    .footer-links a:hover { color: var(--text); }
+    .footer-copy { font-size: .8rem; color: var(--faint); font-family: 'JetBrains Mono', monospace; }
+
+    /* ─── Animations ──────────────────────────────────────────────────── */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    .reveal-delay-1 { transition-delay: .1s; }
+    .reveal-delay-2 { transition-delay: .2s; }
+  </style>
+</head>
+<body>
+
+<!-- ─── NAV ──────────────────────────────────────────────────────────── -->
+<nav aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo" aria-label="Back to Papillion">
+      <img src="assets/images/papillion-icon.png" alt="Papillion butterfly logo" />
+      <span class="nav-wordmark">PAP</span>
+    </a>
+    <ul class="nav-links" role="list">
+      <li><a href="index.html">Papillion</a></li>
+      <li><a href="crystalis.html" aria-current="page">Crystalis</a></li>
+      <li><a href="pap.html">PAP</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
+        <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── HERO ──────────────────────────────────────────────────────────── -->
+<section id="hero" aria-label="Crystalis introduction">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-icon" aria-hidden="true">◈</div>
+        <div class="hero-eyebrow">
+          <span class="badge">Open Source · MIT</span>
+          <span class="badge badge-purple">Built on PAP</span>
+        </div>
+        <h1 class="hero-title">
+          <span class="gradient-text">Crystalis.</span><br />
+          Your own agent registry,<br />
+          on your infrastructure.
+        </h1>
+        <p class="hero-subtitle">
+          A self-hostable federated agent registry built on the Principal Agent Protocol.
+          Announce capabilities, discover peers, and participate in the PAP federation network —
+          on hardware you control.
+        </p>
+        <div class="hero-actions">
+          <a href="https://github.com/Baur-Software/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+            Deploy with Docker →
+          </a>
+          <a href="https://github.com/Baur-Software/pap" class="btn btn-outline btn-lg" target="_blank" rel="noopener">
+            View on GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── FEATURES ─────────────────────────────────────────────────────── -->
+<section class="section" aria-labelledby="features-heading">
+  <div class="container">
+    <div class="reveal" style="margin-bottom: 56px;">
+      <div class="section-label">What it does</div>
+      <h2 class="section-title" id="features-heading">
+        A registry node in the<br />
+        <span class="gradient-text">PAP federation network</span>
+      </h2>
+      <p class="section-sub">
+        Crystalis gives teams and developers a place to publish and discover PAP-compatible agents
+        without depending on any central directory.
+      </p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">🪪</div>
+        <div class="feature-title">DID Node Identity</div>
+        <div class="feature-desc">
+          Each Crystalis instance generates a persistent <code style="font-family:'JetBrains Mono',monospace;font-size:.8em;color:var(--teal)">did:key</code> identity on first boot.
+          TLS certificates are bound to that DID. Restarts don't break federation peers.
+        </div>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">📡</div>
+        <div class="feature-title">Peer Federation</div>
+        <div class="feature-desc">
+          Registries sync with each other via the PAP federation protocol — announce agents,
+          query peers, and propagate discovery across nodes without a central coordinator.
+        </div>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">🔍</div>
+        <div class="feature-title">Schema.org Agent Ads</div>
+        <div class="feature-desc">
+          Agents advertise capabilities as signed JSON-LD using Schema.org vocabulary.
+          Clients filter by action type. No proprietary format, no vendor lock-in.
+        </div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🗄️</div>
+        <div class="feature-title">SQLite or Postgres</div>
+        <div class="feature-desc">
+          Single-node deployments use SQLite. Scale out to Postgres for multi-instance
+          or high-availability setups. Same schema, same binary.
+        </div>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">🖥️</div>
+        <div class="feature-title">Leptos SSR Admin UI</div>
+        <div class="feature-desc">
+          A Rust-native server-side-rendered dashboard for monitoring agents, federation peers,
+          node identity, and endpoint status. No JavaScript framework dependencies.
+        </div>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">🐳</div>
+        <div class="feature-title">Docker First</div>
+        <div class="feature-desc">
+          One <code style="font-family:'JetBrains Mono',monospace;font-size:.8em;color:var(--teal)">docker compose up</code> to run.
+          Dockerfile and compose file included. Configurable via environment variables.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── DEPLOY ────────────────────────────────────────────────────────── -->
+<section class="section" id="deploy" aria-labelledby="deploy-heading">
+  <div class="container">
+    <div class="deploy-grid">
+      <div class="reveal">
+        <div class="section-label">Get started</div>
+        <h2 class="section-title" id="deploy-heading">
+          Up in one<br />
+          <span class="gradient-text"><code>docker compose up</code></span>
+        </h2>
+        <div class="deploy-steps">
+          <div class="deploy-step">
+            <div class="deploy-step-num">1</div>
+            <div>
+              <div class="deploy-step-title">Clone the repo</div>
+              <div class="deploy-step-body">The registry lives in <code style="font-family:'JetBrains Mono',monospace;font-size:.85em;color:var(--teal)">apps/registry/</code> inside the PAP monorepo.</div>
+            </div>
+          </div>
+          <div class="deploy-step">
+            <div class="deploy-step-num">2</div>
+            <div>
+              <div class="deploy-step-title">Configure environment</div>
+              <div class="deploy-step-body">Set <code style="font-family:'JetBrains Mono',monospace;font-size:.85em;color:var(--teal)">DATABASE_URL</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:.85em;color:var(--teal)">PUBLIC_ENDPOINT</code>, and optional peer addresses.</div>
+            </div>
+          </div>
+          <div class="deploy-step">
+            <div class="deploy-step-num">3</div>
+            <div>
+              <div class="deploy-step-title">Run</div>
+              <div class="deploy-step-body">Node identity is generated on first boot and persisted to the database. TLS cert binds to that DID automatically.</div>
+            </div>
+          </div>
+          <div class="deploy-step">
+            <div class="deploy-step-num">4</div>
+            <div>
+              <div class="deploy-step-title">Federate</div>
+              <div class="deploy-step-body">Point Papillion — or any PAP client — at your registry endpoint. Add peer URLs to join the broader federation.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block reveal reveal-delay-1">
+        <div class="code-header">
+          <div class="code-dots">
+            <div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div>
+          </div>
+          <span class="code-title">docker-compose.yml</span>
+        </div>
+        <div class="code-body">
+          <pre><span class="kw">services</span><span class="c">:</span>
+  <span class="kw">registry</span><span class="c">:</span>
+    <span class="kw">image</span><span class="c">: ghcr.io/baur-software/crystalis:latest</span>
+    <span class="kw">ports</span><span class="c">:</span>
+      - <span class="st">"8080:8080"</span>
+    <span class="kw">environment</span><span class="c">:</span>
+      <span class="kw">DATABASE_URL</span><span class="c">: sqlite:///data/registry.db</span>
+      <span class="kw">PUBLIC_ENDPOINT</span><span class="c">: https://your-host:8080</span>
+    <span class="kw">volumes</span><span class="c">:</span>
+      - <span class="st">./data:/data</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── PAP CALLOUT ───────────────────────────────────────────────────── -->
+<section class="section-sm" aria-label="Also get Papillion">
+  <div class="container">
+    <a href="index.html" class="papillion-link reveal">
+      <div class="papillion-link-left">
+        <img src="assets/images/papillion-icon.png" alt="Papillion butterfly" />
+        <div>
+          <div class="papillion-link-name">Papillion</div>
+          <div class="papillion-link-desc">The personal AI assistant that connects to Crystalis registries. macOS · Windows · Linux.</div>
+        </div>
+      </div>
+      <span class="btn btn-outline">Download →</span>
+    </a>
+  </div>
+</section>
+
+<!-- ─── FOOTER ────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span class="footer-logo">Crystalis</span>
+      <div class="footer-links">
+        <a href="index.html">Papillion</a>
+        <a href="pap.html">PAP Protocol</a>
+        <a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <span class="footer-copy">MIT License · Baur Software</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

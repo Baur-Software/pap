@@ -5,6 +5,22 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-23
+
+### Added
+
+- **docs**: New `pap.html` dedicated page for the PAP protocol targeting developers — covers all six protocol invariants (failure-mode-first framing), protocol stack table, crate grid, Quick Start Rust snippet, examples, and comparison table
+- **docs**: New `crystalis.html` page for the Crystalis self-hostable federated registry product
+- **docs**: Papillion canvas rendering demo on `index.html` — macOS-style mockup showing flight booking result with privacy disclosure strip
+- **docs**: Six PAP constraint cards on `pap.html`, each leading with the failure mode it prevents; includes new card 06 "Discovery without a standard becomes a silo" covering the federated registry and Papillion visual composer
+- **docs**: Registry and visual composer card explaining signed JSON-LD capability advertisements, federated discovery, and Papillion's drag-and-drop workflow composer
+
+### Changed
+
+- **docs**: `index.html` reframed around Papillion product (canvas rendering engine, use cases, how-it-works); PAP protocol content moved to dedicated `pap.html`
+- **docs**: PAP invariants rewritten to lead with failure modes rather than mechanism names — "Sessions that never die drain the internet" instead of "Hard TTL enforcement"
+- **docs**: Nav updated across all pages: `index.html`, `crystalis.html`, and `pap.html` link to each other cohesively
+
 ## [0.4.1] - 2026-03-23
 
 ### Added
