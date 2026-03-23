@@ -8,14 +8,14 @@ A principal-first, zero-trust agent negotiation protocol for the open web.
 
 ## The Problem
 
-Every agent protocol in production today — A2A, MCP, ACP, AGNTCY — was designed to serve platform operators, not human principals.
+Existing agent protocols were designed for a single operator orchestrating tools on one machine, not for agents transacting across trust boundaries on behalf of different principals.
 
-- **A2A** authenticates agents as platform entities. Privacy is an "opacity principle" — aspirational, not enforced. No context minimization. No session ephemerality.
-- **MCP** connects models to tools. It is not an agent-to-agent negotiation protocol. Its own spec acknowledges it "cannot enforce these security principles at the protocol level."
-- **ACP** handles REST-based agent interop. Thin trust layer. No cryptographic identity.
-- **CrewAI, LangGraph, OpenAI Agents SDK** treat privacy as an implementation detail. LangGraph's default is a shared scratchpad where every agent sees everything.
+- **A2A** authenticates agents as platform entities. Privacy is an "opacity principle" — aspirational, not enforced. No mechanism for partial disclosure. Session residue is undefined.
+- **MCP** connects models to tools. Its own spec states: "we cannot enforce these security principles at the protocol level." Designed for single-operator. Disclosure is monolithic.
+- **ACP** handles REST-based agent interop. Thin trust layer. No cryptographic identity. No session ephemerality.
+- **CrewAI, LangGraph, OpenAI Agents SDK** treat disclosure as an implementation detail. LangGraph's default is a shared scratchpad where every agent sees everything. No protocol mechanism to send less. When an API in the chain is compromised, the attacker gets full principal context.
 
-None enforce context minimization at the protocol level. None define session ephemerality as a guarantee. None have economic primitives. Privacy is always somebody else's problem.
+**The unifying failure:** None enforce context minimization at the protocol layer. None define session ephemerality as a guarantee. Privacy is always an application problem, never a protocol problem.
 
 ## The Design
 
@@ -25,11 +25,15 @@ The human principal is the root of trust. Every agent in a transaction carries a
 
 **No new cryptography. No token economy. No central registry.**
 
-## Why Should I Care?
+## Why This Matters
 
-You searched for a stroller once. Now every website thinks you're pregnant. For six months. That's one query, with a human behind a browser. Now imagine AI agents making hundreds of queries on your behalf — every one leaking context to platforms that build profiles, adjust prices, and sell your behavioral data to brokers you've never heard of.
+**The Problem:** A compromise in one agent's tool chain becomes a compromise of your principal context. In every major framework — LangGraph, CrewAI, OpenAI Agents SDK, AutoGen — disclosure is monolithic. The agent gets a blob of context. There is no protocol mechanism to send less. When an API gets breached, the attacker gets everything the orchestrator knew about the principal: credit cards, address, travel history, medical conditions, financial data.
 
-PAP ensures your agent discloses only what you explicitly permit, to the specific service that needs it, for the duration of a single session, with a signed receipt proving what happened.
+**The Structural Ceiling:** You cannot solve a disclosure problem with execution controls. Sandboxing constrains *what an agent can do*. It does not constrain *what it can see*. The protocol layer has no opinion on partial disclosure, so developers are left playing whack-a-mole: strip sensitive fields, the model rephrases them in responses; add output filters, the model finds new phrasings.
+
+**PAP's Answer:** Protocol-enforced selective disclosure. An agent receives only the specific properties its mandate permits. The SD-JWT mechanism ensures undisclosed claims do not exist on the wire — not because a filter removed them, but because they were never transmitted. A compromised hotel API gets your check-in date, checkout date, and city. That is the blast radius. Not through defense-in-depth. Through protocol design.
+
+Every session is ephemeral and unlinked to principal identity. Both parties sign receipts that record *which properties were disclosed*, never their values. The agent forgets everything at session close.
 
 ## Trust Model
 
@@ -199,20 +203,19 @@ Key characteristics:
 
 See [apps/registry/README.md](apps/registry/README.md) for full documentation.
 
-## Comparison: Protocol Primitives
+## How PAP Differs
 
 | Feature | A2A | MCP | ACP | PAP |
 |---------|-----|-----|-----|-----|
 | **Trust Root** | Platform entity | Model + tools | Enterprise gateway | Human principal |
-| **Context Minimization** | No | No | No | SD-JWT per interaction |
+| **Protocol Enforces Disclosure?** | No ("opacity principle") | No (spec says aspirational) | No | Yes (SD-JWT structural guarantee) |
 | **Session Ephemerality** | No | Stateful | Stateless option | Ephemeral DIDs, keys always discarded |
-| **Field-Level Disclosure** | No | No | No | SD-JWT selective claims |
-| **Cryptographic Scope Enforcement** | No | No | No | Mandate chain verification |
+| **Selective Disclosure** | No (all or nothing) | No (all or nothing) | No (all or nothing) | Yes (per-field, cryptographic) |
+| **Mandate Chain Verification** | No | No | No | Yes (recursive scope/TTL bounds) |
 | **Agent-to-Agent Negotiation** | Yes | No (tool access only) | Yes | Yes |
-| **Privacy-Preserving Payment** | No | No | No | Ecash / Lightning proofs |
-| **Marketplace Discovery** | Agent Cards | None | HTTP directory | Federated, disclosure-filtered (Crystalis) |
+| **Economic Primitives** | No | No | No | Ecash / Lightning proofs, receipts |
+| **Marketplace Discovery** | Agent Cards (centralized) | None | HTTP (centralized) | Federated, federated (Crystalis) |
 | **Audit Trail** | No | No | No | Co-signed receipts (property refs only) |
-| **Principal Control** | Platform | User (aspirational) | Enterprise gateway | Cryptographic, non-delegable |
 | **Multi-Language Support** | No | Limited | Limited | Rust, Python, JS/TS, C, C#, Java |
 
 ## Protocol Extensions
