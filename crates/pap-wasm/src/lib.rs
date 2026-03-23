@@ -14,10 +14,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use pap_core::mandate::{DecayState, Mandate};
-use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
-use pap_core::session::{CapabilityToken, Session};
-use pap_did::{PrincipalKeypair, SessionKeypair};
+use pap_core::mandate::DecayState;
 
 // ---------------------------------------------------------------------------
 // Error helpers
@@ -195,9 +192,7 @@ impl Scope {
     #[wasm_bindgen(constructor)]
     pub fn new(actions: Vec<ScopeAction>) -> Scope {
         Scope {
-            inner: pap_core::scope::Scope::new(
-                actions.into_iter().map(|a| a.inner).collect(),
-            ),
+            inner: pap_core::scope::Scope::new(actions.into_iter().map(|a| a.inner).collect()),
         }
     }
 
@@ -398,7 +393,9 @@ impl Mandate {
     /// This is a pure computation. To apply the result call `syncDecayState()`.
     #[wasm_bindgen(js_name = computeDecayState)]
     pub fn compute_decay_state(&self, decay_window_secs: i64) -> String {
-        self.inner.compute_decay_state(decay_window_secs).to_string()
+        self.inner
+            .compute_decay_state(decay_window_secs)
+            .to_string()
     }
 
     /// Synchronize the stored decay state to the time-computed value.
