@@ -369,10 +369,7 @@ pub extern "C" fn pap_session_keypair_did(kp: *const PapSessionKeypair) -> *mut 
 /// # Safety
 /// `out` must point to at least 32 bytes.
 #[no_mangle]
-pub unsafe extern "C" fn pap_did_to_public_key_bytes(
-    did: *const c_char,
-    out: *mut u8,
-) -> c_int {
+pub unsafe extern "C" fn pap_did_to_public_key_bytes(did: *const c_char, out: *mut u8) -> c_int {
     let did_str = cstr_or_err!(did);
     if out.is_null() {
         set_last_error("null output buffer");
@@ -484,10 +481,7 @@ pub unsafe extern "C" fn pap_scope_free(s: *mut PapScope) {
 
 /// Returns 1 if the scope permits `action`, 0 otherwise (including on null input).
 #[no_mangle]
-pub extern "C" fn pap_scope_permits(
-    scope: *const PapScope,
-    action: *const c_char,
-) -> c_int {
+pub extern "C" fn pap_scope_permits(scope: *const PapScope, action: *const c_char) -> c_int {
     let scope = match unsafe { scope.as_ref() } {
         Some(s) => s,
         None => return 0,
@@ -509,10 +503,7 @@ pub extern "C" fn pap_scope_permits(
 /// Returns 1 if every action in `child` is also in `parent` (child ⊆ parent).
 /// Returns 0 on any error or if the check fails.
 #[no_mangle]
-pub extern "C" fn pap_scope_contains(
-    parent: *const PapScope,
-    child: *const PapScope,
-) -> c_int {
+pub extern "C" fn pap_scope_contains(parent: *const PapScope, child: *const PapScope) -> c_int {
     match (unsafe { parent.as_ref() }, unsafe { child.as_ref() }) {
         (Some(p), Some(c)) => {
             if p.inner.contains(&c.inner) {
@@ -885,10 +876,7 @@ pub extern "C" fn pap_mandate_compute_decay_state(
 ///
 /// Returns 0 on success, -1 on invalid transition.
 #[no_mangle]
-pub extern "C" fn pap_mandate_transition_decay(
-    m: *mut PapMandate,
-    next_state: c_int,
-) -> c_int {
+pub extern "C" fn pap_mandate_transition_decay(m: *mut PapMandate, next_state: c_int) -> c_int {
     let m = mut_or_err!(m);
     let next = match int_to_decay(next_state) {
         Some(s) => s,
@@ -974,7 +962,10 @@ pub extern "C" fn pap_mandate_principal_did(m: *const PapMandate) -> *mut c_char
     let m = ref_or_null!(m);
     CString::new(m.inner.principal_did.as_str())
         .map(|cs| cs.into_raw())
-        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
+        .unwrap_or_else(|e| {
+            set_last_error(&format!("string contains null byte: {e}"));
+            std::ptr::null_mut()
+        })
 }
 
 /// Returns the agent DID. Caller frees with `pap_string_free`.
@@ -983,7 +974,10 @@ pub extern "C" fn pap_mandate_agent_did(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     CString::new(m.inner.agent_did.as_str())
         .map(|cs| cs.into_raw())
-        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
+        .unwrap_or_else(|e| {
+            set_last_error(&format!("string contains null byte: {e}"));
+            std::ptr::null_mut()
+        })
 }
 
 /// Returns the issuer DID. Caller frees with `pap_string_free`.
@@ -992,7 +986,10 @@ pub extern "C" fn pap_mandate_issuer_did(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     CString::new(m.inner.issuer_did.as_str())
         .map(|cs| cs.into_raw())
-        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
+        .unwrap_or_else(|e| {
+            set_last_error(&format!("string contains null byte: {e}"));
+            std::ptr::null_mut()
+        })
 }
 
 /// Returns the TTL as an RFC 3339 string. Caller frees with `pap_string_free`.
@@ -1001,7 +998,10 @@ pub extern "C" fn pap_mandate_ttl(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     CString::new(m.inner.ttl.to_rfc3339())
         .map(|cs| cs.into_raw())
-        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
+        .unwrap_or_else(|e| {
+            set_last_error(&format!("string contains null byte: {e}"));
+            std::ptr::null_mut()
+        })
 }
 
 // ---------------------------------------------------------------------------

@@ -7,8 +7,8 @@ fn main() {
     // This is committed to the repo for convenience so C/C++/C# consumers
     // don't need the Rust toolchain to obtain the header.
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    let config = cbindgen::Config::from_file("cbindgen.toml")
-        .expect("unable to read cbindgen.toml");
+    let config =
+        cbindgen::Config::from_file("cbindgen.toml").expect("unable to read cbindgen.toml");
 
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
