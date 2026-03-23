@@ -9,8 +9,8 @@ pub fn DashboardPage() -> impl IntoView {
     view! {
         <div class="page">
             <div class="page-header">
-                <h1 class="page-title">"Dashboard"</h1>
-                <p class="page-subtitle">"Federation node overview and registry health."</p>
+                <h1 class="page-title">"Crystalis Dashboard"</h1>
+                <p class="page-subtitle">"Registry overview and agent federation network health."</p>
             </div>
 
             <Suspense fallback=|| view! { <div class="loading"><span class="loading-dot">"Loading..."</span></div> }>
@@ -63,7 +63,7 @@ fn StatusView(s: RegistryStatus) -> impl IntoView {
                 </div>
                 <div class="card-body">
                     <p style="font-size: 13px; color: var(--text-2); margin-bottom: var(--sp-md)">
-                        "This node exposes the PAP federation protocol. Other registries can connect at:"
+                        "Crystalis exposes the PAP federation protocol. Other registries can connect at:"
                     </p>
                     <EndpointRow method="GET"  path="/federation/identity" desc="Node identity and cert fingerprint" />
                     <EndpointRow method="GET"  path="/federation/query?action=..." desc="Query agents by Schema.org action" />
