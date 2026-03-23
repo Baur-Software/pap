@@ -93,9 +93,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // ── Leptos configuration ──────────────────────────────────────────────────
-    let leptos_options = get_configuration(None)
-        .map(|c| c.leptos_options)
-        .unwrap_or_default();
+    let leptos_options = get_configuration(None).unwrap().leptos_options;
 
     // ── Routers ───────────────────────────────────────────────────────────────
 
