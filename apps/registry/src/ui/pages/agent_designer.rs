@@ -1,0 +1,408 @@
+use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+use crate::ui::api::AgentAdvertisement;
+
+/// Form state for the agent designer
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AgentFormState {
+    pub name: String,
+    pub provider_name: String,
+    pub provider_did: String,
+    pub capabilities: Vec<String>,
+    pub object_types: Vec<String>,
+    pub requires_disclosure: Vec<String>,
+    pub returns: Vec<String>,
+    pub ttl_min: u64,
+    pub errors: HashMap<String, String>,
+}
+
+impl Default for AgentFormState {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            provider_name: String::new(),
+            provider_did: String::new(),
+            capabilities: Vec::new(),
+            object_types: Vec::new(),
+            requires_disclosure: Vec::new(),
+            returns: Vec::new(),
+            ttl_min: 3600, // 1 hour default
+            errors: HashMap::new(),
+        }
+    }
+}
+
+impl AgentFormState {
+    /// Convert form state to an unsigned advertisement
+    pub fn to_advertisement(&self) -> AgentAdvertisement {
+        AgentAdvertisement {
+            context: "https://schema.org".to_string(),
+            schema_type: "schema:Service".to_string(),
+            name: self.name.clone(),
+            provider: crate::ui::api::Provider {
+                schema_type: "schema:Organization".to_string(),
+                name: self.provider_name.clone(),
+                did: self.provider_did.clone(),
+            },
+            capability: self.capabilities.clone(),
+            object_types: self.object_types.clone(),
+            requires_disclosure: self.requires_disclosure.clone(),
+            returns: self.returns.clone(),
+            ttl_min: self.ttl_min,
+            signed_by: String::new(),
+            signature: None,
+        }
+    }
+
+    /// Validate form state and populate error map
+    pub fn validate(&mut self) -> bool {
+        self.errors.clear();
+        let mut valid = true;
+
+        if self.name.trim().is_empty() {
+            self.errors
+                .insert("name".to_string(), "Agent name required".to_string());
+            valid = false;
+        }
+        if self.name.len() > 128 {
+            self.errors.insert(
+                "name".to_string(),
+                "Agent name must be ≤ 128 characters".to_string(),
+            );
+            valid = false;
+        }
+
+        if self.provider_name.trim().is_empty() {
+            self.errors.insert(
+                "provider_name".to_string(),
+                "Provider name required".to_string(),
+            );
+            valid = false;
+        }
+        if self.provider_name.len() > 64 {
+            self.errors.insert(
+                "provider_name".to_string(),
+                "Provider name must be ≤ 64 characters".to_string(),
+            );
+            valid = false;
+        }
+
+        if self.provider_did.trim().is_empty() {
+            self.errors.insert(
+                "provider_did".to_string(),
+                "Provider DID required".to_string(),
+            );
+            valid = false;
+        } else if !self.validate_did() {
+            self.errors.insert(
+                "provider_did".to_string(),
+                "Invalid DID format (must start with did:key:)".to_string(),
+            );
+            valid = false;
+        }
+
+        if self.capabilities.is_empty() {
+            self.errors.insert(
+                "capabilities".to_string(),
+                "At least one capability required".to_string(),
+            );
+            valid = false;
+        }
+
+        if self.requires_disclosure.is_empty() {
+            self.errors.insert(
+                "requires_disclosure".to_string(),
+                "Specify what properties you need".to_string(),
+            );
+            valid = false;
+        }
+
+        if self.returns.is_empty() {
+            self.errors.insert(
+                "returns".to_string(),
+                "Specify what types you return".to_string(),
+            );
+            valid = false;
+        }
+
+        if self.ttl_min < 60 {
+            self.errors.insert(
+                "ttl_min".to_string(),
+                "TTL must be at least 60 seconds".to_string(),
+            );
+            valid = false;
+        }
+
+        valid
+    }
+
+    /// Validate DID format (must start with did:key:)
+    fn validate_did(&self) -> bool {
+        self.provider_did.starts_with("did:key:")
+    }
+}
+
+/// Main agent designer page component
+#[component]
+pub fn AgentDesignerPage() -> impl IntoView {
+    let form_state = RwSignal::new(AgentFormState::default());
+
+    view! {
+        <div class="page">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">"Design Agent Advertisement"</h1>
+                    <p class="page-subtitle">"Use the form below to design a new agent advertisement without writing JSON."</p>
+                </div>
+            </div>
+
+            <div class="designer-container">
+                <div class="designer-form-panel">
+                    <DesignerForm form_state />
+                </div>
+                <div class="designer-preview-panel">
+                    <PreviewPane form_state />
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// Form component with all sections
+#[component]
+fn DesignerForm(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+    view! {
+        <form class="agent-designer-form">
+            <MetadataSection form_state />
+            <CapabilitiesSection form_state />
+            <DisclosureSection form_state />
+            <ReturnsSection form_state />
+            <ObjectTypesSection form_state />
+            <TTLSection form_state />
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">
+                    "🔐 Sign & Register"
+                </button>
+                <a href="/agents" class="btn btn-secondary">
+                    "Cancel"
+                </a>
+            </div>
+        </form>
+    }
+}
+
+/// Metadata section: agent name, provider name, provider DID
+#[component]
+fn MetadataSection(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+    view! {
+        <div class="form-section">
+            <h3 class="form-section-title">"Agent Metadata"</h3>
+
+            <div class="form-group">
+                <label class="form-label" for="agent-name">
+                    "Agent Name"
+                </label>
+                <input
+                    id="agent-name"
+                    class="form-input"
+                    type="text"
+                    placeholder="e.g., Flight Search Agent"
+                    prop:value=move || form_state.get().name
+                    on:input=move |e| {
+                        let val = event_target_value(&e);
+                        form_state.update(|s| s.name = val);
+                    }
+                />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="provider-name">
+                    "Provider Name"
+                </label>
+                <input
+                    id="provider-name"
+                    class="form-input"
+                    type="text"
+                    placeholder="e.g., Acme Corp"
+                    prop:value=move || form_state.get().provider_name
+                    on:input=move |e| {
+                        let val = event_target_value(&e);
+                        form_state.update(|s| s.provider_name = val);
+                    }
+                />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="provider-did">
+                    "Provider DID"
+                </label>
+                <input
+                    id="provider-did"
+                    class="form-input"
+                    type="text"
+                    placeholder="e.g., did:key:z6Mkd..."
+                    prop:value=move || form_state.get().provider_did
+                    on:input=move |e| {
+                        let val = event_target_value(&e);
+                        form_state.update(|s| s.provider_did = val);
+                    }
+                />
+            </div>
+        </div>
+    }
+}
+
+/// Capabilities section
+#[component]
+fn CapabilitiesSection(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+    view! {
+        <div class="form-section">
+            <h3 class="form-section-title">"Capabilities"</h3>
+            <p class="form-section-help">"Space-separated schema.org actions (e.g., schema:SearchAction schema:BookAction)"</p>
+            <textarea
+                class="form-input"
+                placeholder="schema:SearchAction schema:BookAction"
+                prop:value=move || form_state.get().capabilities.join(" ")
+                on:input=move |e| {
+                    let val = event_target_value(&e);
+                    let items: Vec<String> = val
+                        .split_whitespace()
+                        .map(|s| s.to_string())
+                        .collect();
+                    form_state.update(|s| s.capabilities = items);
+                }
+            />
+        </div>
+    }
+}
+
+/// Disclosure section
+#[component]
+fn DisclosureSection(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+    view! {
+        <div class="form-section">
+            <h3 class="form-section-title">"Required Disclosure"</h3>
+            <p class="form-section-help">"Properties this agent needs access to"</p>
+            <textarea
+                class="form-input"
+                placeholder="schema:Person.name schema:PostalAddress"
+                prop:value=move || form_state.get().requires_disclosure.join(" ")
+                on:input=move |e| {
+                    let val = event_target_value(&e);
+                    let items: Vec<String> = val
+                        .split_whitespace()
+                        .map(|s| s.to_string())
+                        .collect();
+                    form_state.update(|s| s.requires_disclosure = items);
+                }
+            />
+        </div>
+    }
+}
+
+/// Returns section
+#[component]
+fn ReturnsSection(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+    view! {
+        <div class="form-section">
+            <h3 class="form-section-title">"Return Types"</h3>
+            <p class="form-section-help">"What types this agent returns"</p>
+            <textarea
+                class="form-input"
+                placeholder="schema:SearchResult schema:Reservation"
+                prop:value=move || form_state.get().returns.join(" ")
+                on:input=move |e| {
+                    let val = event_target_value(&e);
+                    let items: Vec<String> = val
+                        .split_whitespace()
+                        .map(|s| s.to_string())
+                        .collect();
+                    form_state.update(|s| s.returns = items);
+                }
+            />
+        </div>
+    }
+}
+
+/// Object types section
+#[component]
+fn ObjectTypesSection(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+    view! {
+        <div class="form-section">
+            <h3 class="form-section-title">"Object Types"</h3>
+            <p class="form-section-help">"Entity types this agent works with"</p>
+            <textarea
+                class="form-input"
+                placeholder="schema:Flight schema:Hotel"
+                prop:value=move || form_state.get().object_types.join(" ")
+                on:input=move |e| {
+                    let val = event_target_value(&e);
+                    let items: Vec<String> = val
+                        .split_whitespace()
+                        .map(|s| s.to_string())
+                        .collect();
+                    form_state.update(|s| s.object_types = items);
+                }
+            />
+        </div>
+    }
+}
+
+/// TTL section: time-to-live input
+#[component]
+fn TTLSection(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+    view! {
+        <div class="form-section">
+            <h3 class="form-section-title">"Time-to-Live (TTL)"</h3>
+            <p class="form-section-help">"Minimum TTL in seconds (minimum: 60)"</p>
+
+            <div class="form-group">
+                <input
+                    class="form-input"
+                    type="number"
+                    min="60"
+                    step="60"
+                    prop:value=move || form_state.get().ttl_min.to_string()
+                    on:input=move |e| {
+                        if let Ok(val) = event_target_value(&e).parse::<u64>() {
+                            form_state.update(|s| s.ttl_min = val);
+                        }
+                    }
+                />
+            </div>
+        </div>
+    }
+}
+
+/// Preview pane: real-time JSON-LD preview
+#[component]
+fn PreviewPane(form_state: RwSignal<AgentFormState>) -> impl IntoView {
+
+    view! {
+        <div class="preview-pane">
+            <div class="preview-header">
+                <h3 class="preview-title">"JSON-LD Preview"</h3>
+                <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    on:click=move |_| {
+                        // TODO: Implement copy-to-clipboard
+                    }
+                >
+                    "📋 Copy JSON"
+                </button>
+            </div>
+            <pre class="preview-json">
+                {move || {
+                    let state = form_state.get();
+                    let ad = state.to_advertisement();
+                    serde_json::to_string_pretty(&ad)
+                        .unwrap_or_else(|_| "Error generating JSON".to_string())
+                }}
+            </pre>
+        </div>
+    }
+}
