@@ -534,11 +534,17 @@
         <p class="constraint-body">To book a flight through most AI integrations today, you authorize the app to read your email, calendar, contacts, and location history &#8212; because the API is all-or-nothing. PAP makes selective disclosure a first-class protocol feature. The travel agent gets your destination and your budget. It doesn&#8217;t get your name. It doesn&#8217;t get your history. It doesn&#8217;t get anything it can sell. Agents get exactly the inputs they need to function. Nothing more.</p>
         <span class="constraint-tag">SD-JWT &#183; W3C VC &#183; minimum-necessary disclosure</span>
       </div>
-      <div class="constraint-card reveal reveal-delay-1" style="grid-column: 1 / -1;">
+      <div class="constraint-card reveal reveal-delay-1">
         <div class="constraint-num">05</div>
         <div class="constraint-title">Value-bearing receipts are surveillance logs</div>
         <p class="constraint-body">Without receipts, agents can claim they did things they didn&#8217;t &#8212; or deny things they did. So you need receipts. But a receipt containing values is a surveillance log: aggregate a billion of them and you have a behavioral database nobody consented to. PAP receipts record property <em>names</em>, never values. &#8220;Destination was disclosed&#8221; &#8212; not &#8220;destination was Tokyo.&#8221; The receipt is co-signed by both the principal session key and the agent. Proof that the right thing happened. Not a profile of what it was.</p>
         <span class="constraint-tag">co-signed &#183; property-names-only &#183; accountability without surveillance</span>
+      </div>
+      <div class="constraint-card reveal reveal-delay-2" style="grid-column: 1 / -1;">
+        <div class="constraint-num">06</div>
+        <div class="constraint-title">Discovery without a standard becomes a silo</div>
+        <p class="constraint-body">Without a common format for capability advertisement, agents can only find each other within the same platform. Every vendor builds a walled garden. Every integration is a custom bilateral contract. PAP defines a signed JSON-LD service advertisement any registry can index &#8212; no central authority required. Agents publish what they can do and what they need. Any compliant directory can list them. In Papillion, the <strong>visual composer</strong> lets you browse available agents and drag them into workflows without writing a line of code. Crystalis is the self-hostable reference registry &#8212; run your own, federate with others, or stay entirely private.</p>
+        <span class="constraint-tag">JSON-LD &#183; Schema.org &#183; federated registry &#183; visual composer</span>
       </div>
     </div>
   </div>
