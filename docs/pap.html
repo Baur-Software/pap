@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Principal Agent Protocol &#8212; Open Spec for Agent Trust</title>
+  <meta name="description" content="PAP is an open protocol for cryptographic trust between humans and AI agents. Mandate-based delegation, ephemeral session DIDs, SD-JWT selective disclosure. MIT OR Apache-2.0." />
+  <meta property="og:title" content="Principal Agent Protocol" />
+  <meta property="og:description" content="The cryptographic trust layer between humans and AI agents. Open specification, Rust reference implementation. No central registry, no token economy." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0c0b14;
+      --surface:   #151420;
+      --surface2:  #1f1e2e;
+      --border:    #2c2b40;
+      --border2:   #353455;
+      --indigo:    #6c5ce7;
+      --violet:    #8b7ff5;
+      --teal:      #2ec4a0;
+      --amber:     #f0a030;
+      --red:       #e8706a;
+      --text:      #eeeef2;
+      --muted:     #9494a8;
+      --faint:     #6a6a80;
+      --code-bg:   #0c0b14;
+      --radius:    8px;
+      --radius-lg: 12px;
+      scroll-behavior: smooth;
+    }
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    .section { padding: 96px 0; }
+    .section-sm { padding: 64px 0; }
+    .divider { height: 1px; background: var(--border); }
+    .gradient-text {
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 999px;
+      font-size: .75rem; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase;
+      background: rgba(108,92,231,.12); color: var(--indigo);
+      border: 1px solid rgba(108,92,231,.25);
+    }
+    .badge-muted {
+      background: rgba(255,255,255,.05); color: var(--muted);
+      border-color: var(--border);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: var(--radius);
+      font-size: .95rem; font-weight: 600;
+      transition: all .15s ease; cursor: pointer; border: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-primary {
+      background: var(--indigo); color: #fff;
+    }
+    .btn-primary:hover { background: var(--violet); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(108,92,231,.35); }
+    .btn-outline {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border2);
+    }
+    .btn-outline:hover { border-color: var(--violet); color: var(--violet); transform: translateY(-1px); }
+    .btn-lg { padding: 14px 32px; font-size: 1rem; }
+    .gh-icon { width: 18px; height: 18px; fill: currentColor; }
+
+    /* ─── Nav ─────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(12,11,20,.85);
+      backdrop-filter: blur(16px) saturate(1.5);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 24px;
+      height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; height: 100%; padding: 8px 0;
+    }
+    .nav-logo img { height: 32px; width: auto; object-fit: contain; }
+    .nav-wordmark {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1.1rem; font-weight: 900; letter-spacing: -.03em;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-links {
+      display: flex; list-style: none; gap: 4px;
+    }
+    .nav-links a {
+      font-size: .9rem; color: var(--muted); font-weight: 500;
+      padding: 6px 14px; border-radius: 6px;
+      transition: all .15s ease;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .nav-links a[aria-current="page"] { color: var(--indigo); }
+    .nav-cta { display: flex; align-items: center; gap: 8px; }
+    @media (max-width: 768px) { .nav-links { display: none; } }
+
+    /* ─── Hero ────────────────────────────────────────────────────────── */
+    .hero {
+      padding-top: 64px;
+      position: relative; overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; pointer-events: none;
+    }
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      top: -20%; left: 50%; transform: translateX(-50%);
+      width: 700px; height: 500px;
+      background: radial-gradient(ellipse,
+        rgba(108,92,231,.12) 0%,
+        transparent 65%);
+    }
+    .hero-inner {
+      position: relative; max-width: 820px; margin: 0 auto;
+      padding: 88px 24px 80px;
+      text-align: center;
+    }
+    .hero-eyebrow {
+      display: flex; align-items: center; gap: 10px;
+      justify-content: center; margin-bottom: 28px; flex-wrap: wrap;
+    }
+    .hero-icon {
+      font-size: 3rem; margin-bottom: 20px;
+      display: block; line-height: 1;
+    }
+    .hero-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 900; line-height: 1.1;
+      letter-spacing: -.03em; margin-bottom: 24px;
+    }
+    .hero-subtitle {
+      font-size: 1.15rem; color: var(--muted); line-height: 1.7;
+      margin-bottom: 36px; max-width: 660px; margin-left: auto; margin-right: auto;
+    }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    /* ─── Section headers ─────────────────────────────────────────────── */
+    .section-label {
+      font-size: .75rem; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--indigo); margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(1.6rem, 3.5vw, 2.5rem);
+      font-weight: 700; line-height: 1.2;
+      margin-bottom: 20px; letter-spacing: -.02em;
+    }
+    .section-sub {
+      font-size: 1rem; color: var(--muted); line-height: 1.7;
+      max-width: 620px;
+    }
+
+    /* ─── Reveal ──────────────────────────────────────────────────────── */
+    .reveal {
+      opacity: 0; transform: translateY(20px);
+      transition: opacity .55s ease, transform .55s ease;
+    }
+    .reveal.visible { opacity: 1; transform: none; }
+    .reveal-delay-1 { transition-delay: .1s; }
+    .reveal-delay-2 { transition-delay: .2s; }
+    .reveal-delay-3 { transition-delay: .3s; }
+
+    /* ─── Constraints ─────────────────────────────────────────────────── */
+    .constraints-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      margin-top: 40px;
+    }
+    .constraint-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 28px 24px;
+      position: relative; overflow: hidden;
+      transition: border-color .2s ease, transform .2s ease;
+    }
+    .constraint-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--indigo), var(--violet));
+    }
+    .constraint-card:hover {
+      border-color: rgba(108,92,231,.3); transform: translateY(-2px);
+    }
+    .constraint-num {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 2.2rem; font-weight: 900; letter-spacing: -.05em;
+      color: rgba(108,92,231,.15); line-height: 1; margin-bottom: 12px;
+    }
+    .constraint-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1rem; font-weight: 700; margin-bottom: 8px;
+    }
+    .constraint-body {
+      font-size: .85rem; color: var(--muted); line-height: 1.65;
+    }
+    .constraint-tag {
+      display: inline-block; margin-top: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .7rem; color: var(--indigo);
+      background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.2);
+      padding: 2px 8px; border-radius: 4px;
+    }
+
+    /* ─── Protocol Stack ──────────────────────────────────────────────── */
+    .stack-table-wrap {
+      margin-top: 40px; overflow-x: auto;
+      border-radius: var(--radius-lg); border: 1px solid var(--border);
+    }
+    .stack-table {
+      width: 100%; border-collapse: collapse; font-size: .88rem;
+    }
+    .stack-table thead th {
+      background: var(--surface); padding: 14px 20px;
+      text-align: left; font-size: .72rem; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    .stack-table tbody tr { border-bottom: 1px solid var(--border); }
+    .stack-table tbody tr:last-child { border-bottom: none; }
+    .stack-table tbody tr:hover { background: var(--surface); }
+    .stack-table tbody td { padding: 14px 20px; vertical-align: middle; }
+    .stack-table code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .78rem; background: rgba(108,92,231,.1);
+      padding: 2px 6px; border-radius: 4px;
+      color: var(--violet);
+    }
+    .stack-layer { font-weight: 600; }
+    .stack-standard { color: var(--teal); font-size: .85rem; }
+    .stack-note { color: var(--muted); font-size: .82rem; }
+
+    /* ─── Crates ──────────────────────────────────────────────────────── */
+    .crates-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+      margin-top: 40px;
+    }
+    .crate-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+      transition: border-color .2s ease, transform .2s ease;
+    }
+    .crate-card:hover { border-color: rgba(108,92,231,.3); transform: translateY(-2px); }
+    .crate-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem; font-weight: 600;
+      color: var(--indigo); margin-bottom: 8px;
+    }
+    .crate-desc { font-size: .8rem; color: var(--muted); line-height: 1.55; }
+
+    /* ─── Quick Start ─────────────────────────────────────────────────── */
+    .quickstart-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+      align-items: start; margin-top: 40px;
+    }
+    .qs-steps { display: flex; flex-direction: column; gap: 20px; }
+    .qs-step { display: flex; gap: 16px; align-items: flex-start; }
+    .qs-step-num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(108,92,231,.15); border: 1px solid rgba(108,92,231,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 800; color: var(--indigo);
+      flex-shrink: 0;
+    }
+    .qs-step-title { font-size: .95rem; font-weight: 700; margin-bottom: 4px; }
+    .qs-step-body { font-size: .85rem; color: var(--muted); line-height: 1.6; }
+    .qs-step-body code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .78rem; color: var(--violet);
+      background: rgba(108,92,231,.1); padding: 1px 5px; border-radius: 3px;
+    }
+    .code-block {
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: rgba(255,255,255,.03);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-dots { display: flex; gap: 6px; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-dot:nth-child(1) { background: #ff5f57; }
+    .code-dot:nth-child(2) { background: #febc2e; }
+    .code-dot:nth-child(3) { background: #28c840; }
+    .code-title {
+      font-size: .72rem; color: var(--faint);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .copy-btn {
+      font-size: .7rem; color: var(--faint); cursor: pointer;
+      padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+      background: none; font-family: 'DM Sans', sans-serif;
+      transition: all .15s ease;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--border2); }
+    .code-body { padding: 20px; overflow-x: auto; }
+    .code-body pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .82rem; line-height: 1.8; color: var(--text); white-space: pre;
+    }
+    .c  { color: var(--faint); }
+    .kw { color: var(--violet); }
+    .st { color: var(--teal); }
+    .fn { color: #60a5fa; }
+    .ty { color: #fbbf24; }
+
+    /* ─── Comparison ──────────────────────────────────────────────────── */
+    .compare-wrap {
+      margin-top: 40px; overflow-x: auto;
+      border-radius: var(--radius-lg); border: 1px solid var(--border);
+    }
+    .compare-table {
+      width: 100%; border-collapse: collapse; font-size: .88rem;
+    }
+    .compare-table thead tr { background: var(--surface); }
+    .compare-table thead th {
+      padding: 14px 20px; text-align: center;
+      font-size: .72rem; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    .compare-table thead th:first-child { text-align: left; }
+    .compare-table thead th.col-pap {
+      color: var(--indigo);
+      background: rgba(108,92,231,.05);
+      border-left: 1px solid rgba(108,92,231,.15);
+      border-right: 1px solid rgba(108,92,231,.15);
+    }
+    .compare-table tbody tr { border-bottom: 1px solid var(--border); }
+    .compare-table tbody tr:last-child { border-bottom: none; }
+    .compare-table tbody tr:hover { background: rgba(255,255,255,.015); }
+    .compare-table tbody td {
+      padding: 13px 20px; text-align: center; vertical-align: middle;
+    }
+    .compare-table tbody td:first-child { text-align: left; font-weight: 600; }
+    .compare-table tbody td.col-pap {
+      background: rgba(108,92,231,.04);
+      border-left: 1px solid rgba(108,92,231,.1);
+      border-right: 1px solid rgba(108,92,231,.1);
+    }
+    .yes { color: var(--teal); font-size: 1rem; }
+    .no  { color: var(--faint); font-size: 1rem; }
+    .partial { color: var(--amber); font-size: .8rem; font-weight: 600; }
+
+    /* ─── Examples ────────────────────────────────────────────────────── */
+    .examples-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+      margin-top: 40px;
+    }
+    .example-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 22px;
+      display: flex; flex-direction: column; gap: 10px;
+      transition: border-color .2s ease;
+    }
+    .example-card:hover { border-color: rgba(108,92,231,.3); }
+    .example-name { font-size: .95rem; font-weight: 700; }
+    .example-desc { font-size: .82rem; color: var(--muted); line-height: 1.6; }
+    .example-cmd {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .72rem; color: var(--teal);
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: 5px; padding: 7px 10px; margin-top: auto;
+    }
+
+    /* ─── CTA Banner ──────────────────────────────────────────────────── */
+    .cta-banner {
+      background: linear-gradient(135deg, rgba(108,92,231,.12), rgba(139,127,245,.07));
+      border: 1px solid rgba(108,92,231,.2);
+      border-radius: var(--radius-lg);
+      padding: 56px 40px; text-align: center;
+    }
+    .cta-banner h2 {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(1.5rem, 3vw, 2.2rem);
+      font-weight: 700; margin-bottom: 12px; letter-spacing: -.02em;
+    }
+    .cta-banner p { color: var(--muted); margin-bottom: 28px; font-size: .95rem; }
+    .cta-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    /* ─── Footer ──────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0 28px;
+    }
+    .footer-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; flex-wrap: wrap;
+    }
+    .footer-logo {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1rem; font-weight: 900; letter-spacing: -.02em;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+    .footer-links a { font-size: .85rem; color: var(--muted); transition: color .15s ease; }
+    .footer-links a:hover { color: var(--text); }
+    .footer-copy { font-size: .8rem; color: var(--faint); }
+
+    @media (max-width: 1024px) {
+      .crates-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .constraints-grid { grid-template-columns: 1fr; }
+      .quickstart-grid { grid-template-columns: 1fr; }
+      .examples-grid { grid-template-columns: 1fr; }
+      .crates-grid { grid-template-columns: repeat(2, 1fr); }
+      .footer-inner { flex-direction: column; gap: 16px; }
+      .cta-banner { padding: 40px 24px; }
+    }
+    @media (max-width: 480px) {
+      .crates-grid { grid-template-columns: 1fr; }
+      .hero-actions { flex-direction: column; }
+      .hero-actions .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── NAV ─────────────────────────────────────────────────────────── -->
+<nav aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo" aria-label="Baur Software">
+      <img src="https://www.baursoftware.com/wp-content/uploads/2025/11/cropped-Artboard-1.png" alt="Baur Software logo" />
+      <span class="nav-wordmark">Baur Software</span>
+    </a>
+    <ul class="nav-links" role="list">
+      <li><a href="index.html">Papillion</a></li>
+      <li><a href="crystalis.html">Crystalis</a></li>
+      <li><a href="pap.html" aria-current="page">PAP</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
+        <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── HERO ─────────────────────────────────────────────────────────── -->
+<section class="hero" aria-label="Introduction">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-inner">
+    <div class="hero-eyebrow">
+      <span class="badge">Open Protocol</span>
+      <span class="badge badge-muted">v0.3.4</span>
+      <span class="badge badge-muted">MIT OR Apache-2.0</span>
+    </div>
+    <h1 class="hero-title">
+      <span class="gradient-text">Principal Agent Protocol.</span><br />
+      Agent trust, grounded in you.
+    </h1>
+    <p class="hero-subtitle">
+      An open specification for cryptographic trust between humans and AI agents.
+      Mandate-based delegation, ephemeral session DIDs, SD-JWT selective disclosure &#8212;
+      without central registries or token economies.
+    </p>
+    <div class="hero-actions">
+      <a href="https://baursoftware.com/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+        Read the Specification &#8594;
+      </a>
+      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline btn-lg" target="_blank" rel="noopener">
+        <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── FIVE CONSTRAINTS ──────────────────────────────────────────── -->
+<section id="constraints" class="section" aria-labelledby="constraints-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Protocol Design</div>
+      <h2 class="section-title" id="constraints-heading">
+        Five invariants.<br />
+        <span class="gradient-text">Enforced by the protocol.</span>
+      </h2>
+      <p class="section-sub">
+        PAP is defined by five non-negotiable design constraints. They&#8217;re not features you can configure &#8212;
+        they&#8217;re structural properties of every compliant implementation.
+      </p>
+    </div>
+    <div class="constraints-grid">
+      <div class="constraint-card reveal reveal-delay-1">
+        <div class="constraint-num">01</div>
+        <div class="constraint-title">Human principal as root of trust</div>
+        <p class="constraint-body">Every trust chain anchors to a human-controlled hardware key via WebAuthn&#47;FIDO2. No platform, orchestrator, or agent stands above the principal. Delegation flows down, never up.</p>
+        <span class="constraint-tag">WebAuthn &#183; FIDO2 &#183; hardware-bound</span>
+      </div>
+      <div class="constraint-card reveal reveal-delay-2">
+        <div class="constraint-num">02</div>
+        <div class="constraint-title">Mandate-scoped delegation with TTL</div>
+        <p class="constraint-body">Agents operate under cryptographically-signed Mandates specifying exact scope, constraints, and a hard TTL. An agent cannot act beyond what was signed &#8212; and the mandate expires automatically.</p>
+        <span class="constraint-tag">JWT &#183; scope &#183; TTL-bound</span>
+      </div>
+      <div class="constraint-card reveal reveal-delay-1">
+        <div class="constraint-num">03</div>
+        <div class="constraint-title">Ephemeral session DIDs</div>
+        <p class="constraint-body">Every agent session uses a fresh DID:key identity unlinked to the principal. Sessions cannot be correlated across interactions. There is no persistent agent fingerprint.</p>
+        <span class="constraint-tag">DID:key &#183; Ed25519 &#183; per-session</span>
+      </div>
+      <div class="constraint-card reveal reveal-delay-2">
+        <div class="constraint-num">04</div>
+        <div class="constraint-title">Context minimization via SD-JWT</div>
+        <p class="constraint-body">Agents receive only the claims they need to do their job, selectively disclosed via SD-JWT. Papillion decides what to share. No agent ever sees the full principal profile.</p>
+        <span class="constraint-tag">SD-JWT &#183; selective disclosure &#183; VC</span>
+      </div>
+      <div class="constraint-card reveal reveal-delay-1" style="grid-column: 1 / -1;">
+        <div class="constraint-num">05</div>
+        <div class="constraint-title">Co-signed receipts with property references only</div>
+        <p class="constraint-body">After every session, a receipt records property <em>names</em> that were disclosed &#8212; never values. The receipt is co-signed by both the principal session key and the agent. It proves something happened, not what was contained. No platform can build a behavioral profile from receipts alone.</p>
+        <span class="constraint-tag">co-signed &#183; property-names-only &#183; verifiable</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── PROTOCOL STACK ─────────────────────────────────────────────── -->
+<section id="stack" class="section" aria-labelledby="stack-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Implementation</div>
+      <h2 class="section-title" id="stack-heading">No novel cryptography.</h2>
+      <p class="section-sub">
+        PAP is composed entirely from established standards. Nothing invented, nothing proprietary.
+        Every layer has a well-understood security model and existing tooling.
+      </p>
+    </div>
+    <div class="stack-table-wrap reveal reveal-delay-1">
+      <table class="stack-table" aria-label="Protocol stack">
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Standard</th>
+            <th>Role in PAP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="stack-layer">Trust Root</td>
+            <td class="stack-standard">WebAuthn&#47;FIDO2</td>
+            <td class="stack-note">Hardware-bound principal identity. Signs the initial Mandate chain.</td>
+          </tr>
+          <tr>
+            <td class="stack-layer">Identity</td>
+            <td class="stack-standard">DID:key (Ed25519)</td>
+            <td class="stack-note">Ephemeral session identities. Derived fresh per session, verifiable without a registry.</td>
+          </tr>
+          <tr>
+            <td class="stack-layer">Authorization</td>
+            <td class="stack-standard">JWT &#43; custom Mandate schema</td>
+            <td class="stack-note">Signed delegation with scope, constraints, TTL. Chain-verifiable from principal to agent.</td>
+          </tr>
+          <tr>
+            <td class="stack-layer">Selective Disclosure</td>
+            <td class="stack-standard">SD-JWT &#47; W3C VC</td>
+            <td class="stack-note">Agents receive only the claims they need. Principal controls disclosure at issuance time.</td>
+          </tr>
+          <tr>
+            <td class="stack-layer">Service Advertisement</td>
+            <td class="stack-standard">JSON-LD &#43; Schema.org</td>
+            <td class="stack-note">Agents advertise capabilities as signed JSON-LD service documents. Verifiable before contact.</td>
+          </tr>
+          <tr>
+            <td class="stack-layer">Transport</td>
+            <td class="stack-standard">HTTP&#47;TLS, WebSocket</td>
+            <td class="stack-note">Standard transport. PAP is transport-agnostic; TLS handles channel confidentiality.</td>
+          </tr>
+          <tr>
+            <td class="stack-layer">Federation</td>
+            <td class="stack-standard">PAP Federation Protocol</td>
+            <td class="stack-note">Peer node discovery and cross-registry capability lookup. Implemented in <code>pap-federation</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── CRATES ────────────────────────────────────────────────────── -->
+<section id="crates" class="section" aria-labelledby="crates-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Rust Reference Implementation</div>
+      <h2 class="section-title" id="crates-heading">Multi-crate monorepo.</h2>
+      <p class="section-sub">
+        The reference implementation lives in <code style="font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--violet);background:rgba(108,92,231,.1);padding:2px 6px;border-radius:4px;">crates/</code> &#8212;
+        eight focused crates with clear boundaries. Use only what you need.
+      </p>
+    </div>
+    <div class="crates-grid">
+      <div class="crate-card reveal reveal-delay-1">
+        <div class="crate-name">pap-core</div>
+        <p class="crate-desc">Mandate engine, session lifecycle, trust chain validation. The protocol heart.</p>
+      </div>
+      <div class="crate-card reveal reveal-delay-2">
+        <div class="crate-name">pap-did</div>
+        <p class="crate-desc">DID:key generation, resolution, and document handling. Ed25519 ephemeral identities.</p>
+      </div>
+      <div class="crate-card reveal reveal-delay-1">
+        <div class="crate-name">pap-credential</div>
+        <p class="crate-desc">SD-JWT and W3C VC issuance, verification, and selective disclosure.</p>
+      </div>
+      <div class="crate-card reveal reveal-delay-2">
+        <div class="crate-name">pap-transport</div>
+        <p class="crate-desc">HTTP and WebSocket transport layers. Async, pluggable, TLS-aware.</p>
+      </div>
+      <div class="crate-card reveal reveal-delay-1">
+        <div class="crate-name">pap-federation</div>
+        <p class="crate-desc">Node discovery and peer federation protocol. Powers Crystalis federation.</p>
+      </div>
+      <div class="crate-card reveal reveal-delay-2">
+        <div class="crate-name">pap-marketplace</div>
+        <p class="crate-desc">Agent registry, capability advertisement parsing and indexing.</p>
+      </div>
+      <div class="crate-card reveal reveal-delay-1">
+        <div class="crate-name">pap-webauthn</div>
+        <p class="crate-desc">WebAuthn credential binding, attestation, and principal key derivation.</p>
+      </div>
+      <div class="crate-card reveal reveal-delay-2">
+        <div class="crate-name">pap-python</div>
+        <p class="crate-desc">PyO3 bindings. Full protocol surface available from Python.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── QUICK START ────────────────────────────────────────────────── -->
+<section id="start" class="section" aria-labelledby="start-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Quick Start</div>
+      <h2 class="section-title" id="start-heading">Add PAP to your agent.</h2>
+      <p class="section-sub">
+        Three steps to a mandate-authenticated agent session. See
+        <a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener" style="color:var(--indigo);">the integration guide</a>
+        for the full walkthrough.
+      </p>
+    </div>
+    <div class="quickstart-grid">
+      <div class="qs-steps">
+        <div class="qs-step reveal reveal-delay-1">
+          <div class="qs-step-num">1</div>
+          <div>
+            <div class="qs-step-title">Add the dependency</div>
+            <p class="qs-step-body">Add <code>pap-core</code> to your <code>Cargo.toml</code>. For Python, <code>pip install pap</code>.</p>
+          </div>
+        </div>
+        <div class="qs-step reveal reveal-delay-2">
+          <div class="qs-step-num">2</div>
+          <div>
+            <div class="qs-step-title">Bind your principal</div>
+            <p class="qs-step-body">Load or register a WebAuthn credential. This becomes your hardware-bound root of trust.</p>
+          </div>
+        </div>
+        <div class="qs-step reveal reveal-delay-3">
+          <div class="qs-step-num">3</div>
+          <div>
+            <div class="qs-step-title">Issue a mandate and open a session</div>
+            <p class="qs-step-body">Sign a Mandate with the scope, constraints, and TTL your agent needs. Open the session. The protocol handles ephemeral DID rotation, selective disclosure, and receipt generation automatically.</p>
+          </div>
+        </div>
+      </div>
+      <div class="code-block reveal reveal-delay-1">
+        <div class="code-header">
+          <div class="code-dots">
+            <div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div>
+          </div>
+          <span class="code-title">src/main.rs</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <div class="code-body">
+          <pre><span class="kw">use</span> pap_core::{<span class="ty">Principal</span>, <span class="ty">Mandate</span>, <span class="ty">Session</span>};
+<span class="kw">use</span> std::time::<span class="ty">Duration</span>;
+
+<span class="c">// 1. Load your hardware-bound principal</span>
+<span class="kw">let</span> principal = <span class="ty">Principal</span>::from_webauthn(&amp;credential)?;
+
+<span class="c">// 2. Define exactly what the agent may do</span>
+<span class="kw">let</span> mandate = <span class="ty">Mandate</span>::builder()
+    .scope([<span class="st">"travel:search"</span>, <span class="st">"travel:book"</span>])
+    .constraint(<span class="st">"maxBudget"</span>, <span class="fn">1500.0</span>)
+    .constraint(<span class="st">"destination"</span>, <span class="st">"TYO"</span>)
+    .ttl(<span class="ty">Duration</span>::from_secs(<span class="fn">1800</span>))
+    .build()?;
+
+<span class="c">// 3. Open an ephemeral session</span>
+<span class="c">//    DID rotation, SD-JWT, receipt — all automatic</span>
+<span class="kw">let</span> session = principal.authorize(mandate)?;
+<span class="kw">let</span> result  = session.run(&amp;flight_agent).await?;</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── EXAMPLES ──────────────────────────────────────────────────── -->
+<section id="examples" class="section" aria-labelledby="examples-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Working Examples</div>
+      <h2 class="section-title" id="examples-heading">Full protocol surface coverage.</h2>
+      <p class="section-sub">
+        Six runnable examples in <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--violet);background:rgba(108,92,231,.1);padding:2px 6px;border-radius:4px;">examples/</code>
+        demonstrating every major protocol feature.
+      </p>
+    </div>
+    <div class="examples-grid">
+      <div class="example-card reveal reveal-delay-1">
+        <div class="example-name">search</div>
+        <p class="example-desc">Minimal capability advertisement, mandate issuance, and single-agent query. The hello-world of PAP.</p>
+        <div class="example-cmd">cargo run --example search</div>
+      </div>
+      <div class="example-card reveal reveal-delay-2">
+        <div class="example-name">travel-booking</div>
+        <p class="example-desc">Multi-constraint mandate: destination, budget, cabin class, maxStops. Shows receipt generation.</p>
+        <div class="example-cmd">cargo run --example travel-booking</div>
+      </div>
+      <div class="example-card reveal reveal-delay-3">
+        <div class="example-name">delegation-chain</div>
+        <p class="example-desc">Orchestrator delegates to downstream agents with narrowed scope. Validates the full trust chain.</p>
+        <div class="example-cmd">cargo run --example delegation-chain</div>
+      </div>
+      <div class="example-card reveal reveal-delay-1">
+        <div class="example-name">payment</div>
+        <p class="example-desc">Payment action with value constraints and two-phase confirm. Co-signed receipt with amount as property name only.</p>
+        <div class="example-cmd">cargo run --example payment</div>
+      </div>
+      <div class="example-card reveal reveal-delay-2">
+        <div class="example-name">networked</div>
+        <p class="example-desc">Two agents on separate nodes. Exercises the transport layer, registry lookup, and DID resolution.</p>
+        <div class="example-cmd">cargo run --example networked</div>
+      </div>
+      <div class="example-card reveal reveal-delay-3">
+        <div class="example-name">federated</div>
+        <p class="example-desc">Cross-registry capability discovery via the PAP federation protocol. Two Crystalis nodes talking.</p>
+        <div class="example-cmd">cargo run --example federated</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── COMPARISON ────────────────────────────────────────────────── -->
+<section id="compare" class="section" aria-labelledby="compare-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Alternatives</div>
+      <h2 class="section-title" id="compare-heading">
+        How PAP is different.
+      </h2>
+      <p class="section-sub">
+        Existing agent protocols focus on model-to-tool communication. PAP focuses on the
+        human-to-agent trust relationship &#8212; a different problem.
+      </p>
+    </div>
+    <div class="compare-wrap reveal reveal-delay-1">
+      <table class="compare-table" aria-label="Protocol comparison">
+        <thead>
+          <tr>
+            <th>Property</th>
+            <th class="col-pap">PAP</th>
+            <th>A2A (Google)</th>
+            <th>MCP (Anthropic)</th>
+            <th>ACP (IBM)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Human as root of trust</td>
+            <td class="col-pap"><span class="yes">&#10003;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+          </tr>
+          <tr>
+            <td>Cryptographic mandate scope</td>
+            <td class="col-pap"><span class="yes">&#10003;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="partial">policy</span></td>
+          </tr>
+          <tr>
+            <td>Ephemeral session DIDs</td>
+            <td class="col-pap"><span class="yes">&#10003;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+          </tr>
+          <tr>
+            <td>SD-JWT selective disclosure</td>
+            <td class="col-pap"><span class="yes">&#10003;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="partial">optional</span></td>
+          </tr>
+          <tr>
+            <td>Co-signed receipts</td>
+            <td class="col-pap"><span class="yes">&#10003;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="no">&#8212;</span></td>
+          </tr>
+          <tr>
+            <td>No central registry required</td>
+            <td class="col-pap"><span class="yes">&#10003;</span></td>
+            <td><span class="no">&#8212;</span></td>
+            <td><span class="yes">&#10003;</span></td>
+            <td><span class="no">&#8212;</span></td>
+          </tr>
+          <tr>
+            <td>Open specification</td>
+            <td class="col-pap"><span class="yes">&#10003;</span></td>
+            <td><span class="yes">&#10003;</span></td>
+            <td><span class="yes">&#10003;</span></td>
+            <td><span class="partial">partial</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── CTA ──────────────────────────────────────────────────────── -->
+<section class="section" aria-label="Get started with PAP">
+  <div class="container">
+    <div class="cta-banner reveal">
+      <div class="section-label">Get started</div>
+      <h2>Read the spec. Build with it.</h2>
+      <p>RFC-style specification, Rust reference implementation, Python bindings. MIT OR Apache-2.0.</p>
+      <div class="cta-actions">
+        <a href="https://baursoftware.com/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+          Read the Specification &#8594;
+        </a>
+        <a href="https://github.com/Baur-Software/pap" class="btn btn-outline btn-lg" target="_blank" rel="noopener">
+          <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          Star on GitHub
+        </a>
+        <a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" class="btn btn-outline btn-lg" target="_blank" rel="noopener">
+          Contributing &#8594;
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FOOTER ────────────────────────────────────────────────────── -->
+<footer aria-label="Site footer">
+  <div class="container">
+    <div class="footer-inner">
+      <span class="footer-logo">Principal Agent Protocol</span>
+      <div class="footer-links">
+        <a href="index.html">Papillion</a>
+        <a href="crystalis.html">Crystalis</a>
+        <a href="https://baursoftware.com/pap" target="_blank" rel="noopener">Specification</a>
+        <a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://baursoftware.com" target="_blank" rel="noopener">Baur Software</a>
+      </div>
+      <span class="footer-copy">MIT OR Apache-2.0 &#183; Baur Software</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  function copyCode(btn) {
+    const pre = btn.closest('.code-block').querySelector('pre');
+    navigator.clipboard.writeText(pre.innerText).then(() => {
+      btn.textContent = 'Copied!';
+      btn.style.color = 'var(--teal)';
+      btn.style.borderColor = 'var(--teal)';
+      setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+    });
+  }
+</script>
+</body>
+</html>
