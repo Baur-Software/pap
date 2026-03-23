@@ -5,6 +5,25 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-03-23
+
+### Added
+
+- **registry**: Hostable federated PAP registry — standalone Axum web service that other agents and Papillion instances can discover and query; supports both SQLite (single-node) and Postgres (clustered) backends
+- **registry**: Leptos 0.8 SSR frontend — server-side-rendered agent search UI with live FTS5 results, DID display, capability badges, and pagination; single-crate architecture (no separate WASM build step)
+- **registry**: Federation protocol — push/pull peer sync, `/api/peers` management endpoints, and configurable sync intervals for multi-node mesh
+- **registry**: Admin REST API — token-authenticated endpoints for agent CRUD, peer management, and status; all mutations require `Authorization: Bearer <token>`
+- **registry**: Ed25519 signature verification on agent registration — rejects unsigned or tampered `AgentAdvertisement` payloads at ingest
+- **registry**: Docker-based test execution — `docker buildx build --target test` stage runs the full test suite at build time; CI `test-registry` job added to GitHub Actions
+- **registry**: Comprehensive test suite — 34 tests covering SQLite CRUD layer, auth middleware, and all admin route handlers via `tower::ServiceExt::oneshot()`
+- **papillion**: Local federated registry settings — configure endpoint and sync interval for the Papillion-embedded registry directly in the Settings panel
+
+### Fixed
+
+- **registry**: SQL injection hardened — FTS5 `MATCH` queries escape special characters (`"`, `*`, `^`) before interpolation (I8 regression test included)
+- **registry**: Cert fingerprint exposed in `/api/status` — removed from public response; available only to authenticated admin callers
+- **registry**: Docker workspace sedding anchored — regex now anchors to member path strings to avoid stripping `workspace.dependencies` lines
+
 ## [0.4.0] - 2026-03-22
 
 ### Added

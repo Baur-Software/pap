@@ -1,0 +1,10 @@
+target/
+apps/papillion/frontend/target/
+apps/papillion/frontend/dist/
+**/*.o
+**/*.so
+.git/
+.gitignore
+e2e/
+docs/
+*.md
