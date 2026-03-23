@@ -1,3 +1,12 @@
+## [0.4.1.2] - 2026-03-23
+
+### Changed
+- **docs**: Improve README messaging with problem-centric framing — reframe "The Problem" around trust boundaries, clarify MCP spec limitations, add concrete attack scenarios
+- **docs**: Sync README with shipped language bindings (Python, JS/TS, C, C#, Java) and Crystalis registry
+- **docs**: Add comprehensive Language Bindings table covering all 6 supported languages
+- **docs**: Expand "Why This Matters" section with three-part structure (Problem → Structural Ceiling → PAP's Answer)
+- **docs**: Rename comparison table to "How PAP Differs" and reframe columns around protocol-enforced disclosure
+
 ## [0.4.1.1] - 2026-03-23
 
 ### Changed
