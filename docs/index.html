@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PAP — Principal Agent Protocol</title>
+  <title>Baur Software - Zero Trust AI. Open Source Forever.</title>
   <meta name="description" content="A principal-first, zero-trust agent negotiation protocol for the open web. Your agents should work for you, not for the platform." />
   <meta property="og:title" content="PAP — Principal Agent Protocol" />
   <meta property="og:description" content="A principal-first, zero-trust agent negotiation protocol. No new cryptography. No token economy. No central registry." />
@@ -822,6 +822,132 @@
       .hero-actions .btn { width: 100%; justify-content: center; }
       .nav-logo img { height: 32px; }
     }
+
+    /* ─── Use Cases ───────────────────────────────────────────────────── */
+    .use-cases-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;
+      margin-top: 48px;
+    }
+    .use-case-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 28px;
+      transition: border-color .2s ease, transform .2s ease;
+    }
+    .use-case-card:hover {
+      border-color: var(--border2); transform: translateY(-2px);
+    }
+    .use-case-icon {
+      font-size: 1.5rem; margin-bottom: 16px; display: block;
+    }
+    .use-case-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1.05rem; font-weight: 700; margin-bottom: 10px;
+      letter-spacing: -.015em;
+    }
+    .use-case-desc {
+      font-size: .88rem; color: var(--muted); line-height: 1.7;
+    }
+
+    /* ─── Artifacts ───────────────────────────────────────────────────── */
+    .artifact-scenario {
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(108,92,231,.08); border: 1px solid rgba(108,92,231,.2);
+      border-radius: var(--radius); padding: 14px 20px;
+      margin-top: 40px; flex-wrap: wrap;
+    }
+    .artifact-scenario-label {
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--indigo); white-space: nowrap;
+    }
+    .artifact-scenario-text {
+      font-size: .9rem; color: var(--text); font-style: italic;
+    }
+    .artifacts-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+      margin-top: 24px;
+    }
+    .artifact-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .artifact-card-header {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .artifact-badge {
+      font-size: .65rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; padding: 3px 8px;
+      border-radius: 4px; white-space: nowrap;
+    }
+    .artifact-badge-teal {
+      background: rgba(46,196,160,.12); color: var(--teal);
+    }
+    .artifact-badge-indigo {
+      background: rgba(108,92,231,.12); color: var(--indigo);
+    }
+    .artifact-badge-gold {
+      background: rgba(245,158,11,.1); color: var(--amber);
+    }
+    .artifact-card-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: .95rem; font-weight: 700; letter-spacing: -.01em;
+    }
+    .artifact-card-desc {
+      font-size: .82rem; color: var(--muted); line-height: 1.65;
+    }
+    .artifact-footnote {
+      margin-top: 32px; padding: 20px 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      font-size: .88rem; color: var(--muted); line-height: 1.7;
+      text-align: center; max-width: 780px;
+      margin-left: auto; margin-right: auto;
+    }
+    .artifact-footnote strong { color: var(--text); }
+
+    /* ─── JSON-LD Syntax Colors ───────────────────────────────────────── */
+    .j-key   { color: #a78bfa; }
+    .j-str   { color: #86efac; }
+    .j-num   { color: #fbbf24; }
+    .j-brace { color: var(--muted); }
+    .j-punct { color: var(--faint); }
+    .j-dim   { color: var(--faint); font-style: italic; }
+
+    /* ─── Copy button ─────────────────────────────────────────────────── */
+    .copy-btn {
+      font-size: .7rem; color: var(--faint); cursor: pointer;
+      padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+      background: none; font-family: 'DM Sans', sans-serif;
+      transition: all .15s ease;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--border2); }
+
+    /* ─── Footer simple ───────────────────────────────────────────────── */
+    .footer-simple {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 24px; flex-wrap: wrap; padding-bottom: 32px;
+      border-bottom: 1px solid var(--border); margin-bottom: 24px;
+    }
+    .footer-brand {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .footer-icon { width: 32px; height: 32px; object-fit: contain; }
+    .footer-nav {
+      display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    }
+    .footer-nav a {
+      font-size: .88rem; color: var(--muted); transition: color .15s ease;
+    }
+    .footer-nav a:hover { color: var(--text); }
+
+    @media (max-width: 1024px) {
+      .artifacts-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .use-cases-grid { grid-template-columns: 1fr; }
+      .footer-simple { flex-direction: column; align-items: flex-start; }
+    }
+
   </style>
 </head>
 <body>
@@ -829,12 +955,13 @@
 <!-- ─── NAV ─────────────────────────────────────────────────────────── -->
 <nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="#" class="nav-logo" aria-label="PAP — Principal Agent Protocol">
-      <img src="assets/images/papillion-icon.png" alt="Papillion butterfly logo" />
-      <span class="nav-wordmark">PAP</span>
+    <a href="#" class="nav-logo" aria-label="Zero Trust AI">
+      <img src="https://www.baursoftware.com/wp-content/uploads/2025/11/cropped-Artboard-1.png" alt="Baur Software logo" />
+      <span class="nav-wordmark">Baur Software</span>
     </a>
     <ul class="nav-links" role="list">
-      <li><a href="index.html" aria-current="page">Papillion</a></li>
+      <li><a href="index.html" aria-current="page">
+        Papillion</a></li>
       <li><a href="crystalis.html">Crystalis</a></li>
       <li><a href="#how">PAP</a></li>
     </ul>
@@ -867,10 +994,8 @@
           assistant.
         </h1>
         <p class="hero-subtitle">
-          Search the web, book travel, manage tasks, answer questions —
-          Papillion learns you over time, but that profile lives on your device,
-          secured by your hardware key. No platform ever sees it.
-          Agent sessions are ephemeral. Your data, your rules, enforced by cryptography.
+          Search the web. Find the best flight and book travel. Delegate tasks, answer questions, be free.
+          Papillion learns who you are, listens to what you need, and only does what you ask. If you can imagine it Papillion can build it.
         </p>
         <div class="hero-actions">
           <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
@@ -903,10 +1028,10 @@
         stay on your device. Your identity never leaves your hardware.
       </p>
       <ul class="product-features">
-        <li>On-device inference — your prompts stay local</li>
-        <li>Local profile, secured by your hardware key</li>
-        <li>Agent sessions are ephemeral — no platform archive</li>
-        <li>Built-in registry — two Papillions can find each other locally</li>
+        <li>Your data is owned by you. Papillion takes your data back from platforms.</li>
+        <li>Secured on devices by your PAP key. Delegate access through shared disclosure.</li>
+        <li>Agent sessions are ephemeral. No tracking, no marketing telemetry.</li>
+        <li>Built-in registry. Two Papillions can find each other locally</li>
       </ul>
       <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary" target="_blank" rel="noopener">Download →</a>
     </div>
@@ -931,759 +1056,240 @@
 
 <div class="divider"></div>
 
-<!-- ─── HOW IT WORKS ─────────────────────────────────────────────────── -->
+<!-- ─── USE CASES ──────────────────────────────────────────────── -->
+<section id="use-cases" class="section" aria-labelledby="use-cases-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">What you can do</div>
+      <h2 class="section-title" id="use-cases-heading">
+        Tell Papillion what you need.<br />
+        <span class="gradient-text">It handles the rest.</span>
+      </h2>
+    </div>
+    <div class="use-cases-grid">
+      <div class="use-case-card reveal reveal-delay-1">
+        <span class="use-case-icon" aria-hidden="true">&#9992;&#65039;</span>
+        <h3 class="use-case-title">Travel</h3>
+        <p class="use-case-desc">Book a round-trip to Tokyo, under $1,500, direct only. Papillion finds capable agents, negotiates constraints, and presents options &#8212; you approve before anything books.</p>
+      </div>
+      <div class="use-case-card reveal reveal-delay-2">
+        <span class="use-case-icon" aria-hidden="true">&#128218;</span>
+        <h3 class="use-case-title">Research</h3>
+        <p class="use-case-desc">Catch me up on quantum computing papers from last week. Papillion fetches sources, reads them, and writes your briefing. Sources are cited, not hallucinated.</p>
+      </div>
+      <div class="use-case-card reveal reveal-delay-3">
+        <span class="use-case-icon" aria-hidden="true">&#128203;</span>
+        <h3 class="use-case-title">Tasks</h3>
+        <p class="use-case-desc">Send the invoice to Sarah, then follow up in two days if she hasn&#8217;t replied. Papillion tracks state across sessions and never oversteps the scope you set.</p>
+      </div>
+      <div class="use-case-card reveal reveal-delay-4">
+        <span class="use-case-icon" aria-hidden="true">&#128274;</span>
+        <h3 class="use-case-title">Local &amp; private</h3>
+        <p class="use-case-desc">Two Papillions on the same network can find each other without a cloud registry. Built-in local registry, no signup, no server, no data leaving your machine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── PROTOCOL ARTIFACTS ────────────────────────────────────── -->
 <section id="how" class="section" aria-labelledby="how-heading">
   <div class="container">
-    <div class="constraints-header">
-      <div class="reveal">
-        <div class="section-label">The Design</div>
-        <h2 class="section-title" id="how-heading">
-          Five constraints.<br />
-          <span class="gradient-text">Enforced by the protocol.</span>
-        </h2>
-        <p class="section-sub">
-          PAP makes privacy the protocol's problem — not the developer's.
-          The human principal is the root of trust. Every agent carries a
-          cryptographically verifiable mandate from that root.
-        </p>
-        <div style="margin-top: 24px; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); font-size: .85rem; color: var(--muted); line-height: 1.8;">
-          <div style="color: var(--text); font-weight: 600; margin-bottom: 8px;">No new cryptography. No token economy. No central registry.</div>
-          Built entirely on existing, standardized primitives maintained by bodies without platform capture.
-        </div>
-      </div>
-      <div class="trust-visual reveal reveal-delay-1" style="height: fit-content;">
-        <div class="trust-visual-title">Mandate Decay States</div>
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(34,197,94,.06); border: 1px solid rgba(34,197,94,.2); border-radius: 8px;">
-            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px rgba(34,197,94,.6);"></div>
-            <div>
-              <div style="font-size:.8rem; font-weight:700; color:var(--green);">Active</div>
-              <div style="font-size:.72rem; color:var(--muted);">Full scope. All operations permitted.</div>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(245,158,11,.05); border: 1px solid rgba(245,158,11,.2); border-radius: 8px;">
-            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--amber);"></div>
-            <div>
-              <div style="font-size:.8rem; font-weight:700; color:var(--amber);">Degraded</div>
-              <div style="font-size:.72rem; color:var(--muted);">Partial scope. Write operations restricted.</div>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(99,102,241,.05); border: 1px solid rgba(99,102,241,.15); border-radius: 8px;">
-            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--indigo);"></div>
-            <div>
-              <div style="font-size:.8rem; font-weight:700; color:var(--indigo);">ReadOnly</div>
-              <div style="font-size:.72rem; color:var(--muted);">No mutations. Queries only.</div>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(239,68,68,.04); border: 1px solid rgba(239,68,68,.15); border-radius: 8px;">
-            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--red);"></div>
-            <div>
-              <div style="font-size:.8rem; font-weight:700; color:var(--red);">Suspended</div>
-              <div style="font-size:.72rem; color:var(--muted);">All operations rejected. Non-renewal = revocation.</div>
-            </div>
-          </div>
-        </div>
-        <div class="handshake-label">
-          // Principal sees degradation.<br/>
-          // Not a surprise cutoff.
-        </div>
-      </div>
-    </div>
-
-    <div class="constraints-grid">
-      <div class="constraint-card reveal">
-        <div class="constraint-num">01</div>
-        <div class="constraint-title">Deny by Default</div>
-        <div class="constraint-body">An agent can only do what its mandate explicitly permits. No scope means no action. Absence of permission is not an error — it is the correct response.</div>
-      </div>
-      <div class="constraint-card reveal reveal-delay-1">
-        <div class="constraint-num">02</div>
-        <div class="constraint-title">Delegation Cannot Exceed Parent</div>
-        <div class="constraint-body">A child mandate's scope is bounded by its parent's scope. A child's TTL cannot exceed its parent's TTL. This is verified cryptographically, not by policy.</div>
-      </div>
-      <div class="constraint-card reveal reveal-delay-2">
-        <div class="constraint-num">03</div>
-        <div class="constraint-title">Session DIDs Are Ephemeral</div>
-        <div class="constraint-body">Both agents generate single-use keypairs for each session. These are not linked to any persistent identity. When the session closes, the keys are discarded.</div>
-      </div>
-      <div class="constraint-card reveal reveal-delay-3">
-        <div class="constraint-num">04</div>
-        <div class="constraint-title">Receipts: Property References Only</div>
-        <div class="constraint-body">A transaction receipt records <em>what types</em> of data were disclosed — never the values. Both principals can audit the record. No platform stores it.</div>
-      </div>
-      <div class="constraint-card constraint-card-full reveal">
-        <div class="constraint-num">05</div>
-        <div class="constraint-title">Non-Renewal Is Revocation</div>
-        <div class="constraint-body" style="max-width: 640px;">A mandate that isn't renewed doesn't need a revocation notice. It degrades progressively — Active → Degraded → ReadOnly → Suspended — and then it stops. The principal sees the degradation, not a surprise cutoff. Revocation is the natural state; continuation requires active consent.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── TRUST HIERARCHY ───────────────────────────────────────────────── -->
-<section class="section" aria-labelledby="trust-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 48px;">
-      <div class="section-label">Trust Model</div>
-      <h2 class="section-title" id="trust-heading">
-        Trust hierarchy<br />
-        <span class="gradient-text">from human to agent</span>
+    <div class="reveal">
+      <div class="section-label">How it works</div>
+      <h2 class="section-title" id="how-heading">
+        Every interaction produces<br />
+        <span class="gradient-text">three verifiable artifacts.</span>
       </h2>
       <p class="section-sub">
-        Every agent chain starts with a human principal. Trust flows down through
-        cryptographically signed mandates, each more restrictive than its parent.
+        When you ask Papillion to book a flight to Tokyo, here&#8217;s what the protocol actually produces.
+        No behavioral data leaves your machine &#8212; only these cryptographically-scoped artifacts,
+        generated and verified locally.
       </p>
     </div>
 
-    <div style="max-width: 700px; margin: 0 auto;">
-      <div class="trust-visual reveal reveal-delay-1" aria-label="Trust hierarchy diagram">
-        <div class="trust-visual-title">Trust Hierarchy</div>
+    <div class="artifact-scenario reveal reveal-delay-1">
+      <span class="artifact-scenario-label">Scenario</span>
+      <span class="artifact-scenario-text">&#8220;Book a round-trip to Tokyo, economy class, under $1,500, no stops.&#8221;</span>
+    </div>
 
-        <div class="trust-node">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-root"></div>
-            <div class="trust-connector"></div>
-          </div>
-          <div>
-            <div class="trust-label">Human Principal</div>
-            <div class="trust-desc">Device-bound keypair · Root of trust · WebAuthn</div>
-          </div>
+    <div class="artifacts-grid reveal reveal-delay-2">
+
+      <!-- Artifact 1: Capability Advertisement -->
+      <div class="artifact-card">
+        <div class="artifact-card-header">
+          <span class="artifact-badge artifact-badge-teal">1 of 3</span>
+          <span class="artifact-card-title">Capability Advertisement</span>
         </div>
-
-        <div class="trust-node trust-indent-1">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-orch"></div>
-            <div class="trust-connector"></div>
+        <p class="artifact-card-desc">The travel agent publishes a signed JSON-LD ad describing what it can do and what constraints it accepts. Papillion verifies the signature before contacting it.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots">
+              <div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div>
+            </div>
+            <span class="code-title">capability-ad.jsonld</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
           </div>
-          <div>
-            <div class="trust-label">Orchestrator Agent</div>
-            <div class="trust-desc">Root mandate · Full principal context · Signs sub-mandates</div>
+          <div class="code-body">
+            <pre><span class="j-brace">{</span>
+  <span class="j-key">"@context"</span><span class="j-punct">:</span> <span class="j-str">"https://schema.org"</span><span class="j-punct">,</span>
+  <span class="j-key">"@type"</span><span class="j-punct">:</span> <span class="j-str">"Service"</span><span class="j-punct">,</span>
+  <span class="j-key">"name"</span><span class="j-punct">:</span> <span class="j-str">"FlightSearch"</span><span class="j-punct">,</span>
+  <span class="j-key">"provider"</span><span class="j-punct">:</span> <span class="j-brace">{</span>
+    <span class="j-key">"@type"</span><span class="j-punct">:</span> <span class="j-str">"Organization"</span><span class="j-punct">,</span>
+    <span class="j-key">"did"</span><span class="j-punct">:</span> <span class="j-dim">"did:key:z6Mkf7..."</span>
+  <span class="j-brace">}</span><span class="j-punct">,</span>
+  <span class="j-key">"serviceType"</span><span class="j-punct">:</span> <span class="j-str">"travel:flightsearch"</span><span class="j-punct">,</span>
+  <span class="j-key">"acceptedAction"</span><span class="j-punct">:</span> <span class="j-brace">[</span>
+    <span class="j-str">"travel:search"</span><span class="j-punct">,</span>
+    <span class="j-str">"travel:book"</span>
+  <span class="j-brace">]</span><span class="j-punct">,</span>
+  <span class="j-key">"constraintSchema"</span><span class="j-punct">:</span> <span class="j-brace">{</span>
+    <span class="j-key">"maxBudget"</span><span class="j-punct">:</span> <span class="j-str">"xsd:decimal"</span><span class="j-punct">,</span>
+    <span class="j-key">"destination"</span><span class="j-punct">:</span> <span class="j-str">"schema:Place"</span><span class="j-punct">,</span>
+    <span class="j-key">"cabin"</span><span class="j-punct">:</span> <span class="j-str">"xsd:string"</span><span class="j-punct">,</span>
+    <span class="j-key">"maxStops"</span><span class="j-punct">:</span> <span class="j-str">"xsd:integer"</span>
+  <span class="j-brace">}</span><span class="j-punct">,</span>
+  <span class="j-key">"proof"</span><span class="j-punct">:</span> <span class="j-brace">{</span>
+    <span class="j-key">"type"</span><span class="j-punct">:</span> <span class="j-str">"Ed25519Signature2020"</span><span class="j-punct">,</span>
+    <span class="j-key">"verificationMethod"</span><span class="j-punct">:</span>
+      <span class="j-dim">"did:key:z6Mkf7...#key-1"</span>
+  <span class="j-brace">}</span>
+<span class="j-brace">}</span></pre>
           </div>
-        </div>
-
-        <div class="trust-node trust-indent-2">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-down"></div>
-            <div class="trust-connector"></div>
-          </div>
-          <div>
-            <div class="trust-label">Downstream Agents</div>
-            <div class="trust-desc">Scoped task mandates · TTL bounded · Scope ≤ parent</div>
-          </div>
-        </div>
-
-        <div class="trust-node trust-indent-3">
-          <div class="trust-node-line">
-            <div class="trust-dot trust-dot-market"></div>
-          </div>
-          <div>
-            <div class="trust-label" style="color:var(--muted)">Marketplace Agents</div>
-            <div class="trust-desc">Own principal chains · Federated discovery</div>
-          </div>
-        </div>
-
-        <div class="handshake-label">
-          <div>// Transactions are handshakes between</div>
-          <div>// two mandate chains, not two agents.</div>
-          <div style="margin-top:8px; color: var(--teal)">5 constraints · enforced at protocol level</div>
         </div>
       </div>
+
+      <!-- Artifact 2: Mandate -->
+      <div class="artifact-card">
+        <div class="artifact-card-header">
+          <span class="artifact-badge artifact-badge-indigo">2 of 3</span>
+          <span class="artifact-card-title">Mandate</span>
+        </div>
+        <p class="artifact-card-desc">You authorize exactly what the agent is allowed to do, for how long, with what constraints. Signed by your hardware key. The agent cannot exceed scope or TTL.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots">
+              <div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div>
+            </div>
+            <span class="code-title">mandate.jsonld</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="code-body">
+            <pre><span class="j-brace">{</span>
+  <span class="j-key">"@context"</span><span class="j-punct">:</span> <span class="j-str">"https://papillon.app/ns/v1"</span><span class="j-punct">,</span>
+  <span class="j-key">"@type"</span><span class="j-punct">:</span> <span class="j-str">"Mandate"</span><span class="j-punct">,</span>
+  <span class="j-key">"issuer"</span><span class="j-punct">:</span> <span class="j-dim">"did:key:z6MkYou..."</span><span class="j-punct">,</span>
+  <span class="j-key">"subject"</span><span class="j-punct">:</span>
+    <span class="j-dim">"did:key:z6MkEphemeral..."</span><span class="j-punct">,</span>
+  <span class="j-key">"scope"</span><span class="j-punct">:</span> <span class="j-brace">[</span>
+    <span class="j-str">"travel:search"</span><span class="j-punct">,</span>
+    <span class="j-str">"travel:book"</span>
+  <span class="j-brace">]</span><span class="j-punct">,</span>
+  <span class="j-key">"constraints"</span><span class="j-punct">:</span> <span class="j-brace">{</span>
+    <span class="j-key">"maxBudget"</span><span class="j-punct">:</span> <span class="j-num">1500</span><span class="j-punct">,</span>
+    <span class="j-key">"currency"</span><span class="j-punct">:</span> <span class="j-str">"USD"</span><span class="j-punct">,</span>
+    <span class="j-key">"destination"</span><span class="j-punct">:</span> <span class="j-str">"TYO"</span><span class="j-punct">,</span>
+    <span class="j-key">"cabin"</span><span class="j-punct">:</span> <span class="j-str">"economy"</span><span class="j-punct">,</span>
+    <span class="j-key">"maxStops"</span><span class="j-punct">:</span> <span class="j-num">0</span>
+  <span class="j-brace">}</span><span class="j-punct">,</span>
+  <span class="j-key">"issuedAt"</span><span class="j-punct">:</span>
+    <span class="j-str">"2026-03-23T14:00:00Z"</span><span class="j-punct">,</span>
+  <span class="j-key">"expiresAt"</span><span class="j-punct">:</span>
+    <span class="j-str">"2026-03-23T14:30:00Z"</span><span class="j-punct">,</span>
+  <span class="j-key">"proof"</span><span class="j-punct">:</span> <span class="j-brace">{</span>
+    <span class="j-key">"type"</span><span class="j-punct">:</span> <span class="j-str">"Ed25519Signature2020"</span><span class="j-punct">,</span>
+    <span class="j-key">"verificationMethod"</span><span class="j-punct">:</span>
+      <span class="j-dim">"did:key:z6MkYou...#key-1"</span>
+  <span class="j-brace">}</span>
+<span class="j-brace">}</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Artifact 3: Receipt -->
+      <div class="artifact-card">
+        <div class="artifact-card-header">
+          <span class="artifact-badge artifact-badge-gold">3 of 3</span>
+          <span class="artifact-card-title">Receipt</span>
+        </div>
+        <p class="artifact-card-desc">After the session, a co-signed receipt records property names only &#8212; never values. No platform can build a profile from this. It&#8217;s proof something happened, not what.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots">
+              <div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div>
+            </div>
+            <span class="code-title">receipt.jsonld</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="code-body">
+            <pre><span class="j-brace">{</span>
+  <span class="j-key">"@context"</span><span class="j-punct">:</span>
+    <span class="j-str">"https://papillon.app/ns/v1"</span><span class="j-punct">,</span>
+  <span class="j-key">"@type"</span><span class="j-punct">:</span> <span class="j-str">"Receipt"</span><span class="j-punct">,</span>
+  <span class="j-key">"mandateRef"</span><span class="j-punct">:</span>
+    <span class="j-dim">"urn:uuid:3e4b1c..."</span><span class="j-punct">,</span>
+  <span class="j-key">"sessionDID"</span><span class="j-punct">:</span>
+    <span class="j-dim">"did:key:z6MkEphemeral..."</span><span class="j-punct">,</span>
+  <span class="j-key">"actions"</span><span class="j-punct">:</span> <span class="j-brace">[</span>
+    <span class="j-brace">{</span>
+      <span class="j-key">"type"</span><span class="j-punct">:</span> <span class="j-str">"travel:search"</span><span class="j-punct">,</span>
+      <span class="j-key">"disclosedFields"</span><span class="j-punct">:</span> <span class="j-brace">[</span>
+        <span class="j-str">"destination"</span><span class="j-punct">,</span>
+        <span class="j-str">"cabin"</span><span class="j-punct">,</span>
+        <span class="j-str">"maxStops"</span>
+      <span class="j-brace">]</span>
+    <span class="j-brace">}</span><span class="j-punct">,</span>
+    <span class="j-brace">{</span>
+      <span class="j-key">"type"</span><span class="j-punct">:</span> <span class="j-str">"travel:book"</span><span class="j-punct">,</span>
+      <span class="j-key">"disclosedFields"</span><span class="j-punct">:</span> <span class="j-brace">[</span>
+        <span class="j-str">"destination"</span><span class="j-punct">,</span>
+        <span class="j-str">"cabin"</span>
+      <span class="j-brace">]</span>
+    <span class="j-brace">}</span>
+  <span class="j-brace">]</span><span class="j-punct">,</span>
+  <span class="j-key">"timestamp"</span><span class="j-punct">:</span>
+    <span class="j-str">"2026-03-23T14:12:44Z"</span><span class="j-punct">,</span>
+  <span class="j-key">"principalSignature"</span><span class="j-punct">:</span>
+    <span class="j-dim">"z3K8mN..."</span><span class="j-punct">,</span>
+  <span class="j-key">"agentSignature"</span><span class="j-punct">:</span>
+    <span class="j-dim">"zPq4rL..."</span>
+<span class="j-brace">}</span></pre>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end .artifacts-grid -->
+
+    <div class="artifact-footnote reveal">
+      <strong>Property names, not values.</strong> The receipt discloses <em>what fields were used</em> &#8212;
+      never <em>what they contained</em>. Your flight price, your name, your payment method: all stay local,
+      co-signed between you and the agent, unreadable by any platform.
+      <br /><br />
+      <a href="https://baursoftware.com/pap" target="_blank" rel="noopener" style="color:var(--indigo);">Read the PAP specification &#8594;</a>
     </div>
+
   </div>
 </section>
 
 <div class="divider"></div>
 
-<!-- ─── PROTOCOL STACK ────────────────────────────────────────────────── -->
-<section id="stack" class="section" aria-labelledby="stack-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 48px;">
-      <div class="section-label">Protocol Stack</div>
-      <h2 class="section-title" id="stack-heading">
-        Built on standards<br />
-        <span class="gradient-text">that already exist</span>
-      </h2>
-      <p class="section-sub">
-        PAP uses no novel cryptographic primitives. Every layer is an existing,
-        ratified specification maintained by bodies without platform capture.
-      </p>
-    </div>
-
-    <div class="stack-table-wrap reveal reveal-delay-1">
-      <table class="stack-table" role="table" aria-label="Protocol stack standards">
-        <thead>
-          <tr>
-            <th scope="col">Layer</th>
-            <th scope="col">Standard</th>
-            <th scope="col">Purpose</th>
-            <th scope="col">Body</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><span class="stack-tag">Identity</span></td>
-            <td><a href="https://www.w3.org/TR/webauthn-3/" target="_blank" rel="noopener">WebAuthn</a></td>
-            <td>Device-bound keypair generation. Root of trust anchored to hardware.</td>
-            <td>W3C</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag">Identity</span></td>
-            <td><a href="https://www.w3.org/TR/did-core/" target="_blank" rel="noopener">W3C DIDs</a></td>
-            <td>Decentralized identifiers — <code>did:key</code>. No central registry.</td>
-            <td>W3C</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag">Credentials</span></td>
-            <td><a href="https://www.w3.org/TR/vc-data-model-2.0/" target="_blank" rel="noopener">W3C VC 2.0</a></td>
-            <td>Verifiable Credential envelope wrapping mandate payloads.</td>
-            <td>W3C</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag">Disclosure</span></td>
-            <td><a href="https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-08.txt" target="_blank" rel="noopener">SD-JWT</a></td>
-            <td>Selective claim disclosure. Share 2 of 4 claims. Over-disclosure structurally prevented.</td>
-            <td>IETF</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag stack-tag-teal">Vocabulary</span></td>
-            <td><a href="https://schema.org" target="_blank" rel="noopener">Schema.org</a></td>
-            <td>Capability and action type references. Describes <em>what</em>. Protocol governs <em>under what terms</em>.</td>
-            <td>schema.org</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag stack-tag-teal">Data</span></td>
-            <td><a href="https://www.w3.org/TR/json-ld11/" target="_blank" rel="noopener">JSON-LD</a></td>
-            <td>Structured linked data for agent advertisements. No vocabulary extensions.</td>
-            <td>W3C</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag stack-tag-teal">Privacy</span></td>
-            <td><a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">OHTTP (RFC 9458)</a></td>
-            <td>Oblivious HTTP. Cloud request unlinkability. The relay cannot correlate requests.</td>
-            <td>IETF</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag">Transport</span></td>
-            <td>HTTP/JSON</td>
-            <td>6-phase session handshake: Token → DID Exchange → Disclosure → Execution → Receipt → Close.</td>
-            <td>IETF</td>
-          </tr>
-          <tr>
-            <td><span class="stack-tag">Federation</span></td>
-            <td>HTTP/JSON</td>
-            <td>Cross-registry sync, announce, and peer discovery. Content-hash dedup.</td>
-            <td>—</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── CRATES ────────────────────────────────────────────────────────── -->
-<section class="section-sm" aria-labelledby="crates-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 40px;">
-      <div class="section-label">Crate Structure</div>
-      <h2 class="section-title" id="crates-heading">
-        <span class="gradient-text">9 focused crates.</span><br />
-        Rust core + Python SDK.
-      </h2>
-    </div>
-    <div class="crates-grid">
-      <div class="crate-card reveal">
-        <div class="crate-name">pap-did</div>
-        <div class="crate-desc">Ed25519 keypair generation, <code>did:key</code> derivation, DID documents, ephemeral session keys.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-1">
-        <div class="crate-name">pap-core</div>
-        <div class="crate-desc">Mandate issuance, hierarchical delegation, scope enforcement, session state machine, receipts, decay states.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-2">
-        <div class="crate-name">pap-credential</div>
-        <div class="crate-desc">W3C Verifiable Credential envelope, SD-JWT selective disclosure. Over-disclosure structurally prevented.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-3">
-        <div class="crate-name">pap-marketplace</div>
-        <div class="crate-desc">Signed JSON-LD agent advertisements, marketplace registry, disclosure-based filtering.</div>
-      </div>
-      <div class="crate-card reveal">
-        <div class="crate-name">pap-proto</div>
-        <div class="crate-desc">Protocol message types and typed envelope serialization for the 6-phase handshake.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-1">
-        <div class="crate-name">pap-transport</div>
-        <div class="crate-desc">Axum HTTP client/server driving the 6-phase session handshake. A thin wrapper — doesn't change the trust model.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-2">
-        <div class="crate-name">pap-federation</div>
-        <div class="crate-desc">Federated registry with cross-registry sync, announce, peer discovery, and content-hash dedup.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-3">
-        <div class="crate-name">pap-webauthn</div>
-        <div class="crate-desc">WebAuthn signer abstraction with software fallback and mock authenticator for testing.</div>
-      </div>
-      <div class="crate-card reveal" style="border-color: rgba(245,158,11,.3);">
-        <div class="crate-name" style="color: var(--amber);">pap-python</div>
-        <div class="crate-desc">Python bindings via PyO3. <code>pip install pap</code>. Full mandate chain, delegation, and verification from Python.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── PYTHON SDK ───────────────────────────────────────────────────── -->
-<section id="python" class="section" aria-labelledby="python-heading">
-  <div class="container">
-    <div class="python-grid">
-      <div class="reveal">
-        <div class="section-label" style="color: var(--amber);">Python SDK</div>
-        <h2 class="section-title" id="python-heading">
-          Full protocol.<br />
-          <span class="gradient-text">From Python.</span>
-        </h2>
-        <p class="section-sub">
-          PyO3 bindings expose the entire Rust core to Python. Generate keypairs,
-          issue mandates, delegate to sub-agents, and verify chains &mdash; all with
-          native Python types and exceptions.
-        </p>
-        <div class="python-install">
-          <span class="prompt">$</span>
-          <span class="cmd">pip install pap</span>
-        </div>
-        <ul class="python-features" style="margin-top: 28px;">
-          <li>PrincipalKeypair &amp; SessionKeypair with <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">did:key</code> derivation</li>
-          <li>Scope, DisclosureSet, and Mandate with full chain verification</li>
-          <li>Typed exceptions: PapSignatureError, PapScopeError, PapSessionError</li>
-          <li>Mixed keypair types in chain verification (principal + session)</li>
-          <li>Build from source with <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">maturin develop</code> &mdash; Rust 1.75+, Python 3.8+</li>
-        </ul>
-      </div>
-
-      <div class="code-block reveal reveal-delay-1">
-        <div class="code-header">
-          <div class="code-dots" aria-hidden="true">
-            <div class="code-dot"></div>
-            <div class="code-dot"></div>
-            <div class="code-dot"></div>
-          </div>
-          <div class="code-title">python</div>
-          <button class="code-copy" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-        </div>
-        <div class="code-body">
-<pre><span class="kw">from</span> pap <span class="kw">import</span> (
-    PrincipalKeypair, SessionKeypair,
-    Scope, ScopeAction, DisclosureSet,
-    Mandate, MandateChain,
-)
-
-<span class="c"># 1. Generate the principal's root keypair</span>
-principal = PrincipalKeypair.generate()
-<span class="fn">print</span>(principal.did())  <span class="c"># did:key:z6Mk...</span>
-
-<span class="c"># 2. Define what the agent is allowed to do</span>
-scope = Scope([ScopeAction(<span class="st">"schema:SearchAction"</span>)])
-ds = DisclosureSet.empty()
-
-<span class="c"># 3. Issue and sign a root mandate</span>
-mandate = Mandate.issue_root(
-    principal.did(), <span class="st">"did:key:zagent"</span>,
-    scope, ds, ttl
-)
-mandate.sign(principal)
-
-<span class="c"># 4. Delegate to a sub-agent (scope &lt;= parent)</span>
-agent_key = SessionKeypair.generate()
-child = mandate.delegate(
-    agent_key.did(), scope, ds, ttl
-)
-child.sign_with_session_key(agent_key)
-
-<span class="c"># 5. Verify the full chain</span>
-chain = MandateChain(mandate)
-chain.push(child)
-chain.verify_chain([principal, agent_key])</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── EXAMPLES ─────────────────────────────────────────────────────── -->
-<section id="examples" class="section" aria-labelledby="examples-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 48px;">
-      <div class="section-label">Working Examples</div>
-      <h2 class="section-title" id="examples-heading">
-        Eight scenarios.<br />
-        <span class="gradient-text">Clone and run today.</span>
-      </h2>
-      <p class="section-sub">
-        Each example exercises protocol features the others do not.
-        Proving the trust model works in code, not prose.
-      </p>
-    </div>
-
-    <div class="examples-grid">
-
-      <div class="example-card reveal">
-        <div class="example-icon" aria-hidden="true">🔍</div>
-        <div class="example-name">Zero-Disclosure Search</div>
-        <div class="example-desc">A web search with zero personal disclosure. 12 protocol steps from keypair generation to co-signed receipt.</div>
-        <ul class="example-features">
-          <li>Full 12-step handshake</li>
-          <li>Zero claims disclosed to search agent</li>
-          <li>Co-signed receipt, property refs only</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin search</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-1">
-        <div class="example-icon" aria-hidden="true">✈️</div>
-        <div class="example-name">Selective Disclosure</div>
-        <div class="example-desc">A flight booking requiring personal context. SD-JWT: 2 of 4 claims revealed. Email + phone cryptographically withheld.</div>
-        <ul class="example-features">
-          <li>SD-JWT: name + nationality only</li>
-          <li>Marketplace filters by satisfiable disclosure</li>
-          <li>Receipt: "Alice Baur" never appears</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin travel-booking</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-2">
-        <div class="example-icon" aria-hidden="true">🔗</div>
-        <div class="example-name">Delegation Chain</div>
-        <div class="example-desc">4-level mandate hierarchy. Scope narrows and TTL shrinks at each level. Three rejected delegations prove the constraints hold.</div>
-        <ul class="example-features">
-          <li>Human → Orchestrator → Trip Planner → Booking</li>
-          <li>3 rejected over-scope delegations</li>
-          <li>Decay state transitions demonstrated</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin delegation-chain</div>
-      </div>
-
-      <div class="example-card reveal">
-        <div class="example-icon" aria-hidden="true">💳</div>
-        <div class="example-name">Payment Extensions</div>
-        <div class="example-desc">Chaumian ecash payment (vendor cannot identify payer), value-capped auto-approval, and continuity tokens with principal-controlled TTL.</div>
-        <ul class="example-features">
-          <li>Ecash: vendor cannot identify payer</li>
-          <li>Auto-approval: $12.99 below $20 threshold</li>
-          <li>Continuity tokens: delete to sever</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin payment</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-1">
-        <div class="example-icon" aria-hidden="true">🌐</div>
-        <div class="example-name">HTTP Transport</div>
-        <div class="example-desc">Same protocol invariants as the in-memory search, but over HTTP. Single binary, Axum server on a random port, 6-phase handshake.</div>
-        <ul class="example-features">
-          <li>Full 6-phase handshake over HTTP</li>
-          <li>Transport is a thin wrapper</li>
-          <li>Trust model unchanged by transport</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin networked-search</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-2">
-        <div class="example-icon" aria-hidden="true">🔭</div>
-        <div class="example-name">Federated Discovery</div>
-        <div class="example-desc">Two independent registries on different ports. Federation sync makes agents from Registry A discoverable through Registry B.</div>
-        <ul class="example-features">
-          <li>Two registries, two ports</li>
-          <li>Push announcements across registries</li>
-          <li>Content-hash dedup prevents duplicates</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin federated-discovery</div>
-      </div>
-
-      <div class="example-card reveal">
-        <div class="example-icon" aria-hidden="true">🔑</div>
-        <div class="example-name">WebAuthn Ceremony</div>
-        <div class="example-desc">Device-bound key generation using the WebAuthn API. Mock authenticator for testing. The production path for principal keypairs.</div>
-        <ul class="example-features">
-          <li>WebAuthn-based key generation</li>
-          <li>Mock authenticator for CI/testing</li>
-          <li>Software fallback signer</li>
-        </ul>
-        <div class="example-cmd">cargo run --bin webauthn-ceremony</div>
-      </div>
-
-      <div class="example-card reveal reveal-delay-1" style="grid-column: 1 / -1; max-width: 560px;">
-        <div style="display: flex; gap: 16px; align-items: flex-start;">
-          <div class="example-icon" aria-hidden="true">🐳</div>
-          <div style="flex: 1;">
-            <div class="example-name">Local AI Assistant</div>
-            <div class="example-desc" style="margin-bottom: 12px;">Docker Compose: Ollama + SearXNG + PAP marketplace + providers + orchestrator + receipt viewer. Your prompts never leave your machine.</div>
-            <ul class="example-features">
-              <li>Ollama local LLM (pull mistral)</li>
-              <li>SearXNG private search — no Google</li>
-              <li>External tool use via PAP full handshake</li>
-              <li>Receipt viewer: see exactly what was disclosed</li>
-            </ul>
-          </div>
-        </div>
-        <div class="example-cmd" style="margin-top: 12px;">cd examples/local-ai-assistant &amp;&amp; docker compose up -d</div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── COMPARISON ────────────────────────────────────────────────────── -->
-<section id="compare" class="section" aria-labelledby="compare-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 48px;">
-      <div class="section-label">Comparison</div>
-      <h2 class="section-title" id="compare-heading">
-        What PAP replaces<br />
-        <span class="gradient-text">and why</span>
-      </h2>
-    </div>
-
-    <div class="compare-table-wrap reveal reveal-delay-1">
-      <table class="compare-table" role="table" aria-label="Protocol comparison">
-        <thead>
-          <tr>
-            <th scope="col" style="text-align:left">Concern</th>
-            <th scope="col">A2A</th>
-            <th scope="col">MCP</th>
-            <th scope="col">ACP</th>
-            <th class="col-pap" scope="col">PAP ✓</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Context minimization</td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">SD-JWT per interaction</span></td>
-          </tr>
-          <tr>
-            <td>Session ephemerality</td>
-            <td><span class="no">✗</span></td>
-            <td><span class="partial">Stateful</span></td>
-            <td><span class="partial">Optional</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">Ephemeral DIDs, keys discarded</span></td>
-          </tr>
-          <tr>
-            <td>Field-level disclosure</td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">SD-JWT selective claims</span></td>
-          </tr>
-          <tr>
-            <td>Cryptographic scope enforcement</td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">Mandate chain verification</span></td>
-          </tr>
-          <tr>
-            <td>Agent-to-agent negotiation</td>
-            <td><span class="yes">✓</span></td>
-            <td><span class="no">✗</span> <span style="font-size:.75rem;color:var(--faint);">(tool access)</span></td>
-            <td><span class="yes">✓</span></td>
-            <td class="col-pap"><span class="yes">✓</span></td>
-          </tr>
-          <tr>
-            <td>Privacy-preserving payment</td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">Ecash / Lightning proofs</span></td>
-          </tr>
-          <tr>
-            <td>Marketplace discovery</td>
-            <td><span class="partial">Agent Cards</span></td>
-            <td><span class="no">✗</span></td>
-            <td><span class="partial">HTTP</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">Federated, disclosure-filtered</span></td>
-          </tr>
-          <tr>
-            <td>Audit trail</td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td><span class="no">✗</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">Co-signed receipts</span></td>
-          </tr>
-          <tr>
-            <td>Principal control</td>
-            <td><span style="font-size:.8rem;color:var(--faint);">Platform</span></td>
-            <td><span style="font-size:.8rem;color:var(--faint);">User (stated)</span></td>
-            <td><span style="font-size:.8rem;color:var(--faint);">Enterprise</span></td>
-            <td class="col-pap"><span class="yes">✓</span> <span style="font-size:.75rem;color:var(--muted);">Cryptographic mandate</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── QUICK START ───────────────────────────────────────────────────── -->
-<section id="start" class="section" aria-labelledby="start-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 48px;">
-      <div class="section-label">Quick Start</div>
-      <h2 class="section-title" id="start-heading">
-        Clone, run,<br />
-        <span class="gradient-text">see it work.</span>
-      </h2>
-    </div>
-
-    <div class="quickstart-grid">
-      <!-- Steps -->
-      <div class="qs-steps reveal">
-        <div class="qs-step">
-          <div class="qs-step-num">1</div>
-          <div>
-            <div class="qs-step-title">Clone the repo</div>
-            <div class="qs-step-body">Requires Rust stable (1.75+). No external services, no API keys, no accounts.</div>
-          </div>
-        </div>
-        <div class="qs-step">
-          <div class="qs-step-num">2</div>
-          <div>
-            <div class="qs-step-title">Run the test suite</div>
-            <div class="qs-step-body">All protocol constraints are exercised in the test suite. Green across the board.</div>
-          </div>
-        </div>
-        <div class="qs-step">
-          <div class="qs-step-num">3</div>
-          <div>
-            <div class="qs-step-title">Run any example</div>
-            <div class="qs-step-body">Start with <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">search</code> for the simplest full handshake, or jump to <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">delegation-chain</code> for the trust hierarchy in action.</div>
-          </div>
-        </div>
-        <div class="qs-step">
-          <div class="qs-step-num">4</div>
-          <div>
-            <div class="qs-step-title">Run the local AI assistant</div>
-            <div class="qs-step-body">Docker Compose brings up the full stack: Ollama, SearXNG, PAP marketplace, providers, and a receipt viewer at <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--teal);">localhost:9090</code>.</div>
-          </div>
-        </div>
-        <div style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap;">
-          <a href="https://github.com/Baur-Software/pap" class="btn btn-primary" target="_blank" rel="noopener">
-            <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-            View on GitHub
-          </a>
-          <a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" class="btn btn-outline" target="_blank" rel="noopener">Contributing →</a>
-        </div>
-      </div>
-
-      <!-- Code block -->
-      <div class="code-block reveal reveal-delay-1">
-        <div class="code-header">
-          <div class="code-dots" aria-hidden="true">
-            <div class="code-dot"></div>
-            <div class="code-dot"></div>
-            <div class="code-dot"></div>
-          </div>
-          <div class="code-title">bash</div>
-          <button class="code-copy" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-        </div>
-        <div class="code-body">
-<pre><span class="c"># Clone the repository</span>
-git clone https://github.com/Baur-Software/pap.git
-cd pap
-
-<span class="c"># Run the full test suite</span>
-cargo test
-
-<span class="c"># Core protocol examples</span>
-<span class="fn">cargo run</span> --bin search          <span class="c"># Zero-disclosure search</span>
-<span class="fn">cargo run</span> --bin travel-booking  <span class="c"># SD-JWT selective disclosure</span>
-<span class="fn">cargo run</span> --bin delegation-chain <span class="c"># 4-level trust hierarchy</span>
-<span class="fn">cargo run</span> --bin payment         <span class="c"># Ecash + auto-approval</span>
-
-<span class="c"># Transport &amp; federation</span>
-<span class="fn">cargo run</span> --bin networked-search    <span class="c"># 6-phase HTTP handshake</span>
-<span class="fn">cargo run</span> --bin federated-discovery <span class="c"># Cross-registry federation</span>
-<span class="fn">cargo run</span> --bin webauthn-ceremony   <span class="c"># Device-bound keys</span>
-
-<span class="c"># Local AI assistant (Docker)</span>
-cd examples/local-ai-assistant
-docker compose up -d
-docker exec ollama ollama pull mistral
-<span class="c"># Ask a question — your prompt stays local</span>
-curl http://localhost:9010/ask \
-  -d '{"query":"What is the weather in Seattle?"}'
-<span class="c"># See exactly what was disclosed</span>
-curl http://localhost:9090/receipts</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── BLOG / RESOURCES ──────────────────────────────────────────────── -->
-<section class="section-sm" aria-labelledby="resources-heading">
-  <div class="container">
-    <div class="reveal" style="margin-bottom: 40px;">
-      <div class="section-label">Resources</div>
-      <h2 class="section-title" id="resources-heading">Go deeper</h2>
-    </div>
-    <div style="display: grid; grid-template-columns: repeat(2,1fr); gap: 20px;" class="reveal reveal-delay-1">
-      <a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease; border-color: rgba(99,102,241,.3);">
-        <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:10px;">Guide</div>
-        <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Add PAP to Your Existing Agent</div>
-        <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">18-minute integration tutorial. Wrap your REST API as a PAP provider, add client handshake to your orchestrator, register with a marketplace. Python + Rust examples.</div>
-      </a>
-      <a href="https://github.com/Baur-Software/pap/blob/main/crates/pap-python/README.md" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease; border-color: rgba(245,158,11,.3);">
-        <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:10px;">SDK</div>
-        <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Python SDK Documentation</div>
-        <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">PyO3 bindings reference. Keypair generation, mandate issuance, delegation, chain verification, and the full exception hierarchy.</div>
-      </a>
-      <a href="https://baursoftware.com/your-agent-works-for-a-platform-it-should-work-for-you/" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease;">
-        <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--indigo); margin-bottom:10px;">Blog</div>
-        <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Your Agent Works for a Platform. It Should Work for You.</div>
-        <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">Protocol introduction and code walkthrough. The trust model, the five constraints, and the implementation.</div>
-      </a>
-      <a href="https://baursoftware.com/show-me-the-agents-pap-in-practice/" target="_blank" rel="noopener" class="card" style="display:block; text-decoration:none; transition: all .2s ease;">
-        <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--indigo); margin-bottom:10px;">Blog</div>
-        <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:8px; line-height:1.4;">Show Me the Agents: PAP in Practice</div>
-        <div style="font-size:.82rem; color:var(--muted); line-height:1.6;">Real-world scenarios and docker-compose examples. Shopping, medical queries, B2B data rooms.</div>
-      </a>
-    </div>
-    <div style="text-align: center; margin-top: 20px;" class="reveal reveal-delay-2">
-      <a href="https://baursoftware.com/the-tollbooth-model-is-over/" target="_blank" rel="noopener" style="font-size:.88rem; color:var(--muted);">
-        Also: <span style="color:var(--indigo);">The Tollbooth Model Is Over</span> &mdash; Economic context for agent-driven internet
-      </a>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── CTA ──────────────────────────────────────────────────────────── -->
-<section class="section-sm">
+<!-- ─── CTA ────────────────────────────────────────────────────── -->
+<section class="section" aria-label="Download Papillion">
   <div class="container">
     <div class="cta-banner reveal">
-      <div class="badge" style="margin-bottom: 24px;">Open Source · MIT OR Apache-2.0</div>
-      <h2>The question isn't whether your<br />agents can talk to each other.</h2>
-      <p>The question is who they answer to. PAP gives you the tools to answer that question in code, not policy.</p>
+      <div class="section-label">Ready?</div>
+      <h2>Your agents. Your rules.</h2>
+      <p>Papillion is free, open source, and runs on macOS, Windows, and Linux.</p>
       <div class="cta-actions">
-        <a href="https://github.com/Baur-Software/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+        <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+          Download Papillion
+        </a>
+        <a href="https://github.com/Baur-Software/pap" class="btn btn-outline btn-lg" target="_blank" rel="noopener">
           <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
           Star on GitHub
         </a>
-        <a href="https://baursoftware.com/pap" class="btn btn-outline btn-lg" target="_blank" rel="noopener">Read the Spec →</a>
       </div>
     </div>
   </div>
@@ -1692,48 +1298,24 @@ curl http://localhost:9090/receipts</pre>
 <!-- ─── FOOTER ───────────────────────────────────────────────────────── -->
 <footer aria-label="Site footer">
   <div class="container">
-    <div class="footer-grid">
-      <div>
-        <span class="footer-logo">PAP</span>
-        <p class="footer-tagline">Principal Agent Protocol. A principal-first, zero-trust agent negotiation protocol for the open web.</p>
-        <div class="footer-license">Licensed MIT OR Apache-2.0</div>
+    <div class="footer-simple">
+      <div class="footer-brand">
+        <img src="assets/images/papillion-icon.png" alt="Papillion" class="footer-icon" />
+        <span class="footer-logo">Papillion</span>
       </div>
-      <div>
-        <div class="footer-col-title">Protocol</div>
-        <ul class="footer-links">
-          <li><a href="#problem">The Problem</a></li>
-          <li><a href="#how">How It Works</a></li>
-          <li><a href="#stack">Protocol Stack</a></li>
-          <li><a href="#compare">Comparison</a></li>
-        </ul>
-      </div>
-      <div>
-        <div class="footer-col-title">Code</div>
-        <ul class="footer-links">
-          <li><a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub Repository</a></li>
-          <li><a href="#python">Python SDK</a></li>
-          <li><a href="#examples">Examples</a></li>
-          <li><a href="#start">Quick Start</a></li>
-          <li><a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener">Integration Guide</a></li>
-          <li><a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a></li>
-        </ul>
-      </div>
-      <div>
-        <div class="footer-col-title">Reading</div>
-        <ul class="footer-links">
-          <li><a href="https://baursoftware.com/pap" target="_blank" rel="noopener">Specification</a></li>
-          <li><a href="https://github.com/Baur-Software/pap/blob/main/crates/pap-python/README.md" target="_blank" rel="noopener">Python SDK Docs</a></li>
-          <li><a href="https://baursoftware.com/your-agent-works-for-a-platform-it-should-work-for-you/" target="_blank" rel="noopener">Introduction Post</a></li>
-          <li><a href="https://baursoftware.com/show-me-the-agents-pap-in-practice/" target="_blank" rel="noopener">PAP in Practice</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <div>© 2026 Baur Software. Built with PAP's own principles in mind.</div>
-      <div class="footer-bottom-links">
+      <nav class="footer-nav" aria-label="Footer navigation">
+        <a href="index.html">Papillion</a>
+        <a href="crystalis.html">Crystalis</a>
+        <a href="https://baursoftware.com/pap" target="_blank" rel="noopener">PAP Protocol</a>
         <a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub</a>
         <a href="https://baursoftware.com" target="_blank" rel="noopener">Baur Software</a>
         <a href="https://github.com/Baur-Software/pap/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      </nav>
+    </div>
+    <div class="footer-bottom">
+      <div>&#169; 2026 Baur Software. Licensed MIT OR Apache-2.0.</div>
+      <div class="footer-bottom-links">
+        <a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
       </div>
     </div>
   </div>
