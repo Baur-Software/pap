@@ -5,7 +5,7 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.5] - 2026-03-23
+## [0.4.1] - 2026-03-23
 
 ### Added
 
@@ -23,6 +23,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **registry**: SQL injection hardened — FTS5 `MATCH` queries escape special characters (`"`, `*`, `^`) before interpolation (I8 regression test included)
 - **registry**: Cert fingerprint exposed in `/api/status` — removed from public response; available only to authenticated admin callers
 - **registry**: Docker workspace sedding anchored — regex now anchors to member path strings to avoid stripping `workspace.dependencies` lines
+
+## [0.4.0] - 2026-03-22
+
+### Added
+
+- **pap-c**: New `crates/pap-c` crate — stable C FFI layer (cdylib + staticlib) exposing all PAP primitives via opaque handles, thread-local last-error storage, and a `pap_mandate_sync_decay_state` helper that automatically handles the Active→ReadOnly TTL-expiry jump
+- **pap-wasm**: New `crates/pap-wasm` crate — wasm-bindgen WebAssembly bindings (`@pap/sdk` npm package) for JavaScript/TypeScript consumers; transport excluded (no reqwest in WASM)
+- **bindings/cpp**: Header-only C++ RAII wrapper (`pap.hpp`) with move semantics, non-copyable handles, and CMake integration
+- **bindings/csharp**: .NET 8 C# bindings via P/Invoke (`[LibraryImport]`), `SafeHandle`-based RAII wrappers, and `PapException` with `DecayState` enum matching the ABI constants
+- **bindings/java**: JNA-based Java bindings (`io.pap.*`) with `AutoCloseable` handles, `DecayState`/`SessionState` enums, and 14 JUnit 5 tests covering all decay-state correctness scenarios
+- **pap-c**: `pap_disclosure_entry_new` now validates null array pointers with non-zero counts (defensive hardening matching sibling functions)
+- **Dockerfile.test**: Docker test harness using `docker buildx` with cargo registry cache mounts for fast iterative CI
+
+### Fixed
+
+- **bindings/java**: `Session.id()` was incorrectly calling `pap_session_free` on the string pointer; corrected to `pap_string_free`
+- **bindings/java**: `Session.close()` now calls `pap_session_close` before `pap_session_free` — ensures proper protocol teardown before memory is released
+- **bindings/csharp**: `DecayState` and `SessionState` properties now guard against `-1` sentinel before casting the FFI integer to an enum value — prevents invalid casts from garbage return values
+- **bindings/cpp**: `decay_state()`, `compute_decay_state()`, and `state()` now validate the upper bound (`> PAP_DECAY_SUSPENDED` / `> PAP_SESSION_CLOSED`) as well as the lower bound — catches out-of-range enum values from future ABI versions
+- **pap-core**: `compute_decay_state` now short-circuits immediately for the `Suspended` terminal state — previously, a decayed-but-suspended mandate could incorrectly re-enter `ReadOnly` after a TTL check
+- **pap-c**: `pap_scope_permits` now guards the null check before calling `CStr::from_ptr`, eliminating a potential undefined-behaviour window where a null-dereference could occur inside the match arm
+- **pap-c**: `pap_disclosure_entry_new` validates per-element null pointers in the permitted/required/excluded arrays before dereferencing — previously only the array pointer itself was checked
+- **pap-wasm**: Removed conflicting `use` imports that shadowed local `#[wasm_bindgen]` struct definitions, fixing an `E0255` compiler error that broke WASM builds when compiled without the Docker `--exclude pap-wasm` flag
+
+## [0.3.5] - 2026-03-21
+
+### Added
+
+- **docs**: Papillion marketing site (`docs/papillion/`) — consumer-facing landing page with interactive 6-step purchase demo showing AI operating within user-defined rules (budget, vendor preferences, approval thresholds)
+- **docs**: Dual GitHub Pages architecture — root landing page (`docs/index.html`) routes to Papillion (consumer) and PAP (developer) sub-sites
+- **docs**: PAP technical spec site relocated to `docs/pap/` with cross-links to Papillion for non-developer visitors
+- **docs**: Multi-language SDK roadmap section on PAP site — Rust (shipping), Python/TypeScript/Go/Swift/Kotlin planned
+
+### Changed
+
+- **docs**: PAP site language aligned with Papillion framing — leads with "why" (control, visibility, safety) before "how" (cryptographic protocol), adds "Not a developer?" CTA linking to Papillion
+- **docs**: README simplified — removed example binary references (examples deleted in 0.2.0), added Papillion link for interactive demos
+- **ci**: Release workflow model download switched to HuggingFace hub for reliability
+
+### Removed
+
+- **docs**: Direct API call examples removed from PAP site — Papillion now covers those use cases through its interactive demo
 
 ## [0.3.0] - 2026-03-21
 

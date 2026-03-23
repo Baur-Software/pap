@@ -185,14 +185,15 @@ impl Mandate {
     }
 
     /// Compute the current decay state based on TTL.
+    /// `Suspended` is terminal — it short-circuits regardless of TTL.
     pub fn compute_decay_state(&self, decay_window_secs: i64) -> DecayState {
+        // Terminal state: no time-based transition can override a suspension.
+        if self.decay_state == DecayState::Suspended {
+            return DecayState::Suspended;
+        }
         let now = Utc::now();
         if now > self.ttl {
-            if self.decay_state == DecayState::Suspended {
-                DecayState::Suspended
-            } else {
-                DecayState::ReadOnly
-            }
+            DecayState::ReadOnly
         } else {
             let remaining = (self.ttl - now).num_seconds();
             if remaining <= decay_window_secs {
