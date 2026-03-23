@@ -64,6 +64,13 @@ impl MarketplaceRegistry {
     pub fn all(&self) -> &[AgentAdvertisement] {
         &self.advertisements
     }
+
+    /// Remove an advertisement by its content hash. Returns true if found and removed.
+    pub fn remove_by_hash(&mut self, hash: &str) -> bool {
+        let before = self.advertisements.len();
+        self.advertisements.retain(|ad| ad.hash() != hash);
+        self.advertisements.len() < before
+    }
 }
 
 impl Default for MarketplaceRegistry {

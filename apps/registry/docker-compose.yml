@@ -1,0 +1,41 @@
+services:
+  registry:
+    build:
+      context: ../..
+      dockerfile: apps/registry/Dockerfile
+    image: pap-registry:latest
+    ports:
+      - "7890:7890"
+    volumes:
+      - registry_data:/data
+    environment:
+      # Public URL peers will use to connect to this node.
+      # Change to your server's hostname/IP before deploying.
+      PAP_REGISTRY_ENDPOINT: "http://localhost:7890"
+      PAP_REGISTRY_PORT: "7890"
+      PAP_REGISTRY_HOST: "0.0.0.0"
+      # SQLite DB path inside the container (persisted via the registry_data volume).
+      # To use Postgres instead, mount a db.yml file with driver: postgres + url.
+      PAP_REGISTRY_DB: "/data/registry.db"
+      # Uncomment to protect admin API routes with a Bearer token:
+      # PAP_REGISTRY_ADMIN_TOKEN: "change-me-before-deploying"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7890/federation/identity"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # Run the test suite in an isolated container:
+  #   docker compose --profile test run --rm test
+  test:
+    build:
+      context: ../..
+      dockerfile: apps/registry/Dockerfile
+      target: test
+    profiles:
+      - test
+
+volumes:
+  registry_data:

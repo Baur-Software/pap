@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1.4
+# Test runner — excludes pap-wasm (wasm32), pap-python (PyO3), papillion (Tauri)
+FROM rust:latest
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy everything in one shot (buildx cache mount keeps registry warm between builds)
+COPY . .
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/workspace/target \
+    cargo test --workspace \
+        --exclude pap-wasm \
+        --exclude pap-python \
+        --exclude papillion \
+        2>&1

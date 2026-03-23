@@ -95,7 +95,7 @@ impl FederatedRegistry {
     /// Verify an advertisement's Ed25519 signature.
     ///
     /// The signature must match the advertised DID's public key.
-    fn verify_advertisement(&self, ad: &AgentAdvertisement) -> bool {
+    pub fn verify_advertisement(&self, ad: &AgentAdvertisement) -> bool {
         // Extract the signing DID
         let did = &ad.signed_by;
 
@@ -113,6 +113,23 @@ impl FederatedRegistry {
     /// Return all advertisements (for serving to federation peers).
     pub fn all_advertisements(&self) -> &[AgentAdvertisement] {
         self.local.all()
+    }
+
+    /// Remove an advertisement by content hash. Returns true if removed.
+    pub fn remove_by_hash(&mut self, hash: &str) -> bool {
+        if self.local.remove_by_hash(hash) {
+            self.seen_hashes.remove(hash);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove a federation peer by DID. Returns true if removed.
+    pub fn remove_peer(&mut self, did: &str) -> bool {
+        let before = self.peers.len();
+        self.peers.retain(|p| p.did != did);
+        self.peers.len() < before
     }
 
     pub fn len(&self) -> usize {
