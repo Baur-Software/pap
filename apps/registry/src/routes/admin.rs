@@ -297,17 +297,17 @@ async fn sync_peer(
         Ok(d) => d,
         Err(r) => return r,
     };
-    let endpoint = {
+    let peer_info = {
         let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry
             .peers()
             .iter()
             .find(|p| p.did == did_decoded)
-            .map(|p| p.endpoint.clone())
+            .map(|p| (p.endpoint.clone(), p.cert_fingerprint.clone()))
     };
 
-    let endpoint = match endpoint {
-        Some(e) => e,
+    let (endpoint, fingerprint) = match peer_info {
+        Some(pair) => pair,
         None => {
             return (
                 StatusCode::NOT_FOUND,
@@ -317,14 +317,7 @@ async fn sync_peer(
         }
     };
 
-    // TODO(C2): validate stored cert_fingerprint against the actual TLS cert presented
-    // during handshake. Until fingerprint pinning is implemented, self-signed certs are
-    // accepted unconditionally and the stored fingerprint provides no MITM protection.
-    let client = match reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-    {
+    let client = match crate::tls::build_peer_client(fingerprint.as_deref()) {
         Ok(c) => c,
         Err(e) => {
             return (

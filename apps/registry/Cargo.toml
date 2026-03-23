@@ -44,6 +44,9 @@ ssr = [
     "dep:chrono",
     "dep:constant_time_eq",
     "dep:percent-encoding",
+    "dep:rustls",
+    "dep:sha2",
+    "dep:hex",
 ]
 hydrate = [
     "dep:console_error_panic_hook",
@@ -77,6 +80,9 @@ serde_yaml         = { version = "0.9", optional = true }
 chrono             = { version = "0.4", features = ["serde"], optional = true }
 constant_time_eq   = { version = "0.3", optional = true }
 percent-encoding   = { version = "2", optional = true }
+rustls             = { workspace = true, optional = true }
+sha2               = { workspace = true, optional = true }
+hex                = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio          = { workspace = true, features = ["macros", "rt-multi-thread"] }

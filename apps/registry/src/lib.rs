@@ -8,6 +8,8 @@ pub mod db;
 pub mod routes;
 #[cfg(feature = "ssr")]
 pub mod state;
+#[cfg(feature = "ssr")]
+pub(crate) mod tls;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]

@@ -304,22 +304,17 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
         return Err(ServerFnError::new("unauthorized"));
     }
 
-    let endpoint = {
+    let peer_info = {
         let registry = state.registry.lock().unwrap();
         registry
             .peers()
             .iter()
             .find(|p| p.did == did)
-            .map(|p| p.endpoint.clone())
+            .map(|p| (p.endpoint.clone(), p.cert_fingerprint.clone()))
     };
-    let endpoint = endpoint.ok_or_else(|| ServerFnError::new("peer not found"))?;
+    let (endpoint, fingerprint) = peer_info.ok_or_else(|| ServerFnError::new("peer not found"))?;
 
-    // TODO(C2): validate stored cert_fingerprint against the actual TLS cert presented
-    // during handshake. Until fingerprint pinning is implemented, self-signed certs are
-    // accepted unconditionally and the stored fingerprint provides no MITM protection.
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .build()
+    let client = crate::tls::build_peer_client(fingerprint.as_deref())
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let resp = client
