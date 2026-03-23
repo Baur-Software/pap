@@ -37,6 +37,8 @@ ssr = [
     "dep:libsqlite3-sys",
     "dep:serde_yaml",
     "dep:chrono",
+    "dep:constant_time_eq",
+    "dep:percent-encoding",
 ]
 hydrate = [
     "dep:console_error_panic_hook",
@@ -68,6 +70,8 @@ sqlx               = { version = "0.8", default-features = false, features = ["r
 libsqlite3-sys     = { version = "0.30", features = ["bundled"], optional = true }
 serde_yaml         = { version = "0.9", optional = true }
 chrono             = { version = "0.4", features = ["serde"], optional = true }
+constant_time_eq   = { version = "0.3", optional = true }
+percent-encoding   = { version = "2", optional = true }
 
 # WASM only
 [target.'cfg(target_arch = "wasm32")'.dependencies]

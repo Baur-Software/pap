@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -12,18 +13,16 @@ impl DbConfig {
     /// 1. Read `db.yml` from the working directory if present.
     /// 2. Otherwise use `PAP_REGISTRY_DB` env var as a SQLite path.
     /// 3. Otherwise default to `./registry.db`.
-    pub fn resolve() -> Self {
+    pub fn resolve() -> Result<Self> {
         if let Ok(text) = std::fs::read_to_string("db.yml") {
-            match serde_yaml::from_str::<DbConfig>(&text) {
-                Ok(cfg) => return cfg,
-                Err(e) => panic!("db.yml is present but could not be parsed: {e}"),
-            }
+            return serde_yaml::from_str::<DbConfig>(&text)
+                .context("db.yml is present but could not be parsed");
         }
         let path = std::env::var("PAP_REGISTRY_DB")
             .unwrap_or_else(|_| "./registry.db".into());
-        DbConfig::Sqlite {
+        Ok(DbConfig::Sqlite {
             url: Some(format!("sqlite:{path}?mode=rwc")),
-        }
+        })
     }
 
     pub fn connection_string(&self) -> String {

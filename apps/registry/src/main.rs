@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting PAP Registry on {}:{}", config.host, config.port);
 
     // ── Database setup ────────────────────────────────────────────────────────
-    let db_cfg = DbConfig::resolve();
+    let db_cfg = DbConfig::resolve()?;
     let store = RegistryStore::connect(&db_cfg).await?;
     store.migrate().await?;
     let store = Arc::new(store);

@@ -66,7 +66,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/peers/{did}/sync", post(sync_peer))
 }
 
-fn extract_bearer(headers: &HeaderMap) -> Option<&str> {
+pub fn extract_bearer(headers: &HeaderMap) -> Option<&str> {
     headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
@@ -154,27 +154,20 @@ async fn register_agent(
                 .into_response();
         }
     }
-    // Register in-memory, then write-through to DB.
-    // Critical: drop the Mutex guard before any .await.
-    let result = {
-        let mut registry = state.registry.lock().unwrap();
-        registry.register_local(ad.clone())
-    };
-    match result {
-        Ok(()) => {
-            let hash = ad.hash();
-            if let Err(e) = state.store.insert_agent(&hash, &ad).await {
-                tracing::error!("DB write-through failed for agent {hash}: {e}");
-            }
-            (StatusCode::CREATED, Json(serde_json::json!({"ok": true, "hash": hash})))
-                .into_response()
-        }
-        Err(e) => (
-            StatusCode::UNPROCESSABLE_ENTITY,
+    // DB first — persist before updating in-memory state.
+    let hash = ad.hash();
+    if let Err(e) = state.store.insert_agent(&hash, &ad).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e.to_string()})),
         )
-            .into_response(),
+            .into_response();
     }
+    {
+        let mut registry = state.registry.lock().unwrap();
+        let _ = registry.register_local(ad); // duplicate silently ignored
+    }
+    (StatusCode::CREATED, Json(serde_json::json!({"ok": true, "hash": hash}))).into_response()
 }
 
 async fn remove_agent(
@@ -185,14 +178,20 @@ async fn remove_agent(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let removed = {
-        let mut registry = state.registry.lock().unwrap();
-        registry.remove_by_hash(&hash)
-    };
-    if removed {
-        if let Err(e) = state.store.delete_agent(&hash).await {
-            tracing::error!("DB delete failed for agent {hash}: {e}");
+    // DB first — only remove from memory if persistence succeeds.
+    let deleted = match state.store.delete_agent(&hash).await {
+        Ok(d) => d,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
         }
+    };
+    if deleted {
+        let mut registry = state.registry.lock().unwrap();
+        registry.remove_by_hash(&hash);
         Json(serde_json::json!({"ok": true})).into_response()
     } else {
         (
@@ -233,12 +232,17 @@ async fn add_peer(
         Some(fp) => RegistryPeer::with_fingerprint(&req.did, &req.endpoint, &fp),
         None => RegistryPeer::new(&req.did, &req.endpoint),
     };
+    // DB first — persist before updating in-memory state.
+    if let Err(e) = state.store.upsert_peer(&peer).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response();
+    }
     {
         let mut registry = state.registry.lock().unwrap();
-        registry.add_peer(peer.clone());
-    }
-    if let Err(e) = state.store.upsert_peer(&peer).await {
-        tracing::error!("DB write-through failed for peer {}: {e}", peer.did);
+        registry.add_peer(peer);
     }
     (StatusCode::CREATED, Json(serde_json::json!({"ok": true}))).into_response()
 }
@@ -252,14 +256,20 @@ async fn remove_peer(
         return auth_error();
     }
     let did_decoded = percent_decode(&did);
-    let removed = {
-        let mut registry = state.registry.lock().unwrap();
-        registry.remove_peer(&did_decoded)
-    };
-    if removed {
-        if let Err(e) = state.store.delete_peer(&did_decoded).await {
-            tracing::error!("DB delete failed for peer {did_decoded}: {e}");
+    // DB first — only remove from memory if persistence succeeds.
+    let deleted = match state.store.delete_peer(&did_decoded).await {
+        Ok(d) => d,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
         }
+    };
+    if deleted {
+        let mut registry = state.registry.lock().unwrap();
+        registry.remove_peer(&did_decoded);
         Json(serde_json::json!({"ok": true})).into_response()
     } else {
         (
@@ -299,94 +309,89 @@ async fn sync_peer(
         }
     };
 
+    // TODO(C2): validate stored cert_fingerprint against the actual TLS cert presented
+    // during handshake. Until fingerprint pinning is implemented, self-signed certs are
+    // accepted unconditionally and the stored fingerprint provides no MITM protection.
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .unwrap();
 
-    match client
+    let resp = match client
         .get(format!("{}/federation/query?action=*", endpoint))
         .send()
         .await
     {
-        Ok(resp) => {
-            if let Ok(msg) = resp.json::<pap_federation::sync::FederationMessage>().await {
-                if let pap_federation::sync::FederationMessage::QueryResponse {
-                    advertisements,
-                } = msg
-                {
-                    // Snapshot before-hashes, merge, collect new ads for write-through.
-                    let new_ads = {
-                        let mut registry = state.registry.lock().unwrap();
-                        let before: std::collections::HashSet<String> =
-                            registry.all_advertisements().iter().map(|a| a.hash()).collect();
-                        registry.merge_remote(advertisements);
-                        registry
-                            .all_advertisements()
-                            .iter()
-                            .filter(|a| !before.contains(&a.hash()))
-                            .cloned()
-                            .collect::<Vec<_>>()
-                    };
-
-                    let merged = new_ads.len();
-                    for ad in &new_ads {
-                        let hash = ad.hash();
-                        if let Err(e) = state.store.insert_agent(&hash, ad).await {
-                            tracing::error!("DB write-through failed for synced agent {hash}: {e}");
-                        }
-                    }
-
-                    // Update last_sync timestamp in DB.
-                    if let Err(e) = state
-                        .store
-                        .update_peer_sync_time(&did_decoded, chrono::Utc::now())
-                        .await
-                    {
-                        tracing::warn!("Failed to update last_sync for peer {did_decoded}: {e}");
-                    }
-
-                    return Json(serde_json::json!({"ok": true, "merged": merged}))
-                        .into_response();
-                }
-            }
-            (
+        Ok(r) => r,
+        Err(e) => {
+            return (
                 StatusCode::BAD_GATEWAY,
-                Json(serde_json::json!({"error": "invalid response from peer"})),
+                Json(serde_json::json!({"error": e.to_string()})),
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_GATEWAY,
-            Json(serde_json::json!({"error": e.to_string()})),
-        )
-            .into_response(),
+    };
+
+    let msg = match resp.json::<pap_federation::sync::FederationMessage>().await {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::error!("Failed to deserialize federation response from {}: {e}", endpoint);
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({"error": format!("invalid response from peer: {e}")})),
+            )
+                .into_response();
+        }
+    };
+
+    match msg {
+        pap_federation::sync::FederationMessage::QueryResponse { advertisements } => {
+            // Snapshot before-hashes, merge, collect new ads for write-through.
+            let new_ads = {
+                let mut registry = state.registry.lock().unwrap();
+                let before: std::collections::HashSet<String> =
+                    registry.all_advertisements().iter().map(|a| a.hash()).collect();
+                registry.merge_remote(advertisements);
+                registry
+                    .all_advertisements()
+                    .iter()
+                    .filter(|a| !before.contains(&a.hash()))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            };
+
+            let merged = new_ads.len();
+            for ad in &new_ads {
+                let hash = ad.hash();
+                if let Err(e) = state.store.insert_agent(&hash, ad).await {
+                    tracing::error!("DB write-through failed for synced agent {hash}: {e}");
+                }
+            }
+
+            // Update last_sync timestamp in DB.
+            if let Err(e) = state
+                .store
+                .update_peer_sync_time(&did_decoded, chrono::Utc::now())
+                .await
+            {
+                tracing::warn!("Failed to update last_sync for peer {did_decoded}: {e}");
+            }
+
+            Json(serde_json::json!({"ok": true, "merged": merged})).into_response()
+        }
+        _ => {
+            tracing::warn!("Unexpected federation message variant from {}", endpoint);
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({"error": "unexpected response type from peer"})),
+            )
+                .into_response()
+        }
     }
 }
 
 fn percent_decode(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
-                result.push((h * 16 + l) as char);
-                i += 3;
-                continue;
-            }
-        }
-        result.push(bytes[i] as char);
-        i += 1;
-    }
-    result
-}
-
-fn hex_val(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
+    percent_encoding::percent_decode_str(s)
+        .decode_utf8_lossy()
+        .into_owned()
 }

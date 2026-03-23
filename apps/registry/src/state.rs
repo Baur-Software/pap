@@ -36,10 +36,15 @@ impl AppState {
 
     /// Check whether the given Bearer token is authorized for admin access.
     /// If no admin token is configured, all requests are allowed.
+    /// Uses constant-time comparison to prevent timing-based token oracle attacks.
     pub fn is_authorized(&self, token: Option<&str>) -> bool {
         match &self.admin_token {
             None => true,
-            Some(expected) => token.map(|t| t == expected).unwrap_or(false),
+            Some(expected) => token
+                .map(|t| {
+                    constant_time_eq::constant_time_eq(t.as_bytes(), expected.as_bytes())
+                })
+                .unwrap_or(false),
         }
     }
 }
