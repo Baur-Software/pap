@@ -13,7 +13,7 @@
 //! Functions that fail return `NULL` (pointers) or `-1` (ints). Call
 //! `pap_last_error_message()` for a human-readable description; free that
 //! string with `pap_string_free`.
-#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
 
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
