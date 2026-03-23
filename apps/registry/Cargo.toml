@@ -3,7 +3,7 @@ name = "pap-registry"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Hostable PAP-compatible federated agent registry with web management UI"
+description = "Crystalis — Hostable PAP-compatible federated agent registry with web management UI"
 
 [[bin]]
 name = "pap-registry"

@@ -1,4 +1,10 @@
-# Changelog
+## [0.4.1.1] - 2026-03-23
+
+### Changed
+- Rebrand registry as "Crystalis" with butterfly motif (🦋)
+- Update sidebar branding and dashboard titles
+- Simplify registry subtitle from "Federation Node" to "Agent Registry"
+
 
 All notable changes to PAP will be documented in this file.
 

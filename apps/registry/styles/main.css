@@ -1,5 +1,5 @@
 /* ============================================================
-   PAP Registry — Design System
+   Crystalis — Agent Registry
    Brand: Purple #6c5ce7 | Wing spectrum for semantics
    Fonts: system-stack (Satoshi/DM Sans unavailable in WASM builds)
    ============================================================ */
@@ -114,7 +114,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
