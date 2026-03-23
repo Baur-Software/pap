@@ -1,0 +1,8 @@
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/debug/deps/toml_datetime-7f011cc79ea2b43a.d: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/datetime.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/de.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/ser.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/debug/deps/libtoml_datetime-7f011cc79ea2b43a.rmeta: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/datetime.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/de.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/ser.rs
+
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/lib.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/datetime.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/de.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_datetime-1.0.1+spec-1.1.0/src/ser.rs:

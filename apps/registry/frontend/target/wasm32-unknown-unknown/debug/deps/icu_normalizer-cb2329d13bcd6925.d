@@ -1,0 +1,8 @@
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/wasm32-unknown-unknown/debug/deps/icu_normalizer-cb2329d13bcd6925.d: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/properties.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/provider.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/uts46.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/wasm32-unknown-unknown/debug/deps/libicu_normalizer-cb2329d13bcd6925.rmeta: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/properties.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/provider.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/uts46.rs
+
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/lib.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/properties.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/provider.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/uts46.rs:

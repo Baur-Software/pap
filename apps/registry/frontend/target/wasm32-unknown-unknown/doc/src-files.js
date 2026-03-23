@@ -1,0 +1,2 @@
+createSrcSidebar('[["pap_registry_ui",["",[["components",[],["mod.rs","nav.rs"]],["pages",[],["agents.rs","dashboard.rs","mod.rs","peers.rs","settings.rs"]]],["api.rs","app.rs","lib.rs"]]]]');
+//{"start":19,"fragment_lengths":[169]}

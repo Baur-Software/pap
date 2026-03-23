@@ -1,0 +1,1 @@
+rd_("opap_registry_ui")

@@ -1,0 +1,10 @@
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/release/deps/lock_api-9bffdb41ad745a83.d: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/mutex.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/remutex.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/rwlock.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/release/deps/liblock_api-9bffdb41ad745a83.rlib: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/mutex.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/remutex.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/rwlock.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/release/deps/liblock_api-9bffdb41ad745a83.rmeta: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/mutex.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/remutex.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/rwlock.rs
+
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/lib.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/mutex.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/remutex.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/rwlock.rs:

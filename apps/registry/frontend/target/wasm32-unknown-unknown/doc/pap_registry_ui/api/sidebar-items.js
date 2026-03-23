@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_peer","fetch_agents","fetch_peers","fetch_status","remove_agent","remove_peer","sync_peer"],"struct":["AddPeerRequest","AgentAdvertisement","AgentEntry","AgentListResponse","Provider","RegistryPeer","RegistryStatus"]};

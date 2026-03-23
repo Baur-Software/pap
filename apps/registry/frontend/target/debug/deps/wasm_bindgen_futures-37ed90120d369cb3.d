@@ -1,0 +1,7 @@
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/debug/deps/wasm_bindgen_futures-37ed90120d369cb3.d: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/queue.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/task/singlethread.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/debug/deps/libwasm_bindgen_futures-37ed90120d369cb3.rmeta: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/queue.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/task/singlethread.rs
+
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/lib.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/queue.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.64/src/task/singlethread.rs:

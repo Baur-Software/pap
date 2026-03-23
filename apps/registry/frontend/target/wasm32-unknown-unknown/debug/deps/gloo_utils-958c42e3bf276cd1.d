@@ -1,0 +1,8 @@
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/wasm32-unknown-unknown/debug/deps/gloo_utils-958c42e3bf276cd1.d: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/errors.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/iter.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/format/json.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/wasm32-unknown-unknown/debug/deps/libgloo_utils-958c42e3bf276cd1.rmeta: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/errors.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/iter.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/format/json.rs
+
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/lib.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/errors.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/iter.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gloo-utils-0.2.0/src/format/json.rs:

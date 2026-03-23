@@ -1,0 +1,7 @@
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/debug/deps/proc_macro_error_attr2-2e3af723dd7d751f.d: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/parse.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/settings.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/debug/deps/libproc_macro_error_attr2-2e3af723dd7d751f.dylib: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/parse.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/settings.rs
+
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/lib.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/parse.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-attr2-2.0.0/src/settings.rs:

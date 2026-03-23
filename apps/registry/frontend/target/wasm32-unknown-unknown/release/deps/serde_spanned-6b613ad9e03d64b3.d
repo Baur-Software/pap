@@ -1,0 +1,9 @@
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/wasm32-unknown-unknown/release/deps/serde_spanned-6b613ad9e03d64b3.d: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/spanned.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/de.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/wasm32-unknown-unknown/release/deps/libserde_spanned-6b613ad9e03d64b3.rlib: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/spanned.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/de.rs
+
+/private/var/folders/dh/3bzw6zf51wz9cc_pqxv4fqk00000gn/T/vibe-kanban/worktrees/0bbd-hostable-federat/pap/apps/registry/frontend/target/wasm32-unknown-unknown/release/deps/libserde_spanned-6b613ad9e03d64b3.rmeta: /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/lib.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/spanned.rs /Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/de.rs
+
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/lib.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/spanned.rs:
+/Users/toadkicker/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_spanned-1.0.4/src/de.rs:
