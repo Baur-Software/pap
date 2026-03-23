@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **docs**: Six PAP constraint cards on `pap.html`, each leading with the failure mode it prevents; includes new card 06 "Discovery without a standard becomes a silo" covering the federated registry and Papillion visual composer
 - **docs**: Registry and visual composer card explaining signed JSON-LD capability advertisements, federated discovery, and Papillion's drag-and-drop workflow composer
 
+### Fixed
+
+- **papillion**: Use `.map()` instead of `.and_then()` for `Navigator::clipboard()` after `web_sys` return type change from `Option<Clipboard>` to `Clipboard` — fixes WASM compilation failure blocking Tauri desktop builds on all platforms
+
 ### Changed
 
 - **docs**: `index.html` reframed around Papillion product (canvas rendering engine, use cases, how-it-works); PAP protocol content moved to dedicated `pap.html`

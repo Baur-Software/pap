@@ -661,7 +661,7 @@ fn ThisNodeCard() -> impl IntoView {
         }
         spawn_local(async move {
             let promise = web_sys::window()
-                .and_then(|w| w.navigator().clipboard())
+                .map(|w| w.navigator().clipboard())
                 .map(|c| c.write_text(&text_clone));
             if let Some(p) = promise {
                 let _ = wasm_bindgen_futures::JsFuture::from(p).await;
