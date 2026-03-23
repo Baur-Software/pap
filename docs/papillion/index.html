@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Papillion — AI that follows your rules</title>
+  <meta name="description" content="AI that works for you, not on its own. Set rules. Approve decisions. See everything. Papillion makes sure AI stays within your control." />
+  <meta property="og:title" content="Papillion — AI that follows your rules" />
+  <meta property="og:description" content="Set rules. Approve decisions. See everything. Papillion makes sure AI stays within your control." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Papillion — AI that follows your rules" />
+  <meta name="twitter:description" content="Set rules. Approve decisions. See everything." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #060609;
+      --surface:  #0c0d14;
+      --surface2: #12131d;
+      --border:   #1c1e2e;
+      --violet:   #8b5cf6;
+      --indigo:   #6366f1;
+      --emerald:  #10b981;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+      --text:     #e8ecf4;
+      --muted:    #8892a8;
+      --faint:    #4a5068;
+      --radius:   10px;
+      --radius-lg: 20px;
+      scroll-behavior: smooth;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection { background: rgba(139,92,246,.3); }
+    a { color: var(--violet); text-decoration: none; transition: color .2s; }
+    a:hover { color: #a78bfa; }
+
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ─── Nav ─────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 16px 0;
+      background: rgba(6,6,9,.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid transparent;
+      transition: border-color .3s;
+    }
+    nav.scrolled { border-bottom-color: var(--border); }
+    nav .container { display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-size: 1.25rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .logo-butterfly { font-size: 1.4rem; }
+    .dev-badge {
+      font-size: .65rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 6px;
+      background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.25);
+      color: var(--amber);
+    }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a { color: var(--muted); font-size: .9rem; font-weight: 500; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      padding: 8px 20px; border-radius: 8px; font-weight: 600; font-size: .875rem;
+      background: var(--violet); color: #fff !important;
+      transition: transform .15s, box-shadow .2s;
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(139,92,246,.4); }
+
+    /* ─── Hero ────────────────────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      position: relative;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(ellipse, rgba(139,92,246,.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      margin-bottom: 24px;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--violet) 0%, #c084fc 50%, var(--indigo) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .subtitle {
+      font-size: clamp(1.1rem, 2vw, 1.35rem);
+      color: var(--muted);
+      max-width: 540px;
+      margin: 0 auto 48px;
+      line-height: 1.6;
+    }
+    .hero-ctas { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      padding: 14px 32px; border-radius: var(--radius);
+      background: var(--violet); color: #fff; font-weight: 600; font-size: 1rem;
+      border: none; cursor: pointer;
+      transition: transform .15s, box-shadow .2s;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(139,92,246,.35); color: #fff; }
+    .btn-secondary {
+      padding: 14px 32px; border-radius: var(--radius);
+      background: transparent; color: var(--muted); font-weight: 600; font-size: 1rem;
+      border: 1px solid var(--border); cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-secondary:hover { border-color: var(--faint); color: var(--text); }
+
+    /* ─── Sections ────────────────────────────────────────────────── */
+    .section { padding: 100px 0; }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 99px;
+      background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.2);
+      color: var(--violet); font-size: .75rem; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .section h2 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -.02em;
+      margin-bottom: 20px;
+    }
+    .section .lead {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 600px;
+      line-height: 1.7;
+    }
+
+    /* ─── Problem ─────────────────────────────────────────────────── */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+    .problem-card {
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      transition: border-color .2s;
+    }
+    .problem-card:hover { border-color: rgba(239,68,68,.3); }
+    .problem-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin-bottom: 16px;
+      background: rgba(239,68,68,.08);
+    }
+    .problem-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+    .problem-card p { color: var(--muted); font-size: .95rem; }
+
+    /* ─── Shift ───────────────────────────────────────────────────── */
+    .shift-steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+    .shift-step {
+      padding: 32px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      text-align: center;
+      position: relative;
+    }
+    .shift-step:hover { border-color: rgba(139,92,246,.3); }
+    .step-number {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--violet), var(--indigo));
+      color: #fff; font-weight: 700; font-size: .9rem;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .shift-step h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+    .shift-step p { color: var(--muted); font-size: .9rem; }
+
+    /* ─── Rules (What It Feels Like) ─────────────────────────────── */
+    .rules-list {
+      display: flex; flex-direction: column; gap: 16px;
+      margin-top: 40px;
+      max-width: 560px;
+    }
+    .rule-item {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 1.05rem;
+      font-weight: 500;
+      transition: border-color .2s;
+    }
+    .rule-item:hover { border-color: rgba(16,185,129,.3); }
+    .rule-check {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(16,185,129,.1); color: var(--emerald);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem; font-weight: 700; flex-shrink: 0;
+    }
+
+    /* ─── Demo ────────────────────────────────────────────────────── */
+    .demo-section { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .demo-header { text-align: center; margin-bottom: 48px; }
+    .demo-container {
+      max-width: 680px;
+      margin: 0 auto;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .demo-topbar {
+      padding: 14px 20px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .demo-topbar-title { font-size: .85rem; font-weight: 600; color: var(--muted); }
+    .demo-topbar-status { font-size: .75rem; color: var(--faint); }
+    .demo-body { padding: 32px 28px; min-height: 400px; }
+
+    /* Demo progress */
+    .demo-progress {
+      display: flex; gap: 4px; margin-bottom: 32px;
+    }
+    .demo-progress-bar {
+      flex: 1; height: 3px; border-radius: 3px;
+      background: var(--border);
+      transition: background .4s;
+    }
+    .demo-progress-bar.active {
+      background: var(--violet);
+    }
+    .demo-progress-bar.done {
+      background: var(--emerald);
+    }
+
+    /* Demo steps */
+    .demo-step { display: none; animation: fadeUp .4s ease; }
+    .demo-step.active { display: block; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .demo-step-label {
+      font-size: .75rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--violet); margin-bottom: 16px;
+    }
+    .demo-step h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 16px; }
+    .demo-step p { color: var(--muted); margin-bottom: 16px; }
+
+    /* Demo rule tags */
+    .demo-rules {
+      display: flex; flex-direction: column; gap: 10px;
+      margin: 20px 0;
+    }
+    .demo-rule {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: .9rem;
+    }
+    .demo-rule-icon {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem; flex-shrink: 0;
+    }
+    .demo-rule-icon.budget { background: rgba(139,92,246,.15); color: var(--violet); }
+    .demo-rule-icon.vendor { background: rgba(99,102,241,.15); color: var(--indigo); }
+    .demo-rule-icon.approval { background: rgba(245,158,11,.15); color: var(--amber); }
+
+    /* Demo filter results */
+    .demo-filter-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .9rem;
+    }
+    .demo-filter-row:last-child { border-bottom: none; }
+    .demo-filter-count { font-weight: 600; }
+    .demo-filter-count.red { color: var(--red); }
+    .demo-filter-count.green { color: var(--emerald); }
+
+    /* Demo approval */
+    .demo-approval-box {
+      padding: 24px;
+      background: rgba(245,158,11,.04);
+      border: 1px solid rgba(245,158,11,.2);
+      border-radius: var(--radius);
+      text-align: center;
+      margin: 20px 0;
+    }
+    .demo-approval-box .price { font-size: 2rem; font-weight: 800; margin: 12px 0 4px; }
+    .demo-approval-box .reason { color: var(--amber); font-size: .85rem; margin-bottom: 20px; }
+    .demo-approval-actions { display: flex; gap: 12px; justify-content: center; }
+    .demo-btn-approve {
+      padding: 10px 28px; border-radius: 8px;
+      background: var(--emerald); color: #fff; font-weight: 600;
+      border: none; cursor: pointer; font-size: .9rem;
+      transition: transform .15s;
+    }
+    .demo-btn-approve:hover { transform: translateY(-1px); }
+    .demo-btn-reject {
+      padding: 10px 28px; border-radius: 8px;
+      background: transparent; color: var(--muted); font-weight: 600;
+      border: 1px solid var(--border); cursor: pointer; font-size: .9rem;
+    }
+
+    /* Demo receipt */
+    .demo-receipt {
+      border: 1px solid rgba(16,185,129,.2);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .demo-receipt-header {
+      padding: 16px 20px;
+      background: rgba(16,185,129,.06);
+      border-bottom: 1px solid rgba(16,185,129,.15);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .demo-receipt-header .icon { color: var(--emerald); font-size: 1.1rem; }
+    .demo-receipt-header span { font-weight: 600; color: var(--emerald); }
+    .demo-receipt-body { padding: 20px; }
+    .demo-receipt-row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0;
+      font-size: .9rem;
+    }
+    .demo-receipt-row .label { color: var(--muted); }
+    .demo-receipt-row .value { font-weight: 500; }
+    .demo-receipt-rules {
+      margin-top: 16px; padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .demo-receipt-rules h4 { font-size: .8rem; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+    .demo-receipt-rule-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; margin: 0 6px 6px 0;
+      border-radius: 6px;
+      background: rgba(16,185,129,.08);
+      border: 1px solid rgba(16,185,129,.15);
+      color: var(--emerald); font-size: .8rem; font-weight: 500;
+    }
+
+    /* Demo controls */
+    .demo-controls {
+      display: flex; justify-content: center;
+      padding: 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface2);
+      gap: 8px;
+    }
+    .demo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border);
+      cursor: pointer;
+      transition: background .2s, transform .15s;
+    }
+    .demo-dot.active { background: var(--violet); transform: scale(1.3); }
+    .demo-dot.done { background: var(--emerald); }
+
+    .demo-nav-btn {
+      padding: 10px 24px; border-radius: 8px;
+      background: var(--surface2); color: var(--text); font-weight: 600;
+      border: 1px solid var(--border); cursor: pointer; font-size: .85rem;
+      transition: border-color .2s;
+      margin-top: 24px;
+    }
+    .demo-nav-btn:hover { border-color: var(--violet); }
+
+    /* ─── Why / Trust ─────────────────────────────────────────────── */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+    .pillar {
+      padding: 28px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      text-align: center;
+    }
+    .pillar-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 1.3rem;
+    }
+    .pillar-icon.control { background: rgba(139,92,246,.1); }
+    .pillar-icon.visible { background: rgba(99,102,241,.1); }
+    .pillar-icon.safe { background: rgba(16,185,129,.1); }
+    .pillar-icon.delegate { background: rgba(245,158,11,.1); }
+    .pillar h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .pillar p { color: var(--muted); font-size: .9rem; }
+
+    .trust-list {
+      display: flex; flex-direction: column; gap: 16px;
+      margin-top: 40px;
+      max-width: 480px;
+    }
+    .trust-item {
+      display: flex; align-items: center; gap: 14px;
+      font-size: 1.05rem;
+      font-weight: 500;
+    }
+    .trust-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: rgba(139,92,246,.08);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--violet); font-size: .9rem; flex-shrink: 0;
+    }
+
+    /* ─── Footer CTA ──────────────────────────────────────────────── */
+    .footer-cta {
+      text-align: center;
+      padding: 120px 24px;
+    }
+    .footer-cta h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+    .footer-cta p { color: var(--muted); font-size: 1.1rem; margin-bottom: 40px; }
+
+    /* ─── Footer ──────────────────────────────────────────────────── */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    footer .container {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    footer .built-on { color: var(--faint); font-size: .85rem; }
+    footer .built-on a { color: var(--faint); }
+    footer .built-on a:hover { color: var(--muted); }
+    footer .footer-links { display: flex; gap: 24px; }
+    footer .footer-links a { color: var(--faint); font-size: .85rem; }
+    footer .footer-links a:hover { color: var(--muted); }
+
+    /* ─── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav-links a:not(.nav-cta) { display: none; }
+      .shift-steps { grid-template-columns: 1fr; }
+      .hero { padding: 100px 20px 60px; }
+      .section { padding: 64px 0; }
+      .demo-body { padding: 24px 20px; }
+    }
+
+    /* ─── Fade-in on scroll ───────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Nav ──────────────────────────────────────────────────────── -->
+<nav id="nav">
+  <div class="container">
+    <a href="#" class="logo">
+      <span class="logo-butterfly">&#x1F98B;</span> Papillion <span class="dev-badge">In Development</span>
+    </a>
+    <div class="nav-links">
+      <a href="#problem">Why</a>
+      <a href="#demo">Demo</a>
+      <a href="#trust">Trust</a>
+      <a href="../pap/" class="nav-cta">For Developers</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Hero ─────────────────────────────────────────────────────── -->
+<section class="hero" id="hero">
+  <div>
+    <h1>AI that works for you.<br><span>Not on its own.</span></h1>
+    <p class="subtitle">Set rules. Approve decisions. See everything.<br>Papillion makes sure AI stays within your control.</p>
+    <div class="hero-ctas">
+      <a href="#demo" class="btn-primary">Try the demo</a>
+      <a href="#shift" class="btn-secondary">See how it works</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Problem ──────────────────────────────────────────────────── -->
+<section class="section" id="problem">
+  <div class="container reveal">
+    <span class="section-label">The problem</span>
+    <h2>AI can take action now.<br>But you're often out of the loop.</h2>
+    <p class="lead">Once AI starts acting on your behalf, things can go wrong fast.</p>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-icon">&#x1F4B8;</div>
+        <h3>It can overspend</h3>
+        <p>No budget limits, no guardrails. One bad decision and you're left with the bill.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">&#x274C;</div>
+        <h3>It picks the wrong option</h3>
+        <p>Without your preferences, AI optimizes for its own criteria &mdash; not yours.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">&#x26A0;&#xFE0F;</div>
+        <h3>It acts without asking</h3>
+        <p>Actions taken before you even know they happened. No review, no approval.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Shift ────────────────────────────────────────────────────── -->
+<section class="section" id="shift">
+  <div class="container reveal">
+    <span class="section-label">The shift</span>
+    <h2>Papillion changes how AI works.</h2>
+    <p class="lead">Instead of giving AI full control, you define the boundaries. It operates within them.</p>
+    <div class="shift-steps">
+      <div class="shift-step">
+        <div class="step-number">1</div>
+        <h3>You define the rules</h3>
+        <p>Set budgets, choose trusted vendors, require approval for important decisions.</p>
+      </div>
+      <div class="shift-step">
+        <div class="step-number">2</div>
+        <h3>AI operates within them</h3>
+        <p>Your assistant searches, evaluates, and acts &mdash; but only within the boundaries you set.</p>
+      </div>
+      <div class="shift-step">
+        <div class="step-number">3</div>
+        <h3>You stay in control</h3>
+        <p>See every decision, approve what matters, and get a clear receipt of what happened.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── What It Feels Like ───────────────────────────────────────── -->
+<section class="section" id="rules">
+  <div class="container reveal">
+    <span class="section-label">What it feels like</span>
+    <h2>You set the rules.<br>Your AI follows them. Always.</h2>
+    <div class="rules-list">
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Only spend up to $500"</span>
+      </div>
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Only use vendors I trust"</span>
+      </div>
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Ask me before anything risky"</span>
+      </div>
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Never share my personal data"</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Demo ─────────────────────────────────────────────────────── -->
+<section class="section demo-section" id="demo">
+  <div class="container">
+    <div class="demo-header reveal">
+      <span class="section-label">Live example</span>
+      <h2>Watch an AI make a purchase &mdash; safely</h2>
+      <p class="lead" style="margin: 12px auto 0;">Your assistant shops for a laptop, following your rules at every step.</p>
+    </div>
+
+    <div class="demo-container reveal">
+      <div class="demo-topbar">
+        <span class="demo-topbar-title">Your Assistant</span>
+        <span class="demo-topbar-status" id="demoStatus">Step 1 of 6</span>
+      </div>
+
+      <div class="demo-progress" id="demoProgress">
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+      </div>
+
+      <div class="demo-body" id="demoBody">
+
+        <!-- Step 1: Set rules -->
+        <div class="demo-step active" data-step="0">
+          <div class="demo-step-label">Step 1 &mdash; You set the rules</div>
+          <h3>Find me a laptop under $1,000</h3>
+          <div class="demo-rules">
+            <div class="demo-rule">
+              <div class="demo-rule-icon budget">$</div>
+              <span>Budget: <strong>$1,000</strong></span>
+            </div>
+            <div class="demo-rule">
+              <div class="demo-rule-icon vendor">&#x2691;</div>
+              <span>Vendors: <strong>Approved only</strong></span>
+            </div>
+            <div class="demo-rule">
+              <div class="demo-rule-icon approval">!</div>
+              <span>Approval required above: <strong>$800</strong></span>
+            </div>
+          </div>
+          <button class="demo-nav-btn" onclick="demoNext()">Start search &rarr;</button>
+        </div>
+
+        <!-- Step 2: Search -->
+        <div class="demo-step" data-step="1">
+          <div class="demo-step-label">Step 2 &mdash; AI searches</div>
+          <h3>Searching across approved vendors...</h3>
+          <p>Your assistant found <strong>12 products</strong> across 4 vendors.</p>
+          <button class="demo-nav-btn" onclick="demoNext()">Apply your rules &rarr;</button>
+        </div>
+
+        <!-- Step 3: Filter -->
+        <div class="demo-step" data-step="2">
+          <div class="demo-step-label">Step 3 &mdash; AI filters by your rules</div>
+          <h3>Applying your constraints</h3>
+          <div style="margin: 20px 0;">
+            <div class="demo-filter-row">
+              <span>Products found</span>
+              <span class="demo-filter-count">12</span>
+            </div>
+            <div class="demo-filter-row">
+              <span>Rejected &mdash; unapproved vendor</span>
+              <span class="demo-filter-count red">&minus;5</span>
+            </div>
+            <div class="demo-filter-row">
+              <span>Rejected &mdash; over budget</span>
+              <span class="demo-filter-count red">&minus;3</span>
+            </div>
+            <div class="demo-filter-row">
+              <span>Rejected &mdash; low ratings</span>
+              <span class="demo-filter-count red">&minus;2</span>
+            </div>
+            <div class="demo-filter-row">
+              <span><strong>Valid options</strong></span>
+              <span class="demo-filter-count green"><strong>2</strong></span>
+            </div>
+          </div>
+          <button class="demo-nav-btn" onclick="demoNext()">See selection &rarr;</button>
+        </div>
+
+        <!-- Step 4: Selection -->
+        <div class="demo-step" data-step="3">
+          <div class="demo-step-label">Step 4 &mdash; AI selects best option</div>
+          <h3>Best match within your rules</h3>
+          <div style="padding: 20px; background: var(--surface2); border-radius: var(--radius); border: 1px solid var(--border); margin: 20px 0;">
+            <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 4px;">ThinkPad X1 Carbon Gen 12</div>
+            <div style="color: var(--muted); font-size: .9rem; margin-bottom: 12px;">14" / 16GB RAM / 512GB SSD</div>
+            <div style="font-size: 1.5rem; font-weight: 800;">$920</div>
+            <div style="color: var(--emerald); font-size: .85rem; margin-top: 4px;">Within budget &bull; Approved vendor &bull; 4.7&#x2605;</div>
+          </div>
+          <p style="color: var(--amber); font-size: .9rem;">This exceeds your $800 approval threshold.</p>
+          <button class="demo-nav-btn" onclick="demoNext()">Request your approval &rarr;</button>
+        </div>
+
+        <!-- Step 5: Approval -->
+        <div class="demo-step" data-step="4">
+          <div class="demo-step-label">Step 5 &mdash; Your approval required</div>
+          <h3>Your assistant needs your approval</h3>
+          <div class="demo-approval-box">
+            <div style="color: var(--muted); font-size: .9rem;">ThinkPad X1 Carbon Gen 12</div>
+            <div class="price">$920.00</div>
+            <div class="reason">Above your $800 approval threshold</div>
+            <div class="demo-approval-actions">
+              <button class="demo-btn-approve" onclick="demoNext()">Approve</button>
+              <button class="demo-btn-reject">Reject</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 6: Receipt -->
+        <div class="demo-step" data-step="5">
+          <div class="demo-step-label">Step 6 &mdash; Complete</div>
+          <h3>Purchase complete</h3>
+          <div class="demo-receipt">
+            <div class="demo-receipt-header">
+              <span class="icon">&#x2713;</span>
+              <span>Transaction verified</span>
+            </div>
+            <div class="demo-receipt-body">
+              <div class="demo-receipt-row">
+                <span class="label">Item</span>
+                <span class="value">ThinkPad X1 Carbon Gen 12</span>
+              </div>
+              <div class="demo-receipt-row">
+                <span class="label">Price</span>
+                <span class="value">$920.00</span>
+              </div>
+              <div class="demo-receipt-row">
+                <span class="label">Vendor</span>
+                <span class="value">Approved &mdash; Lenovo Direct</span>
+              </div>
+              <div class="demo-receipt-row">
+                <span class="label">Approved by</span>
+                <span class="value">You</span>
+              </div>
+              <div class="demo-receipt-rules">
+                <h4>Rules applied</h4>
+                <span class="demo-receipt-rule-tag">&#x2713; Under $1,000 budget</span>
+                <span class="demo-receipt-rule-tag">&#x2713; Approved vendor</span>
+                <span class="demo-receipt-rule-tag">&#x2713; Approval granted</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="demo-controls">
+        <div class="demo-dot active" onclick="demoGoTo(0)"></div>
+        <div class="demo-dot" onclick="demoGoTo(1)"></div>
+        <div class="demo-dot" onclick="demoGoTo(2)"></div>
+        <div class="demo-dot" onclick="demoGoTo(3)"></div>
+        <div class="demo-dot" onclick="demoGoTo(4)"></div>
+        <div class="demo-dot" onclick="demoGoTo(5)"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Why This Matters ─────────────────────────────────────────── -->
+<section class="section" id="why">
+  <div class="container reveal">
+    <span class="section-label">Why this matters</span>
+    <h2>AI is moving from answering questions<br>to taking action.</h2>
+    <p class="lead">Papillion makes sure that transition is safe.</p>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-icon control">&#x1F3AF;</div>
+        <h3>Control</h3>
+        <p>AI follows your rules. No exceptions, no surprises.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon visible">&#x1F441;</div>
+        <h3>Visibility</h3>
+        <p>See what it's doing and why, at every step.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon safe">&#x1F6E1;</div>
+        <h3>Safety</h3>
+        <p>It can't act outside what you allow. Ever.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon delegate">&#x26A1;</div>
+        <h3>Delegation</h3>
+        <p>You still get the full power of automation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Trust ────────────────────────────────────────────────────── -->
+<section class="section" id="trust">
+  <div class="container reveal">
+    <span class="section-label">Trust</span>
+    <h2>You're always in control.</h2>
+    <div class="trust-list">
+      <div class="trust-item">
+        <div class="trust-icon">&#x23F8;</div>
+        <span>Pause anytime</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon">&#x270E;</div>
+        <span>Change rules anytime</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon">&#x1F4CB;</div>
+        <span>See everything that happened</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer CTA ───────────────────────────────────────────────── -->
+<section class="footer-cta reveal">
+  <h2>Try Papillion</h2>
+  <p>See what it feels like to stay in control of AI.</p>
+  <div class="hero-ctas">
+    <a href="#demo" class="btn-primary">Try the demo</a>
+    <a href="../pap/" class="btn-secondary">For developers</a>
+  </div>
+</section>
+
+<!-- ─── Footer ───────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <span class="built-on">Built on <a href="../pap/">PAP (Principal Agent Protocol)</a></span>
+    <div class="footer-links">
+      <a href="https://github.com/Baur-Software">GitHub</a>
+      <a href="../pap/">Documentation</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ─── Nav scroll effect ──────────────────────────────────────────
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// ─── Scroll reveal ──────────────────────────────────────────────
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ─── Demo ───────────────────────────────────────────────────────
+let currentStep = 0;
+const totalSteps = 6;
+const steps = document.querySelectorAll('.demo-step');
+const bars = document.querySelectorAll('.demo-progress-bar');
+const dots = document.querySelectorAll('.demo-dot');
+const status = document.getElementById('demoStatus');
+
+function updateDemo() {
+  steps.forEach((s, i) => s.classList.toggle('active', i === currentStep));
+  bars.forEach((b, i) => {
+    b.classList.toggle('active', i === currentStep);
+    b.classList.toggle('done', i < currentStep);
+  });
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === currentStep);
+    d.classList.toggle('done', i < currentStep);
+  });
+  status.textContent = 'Step ' + (currentStep + 1) + ' of ' + totalSteps;
+}
+
+function demoNext() {
+  if (currentStep < totalSteps - 1) { currentStep++; updateDemo(); }
+}
+function demoGoTo(i) {
+  currentStep = i; updateDemo();
+}
+</script>
+</body>
+</html>
