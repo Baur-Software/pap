@@ -11,12 +11,14 @@ members = [
     "crates/pap-transport",
     "crates/pap-federation",
     "crates/pap-python",
+    "crates/pap-c",
+    "crates/pap-wasm",
     "crates/papillion-shared",
     "apps/papillion",
 ]
 
 [workspace.package]
-version = "0.3.4"
+version = "0.4.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Baur-Software/pap"
