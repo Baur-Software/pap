@@ -22,10 +22,10 @@ pub fn Sidebar() -> impl IntoView {
     view! {
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <div class="sidebar-logo-mark">"R"</div>
+                <div class="sidebar-logo-mark">"🦋"</div>
                 <div>
-                    <div class="sidebar-logo-text">"PAP Registry"</div>
-                    <div class="sidebar-logo-sub">"Federation Node"</div>
+                    <div class="sidebar-logo-text">"Crystalis"</div>
+                    <div class="sidebar-logo-sub">"Agent Registry"</div>
                 </div>
             </div>
             <nav class="nav-section">

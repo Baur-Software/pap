@@ -4179,7 +4179,7 @@ dependencies = [
 
 [[package]]
 name = "pap-c"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "cbindgen",
  "chrono",
@@ -4191,7 +4191,7 @@ dependencies = [
 
 [[package]]
 name = "pap-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4207,7 +4207,7 @@ dependencies = [
 
 [[package]]
 name = "pap-credential"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4224,7 +4224,7 @@ dependencies = [
 
 [[package]]
 name = "pap-did"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "bs58",
  "ed25519-dalek",
@@ -4236,7 +4236,7 @@ dependencies = [
 
 [[package]]
 name = "pap-federation"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "axum",
  "axum-server",
@@ -4260,7 +4260,7 @@ dependencies = [
 
 [[package]]
 name = "pap-marketplace"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4277,7 +4277,7 @@ dependencies = [
 
 [[package]]
 name = "pap-proto"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -4294,7 +4294,7 @@ dependencies = [
 
 [[package]]
 name = "pap-python"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -4311,7 +4311,7 @@ dependencies = [
 
 [[package]]
 name = "pap-registry"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -4352,7 +4352,7 @@ dependencies = [
 
 [[package]]
 name = "pap-transport"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "axum",
  "axum-server",
@@ -4375,7 +4375,7 @@ dependencies = [
 
 [[package]]
 name = "pap-wasm"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -4389,7 +4389,7 @@ dependencies = [
 
 [[package]]
 name = "pap-webauthn"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4406,7 +4406,7 @@ dependencies = [
 
 [[package]]
 name = "papillion"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "axum",
  "axum-server",
@@ -4441,7 +4441,7 @@ dependencies = [
 
 [[package]]
 name = "papillion-shared"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "serde",
