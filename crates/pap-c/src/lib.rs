@@ -40,8 +40,11 @@ fn set_last_error(msg: &str) {
 /// or NULL if no error has occurred. Caller must free with `pap_string_free`.
 #[no_mangle]
 pub extern "C" fn pap_last_error_message() -> *mut c_char {
-    LAST_ERROR.with(|c| match c.borrow().as_deref() {
-        Some(s) => CString::new(s).unwrap_or_default().into_raw(),
+    LAST_ERROR.with(|c| match c.borrow_mut().take() {
+        Some(s) => match CString::new(s) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        },
         None => std::ptr::null_mut(),
     })
 }
@@ -59,6 +62,20 @@ pub unsafe extern "C" fn pap_string_free(s: *mut c_char) {
 // ---------------------------------------------------------------------------
 // Internal helpers — not exported
 // ---------------------------------------------------------------------------
+
+/// Build a heap-allocated C string, setting last_error and returning NULL on
+/// embedded null bytes (which CString::new rejects).
+macro_rules! cstring_or_null {
+    ($s:expr) => {{
+        match CString::new($s) {
+            Ok(cs) => cs.into_raw(),
+            Err(e) => {
+                set_last_error(&format!("string contains null byte: {e}"));
+                return std::ptr::null_mut();
+            }
+        }
+    }};
+}
 
 /// Borrow a `*const c_char` as `&str`, returning null on failure.
 macro_rules! cstr_or_null {
@@ -268,7 +285,7 @@ pub unsafe extern "C" fn pap_keypair_free(kp: *mut PapPrincipalKeypair) {
 #[no_mangle]
 pub extern "C" fn pap_keypair_did(kp: *const PapPrincipalKeypair) -> *mut c_char {
     let kp = ref_or_null!(kp);
-    CString::new(kp.inner.did()).unwrap_or_default().into_raw()
+    cstring_or_null!(kp.inner.did())
 }
 
 /// Writes the 32-byte public key into `out` (caller-allocated 32-byte buffer).
@@ -339,7 +356,7 @@ pub unsafe extern "C" fn pap_session_keypair_free(kp: *mut PapSessionKeypair) {
 #[no_mangle]
 pub extern "C" fn pap_session_keypair_did(kp: *const PapSessionKeypair) -> *mut c_char {
     let kp = ref_or_null!(kp);
-    CString::new(kp.inner.did()).unwrap_or_default().into_raw()
+    cstring_or_null!(kp.inner.did())
 }
 
 // ---------------------------------------------------------------------------
@@ -475,9 +492,12 @@ pub extern "C" fn pap_scope_permits(
         Some(s) => s,
         None => return 0,
     };
-    let action_str = match (action.is_null(), unsafe { CStr::from_ptr(action) }.to_str()) {
-        (false, Ok(s)) => s,
-        _ => return 0,
+    if action.is_null() {
+        return 0;
+    }
+    let action_str = match unsafe { CStr::from_ptr(action) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
     };
     if scope.inner.permits(action_str) {
         1
@@ -532,19 +552,33 @@ pub unsafe extern "C" fn pap_disclosure_entry_new(
     }
     let mut perm_vec = Vec::with_capacity(permitted_count);
     for i in 0..permitted_count {
-        let s = unsafe { CStr::from_ptr(*permitted.add(i)) }
-            .to_str()
-            .unwrap_or_default()
-            .to_string();
-        perm_vec.push(s);
+        let ptr = unsafe { *permitted.add(i) };
+        if ptr.is_null() {
+            set_last_error(&format!("null permitted[{i}] string pointer"));
+            return std::ptr::null_mut();
+        }
+        match unsafe { CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => perm_vec.push(s.to_string()),
+            Err(_) => {
+                set_last_error(&format!("permitted[{i}] is not valid UTF-8"));
+                return std::ptr::null_mut();
+            }
+        }
     }
     let mut prohib_vec = Vec::with_capacity(prohibited_count);
     for i in 0..prohibited_count {
-        let s = unsafe { CStr::from_ptr(*prohibited.add(i)) }
-            .to_str()
-            .unwrap_or_default()
-            .to_string();
-        prohib_vec.push(s);
+        let ptr = unsafe { *prohibited.add(i) };
+        if ptr.is_null() {
+            set_last_error(&format!("null prohibited[{i}] string pointer"));
+            return std::ptr::null_mut();
+        }
+        match unsafe { CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => prohib_vec.push(s.to_string()),
+            Err(_) => {
+                set_last_error(&format!("prohibited[{i}] is not valid UTF-8"));
+                return std::ptr::null_mut();
+            }
+        }
     }
     Box::into_raw(Box::new(PapDisclosureEntry {
         inner: DisclosureEntry::new(type_str, perm_vec, prohib_vec),
@@ -777,7 +811,7 @@ pub unsafe extern "C" fn pap_mandate_verify(
 pub extern "C" fn pap_mandate_to_json(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     match serde_json::to_string(&m.inner) {
-        Ok(s) => CString::new(s).unwrap_or_default().into_raw(),
+        Ok(s) => cstring_or_null!(s),
         Err(e) => {
             set_last_error(&e.to_string());
             std::ptr::null_mut()
@@ -807,7 +841,7 @@ pub extern "C" fn pap_mandate_from_json(json: *const c_char) -> *mut PapMandate 
 #[no_mangle]
 pub extern "C" fn pap_mandate_hash(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
-    CString::new(m.inner.hash()).unwrap_or_default().into_raw()
+    cstring_or_null!(m.inner.hash())
 }
 
 /// Returns the current decay state as an integer constant.
@@ -939,8 +973,8 @@ pub extern "C" fn pap_mandate_is_expired(m: *const PapMandate) -> c_int {
 pub extern "C" fn pap_mandate_principal_did(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     CString::new(m.inner.principal_did.as_str())
-        .unwrap_or_default()
-        .into_raw()
+        .map(|cs| cs.into_raw())
+        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
 }
 
 /// Returns the agent DID. Caller frees with `pap_string_free`.
@@ -948,8 +982,8 @@ pub extern "C" fn pap_mandate_principal_did(m: *const PapMandate) -> *mut c_char
 pub extern "C" fn pap_mandate_agent_did(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     CString::new(m.inner.agent_did.as_str())
-        .unwrap_or_default()
-        .into_raw()
+        .map(|cs| cs.into_raw())
+        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
 }
 
 /// Returns the issuer DID. Caller frees with `pap_string_free`.
@@ -957,8 +991,8 @@ pub extern "C" fn pap_mandate_agent_did(m: *const PapMandate) -> *mut c_char {
 pub extern "C" fn pap_mandate_issuer_did(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     CString::new(m.inner.issuer_did.as_str())
-        .unwrap_or_default()
-        .into_raw()
+        .map(|cs| cs.into_raw())
+        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
 }
 
 /// Returns the TTL as an RFC 3339 string. Caller frees with `pap_string_free`.
@@ -966,8 +1000,8 @@ pub extern "C" fn pap_mandate_issuer_did(m: *const PapMandate) -> *mut c_char {
 pub extern "C" fn pap_mandate_ttl(m: *const PapMandate) -> *mut c_char {
     let m = ref_or_null!(m);
     CString::new(m.inner.ttl.to_rfc3339())
-        .unwrap_or_default()
-        .into_raw()
+        .map(|cs| cs.into_raw())
+        .unwrap_or_else(|e| { set_last_error(&format!("string contains null byte: {e}")); std::ptr::null_mut() })
 }
 
 // ---------------------------------------------------------------------------
@@ -1035,7 +1069,7 @@ pub unsafe extern "C" fn pap_token_sign(
 pub extern "C" fn pap_token_to_json(t: *const PapCapabilityToken) -> *mut c_char {
     let t = ref_or_null!(t);
     match serde_json::to_string(&t.inner) {
-        Ok(s) => CString::new(s).unwrap_or_default().into_raw(),
+        Ok(s) => cstring_or_null!(s),
         Err(e) => {
             set_last_error(&e.to_string());
             std::ptr::null_mut()
@@ -1168,5 +1202,5 @@ pub extern "C" fn pap_session_state(s: *const PapSession) -> c_int {
 #[no_mangle]
 pub extern "C" fn pap_session_id(s: *const PapSession) -> *mut c_char {
     let s = ref_or_null!(s);
-    CString::new(s.inner.id.as_str()).unwrap_or_default().into_raw()
+    cstring_or_null!(s.inner.id.as_str())
 }
