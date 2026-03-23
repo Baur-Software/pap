@@ -89,6 +89,9 @@ pap/
     pap-transport/    # HTTP client/server for 6-phase handshake
     pap-federation/   # Cross-registry sync, announce, peer exchange
     pap-webauthn/     # WebAuthn signer abstraction + software fallback
+  apps/
+    registry/         # Hostable federated PAP registry (Axum + Leptos SSR, SQLite/Postgres)
+    papillion/        # Desktop reference implementation (Tauri)
 ```
 
 ### pap-did
@@ -129,6 +132,29 @@ pap/
 - `FederatedRegistry` — Local + remote agent tracking with content-hash dedup.
 - `FederationServer` — HTTP endpoints for query, announce, peer discovery.
 - `FederationClient` — Pull sync by action type, push announcements, peer exchange.
+
+## Hostable Registry
+
+`apps/registry/` is a standalone, self-hosted federated PAP registry. Deploy one node to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
+
+```bash
+# Run locally (SQLite, no auth)
+cargo run -p pap-registry --features ssr
+
+# Docker (with persistent volume and admin token)
+docker build -f apps/registry/Dockerfile -t pap-registry .
+docker run -p 7890:7890 -v registry_data:/data \
+  -e PAP_REGISTRY_ADMIN_TOKEN=change-me pap-registry
+```
+
+Key characteristics:
+- Did:key node identity persisted across restarts; ephemeral self-signed TLS cert bound to that DID
+- TLS fingerprint pinning for all peer connections — no CA dependency
+- Ed25519 signature verification at agent ingest; unsigned payloads rejected with `422`
+- Admin REST API (`/api/*`) + Leptos SSR web UI at `/`
+- Paginated full-text search (SQLite FTS5, Postgres tsvector)
+
+See [apps/registry/README.md](apps/registry/README.md) for full documentation.
 
 ## What This Replaces
 
