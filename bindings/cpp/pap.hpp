@@ -366,14 +366,14 @@ public:
 
     DecayState decay_state() const {
         int v = pap_mandate_decay_state(h_);
-        if (v < 0) detail::throw_last_error("mandate_decay_state");
+        if (v < 0 || v > PAP_DECAY_SUSPENDED) detail::throw_last_error("mandate_decay_state");
         return static_cast<DecayState>(v);
     }
 
     /// Compute the time-based decay state without mutating the mandate.
     DecayState compute_decay_state(int64_t decay_window_secs) const {
         int v = pap_mandate_compute_decay_state(h_, decay_window_secs);
-        if (v < 0) detail::throw_last_error("compute_decay_state");
+        if (v < 0 || v > PAP_DECAY_SUSPENDED) detail::throw_last_error("compute_decay_state");
         return static_cast<DecayState>(v);
     }
 
@@ -518,7 +518,7 @@ public:
 
     SessionState state() const {
         int v = pap_session_state(h_);
-        if (v < 0) detail::throw_last_error("session_state");
+        if (v < 0 || v > PAP_SESSION_CLOSED) detail::throw_last_error("session_state");
         return static_cast<SessionState>(v);
     }
 
