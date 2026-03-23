@@ -88,7 +88,7 @@ async fn get_status(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let registry = state.registry.lock().unwrap();
+    let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
     Json(RegistryStatus {
         did: state.node_did.clone(),
         endpoint: state.node_endpoint.clone(),
@@ -145,7 +145,7 @@ async fn register_agent(
     }
     // Verify Ed25519 signature before storing.
     {
-        let registry = state.registry.lock().unwrap();
+        let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         if !registry.verify_advertisement(&ad) {
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -164,7 +164,7 @@ async fn register_agent(
             .into_response();
     }
     {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         let _ = registry.register_local(ad); // duplicate silently ignored
     }
     (StatusCode::CREATED, Json(serde_json::json!({"ok": true, "hash": hash}))).into_response()
@@ -190,7 +190,7 @@ async fn remove_agent(
         }
     };
     if deleted {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.remove_by_hash(&hash);
         Json(serde_json::json!({"ok": true})).into_response()
     } else {
@@ -241,7 +241,7 @@ async fn add_peer(
             .into_response();
     }
     {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.add_peer(peer);
     }
     (StatusCode::CREATED, Json(serde_json::json!({"ok": true}))).into_response()
@@ -255,7 +255,10 @@ async fn remove_peer(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let did_decoded = percent_decode(&did);
+    let did_decoded = match percent_decode(&did) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
     // DB first — only remove from memory if persistence succeeds.
     let deleted = match state.store.delete_peer(&did_decoded).await {
         Ok(d) => d,
@@ -268,7 +271,7 @@ async fn remove_peer(
         }
     };
     if deleted {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.remove_peer(&did_decoded);
         Json(serde_json::json!({"ok": true})).into_response()
     } else {
@@ -288,9 +291,12 @@ async fn sync_peer(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
-    let did_decoded = percent_decode(&did);
+    let did_decoded = match percent_decode(&did) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
     let endpoint = {
-        let registry = state.registry.lock().unwrap();
+        let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry
             .peers()
             .iter()
@@ -312,10 +318,20 @@ async fn sync_peer(
     // TODO(C2): validate stored cert_fingerprint against the actual TLS cert presented
     // during handshake. Until fingerprint pinning is implemented, self-signed certs are
     // accepted unconditionally and the stored fingerprint provides no MITM protection.
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
+        .timeout(std::time::Duration::from_secs(30))
         .build()
-        .unwrap();
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("failed to build HTTP client: {e}")})),
+            )
+                .into_response()
+        }
+    };
 
     let resp = match client
         .get(format!("{}/federation/query?action=*", endpoint))
@@ -348,7 +364,7 @@ async fn sync_peer(
         pap_federation::sync::FederationMessage::QueryResponse { advertisements } => {
             // Identify new ads without touching the in-memory registry yet.
             let new_ads: Vec<_> = {
-                let registry = state.registry.lock().unwrap();
+                let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
                 let existing: std::collections::HashSet<String> =
                     registry.all_advertisements().iter().map(|a| a.hash()).collect();
                 advertisements
@@ -358,9 +374,20 @@ async fn sync_peer(
             };
 
             // DB first — only merge into memory what was successfully persisted.
+            // Verify the Ed25519 signature before writing to DB so invalid-signature
+            // ads from a compromised peer never enter persistent storage.
             let mut persisted = Vec::with_capacity(new_ads.len());
             for ad in new_ads {
                 let hash = ad.hash();
+                {
+                    let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
+                    if !registry.verify_advertisement(&ad) {
+                        tracing::warn!(
+                            "Dropping synced agent {hash} from peer {endpoint}: invalid or missing signature"
+                        );
+                        continue;
+                    }
+                }
                 match state.store.insert_agent(&hash, &ad).await {
                     Ok(()) => persisted.push(ad),
                     Err(e) => tracing::error!("DB write failed for synced agent {hash}: {e}"),
@@ -369,7 +396,7 @@ async fn sync_peer(
 
             let merged = persisted.len();
             {
-                let mut registry = state.registry.lock().unwrap();
+                let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
                 registry.merge_remote(persisted);
             }
 
@@ -395,10 +422,17 @@ async fn sync_peer(
     }
 }
 
-fn percent_decode(s: &str) -> String {
+fn percent_decode(s: &str) -> Result<String, Response> {
     percent_encoding::percent_decode_str(s)
-        .decode_utf8_lossy()
-        .into_owned()
+        .decode_utf8()
+        .map(|s| s.into_owned())
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "path parameter contains invalid UTF-8"})),
+            )
+                .into_response()
+        })
 }
 
 #[cfg(test)]
