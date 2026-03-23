@@ -8,10 +8,7 @@ pub fn PeersPage() -> impl IntoView {
     let show_add = RwSignal::new(false);
     let sync_msg = RwSignal::new(None::<String>);
 
-    let peers = Resource::new(
-        move || refresh_key.get(),
-        |_| api::list_peers(),
-    );
+    let peers = Resource::new(move || refresh_key.get(), |_| api::list_peers());
 
     let reload = move || refresh_key.update(|n| *n += 1);
 
@@ -107,20 +104,16 @@ fn PeerRow(
         }
     });
 
-    Effect::new(move || {
-        match remove_action.value().get() {
-            Some(Ok(())) => on_remove.run(()),
-            Some(Err(e)) => on_sync.run(format!("Remove failed: {}", e)),
-            None => {}
-        }
+    Effect::new(move || match remove_action.value().get() {
+        Some(Ok(())) => on_remove.run(()),
+        Some(Err(e)) => on_sync.run(format!("Remove failed: {}", e)),
+        None => {}
     });
 
-    Effect::new(move || {
-        match sync_action.value().get() {
-            Some(Ok(n)) => on_sync.run(format!("Synced {} new agents from peer.", n)),
-            Some(Err(e)) => on_sync.run(format!("Sync failed: {}", e)),
-            None => {}
-        }
+    Effect::new(move || match sync_action.value().get() {
+        Some(Ok(n)) => on_sync.run(format!("Synced {} new agents from peer.", n)),
+        Some(Err(e)) => on_sync.run(format!("Sync failed: {}", e)),
+        None => {}
     });
 
     view! {
@@ -173,12 +166,10 @@ fn AddPeerModal(
         async move { api::add_peer(did, endpoint, fp).await }
     });
 
-    Effect::new(move || {
-        match add_action.value().get() {
-            Some(Ok(())) => on_success.run(()),
-            Some(Err(e)) => error.set(Some(e.to_string())),
-            None => {}
-        }
+    Effect::new(move || match add_action.value().get() {
+        Some(Ok(())) => on_success.run(()),
+        Some(Err(e)) => error.set(Some(e.to_string())),
+        None => {}
     });
 
     let submitting = move || add_action.pending().get();
@@ -193,7 +184,11 @@ fn AddPeerModal(
             return;
         }
         error.set(None);
-        let fp = if fingerprint.is_empty() { None } else { Some(fingerprint) };
+        let fp = if fingerprint.is_empty() {
+            None
+        } else {
+            Some(fingerprint)
+        };
         add_action.dispatch((did, endpoint, fp));
     };
 

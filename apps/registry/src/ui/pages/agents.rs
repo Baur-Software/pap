@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::ui::api::{self, AgentEntry, AgentListResponse};
+use crate::ui::api::{self, AgentEntry};
 
 const PER_PAGE: u32 = 20;
 
@@ -127,14 +127,15 @@ pub fn AgentsPage() -> impl IntoView {
 }
 
 #[component]
-fn AgentCard(
-    entry: AgentEntry,
-    #[prop(into)] on_remove: Callback<()>,
-) -> impl IntoView {
+fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl IntoView {
     let hash = entry.hash.clone();
     let hash_display = {
         let h = &hash;
-        if h.len() > 16 { format!("{}…", &h[..16]) } else { h.clone() }
+        if h.len() > 16 {
+            format!("{}…", &h[..16])
+        } else {
+            h.clone()
+        }
     };
     let ad = entry.ad;
     let name = ad.name.clone();
@@ -155,12 +156,10 @@ fn AgentCard(
     });
 
     // React to action completion
-    Effect::new(move || {
-        match remove_action.value().get() {
-            Some(Ok(())) => on_remove.run(()),
-            Some(Err(e)) => error.set(Some(e.to_string())),
-            None => {}
-        }
+    Effect::new(move || match remove_action.value().get() {
+        Some(Ok(())) => on_remove.run(()),
+        Some(Err(e)) => error.set(Some(e.to_string())),
+        None => {}
     });
 
     let removing = move || remove_action.pending().get();
@@ -218,12 +217,10 @@ fn RegisterModal(
         async move { api::register_agent_json(json).await }
     });
 
-    Effect::new(move || {
-        match register_action.value().get() {
-            Some(Ok(_hash)) => on_success.run(()),
-            Some(Err(e)) => error.set(Some(e.to_string())),
-            None => {}
-        }
+    Effect::new(move || match register_action.value().get() {
+        Some(Ok(_hash)) => on_success.run(()),
+        Some(Err(e)) => error.set(Some(e.to_string())),
+        None => {}
     });
 
     let submitting = move || register_action.pending().get();

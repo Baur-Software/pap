@@ -76,12 +76,12 @@ fn StatusView(s: RegistryStatus) -> impl IntoView {
 }
 
 #[component]
-fn EndpointRow(
-    method: &'static str,
-    path: &'static str,
-    desc: &'static str,
-) -> impl IntoView {
-    let method_color = if method == "GET" { "var(--teal)" } else { "var(--gold)" };
+fn EndpointRow(method: &'static str, path: &'static str, desc: &'static str) -> impl IntoView {
+    let method_color = if method == "GET" {
+        "var(--teal)"
+    } else {
+        "var(--gold)"
+    };
     view! {
         <div style="display:flex; gap: var(--sp-md); align-items: baseline; padding: var(--sp-xs) 0; border-bottom: 1px solid var(--border-subtle)">
             <span style=format!("font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: {}; width: 36px; flex-shrink: 0", method_color)>

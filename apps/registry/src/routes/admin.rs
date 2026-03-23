@@ -40,8 +40,12 @@ pub struct AgentListQuery {
     #[serde(default = "default_per_page")]
     pub per_page: u32,
 }
-fn default_page() -> u32 { 1 }
-fn default_per_page() -> u32 { 20 }
+fn default_page() -> u32 {
+    1
+}
+fn default_per_page() -> u32 {
+    20
+}
 
 /// Paginated agent list response — replaces the old Vec<AgentEntry>.
 #[derive(Debug, Serialize)]
@@ -81,10 +85,7 @@ fn auth_error() -> Response {
         .into_response()
 }
 
-async fn get_status(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn get_status(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
@@ -167,7 +168,11 @@ async fn register_agent(
         let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         let _ = registry.register_local(ad); // duplicate silently ignored
     }
-    (StatusCode::CREATED, Json(serde_json::json!({"ok": true, "hash": hash}))).into_response()
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({"ok": true, "hash": hash})),
+    )
+        .into_response()
 }
 
 async fn remove_agent(
@@ -203,10 +208,7 @@ async fn remove_agent(
 }
 
 /// List peers — reads from DB so last_sync is always current.
-async fn list_peers(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn list_peers(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
@@ -351,7 +353,10 @@ async fn sync_peer(
     let msg = match resp.json::<pap_federation::sync::FederationMessage>().await {
         Ok(m) => m,
         Err(e) => {
-            tracing::error!("Failed to deserialize federation response from {}: {e}", endpoint);
+            tracing::error!(
+                "Failed to deserialize federation response from {}: {e}",
+                endpoint
+            );
             return (
                 StatusCode::BAD_GATEWAY,
                 Json(serde_json::json!({"error": format!("invalid response from peer: {e}")})),
@@ -365,8 +370,11 @@ async fn sync_peer(
             // Identify new ads without touching the in-memory registry yet.
             let new_ads: Vec<_> = {
                 let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
-                let existing: std::collections::HashSet<String> =
-                    registry.all_advertisements().iter().map(|a| a.hash()).collect();
+                let existing: std::collections::HashSet<String> = registry
+                    .all_advertisements()
+                    .iter()
+                    .map(|a| a.hash())
+                    .collect();
                 advertisements
                     .into_iter()
                     .filter(|ad| !existing.contains(&ad.hash()))
@@ -456,7 +464,10 @@ mod tests {
 
     async fn test_router(token: Option<&str>) -> axum::Router {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
         let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
         let state = AppState {
             registry: Arc::new(Mutex::new(FederatedRegistry::new())),
@@ -643,7 +654,10 @@ mod tests {
     async fn register_then_remove_agent_roundtrip() {
         // Use a single AppState for both POST and DELETE.
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
         let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
         let state = AppState {
             registry: Arc::new(Mutex::new(FederatedRegistry::new())),
@@ -692,7 +706,10 @@ mod tests {
     #[tokio::test]
     async fn add_peer_and_appears_in_list() {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
         let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
         let state = AppState {
             registry: Arc::new(Mutex::new(FederatedRegistry::new())),
@@ -738,7 +755,10 @@ mod tests {
     #[tokio::test]
     async fn add_then_remove_peer_roundtrip() {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
         let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
         let state = AppState {
             registry: Arc::new(Mutex::new(FederatedRegistry::new())),

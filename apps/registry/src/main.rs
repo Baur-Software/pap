@@ -46,7 +46,10 @@ async fn main() -> anyhow::Result<()> {
                 signing_key_bytes: kp.signing_key().to_bytes(),
             };
             store.save_identity(&identity).await?;
-            info!("Generated and persisted new node identity: {}", identity.did);
+            info!(
+                "Generated and persisted new node identity: {}",
+                identity.did
+            );
             kp
         }
     };
@@ -75,7 +78,10 @@ async fn main() -> anyhow::Result<()> {
         for peer in peers {
             reg.add_peer(peer);
         }
-        info!("Hydrated registry: {} agents, {} peers", agent_count, peer_count);
+        info!(
+            "Hydrated registry: {} agents, {} peers",
+            agent_count, peer_count
+        );
     }
 
     let app_state = AppState::new(

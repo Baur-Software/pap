@@ -18,7 +18,6 @@ pub struct Config {
     /// Public endpoint URL advertised to federation peers.
     /// Example: "https://registry.example.com:7890"
     pub public_endpoint: String,
-
 }
 
 impl Config {

@@ -18,8 +18,7 @@ impl DbConfig {
             return serde_yaml::from_str::<DbConfig>(&text)
                 .context("db.yml is present but could not be parsed");
         }
-        let path = std::env::var("PAP_REGISTRY_DB")
-            .unwrap_or_else(|_| "./registry.db".into());
+        let path = std::env::var("PAP_REGISTRY_DB").unwrap_or_else(|_| "./registry.db".into());
         Ok(DbConfig::Sqlite {
             url: Some(format!("sqlite:{path}?mode=rwc")),
         })

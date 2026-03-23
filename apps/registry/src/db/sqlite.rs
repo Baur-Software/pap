@@ -40,7 +40,10 @@ impl SqliteStore {
             if key_bytes.len() == 32 {
                 let mut bytes = [0u8; 32];
                 bytes.copy_from_slice(&key_bytes);
-                Some(NodeIdentity { did, signing_key_bytes: bytes })
+                Some(NodeIdentity {
+                    did,
+                    signing_key_bytes: bytes,
+                })
             } else {
                 None
             }
@@ -62,11 +65,10 @@ impl SqliteStore {
     // ── Agents ───────────────────────────────────────────────────────────────
 
     pub async fn load_all_agents(&self) -> Result<Vec<AgentAdvertisement>> {
-        let rows = sqlx::query_as::<_, (String,)>(
-            "SELECT ad_json FROM agents ORDER BY inserted_at ASC",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows =
+            sqlx::query_as::<_, (String,)>("SELECT ad_json FROM agents ORDER BY inserted_at ASC")
+                .fetch_all(&self.pool)
+                .await?;
 
         rows.into_iter()
             .map(|(json,)| {
@@ -165,7 +167,12 @@ impl SqliteStore {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(AgentsPage { items, total, page, per_page })
+        Ok(AgentsPage {
+            items,
+            total,
+            page,
+            per_page,
+        })
     }
 
     // ── Peers ────────────────────────────────────────────────────────────────
@@ -183,7 +190,12 @@ impl SqliteStore {
                 let last_sync = last_sync
                     .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                     .map(|dt| dt.with_timezone(&Utc));
-                RegistryPeer { did, endpoint, cert_fingerprint, last_sync }
+                RegistryPeer {
+                    did,
+                    endpoint,
+                    cert_fingerprint,
+                    last_sync,
+                }
             })
             .collect())
     }
@@ -295,7 +307,10 @@ mod tests {
         let ad = make_signed_ad("FlightSearcher");
         let hash = ad.hash();
         s.insert_agent(&hash, &ad).await.unwrap();
-        let page = s.search_agents(Some("FlightSearcher"), 1, 20).await.unwrap();
+        let page = s
+            .search_agents(Some("FlightSearcher"), 1, 20)
+            .await
+            .unwrap();
         assert_eq!(page.total, 1);
         assert_eq!(page.items[0].ad.name, "FlightSearcher");
     }
@@ -303,8 +318,12 @@ mod tests {
     #[tokio::test]
     async fn agent_search_empty_query_returns_all() {
         let s = in_memory_store().await;
-        s.insert_agent(&make_signed_ad("A").hash(), &make_signed_ad("A")).await.unwrap();
-        s.insert_agent(&make_signed_ad("B").hash(), &make_signed_ad("B")).await.unwrap();
+        s.insert_agent(&make_signed_ad("A").hash(), &make_signed_ad("A"))
+            .await
+            .unwrap();
+        s.insert_agent(&make_signed_ad("B").hash(), &make_signed_ad("B"))
+            .await
+            .unwrap();
         let page = s.search_agents(None, 1, 20).await.unwrap();
         assert_eq!(page.total, 2);
     }
@@ -314,7 +333,11 @@ mod tests {
         // Regression test for I8: FTS5 special chars must not cause an error.
         let s = in_memory_store().await;
         let result = s.search_agents(Some("(NOT\"*"), 1, 20).await;
-        assert!(result.is_ok(), "FTS special chars caused an error: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "FTS special chars caused an error: {:?}",
+            result.err()
+        );
     }
 
     // ── Peers ─────────────────────────────────────────────────────────────────
@@ -322,10 +345,8 @@ mod tests {
     #[tokio::test]
     async fn peer_upsert_and_load_all() {
         let s = in_memory_store().await;
-        let peer = pap_federation::peer::RegistryPeer::new(
-            "did:key:zPeer1",
-            "https://peer1.example.com",
-        );
+        let peer =
+            pap_federation::peer::RegistryPeer::new("did:key:zPeer1", "https://peer1.example.com");
         s.upsert_peer(&peer).await.unwrap();
         let peers = s.load_all_peers().await.unwrap();
         assert_eq!(peers.len(), 1);
@@ -335,7 +356,8 @@ mod tests {
     #[tokio::test]
     async fn peer_delete_returns_true_then_false() {
         let s = in_memory_store().await;
-        let peer = pap_federation::peer::RegistryPeer::new("did:key:zPeer2", "https://p2.example.com");
+        let peer =
+            pap_federation::peer::RegistryPeer::new("did:key:zPeer2", "https://p2.example.com");
         s.upsert_peer(&peer).await.unwrap();
         assert!(s.delete_peer("did:key:zPeer2").await.unwrap());
         assert!(!s.delete_peer("did:key:zPeer2").await.unwrap());
@@ -344,9 +366,11 @@ mod tests {
     #[tokio::test]
     async fn peer_upsert_updates_endpoint() {
         let s = in_memory_store().await;
-        let peer1 = pap_federation::peer::RegistryPeer::new("did:key:zPeer3", "https://old.example.com");
+        let peer1 =
+            pap_federation::peer::RegistryPeer::new("did:key:zPeer3", "https://old.example.com");
         s.upsert_peer(&peer1).await.unwrap();
-        let peer2 = pap_federation::peer::RegistryPeer::new("did:key:zPeer3", "https://new.example.com");
+        let peer2 =
+            pap_federation::peer::RegistryPeer::new("did:key:zPeer3", "https://new.example.com");
         s.upsert_peer(&peer2).await.unwrap();
         let peers = s.load_all_peers().await.unwrap();
         assert_eq!(peers.len(), 1);
@@ -356,7 +380,8 @@ mod tests {
     #[tokio::test]
     async fn peer_sync_time_update() {
         let s = in_memory_store().await;
-        let peer = pap_federation::peer::RegistryPeer::new("did:key:zPeer4", "https://p4.example.com");
+        let peer =
+            pap_federation::peer::RegistryPeer::new("did:key:zPeer4", "https://p4.example.com");
         s.upsert_peer(&peer).await.unwrap();
         let ts = chrono::Utc::now();
         s.update_peer_sync_time("did:key:zPeer4", ts).await.unwrap();

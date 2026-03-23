@@ -67,10 +67,11 @@ pub struct RegistryPeer {
 
 #[server]
 pub async fn get_status() -> Result<RegistryStatus, ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
-    let headers: HeaderMap = leptos_axum::extract().await
+    use axum::http::HeaderMap;
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
@@ -96,10 +97,11 @@ pub async fn list_agents(
     page: u32,
     per_page: u32,
 ) -> Result<AgentListResponse, ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
-    let headers: HeaderMap = leptos_axum::extract().await
+    use axum::http::HeaderMap;
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
@@ -113,10 +115,10 @@ pub async fn list_agents(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // JSON round-trip: server AgentEntry (pap_marketplace ad) → wire JSON → ui AgentEntry
-    let items_json = serde_json::to_string(&db_page.items)
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    let items: Vec<AgentEntry> = serde_json::from_str(&items_json)
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let items_json =
+        serde_json::to_string(&db_page.items).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let items: Vec<AgentEntry> =
+        serde_json::from_str(&items_json).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let total_pages = ((db_page.total as u32).saturating_add(per_page - 1))
         .checked_div(per_page)
@@ -134,17 +136,21 @@ pub async fn list_agents(
 
 #[server]
 pub async fn remove_agent(hash: String) -> Result<(), ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
-    let headers: HeaderMap = leptos_axum::extract().await
+    use axum::http::HeaderMap;
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
         return Err(ServerFnError::new("unauthorized"));
     }
     // DB first — only update memory if persistence succeeds.
-    let deleted = state.store.delete_agent(&hash).await
+    let deleted = state
+        .store
+        .delete_agent(&hash)
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     if deleted {
         let mut registry = state.registry.lock().unwrap();
@@ -158,12 +164,13 @@ pub async fn remove_agent(hash: String) -> Result<(), ServerFnError> {
 /// Register an agent from raw advertisement JSON. Returns the content hash.
 #[server]
 pub async fn register_agent_json(json: String) -> Result<String, ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
+    use axum::http::HeaderMap;
     use pap_marketplace::AgentAdvertisement as PapAd;
 
-    let headers: HeaderMap = leptos_axum::extract().await
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
@@ -184,7 +191,10 @@ pub async fn register_agent_json(json: String) -> Result<String, ServerFnError> 
 
     let hash = ad.hash();
     // DB first — persist before updating in-memory state.
-    state.store.insert_agent(&hash, &ad).await
+    state
+        .store
+        .insert_agent(&hash, &ad)
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     {
         let mut registry = state.registry.lock().unwrap();
@@ -195,10 +205,11 @@ pub async fn register_agent_json(json: String) -> Result<String, ServerFnError> 
 
 #[server]
 pub async fn list_peers() -> Result<Vec<RegistryPeer>, ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
-    let headers: HeaderMap = leptos_axum::extract().await
+    use axum::http::HeaderMap;
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
@@ -222,12 +233,13 @@ pub async fn add_peer(
     endpoint: String,
     cert_fingerprint: Option<String>,
 ) -> Result<(), ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
+    use axum::http::HeaderMap;
     use pap_federation::peer::RegistryPeer as FedPeer;
 
-    let headers: HeaderMap = leptos_axum::extract().await
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
@@ -238,7 +250,10 @@ pub async fn add_peer(
         None => FedPeer::new(&did, &endpoint),
     };
     // DB first — persist before updating in-memory state.
-    state.store.upsert_peer(&peer).await
+    state
+        .store
+        .upsert_peer(&peer)
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     {
         let mut registry = state.registry.lock().unwrap();
@@ -249,18 +264,22 @@ pub async fn add_peer(
 
 #[server]
 pub async fn remove_peer(did: String) -> Result<(), ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
+    use axum::http::HeaderMap;
 
-    let headers: HeaderMap = leptos_axum::extract().await
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
         return Err(ServerFnError::new("unauthorized"));
     }
     // DB first — only remove from memory if persistence succeeds.
-    let deleted = state.store.delete_peer(&did).await
+    let deleted = state
+        .store
+        .delete_peer(&did)
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     if deleted {
         let mut registry = state.registry.lock().unwrap();
@@ -273,11 +292,12 @@ pub async fn remove_peer(did: String) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
-    use axum::http::HeaderMap;
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
+    use axum::http::HeaderMap;
 
-    let headers: HeaderMap = leptos_axum::extract().await
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
     if !state.is_authorized(extract_bearer(&headers)) {
@@ -308,9 +328,14 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let msg = resp.json::<pap_federation::sync::FederationMessage>().await
+    let msg = resp
+        .json::<pap_federation::sync::FederationMessage>()
+        .await
         .map_err(|e| {
-            tracing::error!("Failed to deserialize federation response from {}: {e}", endpoint);
+            tracing::error!(
+                "Failed to deserialize federation response from {}: {e}",
+                endpoint
+            );
             ServerFnError::new(format!("invalid response from peer: {e}"))
         })?;
 
@@ -318,8 +343,11 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
         // Identify new ads without touching the in-memory registry yet.
         let new_ads: Vec<_> = {
             let registry = state.registry.lock().unwrap();
-            let existing: std::collections::HashSet<String> =
-                registry.all_advertisements().iter().map(|a| a.hash()).collect();
+            let existing: std::collections::HashSet<String> = registry
+                .all_advertisements()
+                .iter()
+                .map(|a| a.hash())
+                .collect();
             advertisements
                 .into_iter()
                 .filter(|ad| !existing.contains(&ad.hash()))

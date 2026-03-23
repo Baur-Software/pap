@@ -41,9 +41,7 @@ impl AppState {
         match &self.admin_token {
             None => true,
             Some(expected) => token
-                .map(|t| {
-                    constant_time_eq::constant_time_eq(t.as_bytes(), expected.as_bytes())
-                })
+                .map(|t| constant_time_eq::constant_time_eq(t.as_bytes(), expected.as_bytes()))
                 .unwrap_or(false),
         }
     }
@@ -52,11 +50,14 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{RegistryStore, sqlite::SqliteStore};
+    use crate::db::{sqlite::SqliteStore, RegistryStore};
 
     async fn make_state(token: Option<&str>) -> AppState {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
         AppState {
             registry: Arc::new(Mutex::new(FederatedRegistry::new())),
             store: Arc::new(RegistryStore::Sqlite(SqliteStore { pool })),

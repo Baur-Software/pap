@@ -5,9 +5,9 @@ pub mod config;
 #[cfg(feature = "ssr")]
 pub mod db;
 #[cfg(feature = "ssr")]
-pub mod state;
-#[cfg(feature = "ssr")]
 pub mod routes;
+#[cfg(feature = "ssr")]
+pub mod state;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]

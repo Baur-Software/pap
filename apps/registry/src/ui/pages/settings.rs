@@ -92,11 +92,7 @@ pub fn SettingsPage() -> impl IntoView {
 }
 
 #[component]
-fn EnvVar(
-    name: &'static str,
-    default: &'static str,
-    desc: &'static str,
-) -> impl IntoView {
+fn EnvVar(name: &'static str, default: &'static str, desc: &'static str) -> impl IntoView {
     view! {
         <div style="display:flex; gap: var(--sp-md); padding: var(--sp-xs) 0; border-bottom: 1px solid var(--border-subtle); align-items: baseline; flex-wrap: wrap">
             <code style="font-family: var(--font-mono); font-size: 12px; color: var(--purple); font-weight: 600; min-width: 260px">{name}</code>

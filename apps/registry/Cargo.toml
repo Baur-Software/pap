@@ -10,6 +10,11 @@ name = "pap-registry"
 path = "src/main.rs"
 required-features = ["ssr"]
 
+[[bin]]
+name = "gen_test_ad"
+path = "src/bin/gen_test_ad.rs"
+required-features = ["ssr"]
+
 [lib]
 name = "pap_registry"
 crate-type = ["cdylib", "rlib"]

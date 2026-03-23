@@ -41,11 +41,9 @@ impl PostgresStore {
         .await
         .ok(); // ignore "column already exists"
 
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS agents_search_gin ON agents USING GIN(search_vec)",
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS agents_search_gin ON agents USING GIN(search_vec)")
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
@@ -63,7 +61,10 @@ impl PostgresStore {
             if key_bytes.len() == 32 {
                 let mut bytes = [0u8; 32];
                 bytes.copy_from_slice(&key_bytes);
-                Some(NodeIdentity { did, signing_key_bytes: bytes })
+                Some(NodeIdentity {
+                    did,
+                    signing_key_bytes: bytes,
+                })
             } else {
                 None
             }
@@ -85,11 +86,10 @@ impl PostgresStore {
     // ── Agents ───────────────────────────────────────────────────────────────
 
     pub async fn load_all_agents(&self) -> Result<Vec<AgentAdvertisement>> {
-        let rows = sqlx::query_as::<_, (String,)>(
-            "SELECT ad_json FROM agents ORDER BY inserted_at ASC",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows =
+            sqlx::query_as::<_, (String,)>("SELECT ad_json FROM agents ORDER BY inserted_at ASC")
+                .fetch_all(&self.pool)
+                .await?;
 
         rows.into_iter()
             .map(|(json,)| {
@@ -135,13 +135,13 @@ impl PostgresStore {
         let (total, rows): (u64, Vec<(String, String)>) =
             if let Some(query) = q.filter(|s| !s.is_empty()) {
                 let total: i64 = sqlx::query_as::<_, (i64,)>(
-                    "SELECT COUNT(*) FROM agents WHERE search_vec @@ plainto_tsquery('english', $1)",
-                )
-                .bind(query)
-                .fetch_one(&self.pool)
-                .await
-                .map(|(n,)| n)
-                .unwrap_or(0);
+                "SELECT COUNT(*) FROM agents WHERE search_vec @@ plainto_tsquery('english', $1)",
+            )
+            .bind(query)
+            .fetch_one(&self.pool)
+            .await
+            .map(|(n,)| n)
+            .unwrap_or(0);
 
                 let rows = sqlx::query_as::<_, (String, String)>(
                     "SELECT hash, ad_json FROM agents
@@ -183,7 +183,12 @@ impl PostgresStore {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(AgentsPage { items, total, page, per_page })
+        Ok(AgentsPage {
+            items,
+            total,
+            page,
+            per_page,
+        })
     }
 
     // ── Peers ────────────────────────────────────────────────────────────────
@@ -201,7 +206,12 @@ impl PostgresStore {
                 let last_sync = last_sync
                     .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                     .map(|dt| dt.with_timezone(&Utc));
-                RegistryPeer { did, endpoint, cert_fingerprint, last_sync }
+                RegistryPeer {
+                    did,
+                    endpoint,
+                    cert_fingerprint,
+                    last_sync,
+                }
             })
             .collect())
     }

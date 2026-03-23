@@ -1,6 +1,6 @@
 pub mod config;
-mod postgres;
-mod sqlite;
+pub(crate) mod postgres;
+pub(crate) mod sqlite;
 
 pub use config::DbConfig;
 use postgres::PostgresStore;
