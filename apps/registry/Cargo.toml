@@ -73,6 +73,11 @@ chrono             = { version = "0.4", features = ["serde"], optional = true }
 constant_time_eq   = { version = "0.3", optional = true }
 percent-encoding   = { version = "2", optional = true }
 
+[dev-dependencies]
+tokio          = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower          = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
 # WASM only
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen         = "0.2"

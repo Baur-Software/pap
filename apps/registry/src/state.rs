@@ -48,3 +48,52 @@ impl AppState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{RegistryStore, sqlite::SqliteStore};
+
+    async fn make_state(token: Option<&str>) -> AppState {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store: Arc::new(RegistryStore::Sqlite(SqliteStore { pool })),
+            node_did: "did:key:zTest".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: token.map(str::to_owned),
+        }
+    }
+
+    #[tokio::test]
+    async fn is_authorized_no_token_configured_accepts_no_cred() {
+        let state = make_state(None).await;
+        assert!(state.is_authorized(None));
+    }
+
+    #[tokio::test]
+    async fn is_authorized_no_token_configured_accepts_any_cred() {
+        let state = make_state(None).await;
+        assert!(state.is_authorized(Some("anything")));
+    }
+
+    #[tokio::test]
+    async fn is_authorized_correct_token() {
+        let state = make_state(Some("secret")).await;
+        assert!(state.is_authorized(Some("secret")));
+    }
+
+    #[tokio::test]
+    async fn is_authorized_wrong_token_rejected() {
+        let state = make_state(Some("secret")).await;
+        assert!(!state.is_authorized(Some("wrong")));
+    }
+
+    #[tokio::test]
+    async fn is_authorized_missing_bearer_rejected() {
+        let state = make_state(Some("secret")).await;
+        assert!(!state.is_authorized(None));
+    }
+}

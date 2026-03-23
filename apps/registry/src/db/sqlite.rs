@@ -224,3 +224,164 @@ impl SqliteStore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use ed25519_dalek::SigningKey;
+    use pap_did::PrincipalKeypair;
+    use pap_marketplace::AgentAdvertisement;
+    use rand::rngs::OsRng;
+
+    async fn in_memory_store() -> SqliteStore {
+        let s = SqliteStore::connect("sqlite::memory:").await.unwrap();
+        s.migrate().await.unwrap();
+        s
+    }
+
+    fn make_signed_ad(name: &str) -> AgentAdvertisement {
+        let key = SigningKey::generate(&mut OsRng);
+        let kp = PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap();
+        let did = kp.did();
+        let mut ad = AgentAdvertisement::new(
+            name,
+            "TestCorp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad.sign(&key);
+        ad
+    }
+
+    // ── Migrations ────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn migrate_is_idempotent() {
+        let s = in_memory_store().await;
+        // Second call must not error (sqlx tracks applied versions)
+        s.migrate().await.unwrap();
+    }
+
+    // ── Agents ────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn agent_insert_and_load_all() {
+        let s = in_memory_store().await;
+        let ad = make_signed_ad("SearchBot");
+        let hash = ad.hash();
+        s.insert_agent(&hash, &ad).await.unwrap();
+        let all = s.load_all_agents().await.unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].name, "SearchBot");
+    }
+
+    #[tokio::test]
+    async fn agent_delete_returns_true_then_false() {
+        let s = in_memory_store().await;
+        let ad = make_signed_ad("DeleteBot");
+        let hash = ad.hash();
+        s.insert_agent(&hash, &ad).await.unwrap();
+        assert!(s.delete_agent(&hash).await.unwrap());
+        assert!(!s.delete_agent(&hash).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn agent_search_by_name() {
+        let s = in_memory_store().await;
+        let ad = make_signed_ad("FlightSearcher");
+        let hash = ad.hash();
+        s.insert_agent(&hash, &ad).await.unwrap();
+        let page = s.search_agents(Some("FlightSearcher"), 1, 20).await.unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.items[0].ad.name, "FlightSearcher");
+    }
+
+    #[tokio::test]
+    async fn agent_search_empty_query_returns_all() {
+        let s = in_memory_store().await;
+        s.insert_agent(&make_signed_ad("A").hash(), &make_signed_ad("A")).await.unwrap();
+        s.insert_agent(&make_signed_ad("B").hash(), &make_signed_ad("B")).await.unwrap();
+        let page = s.search_agents(None, 1, 20).await.unwrap();
+        assert_eq!(page.total, 2);
+    }
+
+    #[tokio::test]
+    async fn agent_search_special_chars_no_error() {
+        // Regression test for I8: FTS5 special chars must not cause an error.
+        let s = in_memory_store().await;
+        let result = s.search_agents(Some("(NOT\"*"), 1, 20).await;
+        assert!(result.is_ok(), "FTS special chars caused an error: {:?}", result.err());
+    }
+
+    // ── Peers ─────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn peer_upsert_and_load_all() {
+        let s = in_memory_store().await;
+        let peer = pap_federation::peer::RegistryPeer::new(
+            "did:key:zPeer1",
+            "https://peer1.example.com",
+        );
+        s.upsert_peer(&peer).await.unwrap();
+        let peers = s.load_all_peers().await.unwrap();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].did, "did:key:zPeer1");
+    }
+
+    #[tokio::test]
+    async fn peer_delete_returns_true_then_false() {
+        let s = in_memory_store().await;
+        let peer = pap_federation::peer::RegistryPeer::new("did:key:zPeer2", "https://p2.example.com");
+        s.upsert_peer(&peer).await.unwrap();
+        assert!(s.delete_peer("did:key:zPeer2").await.unwrap());
+        assert!(!s.delete_peer("did:key:zPeer2").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn peer_upsert_updates_endpoint() {
+        let s = in_memory_store().await;
+        let peer1 = pap_federation::peer::RegistryPeer::new("did:key:zPeer3", "https://old.example.com");
+        s.upsert_peer(&peer1).await.unwrap();
+        let peer2 = pap_federation::peer::RegistryPeer::new("did:key:zPeer3", "https://new.example.com");
+        s.upsert_peer(&peer2).await.unwrap();
+        let peers = s.load_all_peers().await.unwrap();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].endpoint, "https://new.example.com");
+    }
+
+    #[tokio::test]
+    async fn peer_sync_time_update() {
+        let s = in_memory_store().await;
+        let peer = pap_federation::peer::RegistryPeer::new("did:key:zPeer4", "https://p4.example.com");
+        s.upsert_peer(&peer).await.unwrap();
+        let ts = chrono::Utc::now();
+        s.update_peer_sync_time("did:key:zPeer4", ts).await.unwrap();
+        let peers = s.load_all_peers().await.unwrap();
+        assert!(peers[0].last_sync.is_some());
+    }
+
+    // ── Identity ──────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn identity_load_empty_returns_none() {
+        let s = in_memory_store().await;
+        assert!(s.load_identity().await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn identity_save_and_load_roundtrip() {
+        let s = in_memory_store().await;
+        let identity = NodeIdentity {
+            did: "did:key:zNode".into(),
+            signing_key_bytes: [0xAB; 32],
+        };
+        s.save_identity(&identity).await.unwrap();
+        let loaded = s.load_identity().await.unwrap().unwrap();
+        assert_eq!(loaded.did, "did:key:zNode");
+        assert_eq!(loaded.signing_key_bytes, [0xAB; 32]);
+    }
+}

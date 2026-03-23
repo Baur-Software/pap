@@ -47,7 +47,41 @@ RUN sed -i \
 # Build server binary (ssr feature) + WASM bundle (hydrate feature) in one step
 RUN cargo leptos build --release -p pap-registry
 
-# ── Stage 2: Minimal runtime image ───────────────────────────────────────────
+# ── Stage 2: Test runner ─────────────────────────────────────────────────────
+# Run with: docker buildx build --target test --progress=plain -f apps/registry/Dockerfile .
+# Via compose: docker compose -f apps/registry/docker-compose.yml --profile test build --progress plain test
+FROM rust:1.94-slim AS test
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY Cargo.toml Cargo.lock ./
+COPY vendor-icu ./vendor-icu
+
+COPY crates/pap-did         ./crates/pap-did
+COPY crates/pap-core        ./crates/pap-core
+COPY crates/pap-marketplace ./crates/pap-marketplace
+COPY crates/pap-federation  ./crates/pap-federation
+
+COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
+COPY apps/registry/src        ./apps/registry/src
+
+RUN sed -i \
+    -e '/^[[:space:]]*"crates\/pap-credential"/d' \
+    -e '/^[[:space:]]*"crates\/pap-webauthn"/d'   \
+    -e '/^[[:space:]]*"crates\/pap-proto"/d'       \
+    -e '/^[[:space:]]*"crates\/pap-transport"/d'   \
+    -e '/^[[:space:]]*"crates\/pap-python"/d'      \
+    -e '/^[[:space:]]*"crates\/papillion-shared"/d' \
+    -e '/^[[:space:]]*"apps\/papillion"/d'         \
+    Cargo.toml
+
+RUN cargo test -p pap-registry --features ssr
+
+# ── Stage 3: Minimal runtime image ───────────────────────────────────────────
 FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

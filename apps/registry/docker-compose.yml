@@ -27,5 +27,15 @@ services:
       retries: 3
       start_period: 5s
 
+  # Run the test suite in an isolated container:
+  #   docker compose --profile test run --rm test
+  test:
+    build:
+      context: ../..
+      dockerfile: apps/registry/Dockerfile
+      target: test
+    profiles:
+      - test
+
 volumes:
   registry_data:

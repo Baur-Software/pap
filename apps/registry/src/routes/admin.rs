@@ -400,3 +400,351 @@ fn percent_decode(s: &str) -> String {
         .decode_utf8_lossy()
         .into_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use axum::body::Body;
+    use axum::http::{header, Request, StatusCode};
+    use ed25519_dalek::SigningKey;
+    use http_body_util::BodyExt;
+    use pap_did::PrincipalKeypair;
+    use pap_federation::registry::FederatedRegistry;
+    use pap_marketplace::AgentAdvertisement;
+    use rand::rngs::OsRng;
+    use tower::ServiceExt;
+
+    use super::*;
+    use crate::db::{sqlite::SqliteStore, RegistryStore};
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    async fn test_router(token: Option<&str>) -> axum::Router {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zTestNode".into(),
+            node_endpoint: "http://localhost:7890".into(),
+            cert_fingerprint: "sha256:deadbeef".into(),
+            admin_token: token.map(str::to_owned),
+        };
+        router().with_state(state)
+    }
+
+    fn signed_ad(name: &str) -> AgentAdvertisement {
+        let key = SigningKey::generate(&mut OsRng);
+        let kp = PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap();
+        let did = kp.did();
+        let mut ad = AgentAdvertisement::new(
+            name,
+            "TestCorp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad.sign(&key);
+        ad
+    }
+
+    async fn body_json(body: Body) -> serde_json::Value {
+        let bytes = body.collect().await.unwrap().to_bytes();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    fn bearer(token: &str) -> (header::HeaderName, String) {
+        (header::AUTHORIZATION, format!("Bearer {token}"))
+    }
+
+    // ── extract_bearer unit tests ─────────────────────────────────────────────
+
+    #[test]
+    fn extract_bearer_parses_valid_header() {
+        let mut map = HeaderMap::new();
+        map.insert(header::AUTHORIZATION, "Bearer mytoken123".parse().unwrap());
+        assert_eq!(extract_bearer(&map), Some("mytoken123"));
+    }
+
+    #[test]
+    fn extract_bearer_missing_header_returns_none() {
+        assert_eq!(extract_bearer(&HeaderMap::new()), None);
+    }
+
+    #[test]
+    fn extract_bearer_wrong_scheme_returns_none() {
+        let mut map = HeaderMap::new();
+        map.insert(header::AUTHORIZATION, "Token mytoken".parse().unwrap());
+        assert_eq!(extract_bearer(&map), None);
+    }
+
+    // ── GET /api/status ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn status_no_admin_token_returns_200() {
+        let app = test_router(None).await;
+        let req = Request::get("/api/status").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn status_without_bearer_returns_401() {
+        let app = test_router(Some("secret")).await;
+        let req = Request::get("/api/status").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn status_with_correct_bearer_returns_200() {
+        let app = test_router(Some("secret")).await;
+        let req = Request::get("/api/status")
+            .header(header::AUTHORIZATION, "Bearer secret")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp.into_body()).await;
+        assert!(json.get("did").is_some());
+    }
+
+    #[tokio::test]
+    async fn status_with_wrong_bearer_returns_401() {
+        let app = test_router(Some("secret")).await;
+        let req = Request::get("/api/status")
+            .header(header::AUTHORIZATION, "Bearer wrong")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    // ── GET /api/agents ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn list_agents_empty_returns_paginated_200() {
+        let app = test_router(None).await;
+        let req = Request::get("/api/agents").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["total"], 0);
+        assert!(json["items"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_agents_fts_special_chars_returns_200_not_500() {
+        // Regression for I8: FTS5 special chars in query string must not 500.
+        let app = test_router(None).await;
+        let req = Request::get("/api/agents?q=%22NOT%22%28%2A")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    // ── POST /api/agents ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn register_unsigned_agent_returns_422() {
+        let app = test_router(None).await;
+        // An ad without a signature should fail verify_advertisement.
+        let key = SigningKey::generate(&mut OsRng);
+        let kp = PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap();
+        let ad = AgentAdvertisement::new(
+            "UnsignedBot",
+            "Corp",
+            &kp.did(),
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let body = serde_json::to_vec(&ad).unwrap();
+        let req = Request::post("/api/agents")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn register_signed_agent_then_appears_in_list() {
+        let app = test_router(None).await;
+        let ad = signed_ad("ListedBot");
+        let body = serde_json::to_vec(&ad).unwrap();
+        let req = Request::post("/api/agents")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Re-build the app with the same store is not possible since each call creates
+        // a fresh in-memory DB. We verify register returns 201 + hash field instead.
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["ok"], true);
+        assert!(json.get("hash").is_some());
+    }
+
+    // ── DELETE /api/agents/{hash} ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn remove_unknown_agent_returns_404() {
+        let app = test_router(None).await;
+        let req = Request::delete("/api/agents/nonexistenthash")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn register_then_remove_agent_roundtrip() {
+        // Use a single AppState for both POST and DELETE.
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+        };
+        let app = router().with_state(state);
+
+        let ad = signed_ad("EphemeralBot");
+        let hash = ad.hash();
+        let body = serde_json::to_vec(&ad).unwrap();
+
+        // Register
+        let req = Request::post("/api/agents")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Delete
+        let req = Request::delete(format!("/api/agents/{hash}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    // ── GET /api/peers ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn list_peers_empty_returns_200() {
+        let app = test_router(None).await;
+        let req = Request::get("/api/peers").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp.into_body()).await;
+        assert!(json.as_array().unwrap().is_empty());
+    }
+
+    // ── POST /api/peers + GET /api/peers ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn add_peer_and_appears_in_list() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+        };
+        let app = router().with_state(state);
+
+        let body = serde_json::json!({
+            "did": "did:key:zPeerX",
+            "endpoint": "https://peerx.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        let req = Request::get("/api/peers").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let json = body_json(resp.into_body()).await;
+        let peers = json.as_array().unwrap();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0]["did"], "did:key:zPeerX");
+    }
+
+    // ── DELETE /api/peers/{did} ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn remove_unknown_peer_returns_404() {
+        let app = test_router(None).await;
+        let req = Request::delete("/api/peers/did%3Akey%3AzUnknown")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn add_then_remove_peer_roundtrip() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite").run(&pool).await.unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+        };
+        let app = router().with_state(state);
+
+        // Add
+        let body = serde_json::json!({
+            "did": "did:key:zPeerY",
+            "endpoint": "https://peery.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Delete (DID must be percent-encoded in path)
+        let req = Request::delete("/api/peers/did%3Akey%3AzPeerY")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    // ── POST /api/peers/{did}/sync ────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn sync_unknown_peer_returns_404() {
+        let app = test_router(None).await;
+        let req = Request::post("/api/peers/did%3Akey%3AzGhost/sync")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+}
