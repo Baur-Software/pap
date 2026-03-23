@@ -1,3 +1,10 @@
+## [0.4.1.2] - 2026-03-23
+
+### Added
+
+- **docs**: Comprehensive Agent Designer specification (`AGENT_DESIGNER_DESIGN.md`) — WYSIWYG form builder for PAP agent advertisements with real-time JSON-LD preview, zero-trust WebAuthn signing, and "Load from existing" versioning workflow. Includes 5-phase implementation roadmap and full architectural design. All reviews (CEO, Design, Eng) approved.
+- **docs**: Agent Designer test plan (`AGENT_DESIGNER_TEST_PLAN.md`) — covers 40+ code paths, 6 critical user flows, edge cases, and E2E + component test breakdown
+
 ## [0.4.1.1] - 2026-03-23
 
 ### Changed
