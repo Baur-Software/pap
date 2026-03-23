@@ -713,11 +713,31 @@
     .footer-bottom-links a { color: var(--faint); }
     .footer-bottom-links a:hover { color: var(--muted); }
 
-    /* ─── Products Grid ───────────────────────────────────────────────── */
-    .products-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-      margin-bottom: 28px;
+    /* ─── Crystalis callout ───────────────────────────────────────────── */
+    .crystalis-callout {
+      max-width: 680px; margin: 0 auto 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; padding: 16px 20px;
+      background: rgba(46,196,160,.06); border: 1px solid rgba(46,196,160,.18);
+      border-radius: var(--radius-lg); flex-wrap: wrap;
     }
+    .crystalis-callout-left {
+      display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
+    }
+    .crystalis-icon {
+      font-size: 1.2rem; color: var(--teal); flex-shrink: 0;
+    }
+    .crystalis-name {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: .9rem; font-weight: 700; color: var(--teal);
+      margin-right: 8px;
+    }
+    .crystalis-desc {
+      font-size: .82rem; color: var(--muted); line-height: 1.5;
+    }
+    .btn-sm { padding: 8px 16px; font-size: .82rem; }
+
+    /* ─── Products shared ─────────────────────────────────────────────── */
     .product-card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius-lg); padding: 28px 28px 24px;
@@ -730,24 +750,12 @@
       height: 2px;
       background: linear-gradient(90deg, var(--indigo), var(--violet));
     }
-    .product-card-crystalis::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--teal), var(--indigo));
-    }
     .product-card:hover { border-color: var(--border2); }
     .product-card-header {
       display: flex; align-items: center; gap: 14px;
     }
     .product-icon {
       width: 44px; height: 44px; flex-shrink: 0;
-    }
-    .product-icon-crystalis {
-      width: 44px; height: 44px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.6rem; color: var(--teal);
-      background: rgba(46,196,160,.1); border: 1px solid rgba(46,196,160,.2);
-      border-radius: 10px;
     }
     .product-name {
       font-family: 'Satoshi', -apple-system, sans-serif;
@@ -767,18 +775,13 @@
     .product-features li::before {
       content: '→ '; color: var(--indigo);
     }
-    .product-card-crystalis .product-features li::before {
-      color: var(--teal);
-    }
     .product-card .btn { margin-top: auto; align-self: flex-start; }
     .products-footnote {
       text-align: center; font-size: .88rem; color: var(--muted);
+      max-width: 680px; margin: 0 auto;
     }
     .products-footnote strong { color: var(--text); }
     .products-footnote a { color: var(--indigo); }
-    @media (max-width: 768px) {
-      .products-grid { grid-template-columns: 1fr; }
-    }
 
     /* ─── GitHub Icon ─────────────────────────────────────────────────── */
     .gh-icon { width: 18px; height: 18px; fill: currentColor; }
@@ -831,8 +834,7 @@
       <span class="nav-wordmark">PAP</span>
     </a>
     <ul class="nav-links" role="list">
-      <li><a href="#products">Papillion &amp; Crystalis</a></li>
-      <li><a href="#problem">Why</a></li>
+      <li><a href="#products">Products</a></li>
       <li><a href="#how">PAP Protocol</a></li>
       <li><a href="#start">Quick Start</a></li>
     </ul>
@@ -872,9 +874,8 @@
         </p>
         <div class="hero-actions">
           <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
-            Download Papillion
+            Download
           </a>
-          <a href="#crystalis" class="btn btn-outline btn-lg">Self-host Crystalis →</a>
         </div>
       </div>
 
@@ -887,122 +888,43 @@
 <!-- ─── PRODUCTS ──────────────────────────────────────────────────────── -->
 <section class="section-sm" id="products" aria-label="Papillion and Crystalis">
   <div class="container">
-    <div class="products-grid reveal">
 
-      <div class="product-card product-card-papillion">
-        <div class="product-card-header">
-          <img src="assets/images/papillion-icon.png" alt="Papillion butterfly" class="product-icon" />
-          <div>
-            <div class="product-name">Papillion</div>
-            <div class="product-type">Personal AI assistant</div>
-          </div>
+    <div class="product-card product-card-papillion reveal" style="max-width: 680px; margin: 0 auto 20px;">
+      <div class="product-card-header">
+        <img src="assets/images/papillion-icon.png" alt="Papillion butterfly" class="product-icon" />
+        <div>
+          <div class="product-name">Papillion</div>
+          <div class="product-type">Personal AI assistant · macOS · Windows · Linux</div>
         </div>
-        <p class="product-desc">
-          The AI assistant that works for you, not the platform. Ask it anything,
-          connect your tools, delegate tasks to specialist agents. Your conversations
-          stay on your device. Your identity never leaves your hardware.
-        </p>
-        <ul class="product-features">
-          <li>macOS · Windows · Linux</li>
-          <li>On-device inference — your prompts stay local</li>
-          <li>Local profile, secured by your hardware key</li>
-          <li>Agent sessions are ephemeral — no platform archive</li>
-        </ul>
-        <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary" target="_blank" rel="noopener">Download →</a>
       </div>
-
-      <div class="product-card product-card-crystalis" id="crystalis">
-        <div class="product-card-header">
-          <div class="product-icon product-icon-crystalis" aria-hidden="true">◈</div>
-          <div>
-            <div class="product-name">Crystalis</div>
-            <div class="product-type">Self-hosted registry</div>
-          </div>
-        </div>
-        <p class="product-desc">
-          Your own federated agent registry. Announce capabilities, discover peers, and participate
-          in the PAP federation network — on infrastructure you control.
-        </p>
-        <ul class="product-features">
-          <li>Docker · SQLite or Postgres</li>
-          <li>DID-based node identity, persists across restarts</li>
-          <li>Peer federation and agent announcement</li>
-          <li>Leptos SSR admin UI</li>
-        </ul>
-        <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener">View on GitHub →</a>
-      </div>
-
-    </div>
-    <p class="products-footnote reveal reveal-delay-1">
-      Both built on <strong>Principal Agent Protocol</strong> — the open spec underneath that makes privacy a cryptographic guarantee, not a terms-of-service promise.
-      <a href="#how">How it works →</a>
-    </p>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- ─── PROBLEM ──────────────────────────────────────────────────────── -->
-<section id="problem" class="section" aria-labelledby="problem-heading">
-  <div class="container">
-    <div class="problem-intro reveal">
-      <div class="section-label">The Problem</div>
-      <h2 class="section-title" id="problem-heading">
-        Your agents are leaking<br />
-        <span class="gradient-text">everything about you</span>
-      </h2>
-      <p class="section-sub" style="margin: 0 auto;">
-        AI agents make hundreds of queries on your behalf — exposing your context
-        with every interaction.
+      <p class="product-desc">
+        The AI assistant that works for you, not the platform. Ask it anything,
+        connect your tools, delegate tasks to specialist agents. Your conversations
+        stay on your device. Your identity never leaves your hardware.
       </p>
+      <ul class="product-features">
+        <li>On-device inference — your prompts stay local</li>
+        <li>Local profile, secured by your hardware key</li>
+        <li>Agent sessions are ephemeral — no platform archive</li>
+        <li>Built-in registry — two Papillions can find each other locally</li>
+      </ul>
+      <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary" target="_blank" rel="noopener">Download →</a>
     </div>
 
-    <div class="problem-quote reveal reveal-delay-1" style="margin-bottom: 48px;">
-      <p>You searched for a stroller once. Now every website thinks you're pregnant.
-      For six months. That's one query, with a human behind a browser.<br /><br />
-      Now imagine AI agents making hundreds of queries on your behalf — every one
-      leaking context to platforms that build profiles, adjust prices, and sell
-      your behavioral data to brokers you've never heard of.</p>
-      <cite>— PAP design rationale</cite>
+    <div class="crystalis-callout reveal reveal-delay-1" id="crystalis">
+      <div class="crystalis-callout-left">
+        <span class="crystalis-icon" aria-hidden="true">◈</span>
+        <div>
+          <span class="crystalis-name">Crystalis</span>
+          <span class="crystalis-desc">A separate product for teams and developers who need a full agent registry. Self-hostable, federated, with Docker, SQLite or Postgres, and DID node identity.</span>
+        </div>
+      </div>
+      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline btn-sm" target="_blank" rel="noopener">GitHub →</a>
     </div>
 
-    <div class="section-label reveal" style="margin-bottom: 24px;">Why existing protocols fall short</div>
-    <div class="protocol-grid reveal reveal-delay-1">
-      <div class="protocol-card">
-        <div class="protocol-name">A2A</div>
-        <div class="protocol-tagline">Agent-to-Agent (Google)</div>
-        <ul class="protocol-missing">
-          <li>Authenticates agents as platform entities</li>
-          <li>Privacy is an "opacity principle" — aspirational, not enforced</li>
-          <li>No context minimization at the protocol level</li>
-          <li>No session ephemerality guarantees</li>
-        </ul>
-      </div>
-      <div class="protocol-card">
-        <div class="protocol-name">MCP</div>
-        <div class="protocol-tagline">Model Context Protocol (Anthropic)</div>
-        <ul class="protocol-missing">
-          <li>Tool access for a single agent — not negotiation between agents</li>
-          <li>Spec acknowledges it "cannot enforce security principles at the protocol level"</li>
-          <li>No cryptographic identity</li>
-          <li>No economic primitives</li>
-        </ul>
-      </div>
-      <div class="protocol-card">
-        <div class="protocol-name">ACP / AGNTCY</div>
-        <div class="protocol-tagline">REST-Based Agent Interop</div>
-        <ul class="protocol-missing">
-          <li>Thin trust layer — no cryptographic identity</li>
-          <li>Enterprise workflow focus — principal is the org, not the individual</li>
-          <li>No field-level disclosure controls</li>
-          <li>Privacy is an implementation concern</li>
-        </ul>
-      </div>
-    </div>
-
-    <p class="reveal reveal-delay-2" style="text-align:center; color:var(--muted); margin-top:32px; font-size:.9rem;">
-      None enforce context minimization. None define session ephemerality as a guarantee.<br />
-      None have economic primitives. <strong style="color:var(--text);">Privacy is always somebody else's problem.</strong>
+    <p class="products-footnote reveal reveal-delay-2">
+      Built on <strong>Principal Agent Protocol</strong> — privacy as a cryptographic guarantee, not a terms-of-service promise.
+      <a href="#how">How it works →</a>
     </p>
   </div>
 </section>
