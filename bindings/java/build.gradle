@@ -1,0 +1,34 @@
+plugins {
+    id 'java-library'
+}
+
+group   = 'io.pap'
+version = '0.3.4'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // JNA: Java Native Access — maps Java interfaces to C symbol names at
+    // runtime without requiring any Rust-side JNI stubs.
+    api 'net.java.dev.jna:jna:5.14.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+
+    // Point JNA at the locally-built libpap_c so tests can run without
+    // installing the library system-wide.
+    // Override via: ./gradlew test -Pjna.library.path=/your/path
+    def libPath = project.findProperty('jna.library.path')
+                  ?: "${rootDir}/../../target/release"
+    systemProperty 'jna.library.path', libPath
+}
