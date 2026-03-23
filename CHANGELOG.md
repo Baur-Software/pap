@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **bindings/java**: `Session.id()` was incorrectly calling `pap_session_free` on the string pointer; corrected to `pap_string_free`
+- **bindings/java**: `Session.close()` now calls `pap_session_close` before `pap_session_free` — ensures proper protocol teardown before memory is released
+- **bindings/csharp**: `DecayState` and `SessionState` properties now guard against `-1` sentinel before casting the FFI integer to an enum value — prevents invalid casts from garbage return values
+- **bindings/cpp**: `decay_state()`, `compute_decay_state()`, and `state()` now validate the upper bound (`> PAP_DECAY_SUSPENDED` / `> PAP_SESSION_CLOSED`) as well as the lower bound — catches out-of-range enum values from future ABI versions
+- **pap-core**: `compute_decay_state` now short-circuits immediately for the `Suspended` terminal state — previously, a decayed-but-suspended mandate could incorrectly re-enter `ReadOnly` after a TTL check
+- **pap-c**: `pap_scope_permits` now guards the null check before calling `CStr::from_ptr`, eliminating a potential undefined-behaviour window where a null-dereference could occur inside the match arm
+- **pap-c**: `pap_disclosure_entry_new` validates per-element null pointers in the permitted/required/excluded arrays before dereferencing — previously only the array pointer itself was checked
+- **pap-wasm**: Removed conflicting `use` imports that shadowed local `#[wasm_bindgen]` struct definitions, fixing an `E0255` compiler error that broke WASM builds when compiled without the Docker `--exclude pap-wasm` flag
 
 ## [0.3.5] - 2026-03-21
 
