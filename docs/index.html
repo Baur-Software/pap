@@ -713,29 +713,71 @@
     .footer-bottom-links a { color: var(--faint); }
     .footer-bottom-links a:hover { color: var(--muted); }
 
-    /* ─── Papillion Strip ─────────────────────────────────────────────── */
-    .papillion-strip {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 24px; padding: 24px 32px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      flex-wrap: wrap;
+    /* ─── Products Grid ───────────────────────────────────────────────── */
+    .products-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+      margin-bottom: 28px;
     }
-    .papillion-strip-left {
-      display: flex; align-items: center; gap: 16px;
+    .product-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 28px 28px 24px;
+      display: flex; flex-direction: column; gap: 16px;
+      position: relative; overflow: hidden;
+      transition: border-color .2s ease;
     }
-    .papillion-strip-icon {
-      width: 48px; height: 48px; flex-shrink: 0;
+    .product-card-papillion::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--indigo), var(--violet));
     }
-    .papillion-strip-name {
+    .product-card-crystalis::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--teal), var(--indigo));
+    }
+    .product-card:hover { border-color: var(--border2); }
+    .product-card-header {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .product-icon {
+      width: 44px; height: 44px; flex-shrink: 0;
+    }
+    .product-icon-crystalis {
+      width: 44px; height: 44px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem; color: var(--teal);
+      background: rgba(46,196,160,.1); border: 1px solid rgba(46,196,160,.2);
+      border-radius: 10px;
+    }
+    .product-name {
       font-family: 'Satoshi', -apple-system, sans-serif;
-      font-size: 1rem; font-weight: 700; letter-spacing: -.01em;
-      color: var(--text); margin-bottom: 4px;
+      font-size: 1.15rem; font-weight: 700; letter-spacing: -.02em;
     }
-    .papillion-strip-desc {
-      font-size: .85rem; color: var(--muted); line-height: 1.5;
-      max-width: 520px;
+    .product-type {
+      font-size: .78rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .08em; font-weight: 600; margin-top: 2px;
+    }
+    .product-desc {
+      font-size: .88rem; color: var(--muted); line-height: 1.65;
+    }
+    .product-features {
+      list-style: none; display: flex; flex-direction: column; gap: 7px;
+      font-size: .82rem; color: var(--muted);
+    }
+    .product-features li::before {
+      content: '→ '; color: var(--indigo);
+    }
+    .product-card-crystalis .product-features li::before {
+      color: var(--teal);
+    }
+    .product-card .btn { margin-top: auto; align-self: flex-start; }
+    .products-footnote {
+      text-align: center; font-size: .88rem; color: var(--muted);
+    }
+    .products-footnote strong { color: var(--text); }
+    .products-footnote a { color: var(--indigo); }
+    @media (max-width: 768px) {
+      .products-grid { grid-template-columns: 1fr; }
     }
 
     /* ─── GitHub Icon ─────────────────────────────────────────────────── */
@@ -789,11 +831,10 @@
       <span class="nav-wordmark">PAP</span>
     </a>
     <ul class="nav-links" role="list">
-      <li><a href="#problem">Why PAP</a></li>
-      <li><a href="#how">Protocol</a></li>
-      <li><a href="#examples">Examples</a></li>
+      <li><a href="#products">Papillion &amp; Crystalis</a></li>
+      <li><a href="#problem">Why</a></li>
+      <li><a href="#how">PAP Protocol</a></li>
       <li><a href="#start">Quick Start</a></li>
-      <li><a href="https://github.com/Baur-Software/pap/releases" target="_blank" rel="noopener">Papillion ↗</a></li>
     </ul>
     <div class="nav-cta">
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
@@ -812,38 +853,32 @@
 
       <div>
         <div class="hero-logo">
-          <img src="assets/images/papillion-icon.png" alt="Papillion — PAP Reference Implementation" />
+          <img src="assets/images/papillion-icon.png" alt="Papillion butterfly logo" />
         </div>
         <div class="hero-eyebrow">
-          <span class="badge">v0.3.4</span>
+          <span class="badge">Papillion · v0.3.4</span>
           <span class="badge badge-green">Open Source · MIT</span>
         </div>
         <h1 class="hero-title">
-          Your agent works<br />
-          for the platform.<br />
-          <span class="gradient-text">PAP changes that.</span>
+          <span class="gradient-text">Papillion.</span><br />
+          AI agents that answer<br />
+          to you.
         </h1>
         <p class="hero-subtitle">
-          Every agent protocol in production was designed to serve platform operators.
-          PAP places the human principal at the root of trust — with cryptographic mandate
-          chains, session ephemerality, and protocol-enforced context minimization.
-          No new cryptography. No token economy. No central registry.
+          The agent desktop built on the Principal Agent Protocol. Every capability
+          cryptographically mandated. Every session ephemeral. You hold the root of
+          trust — not the platform, not the model provider, not us.
         </p>
         <div class="hero-actions">
-          <a href="https://github.com/Baur-Software/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
-            <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-            View on GitHub
+          <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+            Download Papillion
           </a>
-          <a href="#start" class="btn btn-outline btn-lg">Quick Start →</a>
+          <a href="#crystalis" class="btn btn-outline btn-lg">Self-host Crystalis →</a>
         </div>
         <div class="hero-stats">
           <div>
-            <div class="hero-stat-value gradient-text">9</div>
-            <div class="hero-stat-label">Rust + Python crates</div>
-          </div>
-          <div>
-            <div class="hero-stat-value gradient-text">8</div>
-            <div class="hero-stat-label">End-to-end examples</div>
+            <div class="hero-stat-value gradient-text">macOS</div>
+            <div class="hero-stat-label">Windows · Linux</div>
           </div>
           <div>
             <div class="hero-stat-value gradient-text">0</div>
@@ -852,6 +887,10 @@
           <div>
             <div class="hero-stat-value gradient-text">5</div>
             <div class="hero-stat-label">Protocol-level constraints</div>
+          </div>
+          <div>
+            <div class="hero-stat-value gradient-text">MIT</div>
+            <div class="hero-stat-label">License</div>
           </div>
         </div>
       </div>
@@ -862,19 +901,58 @@
 
 <div class="divider"></div>
 
-<!-- ─── PAPILLION CALLOUT ────────────────────────────────────────────── -->
-<section class="section-sm" aria-label="Papillion reference implementation">
+<!-- ─── PRODUCTS ──────────────────────────────────────────────────────── -->
+<section class="section-sm" id="products" aria-label="Papillion and Crystalis">
   <div class="container">
-    <div class="papillion-strip reveal">
-      <div class="papillion-strip-left">
-        <img src="assets/images/papillion-icon.png" alt="Papillion butterfly" class="papillion-strip-icon" />
-        <div>
-          <div class="papillion-strip-name">Papillion</div>
-          <div class="papillion-strip-desc">Reference desktop implementation — macOS, Windows, Linux. On-device inference, zero-trust agent canvas, federated registry.</div>
+    <div class="products-grid reveal">
+
+      <div class="product-card product-card-papillion">
+        <div class="product-card-header">
+          <img src="assets/images/papillion-icon.png" alt="Papillion butterfly" class="product-icon" />
+          <div>
+            <div class="product-name">Papillion</div>
+            <div class="product-type">Desktop app</div>
+          </div>
         </div>
+        <p class="product-desc">
+          The AI agent canvas for people who don't want to give a platform root access to their life.
+          On-device inference. Cryptographic mandate chains. Sessions that evaporate when they're done.
+        </p>
+        <ul class="product-features">
+          <li>macOS · Windows · Linux</li>
+          <li>WebAuthn-rooted principal identity</li>
+          <li>Connects to any Crystalis registry</li>
+          <li>Zero platform telemetry</li>
+        </ul>
+        <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-primary" target="_blank" rel="noopener">Download →</a>
       </div>
-      <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-outline" target="_blank" rel="noopener">Download release →</a>
+
+      <div class="product-card product-card-crystalis" id="crystalis">
+        <div class="product-card-header">
+          <div class="product-icon product-icon-crystalis" aria-hidden="true">◈</div>
+          <div>
+            <div class="product-name">Crystalis</div>
+            <div class="product-type">Self-hosted registry</div>
+          </div>
+        </div>
+        <p class="product-desc">
+          Your own federated agent registry. Announce capabilities, discover peers, and participate
+          in the PAP federation network — on infrastructure you control.
+        </p>
+        <ul class="product-features">
+          <li>Docker · SQLite or Postgres</li>
+          <li>DID-based node identity, persists across restarts</li>
+          <li>Peer federation and agent announcement</li>
+          <li>Leptos SSR admin UI</li>
+        </ul>
+        <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener">View on GitHub →</a>
+      </div>
+
     </div>
+    <p class="products-footnote reveal reveal-delay-1">
+      Both built on <strong>Principal Agent Protocol</strong> — the open spec that makes privacy a protocol guarantee, not a promise.
+      <a href="#how">Read the design →</a>
+    </p>
   </div>
 </section>
 
