@@ -72,7 +72,15 @@ public sealed class Session : IDisposable
     }
 
     /// <summary>Current session state.</summary>
-    public SessionState State => (SessionState)PapNative.pap_session_state(Raw);
+    public SessionState State
+    {
+        get
+        {
+            int v = PapNative.pap_session_state(Raw);
+            if (v < 0) PapNative.ThrowLastError("session_state");
+            return (SessionState)v;
+        }
+    }
 
     /// <summary>The session UUID.</summary>
     public string Id => PapNative.OwnedString(PapNative.pap_session_id(Raw));

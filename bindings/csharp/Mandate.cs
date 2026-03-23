@@ -135,8 +135,15 @@ public sealed class Mandate : IDisposable
     /// <summary>
     /// Current stored decay state.
     /// </summary>
-    public DecayState DecayState =>
-        (DecayState)PapNative.pap_mandate_decay_state(Raw);
+    public DecayState DecayState
+    {
+        get
+        {
+            int v = PapNative.pap_mandate_decay_state(Raw);
+            if (v < 0) PapNative.ThrowLastError("mandate_decay_state");
+            return (DecayState)v;
+        }
+    }
 
     /// <summary>
     /// Compute the time-based decay state without mutating the mandate.
@@ -146,8 +153,12 @@ public sealed class Mandate : IDisposable
     /// This is a pure computation. Call <see cref="SyncDecayState"/> to apply.
     /// </para>
     /// </summary>
-    public DecayState ComputeDecayState(long decayWindowSecs) =>
-        (DecayState)PapNative.pap_mandate_compute_decay_state(Raw, decayWindowSecs);
+    public DecayState ComputeDecayState(long decayWindowSecs)
+    {
+        int v = PapNative.pap_mandate_compute_decay_state(Raw, decayWindowSecs);
+        if (v < 0) PapNative.ThrowLastError("mandate_compute_decay_state");
+        return (DecayState)v;
+    }
 
     /// <summary>
     /// Synchronize the stored decay state to the time-computed value.
