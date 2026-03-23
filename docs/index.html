@@ -13,33 +13,34 @@
   <meta name="twitter:description" content="Your agents should work for you, not for the platform." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
   <style>
     /* ─── Reset & Base ────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:        #090a0f;
-      --surface:   #10111a;
-      --surface2:  #14151f;
-      --border:    #1e2130;
-      --border2:   #252840;
-      --indigo:    #6366f1;
-      --violet:    #8b5cf6;
-      --teal:      #14b8a6;
-      --green:     #22c55e;
-      --amber:     #f59e0b;
-      --red:       #ef4444;
-      --text:      #e2e8f0;
-      --muted:     #94a3b8;
-      --faint:     #475569;
-      --code-bg:   #0d0e16;
+      --bg:        #0c0b14;
+      --surface:   #151420;
+      --surface2:  #1f1e2e;
+      --border:    #2c2b40;
+      --border2:   #353455;
+      --indigo:    #6c5ce7;
+      --violet:    #8b7ff5;
+      --teal:      #2ec4a0;
+      --green:     #2ec4a0;
+      --amber:     #f0a030;
+      --red:       #e8706a;
+      --text:      #eeeef2;
+      --muted:     #9494a8;
+      --faint:     #6a6a80;
+      --code-bg:   #0c0b14;
       --radius:    8px;
-      --radius-lg: 16px;
+      --radius-lg: 12px;
       scroll-behavior: smooth;
     }
     html { font-size: 16px; }
     body {
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: 'DM Sans', -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
@@ -84,8 +85,9 @@
       text-transform: uppercase; color: var(--indigo); margin-bottom: 16px;
     }
     .section-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
       font-size: clamp(1.75rem, 4vw, 2.75rem);
-      font-weight: 800; line-height: 1.2;
+      font-weight: 700; line-height: 1.2;
       margin-bottom: 20px; letter-spacing: -.02em;
     }
     .section-sub {
@@ -111,7 +113,7 @@
       padding: 12px 24px; border-radius: var(--radius);
       font-size: .95rem; font-weight: 600;
       transition: all .15s ease; cursor: pointer; border: none;
-      font-family: 'Inter', sans-serif;
+      font-family: 'DM Sans', sans-serif;
     }
     .btn-primary {
       background: var(--indigo); color: #fff;
@@ -138,18 +140,29 @@
     .nav-logo {
       display: flex;
       align-items: center;
+      gap: 10px;
       text-decoration: none;
       height: 100%;
       padding: 8px 0;
     }
     .nav-logo img {
-      height: 40px;
+      height: 32px;
       width: auto;
       object-fit: contain;
       transition: transform 0.2s ease;
     }
     .nav-logo img:hover {
       transform: scale(1.05);
+    }
+    .nav-wordmark {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1.1rem;
+      font-weight: 900;
+      letter-spacing: -.03em;
+      color: var(--text);
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
     .nav-links {
       display: flex; align-items: center; gap: 8px; list-style: none;
@@ -182,8 +195,8 @@
       top: -30%; left: 50%; transform: translateX(-50%);
       width: 900px; height: 900px;
       background: radial-gradient(ellipse at center,
-        rgba(99,102,241,.12) 0%,
-        rgba(139,92,246,.06) 40%,
+        rgba(108,92,231,.14) 0%,
+        rgba(139,127,245,.06) 40%,
         transparent 70%);
       animation: pulse-slow 8s ease-in-out infinite;
     }
@@ -193,7 +206,7 @@
       bottom: -10%; left: 15%;
       width: 400px; height: 400px;
       background: radial-gradient(circle,
-        rgba(20,184,166,.07) 0%,
+        rgba(46,196,160,.07) 0%,
         transparent 65%);
       animation: pulse-slow 10s ease-in-out infinite reverse;
     }
@@ -228,9 +241,10 @@
       transform: scale(1.02);
     }
     .hero-title {
-      font-size: clamp(2.5rem, 6vw, 4.25rem);
-      font-weight: 900; line-height: 1.08;
-      letter-spacing: -.04em; margin-bottom: 24px;
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(2.25rem, 5.5vw, 4rem);
+      font-weight: 900; line-height: 1.1;
+      letter-spacing: -.03em; margin-bottom: 24px;
     }
     .hero-subtitle {
       font-size: 1.2rem; color: var(--muted);
@@ -671,7 +685,8 @@
       margin-bottom: 48px;
     }
     .footer-logo {
-      font-size: 1.3rem; font-weight: 800; letter-spacing: -.03em;
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1.3rem; font-weight: 900; letter-spacing: -.03em;
       background: linear-gradient(135deg, var(--indigo), var(--violet));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text; margin-bottom: 12px; display: block;
@@ -697,6 +712,31 @@
     .footer-bottom-links { display: flex; gap: 20px; }
     .footer-bottom-links a { color: var(--faint); }
     .footer-bottom-links a:hover { color: var(--muted); }
+
+    /* ─── Papillion Strip ─────────────────────────────────────────────── */
+    .papillion-strip {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 24px; padding: 24px 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      flex-wrap: wrap;
+    }
+    .papillion-strip-left {
+      display: flex; align-items: center; gap: 16px;
+    }
+    .papillion-strip-icon {
+      width: 48px; height: 48px; flex-shrink: 0;
+    }
+    .papillion-strip-name {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1rem; font-weight: 700; letter-spacing: -.01em;
+      color: var(--text); margin-bottom: 4px;
+    }
+    .papillion-strip-desc {
+      font-size: .85rem; color: var(--muted); line-height: 1.5;
+      max-width: 520px;
+    }
 
     /* ─── GitHub Icon ─────────────────────────────────────────────────── */
     .gh-icon { width: 18px; height: 18px; fill: currentColor; }
@@ -744,17 +784,16 @@
 <!-- ─── NAV ─────────────────────────────────────────────────────────── -->
 <nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="#" class="nav-logo">
-      <img src="https://github.com/user-attachments/assets/51e636fd-d247-4ef8-aa56-9981ea79b504" alt="PAP Logo - Principal Agent Protocol" />
+    <a href="#" class="nav-logo" aria-label="PAP — Principal Agent Protocol">
+      <img src="assets/images/papillion-icon.png" alt="Papillion butterfly logo" />
+      <span class="nav-wordmark">PAP</span>
     </a>
     <ul class="nav-links" role="list">
-      <li><a href="#problem">Problem</a></li>
+      <li><a href="#problem">Why PAP</a></li>
       <li><a href="#how">Protocol</a></li>
-      <li><a href="#stack">Stack</a></li>
-      <li><a href="#python">Python</a></li>
       <li><a href="#examples">Examples</a></li>
-      <li><a href="#compare">Compare</a></li>
       <li><a href="#start">Quick Start</a></li>
+      <li><a href="https://github.com/Baur-Software/pap/releases" target="_blank" rel="noopener">Papillion ↗</a></li>
     </ul>
     <div class="nav-cta">
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
@@ -771,24 +810,24 @@
   <div class="container">
     <div class="hero-grid">
 
-      <!-- Left: Copy -->
       <div>
         <div class="hero-logo">
-          <img src="https://github.com/user-attachments/assets/51e636fd-d247-4ef8-aa56-9981ea79b504" alt="PAP Logo - Principal Agent Protocol" />
+          <img src="assets/images/papillion-icon.png" alt="Papillion — PAP Reference Implementation" />
         </div>
         <div class="hero-eyebrow">
-          <span class="badge">v0.1.0</span>
-          <span class="badge badge-green">Open Source</span>
+          <span class="badge">v0.3.4</span>
+          <span class="badge badge-green">Open Source · MIT</span>
         </div>
         <h1 class="hero-title">
-          Principal<br />
-          <span class="gradient-text">Agent</span><br />
-          Protocol
+          Your agent works<br />
+          for the platform.<br />
+          <span class="gradient-text">PAP changes that.</span>
         </h1>
         <p class="hero-subtitle">
-          Every agent protocol in production today was designed to serve
-          platform operators, not human principals. PAP fixes the root cause —
-          cryptographically. It's time to build AI systems that answer to you, not to the platform.
+          Every agent protocol in production was designed to serve platform operators.
+          PAP places the human principal at the root of trust — with cryptographic mandate
+          chains, session ephemerality, and protocol-enforced context minimization.
+          No new cryptography. No token economy. No central registry.
         </p>
         <div class="hero-actions">
           <a href="https://github.com/Baur-Software/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
@@ -800,23 +839,41 @@
         <div class="hero-stats">
           <div>
             <div class="hero-stat-value gradient-text">9</div>
-            <div class="hero-stat-label">Crates (Rust + Python)</div>
+            <div class="hero-stat-label">Rust + Python crates</div>
           </div>
           <div>
             <div class="hero-stat-value gradient-text">8</div>
-            <div class="hero-stat-label">Working Examples</div>
+            <div class="hero-stat-label">End-to-end examples</div>
           </div>
           <div>
             <div class="hero-stat-value gradient-text">0</div>
-            <div class="hero-stat-label">New Primitives</div>
+            <div class="hero-stat-label">Novel crypto primitives</div>
           </div>
           <div>
-            <div class="hero-stat-value gradient-text">MIT</div>
-            <div class="hero-stat-label">License</div>
+            <div class="hero-stat-value gradient-text">5</div>
+            <div class="hero-stat-label">Protocol-level constraints</div>
           </div>
         </div>
       </div>
 
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── PAPILLION CALLOUT ────────────────────────────────────────────── -->
+<section class="section-sm" aria-label="Papillion reference implementation">
+  <div class="container">
+    <div class="papillion-strip reveal">
+      <div class="papillion-strip-left">
+        <img src="assets/images/papillion-icon.png" alt="Papillion butterfly" class="papillion-strip-icon" />
+        <div>
+          <div class="papillion-strip-name">Papillion</div>
+          <div class="papillion-strip-desc">Reference desktop implementation — macOS, Windows, Linux. On-device inference, zero-trust agent canvas, federated registry.</div>
+        </div>
+      </div>
+      <a href="https://github.com/Baur-Software/pap/releases" class="btn btn-outline" target="_blank" rel="noopener">Download release →</a>
     </div>
   </div>
 </section>
