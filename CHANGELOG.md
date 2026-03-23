@@ -11,10 +11,11 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-23
+## [0.4.2] - 2026-03-23
 
 ### Added
 
+- **ci**: CodeQL workflow with path-based filtering — runs static analysis only when changes include target languages (Rust, Python, JavaScript/TypeScript), reducing unnecessary CI runs on documentation-only or configuration-only commits
 - **docs**: New `pap.html` dedicated page for the PAP protocol targeting developers — covers all six protocol invariants (failure-mode-first framing), protocol stack table, crate grid, Quick Start Rust snippet, examples, and comparison table
 - **docs**: New `crystalis.html` page for the Crystalis self-hostable federated registry product
 - **docs**: Papillion canvas rendering demo on `index.html` — macOS-style mockup showing flight booking result with privacy disclosure strip
