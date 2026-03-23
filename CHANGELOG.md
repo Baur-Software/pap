@@ -5,6 +5,22 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-22
+
+### Added
+
+- **pap-c**: New `crates/pap-c` crate — stable C FFI layer (cdylib + staticlib) exposing all PAP primitives via opaque handles, thread-local last-error storage, and a `pap_mandate_sync_decay_state` helper that automatically handles the Active→ReadOnly TTL-expiry jump
+- **pap-wasm**: New `crates/pap-wasm` crate — wasm-bindgen WebAssembly bindings (`@pap/sdk` npm package) for JavaScript/TypeScript consumers; transport excluded (no reqwest in WASM)
+- **bindings/cpp**: Header-only C++ RAII wrapper (`pap.hpp`) with move semantics, non-copyable handles, and CMake integration
+- **bindings/csharp**: .NET 8 C# bindings via P/Invoke (`[LibraryImport]`), `SafeHandle`-based RAII wrappers, and `PapException` with `DecayState` enum matching the ABI constants
+- **bindings/java**: JNA-based Java bindings (`io.pap.*`) with `AutoCloseable` handles, `DecayState`/`SessionState` enums, and 14 JUnit 5 tests covering all decay-state correctness scenarios
+- **pap-c**: `pap_disclosure_entry_new` now validates null array pointers with non-zero counts (defensive hardening matching sibling functions)
+- **Dockerfile.test**: Docker test harness using `docker buildx` with cargo registry cache mounts for fast iterative CI
+
+### Fixed
+
+- **bindings/java**: `Session.id()` was incorrectly calling `pap_session_free` on the string pointer; corrected to `pap_string_free`
+
 ## [0.3.5] - 2026-03-21
 
 ### Added
