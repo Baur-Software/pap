@@ -66,7 +66,9 @@ async fn main() -> anyhow::Result<()> {
         let agents = store.load_all_agents().await?;
         let agent_count = agents.len();
         for ad in agents {
-            let _ = reg.register_local(ad);
+            if let Err(e) = reg.register_local(ad.clone()) {
+                tracing::warn!("Skipping agent {} during hydration: {e}", ad.hash());
+            }
         }
         let peers = store.load_all_peers().await?;
         let peer_count = peers.len();
@@ -108,6 +110,10 @@ async fn main() -> anyhow::Result<()> {
     let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
         .with_state(leptos_options);
 
+    // TODO(I9): allow_origin(Any) permits cross-origin Bearer-authenticated requests from any
+    // web page. Acceptable for a reference implementation on a trusted network. For
+    // production deployments that require strict origin isolation, restrict this to
+    // the node's own public_endpoint origin and leave federation routes open separately.
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)

@@ -20,10 +20,9 @@ impl PostgresStore {
     }
 
     pub async fn migrate(&self) -> Result<()> {
-        // Run the base schema (creates agents/peers/node_identity tables).
-        // The FTS5 virtual table and triggers in 0001_initial.sql are SQLite-only;
-        // they will fail silently on Postgres via the .ok() below.
-        sqlx::migrate!("src/db/migrations")
+        // Run the Postgres-specific migration (no FTS5 virtual table or SQLite triggers).
+        // Full-text search is added below via the generated tsvector column.
+        sqlx::migrate!("src/db/migrations/postgres")
             .run(&self.pool)
             .await
             .context("Postgres migration failed")?;

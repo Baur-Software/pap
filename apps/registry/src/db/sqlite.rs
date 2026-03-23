@@ -20,7 +20,7 @@ impl SqliteStore {
     }
 
     pub async fn migrate(&self) -> Result<()> {
-        sqlx::migrate!("src/db/migrations")
+        sqlx::migrate!("src/db/migrations/sqlite")
             .run(&self.pool)
             .await
             .context("SQLite migration failed")?;
@@ -110,10 +110,14 @@ impl SqliteStore {
 
         let (total, rows): (u64, Vec<(String, String)>) =
             if let Some(query) = q.filter(|s| !s.is_empty()) {
+                // Wrap user input in FTS5 phrase quotes so special characters (", (, NOT, *)
+                // are treated as literals rather than FTS5 syntax operators.
+                let fts_query = format!("\"{}\"", query.replace('"', "\"\""));
+
                 let total: i64 = sqlx::query_as::<_, (i64,)>(
                     "SELECT COUNT(*) FROM agents_fts WHERE agents_fts MATCH ?",
                 )
-                .bind(query)
+                .bind(&fts_query)
                 .fetch_one(&self.pool)
                 .await
                 .map(|(n,)| n)
@@ -127,7 +131,7 @@ impl SqliteStore {
                      ORDER BY rank
                      LIMIT ? OFFSET ?",
                 )
-                .bind(query)
+                .bind(&fts_query)
                 .bind(per_page as i64)
                 .bind(offset as i64)
                 .fetch_all(&self.pool)

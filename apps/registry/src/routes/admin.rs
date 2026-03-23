@@ -346,26 +346,31 @@ async fn sync_peer(
 
     match msg {
         pap_federation::sync::FederationMessage::QueryResponse { advertisements } => {
-            // Snapshot before-hashes, merge, collect new ads for write-through.
-            let new_ads = {
-                let mut registry = state.registry.lock().unwrap();
-                let before: std::collections::HashSet<String> =
+            // Identify new ads without touching the in-memory registry yet.
+            let new_ads: Vec<_> = {
+                let registry = state.registry.lock().unwrap();
+                let existing: std::collections::HashSet<String> =
                     registry.all_advertisements().iter().map(|a| a.hash()).collect();
-                registry.merge_remote(advertisements);
-                registry
-                    .all_advertisements()
-                    .iter()
-                    .filter(|a| !before.contains(&a.hash()))
-                    .cloned()
-                    .collect::<Vec<_>>()
+                advertisements
+                    .into_iter()
+                    .filter(|ad| !existing.contains(&ad.hash()))
+                    .collect()
             };
 
-            let merged = new_ads.len();
-            for ad in &new_ads {
+            // DB first — only merge into memory what was successfully persisted.
+            let mut persisted = Vec::with_capacity(new_ads.len());
+            for ad in new_ads {
                 let hash = ad.hash();
-                if let Err(e) = state.store.insert_agent(&hash, ad).await {
-                    tracing::error!("DB write-through failed for synced agent {hash}: {e}");
+                match state.store.insert_agent(&hash, &ad).await {
+                    Ok(()) => persisted.push(ad),
+                    Err(e) => tracing::error!("DB write failed for synced agent {hash}: {e}"),
                 }
+            }
+
+            let merged = persisted.len();
+            {
+                let mut registry = state.registry.lock().unwrap();
+                registry.merge_remote(persisted);
             }
 
             // Update last_sync timestamp in DB.

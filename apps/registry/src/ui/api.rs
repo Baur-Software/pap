@@ -67,8 +67,15 @@ pub struct RegistryPeer {
 
 #[server]
 pub async fn get_status() -> Result<RegistryStatus, ServerFnError> {
+    use axum::http::HeaderMap;
+    use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
+    let headers: HeaderMap = leptos_axum::extract().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
     let (agent_count, peer_count) = {
         let registry = state.registry.lock().unwrap();
         (registry.len(), registry.peers().len())
@@ -89,8 +96,15 @@ pub async fn list_agents(
     page: u32,
     per_page: u32,
 ) -> Result<AgentListResponse, ServerFnError> {
+    use axum::http::HeaderMap;
+    use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
+    let headers: HeaderMap = leptos_axum::extract().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
     let per_page = per_page.clamp(1, 200);
     let db_page = state
         .store
@@ -181,8 +195,15 @@ pub async fn register_agent_json(json: String) -> Result<String, ServerFnError> 
 
 #[server]
 pub async fn list_peers() -> Result<Vec<RegistryPeer>, ServerFnError> {
+    use axum::http::HeaderMap;
+    use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
+    let headers: HeaderMap = leptos_axum::extract().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
     let peers = state
         .store
         .load_all_peers()
@@ -294,25 +315,33 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
         })?;
 
     if let pap_federation::sync::FederationMessage::QueryResponse { advertisements } = msg {
-        let new_ads = {
-            let mut registry = state.registry.lock().unwrap();
-            let before: std::collections::HashSet<String> =
+        // Identify new ads without touching the in-memory registry yet.
+        let new_ads: Vec<_> = {
+            let registry = state.registry.lock().unwrap();
+            let existing: std::collections::HashSet<String> =
                 registry.all_advertisements().iter().map(|a| a.hash()).collect();
-            registry.merge_remote(advertisements);
-            registry
-                .all_advertisements()
-                .iter()
-                .filter(|a| !before.contains(&a.hash()))
-                .cloned()
-                .collect::<Vec<_>>()
+            advertisements
+                .into_iter()
+                .filter(|ad| !existing.contains(&ad.hash()))
+                .collect()
         };
-        let merged = new_ads.len();
-        for ad in &new_ads {
+
+        // DB first — only merge into memory what was successfully persisted.
+        let mut persisted = Vec::with_capacity(new_ads.len());
+        for ad in new_ads {
             let hash = ad.hash();
-            if let Err(e) = state.store.insert_agent(&hash, ad).await {
-                tracing::error!("DB write-through failed for synced agent {hash}: {e}");
+            match state.store.insert_agent(&hash, &ad).await {
+                Ok(()) => persisted.push(ad),
+                Err(e) => tracing::error!("DB write failed for synced agent {hash}: {e}"),
             }
         }
+
+        let merged = persisted.len();
+        {
+            let mut registry = state.registry.lock().unwrap();
+            registry.merge_remote(persisted);
+        }
+
         if let Err(e) = state
             .store
             .update_peer_sync_time(&did, chrono::Utc::now())
