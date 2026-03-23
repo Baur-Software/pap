@@ -1,23 +1,18 @@
-mod config;
-mod db;
-mod routes;
-mod state;
-
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
+use leptos::config::get_configuration;
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 
 use pap_did::PrincipalKeypair;
 use pap_federation::registry::FederatedRegistry;
 use pap_federation::server::FederationServer;
-
-use crate::config::Config;
-use crate::db::{DbConfig, NodeIdentity, RegistryStore};
-use crate::state::AppState;
+use pap_registry::config::Config;
+use pap_registry::db::{DbConfig, NodeIdentity, RegistryStore};
+use pap_registry::routes;
+use pap_registry::state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -89,6 +84,11 @@ async fn main() -> anyhow::Result<()> {
         cert_fingerprint.clone(),
     );
 
+    // ── Leptos configuration ──────────────────────────────────────────────────
+    let leptos_options = get_configuration(None)
+        .map(|c| c.leptos_options)
+        .unwrap_or_default();
+
     // ── Routers ───────────────────────────────────────────────────────────────
 
     // Federation protocol routes (PAP-compatible).
@@ -102,13 +102,11 @@ async fn main() -> anyhow::Result<()> {
     .router();
 
     // Admin API routes.
-    let admin_router = routes::admin::router().with_state(app_state);
+    let admin_router = routes::admin::router().with_state(app_state.clone());
 
-    // Static file serving for the web UI.
-    let dist_dir = config.dist_dir.clone();
-    let index_fallback = format!("{}/index.html", dist_dir);
-    let static_service =
-        ServeDir::new(&dist_dir).not_found_service(ServeFile::new(&index_fallback));
+    // Leptos SSR + hydration routes (replaces ServeDir fallback).
+    let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
+        .with_state(leptos_options);
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -118,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .merge(federation_router)
         .merge(admin_router)
-        .fallback_service(static_service)
+        .merge(leptos_router)
         .layer(cors);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;

@@ -61,5 +61,18 @@ zeroize = { version = "1", features = ["derive"] }
 # Local patch to work around Windows registry permission issue on this machine.
 # The icu_locale_core crate in the cargo cache has unreadable src/ files;
 # this redirects to an extracted copy. Remove once registry is repaired.
+[[workspace.metadata.leptos]]
+name          = "pap-registry"
+bin-package   = "pap-registry"
+lib-package   = "pap-registry"
+bin-features  = ["ssr"]
+lib-features  = ["hydrate"]
+style-file    = "apps/registry/frontend/styles/main.css"
+site-pkg-dir  = "pkg"
+site-root     = "target/site"
+site-addr     = "127.0.0.1:7890"
+reload-port   = 3001
+output-name   = "pap-registry-ui"
+
 [patch.crates-io]
 icu_locale_core = { path = "vendor-icu" }

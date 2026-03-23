@@ -1,31 +1,16 @@
 # Build context: repo root (pap/)
 #   docker build -f apps/registry/Dockerfile -t pap-registry .
-#
-# ── Stage 1: Build the Leptos WASM frontend ─────────────────────────────────
-FROM rust:1.94-slim AS frontend-builder
+
+# ── Stage 1: Build server binary + WASM bundle with cargo-leptos ─────────────
+FROM rust:1.94-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates pkg-config libssl-dev \
+    curl ca-certificates pkg-config libssl-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup target add wasm32-unknown-unknown
-RUN cargo install trunk --locked
-
-WORKDIR /build/frontend
-COPY apps/registry/frontend/Cargo.toml apps/registry/frontend/Cargo.lock* ./
-COPY apps/registry/frontend/src ./src
-COPY apps/registry/frontend/styles ./styles
-COPY apps/registry/frontend/index.html ./
-
-RUN trunk build --release
-
-# ── Stage 2: Build the Axum backend ─────────────────────────────────────────
-FROM rust:1.94-slim AS backend-builder
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev ca-certificates \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-binstall --locked
+RUN cargo binstall cargo-leptos --no-confirm
 
 WORKDIR /build
 
@@ -40,9 +25,11 @@ COPY crates/pap-core ./crates/pap-core
 COPY crates/pap-marketplace ./crates/pap-marketplace
 COPY crates/pap-federation ./crates/pap-federation
 
-# The registry app
+# The registry app (server + UI in one crate)
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src ./apps/registry/src
+# CSS source referenced by [[workspace.metadata.leptos]] style-file
+COPY apps/registry/frontend/styles ./apps/registry/frontend/styles
 
 # Patch the workspace members list to remove crates we didn't copy.
 # Anchor to lines starting with whitespace+quote (member entries only),
@@ -57,10 +44,10 @@ RUN sed -i \
     -e '/^[[:space:]]*"apps\/papillion"/d' \
     Cargo.toml
 
-# Build only pap-registry
-RUN cargo build --release -p pap-registry
+# Build server binary (ssr feature) + WASM bundle (hydrate feature) in one step
+RUN cargo leptos build --release -p pap-registry
 
-# ── Stage 3: Minimal runtime image ──────────────────────────────────────────
+# ── Stage 2: Minimal runtime image ───────────────────────────────────────────
 FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -68,17 +55,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /data
+RUN mkdir -p /data /app/site
 
 WORKDIR /app
 
-COPY --from=backend-builder /build/target/release/pap-registry ./pap-registry
-COPY --from=frontend-builder /build/frontend/dist ./dist
+# cargo-leptos outputs server binary to target/server/release/
+COPY --from=builder /build/target/server/release/pap-registry ./pap-registry
+# WASM pkg + compiled CSS land in target/site/
+COPY --from=builder /build/target/site ./site
 
 ENV PAP_REGISTRY_HOST=0.0.0.0
 ENV PAP_REGISTRY_PORT=7890
-ENV PAP_REGISTRY_DIST=/app/dist
 ENV PAP_REGISTRY_DB=/data/registry.db
+ENV LEPTOS_SITE_ROOT=/app/site
 
 VOLUME ["/data"]
 

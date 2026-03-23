@@ -8,31 +8,23 @@ const PER_PAGE: u32 = 20;
 
 #[component]
 pub fn AgentsPage() -> impl IntoView {
-    let response = RwSignal::new(None::<AgentListResponse>);
-    let error = RwSignal::new(None::<String>);
-    let loading = RwSignal::new(true);
     let query = RwSignal::new(String::new());
     let page = RwSignal::new(1u32);
     let show_register = RwSignal::new(false);
+    // Incrementing this forces a re-fetch (used by Refresh button and on_remove).
+    let refresh_key = RwSignal::new(0u32);
 
-    let reload = move || {
-        loading.set(true);
-        let q = query.get();
-        let pg = page.get();
-        spawn_local(async move {
+    // create_resource tracks (query, page, refresh_key) as its source and re-fetches
+    // automatically when any of them changes — one fetch per source change, no double-fetches.
+    let agents = create_resource(
+        move || (query.get(), page.get(), refresh_key.get()),
+        |(q, pg, _)| async move {
             let q_ref = if q.is_empty() { None } else { Some(q.as_str()) };
-            match api::fetch_agents(q_ref, pg, PER_PAGE).await {
-                Ok(resp) => {
-                    response.set(Some(resp));
-                    error.set(None);
-                }
-                Err(e) => error.set(Some(e)),
-            }
-            loading.set(false);
-        });
-    };
+            api::fetch_agents(q_ref, pg, PER_PAGE).await
+        },
+    );
 
-    Effect::new(move || { reload(); });
+    let reload = move || refresh_key.update(|n| *n += 1);
 
     view! {
         <div class="page">
@@ -48,19 +40,18 @@ pub fn AgentsPage() -> impl IntoView {
                 </div>
             </div>
 
-            {move || error.get().map(|e| view! {
-                <div class="error-banner">"Error: " {e}</div>
-            })}
-
             <div class="filter-bar">
                 <input
                     class="filter-input"
                     placeholder="Search by name, provider, or capability…"
                     prop:value=move || query.get()
                     on:input=move |e| {
-                        query.set(event_target_value(&e));
-                        page.set(1);
-                        reload();
+                        let val = event_target_value(&e);
+                        // batch ensures query + page reset fire as one reactive update
+                        batch(move || {
+                            query.set(val);
+                            page.set(1);
+                        });
                     }
                 />
                 <button class="btn btn-secondary" on:click=move |_| reload()>
@@ -68,59 +59,58 @@ pub fn AgentsPage() -> impl IntoView {
                 </button>
             </div>
 
-            {move || if loading.get() {
-                view! { <div class="loading">"Loading agents…"</div> }.into_any()
-            } else {
-                match response.get() {
-                    None => view! { <div class="empty-state"><div class="empty-state-icon">"⬡"</div><div class="empty-state-title">"No data"</div></div> }.into_any(),
-                    Some(resp) => {
-                        if resp.items.is_empty() {
-                            view! {
-                                <div class="empty-state">
-                                    <div class="empty-state-icon">"⬡"</div>
-                                    <div class="empty-state-title">"No agents found"</div>
-                                    <p style="font-size:13px; color: var(--text-3)">
-                                        {if query.get().is_empty() {
-                                            "No agents are registered yet. Click \"Register Agent\" to add one."
-                                        } else {
-                                            "No agents match your search."
-                                        }}
-                                    </p>
+            {move || match agents.get() {
+                None => view! { <div class="loading">"Loading agents…"</div> }.into_any(),
+                Some(Err(e)) => view! {
+                    <div class="error-banner">"Error: " {e}</div>
+                }.into_any(),
+                Some(Ok(resp)) => {
+                    if resp.items.is_empty() {
+                        view! {
+                            <div class="empty-state">
+                                <div class="empty-state-icon">"⬡"</div>
+                                <div class="empty-state-title">"No agents found"</div>
+                                <p style="font-size:13px; color: var(--text-3)">
+                                    {if query.get().is_empty() {
+                                        "No agents are registered yet. Click \"Register Agent\" to add one."
+                                    } else {
+                                        "No agents match your search."
+                                    }}
+                                </p>
+                            </div>
+                        }.into_any()
+                    } else {
+                        let total = resp.total;
+                        let total_pages = resp.total_pages;
+                        view! {
+                            <div>
+                                <div class="agent-list">
+                                    {resp.items.into_iter().map(|entry| view! {
+                                        <AgentCard entry=entry.clone() on_remove=move || reload() />
+                                    }).collect::<Vec<_>>()}
                                 </div>
-                            }.into_any()
-                        } else {
-                            let total = resp.total;
-                            let total_pages = resp.total_pages;
-                            view! {
-                                <div>
-                                    <div class="agent-list">
-                                        {resp.items.into_iter().map(|entry| view! {
-                                            <AgentCard entry=entry.clone() on_remove=move || reload() />
-                                        }).collect::<Vec<_>>()}
-                                    </div>
-                                    <div class="pagination">
-                                        <button
-                                            class="btn btn-secondary btn-sm"
-                                            disabled=move || page.get() <= 1
-                                            on:click=move |_| { page.update(|p| *p -= 1); reload(); }
-                                        >
-                                            "← Prev"
-                                        </button>
-                                        <span class="pagination-info">
-                                            "Page " {move || page.get()} " of " {total_pages}
-                                            " (" {total} " total)"
-                                        </span>
-                                        <button
-                                            class="btn btn-secondary btn-sm"
-                                            disabled=move || page.get() >= total_pages
-                                            on:click=move |_| { page.update(|p| *p += 1); reload(); }
-                                        >
-                                            "Next →"
-                                        </button>
-                                    </div>
+                                <div class="pagination">
+                                    <button
+                                        class="btn btn-secondary btn-sm"
+                                        disabled=move || page.get() <= 1
+                                        on:click=move |_| page.update(|p| *p -= 1)
+                                    >
+                                        "← Prev"
+                                    </button>
+                                    <span class="pagination-info">
+                                        "Page " {move || page.get()} " of " {total_pages}
+                                        " (" {total} " total)"
+                                    </span>
+                                    <button
+                                        class="btn btn-secondary btn-sm"
+                                        disabled=move || page.get() >= total_pages
+                                        on:click=move |_| page.update(|p| *p += 1)
+                                    >
+                                        "Next →"
+                                    </button>
                                 </div>
-                            }.into_any()
-                        }
+                            </div>
+                        }.into_any()
                     }
                 }
             }}

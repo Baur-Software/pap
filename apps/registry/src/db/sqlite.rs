@@ -121,9 +121,9 @@ impl SqliteStore {
 
                 let rows = sqlx::query_as::<_, (String, String)>(
                     "SELECT a.hash, a.ad_json
-                     FROM agents_fts f
-                     JOIN agents a ON a.rowid = f.rowid
-                     WHERE f MATCH ?
+                     FROM agents_fts
+                     JOIN agents a ON agents_fts.rowid = a.rowid
+                     WHERE agents_fts MATCH ?
                      ORDER BY rank
                      LIMIT ? OFFSET ?",
                 )

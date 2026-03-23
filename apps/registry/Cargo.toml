@@ -8,23 +8,74 @@ description = "Hostable PAP-compatible federated agent registry with web managem
 [[bin]]
 name = "pap-registry"
 path = "src/main.rs"
+required-features = ["ssr"]
+
+[lib]
+name = "pap_registry"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+ssr = [
+    "leptos/ssr",
+    "leptos_router/ssr",
+    "dep:leptos_axum",
+    "dep:leptos_meta",
+    "dep:pap-federation",
+    "dep:pap-marketplace",
+    "dep:pap-did",
+    "dep:axum",
+    "dep:tokio",
+    "dep:reqwest",
+    "dep:tower-http",
+    "dep:anyhow",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+    "dep:ed25519-dalek",
+    "dep:rand",
+    "dep:sqlx",
+    "dep:libsqlite3-sys",
+    "dep:serde_yaml",
+    "dep:chrono",
+]
+hydrate = [
+    "dep:console_error_panic_hook",
+]
 
 [dependencies]
-pap-federation = { workspace = true }
-pap-marketplace = { workspace = true }
-pap-did = { workspace = true }
-axum = { workspace = true }
-tokio = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-reqwest = { workspace = true }
-tower-http = { version = "0.6", features = ["fs", "cors"] }
-anyhow = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+leptos        = { version = "0.8", features = [] }
+leptos_router = { version = "0.8", features = [] }
+leptos_axum   = { version = "0.8", optional = true }
+leptos_meta   = { version = "0.8", optional = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+console_error_panic_hook = { version = "0.1", optional = true }
 
-# Persistence
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "postgres", "chrono"] }
-libsqlite3-sys = { version = "0.30", features = ["bundled"] }
-serde_yaml = "0.9"
-chrono = { version = "0.4", features = ["serde"] }
+# Server-only (ssr feature)
+pap-federation     = { workspace = true, optional = true }
+pap-marketplace    = { workspace = true, optional = true }
+pap-did            = { workspace = true, optional = true }
+axum               = { workspace = true, optional = true }
+tokio              = { workspace = true, optional = true }
+reqwest            = { workspace = true, optional = true }
+tower-http         = { version = "0.6", features = ["fs", "cors"], optional = true }
+anyhow             = { version = "1", optional = true }
+tracing            = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+ed25519-dalek      = { workspace = true, optional = true }
+rand               = { workspace = true, optional = true }
+sqlx               = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "postgres", "chrono", "migrate", "macros"], optional = true }
+libsqlite3-sys     = { version = "0.30", features = ["bundled"], optional = true }
+serde_yaml         = { version = "0.9", optional = true }
+chrono             = { version = "0.4", features = ["serde"], optional = true }
+
+# WASM only
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen         = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys               = "0.3"
+web-sys              = { version = "0.3", features = [
+    "Window", "Request", "RequestInit", "RequestMode",
+    "Response", "Headers", "HtmlInputElement",
+] }
+serde-wasm-bindgen   = "0.6"
