@@ -8,14 +8,14 @@ A principal-first, zero-trust agent negotiation protocol for the open web.
 
 ## The Problem
 
-Every agent protocol in production today — A2A, MCP, ACP, AGNTCY — was designed to serve platform operators, not human principals.
+Existing agent protocols were designed for a single operator orchestrating tools on one machine, not for agents transacting across trust boundaries on behalf of different principals.
 
-- **A2A** authenticates agents as platform entities. Privacy is an "opacity principle" — aspirational, not enforced. No context minimization. No session ephemerality.
-- **MCP** connects models to tools. It is not an agent-to-agent negotiation protocol. Its own spec acknowledges it "cannot enforce these security principles at the protocol level."
-- **ACP** handles REST-based agent interop. Thin trust layer. No cryptographic identity.
-- **CrewAI, LangGraph, OpenAI Agents SDK** treat privacy as an implementation detail. LangGraph's default is a shared scratchpad where every agent sees everything.
+- **A2A** authenticates agents as platform entities. Privacy is an "opacity principle" — aspirational, not enforced. No mechanism for partial disclosure. Session residue is undefined.
+- **MCP** connects models to tools. Its own spec states: "we cannot enforce these security principles at the protocol level." Designed for single-operator. Disclosure is monolithic.
+- **ACP** handles REST-based agent interop. Thin trust layer. No cryptographic identity. No session ephemerality.
+- **CrewAI, LangGraph, OpenAI Agents SDK** treat disclosure as an implementation detail. LangGraph's default is a shared scratchpad where every agent sees everything. No protocol mechanism to send less. When an API in the chain is compromised, the attacker gets full principal context.
 
-None enforce context minimization at the protocol level. None define session ephemerality as a guarantee. None have economic primitives. Privacy is always somebody else's problem.
+**The unifying failure:** None enforce context minimization at the protocol layer. None define session ephemerality as a guarantee. Privacy is always an application problem, never a protocol problem.
 
 ## The Design
 
@@ -25,11 +25,15 @@ The human principal is the root of trust. Every agent in a transaction carries a
 
 **No new cryptography. No token economy. No central registry.**
 
-## Why Should I Care?
+## Why This Matters
 
-You searched for a stroller once. Now every website thinks you're pregnant. For six months. That's one query, with a human behind a browser. Now imagine AI agents making hundreds of queries on your behalf — every one leaking context to platforms that build profiles, adjust prices, and sell your behavioral data to brokers you've never heard of.
+**The Problem:** A compromise in one agent's tool chain becomes a compromise of your principal context. In every major framework — LangGraph, CrewAI, OpenAI Agents SDK, AutoGen — disclosure is monolithic. The agent gets a blob of context. There is no protocol mechanism to send less. When an API gets breached, the attacker gets everything the orchestrator knew about the principal: credit cards, address, travel history, medical conditions, financial data.
 
-PAP ensures your agent discloses only what you explicitly permit, to the specific service that needs it, for the duration of a single session, with a signed receipt proving what happened.
+**The Structural Ceiling:** You cannot solve a disclosure problem with execution controls. Sandboxing constrains *what an agent can do*. It does not constrain *what it can see*. The protocol layer has no opinion on partial disclosure, so developers are left playing whack-a-mole: strip sensitive fields, the model rephrases them in responses; add output filters, the model finds new phrasings.
+
+**PAP's Answer:** Protocol-enforced selective disclosure. An agent receives only the specific properties its mandate permits. The SD-JWT mechanism ensures undisclosed claims do not exist on the wire — not because a filter removed them, but because they were never transmitted. A compromised hotel API gets your check-in date, checkout date, and city. That is the blast radius. Not through defense-in-depth. Through protocol design.
+
+Every session is ephemeral and unlinked to principal identity. Both parties sign receipts that record *which properties were disclosed*, never their values. The agent forgets everything at session close.
 
 ## Trust Model
 
@@ -89,9 +93,17 @@ pap/
     pap-transport/    # HTTP client/server for 6-phase handshake
     pap-federation/   # Cross-registry sync, announce, peer exchange
     pap-webauthn/     # WebAuthn signer abstraction + software fallback
+    pap-c/            # C FFI bindings (cdylib + staticlib)
+    pap-wasm/         # WebAssembly bindings (@pap/sdk npm package)
+    pap-python/       # Python PyO3 bindings
+    papillion-shared/ # Shared models between Papillion frontend and backend
   apps/
     registry/         # Hostable federated PAP registry (Axum + Leptos SSR, SQLite/Postgres)
     papillion/        # Desktop reference implementation (Tauri)
+  bindings/
+    cpp/              # C++ RAII header-only wrapper (pap.hpp)
+    csharp/           # .NET 8 C# P/Invoke bindings with SafeHandle RAII
+    java/             # JNA-based Java bindings (io.pap.*)
 ```
 
 ### pap-did
@@ -133,9 +145,42 @@ pap/
 - `FederationServer` — HTTP endpoints for query, announce, peer discovery.
 - `FederationClient` — Pull sync by action type, push announcements, peer exchange.
 
-## Hostable Registry
+### pap-c
 
-`apps/registry/` is a standalone, self-hosted federated PAP registry. Deploy one node to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
+- Stable C FFI layer (cdylib + staticlib) exposing all PAP primitives via opaque handles.
+- Thread-local last-error storage for cross-language error propagation.
+- Defensive hardening: null pointer validation on array counts and per-element dereferencing.
+- `pap_mandate_sync_decay_state` helper for automatic Active→ReadOnly TTL-expiry handling.
+
+### pap-wasm
+
+- WebAssembly bindings via wasm-bindgen for JavaScript/TypeScript consumers.
+- npm package: `@pap/sdk` with full PAP core API (no transport layer).
+- Type-safe WASM wrapper for mandate verification, scope checking, and session state machines.
+
+### pap-python
+
+- PyO3-based Python bindings for all PAP primitives.
+- Full access to DID generation, mandate delegation, and session lifecycle.
+
+## Language Bindings
+
+PAP exposes stable FFI layers for multiple languages:
+
+| Language | Package | Transport | Notes |
+|----------|---------|-----------|-------|
+| Rust | `pap-*` crates | ✓ Built-in | Native async support |
+| Python | `pap-python` | PyO3 | Available via PyPI |
+| JavaScript/TypeScript | `@pap/sdk` | wasm-bindgen | WASM-based, no transport |
+| C/C++ | `libpap` + `pap.hpp` | cdylib/staticlib | Header-only wrapper, RAII semantics |
+| C# | `pap-dotnet` | P/Invoke | .NET 8+, SafeHandle RAII |
+| Java | `pap-java` | JNA | AutoCloseable handles, full enum support |
+
+For language bindings, see `crates/pap-c`, `crates/pap-wasm`, `crates/pap-python`, and `bindings/`.
+
+## Crystalis: Hostable Federated Registry
+
+`apps/registry/` is **Crystalis**, a standalone, self-hosted federated PAP registry. Deploy one node to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
 
 ```bash
 # Run locally (SQLite, no auth)
@@ -148,27 +193,30 @@ docker run -p 7890:7890 -v registry_data:/data \
 ```
 
 Key characteristics:
-- Did:key node identity persisted across restarts; ephemeral self-signed TLS cert bound to that DID
-- TLS fingerprint pinning for all peer connections — no CA dependency
-- Ed25519 signature verification at agent ingest; unsigned payloads rejected with `422`
-- Admin REST API (`/api/*`) + Leptos SSR web UI at `/`
-- Paginated full-text search (SQLite FTS5, Postgres tsvector)
+- **Self-hosted registry node** — Each instance is a DID-bound agent discoverable by peers
+- **Federated discovery** — Mesh multiple registry nodes; agents propagate across the network via announce/sync
+- **TLS fingerprint pinning** — No CA dependency; each node has a self-signed cert bound to its DID
+- **Ed25519 signature verification** — Unsigned or tampered agent advertisements rejected at ingest
+- **Admin REST API** (`/api/*`) + Leptos SSR web UI at `/`
+- **Full-text search** — SQLite FTS5 or Postgres tsvector with paginated results
+- **Multi-backend support** — SQLite for single-node, Postgres for clustered deployments
 
 See [apps/registry/README.md](apps/registry/README.md) for full documentation.
 
-## What This Replaces
+## How PAP Differs
 
-| Concern | A2A | MCP | ACP | PAP |
+| Feature | A2A | MCP | ACP | PAP |
 |---------|-----|-----|-----|-----|
-| Context minimization | No | No | No | SD-JWT per interaction |
-| Session ephemerality | No | Stateful | Stateless option | Ephemeral DIDs, keys discarded |
-| Field-level disclosure | No | No | No | SD-JWT selective claims |
-| Cryptographic scope enforcement | No | No | No | Mandate chain verification |
-| Agent-to-agent negotiation | Yes | No (tool access) | Yes | Yes |
-| Privacy-preserving payment | No | No | No | Ecash / Lightning proofs |
-| Marketplace discovery | Agent Cards | None | HTTP | Federated, disclosure-filtered |
-| Audit trail | No | No | No | Co-signed receipts |
-| Principal control | Platform | User (stated) | Enterprise | Cryptographic mandate |
+| **Trust Root** | Platform entity | Model + tools | Enterprise gateway | Human principal |
+| **Protocol Enforces Disclosure?** | No ("opacity principle") | No (spec says aspirational) | No | Yes (SD-JWT structural guarantee) |
+| **Session Ephemerality** | No | Stateful | Stateless option | Ephemeral DIDs, keys always discarded |
+| **Selective Disclosure** | No (all or nothing) | No (all or nothing) | No (all or nothing) | Yes (per-field, cryptographic) |
+| **Mandate Chain Verification** | No | No | No | Yes (recursive scope/TTL bounds) |
+| **Agent-to-Agent Negotiation** | Yes | No (tool access only) | Yes | Yes |
+| **Economic Primitives** | No | No | No | Ecash / Lightning proofs, receipts |
+| **Marketplace Discovery** | Agent Cards (centralized) | None | HTTP (centralized) | Federated, federated (Crystalis) |
+| **Audit Trail** | No | No | No | Co-signed receipts (property refs only) |
+| **Multi-Language Support** | No | Limited | Limited | Rust, Python, JS/TS, C, C#, Java |
 
 ## Protocol Extensions
 
