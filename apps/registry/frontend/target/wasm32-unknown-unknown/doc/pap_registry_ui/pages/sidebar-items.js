@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["agents","dashboard","peers","settings"]};

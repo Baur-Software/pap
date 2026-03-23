@@ -19,9 +19,6 @@ pub struct Config {
     /// Example: "https://registry.example.com:7890"
     pub public_endpoint: String,
 
-    /// Path to serve frontend static files from.
-    /// Defaults to "dist" relative to the working directory.
-    pub dist_dir: String,
 }
 
 impl Config {
@@ -38,14 +35,11 @@ impl Config {
 
         let admin_token = env::var("PAP_REGISTRY_ADMIN_TOKEN").ok();
 
-        let dist_dir = env::var("PAP_REGISTRY_DIST").unwrap_or_else(|_| "dist".into());
-
         Self {
             port,
             host,
             admin_token,
             public_endpoint,
-            dist_dir,
         }
     }
 }

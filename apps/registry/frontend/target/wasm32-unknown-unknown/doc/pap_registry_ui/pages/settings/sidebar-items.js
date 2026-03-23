@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["SettingsPage"],"struct":["SettingsPageProps"]};
