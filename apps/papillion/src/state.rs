@@ -69,6 +69,9 @@ pub struct AppState {
     /// SHA-256 hex fingerprint of this node's TLS certificate.
     /// Peers pin this to verify our identity — no CA trust chain.
     pub node_cert_fingerprint: RwLock<String>,
+    /// LAN-reachable `pap://` URLs for this node, computed at startup.
+    /// Excludes loopback; populated by `start_federation_server_async`.
+    pub local_pap_urls: RwLock<Vec<String>>,
 }
 
 impl AppState {
@@ -114,6 +117,7 @@ impl AppState {
             federation_port: self.federation_port,
             node_endpoint: RwLock::new(self.node_endpoint.read().unwrap().clone()),
             node_cert_fingerprint: RwLock::new(self.node_cert_fingerprint.read().unwrap().clone()),
+            local_pap_urls: RwLock::new(self.local_pap_urls.read().unwrap().clone()),
         }
     }
 
@@ -214,6 +218,20 @@ impl AppState {
 
         let signer = SoftwareSigner::from_keypair(keypair);
 
+        // Load persisted bookmarks — always include pap://local as the first entry
+        let persisted_bookmarks: Vec<String> = db
+            .get_setting("registry_bookmarks")
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok())
+            .unwrap_or_default();
+        let mut bookmarks = vec![LOCAL_REGISTRY_URL.to_string()];
+        for url in persisted_bookmarks {
+            if url != LOCAL_REGISTRY_URL && !bookmarks.contains(&url) {
+                bookmarks.push(url);
+            }
+        }
+
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
 
         // Spawn local agents — these are real AgentHandler implementations
@@ -236,7 +254,7 @@ impl AppState {
             profiles: RwLock::new(profiles),
             registries: RwLock::new(HashMap::new()),
             local_registry,
-            bookmarks: RwLock::new(vec![LOCAL_REGISTRY_URL.to_string()]),
+            bookmarks: RwLock::new(bookmarks),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager,
             agent_keypairs: RwLock::new(agent_keypairs),
@@ -249,6 +267,7 @@ impl AppState {
             federation_port: DEFAULT_FEDERATION_PORT,
             node_endpoint: RwLock::new(String::new()),
             node_cert_fingerprint: RwLock::new(String::new()),
+            local_pap_urls: RwLock::new(Vec::new()),
         }
     }
 

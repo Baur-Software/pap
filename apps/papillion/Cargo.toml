@@ -39,3 +39,4 @@ rusqlite = { version = "0.31", features = ["bundled", "serde_json"] }
 
 ed25519-dalek = { workspace = true }
 zeroize = { workspace = true }
+if-addrs = "0.7"

@@ -76,7 +76,9 @@ pub fn run() {
             commands::registry::sync_agents,
             commands::registry::discover_peers,
             commands::registry::add_bookmark,
+            commands::registry::remove_bookmark,
             commands::registry::list_bookmarks,
+            commands::registry::get_node_addresses,
             commands::registry::register_agent,
             commands::registry::get_node_info,
             commands::orchestrator::get_orchestrator_config,
@@ -174,6 +176,23 @@ async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn s
             eprintln!("Federation server error: {e}");
         }
     });
+
+    // Discover LAN addresses and store as pap:// URLs for the Settings UI
+    {
+        let pap_urls: Vec<String> = if_addrs::get_if_addrs()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|iface| !iface.is_loopback())
+            .filter_map(|iface| {
+                if let if_addrs::IfAddr::V4(ref addr) = iface.addr {
+                    Some(format!("pap://{}:{}", addr.ip, port))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        *state.local_pap_urls.write().unwrap() = pap_urls;
+    }
 
     // Spawn background discovery loop
     let discovery_registry = state.local_registry.clone();

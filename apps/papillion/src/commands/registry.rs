@@ -336,12 +336,12 @@ pub async fn discover_peers(
         .collect())
 }
 
-/// Add a registry URL to bookmarks.
+/// Add a registry URL to bookmarks and persist to SQLite.
 #[tauri::command]
 pub fn add_bookmark(
     state: State<'_, AppState>,
     registry_url: String,
-) -> Result<(), PapillionError> {
+) -> Result<Vec<String>, PapillionError> {
     let mut bookmarks = state
         .bookmarks
         .write()
@@ -351,7 +351,31 @@ pub fn add_bookmark(
         bookmarks.push(registry_url);
     }
 
-    Ok(())
+    persist_bookmarks(&state.db, &bookmarks)?;
+    Ok(bookmarks.clone())
+}
+
+/// Remove a registry URL from bookmarks and persist the updated list.
+/// The built-in `pap://local` registry cannot be removed.
+#[tauri::command]
+pub fn remove_bookmark(
+    state: State<'_, AppState>,
+    registry_url: String,
+) -> Result<Vec<String>, PapillionError> {
+    if registry_url.trim() == LOCAL_REGISTRY_URL {
+        return Err(PapillionError::from(
+            "Cannot remove the built-in local registry".to_string(),
+        ));
+    }
+
+    let mut bookmarks = state
+        .bookmarks
+        .write()
+        .map_err(|e| PapillionError::from(e.to_string()))?;
+
+    bookmarks.retain(|u| u != &registry_url);
+    persist_bookmarks(&state.db, &bookmarks)?;
+    Ok(bookmarks.clone())
 }
 
 /// List bookmarked registry URLs.
@@ -363,6 +387,29 @@ pub fn list_bookmarks(state: State<'_, AppState>) -> Result<Vec<String>, Papilli
         .map_err(|e| PapillionError::from(e.to_string()))?;
 
     Ok(bookmarks.clone())
+}
+
+/// Return the LAN-reachable `pap://` URLs for this node.
+/// These are computed at startup and exclude loopback addresses.
+#[tauri::command]
+pub fn get_node_addresses(state: State<'_, AppState>) -> Result<Vec<String>, PapillionError> {
+    let urls = state
+        .local_pap_urls
+        .read()
+        .map_err(|e| PapillionError::from(e.to_string()))?;
+    Ok(urls.clone())
+}
+
+/// Serialize bookmarks (excluding pap://local) and write to the settings table.
+fn persist_bookmarks(db: &crate::db::Database, bookmarks: &[String]) -> Result<(), PapillionError> {
+    // Don't persist the built-in local entry — it is always re-added on startup
+    let to_persist: Vec<&String> = bookmarks
+        .iter()
+        .filter(|u| u.as_str() != LOCAL_REGISTRY_URL)
+        .collect();
+    let json = serde_json::to_string(&to_persist)
+        .map_err(|e| PapillionError::from(format!("bookmark serialization: {e}")))?;
+    db.set_setting("registry_bookmarks", &json)
 }
 
 /// Register a new agent advertisement on this node.
