@@ -611,6 +611,8 @@ fn IdentityTab() -> impl IntoView {
 fn AdvancedTab() -> impl IntoView {
     view! {
         <div>
+            <ThisNodeCard />
+            <SavedRegistriesCard />
             <div class="card" style="margin-bottom: 16px;">
                 <h3 style="font-size: 14px; margin-bottom: 12px;">"Registry Browser"</h3>
                 <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
@@ -620,6 +622,306 @@ fn AdvancedTab() -> impl IntoView {
             </div>
             <RegistryBrowser />
             <AgentDetail />
+        </div>
+    }
+}
+
+#[component]
+fn ThisNodeCard() -> impl IntoView {
+    let node_did = RwSignal::new(String::new());
+    let node_fingerprint = RwSignal::new(String::new());
+    let node_addresses = RwSignal::new(Vec::<String>::new());
+    let copied = RwSignal::new(None::<String>);
+
+    Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
+        spawn_local(async move {
+            if let Ok(info) = bridge::invoke_no_args::<serde_json::Value>("get_node_info").await {
+                if let Some(did) = info.get("did").and_then(|v| v.as_str()) {
+                    node_did.set(did.to_string());
+                }
+                if let Some(fp) = info.get("cert_fingerprint").and_then(|v| v.as_str()) {
+                    node_fingerprint.set(fp.to_string());
+                }
+            }
+            if let Ok(addrs) = bridge::invoke_no_args::<Vec<String>>("get_node_addresses").await {
+                node_addresses.set(addrs);
+            }
+        });
+    });
+
+    let copy_to_clipboard = move |text: String| {
+        let text_clone = text.clone();
+        // If the same item is already showing "Copied!", toggle it off
+        if copied.get().as_deref() == Some(&text) {
+            copied.set(None);
+            return;
+        }
+        spawn_local(async move {
+            let promise = web_sys::window()
+                .and_then(|w| w.navigator().clipboard())
+                .map(|c| c.write_text(&text_clone));
+            if let Some(p) = promise {
+                let _ = wasm_bindgen_futures::JsFuture::from(p).await;
+            }
+            copied.set(Some(text_clone));
+        });
+    };
+
+    view! {
+        <div class="card" style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; margin-bottom: 4px;">"This Node"</h3>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+                "Share a URL below with other devices on your LAN to let them connect to this node."
+            </p>
+
+            // LAN addresses
+            <Show
+                when=move || !node_addresses.get().is_empty()
+                fallback=move || view! {
+                    <p style="font-size: 12px; color: var(--text-secondary);">
+                        "No LAN addresses detected \u{2014} federation server may still be starting."
+                    </p>
+                }
+            >
+                <div style="margin-bottom: 12px;">
+                    <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">"LAN addresses"</span>
+                    <For
+                        each=move || node_addresses.get()
+                        key=|addr| addr.clone()
+                        let:addr
+                    >
+                        {
+                            let addr_copy = addr.clone();
+                            let addr_display = addr.clone();
+                            let is_copied = {
+                                let addr_check = addr.clone();
+                                move || copied.get().as_deref() == Some(&addr_check)
+                            };
+                            view! {
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <code style="font-size: 12px; background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; flex: 1; word-break: break-all; font-family: 'JetBrains Mono', monospace;">
+                                        {addr_display}
+                                    </code>
+                                    <button
+                                        class="btn"
+                                        style="padding: 4px 10px; font-size: 11px; background: var(--bg-tertiary); color: var(--text-secondary); white-space: nowrap;"
+                                        on:click=move |_| copy_to_clipboard(addr_copy.clone())
+                                    >
+                                        {move || if is_copied() { "Copied!" } else { "Copy" }}
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </For>
+                </div>
+            </Show>
+
+            // Cert fingerprint
+            <Show when=move || !node_fingerprint.get().is_empty()>
+                <div style="margin-bottom: 8px;">
+                    <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">"Certificate fingerprint (SHA-256)"</span>
+                    <code style="font-size: 11px; word-break: break-all; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
+                        {move || node_fingerprint.get()}
+                    </code>
+                </div>
+            </Show>
+
+            // DID
+            <Show when=move || !node_did.get().is_empty()>
+                <div>
+                    <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">"Node DID"</span>
+                    <code style="font-size: 11px; word-break: break-all; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
+                        {move || node_did.get()}
+                    </code>
+                </div>
+            </Show>
+        </div>
+    }
+}
+
+#[component]
+fn SavedRegistriesCard() -> impl IntoView {
+    use crate::state::registry::RegistryState;
+
+    let registry = expect_context::<RegistryState>();
+    let bookmarks = RwSignal::new(Vec::<String>::new());
+    let add_url = RwSignal::new(String::new());
+    let add_error = RwSignal::new(None::<String>);
+    let add_loading = RwSignal::new(false);
+
+    // Load bookmarks on mount
+    Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
+        spawn_local(async move {
+            if let Ok(bm) = bridge::invoke_no_args::<Vec<String>>("list_bookmarks").await {
+                bookmarks.set(bm);
+            }
+        });
+    });
+
+    let handle_connect = move |url: String| {
+        let url_clone = url.clone();
+        spawn_local(async move {
+            registry.current_url.set(url_clone.clone());
+            registry.loading.set(true);
+            registry.error.set(None);
+            match bridge::invoke::<serde_json::Value, papillion_shared::RegistryInfo>(
+                "navigate_registry",
+                &serde_json::json!({ "url": url_clone }),
+            )
+            .await
+            {
+                Ok(info) => {
+                    registry.info.set(Some(info));
+                    registry.loading.set(false);
+                }
+                Err(e) => {
+                    let msg = if e.contains("Tauri IPC") {
+                        "Backend unavailable.".to_string()
+                    } else {
+                        e
+                    };
+                    registry.error.set(Some(msg));
+                    registry.loading.set(false);
+                }
+            }
+        });
+    };
+
+    let handle_remove = move |url: String| {
+        spawn_local(async move {
+            match bridge::invoke::<serde_json::Value, Vec<String>>(
+                "remove_bookmark",
+                &serde_json::json!({ "registryUrl": url }),
+            )
+            .await
+            {
+                Ok(updated) => bookmarks.set(updated),
+                Err(_) => {}
+            }
+        });
+    };
+
+    let handle_add = move |_| {
+        let url = add_url.get().trim().to_string();
+        if url.is_empty() {
+            add_error.set(Some("Enter a registry URL, e.g. pap://192.168.1.x:7890".into()));
+            return;
+        }
+        add_error.set(None);
+        add_loading.set(true);
+        spawn_local(async move {
+            // TOFU handshake first — verify the registry is reachable
+            match bridge::invoke::<serde_json::Value, papillion_shared::RegistryInfo>(
+                "navigate_registry",
+                &serde_json::json!({ "url": url }),
+            )
+            .await
+            {
+                Ok(_) => {
+                    // Reachable — save the bookmark
+                    match bridge::invoke::<serde_json::Value, Vec<String>>(
+                        "add_bookmark",
+                        &serde_json::json!({ "registryUrl": url }),
+                    )
+                    .await
+                    {
+                        Ok(updated) => {
+                            bookmarks.set(updated);
+                            add_url.set(String::new());
+                        }
+                        Err(e) => add_error.set(Some(e)),
+                    }
+                }
+                Err(e) => {
+                    let msg = if e.contains("Tauri IPC") {
+                        "Backend unavailable.".to_string()
+                    } else {
+                        format!("Could not connect: {e}")
+                    };
+                    add_error.set(Some(msg));
+                }
+            }
+            add_loading.set(false);
+        });
+    };
+
+    view! {
+        <div class="card" style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; margin-bottom: 4px;">"Saved Registries"</h3>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+                "Registries saved here reconnect automatically on startup."
+            </p>
+
+            // Bookmark list
+            <For
+                each=move || bookmarks.get()
+                key=|url| url.clone()
+                let:url
+            >
+                {
+                    let url_connect = url.clone();
+                    let url_remove = url.clone();
+                    let url_display = url.clone();
+                    let is_local = url == "pap://local";
+                    view! {
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background: var(--bg-tertiary); border-radius: 6px;">
+                            <code style="flex: 1; font-size: 12px; word-break: break-all; font-family: 'JetBrains Mono', monospace;">
+                                {url_display}
+                            </code>
+                            <button
+                                class="btn"
+                                style="padding: 3px 10px; font-size: 11px; background: var(--bg-secondary); color: var(--text-primary); white-space: nowrap;"
+                                on:click=move |_| handle_connect(url_connect.clone())
+                            >
+                                "Connect"
+                            </button>
+                            <button
+                                class="btn"
+                                style="padding: 3px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--error); white-space: nowrap;"
+                                disabled=move || is_local
+                                on:click=move |_| {
+                                    if !is_local {
+                                        handle_remove(url_remove.clone())
+                                    }
+                                }
+                            >
+                                "Remove"
+                            </button>
+                        </div>
+                    }
+                }
+            </For>
+
+            // Add registry form
+            <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+                <div style="display: flex; gap: 8px; align-items: flex-start;">
+                    <input
+                        type="text"
+                        placeholder="pap://192.168.1.x:7890"
+                        prop:value=move || add_url.get()
+                        on:input=move |ev| add_url.set(event_target_value(&ev))
+                        style="flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text-primary); font-size: 13px; font-family: 'JetBrains Mono', monospace;"
+                    />
+                    <button
+                        class="btn btn-primary"
+                        on:click=handle_add
+                        disabled=move || add_loading.get()
+                    >
+                        {move || if add_loading.get() { "Connecting\u{2026}" } else { "Add" }}
+                    </button>
+                </div>
+                <Show when=move || add_error.get().is_some()>
+                    <p style="font-size: 12px; color: var(--error); margin-top: 6px;">
+                        {move || add_error.get().unwrap_or_default()}
+                    </p>
+                </Show>
+            </div>
         </div>
     }
 }
