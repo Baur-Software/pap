@@ -473,12 +473,12 @@
     </div>
     <h1 class="hero-title">
       <span class="gradient-text">Principal Agent Protocol.</span><br />
-      Agent trust, grounded in you.
+      The internet needs a lifecycle for agents.
     </h1>
     <p class="hero-subtitle">
-      An open specification for cryptographic trust between humans and AI agents.
-      Mandate-based delegation, ephemeral session DIDs, SD-JWT selective disclosure &#8212;
-      without central registries or token economies.
+      Without a trust protocol, agents accumulate permissions forever, platforms capture
+      everything, and sessions never die. PAP gives agents a hard lifecycle &#8212;
+      and gives humans actual cryptographic authority over them.
     </p>
     <div class="hero-actions">
       <a href="https://baursoftware.com/pap" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
@@ -498,46 +498,47 @@
 <section id="constraints" class="section" aria-labelledby="constraints-heading">
   <div class="container">
     <div class="reveal">
-      <div class="section-label">Protocol Design</div>
+      <div class="section-label">Why PAP exists</div>
       <h2 class="section-title" id="constraints-heading">
-        Five invariants.<br />
-        <span class="gradient-text">Enforced by the protocol.</span>
+        Five things that go wrong.<br />
+        <span class="gradient-text">Five fixes in the protocol.</span>
       </h2>
       <p class="section-sub">
-        PAP is defined by five non-negotiable design constraints. They&#8217;re not features you can configure &#8212;
-        they&#8217;re structural properties of every compliant implementation.
+        Each invariant targets a specific failure mode of the agentic internet at scale.
+        They&#8217;re not features you can configure &#8212; they&#8217;re structural properties
+        baked into every compliant implementation.
       </p>
     </div>
     <div class="constraints-grid">
       <div class="constraint-card reveal reveal-delay-1">
         <div class="constraint-num">01</div>
-        <div class="constraint-title">Human principal as root of trust</div>
-        <p class="constraint-body">Every trust chain anchors to a human-controlled hardware key via WebAuthn&#47;FIDO2. No platform, orchestrator, or agent stands above the principal. Delegation flows down, never up.</p>
-        <span class="constraint-tag">WebAuthn &#183; FIDO2 &#183; hardware-bound</span>
+        <div class="constraint-title">Agents work for platforms, not for you</div>
+        <p class="constraint-body">Today&#8217;s AI agents hold your credentials, learn your behavior, and answer to a vendor&#8217;s terms of service &#8212; not yours. PAP makes your hardware key the only thing that can authorize an agent. No platform, vendor, or intermediary can act in your name without a mandate cryptographically signed by your device. Delegation flows down from you. Never up from a platform.</p>
+        <span class="constraint-tag">WebAuthn &#183; FIDO2 &#183; hardware-bound root of trust</span>
       </div>
       <div class="constraint-card reveal reveal-delay-2">
         <div class="constraint-num">02</div>
-        <div class="constraint-title">Mandate-scoped delegation with TTL</div>
-        <p class="constraint-body">Agents operate under cryptographically-signed Mandates specifying exact scope, constraints, and a hard TTL. An agent cannot act beyond what was signed &#8212; and the mandate expires automatically.</p>
-        <span class="constraint-tag">JWT &#183; scope &#183; TTL-bound</span>
+        <div class="constraint-title">Sessions that never die drain the internet</div>
+        <p class="constraint-body">Book one flight, and a naively-designed agent keeps running &#8212; holding connections, burning compute, accumulating permissions. At a billion users, that background swamp is a massive overallocation problem no platform will voluntarily fix. PAP mandates carry a hard TTL. In Papillion, the orchestrator renews TTLs while you&#8217;re actively working on the canvas. The moment you step away, the session winds down. Agents live exactly as long as you need them. The internet doesn&#8217;t carry their dead weight.</p>
+        <span class="constraint-tag">JWT &#183; hard TTL &#183; internet resource governance</span>
       </div>
       <div class="constraint-card reveal reveal-delay-1">
         <div class="constraint-num">03</div>
-        <div class="constraint-title">Ephemeral session DIDs</div>
-        <p class="constraint-body">Every agent session uses a fresh DID:key identity unlinked to the principal. Sessions cannot be correlated across interactions. There is no persistent agent fingerprint.</p>
-        <span class="constraint-tag">DID:key &#183; Ed25519 &#183; per-session</span>
+        <div class="constraint-title">Linked sessions become behavioral fingerprints</div>
+        <p class="constraint-body">Ad networks built billion-dollar businesses by linking your browser sessions across sites. Agent platforms will do the same if given the chance &#8212; one session becomes a fingerprint, sessions accumulate into a behavioral profile, the profile gets sold. PAP issues a fresh DID:key identity for every agent session, derived in-memory and never reused. No session can be linked to any other. There is no thread to pull.</p>
+        <span class="constraint-tag">DID:key &#183; Ed25519 &#183; per-session &#183; unlinkable</span>
       </div>
       <div class="constraint-card reveal reveal-delay-2">
         <div class="constraint-num">04</div>
-        <div class="constraint-title">Context minimization via SD-JWT</div>
-        <p class="constraint-body">Agents receive only the claims they need to do their job, selectively disclosed via SD-JWT. Papillion decides what to share. No agent ever sees the full principal profile.</p>
-        <span class="constraint-tag">SD-JWT &#183; selective disclosure &#183; VC</span>
+        <div class="constraint-title">All-or-nothing APIs leak everything</div>
+        <p class="constraint-body">To book a flight through most AI integrations today, you authorize the app to read your email, calendar, contacts, and location history &#8212; because the API is all-or-nothing. PAP makes selective disclosure a first-class protocol feature. The travel agent gets your destination and your budget. It doesn&#8217;t get your name. It doesn&#8217;t get your history. It doesn&#8217;t get anything it can sell. Agents get exactly the inputs they need to function. Nothing more.</p>
+        <span class="constraint-tag">SD-JWT &#183; W3C VC &#183; minimum-necessary disclosure</span>
       </div>
       <div class="constraint-card reveal reveal-delay-1" style="grid-column: 1 / -1;">
         <div class="constraint-num">05</div>
-        <div class="constraint-title">Co-signed receipts with property references only</div>
-        <p class="constraint-body">After every session, a receipt records property <em>names</em> that were disclosed &#8212; never values. The receipt is co-signed by both the principal session key and the agent. It proves something happened, not what was contained. No platform can build a behavioral profile from receipts alone.</p>
-        <span class="constraint-tag">co-signed &#183; property-names-only &#183; verifiable</span>
+        <div class="constraint-title">Value-bearing receipts are surveillance logs</div>
+        <p class="constraint-body">Without receipts, agents can claim they did things they didn&#8217;t &#8212; or deny things they did. So you need receipts. But a receipt containing values is a surveillance log: aggregate a billion of them and you have a behavioral database nobody consented to. PAP receipts record property <em>names</em>, never values. &#8220;Destination was disclosed&#8221; &#8212; not &#8220;destination was Tokyo.&#8221; The receipt is co-signed by both the principal session key and the agent. Proof that the right thing happened. Not a profile of what it was.</p>
+        <span class="constraint-tag">co-signed &#183; property-names-only &#183; accountability without surveillance</span>
       </div>
     </div>
   </div>
