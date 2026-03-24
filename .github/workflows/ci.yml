@@ -68,3 +68,39 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
+
+  smoke-test:
+    name: Smoke Test (Papillion Desktop App)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+      - name: Install trunk
+        run: cargo binstall trunk --no-confirm
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build Tauri app
+        working-directory: apps/papillion
+        run: cargo tauri build
+      - name: Install Playwright
+        run: npm install -D @playwright/test
+      - name: Run smoke tests
+        run: npm exec playwright test e2e/tests/smoke.spec.ts
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: test-results/
+          retention-days: 7
