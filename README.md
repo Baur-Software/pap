@@ -137,7 +137,9 @@ pap/
 
 - `AgentServer` — Axum HTTP server exposing 6 protocol phase endpoints.
 - `AgentClient` — HTTP client driving the handshake from the initiator side.
+- `AgentHandler` trait — Transport-agnostic protocol logic. Implement once, work with any transport.
 - 6-phase protocol: Token → DID Exchange → Disclosure → Execution → Receipt → Close.
+- **Transport-agnostic design:** The protocol is independent of HTTP. Custom transports (WebSocket, gRPC, Bluetooth, etc.) implement the same handler. See [Transport Bindings](docs/TRANSPORT_BINDINGS.md).
 
 ### pap-federation
 
@@ -276,9 +278,11 @@ Good feedback makes the protocol harder to capture.
 - [Show Me the Agents: PAP in Practice](https://baursoftware.com/show-me-the-agents-pap-in-practice/) — Real-world scenarios + docker-compose examples
 - [The Tollbooth Model Is Over](https://baursoftware.com/the-tollbooth-model-is-over/) — Economic context
 
-## Specification
+## Documentation
 
-See the [PAP v0.1 Architecture Specification](https://baursoftware.com/pap) for the full protocol design.
+- **[PAP v0.1 Architecture Specification](https://baursoftware.com/pap)** — Full protocol design and cryptographic model
+- **[Transport Bindings](docs/TRANSPORT_BINDINGS.md)** — How PAP works across HTTP, WebSocket, gRPC, IoT, and custom transport protocols
+- **[Design System](DESIGN.md)** — Visual design and component conventions
 
 ## License
 
