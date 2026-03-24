@@ -2,7 +2,10 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::ui::api::{AgentAdvertisement, register_agent_json};
+use crate::ui::api::AgentAdvertisement;
+// Phase 4: These will be used when implementing full async signing flow
+#[allow(unused_imports)]
+use crate::ui::api::{register_agent_json, sign_advertisement};
 
 /// Form state for the agent designer
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -192,6 +195,7 @@ fn DesignerForm(
     submit_status: RwSignal<Option<String>>,
 ) -> impl IntoView {
     let is_submitting = RwSignal::new(false);
+    let signing_key = RwSignal::new(String::new());
 
     view! {
         <form class="agent-designer-form"
@@ -201,13 +205,14 @@ fn DesignerForm(
                 let mut state = form_state.get();
                 if state.validate() {
                     form_state.set(state);
-                    // Phase 4: Attempt to register
-                    // TODO: In full implementation, this would:
-                    // 1. Show WebAuthn/Passkey prompt
-                    // 2. Client-side sign the JSON-LD with Ed25519
-                    // 3. Call register_agent_json with signed JSON
-                    submit_status.set(Some("⏳ Signing with WebAuthn... (Phase 4 integration pending)".to_string()));
-                    is_submitting.set(true);
+                    let key = signing_key.get();
+                    if key.trim().is_empty() {
+                        submit_status.set(Some("⚠️ Signing key required. Paste your Ed25519 private key (base64)".to_string()));
+                        return;
+                    }
+                    // Phase 4: Prepare for signing and registration
+                    // Full async handling requires using Action component for proper state management
+                    submit_status.set(Some("📋 Ready to sign. Use Sign & Register button to proceed.".to_string()));
                 } else {
                     form_state.set(state);
                     submit_status.set(None);
@@ -220,12 +225,37 @@ fn DesignerForm(
             <ReturnsSection form_state validation_attempted />
             <ObjectTypesSection form_state />
             <TTLSection form_state validation_attempted />
+            <SigningKeySection signing_key />
 
             <div class="form-actions">
                 <button
                     class="btn btn-primary"
                     type="submit"
                     disabled=move || is_submitting.get()
+                >
+                    "✅ Validate Form"
+                </button>
+                <button
+                    class="btn btn-primary"
+                    type="button"
+                    disabled=move || {
+                        let state = form_state.get();
+                        state.errors.is_empty() && signing_key.get().trim().is_empty() || is_submitting.get()
+                    }
+                    on:click=move |_| {
+                        is_submitting.set(true);
+                        let _state = form_state.get();
+                        let _ad = _state.to_advertisement();
+                        let _key = signing_key.get();
+
+                        // Phase 4: TODO - Implement actual signing and registration
+                        // This will:
+                        // 1. Call sign_advertisement(json, key) server function
+                        // 2. On success, call register_agent_json(signed_json)
+                        // 3. Update status with hash on success or error message on failure
+                        submit_status.set(Some("⏳ Signing & registering... (Phase 4 in progress)".to_string()));
+                        is_submitting.set(false);
+                    }
                 >
                     {move || if is_submitting.get() { "⏳ Signing..." } else { "🔐 Sign & Register" }}
                 </button>
@@ -541,6 +571,29 @@ fn PreviewPane(form_state: RwSignal<AgentFormState>) -> impl IntoView {
                         .unwrap_or_else(|_| "Error generating JSON".to_string())
                 }}
             </pre>
+        </div>
+    }
+}
+
+/// Signing key section (Phase 4: Ed25519 key input for demo/testing)
+#[component]
+fn SigningKeySection(signing_key: RwSignal<String>) -> impl IntoView {
+    view! {
+        <div class="form-section">
+            <h3 class="form-section-title">"Signing Key (Phase 4)"</h3>
+            <p class="form-section-help">"Paste your Ed25519 private key (base64) or leave empty to skip signing"</p>
+            <textarea
+                class="form-input"
+                placeholder="Base64-encoded Ed25519 private key (32 bytes)"
+                prop:value=move || signing_key.get()
+                on:input=move |e| {
+                    let val = event_target_value(&e);
+                    signing_key.set(val);
+                }
+            />
+            <p class="form-hint">
+                "For demo purposes only. In production, signing would use WebAuthn/Passkey."
+            </p>
         </div>
     }
 }
