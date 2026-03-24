@@ -94,9 +94,11 @@ jobs:
         working-directory: apps/papillion
         run: cargo tauri build
       - name: Install Playwright
-        run: npm install -D @playwright/test
+        working-directory: e2e
+        run: npm install
       - name: Run smoke tests
-        run: npm exec playwright test e2e/tests/smoke.spec.ts
+        working-directory: e2e
+        run: npm exec playwright test
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       - name: Upload test results on failure
