@@ -8,6 +8,7 @@
 //! - `wasm`: Uses sql.js (web)
 
 use serde::Serialize;
+use crate::types::Template;
 
 #[cfg(feature = "native")]
 pub mod native;
@@ -119,4 +120,24 @@ pub trait DatabaseOps: Send + Sync {
 
     /// Full-text search over episode fields
     fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError>;
+
+    // ── Template Management ───────────────────────────────────────────────
+
+    /// List all templates enabled for a principal (or global if None)
+    fn list_enabled_templates_for_principal(
+        &self,
+        principal_did: Option<&str>,
+    ) -> Result<Vec<Template>, DbError>;
+
+    /// Insert a new template
+    fn insert_template(&self, template: &Template) -> Result<(), DbError>;
+
+    /// Update an existing template
+    fn update_template(&self, template: &Template) -> Result<(), DbError>;
+
+    /// Delete a template by name
+    fn delete_template(&self, template_name: &str) -> Result<(), DbError>;
+
+    /// Enable or disable a template
+    fn set_template_enabled(&self, template_name: &str, enabled: bool) -> Result<(), DbError>;
 }

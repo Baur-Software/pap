@@ -1,3 +1,4 @@
+use crate::db::prelude::DatabaseOps;
 use crate::state::AppState;
 use papillion_shared::types::Template;
 use serde_json::json;
