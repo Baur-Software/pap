@@ -203,6 +203,40 @@ Key characteristics:
 - **Full-text search** — SQLite FTS5 or Postgres tsvector with paginated results
 - **Multi-backend support** — SQLite for single-node, Postgres for clustered deployments
 
+### Why a Registry?
+
+An open agent network needs a registry for six distinct reasons: discovery, pre-session disclosure matching, payment negotiation, trust at the edge, accountability, and operator sovereignty.
+
+**Discovery without a central directory**
+
+An agent advertising `schema:ReserveAction` shouldn't require a platform-controlled directory to be found. Crystalis nodes store signed `AgentAdvertisement` records indexed by Schema.org action type and free-text capability description. An orchestrator looking for a hotel-booking agent queries its local registry — not a platform API — and receives a list of candidates along with their disclosure requirements. Because the federation protocol propagates advertisements across nodes via push/pull sync, no single node is authoritative. The network discovers its topology from the bottom up.
+
+Full-text search over FTS5/tsvector means any node in the mesh can answer capability queries without a custom routing layer or a crawl-the-web index.
+
+**Pre-session disclosure matching**
+
+Before initiating a session, an orchestrator can inspect a candidate's `AgentAdvertisement` to see exactly which SD-JWT claims the agent requires. If the principal's current mandate doesn't cover those fields, the orchestrator can skip that candidate — without establishing a session, exchanging DIDs, or transmitting any context at all. Unnecessary exposure during candidate evaluation is eliminated at the query stage, not the session stage.
+
+**Payment as a first-class protocol primitive**
+
+Agents in an open network need to charge for execution. PAP's `Mandate` includes an optional `payment_proof` field — an ecash token or Lightning preimage that the service-side agent verifies before processing the request. The registry is where an agent *advertises* its payment terms: denomination, mechanism, and whether the caller needs a prior proof-of-funds before the session begins.
+
+Ecash tokens are unlinkable to the principal identity. The vendor learns a transaction occurred but not who paid. This is not a payment processor — it is a mechanism for agents to negotiate micro-transactions without routing through a platform's billing infrastructure. The registry publishes the terms; the session handshake carries the proof; neither touches a centralized payment rail.
+
+**Trust at the edge, not at the center**
+
+Crystalis nodes don't require a trusted third party to validate agent identity. Ed25519 signature verification happens at ingest: an advertisement that wasn't signed by the claiming DID's key is rejected with `422`. Compromise of one peer node cannot inject forged agents into the mesh because every downstream node re-verifies on receipt. TLS fingerprint pinning (TOFU, no CA dependency) means peer connections are authenticated by DID, not by a certificate authority a platform operator controls.
+
+**Accountability without exposure**
+
+The registry creates a verifiable record of which agents exist and what they claim to do. Co-signed `TransactionReceipt`s — containing property references only, never values — are the per-session record of what was disclosed and executed. Registry advertisements plus session receipts produce a complete audit trail: what the agent advertised, what the principal authorized, and what categories of data were exchanged. No values appear anywhere in this chain.
+
+This separates accountability from surveillance. You can prove a transaction occurred and what types of data it touched. You cannot reconstruct the data itself.
+
+**Operator sovereignty**
+
+Any organization can run its own Crystalis node. Agents do not need permission from a platform to be discoverable. There is no central index to capture, no API key to revoke, and no terms-of-service gate on discovery. A company running its own registry node can federate selectively — peering with trusted nodes while keeping internal agents off the public mesh entirely. The federation protocol is the same in both cases; the trust boundary is operator-defined.
+
 See [apps/registry/README.md](apps/registry/README.md) for full documentation.
 
 ## How PAP Differs

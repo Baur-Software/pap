@@ -285,6 +285,58 @@
     .reveal.visible { opacity: 1; transform: none; }
     .reveal-delay-1 { transition-delay: .1s; }
     .reveal-delay-2 { transition-delay: .2s; }
+
+    /* ─── Why Registry ────────────────────────────────────────────────── */
+    .why-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .why-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 28px;
+      display: flex; gap: 20px; align-items: flex-start;
+      transition: all .2s ease;
+    }
+    .why-card:hover { border-color: rgba(108,92,231,.25); transform: translateY(-2px); }
+    .why-num {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(108,92,231,.12); border: 1px solid rgba(108,92,231,.25);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Satoshi', sans-serif; font-size: .85rem; font-weight: 900;
+      color: var(--violet);
+    }
+    .why-content-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: .95rem; font-weight: 700; margin-bottom: 8px;
+    }
+    .why-content-body {
+      font-size: .82rem; color: var(--muted); line-height: 1.7;
+    }
+    .why-content-body code {
+      font-family: 'JetBrains Mono', monospace; font-size: .8em;
+      color: var(--teal);
+    }
+    .mesh-callout {
+      margin-top: 40px;
+      background: rgba(108,92,231,.07);
+      border: 1px solid rgba(108,92,231,.2);
+      border-radius: var(--radius-lg); padding: 28px 32px;
+      display: flex; gap: 24px; align-items: flex-start;
+    }
+    .mesh-callout-icon {
+      font-size: 1.6rem; flex-shrink: 0; margin-top: 2px;
+    }
+    .mesh-callout-title {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1rem; font-weight: 700; margin-bottom: 8px;
+    }
+    .mesh-callout-body {
+      font-size: .875rem; color: var(--muted); line-height: 1.7;
+    }
+    .mesh-callout-body code {
+      font-family: 'JetBrains Mono', monospace; font-size: .8em;
+      color: var(--violet);
+    }
+    @media (max-width: 768px) { .why-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -408,6 +460,132 @@
         <div class="feature-desc">
           One <code style="font-family:'JetBrains Mono',monospace;font-size:.8em;color:var(--teal)">docker compose up</code> to run.
           Dockerfile and compose file included. Configurable via environment variables.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── WHY A REGISTRY ───────────────────────────────────────────────── -->
+<section class="section" aria-labelledby="why-heading">
+  <div class="container">
+    <div class="reveal" style="margin-bottom: 56px;">
+      <div class="section-label">Why a Registry?</div>
+      <h2 class="section-title" id="why-heading">
+        Six reasons open agent networks<br />
+        <span class="gradient-text">need a registry primitive</span>
+      </h2>
+      <p class="section-sub">
+        A registry isn't a directory you phone home to — it's a protocol component.
+        Here's what it enables that you can't get any other way.
+      </p>
+    </div>
+
+    <div class="why-grid">
+      <div class="why-card reveal">
+        <div class="why-num">1</div>
+        <div>
+          <div class="why-content-title">Discovery without a central directory</div>
+          <div class="why-content-body">
+            An agent advertising <code>schema:ReserveAction</code> shouldn't require a platform-controlled
+            index to be found. Crystalis nodes store signed <code>AgentAdvertisement</code> records indexed
+            by Schema.org action type. Because the federation protocol propagates advertisements across
+            nodes via push/pull sync, no single node is authoritative. The network discovers its topology
+            from the bottom up.
+          </div>
+        </div>
+      </div>
+
+      <div class="why-card reveal reveal-delay-1">
+        <div class="why-num">2</div>
+        <div>
+          <div class="why-content-title">Pre-session disclosure matching</div>
+          <div class="why-content-body">
+            Before initiating a session, an orchestrator inspects a candidate's advertisement to see
+            exactly which SD-JWT claims the agent requires. If the principal's mandate doesn't cover
+            those fields, the orchestrator skips that candidate — without establishing a session,
+            exchanging DIDs, or transmitting any context at all. Unnecessary exposure is eliminated
+            at the query stage, not the session stage.
+          </div>
+        </div>
+      </div>
+
+      <div class="why-card reveal">
+        <div class="why-num">3</div>
+        <div>
+          <div class="why-content-title">Payment as a first-class primitive</div>
+          <div class="why-content-body">
+            Agents in an open network need to charge for execution. PAP's <code>Mandate</code> includes
+            an optional <code>payment_proof</code> field — an ecash token or Lightning preimage verified
+            before the request is processed. The registry is where an agent <em>advertises</em> its payment
+            terms: denomination, mechanism, and proof-of-funds requirements. The registry publishes the
+            terms; the session handshake carries the proof. Neither touches a centralized payment rail.
+            Ecash tokens are unlinkable to principal identity — the vendor learns a transaction occurred,
+            not who paid.
+          </div>
+        </div>
+      </div>
+
+      <div class="why-card reveal reveal-delay-1">
+        <div class="why-num">4</div>
+        <div>
+          <div class="why-content-title">Trust at the edge, not at the center</div>
+          <div class="why-content-body">
+            Crystalis nodes don't require a trusted third party to validate agent identity. Ed25519
+            signature verification happens at ingest: an advertisement not signed by the claiming
+            DID's key is rejected with <code>422</code>. Compromise of one peer node cannot inject
+            forged agents into the mesh because every downstream node re-verifies on receipt. TLS
+            fingerprint pinning (TOFU, no CA dependency) means peer connections are authenticated
+            by DID, not by a certificate authority any platform operator controls.
+          </div>
+        </div>
+      </div>
+
+      <div class="why-card reveal">
+        <div class="why-num">5</div>
+        <div>
+          <div class="why-content-title">Accountability without exposure</div>
+          <div class="why-content-body">
+            The registry creates a verifiable record of what agents claim to do. Co-signed
+            <code>TransactionReceipt</code>s — containing property references only, never values —
+            are the per-session record of what was disclosed and executed. Registry advertisements
+            plus session receipts produce a complete audit trail: what the agent advertised, what the
+            principal authorized, and what categories of data changed hands. This separates
+            accountability from surveillance: you can prove a transaction occurred and what
+            types of data it touched, but you cannot reconstruct the data itself.
+          </div>
+        </div>
+      </div>
+
+      <div class="why-card reveal reveal-delay-1">
+        <div class="why-num">6</div>
+        <div>
+          <div class="why-content-title">Operator sovereignty</div>
+          <div class="why-content-body">
+            Any organization can run its own Crystalis node. Agents don't need permission from a
+            platform to be discoverable. There is no central index to capture, no API key to revoke,
+            and no terms-of-service gate on discovery. The trust boundary is operator-defined:
+            federate with everyone, federate selectively, or keep a node entirely internal.
+            The federation protocol is the same in every case.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mesh-callout reveal">
+      <div class="mesh-callout-icon">🕸️</div>
+      <div>
+        <div class="mesh-callout-title">One org, many nodes — the internal mesh</div>
+        <div class="mesh-callout-body">
+          An organization can run multiple Crystalis instances — one per team, region, or trust
+          boundary — and peer them together into a private mesh. The <code>FederatedRegistry</code>
+          merges advertisements across nodes using content-hash deduplication, so the same ad never
+          cycles through the mesh twice. Peer gossip (<code>/federation/peers</code>) lets new nodes
+          bootstrap without a seed list. Internal nodes can peer with each other while only selected
+          nodes participate in the broader public federation. The boundary between private and public
+          is a peering decision, not an architectural constraint.
         </div>
       </div>
     </div>
