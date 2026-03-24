@@ -16,7 +16,7 @@ fn hash_agent_did(agent_did: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-use crate::db::{AgentProfile, Episode};
+use crate::db::{prelude::DatabaseOps, AgentProfile, Episode};
 use crate::error::PapillionError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillion_shared::{
@@ -907,5 +907,5 @@ pub fn list_completed_runs(
 pub fn list_agent_profiles(
     state: State<'_, AppState>,
 ) -> Result<Vec<AgentProfile>, PapillionError> {
-    state.db.list_agent_profiles()
+    state.db.list_agent_profiles().map_err(|e| PapillionError::from(e.0))
 }

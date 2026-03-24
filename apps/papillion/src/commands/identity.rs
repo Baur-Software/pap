@@ -2,6 +2,7 @@ use base64::Engine;
 use tauri::State;
 use zeroize::Zeroizing;
 
+use crate::db::prelude::DatabaseOps;
 use crate::error::PapillionError;
 use crate::state::AppState;
 use papillion_shared::{ExportedKey, IdentityInfo, KeyBackupStatus, SuccessorDesignation};

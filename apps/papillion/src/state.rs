@@ -11,7 +11,7 @@ use papillion_shared::{OrchestratorConfig, SuccessorDesignation};
 use zeroize::Zeroizing;
 
 use crate::agents::{DuckDuckGoAgent, OnDeviceAiAgent, WikipediaAgent};
-use crate::db::Database;
+use crate::db::{prelude::DatabaseOps, Database};
 use crate::error::PapillionError;
 use crate::inference::ModelManager;
 use crate::profiles_db::ProfilesDatabase;
@@ -78,7 +78,7 @@ impl AppState {
     /// Create AppState with persistent databases at the given path.
     /// Sets up profiles registry and initializes with active profile.
     pub fn new(db_path: &std::path::Path) -> Self {
-        let db = Database::open(db_path).expect("failed to open experience memory database");
+        let db = crate::db::open_db(db_path).expect("failed to open experience memory database");
 
         // Open profiles registry next to the main database
         let profiles_db_path = db_path
@@ -320,7 +320,7 @@ impl Default for AppState {
         // Fallback: use temp databases (data lost on restart).
         // In production, lib.rs uses AppState::new() with app_data_dir.
         let db =
-            Database::open(&PathBuf::from("papillion.db")).expect("failed to open fallback db");
+            crate::db::open_db(&PathBuf::from("papillion.db")).expect("failed to open fallback db");
         let profiles_db = ProfilesDatabase::open(&PathBuf::from("profiles.db"))
             .expect("failed to open fallback profiles db");
         Self::with_db(Arc::new(db), Arc::new(profiles_db))
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_creates_new_seed_when_none_exists() {
-        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
 
         // Should create new seed since none exists
         let (seed, keypair) = AppState::load_or_create_seed(&db).expect("should create seed");
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_loads_existing_seed() {
-        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
 
         // Create first seed
         let (seed1, keypair1) = AppState::load_or_create_seed(&db).expect("should create seed");
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_rejects_corrupt_base64() {
-        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
 
         // Manually set corrupt (invalid base64) seed
         db.set_setting("principal_seed_b64", "not!!!valid%%%base64")
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_rejects_wrong_length() {
-        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
 
         // Set seed with wrong byte length (31 bytes instead of 32)
         let short_seed = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(vec![0u8; 31]);
@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_handles_valid_seed_correctly() {
-        let db = Arc::new(crate::db::Database::open_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
 
         // Create a valid seed and manually persist it
         let valid_keypair = PrincipalKeypair::generate();

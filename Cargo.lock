@@ -4444,6 +4444,7 @@ name = "papillion-shared"
 version = "0.4.2"
 dependencies = [
  "chrono",
+ "rusqlite",
  "serde",
  "serde_json",
 ]

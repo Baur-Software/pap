@@ -8,7 +8,7 @@ license.workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-papillion-shared = { workspace = true }
+papillion-shared = { workspace = true, features = ["native"] }
 pap-did = { workspace = true }
 pap-core = { workspace = true }
 pap-credential = { workspace = true }
