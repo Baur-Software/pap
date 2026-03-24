@@ -30,8 +30,7 @@ impl NativeDatabase {
         Ok(db)
     }
 
-    /// Open an in-memory database (for tests).
-    #[cfg(test)]
+    /// Open an in-memory database (for tests and temporary use).
     pub fn open_memory() -> Result<Self, DbError> {
         let conn = Connection::open_in_memory().map_err(|e| DbError(format!("db open: {e}")))?;
         let db = Self {
