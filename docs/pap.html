@@ -867,6 +867,44 @@
 
 <div class="divider"></div>
 
+<!-- ─── DOCUMENTATION ─────────────────────────────────────────────────────── -->
+<section class="section" aria-labelledby="docs-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Documentation</div>
+      <h2 class="section-title" id="docs-heading">Deep dives on protocol design.</h2>
+      <p class="section-sub">
+        Complete reference documentation for implementing PAP across any transport layer or deployment environment.
+      </p>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-top: 48px;">
+      <div class="example-card reveal reveal-delay-1">
+        <div class="example-name">Specification</div>
+        <p class="example-desc">RFC-style formal specification covering the six-phase protocol, trust model, cryptographic primitives, and all security considerations.</p>
+        <a href="https://baursoftware.com/pap" target="_blank" rel="noopener" style="color: var(--indigo); font-weight: 600; margin-top: 12px; display: inline-flex; align-items: center; gap: 4px;">
+          Read the full spec →
+        </a>
+      </div>
+      <div class="example-card reveal reveal-delay-2">
+        <div class="example-name">Transport Bindings</div>
+        <p class="example-desc">How PAP achieves transport independence. Covers HTTP/JSON default binding, custom transports (WebSocket, gRPC, IoT, email), and implementation patterns.</p>
+        <a href="https://github.com/Baur-Software/pap/blob/main/docs/TRANSPORT_BINDINGS.md" target="_blank" rel="noopener" style="color: var(--indigo); font-weight: 600; margin-top: 12px; display: inline-flex; align-items: center; gap: 4px;">
+          Learn about transports →
+        </a>
+      </div>
+      <div class="example-card reveal reveal-delay-3">
+        <div class="example-name">Integration Guide</div>
+        <p class="example-desc">Step-by-step walkthrough for adding mandate-authenticated PAP sessions to your agent. Language-specific examples for Rust, Python, and JavaScript.</p>
+        <a href="https://github.com/Baur-Software/pap/blob/main/docs/add-pap-to-your-agent.md" target="_blank" rel="noopener" style="color: var(--indigo); font-weight: 600; margin-top: 12px; display: inline-flex; align-items: center; gap: 4px;">
+          View the guide →
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
 <!-- ─── CTA ──────────────────────────────────────────────────────── -->
 <section class="section" aria-label="Get started with PAP">
   <div class="container">
@@ -899,6 +937,7 @@
         <a href="index.html">Papillion</a>
         <a href="crystalis.html">Crystalis</a>
         <a href="https://baursoftware.com/pap" target="_blank" rel="noopener">Specification</a>
+        <a href="https://github.com/Baur-Software/pap/blob/main/docs/TRANSPORT_BINDINGS.md" target="_blank" rel="noopener">Transport Bindings</a>
         <a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub</a>
         <a href="https://baursoftware.com" target="_blank" rel="noopener">Baur Software</a>
       </div>
