@@ -61,6 +61,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::health::get_health_status,
             commands::identity::create_identity,
             commands::identity::get_identity,
             commands::profiles::list_profiles,

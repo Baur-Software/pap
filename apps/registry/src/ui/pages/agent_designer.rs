@@ -269,7 +269,10 @@ fn DesignerForm(
 
 /// Metadata section: agent name, provider name, provider DID (Phase 2: with validation feedback)
 #[component]
-fn MetadataSection(form_state: RwSignal<AgentFormState>, validation_attempted: RwSignal<bool>) -> impl IntoView {
+fn MetadataSection(
+    form_state: RwSignal<AgentFormState>,
+    validation_attempted: RwSignal<bool>,
+) -> impl IntoView {
     view! {
         <div class="form-section">
             <h3 class="form-section-title">"Agent Metadata"</h3>
@@ -363,7 +366,10 @@ fn MetadataSection(form_state: RwSignal<AgentFormState>, validation_attempted: R
 
 /// Capabilities section
 #[component]
-fn CapabilitiesSection(form_state: RwSignal<AgentFormState>, validation_attempted: RwSignal<bool>) -> impl IntoView {
+fn CapabilitiesSection(
+    form_state: RwSignal<AgentFormState>,
+    validation_attempted: RwSignal<bool>,
+) -> impl IntoView {
     view! {
         <div class="form-section">
             <h3 class="form-section-title">"Capabilities"</h3>
@@ -398,7 +404,10 @@ fn CapabilitiesSection(form_state: RwSignal<AgentFormState>, validation_attempte
 
 /// Disclosure section
 #[component]
-fn DisclosureSection(form_state: RwSignal<AgentFormState>, validation_attempted: RwSignal<bool>) -> impl IntoView {
+fn DisclosureSection(
+    form_state: RwSignal<AgentFormState>,
+    validation_attempted: RwSignal<bool>,
+) -> impl IntoView {
     view! {
         <div class="form-section">
             <h3 class="form-section-title">"Required Disclosure"</h3>
@@ -433,7 +442,10 @@ fn DisclosureSection(form_state: RwSignal<AgentFormState>, validation_attempted:
 
 /// Returns section
 #[component]
-fn ReturnsSection(form_state: RwSignal<AgentFormState>, validation_attempted: RwSignal<bool>) -> impl IntoView {
+fn ReturnsSection(
+    form_state: RwSignal<AgentFormState>,
+    validation_attempted: RwSignal<bool>,
+) -> impl IntoView {
     view! {
         <div class="form-section">
             <h3 class="form-section-title">"Return Types"</h3>
@@ -492,7 +504,10 @@ fn ObjectTypesSection(form_state: RwSignal<AgentFormState>) -> impl IntoView {
 
 /// TTL section: time-to-live input
 #[component]
-fn TTLSection(form_state: RwSignal<AgentFormState>, validation_attempted: RwSignal<bool>) -> impl IntoView {
+fn TTLSection(
+    form_state: RwSignal<AgentFormState>,
+    validation_attempted: RwSignal<bool>,
+) -> impl IntoView {
     view! {
         <div class="form-section">
             <h3 class="form-section-title">"Time-to-Live (TTL)"</h3>
@@ -540,7 +555,10 @@ fn PreviewPane(form_state: RwSignal<AgentFormState>) -> impl IntoView {
             copy_feedback.set(Some("✓ Copied!".to_string()));
             // Reset feedback after 2 seconds
             let feedback = copy_feedback;
-            let _timeout_handle = set_timeout(move || feedback.set(None), std::time::Duration::from_secs(2));
+            set_timeout(
+                move || feedback.set(None),
+                std::time::Duration::from_secs(2),
+            );
         }
     };
 

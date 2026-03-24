@@ -40,7 +40,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: 'cpp, csharp, go, java, javascript-typescript, python, ruby, rust'
-          build-mode: none
+          build-mode: autobuild
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3

@@ -192,3 +192,32 @@ jobs:
               release_id: parseInt(process.env.RELEASE_ID),
               draft: false
             });
+
+  # ── 5. Post-deploy canary monitoring ──────────────────────────────────────
+  canary-verify:
+    name: Post-Deploy Canary Verification
+    needs: publish
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install -D @playwright/test
+
+      - name: Run canary health checks
+        run: npm exec playwright test e2e/tests/canary.spec.ts --reporter=html
+        timeout-minutes: 15
+
+      - name: Upload canary report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-report
+          path: playwright-report/
+          retention-days: 7
