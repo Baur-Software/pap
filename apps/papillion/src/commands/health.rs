@@ -5,7 +5,7 @@
 use chrono::Utc;
 use serde::Serialize;
 use std::sync::OnceLock;
-use std::time::{Instant, SystemTime};
+use std::time::Instant;
 
 static APP_START_TIME: OnceLock<Instant> = OnceLock::new();
 

@@ -555,7 +555,7 @@ fn PreviewPane(form_state: RwSignal<AgentFormState>) -> impl IntoView {
             copy_feedback.set(Some("✓ Copied!".to_string()));
             // Reset feedback after 2 seconds
             let feedback = copy_feedback;
-            let _timeout_handle = set_timeout(
+            set_timeout(
                 move || feedback.set(None),
                 std::time::Duration::from_secs(2),
             );
