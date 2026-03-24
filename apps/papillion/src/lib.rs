@@ -107,6 +107,8 @@ pub fn run() {
             commands::templates::update_template,
             commands::templates::delete_template,
             commands::templates::set_template_enabled,
+            commands::templates::export_templates,
+            commands::templates::import_templates,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillion");

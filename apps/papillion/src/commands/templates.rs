@@ -1,5 +1,6 @@
 use crate::state::AppState;
 use papillion_shared::types::Template;
+use serde_json::json;
 
 /// Fetch all enabled global templates from the database.
 ///
@@ -95,4 +96,50 @@ pub async fn set_template_enabled(
         .db
         .set_template_enabled(&template_name, enabled)
         .map_err(|e| e.to_string())
+}
+
+/// Export all global templates as JSON string.
+///
+/// Phase 9f: Returns a JSON string containing all global templates,
+/// suitable for saving to a file or sharing with others.
+#[tauri::command]
+pub async fn export_templates(
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let templates = state
+        .db
+        .list_enabled_templates_for_principal(None)
+        .map_err(|e| e.to_string())?;
+
+    serde_json::to_string_pretty(&templates)
+        .map_err(|e| format!("Failed to serialize templates: {}", e))
+}
+
+/// Import templates from a JSON string.
+///
+/// Phase 9f: Parses JSON string and creates new templates in the database.
+/// Skips templates with duplicate names. Returns count of imported templates.
+#[tauri::command]
+pub async fn import_templates(
+    state: tauri::State<'_, AppState>,
+    json_str: String,
+) -> Result<serde_json::Value, String> {
+    let templates: Vec<Template> = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    let mut imported_count = 0;
+    let mut skipped_count = 0;
+
+    for template in templates {
+        match state.db.insert_template(&template) {
+            Ok(()) => imported_count += 1,
+            Err(_) => skipped_count += 1, // Skip duplicates
+        }
+    }
+
+    Ok(json!({
+        "imported": imported_count,
+        "skipped": skipped_count,
+        "total": imported_count + skipped_count
+    }))
 }

@@ -464,6 +464,82 @@ pub struct TemplateConfig {
     pub fields: Vec<FieldMapping>,
 }
 
+impl TemplateConfig {
+    /// Validate template configuration for schema compliance and consistency.
+    /// Returns an error message if validation fails, or Ok(()) if valid.
+    pub fn validate(&self) -> Result<(), String> {
+        // Version must be >= 1
+        if self.version < 1 {
+            return Err("Template version must be >= 1".to_string());
+        }
+
+        // Layout type must be "grid" or "flex"
+        if !["grid", "flex"].contains(&self.layout.r#type.as_str()) {
+            return Err("Layout type must be 'grid' or 'flex'".to_string());
+        }
+
+        // Grid layout: columns must be > 0
+        if self.layout.r#type == "grid" {
+            if let Some(cols) = self.layout.columns {
+                if cols <= 0 {
+                    return Err("Grid layout must have columns > 0".to_string());
+                }
+            } else {
+                return Err("Grid layout requires columns to be set".to_string());
+            }
+        }
+
+        // Flex layout: direction must be "row" or "column" if specified
+        if self.layout.r#type == "flex" {
+            if let Some(dir) = &self.layout.direction {
+                if !["row", "column"].contains(&dir.as_str()) {
+                    return Err("Flex layout direction must be 'row' or 'column'".to_string());
+                }
+            }
+        }
+
+        // Fields list must not be empty
+        if self.fields.is_empty() {
+            return Err("Template must have at least one field".to_string());
+        }
+
+        // Validate each field
+        let valid_displays = ["title", "text", "price", "date", "url"];
+        for field in &self.fields {
+            // Path must not be empty
+            if field.path.trim().is_empty() {
+                return Err("Field path cannot be empty".to_string());
+            }
+
+            // Display type must be valid
+            if !valid_displays.contains(&field.display.as_str()) {
+                return Err(format!(
+                    "Invalid display type '{}'. Must be one of: {}",
+                    field.display,
+                    valid_displays.join(", ")
+                ));
+            }
+
+            // Validate condition if present
+            if let Some(condition) = &field.condition {
+                if condition.field.trim().is_empty() {
+                    return Err("Condition field cannot be empty".to_string());
+                }
+                let valid_ops = ["exists", "equals", "contains"];
+                if !valid_ops.contains(&condition.op.as_str()) {
+                    return Err(format!(
+                        "Invalid condition operator '{}'. Must be one of: {}",
+                        condition.op,
+                        valid_ops.join(", ")
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// User-defined template for rendering blocks with a specific schema type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Template {

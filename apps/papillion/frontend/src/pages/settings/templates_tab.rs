@@ -6,6 +6,14 @@ use crate::state::templates::TemplatesState;
 use papillion_shared::Template;
 use papillion_shared::types::{TemplateConfig, LayoutConfig};
 
+mod template_builder;
+mod template_preview;
+mod template_library;
+
+use template_builder::TemplateBuilder;
+use template_preview::TemplatePreview;
+use template_library::{TemplateLibrary, get_template_library};
+
 #[component]
 pub fn TemplatesTab() -> impl IntoView {
     let templates_state = expect_context::<TemplatesState>();
@@ -14,6 +22,7 @@ pub fn TemplatesTab() -> impl IntoView {
     let new_name = RwSignal::new(String::new());
     let new_schema_type = RwSignal::new(String::new());
     let new_config = RwSignal::new(String::new());
+    let new_config_error = RwSignal::new(None::<String>);
 
     // UI state
     let create_error = RwSignal::new(None::<String>);
@@ -23,9 +32,76 @@ pub fn TemplatesTab() -> impl IntoView {
     let edit_name = RwSignal::new(String::new());
     let edit_schema_type = RwSignal::new(String::new());
     let edit_config = RwSignal::new(String::new());
+    let edit_config_error = RwSignal::new(None::<String>);
     let edit_error = RwSignal::new(None::<String>);
     let delete_confirm_id = RwSignal::new(None::<String>);
     let delete_error = RwSignal::new(None::<String>);
+
+    // Phase 9b: Template Builder UI state
+    let builder_open = RwSignal::new(false);
+
+    // Phase 9e: Template Library UI state
+    let library_open = RwSignal::new(false);
+
+    // Phase 9d: Bulk operations state
+    let selected_templates = RwSignal::new(std::collections::HashSet::<String>::new());
+    let bulk_delete_confirm_id = RwSignal::new(None::<String>);
+
+    // Phase 9f: Export/Import state
+    let import_error = RwSignal::new(None::<String>);
+    let import_success = RwSignal::new(false);
+
+    // Format JSON handler
+    let handle_format_json = move |config_signal: RwSignal<String>| {
+        let config_str = config_signal.get();
+        match serde_json::from_str::<serde_json::Value>(&config_str) {
+            Ok(val) => {
+                if let Ok(formatted) = serde_json::to_string_pretty(&val) {
+                    config_signal.set(formatted);
+                    new_config_error.set(None);
+                }
+            }
+            Err(e) => {
+                new_config_error.set(Some(format!("Invalid JSON: {}", e)));
+            }
+        }
+    };
+
+    // Minify JSON handler
+    let handle_minify_json = move |config_signal: RwSignal<String>| {
+        let config_str = config_signal.get();
+        match serde_json::from_str::<serde_json::Value>(&config_str) {
+            Ok(val) => {
+                if let Ok(minified) = serde_json::to_string(&val) {
+                    config_signal.set(minified);
+                    new_config_error.set(None);
+                }
+            }
+            Err(e) => {
+                new_config_error.set(Some(format!("Invalid JSON: {}", e)));
+            }
+        }
+    };
+
+    // Real-time JSON validation on input
+    let handle_config_input = move |ev: web_sys::Event, config_signal: RwSignal<String>, error_signal: RwSignal<Option<String>>| {
+        let text = event_target_value(&ev);
+        config_signal.set(text.clone());
+
+        // Validate JSON
+        if text.trim().is_empty() {
+            error_signal.set(None);
+        } else {
+            match serde_json::from_str::<TemplateConfig>(&text) {
+                Ok(_) => error_signal.set(None),
+                Err(e) => {
+                    // Extract line/column info from error
+                    let error_msg = format!("Line {}, Column {}: {}", e.line(), e.column(), e.classify());
+                    error_signal.set(Some(error_msg));
+                }
+            }
+        }
+    };
 
     // Create template handler
     let handle_create = move |_| {
@@ -44,11 +120,17 @@ pub fn TemplatesTab() -> impl IntoView {
         // Parse JSON config
         let template_config: TemplateConfig = match serde_json::from_str(&config_str) {
             Ok(cfg) => cfg,
-            Err(_) => {
-                create_error.set(Some("Invalid JSON in template config".to_string()));
+            Err(e) => {
+                create_error.set(Some(format!("Invalid JSON in template config: {}", e)));
                 return;
             }
         };
+
+        // Validate template configuration
+        if let Err(validation_error) = template_config.validate() {
+            create_error.set(Some(validation_error));
+            return;
+        }
 
         let template = Template {
             id: uuid::Uuid::new_v4().to_string(),
@@ -105,11 +187,17 @@ pub fn TemplatesTab() -> impl IntoView {
             let config_str = edit_config.get();
             let template_config: TemplateConfig = match serde_json::from_str(&config_str) {
                 Ok(cfg) => cfg,
-                Err(_) => {
-                    edit_error.set(Some("Invalid JSON in template config".to_string()));
+                Err(e) => {
+                    edit_error.set(Some(format!("Invalid JSON in template config: {}", e)));
                     return;
                 }
             };
+
+            // Validate template configuration
+            if let Err(validation_error) = template_config.validate() {
+                edit_error.set(Some(validation_error));
+                return;
+            }
 
             template.template_name = edit_name.get();
             template.schema_type = edit_schema_type.get();
@@ -195,13 +283,200 @@ pub fn TemplatesTab() -> impl IntoView {
 
     let all_templates = move || templates_state.all_templates();
 
+    // Handler for builder completion (Phase 9b)
+    let handle_builder_complete = move |config: TemplateConfig| {
+        if let Ok(json) = serde_json::to_string_pretty(&config) {
+            new_config.set(json);
+            new_config_error.set(None);
+        }
+    };
+
+    // Handler for library template selection (Phase 9e)
+    let handle_library_select = move |template: template_library::TemplateExample| {
+        new_name.set(template.name);
+        new_schema_type.set(template.schema_type);
+        if let Ok(json) = serde_json::to_string_pretty(&template.config) {
+            new_config.set(json);
+            new_config_error.set(None);
+        }
+    };
+
+    // Toggle template selection (Phase 9d)
+    let toggle_selection = move |template_name: String| {
+        let mut selected = selected_templates.get();
+        if selected.contains(&template_name) {
+            selected.remove(&template_name);
+        } else {
+            selected.insert(template_name);
+        }
+        selected_templates.set(selected);
+    };
+
+    // Bulk delete confirm (Phase 9d)
+    let handle_bulk_delete_confirm = move |_| {
+        let selected = selected_templates.get();
+        if !selected.is_empty() {
+            bulk_delete_confirm_id.set(Some(format!("{} templates", selected.len())));
+        }
+    };
+
+    // Bulk delete execute (Phase 9d)
+    let handle_bulk_delete_execute = move |_| {
+        delete_error.set(None);
+        let selected: Vec<String> = selected_templates.get().into_iter().collect();
+
+        spawn_local(async move {
+            for template_name in selected {
+                let _ = bridge::invoke::<serde_json::Value, ()>(
+                    "delete_template",
+                    &serde_json::json!({ "template_name": template_name }),
+                )
+                .await;
+            }
+
+            bulk_delete_confirm_id.set(None);
+            selected_templates.set(std::collections::HashSet::new());
+
+            // Reload templates
+            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+                templates_state.global_templates.set(global);
+            }
+        });
+    };
+
+    // Bulk enable/disable (Phase 9d)
+    let handle_bulk_enable_all = move |_| {
+        let selected: Vec<String> = selected_templates.get().into_iter().collect();
+        spawn_local(async move {
+            for template_name in selected {
+                let _ = bridge::invoke::<serde_json::Value, ()>(
+                    "set_template_enabled",
+                    &serde_json::json!({ "template_name": template_name, "enabled": true }),
+                )
+                .await;
+            }
+
+            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+                templates_state.global_templates.set(global);
+            }
+        });
+    };
+
+    let handle_bulk_disable_all = move |_| {
+        let selected: Vec<String> = selected_templates.get().into_iter().collect();
+        spawn_local(async move {
+            for template_name in selected {
+                let _ = bridge::invoke::<serde_json::Value, ()>(
+                    "set_template_enabled",
+                    &serde_json::json!({ "template_name": template_name, "enabled": false }),
+                )
+                .await;
+            }
+
+            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+                templates_state.global_templates.set(global);
+            }
+        });
+    };
+
+    // Export templates (Phase 9f)
+    let handle_export = move |_| {
+        spawn_local(async move {
+            match bridge::invoke_no_args::<String>("export_templates").await {
+                Ok(json_str) => {
+                    // Trigger file download
+                    if let Ok(window) = web_sys::window().ok_or("no window") {
+                        if let Ok(Some(document)) = window.document() {
+                            if let Ok(element) = document.create_element("a") {
+                                if let Ok(a) = element.dyn_into::<web_sys::HtmlAnchorElement>() {
+                                    let blob = web_sys::Blob::new_with_str_sequence(
+                                        &wasm_bindgen::prelude::wasm_bindgen::JsValue::from_serde(&vec![json_str]).unwrap()
+                                    ).unwrap();
+                                    let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+                                    a.set_href(&url);
+                                    a.set_download("papillion-templates.json");
+                                    a.click();
+                                    web_sys::Url::revoke_object_url(&url).unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    import_error.set(Some(format!("Export failed: {}", e)));
+                }
+            }
+        });
+    };
+
+    // Import templates (Phase 9f)
+    let handle_import_file = move |ev: web_sys::Event| {
+        if let Ok(Some(input)) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+            if let Some(files) = input.files() {
+                if let Some(file) = files.get(0) {
+                    let file = file.dyn_into::<web_sys::File>().unwrap();
+                    spawn_local(async move {
+                        match wasm_bindgen_futures::JsFuture::from(file.text()).await {
+                            Ok(js_value) => {
+                                if let Ok(json_str) = js_value.as_string().ok_or("invalid") {
+                                    match bridge::invoke::<serde_json::Value, serde_json::Value>(
+                                        "import_templates",
+                                        &serde_json::json!({ "json_str": json_str }),
+                                    )
+                                    .await
+                                    {
+                                        Ok(result) => {
+                                            import_success.set(true);
+                                            import_error.set(None);
+
+                                            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+                                                templates_state.global_templates.set(global);
+                                            }
+
+                                            // Log import result
+                                            web_sys::console::log_1(&format!("Imported: {:?}", result).into());
+                                        }
+                                        Err(e) => {
+                                            import_error.set(Some(e));
+                                        }
+                                    }
+                                }
+                            }
+                            Err(_) => {
+                                import_error.set(Some("Failed to read file".to_string()));
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    };
+
     view! {
         <div style="padding: 0;">
             // Create Form
             <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                    "Create New Template"
-                </h3>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <h3 style="font-size: 14px; font-weight: 600;">
+                        "Create New Template"
+                    </h3>
+                    <div style="display: flex; gap: 8px;">
+                        <button
+                            class="btn"
+                            on:click=move |_| library_open.set(true)
+                            style="padding: 6px 12px; font-size: 12px; background: var(--teal); color: white; border: none; border-radius: 8px; cursor: pointer;"
+                        >
+                            "📚 Library"
+                        </button>
+                        <button
+                            class="btn"
+                            on:click=move |_| builder_open.set(true)
+                            style="padding: 6px 12px; font-size: 12px; background: var(--purple); color: white; border: none; border-radius: 8px; cursor: pointer;"
+                        >
+                            "✏️ Builder"
+                        </button>
+                    </div>
+                </div>
 
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
@@ -230,15 +505,38 @@ pub fn TemplatesTab() -> impl IntoView {
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
-                    <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
-                        "Template Config (JSON)"
-                    </label>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
+                            "Template Config (JSON)"
+                        </label>
+                        <div style="display: flex; gap: 4px;">
+                            <button
+                                class="btn"
+                                on:click=move |_| handle_format_json(new_config)
+                                style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
+                            >
+                                "Format"
+                            </button>
+                            <button
+                                class="btn"
+                                on:click=move |_| handle_minify_json(new_config)
+                                style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
+                            >
+                                "Minify"
+                            </button>
+                        </div>
+                    </div>
                     <textarea
                         placeholder=r#"{"version":1,"layout":{"type":"grid","columns":2},"fields":[{"path":"name","label":"Name","display":"title"}]}"#
                         prop:value=move || new_config.get()
-                        on:input=move |ev| new_config.set(event_target_value(&ev))
+                        on:input=move |ev| handle_config_input(ev, new_config, new_config_error)
                         style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 13px; font-family: var(--font-mono); min-height: 100px; resize: vertical;"
                     />
+                    <Show when=move || new_config_error.get().is_some()>
+                        <div style="font-size: 11px; color: var(--coral);">
+                            {move || new_config_error.get().unwrap_or_default()}
+                        </div>
+                    </Show>
                 </div>
 
                 <Show when=move || create_error.get().is_some()>
@@ -262,11 +560,41 @@ pub fn TemplatesTab() -> impl IntoView {
                 </button>
             </div>
 
-            // Templates List
+            // Templates List with Bulk Operations
             <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
-                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                    "Templates"
-                </h3>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <h3 style="font-size: 14px; font-weight: 600;">
+                        "Templates"
+                    </h3>
+                    <Show when=move || !selected_templates.get().is_empty()>
+                        <div style="display: flex; gap: 8px; align-items: center; font-size: 12px;">
+                            <span style="color: var(--text-2);">
+                                {move || format!("{} selected", selected_templates.get().len())}
+                            </span>
+                            <button
+                                class="btn"
+                                on:click=handle_bulk_enable_all
+                                style="padding: 4px 8px; font-size: 11px; background: var(--teal); color: white; border: none; border-radius: 4px; cursor: pointer;"
+                            >
+                                "Enable All"
+                            </button>
+                            <button
+                                class="btn"
+                                on:click=handle_bulk_disable_all
+                                style="padding: 4px 8px; font-size: 11px; background: var(--gold); color: black; border: none; border-radius: 4px; cursor: pointer;"
+                            >
+                                "Disable All"
+                            </button>
+                            <button
+                                class="btn"
+                                on:click=handle_bulk_delete_confirm
+                                style="padding: 4px 8px; font-size: 11px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer;"
+                            >
+                                "Delete All"
+                            </button>
+                        </div>
+                    </Show>
+                </div>
 
                 <Show
                     when=move || !all_templates().is_empty()
@@ -282,6 +610,12 @@ pub fn TemplatesTab() -> impl IntoView {
                         let:template
                     >
                         <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border);">
+                            <input
+                                type="checkbox"
+                                checked=move || selected_templates.get().contains(&template.template_name)
+                                on:change=move |_| toggle_selection(template.template_name.clone())
+                                style="cursor: pointer;"
+                            />
                             <div style="flex: 1; min-width: 0;">
                                 <div style="font-size: 13px; font-weight: 500; color: var(--text-1);">
                                     {template.template_name.clone()}
@@ -330,6 +664,59 @@ pub fn TemplatesTab() -> impl IntoView {
                 </Show>
             </div>
 
+            // Export/Import Section (Phase 9f)
+            <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+                    "Data Management"
+                </h3>
+
+                <div style="display: flex; gap: 12px;">
+                    <button
+                        class="btn"
+                        on:click=handle_export
+                        style="padding: 8px 16px; background: var(--purple); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;"
+                    >
+                        "📥 Export Templates"
+                    </button>
+
+                    <input
+                        type="file"
+                        accept=".json"
+                        on:change=handle_import_file
+                        style="display: none;"
+                        id="template-import-input"
+                    />
+
+                    <button
+                        class="btn"
+                        on:click=move |_| {
+                            if let Ok(Some(elem)) = web_sys::window()
+                                .and_then(|w| w.document())
+                                .and_then(|d| d.get_element_by_id("template-import-input"))
+                                .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
+                            {
+                                elem.click();
+                            }
+                        }
+                        style="padding: 8px 16px; background: var(--teal); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;"
+                    >
+                        "📤 Import Templates"
+                    </button>
+                </div>
+
+                <Show when=move || import_error.get().is_some()>
+                    <div style="font-size: 12px; color: var(--coral); margin-top: 8px;">
+                        {move || import_error.get().unwrap_or_default()}
+                    </div>
+                </Show>
+
+                <Show when=move || import_success.get()>
+                    <div style="font-size: 12px; color: var(--teal); margin-top: 8px;">
+                        "Templates imported successfully!"
+                    </div>
+                </Show>
+            </div>
+
             // Edit Modal
             <Show when=move || edit_template_id.get().is_some()>
                 <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
@@ -364,14 +751,37 @@ pub fn TemplatesTab() -> impl IntoView {
                             </div>
 
                             <div>
-                                <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
-                                    "Template Config (JSON)"
-                                </label>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
+                                        "Template Config (JSON)"
+                                    </label>
+                                    <div style="display: flex; gap: 4px;">
+                                        <button
+                                            class="btn"
+                                            on:click=move |_| handle_format_json(edit_config)
+                                            style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
+                                        >
+                                            "Format"
+                                        </button>
+                                        <button
+                                            class="btn"
+                                            on:click=move |_| handle_minify_json(edit_config)
+                                            style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
+                                        >
+                                            "Minify"
+                                        </button>
+                                    </div>
+                                </div>
                                 <textarea
                                     prop:value=move || edit_config.get()
-                                    on:input=move |ev| edit_config.set(event_target_value(&ev))
+                                    on:input=move |ev| handle_config_input(ev, edit_config, edit_config_error)
                                     style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 13px; font-family: var(--font-mono); min-height: 120px; margin-top: 4px; box-sizing: border-box;"
                                 />
+                                <Show when=move || edit_config_error.get().is_some()>
+                                    <div style="font-size: 11px; color: var(--coral); margin-top: 4px;">
+                                        {move || edit_config_error.get().unwrap_or_default()}
+                                    </div>
+                                </Show>
                             </div>
 
                             <Show when=move || edit_error.get().is_some()>
@@ -395,6 +805,44 @@ pub fn TemplatesTab() -> impl IntoView {
                                 style="padding: 8px 16px; background: var(--purple); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;"
                             >
                                 "Save"
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
+            // Bulk Delete Confirmation Modal (Phase 9d)
+            <Show when=move || bulk_delete_confirm_id.get().is_some()>
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+                    <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; max-width: 400px; width: 90%; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);">
+                        <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">
+                            "Delete Templates?"
+                        </h3>
+                        <p style="font-size: 13px; color: var(--text-2); margin-bottom: 16px;">
+                            {move || format!("Delete {}", bulk_delete_confirm_id.get().unwrap_or_default())}
+                            " This action cannot be undone. Are you sure?"
+                        </p>
+
+                        <Show when=move || delete_error.get().is_some()>
+                            <div style="font-size: 12px; color: var(--coral); margin-bottom: 12px;">
+                                {move || delete_error.get().unwrap_or_default()}
+                            </div>
+                        </Show>
+
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button
+                                class="btn"
+                                on:click=move |_| bulk_delete_confirm_id.set(None)
+                                style="padding: 8px 16px; background: var(--bg-tertiary); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px;"
+                            >
+                                "Cancel"
+                            </button>
+                            <button
+                                class="btn"
+                                on:click=handle_bulk_delete_execute
+                                style="padding: 8px 16px; background: var(--coral); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;"
+                            >
+                                "Delete Templates"
                             </button>
                         </div>
                     </div>
@@ -441,6 +889,18 @@ pub fn TemplatesTab() -> impl IntoView {
                     </div>
                 </div>
             </Show>
+
+            // Template Builder Modal (Phase 9b)
+            <TemplateBuilder
+                is_open=builder_open
+                on_complete=handle_builder_complete
+            />
+
+            // Template Library Modal (Phase 9e)
+            <TemplateLibrary
+                is_open=library_open
+                on_select=handle_library_select
+            />
         </div>
     }
 }
