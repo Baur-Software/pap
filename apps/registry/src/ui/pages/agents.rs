@@ -8,7 +8,6 @@ const PER_PAGE: u32 = 20;
 pub fn AgentsPage() -> impl IntoView {
     let query = RwSignal::new(String::new());
     let page = RwSignal::new(1u32);
-    let show_register = RwSignal::new(false);
     let refresh_key = RwSignal::new(0u32);
 
     let agents = Resource::new(
@@ -28,9 +27,9 @@ pub fn AgentsPage() -> impl IntoView {
                         <h1 class="page-title">"Agents"</h1>
                         <p class="page-subtitle">"All registered agent advertisements in this node's registry."</p>
                     </div>
-                    <button class="btn btn-primary" on:click=move |_| show_register.set(true)>
-                        "+ Register Agent"
-                    </button>
+                    <a href="/agents/design" class="btn btn-primary">
+                        "+ Design Agent"
+                    </a>
                 </div>
             </div>
 
@@ -111,17 +110,6 @@ pub fn AgentsPage() -> impl IntoView {
                     }
                 })}
             </Suspense>
-
-            {move || if show_register.get() {
-                view! {
-                    <RegisterModal
-                        on_close=move || show_register.set(false)
-                        on_success=move || { show_register.set(false); reload(); }
-                    />
-                }.into_any()
-            } else {
-                view! { <span /> }.into_any()
-            }}
         </div>
     }
 }
