@@ -3,6 +3,7 @@ use leptos_router::components::{Route, Router, Routes};
 use leptos_router::path;
 
 use crate::ui::components::nav::Sidebar;
+use crate::ui::pages::agent_designer::AgentDesignerPage;
 use crate::ui::pages::agents::AgentsPage;
 use crate::ui::pages::dashboard::DashboardPage;
 use crate::ui::pages::peers::PeersPage;
@@ -18,6 +19,7 @@ pub fn App() -> impl IntoView {
                     <Routes fallback=|| view! { <NotFound /> }>
                         <Route path=path!("/") view=DashboardPage />
                         <Route path=path!("/agents") view=AgentsPage />
+                        <Route path=path!("/agents/design") view=AgentDesignerPage />
                         <Route path=path!("/peers") view=PeersPage />
                         <Route path=path!("/settings") view=SettingsPage />
                     </Routes>

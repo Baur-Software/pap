@@ -1,6 +1,13 @@
 ## [0.4.1.2] - 2026-03-23
 
+### Added
+
+- **Agent Designer WYSIWYG Form Builder** — Complete 5-phase implementation: Phase 1 scaffolding + routing, Phase 2 form validation display, Phase 3 copy-to-clipboard JSON preview, Phase 4 Ed25519 signing infrastructure, Phase 5 visual polish & accessibility. 600+ lines of Leptos/Rust + 140+ lines of CSS. Real-time JSON-LD preview, responsive two-column layout, comprehensive validation with error display.
+- **docs**: Comprehensive Agent Designer specification (`AGENT_DESIGNER_DESIGN.md`) — WYSIWYG form builder for PAP agent advertisements with real-time JSON-LD preview, zero-trust WebAuthn signing, and "Load from existing" versioning workflow. Includes 5-phase implementation roadmap and full architectural design. All reviews (CEO, Design, Eng) approved.
+- **docs**: Agent Designer test plan (`AGENT_DESIGNER_TEST_PLAN.md`) — covers 40+ code paths, 6 critical user flows, edge cases, and E2E + component test breakdown
+
 ### Changed
+
 - **docs**: Improve README messaging with problem-centric framing — reframe "The Problem" around trust boundaries, clarify MCP spec limitations, add concrete attack scenarios
 - **docs**: Sync README with shipped language bindings (Python, JS/TS, C, C#, Java) and Crystalis registry
 - **docs**: Add comprehensive Language Bindings table covering all 6 supported languages

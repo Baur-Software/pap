@@ -161,6 +161,42 @@ pub async fn remove_agent(hash: String) -> Result<(), ServerFnError> {
     }
 }
 
+/// Sign an unsigned advertisement JSON with the provided Ed25519 private key.
+/// Returns the signed JSON with signature field populated.
+#[server]
+pub async fn sign_advertisement(
+    json: String,
+    private_key_b64: String,
+) -> Result<String, ServerFnError> {
+    use base64::Engine;
+    use ed25519_dalek::SigningKey;
+
+    // Decode private key from base64
+    let private_key_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(&private_key_b64)
+        .map_err(|e| ServerFnError::new(format!("Invalid private key encoding: {}", e)))?;
+
+    if private_key_bytes.len() != 32 {
+        return Err(ServerFnError::new(format!(
+            "Private key must be 32 bytes, got {}",
+            private_key_bytes.len()
+        )));
+    }
+
+    let signing_key = SigningKey::from_bytes(private_key_bytes.as_slice().try_into().unwrap());
+
+    // Parse the advertisement JSON
+    let mut ad: pap_marketplace::AgentAdvertisement = serde_json::from_str(&json)
+        .map_err(|e| ServerFnError::new(format!("Invalid advertisement JSON: {}", e)))?;
+
+    // Sign it
+    ad.sign(&signing_key);
+
+    // Return signed JSON
+    serde_json::to_string(&ad)
+        .map_err(|e| ServerFnError::new(format!("Serialization error: {}", e)))
+}
+
 /// Register an agent from raw advertisement JSON. Returns the content hash.
 #[server]
 pub async fn register_agent_json(json: String) -> Result<String, ServerFnError> {
