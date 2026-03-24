@@ -1,3 +1,4 @@
+mod declarative;
 mod field_classify;
 mod generic;
 mod receipt;
@@ -11,6 +12,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 use crate::state::canvas::CanvasState;
+use crate::state::templates::TemplatesState;
 use registry::RendererRegistry;
 
 /// Create and initialize the default renderer registry with shipped templates.
@@ -27,7 +29,16 @@ fn create_default_registry() -> Arc<RendererRegistry> {
 #[component]
 pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
+    let templates_state = expect_context::<TemplatesState>();
+
     let registry = create_default_registry();
+
+    // Load user-defined templates from context
+    let all_templates = templates_state.all_templates();
+    if !all_templates.is_empty() {
+        let _ = registry.load_from_templates(all_templates);
+    }
+
     let block_id = StoredValue::new(block.id.clone());
     let show_reprompt = RwSignal::new(false);
     let reprompt_value = RwSignal::new(String::new());

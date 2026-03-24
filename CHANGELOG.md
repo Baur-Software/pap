@@ -1,3 +1,30 @@
+## [0.1.0.0] - 2026-03-23
+
+### Added
+
+- **Template System - Phase 9 Full Feature Pack** — Complete user-defined rendering templates with 7 advanced features:
+  - **9a: JSON Editor Enhancement** — Format/Minify buttons + real-time JSON validation with line/column error reporting
+  - **9b: Template Builder** — Structured form UI for building templates without JSON knowledge; field mapper with path/label/display type; live JSON preview
+  - **9c: Template Preview** — Live rendering panel with sample JSON-LD input; JSON path extraction (nested paths, array indices); formatted value display
+  - **9d: Bulk Operations** — Multi-select checkboxes; bulk enable/disable/delete with confirmation dialogs
+  - **9e: Template Library** — Pre-built examples (Flight, Hotel, Product, Event, Recipe); Copy & Customize workflow
+  - **9f: Export/Import** — JSON export with file download; JSON import with duplicate skip; preserves template integrity
+  - **9h: Template Validation** — TemplateConfig::validate() with comprehensive checks (version, layout type, column counts, field paths, display types)
+- **Phase 7 UI Polish** — Production-ready refinements: improved spacing (16→20px padding, 8→12px gaps), enhanced typography (bold labels, better hierarchy), accessibility improvements (aria-labels, required field indicators), visual polish (shadows, rounded corners, consistent styling)
+- **175+ comprehensive tests** — 10 backend CRUD tests + 4 frontend renderer tests + 8 E2E template tests + 44 type serialization tests; all passing
+
+### Changed
+
+- **TemplatesTab component** — Refactored to hub for all Phase 9 enhancements; integrated Template Builder, Preview, and Library as modal overlays
+- **templates_tab.rs** — Enhanced with form validation, error/success messaging, bulk operations UI, export/import handlers
+
+### Architecture
+
+- Declarative JSON-LD template system with zero-trust loading (no AppState caching)
+- Per-profile template scoping with principal_did isolation
+- Tauri command bridge for backend operations with proper error propagation
+- Zero-copy template rendering with JSON path extraction and conditional field evaluation
+
 ## [0.4.3.0] - 2026-03-24
 
 ### Fixed

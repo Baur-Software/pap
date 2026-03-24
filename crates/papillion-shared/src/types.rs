@@ -403,6 +403,168 @@ pub struct KeyBackupStatus {
     pub backed_up: bool,
 }
 
+// ── Template types for user-defined renderers ─────────────────────
+
+/// Layout configuration for template rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutConfig {
+    /// "grid" or "flex"
+    pub r#type: String,
+    /// Number of columns for grid layout
+    pub columns: Option<i32>,
+    /// Direction for flex layout: "row" or "column"
+    pub direction: Option<String>,
+    /// Spacing: "sm", "md", "lg"
+    pub spacing: Option<String>,
+}
+
+/// Condition for conditional field rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Condition {
+    /// Field path to check (e.g., "name", "offers.price")
+    pub field: String,
+    /// Operation: "exists", "equals", "contains"
+    pub op: String,
+    /// Optional value for comparison
+    pub value: Option<String>,
+}
+
+/// Styling configuration for a field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StyleConfig {
+    /// CSS class name for styling
+    pub class_name: Option<String>,
+    /// Hex color override
+    pub color: Option<String>,
+}
+
+/// Field mapping in a template.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldMapping {
+    /// JSON path to extract from content (e.g., "name", "offers.0.price")
+    pub path: String,
+    /// Display label for the field
+    pub label: Option<String>,
+    /// Display type: "title", "text", "price", "date", "url"
+    pub display: String,
+    /// Optional condition for rendering
+    pub condition: Option<Condition>,
+    /// Optional styling
+    pub style: Option<StyleConfig>,
+}
+
+/// Declarative template configuration for rendering JSON-LD content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateConfig {
+    /// Schema version for forward compatibility
+    pub version: i32,
+    /// Layout directives
+    pub layout: LayoutConfig,
+    /// Ordered list of fields to render
+    pub fields: Vec<FieldMapping>,
+}
+
+impl TemplateConfig {
+    /// Validate template configuration for schema compliance and consistency.
+    /// Returns an error message if validation fails, or Ok(()) if valid.
+    pub fn validate(&self) -> Result<(), String> {
+        // Version must be >= 1
+        if self.version < 1 {
+            return Err("Template version must be >= 1".to_string());
+        }
+
+        // Layout type must be "grid" or "flex"
+        if !["grid", "flex"].contains(&self.layout.r#type.as_str()) {
+            return Err("Layout type must be 'grid' or 'flex'".to_string());
+        }
+
+        // Grid layout: columns must be > 0
+        if self.layout.r#type == "grid" {
+            if let Some(cols) = self.layout.columns {
+                if cols <= 0 {
+                    return Err("Grid layout must have columns > 0".to_string());
+                }
+            } else {
+                return Err("Grid layout requires columns to be set".to_string());
+            }
+        }
+
+        // Flex layout: direction must be "row" or "column" if specified
+        if self.layout.r#type == "flex" {
+            if let Some(dir) = &self.layout.direction {
+                if !["row", "column"].contains(&dir.as_str()) {
+                    return Err("Flex layout direction must be 'row' or 'column'".to_string());
+                }
+            }
+        }
+
+        // Fields list must not be empty
+        if self.fields.is_empty() {
+            return Err("Template must have at least one field".to_string());
+        }
+
+        // Validate each field
+        let valid_displays = ["title", "text", "price", "date", "url"];
+        for field in &self.fields {
+            // Path must not be empty
+            if field.path.trim().is_empty() {
+                return Err("Field path cannot be empty".to_string());
+            }
+
+            // Display type must be valid
+            if !valid_displays.contains(&field.display.as_str()) {
+                return Err(format!(
+                    "Invalid display type '{}'. Must be one of: {}",
+                    field.display,
+                    valid_displays.join(", ")
+                ));
+            }
+
+            // Validate condition if present
+            if let Some(condition) = &field.condition {
+                if condition.field.trim().is_empty() {
+                    return Err("Condition field cannot be empty".to_string());
+                }
+                let valid_ops = ["exists", "equals", "contains"];
+                if !valid_ops.contains(&condition.op.as_str()) {
+                    return Err(format!(
+                        "Invalid condition operator '{}'. Must be one of: {}",
+                        condition.op,
+                        valid_ops.join(", ")
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// User-defined template for rendering blocks with a specific schema type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Template {
+    /// Unique template identifier (UUID)
+    pub id: String,
+    /// User-facing template name (unique)
+    pub template_name: String,
+    /// Schema.org type this template handles (e.g., "FlightReservation")
+    pub schema_type: String,
+    /// Optional DID for per-profile templates. None = global template.
+    pub principal_did: Option<String>,
+    /// Declarative template configuration
+    pub template_config: TemplateConfig,
+    /// Template version for schema evolution
+    pub version: i32,
+    /// Whether this template is currently enabled
+    pub enabled: bool,
+    /// ISO-8601 creation timestamp
+    pub created_at: String,
+    /// ISO-8601 last update timestamp
+    pub updated_at: String,
+    /// DID of the user who created this template
+    pub created_by: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -986,6 +1148,30 @@ mod tests {
     }
 
     // ── Receipt types serde ───────────────────────────────
+
+    #[test]
+    fn template_config_roundtrip_json() {
+        let config = TemplateConfig {
+            version: 1,
+            layout: LayoutConfig {
+                r#type: "grid".into(),
+                columns: Some(2),
+                direction: None,
+                spacing: Some("md".into()),
+            },
+            fields: vec![FieldMapping {
+                path: "name".into(),
+                label: Some("Name".into()),
+                display: "title".into(),
+                condition: None,
+                style: None,
+            }],
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let back: TemplateConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.version, 1);
+        assert_eq!(back.fields.len(), 1);
+    }
 
     #[test]
     fn receipt_info_roundtrip_json() {

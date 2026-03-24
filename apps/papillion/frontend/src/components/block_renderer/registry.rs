@@ -47,6 +47,24 @@ impl RendererRegistry {
     pub fn get(&self, schema_type: &str) -> Option<Arc<dyn BlockRenderer>> {
         self.renderers.read().unwrap().get(schema_type).cloned()
     }
+
+    /// Load declarative renderers from a list of templates.
+    ///
+    /// Creates and registers a DeclarativeRenderer for each enabled template.
+    /// User templates override shipped templates when they have the same schema_type.
+    ///
+    /// # Arguments
+    /// * `templates` - User-defined templates to load
+    pub fn load_from_templates(&self, templates: Vec<papillion_shared::types::Template>) {
+        use crate::components::block_renderer::declarative::DeclarativeRenderer;
+
+        for template in templates {
+            if template.enabled {
+                let renderer = DeclarativeRenderer::from_template(&template);
+                self.register(Arc::new(renderer));
+            }
+        }
+    }
 }
 
 impl Default for RendererRegistry {

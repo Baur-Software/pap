@@ -16,7 +16,8 @@ use crate::state::canvas::CanvasState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::registry::RegistryState;
-use papillion_shared::{IdentityInfo, OrchestratorStatus, ProfileMetadata};
+use crate::state::templates::TemplatesState;
+use papillion_shared::{IdentityInfo, OrchestratorStatus, ProfileMetadata, Template};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -24,10 +25,12 @@ pub fn App() -> impl IntoView {
     let registry_state = RegistryState::default();
     let orchestrator_state = OrchestratorState::default();
     let canvas_state = CanvasState::default();
+    let templates_state = TemplatesState::default();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);
     provide_context(canvas_state);
+    provide_context(templates_state);
 
     // Auto-load profiles and identity on startup
     Effect::new(move || {
@@ -65,6 +68,19 @@ pub fn App() -> impl IntoView {
         });
     });
 
+    // Load global templates on startup
+    Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
+        spawn_local(async move {
+            if let Ok(templates) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+            {
+                templates_state.global_templates.set(templates);
+            }
+        });
+    });
+
     // Detect identity (DID) changes and reset all state
     // This effect triggers when the DID changes, indicating a profile switch
     // When DID changes, we must reset all profile-scoped state to maintain isolation
@@ -91,6 +107,9 @@ pub fn App() -> impl IntoView {
                 registry_state.action_filter.set(String::new());
                 registry_state.error.set(None);
 
+                // Templates: Clear profile-scoped templates (will reload below)
+                templates_state.profile_templates.set(Vec::new());
+
                 // Reload orchestrator config for new profile
                 let orchestrator = orchestrator_state;
                 spawn_local(async move {
@@ -106,6 +125,26 @@ pub fn App() -> impl IntoView {
 
         // Track the DID for next comparison
         previous_did.set(current_did);
+    });
+
+    // Load profile templates when identity changes
+    Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
+        let current_did = identity_state.info.get().map(|i| i.did.clone());
+        if let Some(did) = current_did {
+            spawn_local(async move {
+                if let Ok(templates) = bridge::invoke::<serde_json::json::Value, Vec<Template>>(
+                    "get_profile_templates",
+                    &serde_json::json!({ "principal_did": did }),
+                )
+                .await
+                {
+                    templates_state.profile_templates.set(templates);
+                }
+            });
+        }
     });
 
     // Global keyboard listener for ⌘K — creates a new canvas and navigates home.
