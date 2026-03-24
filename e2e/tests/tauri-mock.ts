@@ -290,17 +290,20 @@ window.__TAURI__ = {
 
         // ── Tier 2 Test: Orchestrator state transitions ─────────────────
         case 'get_orchestrator_status_transition': {
-          // Allow test to override orchestrator status
-          if (args?.state === 'Disconnected') {
-            return 'Disconnected';
+          // Validate state transitions (not all transitions are valid)
+          const requestedState = args?.state || 'Ready';
+          const validStates = ['Disconnected', 'Ready', 'Failed'];
+
+          if (!validStates.includes(requestedState)) {
+            return {
+              success: false,
+              error: `Invalid state: ${requestedState}`,
+              error_code: 'INVALID_STATE',
+            };
           }
-          if (args?.state === 'Ready') {
-            return 'Ready';
-          }
-          if (args?.state === 'Failed') {
-            return 'Failed';
-          }
-          return 'Ready';
+
+          // Return confirmed state
+          return requestedState;
         }
 
         default:

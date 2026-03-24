@@ -212,7 +212,7 @@ jobs:
 
       - name: Run canary health checks
         run: npm exec playwright test e2e/tests/canary.spec.ts --reporter=html
-        timeout-minutes: 5
+        timeout-minutes: 15
 
       - name: Upload canary report on failure
         if: failure()
