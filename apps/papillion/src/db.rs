@@ -3,9 +3,7 @@
 //! This module provides a backward-compatible interface to the shared database abstraction.
 //! Existing code that imports from `crate::db` continues to work without changes.
 
-pub use papillion_shared::db::{
-    AgentProfile, DatabaseOps, DbError, Episode,
-};
+pub use papillion_shared::db::{AgentProfile, DatabaseOps, DbError, Episode};
 
 // Re-export for convenience
 pub use papillion_shared::db::native::NativeDatabase;

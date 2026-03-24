@@ -410,7 +410,8 @@ fn persist_bookmarks(db: &crate::db::Database, bookmarks: &[String]) -> Result<(
         .collect();
     let json = serde_json::to_string(&to_persist)
         .map_err(|e| PapillionError::from(format!("bookmark serialization: {e}")))?;
-    db.set_setting("registry_bookmarks", &json).map_err(|e| PapillionError::from(e.0))
+    db.set_setting("registry_bookmarks", &json)
+        .map_err(|e| PapillionError::from(e.0))
 }
 
 /// Register a new agent advertisement on this node.
