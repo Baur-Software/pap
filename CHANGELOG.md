@@ -1,3 +1,9 @@
+## [0.4.3.0] - 2026-03-24
+
+### Fixed
+
+- **docker-compose**: Resolve Docker image pull error by using `tags` field instead of standalone `image` key. Prevents spurious "pull access denied for pap-registry" errors when docker-compose attempts to pull a non-existent image from Docker Hub.
+
 ## [0.4.1.2] - 2026-03-23
 
 ### Added
