@@ -1,12 +1,11 @@
 use leptos::prelude::*;
 
-use crate::bridge;
-use papillion_shared::types::{TemplateConfig, LayoutConfig, FieldMapping, Condition, StyleConfig};
+use papillion_shared::types::{TemplateConfig, LayoutConfig, FieldMapping, Condition};
 
 #[component]
 pub fn TemplateBuilder(
     is_open: RwSignal<bool>,
-    on_complete: impl Fn(TemplateConfig) + 'static,
+    on_complete: Callback<TemplateConfig>,
 ) -> impl IntoView {
     // Layout state
     let layout_type = RwSignal::new("grid".to_string());
@@ -139,7 +138,7 @@ pub fn TemplateBuilder(
             return;
         }
 
-        on_complete(config);
+        on_complete.run(config);
         is_open.set(false);
     };
 
@@ -152,7 +151,6 @@ pub fn TemplateBuilder(
                     </h3>
 
                     <div style="display: flex; gap: 16px;">
-                        // Left: Configuration Form
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
                             <div>
                                 <label style="font-size: 12px; font-weight: 500; color: var(--text-2); display: block; margin-bottom: 4px;">
@@ -334,7 +332,6 @@ pub fn TemplateBuilder(
                             </button>
                         </div>
 
-                        // Right: Preview + Fields List
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
                             <div>
                                 <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">
@@ -352,26 +349,28 @@ pub fn TemplateBuilder(
                                         <For
                                             each=move || fields.get().into_iter().enumerate()
                                             key=|(i, _)| *i
-                                            let:(index, field)
-                                        >
-                                            <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 12px;">
-                                                <div>
-                                                    <div style="font-weight: 500;">
-                                                        {field.path.clone()}
+                                            children=move |(index, field)| {
+                                                view! {
+                                                    <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 12px;">
+                                                        <div>
+                                                            <div style="font-weight: 500;">
+                                                                {field.path.clone()}
+                                                            </div>
+                                                            <div style="color: var(--text-2); font-size: 11px;">
+                                                                {field.display.clone()}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            class="btn"
+                                                            on:click=move |_| remove_field(index)
+                                                            style="padding: 4px 8px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;"
+                                                        >
+                                                            "Remove"
+                                                        </button>
                                                     </div>
-                                                    <div style="color: var(--text-2); font-size: 11px;">
-                                                        {field.display.clone()}
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    class="btn"
-                                                    on:click=move |_| remove_field(index)
-                                                    style="padding: 4px 8px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;"
-                                                >
-                                                    "Remove"
-                                                </button>
-                                            </div>
-                                        </For>
+                                                }
+                                            }
+                                        />
                                     </div>
                                 </Show>
                             </div>

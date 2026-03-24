@@ -83,7 +83,7 @@ jobs:
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
       - name: Install trunk
-        run: cargo binstall trunk --no-confirm
+        run: cargo binstall trunk --no-confirm --force
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -95,12 +95,12 @@ jobs:
         run: cargo tauri build
       - name: Install Playwright
         working-directory: e2e
-        run: npm install
+        run: |
+          npm install
+          npx playwright install chromium --with-deps
       - name: Run smoke tests
         working-directory: e2e
         run: npm exec playwright test
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@v4

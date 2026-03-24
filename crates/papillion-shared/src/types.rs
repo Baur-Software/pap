@@ -406,7 +406,7 @@ pub struct KeyBackupStatus {
 // ── Template types for user-defined renderers ─────────────────────
 
 /// Layout configuration for template rendering.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LayoutConfig {
     /// "grid" or "flex"
     pub r#type: String,
@@ -419,7 +419,7 @@ pub struct LayoutConfig {
 }
 
 /// Condition for conditional field rendering.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Condition {
     /// Field path to check (e.g., "name", "offers.price")
     pub field: String,
@@ -430,7 +430,7 @@ pub struct Condition {
 }
 
 /// Styling configuration for a field.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StyleConfig {
     /// CSS class name for styling
     pub class_name: Option<String>,
@@ -439,7 +439,7 @@ pub struct StyleConfig {
 }
 
 /// Field mapping in a template.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FieldMapping {
     /// JSON path to extract from content (e.g., "name", "offers.0.price")
     pub path: String,
@@ -454,7 +454,7 @@ pub struct FieldMapping {
 }
 
 /// Declarative template configuration for rendering JSON-LD content.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateConfig {
     /// Schema version for forward compatibility
     pub version: i32,

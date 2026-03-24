@@ -32,9 +32,7 @@ pub fn HomePage() -> impl IntoView {
                 <For
                     each=move || orchestrator.scenarios.get()
                     key=|card| card.id.clone()
-                    let:card
-                >
-                    {
+                    children=move |card| {
                         let nav = navigate.clone();
                         let id = card.id.clone();
                         let orchestrator = orchestrator;
@@ -57,7 +55,7 @@ pub fn HomePage() -> impl IntoView {
                             </div>
                         }
                     }
-                </For>
+                />
             </div>
         </div>
     }

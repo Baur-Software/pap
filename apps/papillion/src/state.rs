@@ -333,7 +333,11 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_creates_new_seed_when_none_exists() {
-        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(
+            Database::open_memory()
+                .map_err(|e| PapillionError::from(e.0))
+                .expect("failed to open in-memory db"),
+        );
 
         // Should create new seed since none exists
         let (seed, keypair) = AppState::load_or_create_seed(&db).expect("should create seed");
@@ -354,7 +358,11 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_loads_existing_seed() {
-        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(
+            Database::open_memory()
+                .map_err(|e| PapillionError::from(e.0))
+                .expect("failed to open in-memory db"),
+        );
 
         // Create first seed
         let (seed1, keypair1) = AppState::load_or_create_seed(&db).expect("should create seed");
@@ -368,7 +376,11 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_rejects_corrupt_base64() {
-        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(
+            Database::open_memory()
+                .map_err(|e| PapillionError::from(e.0))
+                .expect("failed to open in-memory db"),
+        );
 
         // Manually set corrupt (invalid base64) seed
         db.set_setting("principal_seed_b64", "not!!!valid%%%base64")
@@ -383,7 +395,11 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_rejects_wrong_length() {
-        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(
+            Database::open_memory()
+                .map_err(|e| PapillionError::from(e.0))
+                .expect("failed to open in-memory db"),
+        );
 
         // Set seed with wrong byte length (31 bytes instead of 32)
         let short_seed = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(vec![0u8; 31]);
@@ -399,7 +415,11 @@ mod tests {
 
     #[test]
     fn test_load_or_create_seed_handles_valid_seed_correctly() {
-        let db = Arc::new(crate::db::open_db_memory().expect("failed to open in-memory db"));
+        let db = Arc::new(
+            Database::open_memory()
+                .map_err(|e| PapillionError::from(e.0))
+                .expect("failed to open in-memory db"),
+        );
 
         // Create a valid seed and manually persist it
         let valid_keypair = PrincipalKeypair::generate();

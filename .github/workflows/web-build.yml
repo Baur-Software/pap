@@ -32,7 +32,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install trunk
-        run: cargo binstall trunk --no-confirm
+        run: cargo binstall trunk --no-confirm --force
 
       - name: Build web with trunk
         working-directory: apps/papillion/frontend
@@ -63,7 +63,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check WASM target
-        run: cargo build --target wasm32-unknown-unknown -p papillion-shared --features wasm --lib
+        run: cargo build --target wasm32-unknown-unknown -p papillion-shared --no-default-features --features wasm --lib
 
   web-test:
     name: Test Web Build

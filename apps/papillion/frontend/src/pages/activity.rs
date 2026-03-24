@@ -43,9 +43,7 @@ pub fn ActivityPage() -> impl IntoView {
                 <For
                     each=runs_reversed
                     key=|run| run.completed_at.clone()
-                    let:run
-                >
-                    {
+                    children=move |run| {
                         let agent_name = run.agent_name.clone();
                         let completed_at = run.completed_at.clone();
                         let receipt = run.receipt.clone();
@@ -94,7 +92,7 @@ pub fn ActivityPage() -> impl IntoView {
                             </div>
                         }
                     }
-                </For>
+                />
             </Show>
         </div>
     }

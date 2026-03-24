@@ -122,9 +122,7 @@ pub fn TopBar() -> impl IntoView {
                 <For
                     each=canvases
                     key=|c| c.id.clone()
-                    let:canvas
-                >
-                    {
+                    children=move |canvas| {
                         let cid = canvas.id.clone();
                         let cid_for_class = canvas.id.clone();
                         view! {
@@ -146,7 +144,7 @@ pub fn TopBar() -> impl IntoView {
                             </A>
                         }
                     }
-                </For>
+                />
                 <div class="menu-divider"></div>
                 <A href="/browse" attr:class="menu-item" on:click=close_menu>
                     "Browse Registries"
@@ -164,9 +162,7 @@ pub fn TopBar() -> impl IntoView {
                     <For
                         each=move || identity.profiles.get()
                         key=|p| p.id.clone()
-                        let:profile
-                    >
-                        {
+                        children=move |profile| {
                             let profile_id = profile.id.clone();
                             let is_active = profile.active;
                             let profile_name = profile.name.clone();
@@ -189,7 +185,7 @@ pub fn TopBar() -> impl IntoView {
                                 </button>
                             }
                         }
-                    </For>
+                    />
                 </div>
                 <div class="profile-menu-divider"></div>
                 <A href="/settings?tab=profiles" attr:class="profile-menu-link" on:click=move |_| profile_menu_open.set(false)>

@@ -21,8 +21,7 @@ pub struct NativeDatabase {
 impl NativeDatabase {
     /// Open (or create) the database at the given path and run migrations.
     pub fn open(path: &Path) -> Result<Self, DbError> {
-        let conn = Connection::open(path)
-            .map_err(|e| DbError(format!("db open: {e}")))?;
+        let conn = Connection::open(path).map_err(|e| DbError(format!("db open: {e}")))?;
 
         let db = Self {
             conn: Mutex::new(conn),
@@ -31,11 +30,9 @@ impl NativeDatabase {
         Ok(db)
     }
 
-    /// Open an in-memory database (for tests).
-    #[cfg(test)]
+    /// Open an in-memory database (for tests and ephemeral use).
     pub fn open_memory() -> Result<Self, DbError> {
-        let conn = Connection::open_in_memory()
-            .map_err(|e| DbError(format!("db open: {e}")))?;
+        let conn = Connection::open_in_memory().map_err(|e| DbError(format!("db open: {e}")))?;
         let db = Self {
             conn: Mutex::new(conn),
         };
@@ -45,10 +42,7 @@ impl NativeDatabase {
 
     /// Run schema migrations. Idempotent — safe to call on every startup.
     fn migrate(&self) -> Result<(), DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         conn.execute_batch(
             "
@@ -121,10 +115,7 @@ impl NativeDatabase {
 
 impl DatabaseOps for NativeDatabase {
     fn insert_episode(&self, episode: &Episode) -> Result<(), DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         conn.execute(
             "INSERT INTO episodes (
@@ -164,10 +155,7 @@ impl DatabaseOps for NativeDatabase {
         limit: usize,
         offset: Option<i64>,
     ) -> Result<Vec<Episode>, DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         let mut sql = String::from(
             "SELECT id, receipt_session_id, scenario_id, action_type,
@@ -239,10 +227,7 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn episode_count(&self) -> Result<usize, DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM episodes", [], |row| row.get(0))
             .map_err(|e| DbError(format!("db count: {e}")))?;
@@ -250,10 +235,7 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn upsert_agent_profile(&self, profile: &AgentProfile) -> Result<(), DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         conn.execute(
             "INSERT INTO agent_profiles (
@@ -287,14 +269,8 @@ impl DatabaseOps for NativeDatabase {
         Ok(())
     }
 
-    fn get_agent_profile(
-        &self,
-        agent_did_hash: &str,
-    ) -> Result<Option<AgentProfile>, DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+    fn get_agent_profile(&self, agent_did_hash: &str) -> Result<Option<AgentProfile>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         let mut stmt = conn
             .prepare(
@@ -329,10 +305,7 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn list_agent_profiles(&self) -> Result<Vec<AgentProfile>, DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         let mut stmt = conn
             .prepare(
@@ -367,10 +340,7 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn get_setting(&self, key: &str) -> Result<Option<String>, DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         let mut stmt = conn
             .prepare("SELECT value FROM settings WHERE key = ?1")
@@ -388,10 +358,7 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn set_setting(&self, key: &str, value: &str) -> Result<(), DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         conn.execute(
             "INSERT INTO settings (key, value) VALUES (?1, ?2)
@@ -408,10 +375,7 @@ impl DatabaseOps for NativeDatabase {
         schema_type: &str,
         limit: usize,
     ) -> Result<Vec<Episode>, DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         let mut stmt = conn
             .prepare(
@@ -481,10 +445,7 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| DbError(e.to_string()))?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
         let escaped_query = query.replace('%', "\\%").replace('_', "\\_");
         let pattern = format!("%{escaped_query}%");

@@ -135,7 +135,7 @@ pub fn App() -> impl IntoView {
         let current_did = identity_state.info.get().map(|i| i.did.clone());
         if let Some(did) = current_did {
             spawn_local(async move {
-                if let Ok(templates) = bridge::invoke::<serde_json::json::Value, Vec<Template>>(
+                if let Ok(templates) = bridge::invoke::<serde_json::Value, Vec<Template>>(
                     "get_profile_templates",
                     &serde_json::json!({ "principal_did": did }),
                 )

@@ -907,5 +907,8 @@ pub fn list_completed_runs(
 pub fn list_agent_profiles(
     state: State<'_, AppState>,
 ) -> Result<Vec<AgentProfile>, PapillionError> {
-    state.db.list_agent_profiles().map_err(|e| PapillionError::from(e.0))
+    state
+        .db
+        .list_agent_profiles()
+        .map_err(|e| PapillionError::from(e.0))
 }

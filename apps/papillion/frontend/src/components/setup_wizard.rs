@@ -146,12 +146,14 @@ pub fn SetupWizard() -> impl IntoView {
                                 <For
                                     each=move || builtin_models.get()
                                     key=|m| m.id.clone()
-                                    let:model
-                                >
-                                    <option value={model.id.clone()}>
-                                        {format!("{} ({})", model.display_name, model.size_hint)}
-                                    </option>
-                                </For>
+                                    children=move |model| {
+                                        view! {
+                                            <option value={model.id.clone()}>
+                                                {format!("{} ({})", model.display_name, model.size_hint)}
+                                            </option>
+                                        }
+                                    }
+                                />
                             </select>
                             <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
                                 "Ships with the app. Runs entirely on-device \u{2014} no network calls."

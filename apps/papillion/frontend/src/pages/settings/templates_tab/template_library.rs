@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use papillion_shared::types::{TemplateConfig, LayoutConfig, FieldMapping};
 
 /// Pre-built template example
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TemplateExample {
     pub name: String,
     pub schema_type: String,
@@ -232,9 +232,9 @@ pub fn get_template_library() -> Vec<TemplateExample> {
 #[component]
 pub fn TemplateLibrary(
     is_open: RwSignal<bool>,
-    on_select: impl Fn(TemplateExample) + 'static,
+    on_select: Callback<TemplateExample>,
 ) -> impl IntoView {
-    let library = get_template_library();
+    let library = RwSignal::new(get_template_library());
 
     view! {
         <Show when=move || is_open.get()>
@@ -246,32 +246,38 @@ pub fn TemplateLibrary(
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
                         <For
-                            each=move || library.clone()
+                            each=move || library.get()
                             key=|t| t.name.clone()
-                            let:template
-                        >
-                            <div style="border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary);">
-                                <div style="font-weight: 600; font-size: 13px;">
-                                    {template.name.clone()}
-                                </div>
-                                <div style="font-size: 11px; color: var(--text-2);">
-                                    {template.schema_type.clone()}
-                                </div>
-                                <div style="font-size: 12px; color: var(--text-2); flex: 1;">
-                                    {template.description.clone()}
-                                </div>
-                                <button
-                                    class="btn"
-                                    on:click=move |_| {
-                                        on_select(template.clone());
-                                        is_open.set(false);
-                                    }
-                                    style="padding: 8px 16px; background: var(--teal); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                                >
-                                    "Copy & Customize"
-                                </button>
-                            </div>
-                        </For>
+                            children=move |template| {
+                                let on_select = on_select.clone();
+                                let name = template.name.clone();
+                                let schema_type = template.schema_type.clone();
+                                let description = template.description.clone();
+                                view! {
+                                    <div style="border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary);">
+                                        <div style="font-weight: 600; font-size: 13px;">
+                                            {name}
+                                        </div>
+                                        <div style="font-size: 11px; color: var(--text-2);">
+                                            {schema_type}
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--text-2); flex: 1;">
+                                            {description}
+                                        </div>
+                                        <button
+                                            class="btn"
+                                            on:click=move |_| {
+                                                on_select.run(template.clone());
+                                                is_open.set(false);
+                                            }
+                                            style="padding: 8px 16px; background: var(--teal); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                                        >
+                                            "Copy & Customize"
+                                        </button>
+                                    </div>
+                                }
+                            }
+                        />
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; margin-top: 16px;">

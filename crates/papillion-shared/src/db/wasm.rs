@@ -18,9 +18,9 @@
 //! For MVP, this in-memory backend works offline and persists via browser storage
 //! (implemented via IndexedDB wrapper layer above this module).
 
-use std::sync::{Arc, Mutex};
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
 use crate::types::Template;
+use std::sync::{Arc, Mutex};
 
 /// WASM database implementation with in-memory storage.
 ///
@@ -97,8 +97,10 @@ impl DatabaseOps for WasmDatabase {
         let mut filtered: Vec<Episode> = episodes
             .iter()
             .filter(|ep| {
-                let action_match = action_type.is_none() || action_type == Some(ep.action_type.as_str());
-                let agent_match = agent_did_hash.is_none() || agent_did_hash == Some(ep.agent_did_hash.as_str());
+                let action_match =
+                    action_type.is_none() || action_type == Some(ep.action_type.as_str());
+                let agent_match =
+                    agent_did_hash.is_none() || agent_did_hash == Some(ep.agent_did_hash.as_str());
                 action_match && agent_match
             })
             .cloned()
@@ -129,7 +131,10 @@ impl DatabaseOps for WasmDatabase {
             .map_err(|e| DbError(format!("db lock: {e}")))?;
 
         // Find and update or insert
-        if let Some(pos) = profiles.iter().position(|p| p.agent_did_hash == profile.agent_did_hash) {
+        if let Some(pos) = profiles
+            .iter()
+            .position(|p| p.agent_did_hash == profile.agent_did_hash)
+        {
             profiles[pos] = profile.clone();
         } else {
             profiles.push(profile.clone());
@@ -186,7 +191,11 @@ impl DatabaseOps for WasmDatabase {
         Ok(())
     }
 
-    fn search_by_schema_type(&self, schema_type: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+    fn search_by_schema_type(
+        &self,
+        schema_type: &str,
+        limit: usize,
+    ) -> Result<Vec<Episode>, DbError> {
         let episodes = self
             .episodes
             .lock()
@@ -299,7 +308,10 @@ impl DatabaseOps for WasmDatabase {
             .lock()
             .map_err(|e| DbError(format!("db lock: {e}")))?;
 
-        if let Some(pos) = templates.iter().position(|t| t.template_name == template_name) {
+        if let Some(pos) = templates
+            .iter()
+            .position(|t| t.template_name == template_name)
+        {
             templates.remove(pos);
             Ok(())
         } else {
@@ -313,7 +325,10 @@ impl DatabaseOps for WasmDatabase {
             .lock()
             .map_err(|e| DbError(format!("db lock: {e}")))?;
 
-        if let Some(template) = templates.iter_mut().find(|t| t.template_name == template_name) {
+        if let Some(template) = templates
+            .iter_mut()
+            .find(|t| t.template_name == template_name)
+        {
             template.enabled = enabled;
             Ok(())
         } else {
@@ -521,7 +536,9 @@ mod tests {
             duration_ms: 100,
             decay_state: "Active".into(),
             intent_summary: None,
-            result_json: Some(r#"{"@type":"FlightReservation","bookingReference":"ABC123"}"#.into()),
+            result_json: Some(
+                r#"{"@type":"FlightReservation","bookingReference":"ABC123"}"#.into(),
+            ),
             query: None,
             recorded_at: Utc::now().to_rfc3339(),
         };

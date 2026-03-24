@@ -1,18 +1,18 @@
 use leptos::prelude::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::templates::TemplatesState;
 use papillion_shared::Template;
-use papillion_shared::types::{TemplateConfig, LayoutConfig};
+use papillion_shared::types::TemplateConfig;
 
 mod template_builder;
 mod template_preview;
 mod template_library;
 
 use template_builder::TemplateBuilder;
-use template_preview::TemplatePreview;
-use template_library::{TemplateLibrary, get_template_library};
+use template_library::TemplateLibrary;
 
 #[component]
 pub fn TemplatesTab() -> impl IntoView {
@@ -96,7 +96,7 @@ pub fn TemplatesTab() -> impl IntoView {
                 Ok(_) => error_signal.set(None),
                 Err(e) => {
                     // Extract line/column info from error
-                    let error_msg = format!("Line {}, Column {}: {}", e.line(), e.column(), e.classify());
+                    let error_msg = format!("Line {}, Column {}: {:?}", e.line(), e.column(), e.classify());
                     error_signal.set(Some(error_msg));
                 }
             }
@@ -385,13 +385,13 @@ pub fn TemplatesTab() -> impl IntoView {
             match bridge::invoke_no_args::<String>("export_templates").await {
                 Ok(json_str) => {
                     // Trigger file download
-                    if let Ok(window) = web_sys::window().ok_or("no window") {
-                        if let Ok(Some(document)) = window.document() {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
                             if let Ok(element) = document.create_element("a") {
                                 if let Ok(a) = element.dyn_into::<web_sys::HtmlAnchorElement>() {
-                                    let blob = web_sys::Blob::new_with_str_sequence(
-                                        &wasm_bindgen::prelude::wasm_bindgen::JsValue::from_serde(&vec![json_str]).unwrap()
-                                    ).unwrap();
+                                    let arr = js_sys::Array::new();
+                                    arr.push(&wasm_bindgen::JsValue::from_str(&json_str));
+                                    let blob = web_sys::Blob::new_with_str_sequence(&arr).unwrap();
                                     let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
                                     a.set_href(&url);
                                     a.set_download("papillion-templates.json");
@@ -411,14 +411,13 @@ pub fn TemplatesTab() -> impl IntoView {
 
     // Import templates (Phase 9f)
     let handle_import_file = move |ev: web_sys::Event| {
-        if let Ok(Some(input)) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+        if let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
             if let Some(files) = input.files() {
                 if let Some(file) = files.get(0) {
-                    let file = file.dyn_into::<web_sys::File>().unwrap();
                     spawn_local(async move {
                         match wasm_bindgen_futures::JsFuture::from(file.text()).await {
                             Ok(js_value) => {
-                                if let Ok(json_str) = js_value.as_string().ok_or("invalid") {
+                                if let Some(json_str) = js_value.as_string() {
                                     match bridge::invoke::<serde_json::Value, serde_json::Value>(
                                         "import_templates",
                                         &serde_json::json!({ "json_str": json_str }),
@@ -617,60 +616,70 @@ pub fn TemplatesTab() -> impl IntoView {
                     <For
                         each=all_templates
                         key=|t| t.id.clone()
-                        let:template
-                    >
-                        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border);">
-                            <input
-                                type="checkbox"
-                                checked=move || selected_templates.get().contains(&template.template_name)
-                                on:change=move |_| toggle_selection(template.template_name.clone())
-                                style="cursor: pointer;"
-                            />
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 13px; font-weight: 500; color: var(--text-1);">
-                                    {template.template_name.clone()}
+                        children=move |template| {
+                            let name_for_check = template.template_name.clone();
+                            let name_for_toggle = template.template_name.clone();
+                            let name_display = template.template_name.clone();
+                            let schema_display = template.schema_type.clone();
+                            let enabled = template.enabled;
+                            let name_for_enable = template.template_name.clone();
+                            let name_for_delete = template.template_name.clone();
+                            let template_for_edit = template.clone();
+                            view! {
+                                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border);">
+                                    <input
+                                        type="checkbox"
+                                        checked=move || selected_templates.get().contains(&name_for_check)
+                                        on:change=move |_| toggle_selection(name_for_toggle.clone())
+                                        style="cursor: pointer;"
+                                    />
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-size: 13px; font-weight: 500; color: var(--text-1);">
+                                            {name_display}
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--text-2); margin-top: 2px;">
+                                            {schema_display}
+                                        </div>
+                                    </div>
+
+                                    <Show when=move || enabled>
+                                        <span style="font-size: 11px; background: var(--teal); color: white; padding: 2px 8px; border-radius: 4px;">
+                                            "Enabled"
+                                        </span>
+                                    </Show>
+                                    <Show when=move || !enabled>
+                                        <span style="font-size: 11px; background: var(--text-3); color: var(--text-2); padding: 2px 8px; border-radius: 4px;">
+                                            "Disabled"
+                                        </span>
+                                    </Show>
+
+                                    <button
+                                        class="btn"
+                                        on:click=move |_| handle_edit_open(template_for_edit.clone())
+                                        style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
+                                    >
+                                        "Edit"
+                                    </button>
+
+                                    <button
+                                        class="btn"
+                                        on:click=move |_| handle_toggle_enabled(name_for_enable.clone(), enabled)
+                                        style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
+                                    >
+                                        {move || if enabled { "Disable" } else { "Enable" }}
+                                    </button>
+
+                                    <button
+                                        class="btn"
+                                        on:click=move |_| handle_delete_confirm(name_for_delete.clone())
+                                        style="padding: 4px 8px; font-size: 11px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer;"
+                                    >
+                                        "Delete"
+                                    </button>
                                 </div>
-                                <div style="font-size: 12px; color: var(--text-2); margin-top: 2px;">
-                                    {template.schema_type.clone()}
-                                </div>
-                            </div>
-
-                            <Show when=move || template.enabled>
-                                <span style="font-size: 11px; background: var(--teal); color: white; padding: 2px 8px; border-radius: 4px;">
-                                    "Enabled"
-                                </span>
-                            </Show>
-                            <Show when=move || !template.enabled>
-                                <span style="font-size: 11px; background: var(--text-3); color: var(--text-2); padding: 2px 8px; border-radius: 4px;">
-                                    "Disabled"
-                                </span>
-                            </Show>
-
-                            <button
-                                class="btn"
-                                on:click=move |_| handle_edit_open(template.clone())
-                                style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
-                            >
-                                "Edit"
-                            </button>
-
-                            <button
-                                class="btn"
-                                on:click=move |_| handle_toggle_enabled(template.template_name.clone(), template.enabled)
-                                style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
-                            >
-                                {move || if template.enabled { "Disable" } else { "Enable" }}
-                            </button>
-
-                            <button
-                                class="btn"
-                                on:click=move |_| handle_delete_confirm(template.template_name.clone())
-                                style="padding: 4px 8px; font-size: 11px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer;"
-                            >
-                                "Delete"
-                            </button>
-                        </div>
-                    </For>
+                            }
+                        }
+                    />
                 </Show>
             </div>
 
@@ -700,7 +709,7 @@ pub fn TemplatesTab() -> impl IntoView {
                     <button
                         class="btn"
                         on:click=move |_| {
-                            if let Ok(Some(elem)) = web_sys::window()
+                            if let Some(elem) = web_sys::window()
                                 .and_then(|w| w.document())
                                 .and_then(|d| d.get_element_by_id("template-import-input"))
                                 .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
@@ -903,13 +912,12 @@ pub fn TemplatesTab() -> impl IntoView {
             // Template Builder Modal (Phase 9b)
             <TemplateBuilder
                 is_open=builder_open
-                on_complete=handle_builder_complete
+                on_complete=Callback::new(handle_builder_complete)
             />
 
-            // Template Library Modal (Phase 9e)
             <TemplateLibrary
                 is_open=library_open
-                on_select=handle_library_select
+                on_select=Callback::new(handle_library_select)
             />
         </div>
     }

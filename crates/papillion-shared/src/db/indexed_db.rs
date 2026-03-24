@@ -14,8 +14,8 @@
 #[cfg(target_arch = "wasm32")]
 use gloo_storage::{LocalStorage, Storage};
 
-use super::{AgentProfile, DatabaseOps, DbError, Episode};
 use super::wasm::WasmDatabase;
+use super::{AgentProfile, DatabaseOps, DbError, Episode};
 use crate::types::Template;
 
 /// IndexedDB-backed database that persists all operations.
@@ -149,7 +149,8 @@ impl DatabaseOps for IndexedDbDatabase {
         limit: usize,
         offset: Option<i64>,
     ) -> Result<Vec<Episode>, DbError> {
-        self.inner.list_episodes(action_type, agent_did_hash, limit, offset)
+        self.inner
+            .list_episodes(action_type, agent_did_hash, limit, offset)
     }
 
     fn episode_count(&self) -> Result<usize, DbError> {
@@ -180,7 +181,11 @@ impl DatabaseOps for IndexedDbDatabase {
         Ok(())
     }
 
-    fn search_by_schema_type(&self, schema_type: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+    fn search_by_schema_type(
+        &self,
+        schema_type: &str,
+        limit: usize,
+    ) -> Result<Vec<Episode>, DbError> {
         self.inner.search_by_schema_type(schema_type, limit)
     }
 
@@ -192,7 +197,8 @@ impl DatabaseOps for IndexedDbDatabase {
         &self,
         principal_did: Option<&str>,
     ) -> Result<Vec<Template>, DbError> {
-        self.inner.list_enabled_templates_for_principal(principal_did)
+        self.inner
+            .list_enabled_templates_for_principal(principal_did)
     }
 
     fn insert_template(&self, template: &Template) -> Result<(), DbError> {

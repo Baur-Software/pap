@@ -406,7 +406,7 @@ window.__TAURI__ = {
           if (!validStates.includes(requestedState)) {
             return {
               success: false,
-              error: `Invalid state: ${requestedState}`,
+              error: 'Invalid state: ' + requestedState,
               error_code: 'INVALID_STATE',
             };
           }

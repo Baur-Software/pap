@@ -8,8 +8,8 @@
 //! - `wasm`: Uses sql.js (web)
 //! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
-use serde::{Deserialize, Serialize};
 use crate::types::Template;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "native")]
 pub mod native;
@@ -19,6 +19,9 @@ pub mod wasm;
 
 #[cfg(feature = "wasm")]
 pub mod indexed_db;
+
+#[cfg(test)]
+mod e2e_tests;
 
 // Re-export the appropriate implementation based on feature flags
 #[cfg(feature = "native")]
@@ -120,7 +123,11 @@ pub trait DatabaseOps: Send + Sync {
     fn set_setting(&self, key: &str, value: &str) -> Result<(), DbError>;
 
     /// Search episodes by Schema.org @type
-    fn search_by_schema_type(&self, schema_type: &str, limit: usize) -> Result<Vec<Episode>, DbError>;
+    fn search_by_schema_type(
+        &self,
+        schema_type: &str,
+        limit: usize,
+    ) -> Result<Vec<Episode>, DbError>;
 
     /// Full-text search over episode fields
     fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError>;

@@ -3,9 +3,7 @@
 //! This module provides a backward-compatible interface to the shared database abstraction.
 //! Existing code that imports from `crate::db` continues to work without changes.
 
-pub use papillion_shared::db::{
-    AgentProfile, DatabaseOps, DbError, Episode,
-};
+pub use papillion_shared::db::{AgentProfile, DatabaseOps, DbError, Episode};
 
 // Re-export for convenience
 pub use papillion_shared::db::native::NativeDatabase;
@@ -30,9 +28,4 @@ impl From<DbError> for PapillionError {
 // Helper functions for opening database
 pub fn open_db(path: &std::path::Path) -> Result<Database, PapillionError> {
     NativeDatabase::open(path).map_err(|e| PapillionError::from(e.0))
-}
-
-#[cfg(test)]
-pub fn open_db_memory() -> Result<Database, PapillionError> {
-    NativeDatabase::open_memory().map_err(|e| PapillionError::from(e.0))
 }
