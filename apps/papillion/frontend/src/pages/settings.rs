@@ -8,6 +8,9 @@ use crate::components::registry::agent_detail::AgentDetail;
 use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
+
+mod templates_tab;
+use templates_tab::TemplatesTab;
 use papillion_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, OrchestratorConfig,
     OrchestratorStatus, ProfileMetadata, SuccessorDesignation,
@@ -30,6 +33,10 @@ pub fn SettingsPage() -> impl IntoView {
                     on:click=move |_| active_tab.set("profiles".into())
                 >"Profiles"</button>
                 <button
+                    class=move || if active_tab.get() == "templates" { "settings-tab active" } else { "settings-tab" }
+                    on:click=move |_| active_tab.set("templates".into())
+                >"Templates"</button>
+                <button
                     class=move || if active_tab.get() == "identity" { "settings-tab active" } else { "settings-tab" }
                     on:click=move |_| active_tab.set("identity".into())
                 >"Identity"</button>
@@ -44,6 +51,9 @@ pub fn SettingsPage() -> impl IntoView {
             </Show>
             <Show when=move || active_tab.get() == "profiles">
                 <ProfilesTab />
+            </Show>
+            <Show when=move || active_tab.get() == "templates">
+                <TemplatesTab />
             </Show>
             <Show when=move || active_tab.get() == "identity">
                 <IdentityTab />

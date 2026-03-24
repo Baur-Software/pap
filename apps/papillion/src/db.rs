@@ -5,6 +5,7 @@ use rusqlite::{params, Connection};
 use serde::Serialize;
 
 use crate::error::PapillionError;
+use papillion_shared::types::Template;
 
 /// Persistent SQLite database for Papillion's experience memory.
 ///
@@ -101,6 +102,28 @@ impl Database {
                 key   TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS templates (
+                id              TEXT PRIMARY KEY,
+                template_name   TEXT NOT NULL UNIQUE,
+                schema_type     TEXT NOT NULL,
+                principal_did   TEXT,
+                template_config TEXT NOT NULL,
+                version         INTEGER NOT NULL DEFAULT 1,
+                enabled         INTEGER NOT NULL DEFAULT 1,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL,
+                created_by      TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_templates_schema_type
+                ON templates(schema_type);
+            CREATE INDEX IF NOT EXISTS idx_templates_enabled
+                ON templates(enabled);
+            CREATE INDEX IF NOT EXISTS idx_templates_principal_did
+                ON templates(principal_did);
+            CREATE INDEX IF NOT EXISTS idx_templates_schema_principal
+                ON templates(schema_type, principal_did, enabled);
             ",
         )
         .map_err(|e| PapillionError::from(format!("db migrate: {e}")))?;
@@ -548,6 +571,284 @@ impl Database {
             episodes.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
         }
         Ok(episodes)
+    }
+
+    // ── Template CRUD ──────────────────────────────────────────
+
+    /// Insert a new template into the database.
+    pub fn insert_template(&self, template: &Template) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let template_config_json = serde_json::to_string(&template.template_config)
+            .map_err(|e| PapillionError::from(format!("template config json: {e}")))?;
+
+        conn.execute(
+            "INSERT INTO templates (
+                id, template_name, schema_type, principal_did, template_config,
+                version, enabled, created_at, updated_at, created_by
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                template.id,
+                template.template_name,
+                template.schema_type,
+                template.principal_did,
+                template_config_json,
+                template.version,
+                if template.enabled { 1 } else { 0 },
+                template.created_at,
+                template.updated_at,
+                template.created_by,
+            ],
+        )
+        .map_err(|e| PapillionError::from(format!("db insert template: {e}")))?;
+
+        Ok(())
+    }
+
+    /// Get a template by name.
+    pub fn get_template(&self, template_name: &str) -> Result<Option<Template>, PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, template_name, schema_type, principal_did, template_config,
+                        version, enabled, created_at, updated_at, created_by
+                 FROM templates WHERE template_name = ?1",
+            )
+            .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+        let mut rows = stmt
+            .query_map(params![template_name], |row| {
+                let template_config_json: String = row.get(4)?;
+                let template_config = serde_json::from_str(&template_config_json)
+                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                Ok(Template {
+                    id: row.get(0)?,
+                    template_name: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    principal_did: row.get(3)?,
+                    template_config,
+                    version: row.get(5)?,
+                    enabled: row.get::<_, i32>(6)? != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    created_by: row.get(9)?,
+                })
+            })
+            .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+        match rows.next() {
+            Some(Ok(template)) => Ok(Some(template)),
+            Some(Err(e)) => Err(PapillionError::from(format!("db row: {e}"))),
+            None => Ok(None),
+        }
+    }
+
+    /// List all templates.
+    pub fn list_templates(&self) -> Result<Vec<Template>, PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, template_name, schema_type, principal_did, template_config,
+                        version, enabled, created_at, updated_at, created_by
+                 FROM templates ORDER BY created_at DESC",
+            )
+            .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let template_config_json: String = row.get(4)?;
+                let template_config = serde_json::from_str(&template_config_json)
+                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                Ok(Template {
+                    id: row.get(0)?,
+                    template_name: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    principal_did: row.get(3)?,
+                    template_config,
+                    version: row.get(5)?,
+                    enabled: row.get::<_, i32>(6)? != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    created_by: row.get(9)?,
+                })
+            })
+            .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+        let mut templates = Vec::new();
+        for row in rows {
+            templates.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+        }
+        Ok(templates)
+    }
+
+    /// List enabled templates for a principal (profile) or global templates.
+    /// If principal_did is None, returns only global templates (principal_did IS NULL).
+    /// If principal_did is Some, returns profile templates for that principal plus global templates.
+    pub fn list_enabled_templates_for_principal(
+        &self,
+        principal_did: Option<&str>,
+    ) -> Result<Vec<Template>, PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let mut templates: Vec<Template> = Vec::new();
+
+        if let Some(did) = principal_did {
+            // Return both profile-specific and global templates
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, template_name, schema_type, principal_did, template_config,
+                            version, enabled, created_at, updated_at, created_by
+                     FROM templates
+                     WHERE enabled = 1 AND (principal_did = ?1 OR principal_did IS NULL)
+                     ORDER BY schema_type, created_at DESC",
+                )
+                .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+            let rows = stmt
+                .query_map(params![did], |row| {
+                    let template_config_json: String = row.get(4)?;
+                    let template_config = serde_json::from_str(&template_config_json)
+                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    Ok(Template {
+                        id: row.get(0)?,
+                        template_name: row.get(1)?,
+                        schema_type: row.get(2)?,
+                        principal_did: row.get(3)?,
+                        template_config,
+                        version: row.get(5)?,
+                        enabled: row.get::<_, i32>(6)? != 0,
+                        created_at: row.get(7)?,
+                        updated_at: row.get(8)?,
+                        created_by: row.get(9)?,
+                    })
+                })
+                .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+            for row in rows {
+                templates.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            }
+        } else {
+            // Return only global templates
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, template_name, schema_type, principal_did, template_config,
+                            version, enabled, created_at, updated_at, created_by
+                     FROM templates
+                     WHERE enabled = 1 AND principal_did IS NULL
+                     ORDER BY created_at DESC",
+                )
+                .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+            let rows = stmt
+                .query_map([], |row| {
+                    let template_config_json: String = row.get(4)?;
+                    let template_config = serde_json::from_str(&template_config_json)
+                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    Ok(Template {
+                        id: row.get(0)?,
+                        template_name: row.get(1)?,
+                        schema_type: row.get(2)?,
+                        principal_did: row.get(3)?,
+                        template_config,
+                        version: row.get(5)?,
+                        enabled: row.get::<_, i32>(6)? != 0,
+                        created_at: row.get(7)?,
+                        updated_at: row.get(8)?,
+                        created_by: row.get(9)?,
+                    })
+                })
+                .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+            for row in rows {
+                templates.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            }
+        }
+
+        Ok(templates)
+    }
+
+    /// Update an existing template.
+    pub fn update_template(&self, template: &Template) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let template_config_json = serde_json::to_string(&template.template_config)
+            .map_err(|e| PapillionError::from(format!("template config json: {e}")))?;
+
+        conn.execute(
+            "UPDATE templates SET
+                template_config = ?1,
+                version = ?2,
+                enabled = ?3,
+                updated_at = ?4,
+                created_by = ?5
+             WHERE template_name = ?6",
+            params![
+                template_config_json,
+                template.version,
+                if template.enabled { 1 } else { 0 },
+                template.updated_at,
+                template.created_by,
+                template.template_name,
+            ],
+        )
+        .map_err(|e| PapillionError::from(format!("db update template: {e}")))?;
+
+        Ok(())
+    }
+
+    /// Set whether a template is enabled or disabled.
+    pub fn set_template_enabled(
+        &self,
+        template_name: &str,
+        enabled: bool,
+    ) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+
+        conn.execute(
+            "UPDATE templates SET enabled = ?1, updated_at = ?2 WHERE template_name = ?3",
+            params![if enabled { 1 } else { 0 }, now, template_name],
+        )
+        .map_err(|e| PapillionError::from(format!("db set template enabled: {e}")))?;
+
+        Ok(())
+    }
+
+    /// Delete a template by name.
+    pub fn delete_template(&self, template_name: &str) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        conn.execute(
+            "DELETE FROM templates WHERE template_name = ?1",
+            params![template_name],
+        )
+        .map_err(|e| PapillionError::from(format!("db delete template: {e}")))?;
+
+        Ok(())
     }
 }
 
@@ -1114,5 +1415,244 @@ mod tests {
         let fetched = db.get_agent_profile("hash-agent-c").unwrap().unwrap();
         assert_eq!(fetched.episode_count, 3);
         assert!((fetched.success_rate - (2.0 / 3.0)).abs() < 0.01);
+    }
+
+    // ============================================================================
+    // Template CRUD Tests (Phase 8)
+    // ============================================================================
+
+    /// Helper to create a sample template for testing
+    fn sample_template(name: &str, schema_type: &str, principal_did: Option<&str>) -> Template {
+        use papillion_shared::types::{FieldMapping, LayoutConfig};
+        use uuid::Uuid;
+
+        Template {
+            id: Uuid::new_v4().to_string(),
+            template_name: name.to_string(),
+            schema_type: schema_type.to_string(),
+            principal_did: principal_did.map(|s| s.to_string()),
+            template_config: TemplateConfig {
+                version: 1,
+                layout: LayoutConfig {
+                    r#type: "grid".to_string(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".to_string()),
+                },
+                fields: vec![FieldMapping {
+                    path: "name".to_string(),
+                    label: Some("Name".to_string()),
+                    display: "title".to_string(),
+                    condition: None,
+                    style: None,
+                }],
+            },
+            version: 1,
+            enabled: true,
+            created_at: "2026-03-23T12:00:00Z".to_string(),
+            updated_at: "2026-03-23T12:00:00Z".to_string(),
+            created_by: Some("test-creator".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_insert_and_get_global_template() {
+        let db = test_db();
+        let template = sample_template("GlobalFlightTemplate", "FlightReservation", None);
+        db.insert_template(&template).unwrap();
+
+        let fetched = db.get_template("GlobalFlightTemplate").unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.template_name, "GlobalFlightTemplate");
+        assert_eq!(fetched.schema_type, "FlightReservation");
+        assert_eq!(fetched.principal_did, None);
+        assert!(fetched.enabled);
+    }
+
+    #[test]
+    fn test_insert_and_get_profile_template() {
+        let db = test_db();
+        let principal_did = "did:key:profile-1";
+        let template = sample_template("ProfileHotelTemplate", "Hotel", Some(principal_did));
+        db.insert_template(&template).unwrap();
+
+        let fetched = db.get_template("ProfileHotelTemplate").unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.template_name, "ProfileHotelTemplate");
+        assert_eq!(fetched.principal_did, Some(principal_did.to_string()));
+    }
+
+    #[test]
+    fn test_list_all_templates() {
+        let db = test_db();
+        let t1 = sample_template("Template1", "FlightReservation", None);
+        let t2 = sample_template("Template2", "Hotel", Some("did:key:user-1"));
+        let t3 = sample_template("Template3", "Restaurant", None);
+
+        db.insert_template(&t1).unwrap();
+        db.insert_template(&t2).unwrap();
+        db.insert_template(&t3).unwrap();
+
+        let all = db.list_templates().unwrap();
+        assert_eq!(all.len(), 3);
+        let names: Vec<_> = all.iter().map(|t| t.template_name.clone()).collect();
+        assert!(names.contains(&"Template1".to_string()));
+        assert!(names.contains(&"Template2".to_string()));
+        assert!(names.contains(&"Template3".to_string()));
+    }
+
+    #[test]
+    fn test_list_enabled_templates_profile_scope() {
+        let db = test_db();
+        let principal_did = "did:key:user-profile-2";
+
+        // Create global templates
+        let global1 = sample_template("Global1", "Recipe", None);
+        let global2 = sample_template("Global2", "LocalBusiness", None);
+
+        // Create profile-specific template
+        let profile_template = sample_template("ProfileRecipe", "Recipe", Some(principal_did));
+
+        db.insert_template(&global1).unwrap();
+        db.insert_template(&global2).unwrap();
+        db.insert_template(&profile_template).unwrap();
+
+        // Disable one global
+        db.set_template_enabled("Global2", false).unwrap();
+
+        // Get enabled templates for this principal (should return global enabled + profile)
+        let enabled = db
+            .list_enabled_templates_for_principal(Some(principal_did))
+            .unwrap();
+        assert_eq!(enabled.len(), 2); // Global1 + ProfileRecipe
+        let names: Vec<_> = enabled.iter().map(|t| t.template_name.clone()).collect();
+        assert!(names.contains(&"Global1".to_string()));
+        assert!(names.contains(&"ProfileRecipe".to_string()));
+        assert!(!names.contains(&"Global2".to_string())); // Disabled
+    }
+
+    #[test]
+    fn test_list_enabled_templates_global_scope() {
+        let db = test_db();
+
+        let global1 = sample_template("GlobalA", "FlightReservation", None);
+        let global2 = sample_template("GlobalB", "Hotel", None);
+        let profile_only = sample_template("ProfileOnly", "Restaurant", Some("did:key:other"));
+
+        db.insert_template(&global1).unwrap();
+        db.insert_template(&global2).unwrap();
+        db.insert_template(&profile_only).unwrap();
+
+        // Get enabled global templates (None principal)
+        let enabled = db.list_enabled_templates_for_principal(None).unwrap();
+        let names: Vec<_> = enabled.iter().map(|t| t.template_name.clone()).collect();
+        assert!(names.contains(&"GlobalA".to_string()));
+        assert!(names.contains(&"GlobalB".to_string()));
+        assert!(!names.contains(&"ProfileOnly".to_string())); // Profile-specific, not returned
+    }
+
+    #[test]
+    fn test_update_template_preserves_id() {
+        let db = test_db();
+        let mut template = sample_template("EditableTemplate", "FlightReservation", None);
+        let original_id = template.id.clone();
+
+        db.insert_template(&template).unwrap();
+
+        // Modify and update (schema_type is NOT mutable via update, by design)
+        template.updated_at = "2026-03-24T12:00:00Z".to_string();
+        template.enabled = false;
+        db.update_template(&template).unwrap();
+
+        let fetched = db.get_template("EditableTemplate").unwrap().unwrap();
+        assert_eq!(fetched.id, original_id);
+        assert_eq!(fetched.schema_type, "FlightReservation"); // Unchanged
+        assert_eq!(fetched.updated_at, "2026-03-24T12:00:00Z");
+        assert!(!fetched.enabled);
+    }
+
+    #[test]
+    fn test_set_template_enabled_toggle() {
+        let db = test_db();
+        let template = sample_template("ToggleTemplate", "Recipe", None);
+        db.insert_template(&template).unwrap();
+
+        // Verify initially enabled
+        let fetched = db.get_template("ToggleTemplate").unwrap().unwrap();
+        assert!(fetched.enabled);
+
+        // Disable
+        db.set_template_enabled("ToggleTemplate", false).unwrap();
+        let fetched = db.get_template("ToggleTemplate").unwrap().unwrap();
+        assert!(!fetched.enabled);
+
+        // List enabled should not include it
+        let enabled = db.list_templates().unwrap();
+        let disabled_count = enabled
+            .iter()
+            .filter(|t| t.template_name == "ToggleTemplate" && !t.enabled)
+            .count();
+        assert_eq!(disabled_count, 1);
+
+        // Re-enable
+        db.set_template_enabled("ToggleTemplate", true).unwrap();
+        let fetched = db.get_template("ToggleTemplate").unwrap().unwrap();
+        assert!(fetched.enabled);
+    }
+
+    #[test]
+    fn test_delete_template_removes() {
+        let db = test_db();
+        let template = sample_template("DeleteMe", "LocalBusiness", None);
+        db.insert_template(&template).unwrap();
+
+        // Verify exists
+        assert!(db.get_template("DeleteMe").unwrap().is_some());
+
+        // Delete
+        db.delete_template("DeleteMe").unwrap();
+
+        // Verify gone
+        assert!(db.get_template("DeleteMe").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_template_name_uniqueness() {
+        let db = test_db();
+        let template1 = sample_template("UniqueTemplate", "FlightReservation", None);
+        let template2 = sample_template("UniqueTemplate", "Hotel", None); // Same name, different schema
+
+        db.insert_template(&template1).unwrap();
+
+        // Attempt to insert duplicate name should fail
+        let result = db.insert_template(&template2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_config_json_roundtrip() {
+        use papillion_shared::types::FieldMapping;
+        let db = test_db();
+
+        // Create template with complex config
+        let mut template = sample_template("ComplexTemplate", "FlightReservation", None);
+        template.template_config.fields.push(FieldMapping {
+            path: "offers.price".to_string(),
+            label: Some("Price".to_string()),
+            display: "price".to_string(),
+            condition: None,
+            style: None,
+        });
+
+        db.insert_template(&template).unwrap();
+
+        // Fetch and verify config survived serialization
+        let fetched = db.get_template("ComplexTemplate").unwrap().unwrap();
+        assert_eq!(fetched.template_config.version, 1);
+        assert_eq!(fetched.template_config.fields.len(), 2);
+        assert_eq!(fetched.template_config.fields[1].path, "offers.price");
+        assert_eq!(fetched.template_config.fields[1].display, "price");
     }
 }
