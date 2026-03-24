@@ -168,8 +168,8 @@ pub async fn sign_advertisement(
     json: String,
     private_key_b64: String,
 ) -> Result<String, ServerFnError> {
-    use ed25519_dalek::SigningKey;
     use base64::Engine;
+    use ed25519_dalek::SigningKey;
 
     // Decode private key from base64
     let private_key_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -177,9 +177,10 @@ pub async fn sign_advertisement(
         .map_err(|e| ServerFnError::new(format!("Invalid private key encoding: {}", e)))?;
 
     if private_key_bytes.len() != 32 {
-        return Err(ServerFnError::new(
-            format!("Private key must be 32 bytes, got {}", private_key_bytes.len()),
-        ));
+        return Err(ServerFnError::new(format!(
+            "Private key must be 32 bytes, got {}",
+            private_key_bytes.len()
+        )));
     }
 
     let signing_key = SigningKey::from_bytes(private_key_bytes.as_slice().try_into().unwrap());
@@ -192,7 +193,8 @@ pub async fn sign_advertisement(
     ad.sign(&signing_key);
 
     // Return signed JSON
-    serde_json::to_string(&ad).map_err(|e| ServerFnError::new(format!("Serialization error: {}", e)))
+    serde_json::to_string(&ad)
+        .map_err(|e| ServerFnError::new(format!("Serialization error: {}", e)))
 }
 
 /// Register an agent from raw advertisement JSON. Returns the content hash.
