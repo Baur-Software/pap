@@ -69,6 +69,22 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  bench:
+    name: Benchmark (regression gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev python3
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Run benchmarks
+        run: cargo bench -p pap-bench
+      - name: Check for p50 regressions (>20% vs baseline)
+        run: bash benches/check_regression.sh
+
   smoke-test:
     name: Smoke Test (Papillion Desktop App)
     runs-on: ubuntu-latest

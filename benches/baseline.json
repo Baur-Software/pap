@@ -1,0 +1,39 @@
+{
+  "_comment": "p50 baseline thresholds (nanoseconds). CI fails if any benchmark regresses >20% vs these values.",
+  "ed25519_keypair_generation": {
+    "p50_ns": 14024,
+    "target": "< 1ms"
+  },
+  "did_key_derivation": {
+    "p50_ns": 1246,
+    "target": "< 0.5ms"
+  },
+  "mandate_create_sign": {
+    "p50_ns": 17858,
+    "target": "< 2ms"
+  },
+  "mandate_chain_verify_depth3": {
+    "p50_ns": 87792,
+    "target": "< 5ms"
+  },
+  "sd_jwt_issue_5claims": {
+    "p50_ns": 19690,
+    "target": "< 3ms"
+  },
+  "sd_jwt_verify_disclose_3of5": {
+    "p50_ns": 31163,
+    "target": "< 2ms"
+  },
+  "session_open_full_lifecycle": {
+    "p50_ns": 75309,
+    "target": "< 20ms"
+  },
+  "receipt_create_cosign": {
+    "p50_ns": 35294,
+    "target": "< 3ms"
+  },
+  "federation_announce_local": {
+    "p50_ns": 39171,
+    "target": "< 50ms"
+  }
+}
