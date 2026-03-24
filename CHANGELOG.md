@@ -1,3 +1,9 @@
+## [0.4.3.0] - 2026-03-24
+
+### Fixed
+
+- **docker-compose**: Resolve Docker image pull error by using `tags` field instead of standalone `image` key. Prevents spurious "pull access denied for pap-registry" errors when docker-compose attempts to pull a non-existent image from Docker Hub.
+
 ## [0.4.1.2] - 2026-03-23
 
 ### Added
@@ -27,10 +33,14 @@ All notable changes to PAP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.2] - 2026-03-23
+## [0.4.2] - 2026-03-24
 
 ### Added
 
+- **qa**: Tier 1 smoke tests for Papillion desktop app — Playwright-based E2E smoke tests verifying app launches, renders, and loads without WASM errors. Runs in CI on every PR.
+- **qa**: Tier 2 functional tests for Papillion workflows — 11 E2E tests covering agent discovery, scenario selection, PAP handshake (6-step protocol), and settings management. Mock command infrastructure validates state transitions and error scenarios.
+- **qa**: Tier 3 canary monitoring for post-deploy health checks — 6 post-deployment health checks (backend health endpoint, frontend load time, scenario execution latency, orchestrator config, identity access, console errors). Runs automatically after release publish.
+- **papillion**: Health endpoint (`get_health_status` Tauri command) — returns application health status, uptime (calculated from Instant, not UNIX_EPOCH), timestamp, and version. Enables post-deploy canary verification without rolling back broken releases.
 - **ci**: CodeQL workflow with path-based filtering — runs static analysis only when changes include target languages (Rust, Python, JavaScript/TypeScript), reducing unnecessary CI runs on documentation-only or configuration-only commits
 - **docs**: New `pap.html` dedicated page for the PAP protocol targeting developers — covers all six protocol invariants (failure-mode-first framing), protocol stack table, crate grid, Quick Start Rust snippet, examples, and comparison table
 - **docs**: New `crystalis.html` page for the Crystalis self-hostable federated registry product
@@ -40,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **health**: Fix uptime metric calculation — changed from seconds since UNIX_EPOCH (corrupted metric) to actual application uptime using `std::time::Instant`. Prevents silent data corruption in monitoring dashboards.
+- **ci**: Fix CodeQL workflow build-mode compatibility — changed `build-mode: none` to `build-mode: autobuild` for Go language support in multi-language analysis.
+- **ci**: Add Tauri CLI installation to smoke test job — explicitly installs `tauri-cli` in CI environment before running `cargo tauri build`.
+- **ci**: Increase canary verification timeout from 5 to 15 minutes — accommodates cold-start WASM compilation and Playwright browser download on CI machines.
+- **qa**: Adjust frontend load time SLA from 3 seconds to 10 seconds — realistic timeout for CI ubuntu-latest cold-start (WASM + bundle = 5-15s).
+- **qa**: Improve console error filtering in canary tests — use regex patterns instead of string includes, properly detects critical errors vs. benign warnings.
 - **papillion**: Use `.map()` instead of `.and_then()` for `Navigator::clipboard()` after `web_sys` return type change from `Option<Clipboard>` to `Clipboard` — fixes WASM compilation failure blocking Tauri desktop builds on all platforms
 
 ### Changed

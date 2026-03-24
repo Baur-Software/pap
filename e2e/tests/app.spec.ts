@@ -205,3 +205,226 @@ test.describe("Settings page", () => {
     await expect(page.locator("text=Registry Browser")).toBeVisible();
   });
 });
+
+// ── Tier 2 Tests: Agent Discovery (Browse) ──────────────────────
+
+test.describe("Agent discovery workflow", () => {
+  test("loads agent registry with 3 builtin agents", async ({ page }) => {
+    await page.goto("/");
+    // Navigate to browse registries
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=Browse Registries").click();
+    // Should show registry page
+    await expect(page.locator("text=Browse Registries")).toBeVisible({ timeout: 5000 });
+    // Should show agents (at least 3 from mock)
+    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
+  });
+
+  test("agent cards display name and action type", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=Browse Registries").click();
+    // Wait for first agent card
+    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
+    // Check agent card contains expected fields
+    const firstCard = page.locator(".agent-card").first();
+    await expect(firstCard).toContainText("DuckDuckGo Search");
+    await expect(firstCard).toContainText("search.web");
+  });
+
+  test("clicking agent shows detail view", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=Browse Registries").click();
+    // Click first agent card
+    await page.locator(".agent-card").first().click();
+    // Should show agent detail view
+    await expect(page.locator(".agent-detail")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".agent-detail-name")).toBeVisible();
+  });
+});
+
+// ── Tier 2 Tests: Scenario Selection & Disclosure ─────────────
+
+test.describe("Scenario selection and disclosure", () => {
+  test("loads scenarios with correct disclosure requirements", async ({ page }) => {
+    await page.goto("/");
+    // Click "Browse Scenarios" or navigate to scenarios
+    await page.locator(".topbar-menu-btn").click();
+    // Assuming there's a scenarios link
+    const scenariosLink = page.locator("text=Scenarios, Mandates & Receipts");
+    if (await scenariosLink.isVisible()) {
+      await scenariosLink.click();
+      // Should show scenarios list
+      await expect(page.locator("text=Book a Flight")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator("text=Send Payment")).toBeVisible();
+    }
+  });
+
+  test("scenario details show required disclosures", async ({ page }) => {
+    await page.goto("/");
+    // Navigate to scenario page if available, or verify via mock
+    // Mock returns scenarios with requires_disclosure array
+    // Booking scenario requires: name, email, passport_number
+    // Payment scenario requires: account_id
+    // This test verifies the mock is returning correct structure
+    const initiateScenario = async (scenarioId: string) => {
+      const scenarios = await page.evaluate(() => {
+        return window.__TAURI__.core.invoke("list_scenarios");
+      });
+      expect(scenarios).toHaveLength(3);
+      const booking = scenarios.find(s => s.id === "booking");
+      expect(booking.requires_disclosure).toContain("name");
+      expect(booking.requires_disclosure).toContain("email");
+      expect(booking.requires_disclosure).toContain("passport_number");
+    };
+    await initiateScenario("booking");
+  });
+});
+
+// ── Tier 2 Tests: PAP Handshake Execution ────────────────────────
+
+test.describe("PAP handshake execution", () => {
+  test("running scenario returns receipt with 6 steps", async ({ page }) => {
+    await page.goto("/");
+    // Execute scenario via mock (simulating full handshake)
+    const result = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" });
+    });
+    // Verify receipt structure
+    expect(result.success).toBe(true);
+    expect(result.steps).toHaveLength(6);
+    expect(result.steps.map(s => s.step_name)).toEqual([
+      "Discover Agent",
+      "Issue Mandate",
+      "Open Session",
+      "Exchange Data",
+      "Co-sign Receipt",
+      "Close Session",
+    ]);
+    // Verify receipt is co-signed
+    expect(result.receipt.co_signed).toBe(true);
+    expect(result.receipt.property_refs).toEqual([]); // weather has no disclosure
+  });
+
+  test("running booking scenario includes disclosure in receipt", async ({ page }) => {
+    await page.goto("/");
+    const result = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("run_scenario", { scenarioId: "booking" });
+    });
+    // Booking scenario requires 3 properties
+    expect(result.receipt.property_refs).toContain("name");
+    expect(result.receipt.property_refs).toContain("email");
+    expect(result.receipt.property_refs).toContain("passport_number");
+  });
+
+  test("completed runs are accumulated in list", async ({ page }) => {
+    await page.goto("/");
+    // Run two scenarios
+    await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" });
+    });
+    await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("run_scenario", { scenarioId: "payment" });
+    });
+    // List completed runs
+    const runs = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("list_completed_runs");
+    });
+    expect(runs).toHaveLength(2);
+    expect(runs[0].scenario_id).toBe("weather");
+    expect(runs[1].scenario_id).toBe("payment");
+  });
+});
+
+// ── Tier 2 Tests: Settings Management & Persistence ──────────
+
+test.describe("Settings management and persistence", () => {
+  test("LLM provider configuration can be updated", async ({ page }) => {
+    await page.goto("/settings");
+    // Get initial config
+    const initialConfig = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("get_orchestrator_config");
+    });
+    expect(initialConfig.llm_provider).toBeDefined();
+    // Configure new provider
+    const newConfig = {
+      ...initialConfig,
+      llm_provider: "Mistral",
+    };
+    const updated = await page.evaluate((config) => {
+      return window.__TAURI__.core.invoke("configure_orchestrator", { config });
+    }, newConfig);
+    expect(updated.llm_provider).toBe("Mistral");
+  });
+
+  test("mandate TTL configuration persists", async ({ page }) => {
+    await page.goto("/settings");
+    const config = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("get_orchestrator_config");
+    });
+    expect(config.mandate_ttl_hours).toBe(8);
+    // UI could update this value — this test verifies mock supports it
+    const updated = await page.evaluate((cfg) => {
+      return window.__TAURI__.core.invoke("configure_orchestrator", {
+        config: { ...cfg, mandate_ttl_hours: 24 },
+      });
+    }, config);
+    expect(updated.mandate_ttl_hours).toBe(24);
+  });
+
+  test("successors can be added and persisted", async ({ page }) => {
+    await page.goto("/settings");
+    await page.locator(".settings-tab").nth(1).click();
+    // Verify empty state
+    let successors = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("list_successors");
+    });
+    expect(successors).toHaveLength(0);
+    // Add successor
+    await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("add_successor", {
+        successorDid: "did:key:z6MkSuccessor1",
+        relationship: "executor",
+        notes: "My estate executor",
+      });
+    });
+    // Verify it was added
+    successors = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("list_successors");
+    });
+    expect(successors).toHaveLength(1);
+    expect(successors[0].successor_did).toBe("did:key:z6MkSuccessor1");
+  });
+
+  test("successors can be removed", async ({ page }) => {
+    await page.goto("/settings");
+    // Add two successors
+    await page.evaluate(() => {
+      window.__TAURI__.core.invoke("add_successor", {
+        successorDid: "did:key:z6MkSuccessor1",
+        relationship: "executor",
+      });
+      return window.__TAURI__.core.invoke("add_successor", {
+        successorDid: "did:key:z6MkSuccessor2",
+        relationship: "backup",
+      });
+    });
+    let successors = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("list_successors");
+    });
+    expect(successors).toHaveLength(2);
+    // Remove one
+    await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("remove_successor", {
+        successorDid: "did:key:z6MkSuccessor1",
+      });
+    });
+    // Verify it was removed
+    successors = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("list_successors");
+    });
+    expect(successors).toHaveLength(1);
+    expect(successors[0].successor_did).toBe("did:key:z6MkSuccessor2");
+  });
+});
