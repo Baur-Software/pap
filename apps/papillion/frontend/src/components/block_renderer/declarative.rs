@@ -1,7 +1,7 @@
 use super::renderer::BlockRenderer;
 use leptos::prelude::*;
 use serde_json::Value;
-use papillion_shared::types::{FieldMapping, Template, TemplateConfig};
+use papillion_shared::types::{Template, TemplateConfig};
 
 /// A runtime-loaded declarative renderer that uses template configuration to render JSON-LD content.
 ///

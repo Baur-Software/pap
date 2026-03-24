@@ -1,7 +1,6 @@
 use leptos::prelude::*;
 
-use crate::bridge;
-use papillion_shared::types::{TemplateConfig, LayoutConfig, FieldMapping, Condition, StyleConfig};
+use papillion_shared::types::{TemplateConfig, LayoutConfig, FieldMapping, Condition};
 
 #[component]
 pub fn TemplateBuilder(

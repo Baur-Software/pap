@@ -5,15 +5,14 @@ use wasm_bindgen_futures::spawn_local;
 use crate::bridge;
 use crate::state::templates::TemplatesState;
 use papillion_shared::Template;
-use papillion_shared::types::{TemplateConfig, LayoutConfig};
+use papillion_shared::types::TemplateConfig;
 
 mod template_builder;
 mod template_preview;
 mod template_library;
 
 use template_builder::TemplateBuilder;
-use template_preview::TemplatePreview;
-use template_library::{TemplateLibrary, get_template_library};
+use template_library::TemplateLibrary;
 
 #[component]
 pub fn TemplatesTab() -> impl IntoView {
@@ -618,29 +617,37 @@ pub fn TemplatesTab() -> impl IntoView {
                         each=all_templates
                         key=|t| t.id.clone()
                         children=move |template| {
+                            let name_for_check = template.template_name.clone();
+                            let name_for_toggle = template.template_name.clone();
+                            let name_display = template.template_name.clone();
+                            let schema_display = template.schema_type.clone();
+                            let enabled = template.enabled;
+                            let name_for_enable = template.template_name.clone();
+                            let name_for_delete = template.template_name.clone();
+                            let template_for_edit = template.clone();
                             view! {
                                 <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border);">
                                     <input
                                         type="checkbox"
-                                        checked=move || selected_templates.get().contains(&template.template_name)
-                                        on:change=move |_| toggle_selection(template.template_name.clone())
+                                        checked=move || selected_templates.get().contains(&name_for_check)
+                                        on:change=move |_| toggle_selection(name_for_toggle.clone())
                                         style="cursor: pointer;"
                                     />
                                     <div style="flex: 1; min-width: 0;">
                                         <div style="font-size: 13px; font-weight: 500; color: var(--text-1);">
-                                            {template.template_name.clone()}
+                                            {name_display}
                                         </div>
                                         <div style="font-size: 12px; color: var(--text-2); margin-top: 2px;">
-                                            {template.schema_type.clone()}
+                                            {schema_display}
                                         </div>
                                     </div>
 
-                                    <Show when=move || template.enabled>
+                                    <Show when=move || enabled>
                                         <span style="font-size: 11px; background: var(--teal); color: white; padding: 2px 8px; border-radius: 4px;">
                                             "Enabled"
                                         </span>
                                     </Show>
-                                    <Show when=move || !template.enabled>
+                                    <Show when=move || !enabled>
                                         <span style="font-size: 11px; background: var(--text-3); color: var(--text-2); padding: 2px 8px; border-radius: 4px;">
                                             "Disabled"
                                         </span>
@@ -648,7 +655,7 @@ pub fn TemplatesTab() -> impl IntoView {
 
                                     <button
                                         class="btn"
-                                        on:click=move |_| handle_edit_open(template.clone())
+                                        on:click=move |_| handle_edit_open(template_for_edit.clone())
                                         style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
                                     >
                                         "Edit"
@@ -656,15 +663,15 @@ pub fn TemplatesTab() -> impl IntoView {
 
                                     <button
                                         class="btn"
-                                        on:click=move |_| handle_toggle_enabled(template.template_name.clone(), template.enabled)
+                                        on:click=move |_| handle_toggle_enabled(name_for_enable.clone(), enabled)
                                         style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
                                     >
-                                        {move || if template.enabled { "Disable" } else { "Enable" }}
+                                        {move || if enabled { "Disable" } else { "Enable" }}
                                     </button>
 
                                     <button
                                         class="btn"
-                                        on:click=move |_| handle_delete_confirm(template.template_name.clone())
+                                        on:click=move |_| handle_delete_confirm(name_for_delete.clone())
                                         style="padding: 4px 8px; font-size: 11px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer;"
                                     >
                                         "Delete"

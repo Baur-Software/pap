@@ -249,16 +249,20 @@ pub fn TemplateLibrary(
                             each=move || library.clone()
                             key=|t| t.name.clone()
                             children=move |template| {
+                                let on_select = on_select.clone();
+                                let name = template.name.clone();
+                                let schema_type = template.schema_type.clone();
+                                let description = template.description.clone();
                                 view! {
                                     <div style="border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary);">
                                         <div style="font-weight: 600; font-size: 13px;">
-                                            {template.name.clone()}
+                                            {name}
                                         </div>
                                         <div style="font-size: 11px; color: var(--text-2);">
-                                            {template.schema_type.clone()}
+                                            {schema_type}
                                         </div>
                                         <div style="font-size: 12px; color: var(--text-2); flex: 1;">
-                                            {template.description.clone()}
+                                            {description}
                                         </div>
                                         <button
                                             class="btn"
