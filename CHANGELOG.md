@@ -1,3 +1,10 @@
+## [0.4.4.0] - 2026-03-24
+
+### Added
+
+- **Why a Registry? — README** — Six-reason rationale for the Crystalis registry primitive: discovery without a central directory, pre-session SD-JWT disclosure matching, payment negotiation via `Mandate.payment_proof` (ecash/Lightning), trust at the edge (Ed25519 ingest + TLS TOFU pinning), accountability without exposure (receipts with property refs only), and operator sovereignty.
+- **Why a Registry? — GitHub Pages** — Same rationale section added to `docs/crystalis.html` with a numbered six-card grid and a callout explaining the org-internal multi-node mesh pattern (`FederatedRegistry` content-hash dedup + `/federation/peers` gossip, public/private boundary by peering decision).
+
 ## [0.1.0.0] - 2026-03-23
 
 ### Added
