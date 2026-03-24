@@ -19,7 +19,7 @@ use crate::seed::seed_registry;
 use papillion_shared::ProfileMetadata;
 
 #[cfg(test)]
-use papillion_shared::db::native::NativeDatabase;
+use papillion_shared::db::Database;
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn test_load_or_create_seed_creates_new_seed_when_none_exists() {
         let db = Arc::new(
-            NativeDatabase::open_memory()
+            Database::open_memory()
                 .map_err(|e| PapillionError::from(e.0))
                 .expect("failed to open in-memory db"),
         );
@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn test_load_or_create_seed_loads_existing_seed() {
         let db = Arc::new(
-            NativeDatabase::open_memory()
+            Database::open_memory()
                 .map_err(|e| PapillionError::from(e.0))
                 .expect("failed to open in-memory db"),
         );
@@ -380,7 +380,7 @@ mod tests {
     #[test]
     fn test_load_or_create_seed_rejects_corrupt_base64() {
         let db = Arc::new(
-            NativeDatabase::open_memory()
+            Database::open_memory()
                 .map_err(|e| PapillionError::from(e.0))
                 .expect("failed to open in-memory db"),
         );
@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn test_load_or_create_seed_rejects_wrong_length() {
         let db = Arc::new(
-            NativeDatabase::open_memory()
+            Database::open_memory()
                 .map_err(|e| PapillionError::from(e.0))
                 .expect("failed to open in-memory db"),
         );
@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn test_load_or_create_seed_handles_valid_seed_correctly() {
         let db = Arc::new(
-            NativeDatabase::open_memory()
+            Database::open_memory()
                 .map_err(|e| PapillionError::from(e.0))
                 .expect("failed to open in-memory db"),
         );
