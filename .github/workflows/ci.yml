@@ -88,6 +88,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
       - name: Build Tauri app
         working-directory: apps/papillion
         run: cargo tauri build
