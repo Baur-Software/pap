@@ -29,7 +29,7 @@ COPY crates/pap-federation ./crates/pap-federation
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src ./apps/registry/src
 # CSS source referenced by [[workspace.metadata.leptos]] style-file
-COPY apps/registry/frontend/styles ./apps/registry/frontend/styles
+COPY apps/registry/styles ./apps/registry/styles
 
 # Patch the workspace members list to remove crates we didn't copy.
 # Anchor to lines starting with whitespace+quote (member entries only),
