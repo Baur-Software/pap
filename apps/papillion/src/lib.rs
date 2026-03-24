@@ -101,6 +101,12 @@ pub fn run() {
             commands::canvas::canvas_prompt,
             commands::canvas::canvas_reshape,
             commands::canvas::canvas_retry,
+            commands::templates::get_global_templates,
+            commands::templates::get_profile_templates,
+            commands::templates::create_template,
+            commands::templates::update_template,
+            commands::templates::delete_template,
+            commands::templates::set_template_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillion");

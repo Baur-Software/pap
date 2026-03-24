@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use serde::Serialize;
 
 use crate::error::PapillionError;
-use papillion_shared::types::{Template, TemplateConfig};
+use papillion_shared::types::Template;
 
 /// Persistent SQLite database for Papillion's experience memory.
 ///

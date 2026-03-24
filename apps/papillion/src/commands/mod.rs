@@ -4,3 +4,4 @@ pub mod llm;
 pub mod orchestrator;
 pub mod profiles;
 pub mod registry;
+pub mod templates;
