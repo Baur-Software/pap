@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use papillion_shared::types::{TemplateConfig, LayoutConfig, FieldMapping};
 
 /// Pre-built template example
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TemplateExample {
     pub name: String,
     pub schema_type: String,
@@ -234,7 +234,7 @@ pub fn TemplateLibrary(
     is_open: RwSignal<bool>,
     on_select: Callback<TemplateExample>,
 ) -> impl IntoView {
-    let library = get_template_library();
+    let library = RwSignal::new(get_template_library());
 
     view! {
         <Show when=move || is_open.get()>
@@ -246,7 +246,7 @@ pub fn TemplateLibrary(
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
                         <For
-                            each=move || library.clone()
+                            each=move || library.get()
                             key=|t| t.name.clone()
                             children=move |template| {
                                 let on_select = on_select.clone();
