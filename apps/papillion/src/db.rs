@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use serde::Serialize;
 
 use crate::error::PapillionError;
-use papillion_shared::types::Template;
+use papillion_shared::types::{Template, TemplateConfig};
 
 /// Persistent SQLite database for Papillion's experience memory.
 ///
@@ -1411,5 +1411,246 @@ mod tests {
         let fetched = db.get_agent_profile("hash-agent-c").unwrap().unwrap();
         assert_eq!(fetched.episode_count, 3);
         assert!((fetched.success_rate - (2.0 / 3.0)).abs() < 0.01);
+    }
+
+    // ============================================================================
+    // Template CRUD Tests (Phase 8)
+    // ============================================================================
+
+    /// Helper to create a sample template for testing
+    fn sample_template(name: &str, schema_type: &str, principal_did: Option<&str>) -> Template {
+        use papillion_shared::types::{LayoutConfig, FieldMapping};
+        use uuid::Uuid;
+
+        Template {
+            id: Uuid::new_v4().to_string(),
+            template_name: name.to_string(),
+            schema_type: schema_type.to_string(),
+            principal_did: principal_did.map(|s| s.to_string()),
+            template_config: TemplateConfig {
+                version: 1,
+                layout: LayoutConfig {
+                    r#type: "grid".to_string(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".to_string()),
+                },
+                fields: vec![
+                    FieldMapping {
+                        path: "name".to_string(),
+                        label: Some("Name".to_string()),
+                        display: "title".to_string(),
+                        condition: None,
+                        style: None,
+                    },
+                ],
+            },
+            version: 1,
+            enabled: true,
+            created_at: "2026-03-23T12:00:00Z".to_string(),
+            updated_at: "2026-03-23T12:00:00Z".to_string(),
+            created_by: Some("test-creator".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_insert_and_get_global_template() {
+        let db = test_db();
+        let template = sample_template("GlobalFlightTemplate", "FlightReservation", None);
+        db.insert_template(&template).unwrap();
+
+        let fetched = db.get_template("GlobalFlightTemplate").unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.template_name, "GlobalFlightTemplate");
+        assert_eq!(fetched.schema_type, "FlightReservation");
+        assert_eq!(fetched.principal_did, None);
+        assert!(fetched.enabled);
+    }
+
+    #[test]
+    fn test_insert_and_get_profile_template() {
+        let db = test_db();
+        let principal_did = "did:key:profile-1";
+        let template = sample_template("ProfileHotelTemplate", "Hotel", Some(principal_did));
+        db.insert_template(&template).unwrap();
+
+        let fetched = db.get_template("ProfileHotelTemplate").unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.template_name, "ProfileHotelTemplate");
+        assert_eq!(fetched.principal_did, Some(principal_did.to_string()));
+    }
+
+    #[test]
+    fn test_list_all_templates() {
+        let db = test_db();
+        let t1 = sample_template("Template1", "FlightReservation", None);
+        let t2 = sample_template("Template2", "Hotel", Some("did:key:user-1"));
+        let t3 = sample_template("Template3", "Restaurant", None);
+
+        db.insert_template(&t1).unwrap();
+        db.insert_template(&t2).unwrap();
+        db.insert_template(&t3).unwrap();
+
+        let all = db.list_templates().unwrap();
+        assert_eq!(all.len(), 3);
+        let names: Vec<_> = all.iter().map(|t| t.template_name.clone()).collect();
+        assert!(names.contains(&"Template1".to_string()));
+        assert!(names.contains(&"Template2".to_string()));
+        assert!(names.contains(&"Template3".to_string()));
+    }
+
+    #[test]
+    fn test_list_enabled_templates_profile_scope() {
+        let db = test_db();
+        let principal_did = "did:key:user-profile-2";
+
+        // Create global templates
+        let global1 = sample_template("Global1", "Recipe", None);
+        let global2 = sample_template("Global2", "LocalBusiness", None);
+
+        // Create profile-specific template
+        let profile_template = sample_template("ProfileRecipe", "Recipe", Some(principal_did));
+
+        db.insert_template(&global1).unwrap();
+        db.insert_template(&global2).unwrap();
+        db.insert_template(&profile_template).unwrap();
+
+        // Disable one global
+        db.set_template_enabled("Global2", false).unwrap();
+
+        // Get enabled templates for this principal (should return global enabled + profile)
+        let enabled = db
+            .list_enabled_templates_for_principal(Some(principal_did))
+            .unwrap();
+        assert_eq!(enabled.len(), 2); // Global1 + ProfileRecipe
+        let names: Vec<_> = enabled.iter().map(|t| t.template_name.clone()).collect();
+        assert!(names.contains(&"Global1".to_string()));
+        assert!(names.contains(&"ProfileRecipe".to_string()));
+        assert!(!names.contains(&"Global2".to_string())); // Disabled
+    }
+
+    #[test]
+    fn test_list_enabled_templates_global_scope() {
+        let db = test_db();
+
+        let global1 = sample_template("GlobalA", "FlightReservation", None);
+        let global2 = sample_template("GlobalB", "Hotel", None);
+        let profile_only = sample_template("ProfileOnly", "Restaurant", Some("did:key:other"));
+
+        db.insert_template(&global1).unwrap();
+        db.insert_template(&global2).unwrap();
+        db.insert_template(&profile_only).unwrap();
+
+        // Get enabled global templates (None principal)
+        let enabled = db.list_enabled_templates_for_principal(None).unwrap();
+        let names: Vec<_> = enabled.iter().map(|t| t.template_name.clone()).collect();
+        assert!(names.contains(&"GlobalA".to_string()));
+        assert!(names.contains(&"GlobalB".to_string()));
+        assert!(!names.contains(&"ProfileOnly".to_string())); // Profile-specific, not returned
+    }
+
+    #[test]
+    fn test_update_template_preserves_id() {
+        let db = test_db();
+        let mut template = sample_template("EditableTemplate", "FlightReservation", None);
+        let original_id = template.id.clone();
+
+        db.insert_template(&template).unwrap();
+
+        // Modify and update (schema_type is NOT mutable via update, by design)
+        template.updated_at = "2026-03-24T12:00:00Z".to_string();
+        template.enabled = false;
+        db.update_template(&template).unwrap();
+
+        let fetched = db.get_template("EditableTemplate").unwrap().unwrap();
+        assert_eq!(fetched.id, original_id);
+        assert_eq!(fetched.schema_type, "FlightReservation"); // Unchanged
+        assert_eq!(fetched.updated_at, "2026-03-24T12:00:00Z");
+        assert!(!fetched.enabled);
+    }
+
+    #[test]
+    fn test_set_template_enabled_toggle() {
+        let db = test_db();
+        let template = sample_template("ToggleTemplate", "Recipe", None);
+        db.insert_template(&template).unwrap();
+
+        // Verify initially enabled
+        let fetched = db.get_template("ToggleTemplate").unwrap().unwrap();
+        assert!(fetched.enabled);
+
+        // Disable
+        db.set_template_enabled("ToggleTemplate", false).unwrap();
+        let fetched = db.get_template("ToggleTemplate").unwrap().unwrap();
+        assert!(!fetched.enabled);
+
+        // List enabled should not include it
+        let enabled = db.list_templates().unwrap();
+        let disabled_count = enabled
+            .iter()
+            .filter(|t| t.template_name == "ToggleTemplate" && !t.enabled)
+            .count();
+        assert_eq!(disabled_count, 1);
+
+        // Re-enable
+        db.set_template_enabled("ToggleTemplate", true).unwrap();
+        let fetched = db.get_template("ToggleTemplate").unwrap().unwrap();
+        assert!(fetched.enabled);
+    }
+
+    #[test]
+    fn test_delete_template_removes() {
+        let db = test_db();
+        let template = sample_template("DeleteMe", "LocalBusiness", None);
+        db.insert_template(&template).unwrap();
+
+        // Verify exists
+        assert!(db.get_template("DeleteMe").unwrap().is_some());
+
+        // Delete
+        db.delete_template("DeleteMe").unwrap();
+
+        // Verify gone
+        assert!(db.get_template("DeleteMe").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_template_name_uniqueness() {
+        let db = test_db();
+        let template1 = sample_template("UniqueTemplate", "FlightReservation", None);
+        let template2 = sample_template("UniqueTemplate", "Hotel", None); // Same name, different schema
+
+        db.insert_template(&template1).unwrap();
+
+        // Attempt to insert duplicate name should fail
+        let result = db.insert_template(&template2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_config_json_roundtrip() {
+        use papillion_shared::types::{LayoutConfig, FieldMapping};
+        let db = test_db();
+
+        // Create template with complex config
+        let mut template = sample_template("ComplexTemplate", "FlightReservation", None);
+        template.template_config.fields.push(FieldMapping {
+            path: "offers.price".to_string(),
+            label: Some("Price".to_string()),
+            display: "price".to_string(),
+            condition: None,
+            style: None,
+        });
+
+        db.insert_template(&template).unwrap();
+
+        // Fetch and verify config survived serialization
+        let fetched = db.get_template("ComplexTemplate").unwrap().unwrap();
+        assert_eq!(fetched.template_config.version, 1);
+        assert_eq!(fetched.template_config.fields.len(), 2);
+        assert_eq!(fetched.template_config.fields[1].path, "offers.price");
+        assert_eq!(fetched.template_config.fields[1].display, "price");
     }
 }

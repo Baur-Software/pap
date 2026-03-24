@@ -278,4 +278,93 @@ mod tests {
         let renderer = DeclarativeRenderer::new(sample_template_config(), "Recipe");
         assert_eq!(renderer.format_value(&serde_json::json!(12.99), "price"), "$12.99");
     }
+
+    #[test]
+    fn test_extract_array_index() {
+        // Test extracting nested array elements (e.g., results.0.title)
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "Recipe");
+        let content = serde_json::json!({
+            "results": [
+                { "title": "First Result", "score": 0.95 },
+                { "title": "Second Result", "score": 0.85 }
+            ]
+        });
+
+        let first_title = renderer.extract_value(&content, "results.0.title");
+        assert!(first_title.is_some());
+        assert_eq!(first_title.unwrap(), "First Result");
+
+        let second_title = renderer.extract_value(&content, "results.1.title");
+        assert!(second_title.is_some());
+        assert_eq!(second_title.unwrap(), "Second Result");
+    }
+
+    #[test]
+    fn test_condition_contains() {
+        // Test substring matching in conditions (op: "contains")
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "Recipe");
+        let content = serde_json::json!({
+            "description": "This is a delicious pasta recipe"
+        });
+
+        assert!(renderer.eval_condition(
+            &content,
+            "description",
+            "contains",
+            Some("pasta")
+        ));
+        assert!(renderer.eval_condition(
+            &content,
+            "description",
+            "contains",
+            Some("delicious")
+        ));
+        assert!(!renderer.eval_condition(
+            &content,
+            "description",
+            "contains",
+            Some("pizza")
+        ));
+    }
+
+    #[test]
+    fn test_format_price_from_string() {
+        // Test formatting price values when provided as strings (JSON interchange)
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "Recipe");
+
+        // Numeric price
+        assert_eq!(
+            renderer.format_value(&serde_json::json!(24.50), "price"),
+            "$24.50"
+        );
+
+        // String price should be parsed
+        assert_eq!(
+            renderer.format_value(&serde_json::json!("19.99"), "price"),
+            "$19.99"
+        );
+    }
+
+    #[test]
+    fn test_format_missing_values() {
+        // Test handling of null/missing/invalid values
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "Recipe");
+
+        // Null value
+        assert_eq!(
+            renderer.format_value(&serde_json::json!(null), "price"),
+            "—"
+        );
+
+        // Missing field returns empty (handled in extract_value)
+        let content = serde_json::json!({ "name": "Pasta" });
+        let missing = renderer.extract_value(&content, "missing.field");
+        assert!(missing.is_none());
+
+        // Empty string
+        assert_eq!(
+            renderer.format_value(&serde_json::json!(""), "text"),
+            ""
+        );
+    }
 }
