@@ -30,6 +30,7 @@ pub fn open_db(path: &std::path::Path) -> Result<Database, PapillionError> {
     NativeDatabase::open(path).map_err(|e| PapillionError::from(e.0))
 }
 
+#[cfg(test)]
 pub fn open_db_memory() -> Result<Database, PapillionError> {
     NativeDatabase::open_memory().map_err(|e| PapillionError::from(e.0))
 }
