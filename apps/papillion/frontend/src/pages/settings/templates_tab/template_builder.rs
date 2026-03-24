@@ -352,26 +352,28 @@ pub fn TemplateBuilder(
                                         <For
                                             each=move || fields.get().into_iter().enumerate()
                                             key=|(i, _)| *i
-                                            let:(index, field)
-                                        >
-                                            <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 12px;">
-                                                <div>
-                                                    <div style="font-weight: 500;">
-                                                        {field.path.clone()}
+                                            children=move |(index, field)| {
+                                                view! {
+                                                    <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 12px;">
+                                                        <div>
+                                                            <div style="font-weight: 500;">
+                                                                {field.path.clone()}
+                                                            </div>
+                                                            <div style="color: var(--text-2); font-size: 11px;">
+                                                                {field.display.clone()}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            class="btn"
+                                                            on:click=move |_| remove_field(index)
+                                                            style="padding: 4px 8px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;"
+                                                        >
+                                                            "Remove"
+                                                        </button>
                                                     </div>
-                                                    <div style="color: var(--text-2); font-size: 11px;">
-                                                        {field.display.clone()}
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    class="btn"
-                                                    on:click=move |_| remove_field(index)
-                                                    style="padding: 4px 8px; background: var(--coral); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;"
-                                                >
-                                                    "Remove"
-                                                </button>
-                                            </div>
-                                        </For>
+                                                }
+                                            }
+                                        />
                                     </div>
                                 </Show>
                             </div>

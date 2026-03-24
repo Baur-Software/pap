@@ -76,12 +76,14 @@ pub fn ScenarioPage() -> impl IntoView {
                                                         <For
                                                             each=move || disc.clone()
                                                             key=|d| d.clone()
-                                                            let:field
-                                                        >
-                                                            <li style="padding: 4px 0; font-size: 13px;">
-                                                                <span class="badge badge-accent" style="margin-right: 8px;">{field}</span>
-                                                            </li>
-                                                        </For>
+                                                            children=move |field| {
+                                                                view! {
+                                                                    <li style="padding: 4px 0; font-size: 13px;">
+                                                                        <span class="badge badge-accent" style="margin-right: 8px;">{field}</span>
+                                                                    </li>
+                                                                }
+                                                            }
+                                                        />
                                                     </ul>
                                                 }
                                             }
@@ -220,10 +222,12 @@ pub fn ScenarioPage() -> impl IntoView {
                             <For
                                 each=move || returns.clone()
                                 key=|r| r.clone()
-                                let:ret
-                            >
-                                <span class="badge badge-success" style="margin-right: 8px;">{ret}</span>
-                            </For>
+                                children=move |ret| {
+                                    view! {
+                                        <span class="badge badge-success" style="margin-right: 8px;">{ret}</span>
+                                    }
+                                }
+                            />
                         </div>
                     }
                 })}

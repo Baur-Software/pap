@@ -206,12 +206,14 @@ fn GeneralTab() -> impl IntoView {
                         <For
                             each=move || builtin_models.get()
                             key=|m| m.id.clone()
-                            let:model
-                        >
-                            <option value={model.id.clone()}>
-                                {format!("{} ({})", model.display_name, model.size_hint)}
-                            </option>
-                        </For>
+                            children=move |model| {
+                                view! {
+                                    <option value={model.id.clone()}>
+                                        {format!("{} ({})", model.display_name, model.size_hint)}
+                                    </option>
+                                }
+                            }
+                        />
                     </select>
                     <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
                         "Ships with the app. Runs entirely on-device \u{2014} no network calls."
@@ -517,9 +519,7 @@ fn IdentityTab() -> impl IntoView {
             <For
                 each=move || identity.successors.get()
                 key=|s| s.successor_did.clone()
-                let:successor
-            >
-                {
+                children=move |successor| {
                     let did = successor.successor_did.clone();
                     let did_for_remove = successor.successor_did.clone();
                     let rel = successor.relationship.clone();
@@ -558,7 +558,7 @@ fn IdentityTab() -> impl IntoView {
                         </div>
                     }
                 }
-            </For>
+            />
 
             <Show when=move || successor_error.get().is_some()>
                 <p style="color: var(--error); font-size: 12px; margin-top: 8px;">
@@ -701,9 +701,7 @@ fn ThisNodeCard() -> impl IntoView {
                     <For
                         each=move || node_addresses.get()
                         key=|addr| addr.clone()
-                        let:addr
-                    >
-                        {
+                        children=move |addr| {
                             let addr_copy = addr.clone();
                             let addr_display = addr.clone();
                             let is_copied = {
@@ -725,7 +723,7 @@ fn ThisNodeCard() -> impl IntoView {
                                 </div>
                             }
                         }
-                    </For>
+                    />
                 </div>
             </Show>
 
@@ -872,9 +870,7 @@ fn SavedRegistriesCard() -> impl IntoView {
             <For
                 each=move || bookmarks.get()
                 key=|url| url.clone()
-                let:url
-            >
-                {
+                children=move |url| {
                     let url_connect = url.clone();
                     let url_remove = url.clone();
                     let url_display = url.clone();
@@ -906,7 +902,7 @@ fn SavedRegistriesCard() -> impl IntoView {
                         </div>
                     }
                 }
-            </For>
+            />
 
             // Add registry form
             <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
@@ -1010,9 +1006,7 @@ fn ProfilesTab() -> impl IntoView {
                 <For
                     each=move || identity.profiles.get()
                     key=|p| p.id.clone()
-                    let:profile
-                >
-                    {
+                    children=move |profile| {
                         let profile_id_for_delete = profile.id.clone();
                         let is_active = profile.active;
                         let profile_name = profile.name.clone();
@@ -1048,7 +1042,7 @@ fn ProfilesTab() -> impl IntoView {
                             </div>
                         }
                     }
-                </For>
+                />
             </div>
 
             // Create new profile

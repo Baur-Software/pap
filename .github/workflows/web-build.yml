@@ -63,7 +63,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check WASM target
-        run: cargo build --target wasm32-unknown-unknown -p papillion-shared --features wasm --lib
+        run: cargo build --target wasm32-unknown-unknown -p papillion-shared --no-default-features --features wasm --lib
 
   web-test:
     name: Test Web Build

@@ -248,30 +248,32 @@ pub fn TemplateLibrary(
                         <For
                             each=move || library.clone()
                             key=|t| t.name.clone()
-                            let:template
-                        >
-                            <div style="border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary);">
-                                <div style="font-weight: 600; font-size: 13px;">
-                                    {template.name.clone()}
-                                </div>
-                                <div style="font-size: 11px; color: var(--text-2);">
-                                    {template.schema_type.clone()}
-                                </div>
-                                <div style="font-size: 12px; color: var(--text-2); flex: 1;">
-                                    {template.description.clone()}
-                                </div>
-                                <button
-                                    class="btn"
-                                    on:click=move |_| {
-                                        on_select(template.clone());
-                                        is_open.set(false);
-                                    }
-                                    style="padding: 8px 16px; background: var(--teal); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                                >
-                                    "Copy & Customize"
-                                </button>
-                            </div>
-                        </For>
+                            children=move |template| {
+                                view! {
+                                    <div style="border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary);">
+                                        <div style="font-weight: 600; font-size: 13px;">
+                                            {template.name.clone()}
+                                        </div>
+                                        <div style="font-size: 11px; color: var(--text-2);">
+                                            {template.schema_type.clone()}
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--text-2); flex: 1;">
+                                            {template.description.clone()}
+                                        </div>
+                                        <button
+                                            class="btn"
+                                            on:click=move |_| {
+                                                on_select(template.clone());
+                                                is_open.set(false);
+                                            }
+                                            style="padding: 8px 16px; background: var(--teal); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                                        >
+                                            "Copy & Customize"
+                                        </button>
+                                    </div>
+                                }
+                            }
+                        />
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; margin-top: 16px;">

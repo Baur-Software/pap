@@ -93,23 +93,23 @@ pub fn CanvasPage() -> impl IntoView {
                             BlockGroup::Single(b) => b.id.clone(),
                             BlockGroup::Linked(bs) => bs.iter().map(|b| b.id.as_str()).collect::<Vec<_>>().join("-"),
                         }
-                        let:group
-                    >
-                        {match group {
-                            BlockGroup::Single(block) => {
-                                view! { <BlockRenderer block=block /> }.into_any()
+                        children=move |group| {
+                            match group {
+                                BlockGroup::Single(block) => {
+                                    view! { <BlockRenderer block=block /> }.into_any()
+                                }
+                                BlockGroup::Linked(blocks) => {
+                                    view! {
+                                        <div class="block-group">
+                                            {blocks.into_iter().map(|block| {
+                                                view! { <BlockRenderer block=block /> }
+                                            }).collect::<Vec<_>>()}
+                                        </div>
+                                    }.into_any()
+                                }
                             }
-                            BlockGroup::Linked(blocks) => {
-                                view! {
-                                    <div class="block-group">
-                                        {blocks.into_iter().map(|block| {
-                                            view! { <BlockRenderer block=block /> }
-                                        }).collect::<Vec<_>>()}
-                                    </div>
-                                }.into_any()
-                            }
-                        }}
-                    </For>
+                        }
+                    />
                 </div>
                 // Inline prompt at bottom when blocks exist
                 <InlinePrompt />
