@@ -20,6 +20,9 @@ pub mod wasm;
 #[cfg(feature = "wasm")]
 pub mod indexed_db;
 
+#[cfg(test)]
+mod e2e_tests;
+
 // Re-export the appropriate implementation based on feature flags
 #[cfg(feature = "native")]
 pub use native::NativeDatabase as Database;
