@@ -18,9 +18,6 @@ use crate::profiles_db::ProfilesDatabase;
 use crate::seed::seed_registry;
 use papillion_shared::ProfileMetadata;
 
-#[cfg(test)]
-use papillion_shared::db::Database;
-
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
 /// Default port for the federation + agent TLS server.

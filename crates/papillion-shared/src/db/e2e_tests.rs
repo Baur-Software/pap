@@ -34,7 +34,7 @@ mod e2e_scenarios {
             let profile = AgentProfile {
                 agent_did_hash: agent_hash.into(),
                 agent_name: agent_name.into(),
-                success_rate: success_rate,
+                success_rate,
                 avg_quality: success_rate - 0.05,
                 avg_duration_ms: 200.0,
                 episode_count: 100,
@@ -68,8 +68,7 @@ mod e2e_scenarios {
                         _ => "payment",
                     },
                     1
-                )
-                .into(),
+                ),
                 agent_name: match i % 3 {
                     0 => "Web Search Agent",
                     1 => "Flight Booking Agent",
@@ -322,7 +321,7 @@ mod e2e_scenarios {
                 scenario_id: format!("scenario-{}", i),
                 action_type: if i % 2 == 0 { "search" } else { "booking" }.into(),
                 agent_did_hash: format!("agent-{}", i % 2),
-                agent_name: format!("Agent {}", i % 2).into(),
+                agent_name: format!("Agent {}", i % 2),
                 outcome: "success".into(),
                 outcome_detail: None,
                 scope_exercised: "[]".into(),
