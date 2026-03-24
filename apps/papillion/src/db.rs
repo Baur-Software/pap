@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use serde::Serialize;
 
 use crate::error::PapillionError;
-use papillion_shared::types::{Template, TemplateConfig};
+use papillion_shared::types::Template;
 
 /// Persistent SQLite database for Papillion's experience memory.
 ///
@@ -619,7 +619,7 @@ impl Database {
             .prepare(
                 "SELECT id, template_name, schema_type, principal_did, template_config,
                         version, enabled, created_at, updated_at, created_by
-                 FROM templates WHERE template_name = ?1"
+                 FROM templates WHERE template_name = ?1",
             )
             .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
 
@@ -661,7 +661,7 @@ impl Database {
             .prepare(
                 "SELECT id, template_name, schema_type, principal_did, template_config,
                         version, enabled, created_at, updated_at, created_by
-                 FROM templates ORDER BY created_at DESC"
+                 FROM templates ORDER BY created_at DESC",
             )
             .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
 
@@ -714,7 +714,7 @@ impl Database {
                             version, enabled, created_at, updated_at, created_by
                      FROM templates
                      WHERE enabled = 1 AND (principal_did = ?1 OR principal_did IS NULL)
-                     ORDER BY schema_type, created_at DESC"
+                     ORDER BY schema_type, created_at DESC",
                 )
                 .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
 
@@ -749,7 +749,7 @@ impl Database {
                             version, enabled, created_at, updated_at, created_by
                      FROM templates
                      WHERE enabled = 1 AND principal_did IS NULL
-                     ORDER BY created_at DESC"
+                     ORDER BY created_at DESC",
                 )
                 .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
 
@@ -814,7 +814,11 @@ impl Database {
     }
 
     /// Set whether a template is enabled or disabled.
-    pub fn set_template_enabled(&self, template_name: &str, enabled: bool) -> Result<(), PapillionError> {
+    pub fn set_template_enabled(
+        &self,
+        template_name: &str,
+        enabled: bool,
+    ) -> Result<(), PapillionError> {
         let conn = self
             .conn
             .lock()
@@ -1419,7 +1423,7 @@ mod tests {
 
     /// Helper to create a sample template for testing
     fn sample_template(name: &str, schema_type: &str, principal_did: Option<&str>) -> Template {
-        use papillion_shared::types::{LayoutConfig, FieldMapping};
+        use papillion_shared::types::{FieldMapping, LayoutConfig};
         use uuid::Uuid;
 
         Template {
@@ -1435,15 +1439,13 @@ mod tests {
                     direction: None,
                     spacing: Some("md".to_string()),
                 },
-                fields: vec![
-                    FieldMapping {
-                        path: "name".to_string(),
-                        label: Some("Name".to_string()),
-                        display: "title".to_string(),
-                        condition: None,
-                        style: None,
-                    },
-                ],
+                fields: vec![FieldMapping {
+                    path: "name".to_string(),
+                    label: Some("Name".to_string()),
+                    display: "title".to_string(),
+                    condition: None,
+                    style: None,
+                }],
             },
             version: 1,
             enabled: true,
@@ -1631,7 +1633,7 @@ mod tests {
 
     #[test]
     fn test_template_config_json_roundtrip() {
-        use papillion_shared::types::{LayoutConfig, FieldMapping};
+        use papillion_shared::types::FieldMapping;
         let db = test_db();
 
         // Create template with complex config

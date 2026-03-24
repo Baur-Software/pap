@@ -103,9 +103,7 @@ pub async fn set_template_enabled(
 /// Phase 9f: Returns a JSON string containing all global templates,
 /// suitable for saving to a file or sharing with others.
 #[tauri::command]
-pub async fn export_templates(
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+pub async fn export_templates(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let templates = state
         .db
         .list_enabled_templates_for_principal(None)
@@ -124,8 +122,8 @@ pub async fn import_templates(
     state: tauri::State<'_, AppState>,
     json_str: String,
 ) -> Result<serde_json::Value, String> {
-    let templates: Vec<Template> = serde_json::from_str(&json_str)
-        .map_err(|e| format!("Invalid JSON: {}", e))?;
+    let templates: Vec<Template> =
+        serde_json::from_str(&json_str).map_err(|e| format!("Invalid JSON: {}", e))?;
 
     let mut imported_count = 0;
     let mut skipped_count = 0;
