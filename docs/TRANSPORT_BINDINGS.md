@@ -2,14 +2,16 @@
 
 ## Overview
 
-The Principal Agent Protocol (PAP) is **transport-agnostic**. It defines a secure, cryptographic handshake (the six-phase protocol) independently of how messages are delivered across a network. This allows PAP to work reliably in any networking environment—HTTP, WebSocket, Bluetooth, SMTP, message queues, or custom protocols.
+The Principal Agent Protocol (PAP) is **transport-agnostic**. The protocol logic—mandate validation, signature verification, disclosure filtering, session state machine—is defined independently of the wire format or delivery mechanism.
+
+This allows the same protocol implementation to work over HTTP, WebSocket, gRPC, Bluetooth, AMQP, or custom transports. Each transport is a separate binding that handles serialization and delivery, but all use identical cryptographic validation.
 
 This document explains:
-- How PAP abstracts from transport concerns
-- How transport bindings are implemented
-- The default HTTP/JSON binding
+- How PAP separates protocol logic from transport layer
+- The abstraction layer (traits and message types)
+- How the default HTTP/JSON binding works
 - How to implement custom transport bindings
-- Real-world deployment scenarios
+- Real-world deployment scenarios and their transport choices
 
 ---
 
@@ -43,7 +45,7 @@ The transport layer is responsible for:
 - Managing TLS/encryption at the link level
 - Endpoint discovery and routing
 
-**Transport implementations must be interchangeable.** A PAP implementation running over HTTP should accept messages from a PAP implementation running over WebSocket, provided both parties can discover each other's endpoints.
+**Transport implementations must be mutually intelligible.** Different transport bindings are independent layers. A PAP orchestrator can initiate sessions with HTTP-based agents *and separately* with WebSocket-based agents. The protocol invariants (mandate validation, disclosure filtering, signature verification) remain identical across transports. Agents don't mix protocols within a single session—they match the transport their peer advertises in the DID Document service endpoint.
 
 ---
 
@@ -373,28 +375,40 @@ service PAPAgent {
 
 ---
 
-## Migration Between Transports
+## What Transport Independence Actually Means
 
-One of PAP's strengths is that **agents can switch transports without protocol changes**.
+Transport independence doesn't mean agents magically understand each other's wire formats. It means:
 
-### Example: Migrating HTTP to WebSocket
+1. **Protocol logic is independent**: The `AgentHandler` validates mandates, checks disclosures, verifies signatures—all identically whether the message came from HTTP or WebSocket.
 
-**Before:**
+2. **The same handler works for any transport**: You write one `impl AgentHandler` and wrap it in HTTP, WebSocket, gRPC, etc. The protocol logic is transport-agnostic.
+
+3. **Agents choose their transport at deployment time**: An agent publishes its endpoint URL (`https://...` or `wss://...`) in its DID Document. Initiators connect to the advertised endpoint. No protocol changes needed.
+
+4. **Security guarantees hold across transports**: Session key signing, nonce consumption, mandate chain verification work identically regardless of how the bits move across the network.
+
+### Example: Supporting Multiple Transports
+
 ```rust
-// HTTP-based negotiation
-let client = AgentClient::new("http://agent-b.example.com");
-let response = client.present_token(token).await?;
+// Same handler for both HTTP and WebSocket
+struct MyAgentHandler;
+impl AgentHandler for MyAgentHandler { /* ... */ }
+
+let handler = Arc::new(MyAgentHandler);
+
+// Publish on HTTP
+let http_server = AgentServer::new(handler.clone(), 8080);
+tokio::spawn(http_server.run());
+
+// Publish on WebSocket
+let ws_server = WebSocketServer::new(handler.clone(), 9000);
+tokio::spawn(ws_server.run());
+
+// Clients discover your agent's DID Document, which lists both endpoints
+// They choose which one to use
 ```
 
-**After:**
-```rust
-// WebSocket-based negotiation (same agent logic, different transport)
-let ws = connect_websocket("ws://agent-b.example.com").await?;
-let mut client = WebSocketClient::new(ws);
-let response = client.present_token(token).await?;
-```
-
-**Key insight:** The `AgentHandler` implementation on the receiver side doesn't change at all. Only the transport layer is swapped.
+Initiators don't care which transport you use—they just need to know your endpoint. The protocol is the same.
 
 ---
 
