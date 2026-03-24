@@ -66,6 +66,7 @@ zeroize = { version = "1", features = ["derive"] }
 [[workspace.metadata.leptos]]
 name          = "pap-registry"
 bin-package   = "pap-registry"
+bin-target    = "pap-registry"
 lib-package   = "pap-registry"
 bin-features  = ["ssr"]
 lib-features  = ["hydrate"]
