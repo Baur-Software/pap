@@ -1,4 +1,5 @@
 pub mod canvas;
+pub mod health;
 pub mod identity;
 pub mod llm;
 pub mod orchestrator;
