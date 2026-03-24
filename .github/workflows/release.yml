@@ -156,6 +156,23 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.tauri_args }}
 
+      - name: Verify built app exists (post-build check)
+        if: success()
+        run: |
+          echo "Post-build verification for ${{ matrix.platform }}"
+          case "${{ matrix.platform }}" in
+            macos-latest)
+              ls -lh ~/Library/Tauri/Papillion.app 2>/dev/null || ls -lh apps/papillion/target/universal-apple-darwin/release/bundle/macos/*.app 2>/dev/null || echo "macOS app not found in expected locations"
+              ;;
+            ubuntu-22.04)
+              ls -lh apps/papillion/target/release/bundle/appimage/*.AppImage 2>/dev/null || echo "AppImage not found"
+              ls -lh apps/papillion/target/release/papillion 2>/dev/null || echo "Binary not found"
+              ;;
+            windows-latest)
+              ls -lh apps/papillion/target/release/bundle/msi/*.msi 2>/dev/null || echo "MSI not found"
+              ;;
+          esac
+
   # ── 4. Publish the release (un-draft) ──────────────────────────────────
   publish:
     needs: [create-release, build]
