@@ -52,8 +52,7 @@ impl DeclarativeRenderer {
             "equals" => {
                 if let Some(val) = value {
                     self.extract_value(content, field)
-                        .and_then(|v| v.as_str())
-                        .map(|s| s == val)
+                        .and_then(|v| v.as_str().map(|s| s == val))
                         .unwrap_or(false)
                 } else {
                     false
@@ -62,8 +61,7 @@ impl DeclarativeRenderer {
             "contains" => {
                 if let Some(val) = value {
                     self.extract_value(content, field)
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.contains(val))
+                        .and_then(|v| v.as_str().map(|s| s.contains(val)))
                         .unwrap_or(false)
                 } else {
                     false
@@ -82,7 +80,7 @@ impl DeclarativeRenderer {
                 let price = value.as_f64().or_else(|| {
                     value.as_str().and_then(|s| s.parse::<f64>().ok())
                 });
-                price.map(|p| format!("${:.2}", p)).unwrap_or_default()
+                price.map(|p| format!("${:.2}", p)).unwrap_or_else(|| "\u{2014}".to_string())
             }
             "date" => value.as_str().unwrap_or("-").to_string(),
             "url" => value.as_str().unwrap_or("-").to_string(),

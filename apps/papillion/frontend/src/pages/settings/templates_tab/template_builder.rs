@@ -6,7 +6,7 @@ use papillion_shared::types::{TemplateConfig, LayoutConfig, FieldMapping, Condit
 #[component]
 pub fn TemplateBuilder(
     is_open: RwSignal<bool>,
-    on_complete: impl Fn(TemplateConfig) + 'static,
+    on_complete: Callback<TemplateConfig>,
 ) -> impl IntoView {
     // Layout state
     let layout_type = RwSignal::new("grid".to_string());
@@ -139,7 +139,7 @@ pub fn TemplateBuilder(
             return;
         }
 
-        on_complete(config);
+        on_complete.run(config);
         is_open.set(false);
     };
 
@@ -152,7 +152,6 @@ pub fn TemplateBuilder(
                     </h3>
 
                     <div style="display: flex; gap: 16px;">
-                        // Left: Configuration Form
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
                             <div>
                                 <label style="font-size: 12px; font-weight: 500; color: var(--text-2); display: block; margin-bottom: 4px;">
@@ -334,7 +333,6 @@ pub fn TemplateBuilder(
                             </button>
                         </div>
 
-                        // Right: Preview + Fields List
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
                             <div>
                                 <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">

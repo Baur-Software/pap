@@ -42,7 +42,7 @@ pub fn TemplatePreview(
     let preview_error = RwSignal::new(None::<String>);
     let preview_result = RwSignal::new(String::new());
 
-    let render_preview = move |_| {
+    let render_preview = move || {
         let input = sample_input.get();
         match serde_json::from_str::<serde_json::Value>(&input) {
             Ok(data) => {
@@ -102,12 +102,11 @@ pub fn TemplatePreview(
     };
 
     // Initial render
-    render_preview(());
+    render_preview();
 
     view! {
         <div style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
             <div style="flex: 1; display: flex; gap: 12px; overflow-y: auto;">
-                // Sample Data Input
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
                     <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
                         "Sample JSON-LD Data"
@@ -116,17 +115,16 @@ pub fn TemplatePreview(
                         prop:value=move || sample_input.get()
                         on:input=move |ev| sample_input.set(event_target_value(&ev))
                         style="flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 12px; font-family: var(--font-mono); resize: vertical;"
-                    />
+                    ></textarea>
                     <button
                         class="btn"
-                        on:click=render_preview
+                        on:click=move |_| render_preview()
                         style="padding: 8px 16px; background: var(--purple); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;"
                     >
                         "Render Preview"
                     </button>
                 </div>
 
-                // Preview Result
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
                     <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
                         "Preview Result"

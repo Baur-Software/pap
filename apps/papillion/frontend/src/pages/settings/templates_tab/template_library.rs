@@ -232,7 +232,7 @@ pub fn get_template_library() -> Vec<TemplateExample> {
 #[component]
 pub fn TemplateLibrary(
     is_open: RwSignal<bool>,
-    on_select: impl Fn(TemplateExample) + 'static,
+    on_select: Callback<TemplateExample>,
 ) -> impl IntoView {
     let library = get_template_library();
 
@@ -263,7 +263,7 @@ pub fn TemplateLibrary(
                                         <button
                                             class="btn"
                                             on:click=move |_| {
-                                                on_select(template.clone());
+                                                on_select.run(template.clone());
                                                 is_open.set(false);
                                             }
                                             style="padding: 8px 16px; background: var(--teal); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"

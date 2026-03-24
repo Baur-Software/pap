@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
@@ -96,7 +97,7 @@ pub fn TemplatesTab() -> impl IntoView {
                 Ok(_) => error_signal.set(None),
                 Err(e) => {
                     // Extract line/column info from error
-                    let error_msg = format!("Line {}, Column {}: {}", e.line(), e.column(), e.classify());
+                    let error_msg = format!("Line {}, Column {}: {:?}", e.line(), e.column(), e.classify());
                     error_signal.set(Some(error_msg));
                 }
             }
@@ -385,8 +386,8 @@ pub fn TemplatesTab() -> impl IntoView {
             match bridge::invoke_no_args::<String>("export_templates").await {
                 Ok(json_str) => {
                     // Trigger file download
-                    if let Ok(window) = web_sys::window().ok_or("no window") {
-                        if let Ok(Some(document)) = window.document() {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
                             if let Ok(element) = document.create_element("a") {
                                 if let Ok(a) = element.dyn_into::<web_sys::HtmlAnchorElement>() {
                                     let arr = js_sys::Array::new();
@@ -411,14 +412,13 @@ pub fn TemplatesTab() -> impl IntoView {
 
     // Import templates (Phase 9f)
     let handle_import_file = move |ev: web_sys::Event| {
-        if let Ok(Some(input)) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+        if let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
             if let Some(files) = input.files() {
                 if let Some(file) = files.get(0) {
-                    let file = file.dyn_into::<web_sys::File>().unwrap();
                     spawn_local(async move {
                         match wasm_bindgen_futures::JsFuture::from(file.text()).await {
                             Ok(js_value) => {
-                                if let Ok(json_str) = js_value.as_string().ok_or("invalid") {
+                                if let Some(json_str) = js_value.as_string() {
                                     match bridge::invoke::<serde_json::Value, serde_json::Value>(
                                         "import_templates",
                                         &serde_json::json!({ "json_str": json_str }),
@@ -702,7 +702,7 @@ pub fn TemplatesTab() -> impl IntoView {
                     <button
                         class="btn"
                         on:click=move |_| {
-                            if let Ok(Some(elem)) = web_sys::window()
+                            if let Some(elem) = web_sys::window()
                                 .and_then(|w| w.document())
                                 .and_then(|d| d.get_element_by_id("template-import-input"))
                                 .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
@@ -905,13 +905,12 @@ pub fn TemplatesTab() -> impl IntoView {
             // Template Builder Modal (Phase 9b)
             <TemplateBuilder
                 is_open=builder_open
-                on_complete=handle_builder_complete
+                on_complete=Callback::new(handle_builder_complete)
             />
 
-            // Template Library Modal (Phase 9e)
             <TemplateLibrary
                 is_open=library_open
-                on_select=handle_library_select
+                on_select=Callback::new(handle_library_select)
             />
         </div>
     }
