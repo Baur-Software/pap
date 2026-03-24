@@ -454,53 +454,63 @@ pub fn TemplatesTab() -> impl IntoView {
 
     view! {
         <div style="padding: 0;">
-            // Create Form
-            <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <h3 style="font-size: 14px; font-weight: 600;">
-                        "Create New Template"
+            // Create Form (Phase 7 UI Polish)
+            <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: var(--text-1); margin: 0;">
+                        "Create Template"
                     </h3>
                     <div style="display: flex; gap: 8px;">
                         <button
                             class="btn"
                             on:click=move |_| library_open.set(true)
-                            style="padding: 6px 12px; font-size: 12px; background: var(--teal); color: white; border: none; border-radius: 8px; cursor: pointer;"
+                            title="Choose from pre-built template examples"
+                            style="padding: 8px 14px; font-size: 12px; font-weight: 500; background: var(--teal); color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease;"
                         >
                             "📚 Library"
                         </button>
                         <button
                             class="btn"
                             on:click=move |_| builder_open.set(true)
-                            style="padding: 6px 12px; font-size: 12px; background: var(--purple); color: white; border: none; border-radius: 8px; cursor: pointer;"
+                            title="Visually build a template without writing JSON"
+                            style="padding: 8px 14px; font-size: 12px; font-weight: 500; background: var(--purple); color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease;"
                         >
                             "✏️ Builder"
                         </button>
                     </div>
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
-                        "Template Name (required)"
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-1); letter-spacing: 0.3px;">
+                        "Template Name "
+                        <span style="color: var(--coral);">
+                            "*"
+                        </span>
                     </label>
                     <input
                         type="text"
                         placeholder="e.g., My Flight Template"
                         prop:value=move || new_name.get()
                         on:input=move |ev| new_name.set(event_target_value(&ev))
-                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 13px; font-family: var(--font-body);"
+                        aria-label="Template name"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: var(--text-1); font-size: 13px; font-family: var(--font-body); transition: border-color 0.2s ease;"
                     />
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
-                    <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
-                        "Schema Type (required)"
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-1); letter-spacing: 0.3px;">
+                        "Schema Type "
+                        <span style="color: var(--coral);">
+                            "*"
+                        </span>
                     </label>
                     <input
                         type="text"
                         placeholder="e.g., FlightReservation"
                         prop:value=move || new_schema_type.get()
                         on:input=move |ev| new_schema_type.set(event_target_value(&ev))
-                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 13px; font-family: var(--font-body);"
+                        aria-label="Schema type"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: var(--text-1); font-size: 13px; font-family: var(--font-body); transition: border-color 0.2s ease;"
                     />
                 </div>
 
@@ -560,10 +570,10 @@ pub fn TemplatesTab() -> impl IntoView {
                 </button>
             </div>
 
-            // Templates List with Bulk Operations
-            <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <h3 style="font-size: 14px; font-weight: 600;">
+            // Templates List with Bulk Operations (Phase 7 UI Polish)
+            <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: var(--text-1); margin: 0;">
                         "Templates"
                     </h3>
                     <Show when=move || !selected_templates.get().is_empty()>
