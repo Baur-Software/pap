@@ -105,7 +105,10 @@ pub fn filter_actions(term: &str) -> Vec<String> {
 /// Filter object types by search term
 pub fn filter_object_types(term: &str) -> Vec<String> {
     if term.is_empty() {
-        return SCHEMA_ORG_OBJECT_TYPES.iter().map(|s| s.to_string()).collect();
+        return SCHEMA_ORG_OBJECT_TYPES
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
     }
     let lower = term.to_lowercase();
     SCHEMA_ORG_OBJECT_TYPES
@@ -118,7 +121,10 @@ pub fn filter_object_types(term: &str) -> Vec<String> {
 /// Filter properties by search term
 pub fn filter_properties(term: &str) -> Vec<String> {
     if term.is_empty() {
-        return SCHEMA_ORG_PROPERTIES.iter().map(|s| s.to_string()).collect();
+        return SCHEMA_ORG_PROPERTIES
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
     }
     let lower = term.to_lowercase();
     SCHEMA_ORG_PROPERTIES
