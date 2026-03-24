@@ -6,8 +6,9 @@
 //! The abstraction is implemented via feature flags:
 //! - `native`: Uses rusqlite (desktop, default)
 //! - `wasm`: Uses sql.js (web)
+//! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::types::Template;
 
 #[cfg(feature = "native")]
@@ -16,17 +17,20 @@ pub mod native;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+#[cfg(feature = "wasm")]
+pub mod indexed_db;
+
 // Re-export the appropriate implementation based on feature flags
 #[cfg(feature = "native")]
 pub use native::NativeDatabase as Database;
 
 #[cfg(feature = "wasm")]
-pub use wasm::WasmDatabase as Database;
+pub use indexed_db::IndexedDbDatabase as Database;
 
 // ── Data types ───────────────────────────────────────────────
 
 /// A single recorded interaction episode, anchored to a co-signed receipt.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Episode {
     pub id: String,
     pub receipt_session_id: String,
@@ -51,7 +55,7 @@ pub struct Episode {
 }
 
 /// Aggregated agent performance profile.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentProfile {
     pub agent_did_hash: String,
     pub agent_name: String,

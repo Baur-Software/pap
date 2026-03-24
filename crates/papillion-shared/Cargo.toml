@@ -12,8 +12,17 @@ chrono = { workspace = true }
 # Database abstraction - feature gated
 rusqlite = { version = "0.32", features = ["bundled", "serde_json"], optional = true }
 
+# WASM/IndexedDB dependencies - feature gated
+wasm-bindgen = { version = "0.2", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+    "Window", "IdbFactory", "IdbDatabase", "IdbObjectStore",
+    "IdbRequest", "IdbOpenDbRequest", "IdbKeyRange"
+] }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+gloo-storage = { version = "0.3", optional = true }
+
 # Feature flags
 [features]
 default = ["native"]
 native = ["rusqlite"]
-wasm = []
+wasm = ["wasm-bindgen", "web-sys", "wasm-bindgen-futures", "gloo-storage"]
