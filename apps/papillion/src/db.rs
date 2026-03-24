@@ -1423,7 +1423,7 @@ mod tests {
 
     /// Helper to create a sample template for testing
     fn sample_template(name: &str, schema_type: &str, principal_did: Option<&str>) -> Template {
-        use papillion_shared::types::{FieldMapping, LayoutConfig};
+        use papillion_shared::types::{FieldMapping, LayoutConfig, TemplateConfig};
         use uuid::Uuid;
 
         Template {
