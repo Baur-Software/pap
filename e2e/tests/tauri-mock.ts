@@ -240,6 +240,69 @@ window.__TAURI__ = {
         case 'check_llm_connection':
           return 'Hello! I am a mock LLM response.';
 
+        // ── Tier 2 Test: Error scenarios ────────────────────────
+        case 'run_scenario_with_error': {
+          // Test validation error when mandate scope exceeds agent capabilities
+          const sid = args?.scenarioId ?? 'weather';
+          const scenario = SCENARIOS.find(s => s.id === sid) || SCENARIOS[0];
+          if (args?.triggerError === 'scope_exceeded') {
+            return {
+              success: false,
+              error: 'Mandate scope exceeds agent capabilities',
+              error_code: 'SCOPE_EXCEEDED',
+              scenario_id: sid,
+            };
+          }
+          if (args?.triggerError === 'ttl_expired') {
+            return {
+              success: false,
+              error: 'Mandate TTL exceeded during negotiation',
+              error_code: 'TTL_EXPIRED',
+              scenario_id: sid,
+            };
+          }
+          // Fallback to normal scenario
+          return { success: true, scenario_id: sid };
+        }
+
+        // ── Tier 2 Test: Registry search and filtering ────────────────
+        case 'search_agents': {
+          const query = args?.query ?? '';
+          const actionType = args?.actionType ?? '';
+          const allAgents = [
+            { name: 'DuckDuckGo Search', did: 'did:key:z6MkDDG', action_types: ['search.web'], requires_disclosure: [], description: 'Web search' },
+            { name: 'Wikipedia', did: 'did:key:z6MkWiki', action_types: ['knowledge.lookup'], requires_disclosure: [], description: 'Knowledge lookup' },
+            { name: 'Mistral AI', did: 'did:key:z6MkMistral', action_types: ['ai.inference'], requires_disclosure: [], description: 'AI inference' },
+          ];
+          // Filter by action_type if provided
+          if (actionType) {
+            return allAgents.filter(a => a.action_types.includes(actionType));
+          }
+          // Filter by query if provided
+          if (query) {
+            return allAgents.filter(a =>
+              a.name.toLowerCase().includes(query.toLowerCase()) ||
+              a.description.toLowerCase().includes(query.toLowerCase())
+            );
+          }
+          return allAgents;
+        }
+
+        // ── Tier 2 Test: Orchestrator state transitions ─────────────────
+        case 'get_orchestrator_status_transition': {
+          // Allow test to override orchestrator status
+          if (args?.state === 'Disconnected') {
+            return 'Disconnected';
+          }
+          if (args?.state === 'Ready') {
+            return 'Ready';
+          }
+          if (args?.state === 'Failed') {
+            return 'Failed';
+          }
+          return 'Ready';
+        }
+
         default:
           console.warn('[tauri-mock] unhandled command:', cmd);
           return null;
