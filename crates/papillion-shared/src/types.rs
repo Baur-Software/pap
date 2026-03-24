@@ -403,6 +403,92 @@ pub struct KeyBackupStatus {
     pub backed_up: bool,
 }
 
+// ── Template types for user-defined renderers ─────────────────────
+
+/// Layout configuration for template rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutConfig {
+    /// "grid" or "flex"
+    pub r#type: String,
+    /// Number of columns for grid layout
+    pub columns: Option<i32>,
+    /// Direction for flex layout: "row" or "column"
+    pub direction: Option<String>,
+    /// Spacing: "sm", "md", "lg"
+    pub spacing: Option<String>,
+}
+
+/// Condition for conditional field rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Condition {
+    /// Field path to check (e.g., "name", "offers.price")
+    pub field: String,
+    /// Operation: "exists", "equals", "contains"
+    pub op: String,
+    /// Optional value for comparison
+    pub value: Option<String>,
+}
+
+/// Styling configuration for a field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StyleConfig {
+    /// CSS class name for styling
+    pub class_name: Option<String>,
+    /// Hex color override
+    pub color: Option<String>,
+}
+
+/// Field mapping in a template.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldMapping {
+    /// JSON path to extract from content (e.g., "name", "offers.0.price")
+    pub path: String,
+    /// Display label for the field
+    pub label: Option<String>,
+    /// Display type: "title", "text", "price", "date", "url"
+    pub display: String,
+    /// Optional condition for rendering
+    pub condition: Option<Condition>,
+    /// Optional styling
+    pub style: Option<StyleConfig>,
+}
+
+/// Declarative template configuration for rendering JSON-LD content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateConfig {
+    /// Schema version for forward compatibility
+    pub version: i32,
+    /// Layout directives
+    pub layout: LayoutConfig,
+    /// Ordered list of fields to render
+    pub fields: Vec<FieldMapping>,
+}
+
+/// User-defined template for rendering blocks with a specific schema type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Template {
+    /// Unique template identifier (UUID)
+    pub id: String,
+    /// User-facing template name (unique)
+    pub template_name: String,
+    /// Schema.org type this template handles (e.g., "FlightReservation")
+    pub schema_type: String,
+    /// Optional DID for per-profile templates. None = global template.
+    pub principal_did: Option<String>,
+    /// Declarative template configuration
+    pub template_config: TemplateConfig,
+    /// Template version for schema evolution
+    pub version: i32,
+    /// Whether this template is currently enabled
+    pub enabled: bool,
+    /// ISO-8601 creation timestamp
+    pub created_at: String,
+    /// ISO-8601 last update timestamp
+    pub updated_at: String,
+    /// DID of the user who created this template
+    pub created_by: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -986,6 +1072,30 @@ mod tests {
     }
 
     // ── Receipt types serde ───────────────────────────────
+
+    #[test]
+    fn template_config_roundtrip_json() {
+        let config = TemplateConfig {
+            version: 1,
+            layout: LayoutConfig {
+                r#type: "grid".into(),
+                columns: Some(2),
+                direction: None,
+                spacing: Some("md".into()),
+            },
+            fields: vec![FieldMapping {
+                path: "name".into(),
+                label: Some("Name".into()),
+                display: "title".into(),
+                condition: None,
+                style: None,
+            }],
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let back: TemplateConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.version, 1);
+        assert_eq!(back.fields.len(), 1);
+    }
 
     #[test]
     fn receipt_info_roundtrip_json() {

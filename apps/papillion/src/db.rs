@@ -5,6 +5,7 @@ use rusqlite::{params, Connection};
 use serde::Serialize;
 
 use crate::error::PapillionError;
+use papillion_shared::types::{Template, TemplateConfig};
 
 /// Persistent SQLite database for Papillion's experience memory.
 ///
@@ -101,6 +102,28 @@ impl Database {
                 key   TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS templates (
+                id              TEXT PRIMARY KEY,
+                template_name   TEXT NOT NULL UNIQUE,
+                schema_type     TEXT NOT NULL,
+                principal_did   TEXT,
+                template_config TEXT NOT NULL,
+                version         INTEGER NOT NULL DEFAULT 1,
+                enabled         INTEGER NOT NULL DEFAULT 1,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL,
+                created_by      TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_templates_schema_type
+                ON templates(schema_type);
+            CREATE INDEX IF NOT EXISTS idx_templates_enabled
+                ON templates(enabled);
+            CREATE INDEX IF NOT EXISTS idx_templates_principal_did
+                ON templates(principal_did);
+            CREATE INDEX IF NOT EXISTS idx_templates_schema_principal
+                ON templates(schema_type, principal_did, enabled);
             ",
         )
         .map_err(|e| PapillionError::from(format!("db migrate: {e}")))?;
@@ -548,6 +571,280 @@ impl Database {
             episodes.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
         }
         Ok(episodes)
+    }
+
+    // ── Template CRUD ──────────────────────────────────────────
+
+    /// Insert a new template into the database.
+    pub fn insert_template(&self, template: &Template) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let template_config_json = serde_json::to_string(&template.template_config)
+            .map_err(|e| PapillionError::from(format!("template config json: {e}")))?;
+
+        conn.execute(
+            "INSERT INTO templates (
+                id, template_name, schema_type, principal_did, template_config,
+                version, enabled, created_at, updated_at, created_by
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                template.id,
+                template.template_name,
+                template.schema_type,
+                template.principal_did,
+                template_config_json,
+                template.version,
+                if template.enabled { 1 } else { 0 },
+                template.created_at,
+                template.updated_at,
+                template.created_by,
+            ],
+        )
+        .map_err(|e| PapillionError::from(format!("db insert template: {e}")))?;
+
+        Ok(())
+    }
+
+    /// Get a template by name.
+    pub fn get_template(&self, template_name: &str) -> Result<Option<Template>, PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, template_name, schema_type, principal_did, template_config,
+                        version, enabled, created_at, updated_at, created_by
+                 FROM templates WHERE template_name = ?1"
+            )
+            .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+        let mut rows = stmt
+            .query_map(params![template_name], |row| {
+                let template_config_json: String = row.get(4)?;
+                let template_config = serde_json::from_str(&template_config_json)
+                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                Ok(Template {
+                    id: row.get(0)?,
+                    template_name: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    principal_did: row.get(3)?,
+                    template_config,
+                    version: row.get(5)?,
+                    enabled: row.get::<_, i32>(6)? != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    created_by: row.get(9)?,
+                })
+            })
+            .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+        match rows.next() {
+            Some(Ok(template)) => Ok(Some(template)),
+            Some(Err(e)) => Err(PapillionError::from(format!("db row: {e}"))),
+            None => Ok(None),
+        }
+    }
+
+    /// List all templates.
+    pub fn list_templates(&self) -> Result<Vec<Template>, PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, template_name, schema_type, principal_did, template_config,
+                        version, enabled, created_at, updated_at, created_by
+                 FROM templates ORDER BY created_at DESC"
+            )
+            .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let template_config_json: String = row.get(4)?;
+                let template_config = serde_json::from_str(&template_config_json)
+                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                Ok(Template {
+                    id: row.get(0)?,
+                    template_name: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    principal_did: row.get(3)?,
+                    template_config,
+                    version: row.get(5)?,
+                    enabled: row.get::<_, i32>(6)? != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    created_by: row.get(9)?,
+                })
+            })
+            .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+        let mut templates = Vec::new();
+        for row in rows {
+            templates.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+        }
+        Ok(templates)
+    }
+
+    /// List enabled templates for a principal (profile) or global templates.
+    /// If principal_did is None, returns only global templates (principal_did IS NULL).
+    /// If principal_did is Some, returns profile templates for that principal plus global templates.
+    pub fn list_enabled_templates_for_principal(
+        &self,
+        principal_did: Option<&str>,
+    ) -> Result<Vec<Template>, PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let mut templates: Vec<Template> = Vec::new();
+
+        if let Some(did) = principal_did {
+            // Return both profile-specific and global templates
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, template_name, schema_type, principal_did, template_config,
+                            version, enabled, created_at, updated_at, created_by
+                     FROM templates
+                     WHERE enabled = 1 AND (principal_did = ?1 OR principal_did IS NULL)
+                     ORDER BY schema_type, created_at DESC"
+                )
+                .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+            let rows = stmt
+                .query_map(params![did], |row| {
+                    let template_config_json: String = row.get(4)?;
+                    let template_config = serde_json::from_str(&template_config_json)
+                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    Ok(Template {
+                        id: row.get(0)?,
+                        template_name: row.get(1)?,
+                        schema_type: row.get(2)?,
+                        principal_did: row.get(3)?,
+                        template_config,
+                        version: row.get(5)?,
+                        enabled: row.get::<_, i32>(6)? != 0,
+                        created_at: row.get(7)?,
+                        updated_at: row.get(8)?,
+                        created_by: row.get(9)?,
+                    })
+                })
+                .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+            for row in rows {
+                templates.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            }
+        } else {
+            // Return only global templates
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, template_name, schema_type, principal_did, template_config,
+                            version, enabled, created_at, updated_at, created_by
+                     FROM templates
+                     WHERE enabled = 1 AND principal_did IS NULL
+                     ORDER BY created_at DESC"
+                )
+                .map_err(|e| PapillionError::from(format!("db prepare: {e}")))?;
+
+            let rows = stmt
+                .query_map([], |row| {
+                    let template_config_json: String = row.get(4)?;
+                    let template_config = serde_json::from_str(&template_config_json)
+                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    Ok(Template {
+                        id: row.get(0)?,
+                        template_name: row.get(1)?,
+                        schema_type: row.get(2)?,
+                        principal_did: row.get(3)?,
+                        template_config,
+                        version: row.get(5)?,
+                        enabled: row.get::<_, i32>(6)? != 0,
+                        created_at: row.get(7)?,
+                        updated_at: row.get(8)?,
+                        created_by: row.get(9)?,
+                    })
+                })
+                .map_err(|e| PapillionError::from(format!("db query: {e}")))?;
+
+            for row in rows {
+                templates.push(row.map_err(|e| PapillionError::from(format!("db row: {e}")))?);
+            }
+        }
+
+        Ok(templates)
+    }
+
+    /// Update an existing template.
+    pub fn update_template(&self, template: &Template) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let template_config_json = serde_json::to_string(&template.template_config)
+            .map_err(|e| PapillionError::from(format!("template config json: {e}")))?;
+
+        conn.execute(
+            "UPDATE templates SET
+                template_config = ?1,
+                version = ?2,
+                enabled = ?3,
+                updated_at = ?4,
+                created_by = ?5
+             WHERE template_name = ?6",
+            params![
+                template_config_json,
+                template.version,
+                if template.enabled { 1 } else { 0 },
+                template.updated_at,
+                template.created_by,
+                template.template_name,
+            ],
+        )
+        .map_err(|e| PapillionError::from(format!("db update template: {e}")))?;
+
+        Ok(())
+    }
+
+    /// Set whether a template is enabled or disabled.
+    pub fn set_template_enabled(&self, template_name: &str, enabled: bool) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+
+        conn.execute(
+            "UPDATE templates SET enabled = ?1, updated_at = ?2 WHERE template_name = ?3",
+            params![if enabled { 1 } else { 0 }, now, template_name],
+        )
+        .map_err(|e| PapillionError::from(format!("db set template enabled: {e}")))?;
+
+        Ok(())
+    }
+
+    /// Delete a template by name.
+    pub fn delete_template(&self, template_name: &str) -> Result<(), PapillionError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillionError::from(e.to_string()))?;
+
+        conn.execute(
+            "DELETE FROM templates WHERE template_name = ?1",
+            params![template_name],
+        )
+        .map_err(|e| PapillionError::from(format!("db delete template: {e}")))?;
+
+        Ok(())
     }
 }
 
