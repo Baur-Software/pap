@@ -9,7 +9,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-papillion-shared = { path = "../../../crates/papillion-shared" }
+papillion-shared = { path = "../../../crates/papillion-shared", default-features = false, features = ["wasm"] }
 leptos = { version = "0.7", features = ["csr"] }
 leptos_router = "0.7"
 serde = { version = "1", features = ["derive"] }
