@@ -529,6 +529,35 @@ impl DatabaseOps for NativeDatabase {
         }
         Ok(episodes)
     }
+
+    fn list_enabled_templates_for_principal(
+        &self,
+        principal_did: Option<&str>,
+    ) -> Result<Vec<crate::types::Template>, DbError> {
+        // TODO: Implement template querying from database
+        // For now, return empty list until templates table is created
+        Ok(Vec::new())
+    }
+
+    fn insert_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
+        // TODO: Implement template insertion
+        Ok(())
+    }
+
+    fn update_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
+        // TODO: Implement template update
+        Ok(())
+    }
+
+    fn delete_template(&self, _template_name: &str) -> Result<(), DbError> {
+        // TODO: Implement template deletion
+        Ok(())
+    }
+
+    fn set_template_enabled(&self, _template_name: &str, _enabled: bool) -> Result<(), DbError> {
+        // TODO: Implement template enable/disable
+        Ok(())
+    }
 }
 
 #[cfg(test)]
