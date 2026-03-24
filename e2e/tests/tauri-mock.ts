@@ -82,6 +82,46 @@ window.__TAURI__ = {
     _completedRuns: [],
     _backedUp: false,
     _successors: [],
+    _templates: [
+      {
+        id: 'tmpl-flight',
+        template_name: 'Default Flight Template',
+        schema_type: 'FlightReservation',
+        principal_did: null,
+        template_config: {
+          version: 1,
+          layout: { type: 'grid', columns: 2 },
+          fields: [
+            { path: 'reservationNumber', label: 'Confirmation', display: 'text' },
+            { path: 'underName.name', label: 'Passenger', display: 'text' },
+          ],
+        },
+        version: 1,
+        enabled: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        created_by: null,
+      },
+      {
+        id: 'tmpl-hotel',
+        template_name: 'Default Hotel Template',
+        schema_type: 'Hotel',
+        principal_did: null,
+        template_config: {
+          version: 1,
+          layout: { type: 'grid', columns: 1 },
+          fields: [
+            { path: 'name', label: 'Hotel', display: 'title' },
+            { path: 'address', label: 'Location', display: 'text' },
+          ],
+        },
+        version: 1,
+        enabled: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        created_by: null,
+      },
+    ],
     invoke: async function(cmd, args) {
       console.log('[tauri-mock] invoke:', cmd, args);
       const IDENTITY = ${JSON.stringify(IDENTITY)};
@@ -239,6 +279,75 @@ window.__TAURI__ = {
 
         case 'check_llm_connection':
           return 'Hello! I am a mock LLM response.';
+
+        // ─── Template CRUD Commands ───
+        case 'get_global_templates': {
+          return window.__TAURI__.core._templates.filter(
+            (t: any) => t.principal_did === null && t.enabled
+          );
+        }
+
+        case 'get_profile_templates': {
+          const principal_did = args?.principalDid;
+          return window.__TAURI__.core._templates.filter(
+            (t: any) => (t.principal_did === principal_did || t.principal_did === null) && t.enabled
+          );
+        }
+
+        case 'create_template': {
+          const template = args?.template || {};
+          const id = 'tmpl-' + Math.random().toString(36).substr(2, 9);
+          const now = new Date().toISOString();
+          const newTemplate = {
+            id,
+            template_name: template.template_name,
+            schema_type: template.schema_type,
+            principal_did: template.principal_did || null,
+            template_config: template.template_config || {},
+            version: 1,
+            enabled: true,
+            created_at: now,
+            updated_at: now,
+            created_by: template.created_by,
+          };
+          window.__TAURI__.core._templates.push(newTemplate);
+          return null; // Success (returns () in actual Rust)
+        }
+
+        case 'update_template': {
+          const template = args?.template || {};
+          const idx = window.__TAURI__.core._templates.findIndex(
+            (t: any) => t.template_name === template.template_name
+          );
+          if (idx !== -1) {
+            window.__TAURI__.core._templates[idx] = {
+              ...window.__TAURI__.core._templates[idx],
+              ...template,
+              updated_at: new Date().toISOString(),
+            };
+          }
+          return null;
+        }
+
+        case 'delete_template': {
+          const template_name = args?.templateName;
+          window.__TAURI__.core._templates = window.__TAURI__.core._templates.filter(
+            (t: any) => t.template_name !== template_name
+          );
+          return null;
+        }
+
+        case 'set_template_enabled': {
+          const template_name = args?.templateName;
+          const enabled = args?.enabled;
+          const template = window.__TAURI__.core._templates.find(
+            (t: any) => t.template_name === template_name
+          );
+          if (template) {
+            template.enabled = enabled;
+          }
+          return null;
+        }
 
         default:
           console.warn('[tauri-mock] unhandled command:', cmd);
