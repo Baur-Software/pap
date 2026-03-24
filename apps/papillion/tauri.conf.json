@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.baur-software.papillion",
   "build": {
-    "beforeDevCommand": "cd frontend && trunk serve --port 1420",
-    "beforeBuildCommand": "cd frontend && trunk build --release",
+    "beforeDevCommand": "cd papillion/frontend && trunk serve --port 1420",
+    "beforeBuildCommand": "cd papillion/frontend && trunk build --release",
     "devUrl": "http://localhost:1420",
     "frontendDist": "frontend/dist"
   },
