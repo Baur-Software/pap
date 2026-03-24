@@ -415,6 +415,24 @@ window.__TAURI__ = {
           return requestedState;
         }
 
+        case 'list_profiles':
+          return [
+            {
+              id: 'profile-default',
+              label: 'Default',
+              active: true,
+              created_at: '2026-01-01T00:00:00Z',
+            },
+          ];
+
+        case 'get_health_status':
+          return {
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            uptime_seconds: 120,
+            version: '0.1.0-mock',
+          };
+
         default:
           console.warn('[tauri-mock] unhandled command:', cmd);
           return null;

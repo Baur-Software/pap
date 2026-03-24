@@ -14,10 +14,12 @@
 
 import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
+import { waitForApp } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
   await page.goto("/");
+  await waitForApp(page);
 });
 
 test.describe("Templates", () => {

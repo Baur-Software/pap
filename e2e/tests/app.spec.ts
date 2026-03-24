@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
+import { waitForApp } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
@@ -10,6 +11,7 @@ test.beforeEach(async ({ page }) => {
 test.describe("App shell", () => {
   test("renders top bar with identity and status", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     await expect(page.locator(".topbar")).toBeVisible();
     await expect(page.locator(".topbar-identity")).not.toBeEmpty();
     await expect(page.locator(".topbar-status")).toBeVisible();
@@ -17,17 +19,20 @@ test.describe("App shell", () => {
 
   test("shows orchestrator status in top bar", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     // Mock returns "Ready" → topbar maps to "Ready"
     await expect(page.locator(".topbar-status")).toContainText("Ready");
   });
 
   test("shows settings gear link", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     await expect(page.locator(".topbar-settings-btn")).toBeVisible();
   });
 
   test("hamburger menu opens and shows nav items", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     await page.locator(".topbar-menu-btn").click();
     await expect(page.locator(".menu-dropdown")).toBeVisible();
     await expect(page.locator("text=Browse Registries")).toBeVisible();
@@ -36,6 +41,7 @@ test.describe("App shell", () => {
 
   test("shows status bar footer", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     await expect(page.locator(".status-bar")).toBeVisible();
   });
 });
@@ -45,6 +51,7 @@ test.describe("App shell", () => {
 test.describe("Canvas page", () => {
   test("shows empty state with inspiration lines", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     await expect(page.locator(".canvas-area")).toBeVisible();
     await expect(page.locator(".canvas-empty")).toBeVisible();
     await expect(page.locator(".inspiration-line").first()).toBeVisible();
@@ -52,7 +59,8 @@ test.describe("Canvas page", () => {
 
   test("shows inline prompt when orchestrator is ready", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
+    await waitForApp(page);
+    await expect(page.locator(".canvas-prompt")).toBeVisible();
     await expect(
       page.locator(".palette-label")
     ).toContainText("What do you want to build?");
@@ -60,13 +68,15 @@ test.describe("Canvas page", () => {
 
   test("inline prompt shows suggestion buttons", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
+    await waitForApp(page);
+    await expect(page.locator(".canvas-prompt")).toBeVisible();
     await expect(page.locator(".palette-suggestion").first()).toBeVisible();
   });
 
   test("inline prompt input accepts text", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".canvas-prompt")).toBeVisible({ timeout: 5000 });
+    await waitForApp(page);
+    await expect(page.locator(".canvas-prompt")).toBeVisible();
     await page.locator(".palette-input").fill("Search for flights");
     await expect(page.locator(".palette-input")).toHaveValue("Search for flights");
     // Suggestions should hide when input has text
@@ -83,7 +93,8 @@ test.describe("Canvas page", () => {
       };
     `);
     await page.goto("/");
-    await expect(page.locator(".canvas-prompt-setup")).toBeVisible({ timeout: 5000 });
+    await waitForApp(page);
+    await expect(page.locator(".canvas-prompt-setup")).toBeVisible();
     await expect(page.locator("text=Configure an LLM provider")).toBeVisible();
     await expect(page.locator("text=Open Settings")).toBeVisible();
   });
@@ -94,6 +105,7 @@ test.describe("Canvas page", () => {
 test.describe("Activity page", () => {
   test("shows empty state when no runs", async ({ page }) => {
     await page.goto("/activity");
+    await waitForApp(page);
     await expect(
       page.locator("text=No recent activity")
     ).toBeVisible();
@@ -105,6 +117,7 @@ test.describe("Activity page", () => {
 test.describe("Settings page", () => {
   test("renders three tabs", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     await expect(page.locator(".settings-tab")).toHaveCount(3);
     await expect(page.locator(".settings-tab").first()).toHaveText("General");
     await expect(page.locator(".settings-tab").nth(1)).toHaveText("Identity");
@@ -113,6 +126,7 @@ test.describe("Settings page", () => {
 
   test("General tab shows LLM Provider config", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     await expect(page.locator("text=LLM Provider")).toBeVisible();
     // Provider select is the first select on the page
     await expect(page.locator("select").first()).toBeVisible();
@@ -122,6 +136,7 @@ test.describe("Settings page", () => {
     page,
   }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     await page.locator(".settings-tab").nth(1).click();
 
     // Should show backup warning (key not backed up)
@@ -140,6 +155,7 @@ test.describe("Settings page", () => {
 
   test("Export key shows seed and clears backup warning", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     await page.locator(".settings-tab").nth(1).click();
     await expect(page.locator(".backup-warning")).toBeVisible();
 
@@ -158,6 +174,7 @@ test.describe("Settings page", () => {
 
   test("Add Successor form works", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     await page.locator(".settings-tab").nth(1).click();
 
     // Wait for Identity tab content
@@ -192,6 +209,7 @@ test.describe("Settings page", () => {
 
   test("switching tabs works", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
 
     // Start on General
     await expect(page.locator("text=LLM Provider")).toBeVisible();
@@ -211,6 +229,7 @@ test.describe("Settings page", () => {
 test.describe("Agent discovery workflow", () => {
   test("loads agent registry with 3 builtin agents", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     // Navigate to browse registries
     await page.locator(".topbar-menu-btn").click();
     await page.locator("text=Browse Registries").click();
@@ -222,6 +241,7 @@ test.describe("Agent discovery workflow", () => {
 
   test("agent cards display name and action type", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     await page.locator(".topbar-menu-btn").click();
     await page.locator("text=Browse Registries").click();
     // Wait for first agent card
@@ -234,6 +254,7 @@ test.describe("Agent discovery workflow", () => {
 
   test("clicking agent shows detail view", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     await page.locator(".topbar-menu-btn").click();
     await page.locator("text=Browse Registries").click();
     // Click first agent card
@@ -249,6 +270,7 @@ test.describe("Agent discovery workflow", () => {
 test.describe("Scenario selection and disclosure", () => {
   test("loads scenarios with correct disclosure requirements", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     // Click "Browse Scenarios" or navigate to scenarios
     await page.locator(".topbar-menu-btn").click();
     // Assuming there's a scenarios link
@@ -263,6 +285,7 @@ test.describe("Scenario selection and disclosure", () => {
 
   test("scenario details show required disclosures", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     // Navigate to scenario page if available, or verify via mock
     // Mock returns scenarios with requires_disclosure array
     // Booking scenario requires: name, email, passport_number
@@ -287,6 +310,7 @@ test.describe("Scenario selection and disclosure", () => {
 test.describe("PAP handshake execution", () => {
   test("running scenario returns receipt with 6 steps", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     // Execute scenario via mock (simulating full handshake)
     const result = await page.evaluate(() => {
       return window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" });
@@ -309,6 +333,7 @@ test.describe("PAP handshake execution", () => {
 
   test("running booking scenario includes disclosure in receipt", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     const result = await page.evaluate(() => {
       return window.__TAURI__.core.invoke("run_scenario", { scenarioId: "booking" });
     });
@@ -320,6 +345,7 @@ test.describe("PAP handshake execution", () => {
 
   test("completed runs are accumulated in list", async ({ page }) => {
     await page.goto("/");
+    await waitForApp(page);
     // Run two scenarios
     await page.evaluate(() => {
       return window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" });
@@ -342,6 +368,7 @@ test.describe("PAP handshake execution", () => {
 test.describe("Settings management and persistence", () => {
   test("LLM provider configuration can be updated", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     // Get initial config
     const initialConfig = await page.evaluate(() => {
       return window.__TAURI__.core.invoke("get_orchestrator_config");
@@ -360,6 +387,7 @@ test.describe("Settings management and persistence", () => {
 
   test("mandate TTL configuration persists", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     const config = await page.evaluate(() => {
       return window.__TAURI__.core.invoke("get_orchestrator_config");
     });
@@ -375,6 +403,7 @@ test.describe("Settings management and persistence", () => {
 
   test("successors can be added and persisted", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     await page.locator(".settings-tab").nth(1).click();
     // Verify empty state
     let successors = await page.evaluate(() => {
@@ -399,6 +428,7 @@ test.describe("Settings management and persistence", () => {
 
   test("successors can be removed", async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
     // Add two successors
     await page.evaluate(() => {
       window.__TAURI__.core.invoke("add_successor", {

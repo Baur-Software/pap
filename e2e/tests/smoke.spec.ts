@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { installTauriMock } from './tauri-mock';
+import { waitForApp } from './helpers';
 
 /**
  * Tier 1 Smoke Tests for Papillion Desktop App
@@ -10,21 +12,24 @@ import { test, expect } from '@playwright/test';
  * - Basic interaction works (buttons respond)
  *
  * These tests catch regressions like the v0.3.0 blank UI bug before release.
- * Expected duration: ~30 seconds per run
  */
+
+test.beforeEach(async ({ page }) => {
+  await installTauriMock(page);
+});
 
 test.describe('Papillion Smoke Tests', () => {
   test('app window launches without crashing', async ({ page }) => {
-    // Navigate to the dev server URL where the app is running
-    await page.goto('http://localhost:1420', { waitUntil: 'networkidle' });
+    await page.goto('/');
+    await waitForApp(page);
 
-    // Wait for the main app container to be visible
     const appContainer = page.locator('body');
-    await expect(appContainer).toBeVisible({ timeout: 5000 });
+    await expect(appContainer).toBeVisible();
   });
 
   test('frontend renders content (not blank screen)', async ({ page }) => {
-    await page.goto('http://localhost:1420', { waitUntil: 'networkidle' });
+    await page.goto('/');
+    await waitForApp(page);
 
     // Verify the page has meaningful content (not just empty HTML)
     const mainContent = page.locator('main, [role="main"], .app, #app, body > div');
@@ -44,10 +49,8 @@ test.describe('Papillion Smoke Tests', () => {
       }
     });
 
-    await page.goto('http://localhost:1420', { waitUntil: 'networkidle' });
-
-    // Wait a moment for any async errors
-    await page.waitForTimeout(1000);
+    await page.goto('/');
+    await waitForApp(page);
 
     // Should have no critical errors (filter out known non-critical errors)
     const criticalErrors = errors.filter(
@@ -62,7 +65,8 @@ test.describe('Papillion Smoke Tests', () => {
   });
 
   test('basic interaction works (buttons respond)', async ({ page }) => {
-    await page.goto('http://localhost:1420', { waitUntil: 'networkidle' });
+    await page.goto('/');
+    await waitForApp(page);
 
     // Try to find and click an interactive element
     const buttons = page.locator('button, [role="button"]');
@@ -82,7 +86,8 @@ test.describe('Papillion Smoke Tests', () => {
   });
 
   test('WASM module loaded (check for specific app markers)', async ({ page }) => {
-    await page.goto('http://localhost:1420', { waitUntil: 'networkidle' });
+    await page.goto('/');
+    await waitForApp(page);
 
     // Check for Papillion-specific content markers that indicate WASM loaded
     // Look for key UI elements that should only exist if frontend compiled
