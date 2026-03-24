@@ -1,3 +1,4 @@
+mod declarative;
 mod field_classify;
 mod generic;
 mod receipt;
