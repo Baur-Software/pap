@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::ui::api::AgentAdvertisement;
+use crate::ui::api::{AgentAdvertisement, register_agent_json};
 
 /// Form state for the agent designer
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -191,6 +191,8 @@ fn DesignerForm(
     validation_attempted: RwSignal<bool>,
     submit_status: RwSignal<Option<String>>,
 ) -> impl IntoView {
+    let is_submitting = RwSignal::new(false);
+
     view! {
         <form class="agent-designer-form"
             on:submit=move |e| {
@@ -199,7 +201,13 @@ fn DesignerForm(
                 let mut state = form_state.get();
                 if state.validate() {
                     form_state.set(state);
-                    submit_status.set(Some("✓ Valid! Ready to sign. (Signing coming in Phase 4)".to_string()));
+                    // Phase 4: Attempt to register
+                    // TODO: In full implementation, this would:
+                    // 1. Show WebAuthn/Passkey prompt
+                    // 2. Client-side sign the JSON-LD with Ed25519
+                    // 3. Call register_agent_json with signed JSON
+                    submit_status.set(Some("⏳ Signing with WebAuthn... (Phase 4 integration pending)".to_string()));
+                    is_submitting.set(true);
                 } else {
                     form_state.set(state);
                     submit_status.set(None);
@@ -214,8 +222,12 @@ fn DesignerForm(
             <TTLSection form_state validation_attempted />
 
             <div class="form-actions">
-                <button class="btn btn-primary" type="submit">
-                    "🔐 Sign & Register"
+                <button
+                    class="btn btn-primary"
+                    type="submit"
+                    disabled=move || is_submitting.get()
+                >
+                    {move || if is_submitting.get() { "⏳ Signing..." } else { "🔐 Sign & Register" }}
                 </button>
                 <a href="/agents" class="btn btn-secondary">
                     "Cancel"
