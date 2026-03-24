@@ -532,7 +532,7 @@ impl DatabaseOps for NativeDatabase {
 
     fn list_enabled_templates_for_principal(
         &self,
-        principal_did: Option<&str>,
+        _principal_did: Option<&str>,
     ) -> Result<Vec<crate::types::Template>, DbError> {
         // TODO: Implement template querying from database
         // For now, return empty list until templates table is created
