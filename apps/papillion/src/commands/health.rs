@@ -2,7 +2,6 @@
 ///
 /// Returns application health status and uptime metrics.
 /// Used by post-deploy verification to detect runtime failures.
-
 use chrono::Utc;
 use serde::Serialize;
 use std::sync::OnceLock;
@@ -36,10 +35,7 @@ pub fn get_health_status() -> HealthResponse {
     let timestamp = Utc::now().to_rfc3339();
 
     // Calculate uptime from app start time, not UNIX_EPOCH
-    let uptime_seconds = APP_START_TIME
-        .get_or_init(Instant::now)
-        .elapsed()
-        .as_secs();
+    let uptime_seconds = APP_START_TIME.get_or_init(Instant::now).elapsed().as_secs();
 
     HealthResponse {
         status: "ok".to_string(),
@@ -60,7 +56,11 @@ mod tests {
         assert_eq!(health.status, "ok");
         assert!(!health.timestamp.is_empty());
         // Uptime should be reasonable (0-300 seconds for test runtime)
-        assert!(health.uptime_seconds <= 300, "uptime {} exceeds test runtime", health.uptime_seconds);
+        assert!(
+            health.uptime_seconds <= 300,
+            "uptime {} exceeds test runtime",
+            health.uptime_seconds
+        );
         assert!(!health.version.is_empty());
     }
 
