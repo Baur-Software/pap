@@ -692,32 +692,4 @@ mod tests {
         let templates = db.list_enabled_templates_for_principal(None).unwrap();
         assert_eq!(templates.len(), 0);
     }
-
-    fn list_enabled_templates_for_principal(
-        &self,
-        _principal_did: Option<&str>,
-    ) -> Result<Vec<crate::types::Template>, DbError> {
-        // TODO: Implement template querying from sql.js
-        Ok(Vec::new())
-    }
-
-    fn insert_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
-        // TODO: Implement template insertion in sql.js
-        Ok(())
-    }
-
-    fn update_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
-        // TODO: Implement template update in sql.js
-        Ok(())
-    }
-
-    fn delete_template(&self, _template_name: &str) -> Result<(), DbError> {
-        // TODO: Implement template deletion in sql.js
-        Ok(())
-    }
-
-    fn set_template_enabled(&self, _template_name: &str, _enabled: bool) -> Result<(), DbError> {
-        // TODO: Implement template enable/disable in sql.js
-        Ok(())
-    }
 }
