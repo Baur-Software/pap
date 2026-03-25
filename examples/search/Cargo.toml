@@ -1,0 +1,19 @@
+[package]
+name = "pap-search-example"
+description = "End-to-end search PoC for the Principal Agent Protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "search"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-credential = { workspace = true }
+pap-marketplace = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }

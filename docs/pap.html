@@ -785,40 +785,55 @@
       <div class="section-label">Working Examples</div>
       <h2 class="section-title" id="examples-heading">Full protocol surface coverage.</h2>
       <p class="section-sub">
-        Six runnable examples in <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--violet);background:rgba(108,92,231,.1);padding:2px 6px;border-radius:4px;">examples/</code>
-        demonstrating every major protocol feature.
+        Nine runnable examples in <code style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--violet);background:rgba(108,92,231,.1);padding:2px 6px;border-radius:4px;">examples/</code>
+        demonstrating every major protocol feature. Each invokes real PAP SDK code with cryptographic verification.
       </p>
     </div>
     <div class="examples-grid">
       <div class="example-card reveal reveal-delay-1">
         <div class="example-name">search</div>
-        <p class="example-desc">Minimal capability advertisement, mandate issuance, and single-agent query. The hello-world of PAP.</p>
-        <div class="example-cmd">cargo run --example search</div>
+        <p class="example-desc">Full 12-step protocol flow: mandate issuance, marketplace query, capability tokens, session handshake, zero-disclosure search, and co-signed receipts.</p>
+        <div class="example-cmd">cargo run --bin search</div>
       </div>
       <div class="example-card reveal reveal-delay-2">
         <div class="example-name">travel-booking</div>
-        <p class="example-desc">Multi-constraint mandate: destination, budget, cabin class, maxStops. Shows receipt generation.</p>
-        <div class="example-cmd">cargo run --example travel-booking</div>
+        <p class="example-desc">SD-JWT selective disclosure with W3C VC envelope. Marketplace filtering by disclosure requirements. Session-only and no-retention flags.</p>
+        <div class="example-cmd">cargo run --bin travel-booking</div>
       </div>
       <div class="example-card reveal reveal-delay-3">
         <div class="example-name">delegation-chain</div>
-        <p class="example-desc">Orchestrator delegates to downstream agents with narrowed scope. Validates the full trust chain.</p>
-        <div class="example-cmd">cargo run --example delegation-chain</div>
+        <p class="example-desc">4-level mandate hierarchy with scope narrowing at each hop. TTL enforcement, chain verification, and decay state transitions.</p>
+        <div class="example-cmd">cargo run --bin delegation-chain</div>
       </div>
       <div class="example-card reveal reveal-delay-1">
         <div class="example-name">payment</div>
-        <p class="example-desc">Payment action with value constraints and two-phase confirm. Co-signed receipt with amount as property name only.</p>
-        <div class="example-cmd">cargo run --example payment</div>
+        <p class="example-desc">Chaumian ecash blind-signed payment proof. Auto-approval policies, continuity tokens, and value-capped scope conditions.</p>
+        <div class="example-cmd">cargo run --bin payment</div>
       </div>
       <div class="example-card reveal reveal-delay-2">
-        <div class="example-name">networked</div>
-        <p class="example-desc">Two agents on separate nodes. Exercises the transport layer, registry lookup, and DID resolution.</p>
-        <div class="example-cmd">cargo run --example networked</div>
+        <div class="example-name">networked-search</div>
+        <p class="example-desc">Full 6-phase PAP handshake over HTTP. AgentServer and AgentClient drive the protocol through REST endpoints.</p>
+        <div class="example-cmd">cargo run --bin networked-search</div>
       </div>
       <div class="example-card reveal reveal-delay-3">
-        <div class="example-name">federated</div>
-        <p class="example-desc">Cross-registry capability discovery via the PAP federation protocol. Two Crystalis nodes talking.</p>
-        <div class="example-cmd">cargo run --example federated</div>
+        <div class="example-name">webauthn-ceremony</div>
+        <p class="example-desc">PrincipalSigner trait abstraction. SoftwareSigner and MockWebAuthnSigner used interchangeably for mandate signing.</p>
+        <div class="example-cmd">cargo run --bin webauthn-ceremony</div>
+      </div>
+      <div class="example-card reveal reveal-delay-1">
+        <div class="example-name">federated-discovery</div>
+        <p class="example-desc">TLS identity generation with DID-bound certs. Peer-to-peer registry sync, signature verification, and disclosure-constrained federated queries.</p>
+        <div class="example-cmd">cargo run --bin federated-discovery</div>
+      </div>
+      <div class="example-card reveal reveal-delay-2">
+        <div class="example-name">credential-lifecycle</div>
+        <p class="example-desc">W3C VC issuance and SD-JWT deep dive. Zero, partial, and full disclosure. Tamper detection via hash commitments.</p>
+        <div class="example-cmd">cargo run --bin credential-lifecycle</div>
+      </div>
+      <div class="example-card reveal reveal-delay-3">
+        <div class="example-name">protocol-envelope</div>
+        <p class="example-desc">Envelope signing, sequence numbers, and tamper detection. All 12 protocol message types wrapped, signed, and verified.</p>
+        <div class="example-cmd">cargo run --bin protocol-envelope</div>
       </div>
     </div>
   </div>

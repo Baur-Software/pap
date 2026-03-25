@@ -17,6 +17,15 @@ members = [
     "apps/papillion",
     "apps/registry",
     "benches",
+    "examples/search",
+    "examples/travel-booking",
+    "examples/delegation-chain",
+    "examples/payment",
+    "examples/networked-search",
+    "examples/webauthn-ceremony",
+    "examples/federated-discovery",
+    "examples/credential-lifecycle",
+    "examples/protocol-envelope",
 ]
 
 [workspace.package]

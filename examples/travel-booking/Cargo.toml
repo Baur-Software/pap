@@ -1,0 +1,19 @@
+[package]
+name = "pap-travel-booking-example"
+description = "Travel booking PoC demonstrating SD-JWT selective disclosure and marketplace filtering"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "travel-booking"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-credential = { workspace = true }
+pap-marketplace = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }

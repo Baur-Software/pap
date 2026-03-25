@@ -1,0 +1,17 @@
+[package]
+name = "pap-delegation-chain-example"
+description = "Multi-hop delegation PoC demonstrating scope narrowing, TTL enforcement, and decay states"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "delegation-chain"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
