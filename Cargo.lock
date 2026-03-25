@@ -4258,6 +4258,7 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "hex",
+ "pap-core",
  "pap-did",
  "pap-marketplace",
  "rand 0.8.5",
@@ -4330,6 +4331,7 @@ version = "0.4.2"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "chrono",
  "console_error_panic_hook",
  "constant_time_eq",

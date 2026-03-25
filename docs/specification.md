@@ -1273,6 +1273,119 @@ certain categories of actions without per-transaction approval.
 - If `max_value` is set and the transaction value exceeds it, the
   orchestrator MUST request explicit principal approval.
 
+### 13.5. M-of-N Social Recovery
+
+Principal identity recovery via a designated notary quorum. No central
+recovery authority. The principal designates N notary DIDs at setup
+time; any M co-signers from that set can authorize key rotation.
+
+#### 13.5.1. Recovery Mandate
+
+A principal creates a `RecoveryMandate` while they still control their
+key, designating the notary set and threshold.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `principal_did` | String | REQUIRED | DID of the principal creating the mandate |
+| `threshold` | Integer | REQUIRED | M: minimum co-signatures required (1 ≤ M ≤ N) |
+| `notary_dids` | Array\<String\> | REQUIRED | N designated notary DIDs (no duplicates) |
+| `created_at` | DateTime | REQUIRED | Mandate creation timestamp |
+| `signature` | String | REQUIRED | Ed25519 signature by the principal |
+
+Constraints:
+- `threshold` MUST be ≥ 1 and ≤ `notary_dids.length`.
+- `notary_dids` MUST NOT contain duplicate entries.
+- The mandate MUST be signed by the principal's current key.
+- Only one recovery mandate per principal DID. A new mandate
+  replaces any previous one.
+
+#### 13.5.2. Recovery Request
+
+When recovery is needed, a `RecoveryRequest` is created identifying
+the old principal, the new principal keypair, and the authorizing
+recovery mandate.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `old_principal_did` | String | REQUIRED | DID of the principal being recovered |
+| `new_principal_did` | String | REQUIRED | DID of the new principal keypair |
+| `recovery_mandate_hash` | String | REQUIRED | SHA-256 hash of the authorizing RecoveryMandate |
+| `requested_at` | DateTime | REQUIRED | Request timestamp |
+
+The canonical bytes of the recovery request are the message that each
+notary signs independently.
+
+#### 13.5.3. Partial Recovery Signature (Blind)
+
+Each notary signs the recovery request independently. Notaries MUST
+NOT communicate with each other during recovery — they learn nothing
+about which other notaries have been contacted (threshold blind
+signature scheme).
+
+Before signing, a notary MUST verify:
+1. The recovery mandate was signed by the old principal.
+2. The notary's own DID is in the designated notary set.
+3. The request references the correct recovery mandate hash.
+4. The request's `old_principal_did` matches the mandate.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `notary_did` | String | REQUIRED | DID of the signing notary |
+| `signature` | String | REQUIRED | Ed25519 signature over the RecoveryRequest canonical bytes |
+| `signed_at` | DateTime | REQUIRED | Timestamp of the notary's signature |
+
+#### 13.5.4. Recovery Proof Assembly
+
+A recovery coordinator collects M partial signatures and assembles a
+`RecoveryProof`. Verification of the proof MUST check:
+
+1. The recovery mandate was signed by the old principal.
+2. At least M partial signatures are present.
+3. All signers are in the designated notary set.
+4. No duplicate signers.
+5. All partial signatures are cryptographically valid.
+
+#### 13.5.5. Revocation Proof and Broadcast
+
+After successful recovery, a `RevocationProof` is created and
+broadcast to federation peers.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `old_principal_did` | String | REQUIRED | The revoked DID |
+| `new_principal_did` | String | REQUIRED | The replacement DID |
+| `recovery_proof_hash` | String | REQUIRED | SHA-256 hash of the RecoveryProof |
+| `revoked_at` | DateTime | REQUIRED | Revocation timestamp |
+| `signature` | String | REQUIRED | Ed25519 signature by the new principal key |
+
+The revocation proof MUST be signed by the new principal key (proving
+possession). Federation peers that receive a valid revocation MUST:
+- Mark the old principal DID as revoked.
+- Reject any future operations using the old DID.
+- Remove the old recovery mandate from their NotarySet.
+
+#### 13.5.6. NotarySet Registry
+
+Each federation node maintains a `NotarySet` — a registry of recovery
+mandates queryable by principal DID. The NotarySet:
+- Stores signed recovery mandates.
+- Tracks revoked principal DIDs.
+- Rejects mandate registration for already-revoked DIDs.
+- Processes revocation broadcasts from federation peers.
+
+#### 13.5.7. Security Properties
+
+- **No central authority.** Recovery requires M independent notaries.
+- **Blind co-signing.** Notaries do not learn which other notaries
+  participate in a recovery event.
+- **Old key revocation.** The old principal DID is cryptographically
+  revoked and broadcast to all federation peers.
+- **Notary set immutability.** The notary set is fixed at mandate
+  creation time by the principal. It cannot be modified without
+  creating a new mandate signed by the principal.
+- **Threshold enforcement.** Fewer than M signatures MUST be rejected.
+  Duplicate signers MUST be rejected.
+
 ---
 
 ## 14. Transport Binding

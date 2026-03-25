@@ -1,3 +1,4 @@
+use pap_core::recovery::RevocationProof;
 use pap_marketplace::AgentAdvertisement;
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +30,15 @@ pub enum FederationMessage {
 
     /// Response with the peer's known peers.
     PeerListResponse { peers: Vec<RegistryPeer> },
+
+    /// Broadcast a principal DID revocation to federation peers.
+    RevocationBroadcast { revocation: Box<RevocationProof> },
+
+    /// Acknowledge a revocation broadcast.
+    RevocationAck {
+        old_principal_did: String,
+        accepted: bool,
+    },
 }
 
 /// HTTP(S) client for federation operations.

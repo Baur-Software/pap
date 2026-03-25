@@ -6,6 +6,9 @@ use pap_core::error::PapError;
 use pap_core::extensions::{AutoApprovalPolicy, ContinuityToken};
 use pap_core::mandate::{DecayState, Mandate};
 use pap_core::receipt::TransactionReceipt;
+use pap_core::recovery::{
+    PartialRecoverySignature, RecoveryMandate, RecoveryProof, RecoveryRequest, RevocationProof,
+};
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session, SessionState};
 use rand::rngs::OsRng;
@@ -387,4 +390,200 @@ fn mandate_payment_proof_attachment() {
 
     assert!(mandate.payment_proof.is_some());
     assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
+}
+
+// ─── M-of-N Social Recovery ────────────────────────────────────────
+
+#[test]
+fn social_recovery_2_of_3_simulation() {
+    // ── Setup: Principal designates 3 notaries with threshold 2 ──
+
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+
+    let notary1_key = make_keypair();
+    let notary1_did = did_from_key(&notary1_key);
+    let notary2_key = make_keypair();
+    let notary2_did = did_from_key(&notary2_key);
+    let notary3_key = make_keypair();
+    let notary3_did = did_from_key(&notary3_key);
+
+    // Principal creates recovery mandate while healthy
+    let mut recovery_mandate = RecoveryMandate::new(
+        principal_did.clone(),
+        2, // threshold: 2 of 3
+        vec![
+            notary1_did.clone(),
+            notary2_did.clone(),
+            notary3_did.clone(),
+        ],
+    )
+    .unwrap();
+    recovery_mandate.sign(&principal_key);
+
+    // Verify the recovery mandate is valid
+    assert!(recovery_mandate
+        .verify(&principal_key.verifying_key())
+        .is_ok());
+    assert!(recovery_mandate.is_notary(&notary1_did));
+    assert!(recovery_mandate.is_notary(&notary2_did));
+    assert!(recovery_mandate.is_notary(&notary3_did));
+    assert!(!recovery_mandate.is_notary("did:key:zoutsider"));
+
+    // ── Recovery: Principal lost their key, generates new keypair ──
+
+    let new_principal_key = make_keypair();
+    let new_principal_did = did_from_key(&new_principal_key);
+
+    // Recovery coordinator creates the request
+    let recovery_request = RecoveryRequest::new(
+        principal_did.clone(),
+        new_principal_did.clone(),
+        recovery_mandate.hash(),
+    );
+
+    // ── Blind co-signing: Each notary signs independently ──
+
+    // Notary 1 signs (doesn't know about notary 2)
+    let partial_sig_1 = PartialRecoverySignature::sign(
+        &recovery_mandate,
+        &recovery_request,
+        &notary1_did,
+        &notary1_key,
+        &principal_key.verifying_key(),
+    )
+    .unwrap();
+
+    // Notary 2 signs (doesn't know about notary 1)
+    let partial_sig_2 = PartialRecoverySignature::sign(
+        &recovery_mandate,
+        &recovery_request,
+        &notary2_did,
+        &notary2_key,
+        &principal_key.verifying_key(),
+    )
+    .unwrap();
+
+    // Verify each partial signature independently
+    assert!(partial_sig_1
+        .verify(&recovery_request, &notary1_key.verifying_key())
+        .is_ok());
+    assert!(partial_sig_2
+        .verify(&recovery_request, &notary2_key.verifying_key())
+        .is_ok());
+
+    // ── Assemble recovery proof (2 of 3 signatures) ──
+
+    let notary_keys = vec![
+        (notary1_did.clone(), notary1_key.verifying_key()),
+        (notary2_did.clone(), notary2_key.verifying_key()),
+        (notary3_did.clone(), notary3_key.verifying_key()),
+    ];
+
+    let recovery_proof = RecoveryProof::assemble(
+        recovery_request,
+        recovery_mandate,
+        vec![partial_sig_1, partial_sig_2],
+        &principal_key.verifying_key(),
+        &notary_keys,
+    )
+    .unwrap();
+
+    // Verify the assembled proof
+    assert!(recovery_proof
+        .verify(&principal_key.verifying_key(), &notary_keys)
+        .is_ok());
+    assert_eq!(recovery_proof.partial_signatures.len(), 2);
+
+    // ── Revocation: Old key is cryptographically revoked ──
+
+    let mut revocation = RevocationProof::from_recovery_proof(&recovery_proof);
+    assert_eq!(revocation.old_principal_did, principal_did);
+    assert_eq!(revocation.new_principal_did, new_principal_did);
+
+    // New principal signs the revocation (proves possession of new key)
+    revocation.sign(&new_principal_key);
+    assert!(revocation
+        .verify(&new_principal_key.verifying_key())
+        .is_ok());
+
+    // Wrong key should fail verification
+    let wrong_key = make_keypair();
+    assert!(revocation.verify(&wrong_key.verifying_key()).is_err());
+}
+
+#[test]
+fn social_recovery_below_threshold_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let notary1_key = make_keypair();
+    let notary1_did = did_from_key(&notary1_key);
+    let notary2_did = did_from_key(&make_keypair());
+    let notary3_did = did_from_key(&make_keypair());
+
+    let mut mandate = RecoveryMandate::new(
+        principal_did.clone(),
+        2,
+        vec![
+            notary1_did.clone(),
+            notary2_did.clone(),
+            notary3_did.clone(),
+        ],
+    )
+    .unwrap();
+    mandate.sign(&principal_key);
+
+    let request =
+        RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+    // Only 1 signature — threshold is 2
+    let ps1 = PartialRecoverySignature::sign(
+        &mandate,
+        &request,
+        &notary1_did,
+        &notary1_key,
+        &principal_key.verifying_key(),
+    )
+    .unwrap();
+
+    let result = RecoveryProof::assemble(
+        request,
+        mandate,
+        vec![ps1],
+        &principal_key.verifying_key(),
+        &[
+            (notary1_did, notary1_key.verifying_key()),
+            (notary2_did, make_keypair().verifying_key()),
+            (notary3_did, make_keypair().verifying_key()),
+        ],
+    );
+
+    assert!(matches!(result, Err(PapError::ThresholdNotMet(2, 1))));
+}
+
+#[test]
+fn social_recovery_outsider_notary_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let notary1_key = make_keypair();
+    let notary1_did = did_from_key(&notary1_key);
+    let outsider_key = make_keypair();
+    let outsider_did = did_from_key(&outsider_key);
+
+    let mut mandate = RecoveryMandate::new(principal_did.clone(), 1, vec![notary1_did]).unwrap();
+    mandate.sign(&principal_key);
+
+    let request =
+        RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+    // Outsider tries to sign — not in notary set
+    let result = PartialRecoverySignature::sign(
+        &mandate,
+        &request,
+        &outsider_did,
+        &outsider_key,
+        &principal_key.verifying_key(),
+    );
+
+    assert!(matches!(result, Err(PapError::NotaryNotInSet(_))));
 }
