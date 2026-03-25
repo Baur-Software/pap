@@ -4565,6 +4565,7 @@ dependencies = [
  "axum-server",
  "chrono",
  "ed25519-dalek",
+ "futures-util",
  "pap-core",
  "pap-credential",
  "pap-did",
@@ -4577,6 +4578,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-rustls",
+ "tokio-tungstenite",
  "uuid",
 ]
 

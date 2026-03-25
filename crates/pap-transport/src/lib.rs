@@ -4,6 +4,11 @@ pub mod error;
 pub mod handler;
 pub mod remote;
 pub mod server;
+pub mod ws_client;
+pub mod ws_remote;
+pub mod ws_server;
+
+pub(crate) mod ws_common;
 
 pub use client::AgentClient;
 pub use endpoint::EndpointRegistry;
@@ -11,6 +16,9 @@ pub use error::TransportError;
 pub use handler::AgentHandler;
 pub use remote::RemoteAgentHandler;
 pub use server::AgentServer;
+pub use ws_client::WsAgentClient;
+pub use ws_remote::WsRemoteAgentHandler;
+pub use ws_server::WsAgentServer;
 
 #[cfg(test)]
 mod tests {

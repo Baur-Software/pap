@@ -55,6 +55,8 @@ rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
 tokio-rustls = "0.26"
 axum-server = { version = "0.8", features = ["tls-rustls"] }
+tokio-tungstenite = "0.28"
+futures-util = "0.3"
 hex = "0.4"
 candle-core = "0.8"
 candle-transformers = "0.8"
