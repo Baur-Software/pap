@@ -102,18 +102,19 @@ impl IndexedDbDatabase {
 
     /// Restore full database state from a JSON snapshot.
     #[allow(dead_code)] // called from open() on wasm32 and from tests
+    #[allow(clippy::unused_enumerate_index)] // index used in #[cfg(wasm32)] logging
     fn restore_state(&self, state: &serde_json::Value) -> Result<(), DbError> {
         // Check snapshot version (if missing, assume v1 — the first version)
         let _version = state.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
 
         if let Some(episodes) = state.get("episodes").and_then(|v| v.as_array()) {
-            for (i, val) in episodes.iter().enumerate() {
+            for (_i, val) in episodes.iter().enumerate() {
                 match serde_json::from_value::<Episode>(val.clone()) {
                     Ok(ep) => self.inner.insert_episode(&ep)?,
                     Err(e) => {
                         #[cfg(target_arch = "wasm32")]
                         web_sys::console::warn_1(
-                            &format!("papillion: skipping corrupt episode[{}]: {}", i, e).into(),
+                            &format!("papillion: skipping corrupt episode[{}]: {}", _i, e).into(),
                         );
                         let _ = e;
                     }
@@ -122,13 +123,13 @@ impl IndexedDbDatabase {
         }
 
         if let Some(profiles) = state.get("profiles").and_then(|v| v.as_array()) {
-            for (i, val) in profiles.iter().enumerate() {
+            for (_i, val) in profiles.iter().enumerate() {
                 match serde_json::from_value::<AgentProfile>(val.clone()) {
                     Ok(p) => self.inner.upsert_agent_profile(&p)?,
                     Err(e) => {
                         #[cfg(target_arch = "wasm32")]
                         web_sys::console::warn_1(
-                            &format!("papillion: skipping corrupt profile[{}]: {}", i, e).into(),
+                            &format!("papillion: skipping corrupt profile[{}]: {}", _i, e).into(),
                         );
                         let _ = e;
                     }
@@ -145,13 +146,13 @@ impl IndexedDbDatabase {
         }
 
         if let Some(templates) = state.get("templates").and_then(|v| v.as_array()) {
-            for (i, val) in templates.iter().enumerate() {
+            for (_i, val) in templates.iter().enumerate() {
                 match serde_json::from_value::<Template>(val.clone()) {
                     Ok(t) => self.inner.insert_template(&t)?,
                     Err(e) => {
                         #[cfg(target_arch = "wasm32")]
                         web_sys::console::warn_1(
-                            &format!("papillion: skipping corrupt template[{}]: {}", i, e).into(),
+                            &format!("papillion: skipping corrupt template[{}]: {}", _i, e).into(),
                         );
                         let _ = e;
                     }
