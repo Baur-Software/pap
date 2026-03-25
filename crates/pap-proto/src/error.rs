@@ -22,4 +22,7 @@ pub enum ProtoError {
 
     #[error("session not open — DID exchange required before sending sealed messages")]
     SessionNotOpen,
+
+    #[error("DIDComm error: {0}")]
+    DIDCommError(String),
 }

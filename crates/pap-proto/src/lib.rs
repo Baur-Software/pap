@@ -1,3 +1,4 @@
+pub mod didcomm;
 pub mod envelope;
 pub mod error;
 pub mod message;
