@@ -49,4 +49,19 @@ pub enum PapError {
 
     #[error("auto-approval policy exceeds mandate scope")]
     PolicyExceedsMandate,
+
+    #[error("recovery error: {0}")]
+    RecoveryError(String),
+
+    #[error("recovery threshold not met: need {0}, got {1}")]
+    ThresholdNotMet(usize, usize),
+
+    #[error("notary not in designated set: {0}")]
+    NotaryNotInSet(String),
+
+    #[error("duplicate notary signature: {0}")]
+    DuplicateNotarySignature(String),
+
+    #[error("invalid recovery mandate: {0}")]
+    InvalidRecoveryMandate(String),
 }

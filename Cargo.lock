@@ -4377,6 +4377,7 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "hex",
+ "pap-core",
  "pap-did",
  "pap-marketplace",
  "rand 0.8.5",
