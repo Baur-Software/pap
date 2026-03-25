@@ -16,6 +16,7 @@ members = [
     "crates/papillion-shared",
     "apps/papillion",
     "apps/registry",
+    "benches",
 ]
 
 [workspace.package]
@@ -62,6 +63,7 @@ zeroize = { version = "1", features = ["derive"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 aes-gcm = "0.10"
 curve25519-dalek = { version = "4", features = ["digest"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 
 # Local patch to work around Windows registry permission issue on this machine.
 # The icu_locale_core crate in the cargo cache has unreadable src/ files;

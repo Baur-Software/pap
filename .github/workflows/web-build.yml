@@ -65,6 +65,27 @@ jobs:
       - name: Check WASM target
         run: cargo build --target wasm32-unknown-unknown -p papillion-shared --no-default-features --features wasm --lib
 
+  web-clippy:
+    name: Clippy (WASM target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy papillion-shared (WASM)
+        run: cargo clippy --target wasm32-unknown-unknown -p papillion-shared --no-default-features --features wasm --lib -- -D warnings
+
   web-test:
     name: Test Web Build
     runs-on: ubuntu-latest
@@ -92,4 +113,22 @@ jobs:
           sleep 2
           # Check if index.html is served
           curl -f http://localhost:8080/ || exit 1
-          echo "✓ Web app served successfully"
+          echo "Web app served successfully"
+
+  web-unit-test:
+    name: Test papillion-shared (WASM backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test papillion-shared with WASM feature
+        run: cargo test -p papillion-shared --no-default-features --features wasm

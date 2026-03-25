@@ -364,6 +364,47 @@
     .no  { color: var(--faint); font-size: 1rem; }
     .partial { color: var(--amber); font-size: .8rem; font-weight: 600; }
 
+    /* ─── Performance ──────────────────────────────────────────────────── */
+    .perf-grid {
+      display: flex; flex-direction: column; gap: 14px; margin-top: 40px;
+    }
+    .perf-row {
+      display: grid; grid-template-columns: 220px 1fr 90px; gap: 16px;
+      align-items: center; padding: 14px 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); transition: border-color .2s ease;
+    }
+    .perf-row:hover { border-color: rgba(108,92,231,.3); }
+    .perf-label {
+      font-size: .82rem; font-weight: 600; white-space: nowrap;
+    }
+    .perf-bar-track {
+      height: 6px; background: var(--surface2); border-radius: 3px;
+      overflow: hidden; position: relative;
+    }
+    .perf-bar-fill {
+      height: 100%; border-radius: 3px;
+      background: linear-gradient(90deg, var(--teal), var(--indigo));
+      transition: width .8s cubic-bezier(.4,0,.2,1);
+    }
+    .perf-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .78rem; color: var(--teal); text-align: right;
+      white-space: nowrap;
+    }
+    .perf-note {
+      font-size: .82rem; color: var(--muted); margin-top: 24px; line-height: 1.6;
+    }
+    .perf-note code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .75rem; background: rgba(108,92,231,.1);
+      padding: 2px 6px; border-radius: 4px; color: var(--violet);
+    }
+    @media (max-width: 768px) {
+      .perf-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .perf-bar-track { grid-column: 1 / -1; }
+    }
+
     /* ─── Examples ────────────────────────────────────────────────────── */
     .examples-grid {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
@@ -862,6 +903,73 @@
         </tbody>
       </table>
     </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ─── PERFORMANCE ───────────────────────────────────────────────────────── -->
+<section id="performance" class="section" aria-labelledby="perf-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Performance</div>
+      <h2 class="section-title" id="perf-heading">Cryptographic trust under 100 &#181;s.</h2>
+      <p class="section-sub">
+        Criterion.rs benchmarks for every core operation. CI-gated against regression.
+      </p>
+    </div>
+    <div class="perf-grid reveal reveal-delay-1">
+      <div class="perf-row">
+        <div class="perf-label">Ed25519 keypair gen</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 1.4%"></div></div>
+        <div class="perf-value">14 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label"><code>did:key</code> derivation</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 0.5%"></div></div>
+        <div class="perf-value">1.2 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Mandate create + sign</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 1.8%"></div></div>
+        <div class="perf-value">18 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Chain verify (depth 3)</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 8.8%"></div></div>
+        <div class="perf-value">88 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">SD-JWT issue (5 claims)</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 2%"></div></div>
+        <div class="perf-value">20 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">SD-JWT verify + disclose</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 3.1%"></div></div>
+        <div class="perf-value">31 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Session open (full lifecycle)</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 7.5%"></div></div>
+        <div class="perf-value">75 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Receipt co-sign</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 3.5%"></div></div>
+        <div class="perf-value">35 &#181;s</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Federation announce</div>
+        <div class="perf-bar-track"><div class="perf-bar-fill" style="width: 3.9%"></div></div>
+        <div class="perf-value">39 &#181;s</div>
+      </div>
+    </div>
+    <p class="perf-note reveal reveal-delay-2">
+      Run <code>cargo bench -p pap-bench</code> to reproduce.
+      Baselines committed in <code>benches/baseline.json</code>.
+      Regression gate: <code>bash benches/check_regression.sh</code>.
+    </p>
   </div>
 </section>
 
