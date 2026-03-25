@@ -3,15 +3,14 @@ import { Page, expect } from "@playwright/test";
 /**
  * Wait for the WASM app to mount and render.
  *
- * The Leptos/WASM frontend compiles in the browser before rendering.
- * On CI runners this can take 30-60+ seconds for debug builds.
- * This helper waits for the app shell to appear in the DOM.
+ * V8 must compile the 2.2 MB release WASM on every new browser context.
+ * On a 2-core CI runner this takes 90-120 seconds. The DOMContentLoaded
+ * event won't fire until the <script type="module"> with `await init()`
+ * finishes, so page.goto() alone can consume most of the test budget.
+ *
+ * This helper polls for the root .app-shell-canvas element with a
+ * generous timeout that covers WASM compilation + app mounting.
  */
 export async function waitForApp(page: Page): Promise<void> {
-  // The app renders <div class="app-shell-canvas"> as its root element.
-  // Wait for this to appear, which confirms WASM loaded, compiled, and mounted.
-  //
-  // Release WASM (~5-20 MB) compiles in seconds; debug WASM (~50-100 MB)
-  // can take much longer. Use a generous timeout for both cases.
-  await expect(page.locator(".app-shell-canvas")).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator(".app-shell-canvas")).toBeVisible({ timeout: 240_000 });
 }

@@ -18,7 +18,7 @@ import { waitForApp } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "commit" });
   await waitForApp(page);
 });
 

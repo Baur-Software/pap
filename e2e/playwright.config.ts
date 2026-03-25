@@ -4,15 +4,17 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: "./tests",
-  timeout: 120_000,
+  // WASM compilation on a 2-core CI runner takes 90-120s.
+  // Allow 5 minutes total per test to cover compilation + assertions.
+  timeout: 300_000,
   retries: 0,
   expect: {
     timeout: 30_000,
   },
   use: {
     baseURL: "http://localhost:1420",
-    trace: "on",
-    screenshot: "on",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
   webServer: {
     // CI: trunk build --release already ran; serve the static dist directory.
