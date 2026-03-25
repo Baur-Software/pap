@@ -190,17 +190,15 @@ pub fn generate_node_identity(did: &str) -> Result<NodeTlsIdentity, FederationEr
     })
 }
 
-/// Build a reqwest Client that verifies peers by pinned cert fingerprints.
+/// Build a `rustls::ClientConfig` that verifies peers by pinned cert fingerprints.
 ///
-/// Only accepts TLS connections where the server's certificate has a SHA-256
-/// fingerprint matching one in the trusted set. No CA dependency — DIDs are
-/// the trust root, cert fingerprints bind the TLS identity.
-///
-/// Panics if `trusted_fingerprints` is empty — use `build_tofu_client()`
-/// for bootstrapping new peers.
-pub fn build_pinned_client(
+/// This is the foundation for any TLS client (HTTP, WebSocket, etc.) that
+/// needs fingerprint-pinned peer verification. Use directly for non-HTTP
+/// transports (e.g., WebSocket via tokio-rustls), or pass to
+/// `build_pinned_client()` for an HTTP client.
+pub fn build_pinned_tls_config(
     trusted_fingerprints: &[String],
-) -> Result<reqwest::Client, FederationError> {
+) -> Result<rustls::ClientConfig, FederationError> {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let provider = Arc::new(rustls::crypto::ring::default_provider());
@@ -215,6 +213,22 @@ pub fn build_pinned_client(
         .dangerous()
         .with_custom_certificate_verifier(verifier)
         .with_no_client_auth();
+
+    Ok(config)
+}
+
+/// Build a reqwest Client that verifies peers by pinned cert fingerprints.
+///
+/// Only accepts TLS connections where the server's certificate has a SHA-256
+/// fingerprint matching one in the trusted set. No CA dependency — DIDs are
+/// the trust root, cert fingerprints bind the TLS identity.
+///
+/// Panics if `trusted_fingerprints` is empty — use `build_tofu_client()`
+/// for bootstrapping new peers.
+pub fn build_pinned_client(
+    trusted_fingerprints: &[String],
+) -> Result<reqwest::Client, FederationError> {
+    let config = build_pinned_tls_config(trusted_fingerprints)?;
 
     reqwest::Client::builder()
         .user_agent("Papillion/0.1 (PAP Federation Node)")

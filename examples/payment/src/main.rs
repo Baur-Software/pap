@@ -14,6 +14,7 @@ use chrono::{Duration, Utc};
 use pap_core::error::PapError;
 use pap_core::extensions::{AutoApprovalPolicy, ContinuityToken};
 use pap_core::mandate::Mandate;
+use pap_core::payment::PaymentProof;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session};
@@ -54,12 +55,12 @@ fn main() {
         ttl,
     );
 
-    // Attach a payment proof — a blind-signed Chaumian ecash token
+    // Attach a payment proof — a Cashu ecash blind-signed token commitment.
     // In production this would be a real token from a mint.
-    // The vendor receives proof of value transfer but nothing that identifies the payer.
-    root_mandate.payment_proof = Some(
-        "ecash:blind:v1:mint=example.com:amount=50:token=ZGVtby1ibGluZC1zaWduZWQtdG9rZW4".into(),
-    );
+    // Only the SHA-256 hash is stored — the vendor receives proof of value
+    // transfer but nothing that identifies the payer.
+    let proof = PaymentProof::ecash(b"cashu:blind:v1:mint=example.com:amount=50:token=ZGVtby1ibGluZC1zaWduZWQtdG9rZW4");
+    root_mandate.payment_proof = Some(proof);
     root_mandate.sign(principal.signing_key());
 
     println!("  Principal DID: {principal_did}");

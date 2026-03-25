@@ -102,8 +102,6 @@ async def search_documents(request: SearchRequest):
      return {"results": results}
 ```
 
-> **Note**: The Python `pap-sdk` package depends on issue #42 (PyO3 wrapper) and is not yet released. Use the Rust implementation for immediate deployment.
-
 ### Rust (Axum)
 
 **Before** - Your existing Axum agent:

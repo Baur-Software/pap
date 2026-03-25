@@ -254,6 +254,33 @@ See [apps/registry/README.md](apps/registry/README.md) for full documentation.
 | **Audit Trail** | No | No | No | Co-signed receipts (property refs only) |
 | **Multi-Language Support** | No | Limited | Limited | Rust, Python, JS/TS, C, C#, Java |
 
+## Performance
+
+Core protocol operations benchmarked with [Criterion.rs](https://github.com/bheisler/criterion.rs). CI fails if any p50 regresses >20% vs baseline.
+
+| Operation | Target (p50) |
+|-----------|-------------|
+| Ed25519 keypair generation | < 1 ms |
+| `did:key` derivation | < 0.5 ms |
+| Mandate creation + sign | < 2 ms |
+| Mandate chain verification (depth 3) | < 5 ms |
+| SD-JWT issue (5 claims) | < 3 ms |
+| SD-JWT verify + disclose (3 of 5) | < 2 ms |
+| Session open (full lifecycle, loopback) | < 20 ms |
+| Receipt creation + co-sign | < 3 ms |
+| Federation announce (single peer) | < 50 ms |
+
+```bash
+# Run benchmarks
+cargo bench -p pap-bench
+
+# Check for regressions against baseline
+bash benches/check_regression.sh
+
+# Update baseline with current results
+bash benches/check_regression.sh --update-baseline
+```
+
 ## Protocol Extensions
 
 Extensions evaluated against the capture test: does this reduce or expand the attack surface for incumbent platform capture?

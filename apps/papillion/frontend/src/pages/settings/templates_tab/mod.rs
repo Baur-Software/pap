@@ -8,7 +8,6 @@ use papillion_shared::Template;
 use papillion_shared::types::TemplateConfig;
 
 mod template_builder;
-mod template_preview;
 mod template_library;
 
 use template_builder::TemplateBuilder;

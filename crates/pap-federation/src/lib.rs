@@ -1,4 +1,5 @@
 pub mod error;
+pub mod notary;
 pub mod peer;
 pub mod registry;
 pub mod resolve;
@@ -7,14 +8,15 @@ pub mod sync;
 pub mod tls;
 
 pub use error::FederationError;
+pub use notary::NotarySet;
 pub use peer::RegistryPeer;
 pub use registry::FederatedRegistry;
 pub use resolve::PapUrl;
 pub use server::{FederationServer, NodeIdentityResponse};
 pub use sync::{FederationClient, FederationMessage};
 pub use tls::{
-    build_pinned_client, build_tofu_client, cert_fingerprint, generate_node_identity,
-    NodeTlsIdentity,
+    build_pinned_client, build_pinned_tls_config, build_tofu_client, cert_fingerprint,
+    generate_node_identity, NodeTlsIdentity,
 };
 
 #[cfg(test)]

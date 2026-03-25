@@ -98,6 +98,26 @@ impl NativeDatabase {
                 key   TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS templates (
+                id              TEXT PRIMARY KEY,
+                template_name   TEXT NOT NULL UNIQUE,
+                schema_type     TEXT NOT NULL,
+                principal_did   TEXT,
+                template_config TEXT NOT NULL,
+                version         INTEGER NOT NULL DEFAULT 1,
+                enabled         INTEGER NOT NULL DEFAULT 1,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL,
+                created_by      TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_templates_schema_type
+                ON templates(schema_type);
+            CREATE INDEX IF NOT EXISTS idx_templates_principal_did
+                ON templates(principal_did);
+            CREATE INDEX IF NOT EXISTS idx_templates_enabled
+                ON templates(enabled);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -491,32 +511,240 @@ impl DatabaseOps for NativeDatabase {
         Ok(episodes)
     }
 
+    fn query_templates(
+        &self,
+        principal_did: Option<&str>,
+    ) -> Result<Vec<crate::types::Template>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        let (sql, param_values): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) =
+            if let Some(pid) = principal_did {
+                (
+                    "SELECT id, template_name, schema_type, principal_did,
+                            template_config, version, enabled, created_at,
+                            updated_at, created_by
+                     FROM templates
+                     WHERE principal_did = ?1 OR principal_did IS NULL
+                     ORDER BY template_name",
+                    vec![Box::new(pid.to_string())],
+                )
+            } else {
+                (
+                    "SELECT id, template_name, schema_type, principal_did,
+                            template_config, version, enabled, created_at,
+                            updated_at, created_by
+                     FROM templates
+                     ORDER BY template_name",
+                    vec![],
+                )
+            };
+
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
+
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map(params_refs.as_slice(), |row| {
+                let config_json: String = row.get(4)?;
+                let template_config: crate::types::TemplateConfig =
+                    serde_json::from_str(&config_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?;
+                let enabled_int: i64 = row.get(6)?;
+                Ok(crate::types::Template {
+                    id: row.get(0)?,
+                    template_name: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    principal_did: row.get(3)?,
+                    template_config,
+                    version: row.get(5)?,
+                    enabled: enabled_int != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    created_by: row.get(9)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query: {e}")))?;
+
+        let mut templates = Vec::new();
+        for row in rows {
+            templates.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(templates)
+    }
+
     fn list_enabled_templates_for_principal(
         &self,
-        _principal_did: Option<&str>,
+        principal_did: Option<&str>,
     ) -> Result<Vec<crate::types::Template>, DbError> {
-        // TODO: Implement template querying from database
-        // For now, return empty list until templates table is created
-        Ok(Vec::new())
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        let (sql, param_values): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) =
+            if let Some(pid) = principal_did {
+                (
+                    "SELECT id, template_name, schema_type, principal_did,
+                            template_config, version, enabled, created_at,
+                            updated_at, created_by
+                     FROM templates
+                     WHERE enabled = 1 AND (principal_did = ?1 OR principal_did IS NULL)
+                     ORDER BY template_name",
+                    vec![Box::new(pid.to_string())],
+                )
+            } else {
+                (
+                    "SELECT id, template_name, schema_type, principal_did,
+                            template_config, version, enabled, created_at,
+                            updated_at, created_by
+                     FROM templates
+                     WHERE enabled = 1
+                     ORDER BY template_name",
+                    vec![],
+                )
+            };
+
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
+
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map(params_refs.as_slice(), |row| {
+                let config_json: String = row.get(4)?;
+                let template_config: crate::types::TemplateConfig =
+                    serde_json::from_str(&config_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?;
+                let enabled_int: i64 = row.get(6)?;
+                Ok(crate::types::Template {
+                    id: row.get(0)?,
+                    template_name: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    principal_did: row.get(3)?,
+                    template_config,
+                    version: row.get(5)?,
+                    enabled: enabled_int != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    created_by: row.get(9)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query: {e}")))?;
+
+        let mut templates = Vec::new();
+        for row in rows {
+            templates.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(templates)
     }
 
-    fn insert_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
-        // TODO: Implement template insertion
+    fn insert_template(&self, template: &crate::types::Template) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        let config_json = serde_json::to_string(&template.template_config)
+            .map_err(|e| DbError(format!("serialize template_config: {e}")))?;
+
+        conn.execute(
+            "INSERT INTO templates (
+                id, template_name, schema_type, principal_did,
+                template_config, version, enabled, created_at,
+                updated_at, created_by
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                template.id,
+                template.template_name,
+                template.schema_type,
+                template.principal_did,
+                config_json,
+                template.version,
+                template.enabled as i64,
+                template.created_at,
+                template.updated_at,
+                template.created_by,
+            ],
+        )
+        .map_err(|e| DbError(format!("db insert template: {e}")))?;
+
         Ok(())
     }
 
-    fn update_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
-        // TODO: Implement template update
+    fn update_template(&self, template: &crate::types::Template) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        let config_json = serde_json::to_string(&template.template_config)
+            .map_err(|e| DbError(format!("serialize template_config: {e}")))?;
+
+        let rows_changed = conn
+            .execute(
+                "UPDATE templates SET
+                    template_name = ?1, schema_type = ?2, principal_did = ?3,
+                    template_config = ?4, version = ?5, enabled = ?6,
+                    updated_at = ?7, created_by = ?8
+                 WHERE id = ?9",
+                params![
+                    template.template_name,
+                    template.schema_type,
+                    template.principal_did,
+                    config_json,
+                    template.version,
+                    template.enabled as i64,
+                    template.updated_at,
+                    template.created_by,
+                    template.id,
+                ],
+            )
+            .map_err(|e| DbError(format!("db update template: {e}")))?;
+
+        if rows_changed == 0 {
+            return Err(DbError(format!("Template not found: {}", template.id)));
+        }
+
         Ok(())
     }
 
-    fn delete_template(&self, _template_name: &str) -> Result<(), DbError> {
-        // TODO: Implement template deletion
+    fn delete_template(&self, template_name: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        let rows_changed = conn
+            .execute(
+                "DELETE FROM templates WHERE template_name = ?1",
+                params![template_name],
+            )
+            .map_err(|e| DbError(format!("db delete template: {e}")))?;
+
+        if rows_changed == 0 {
+            return Err(DbError(format!("Template not found: {}", template_name)));
+        }
+
         Ok(())
     }
 
-    fn set_template_enabled(&self, _template_name: &str, _enabled: bool) -> Result<(), DbError> {
-        // TODO: Implement template enable/disable
+    fn set_template_enabled(&self, template_name: &str, enabled: bool) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        let rows_changed = conn
+            .execute(
+                "UPDATE templates SET enabled = ?1 WHERE template_name = ?2",
+                params![enabled as i64, template_name],
+            )
+            .map_err(|e| DbError(format!("db set template enabled: {e}")))?;
+
+        if rows_changed == 0 {
+            return Err(DbError(format!("Template not found: {}", template_name)));
+        }
+
         Ok(())
     }
 }
@@ -560,5 +788,218 @@ mod tests {
 
         let episodes = db.list_episodes(None, None, 100, None).unwrap();
         assert_eq!(episodes.len(), 2);
+    }
+
+    fn sample_template(id: &str, name: &str) -> crate::types::Template {
+        crate::types::Template {
+            id: id.to_string(),
+            template_name: name.to_string(),
+            schema_type: "FlightReservation".to_string(),
+            principal_did: None,
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".to_string(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".to_string()),
+                },
+                fields: vec![crate::types::FieldMapping {
+                    path: "name".to_string(),
+                    label: Some("Name".to_string()),
+                    display: "title".to_string(),
+                    condition: None,
+                    style: None,
+                }],
+            },
+            version: 1,
+            enabled: true,
+            created_at: "2026-03-21T12:00:00Z".to_string(),
+            updated_at: "2026-03-21T12:00:00Z".to_string(),
+            created_by: None,
+        }
+    }
+
+    #[test]
+    fn template_insert_and_query() {
+        let db = test_db();
+        let t = sample_template("t-1", "flight_tpl");
+
+        db.insert_template(&t).unwrap();
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].template_name, "flight_tpl");
+        assert_eq!(all[0].schema_type, "FlightReservation");
+        assert_eq!(all[0].template_config.fields.len(), 1);
+    }
+
+    #[test]
+    fn template_list_enabled_filters_disabled() {
+        let db = test_db();
+
+        let mut enabled = sample_template("t-1", "enabled_tpl");
+        enabled.enabled = true;
+
+        let mut disabled = sample_template("t-2", "disabled_tpl");
+        disabled.enabled = false;
+
+        db.insert_template(&enabled).unwrap();
+        db.insert_template(&disabled).unwrap();
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 2);
+
+        let enabled_only = db.list_enabled_templates_for_principal(None).unwrap();
+        assert_eq!(enabled_only.len(), 1);
+        assert_eq!(enabled_only[0].template_name, "enabled_tpl");
+    }
+
+    #[test]
+    fn template_update() {
+        let db = test_db();
+        let t = sample_template("t-1", "my_tpl");
+        db.insert_template(&t).unwrap();
+
+        let mut updated = t.clone();
+        updated.schema_type = "HotelReservation".to_string();
+        updated.version = 2;
+        db.update_template(&updated).unwrap();
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].schema_type, "HotelReservation");
+        assert_eq!(all[0].version, 2);
+    }
+
+    #[test]
+    fn template_update_not_found() {
+        let db = test_db();
+        let t = sample_template("nonexistent", "ghost");
+        assert!(db.update_template(&t).is_err());
+    }
+
+    #[test]
+    fn template_delete() {
+        let db = test_db();
+        db.insert_template(&sample_template("t-1", "to_delete"))
+            .unwrap();
+
+        db.delete_template("to_delete").unwrap();
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 0);
+    }
+
+    #[test]
+    fn template_delete_not_found() {
+        let db = test_db();
+        assert!(db.delete_template("nonexistent").is_err());
+    }
+
+    #[test]
+    fn template_enable_disable() {
+        let db = test_db();
+        db.insert_template(&sample_template("t-1", "toggleable"))
+            .unwrap();
+
+        db.set_template_enabled("toggleable", false).unwrap();
+
+        let enabled = db.list_enabled_templates_for_principal(None).unwrap();
+        assert_eq!(enabled.len(), 0);
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(!all[0].enabled);
+
+        db.set_template_enabled("toggleable", true).unwrap();
+        let enabled = db.list_enabled_templates_for_principal(None).unwrap();
+        assert_eq!(enabled.len(), 1);
+    }
+
+    #[test]
+    fn template_enable_not_found() {
+        let db = test_db();
+        assert!(db.set_template_enabled("nonexistent", true).is_err());
+    }
+
+    #[test]
+    fn template_principal_filtering() {
+        let db = test_db();
+
+        let mut global = sample_template("t-1", "global_tpl");
+        global.principal_did = None;
+
+        let mut alice = sample_template("t-2", "alice_tpl");
+        alice.principal_did = Some("did:pap:alice".to_string());
+
+        let mut bob = sample_template("t-3", "bob_tpl");
+        bob.principal_did = Some("did:pap:bob".to_string());
+
+        db.insert_template(&global).unwrap();
+        db.insert_template(&alice).unwrap();
+        db.insert_template(&bob).unwrap();
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 3);
+
+        // Alice sees global + alice = 2
+        let alice_tpls = db.query_templates(Some("did:pap:alice")).unwrap();
+        assert_eq!(alice_tpls.len(), 2);
+
+        // Bob sees global + bob = 2
+        let bob_tpls = db.query_templates(Some("did:pap:bob")).unwrap();
+        assert_eq!(bob_tpls.len(), 2);
+
+        // Enabled list for alice = global + alice = 2
+        let alice_enabled = db
+            .list_enabled_templates_for_principal(Some("did:pap:alice"))
+            .unwrap();
+        assert_eq!(alice_enabled.len(), 2);
+    }
+
+    #[test]
+    fn template_config_roundtrips_through_sql() {
+        let db = test_db();
+
+        let config = crate::types::TemplateConfig {
+            version: 1,
+            layout: crate::types::LayoutConfig {
+                r#type: "flex".to_string(),
+                columns: None,
+                direction: Some("column".to_string()),
+                spacing: Some("lg".to_string()),
+            },
+            fields: vec![
+                crate::types::FieldMapping {
+                    path: "name".to_string(),
+                    label: Some("Name".to_string()),
+                    display: "title".to_string(),
+                    condition: None,
+                    style: Some(crate::types::StyleConfig {
+                        class_name: Some("bold".to_string()),
+                        color: Some("#6c5ce7".to_string()),
+                    }),
+                },
+                crate::types::FieldMapping {
+                    path: "offers.0.price".to_string(),
+                    label: Some("Price".to_string()),
+                    display: "price".to_string(),
+                    condition: Some(crate::types::Condition {
+                        field: "offers".to_string(),
+                        op: "exists".to_string(),
+                        value: None,
+                    }),
+                    style: None,
+                },
+            ],
+        };
+
+        let mut t = sample_template("t-1", "complex_tpl");
+        t.template_config = config.clone();
+        db.insert_template(&t).unwrap();
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].template_config, config);
     }
 }

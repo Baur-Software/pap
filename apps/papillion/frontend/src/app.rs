@@ -87,7 +87,10 @@ pub fn App() -> impl IntoView {
     let previous_did = RwSignal::new(None::<String>);
     Effect::new(move || {
         let current_did = identity_state.info.get().map(|i| i.did.clone());
-        let prev_did = previous_did.get();
+        // Use get_untracked to avoid infinite reactive cycle:
+        // this effect writes to previous_did, so reading it tracked
+        // would re-trigger the effect on every write.
+        let prev_did = previous_did.get_untracked();
 
         // Only reset if we've loaded an identity before and DID actually changed
         if let (Some(prev), Some(curr)) = (prev_did, &current_did) {

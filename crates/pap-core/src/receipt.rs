@@ -3,6 +3,7 @@ use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::error::PapError;
+use crate::mandate::Mandate;
 use crate::session::Session;
 
 /// A transaction receipt co-signed by both session parties.
@@ -26,6 +27,10 @@ pub struct TransactionReceipt {
     pub executed: String,
     /// Description of what was returned
     pub returned: String,
+    /// Payment proof commitment hash (if the action involved payment).
+    /// Contains only the commitment reference — never amounts or destinations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_proof_commitment: Option<String>,
     /// Timestamp
     pub timestamp: DateTime<Utc>,
     /// Co-signatures from both session DIDs (base64-encoded)
@@ -59,9 +64,51 @@ impl TransactionReceipt {
             disclosed_by_receiver,
             executed,
             returned,
+            payment_proof_commitment: None,
             timestamp: Utc::now(),
             signatures: vec![],
         })
+    }
+
+    /// Attach the payment proof commitment from a mandate.
+    /// Copies only the commitment hash — no amounts or payment details.
+    pub fn with_payment_proof(mut self, mandate: &Mandate) -> Self {
+        self.payment_proof_commitment = mandate
+            .payment_proof
+            .as_ref()
+            .map(|p| p.commitment().to_string());
+        self
+    }
+
+    /// Validate that the receipt's payment proof commitment is consistent
+    /// with the mandate. If the action is `schema:PayAction`, the mandate
+    /// MUST have a payment proof and the receipt MUST carry the commitment.
+    pub fn validate_payment_commitment(&self, mandate: &Mandate) -> Result<(), PapError> {
+        let is_pay_action = self.action == "schema:PayAction";
+
+        if is_pay_action {
+            // Mandate must have a proof
+            let proof = mandate
+                .payment_proof
+                .as_ref()
+                .ok_or(PapError::MissingPaymentProof)?;
+
+            // Receipt must carry the commitment
+            let receipt_commitment = self.payment_proof_commitment.as_ref().ok_or_else(|| {
+                PapError::ReceiptError(
+                    "receipt missing payment proof commitment for PayAction".into(),
+                )
+            })?;
+
+            // Commitment must match the mandate's proof
+            if receipt_commitment != proof.commitment() {
+                return Err(PapError::PaymentProofError(
+                    "receipt commitment does not match mandate proof".into(),
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     /// Canonical bytes for signing (excludes signatures).
@@ -75,6 +122,7 @@ impl TransactionReceipt {
             "disclosed_by_receiver": self.disclosed_by_receiver,
             "executed": self.executed,
             "returned": self.returned,
+            "payment_proof_commitment": self.payment_proof_commitment,
             "timestamp": self.timestamp.to_rfc3339(),
         });
         serde_json::to_vec(&canonical).expect("canonical serialization cannot fail")

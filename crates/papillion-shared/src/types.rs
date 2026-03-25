@@ -86,6 +86,9 @@ pub struct PipelineNodeInfo {
     pub id: String,
     pub agent_hash: String,
     pub agent_name: String,
+    /// The schema.org action this node performs (e.g. "schema:SearchAction").
+    #[serde(default)]
+    pub action_type: String,
     pub position_x: f64,
     pub position_y: f64,
 }
@@ -279,6 +282,9 @@ pub struct CanvasBlock {
     pub id: String,
     /// The prompt that spawned this block's mandate chain.
     pub prompt_id: String,
+    /// The original user prompt text. Stored for retry support.
+    #[serde(default)]
+    pub prompt_text: Option<String>,
     /// Current lifecycle state.
     pub state: BlockState,
     /// Schema.org `@type` from the JSON-LD response (e.g. "FlightReservation").
@@ -794,6 +800,7 @@ mod tests {
         let block = CanvasBlock {
             id: "blk-1".into(),
             prompt_id: "p-1".into(),
+            prompt_text: None,
             state: BlockState::Resolving {
                 phase: 2,
                 phase_label: "Issuing mandate...".into(),
@@ -808,6 +815,7 @@ mod tests {
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
         assert_eq!(back.id, "blk-1");
         assert_eq!(back.prompt_id, "p-1");
+        assert!(back.prompt_text.is_none());
         assert!(back.schema_type.is_none());
         assert!(back.content.is_none());
         assert!(back.linked_block_ids.is_empty());
@@ -822,6 +830,7 @@ mod tests {
         let block = CanvasBlock {
             id: "blk-2".into(),
             prompt_id: "p-1".into(),
+            prompt_text: None,
             state: BlockState::Resolved,
             schema_type: Some("FlightReservation".into()),
             content: Some(content.clone()),
@@ -841,6 +850,7 @@ mod tests {
         let block = CanvasBlock {
             id: "blk-fail".into(),
             prompt_id: "p-1".into(),
+            prompt_text: None,
             state: BlockState::Failed {
                 phase: 5,
                 reason: "Receipt co-sign rejected".into(),
@@ -872,6 +882,7 @@ mod tests {
             blocks: vec![CanvasBlock {
                 id: "blk-1".into(),
                 prompt_id: "p-1".into(),
+                prompt_text: None,
                 state: BlockState::Resolved,
                 schema_type: Some("FlightReservation".into()),
                 content: Some(serde_json::json!({"@type": "FlightReservation"})),
@@ -943,6 +954,7 @@ mod tests {
             block: CanvasBlock {
                 id: "blk-ev".into(),
                 prompt_id: "p-1".into(),
+                prompt_text: None,
                 state: BlockState::Resolved,
                 schema_type: Some("Answer".into()),
                 content: Some(serde_json::json!({"text": "42"})),
@@ -1115,6 +1127,7 @@ mod tests {
                 id: "n-1".into(),
                 agent_hash: "hash123".into(),
                 agent_name: "Agent1".into(),
+                action_type: "schema:SearchAction".into(),
                 position_x: 100.0,
                 position_y: 200.0,
             }],
@@ -1201,5 +1214,57 @@ mod tests {
         let back: ReceiptVerificationResult = serde_json::from_str(&json).unwrap();
         assert!(back.initiator_signature_valid);
         assert!(!back.receiver_signature_valid);
+    }
+
+    // ── CanvasBlock prompt_text ──────────────────────────────
+
+    #[test]
+    fn canvas_block_prompt_text_roundtrip() {
+        let block = CanvasBlock {
+            id: "blk-pt".into(),
+            prompt_id: "p-1".into(),
+            prompt_text: Some("search for Rust".into()),
+            state: BlockState::Resolved,
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&block).unwrap();
+        let back: CanvasBlock = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.prompt_text.as_deref(), Some("search for Rust"));
+    }
+
+    #[test]
+    fn canvas_block_missing_prompt_text_deserializes_as_none() {
+        // Simulate JSON from an older version that lacks the prompt_text field
+        let json = r#"{
+            "id": "blk-old",
+            "prompt_id": "p-1",
+            "state": "Resolved",
+            "schema_type": null,
+            "content": null,
+            "linked_block_ids": [],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z"
+        }"#;
+        let back: CanvasBlock = serde_json::from_str(json).unwrap();
+        assert!(back.prompt_text.is_none());
+    }
+
+    // ── PipelineNodeInfo action_type backward compat ─────────
+
+    #[test]
+    fn pipeline_node_missing_action_type_deserializes_as_empty() {
+        let json = r#"{
+            "id": "n-1",
+            "agent_hash": "h1",
+            "agent_name": "Agent",
+            "position_x": 0.0,
+            "position_y": 0.0
+        }"#;
+        let back: PipelineNodeInfo = serde_json::from_str(json).unwrap();
+        assert!(back.action_type.is_empty());
     }
 }

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::PapError;
+use crate::payment::PaymentProof;
 use crate::scope::{DisclosureSet, Scope};
 
 /// Decay state for a mandate's scope as TTL progresses without renewal.
@@ -72,12 +73,13 @@ pub struct Mandate {
     pub decay_state: DecayState,
     /// Issuance timestamp
     pub issued_at: DateTime<Utc>,
-    /// Optional payment proof (Chaumian ecash blind-signed token or
-    /// Lightning preimage). Presented alongside capability token in
-    /// the session handshake. Unlinkable from principal identity.
-    /// See PAP v0.1 spec section 9.1.
+    /// Optional payment proof commitment (Lightning BOLT-11 hash or
+    /// Cashu ecash token hash). Zero-knowledge: contains only a
+    /// cryptographic commitment, never amounts or destinations.
+    /// Presented alongside capability token in the session handshake.
+    /// Unlinkable from principal identity. See spec section 13.1.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub payment_proof: Option<String>,
+    pub payment_proof: Option<PaymentProof>,
     /// Ed25519 signature by the issuer (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -202,6 +204,25 @@ impl Mandate {
                 DecayState::Active
             }
         }
+    }
+
+    /// Attach a payment proof to this mandate.
+    pub fn with_payment_proof(mut self, proof: PaymentProof) -> Self {
+        self.payment_proof = Some(proof);
+        self
+    }
+
+    /// Validate that if the scope includes a payment action, a payment
+    /// proof commitment is present. Returns `MissingPaymentProof` if the
+    /// scope permits `schema:PayAction` but no proof is attached.
+    pub fn validate_payment_proof(&self) -> Result<(), PapError> {
+        if self.scope.permits("schema:PayAction") && self.payment_proof.is_none() {
+            return Err(PapError::MissingPaymentProof);
+        }
+        if let Some(ref proof) = self.payment_proof {
+            proof.validate()?;
+        }
+        Ok(())
     }
 
     /// Transition the decay state, validating the transition.

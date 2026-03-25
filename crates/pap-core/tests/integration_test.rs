@@ -5,7 +5,11 @@ use ed25519_dalek::SigningKey;
 use pap_core::error::PapError;
 use pap_core::extensions::{AutoApprovalPolicy, ContinuityToken};
 use pap_core::mandate::{DecayState, Mandate};
+use pap_core::payment::PaymentProof;
 use pap_core::receipt::TransactionReceipt;
+use pap_core::recovery::{
+    PartialRecoverySignature, RecoveryMandate, RecoveryProof, RecoveryRequest, RevocationProof,
+};
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session, SessionState};
 use rand::rngs::OsRng;
@@ -381,10 +385,432 @@ fn mandate_payment_proof_attachment() {
         Utc::now() + Duration::hours(24),
     );
 
-    // Attach payment proof
-    mandate.payment_proof = Some("ecash:blind:v1:token=XYZ123".into());
+    // Attach typed payment proof (ecash commitment)
+    mandate.payment_proof = Some(PaymentProof::ecash(b"blind-signed-token-XYZ123"));
     mandate.sign(&principal_key);
 
     assert!(mandate.payment_proof.is_some());
     assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
+    assert!(mandate.validate_payment_proof().is_ok());
+}
+
+#[test]
+fn lightning_payment_proof_end_to_end() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let orchestrator_key = make_keypair();
+    let orchestrator_did = did_from_key(&orchestrator_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    // Root mandate with PayAction and Lightning proof
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let proof = PaymentProof::lightning(b"bolt11-payment-hash-preimage");
+    let mut root_mandate = Mandate::issue_root(
+        principal_did.clone(),
+        orchestrator_did.clone(),
+        scope.clone(),
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(proof);
+
+    assert!(root_mandate.validate_payment_proof().is_ok());
+    root_mandate.sign(&principal_key);
+    assert!(root_mandate.verify(&principal_key.verifying_key()).is_ok());
+
+    // Capability token for payment action
+    let mut token = CapabilityToken::mint(
+        agent_did.clone(),
+        "schema:PayAction".into(),
+        orchestrator_did.clone(),
+        Utc::now() + Duration::hours(1),
+    );
+    token.sign(&orchestrator_key);
+
+    // Session: initiate -> open -> execute
+    let mut session =
+        Session::initiate(&token, &agent_did, &orchestrator_key.verifying_key()).unwrap();
+    let init_sess_key = make_keypair();
+    let recv_sess_key = make_keypair();
+    session
+        .open(did_from_key(&init_sess_key), did_from_key(&recv_sess_key))
+        .unwrap();
+    session.execute().unwrap();
+
+    // Receipt with payment proof commitment
+    let mut receipt = TransactionReceipt::from_session(
+        &session,
+        vec![],
+        vec!["agent:payment_executed".into()],
+        "schema:PayAction executed".into(),
+        "schema:PaymentReceipt returned".into(),
+    )
+    .unwrap()
+    .with_payment_proof(&root_mandate);
+
+    // Validate commitment matches mandate
+    assert!(receipt.validate_payment_commitment(&root_mandate).is_ok());
+
+    // Co-sign and verify
+    receipt.co_sign(&init_sess_key);
+    receipt.co_sign(&recv_sess_key);
+    assert!(receipt
+        .verify_both(
+            &init_sess_key.verifying_key(),
+            &recv_sess_key.verifying_key()
+        )
+        .is_ok());
+
+    // Verify preimage against proof
+    assert!(root_mandate
+        .payment_proof
+        .as_ref()
+        .unwrap()
+        .verify(b"bolt11-payment-hash-preimage"));
+}
+
+#[test]
+fn ecash_payment_proof_end_to_end() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let proof = PaymentProof::ecash(b"cashuAeyJ0b2tlbiI6W3sibWludCI6Im");
+    let mut mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(proof);
+
+    assert!(mandate.validate_payment_proof().is_ok());
+    mandate.sign(&principal_key);
+    assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
+
+    // Verify the commitment
+    assert!(mandate
+        .payment_proof
+        .as_ref()
+        .unwrap()
+        .verify(b"cashuAeyJ0b2tlbiI6W3sibWludCI6Im"));
+    assert!(!mandate
+        .payment_proof
+        .as_ref()
+        .unwrap()
+        .verify(b"wrong-token"));
+}
+
+#[test]
+fn pay_action_without_proof_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    // PayAction scope but no payment proof attached
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    );
+
+    assert!(matches!(
+        mandate.validate_payment_proof(),
+        Err(PapError::MissingPaymentProof)
+    ));
+}
+
+#[test]
+fn receipt_missing_commitment_for_pay_action_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let orchestrator_key = make_keypair();
+    let orchestrator_did = did_from_key(&orchestrator_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let mut mandate = Mandate::issue_root(
+        principal_did,
+        orchestrator_did.clone(),
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(PaymentProof::lightning(b"payment-hash"));
+    mandate.sign(&principal_key);
+
+    let mut token = CapabilityToken::mint(
+        agent_did.clone(),
+        "schema:PayAction".into(),
+        orchestrator_did,
+        Utc::now() + Duration::hours(1),
+    );
+    token.sign(&orchestrator_key);
+
+    let mut session =
+        Session::initiate(&token, &agent_did, &orchestrator_key.verifying_key()).unwrap();
+    session
+        .open("did:key:zinit".into(), "did:key:zrecv".into())
+        .unwrap();
+    session.execute().unwrap();
+
+    // Receipt WITHOUT calling with_payment_proof
+    let receipt = TransactionReceipt::from_session(
+        &session,
+        vec![],
+        vec![],
+        "payment executed".into(),
+        "receipt returned".into(),
+    )
+    .unwrap();
+
+    // Validation fails: receipt missing commitment
+    assert!(receipt.validate_payment_commitment(&mandate).is_err());
+}
+
+#[test]
+fn non_payment_action_no_proof_required() {
+    let principal_did = did_from_key(&make_keypair());
+    let agent_did = did_from_key(&make_keypair());
+
+    // SearchAction scope — no payment proof needed
+    let scope = Scope::new(vec![ScopeAction::new("schema:SearchAction")]);
+    let mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    );
+
+    assert!(mandate.validate_payment_proof().is_ok());
+}
+
+#[test]
+fn payment_proof_serialization_in_mandate() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let proof = PaymentProof::lightning(b"serialize-test-hash");
+    let mut mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(proof);
+    mandate.sign(&principal_key);
+
+    let json = serde_json::to_string(&mandate).unwrap();
+    let mandate2: Mandate = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(
+        mandate.payment_proof.as_ref().unwrap().commitment(),
+        mandate2.payment_proof.as_ref().unwrap().commitment()
+    );
+    assert!(mandate2.verify(&principal_key.verifying_key()).is_ok());
+}
+
+// ─── M-of-N Social Recovery ────────────────────────────────────────
+
+#[test]
+fn social_recovery_2_of_3_simulation() {
+    // ── Setup: Principal designates 3 notaries with threshold 2 ──
+
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+
+    let notary1_key = make_keypair();
+    let notary1_did = did_from_key(&notary1_key);
+    let notary2_key = make_keypair();
+    let notary2_did = did_from_key(&notary2_key);
+    let notary3_key = make_keypair();
+    let notary3_did = did_from_key(&notary3_key);
+
+    // Principal creates recovery mandate while healthy
+    let mut recovery_mandate = RecoveryMandate::new(
+        principal_did.clone(),
+        2, // threshold: 2 of 3
+        vec![
+            notary1_did.clone(),
+            notary2_did.clone(),
+            notary3_did.clone(),
+        ],
+    )
+    .unwrap();
+    recovery_mandate.sign(&principal_key);
+
+    // Verify the recovery mandate is valid
+    assert!(recovery_mandate
+        .verify(&principal_key.verifying_key())
+        .is_ok());
+    assert!(recovery_mandate.is_notary(&notary1_did));
+    assert!(recovery_mandate.is_notary(&notary2_did));
+    assert!(recovery_mandate.is_notary(&notary3_did));
+    assert!(!recovery_mandate.is_notary("did:key:zoutsider"));
+
+    // ── Recovery: Principal lost their key, generates new keypair ──
+
+    let new_principal_key = make_keypair();
+    let new_principal_did = did_from_key(&new_principal_key);
+
+    // Recovery coordinator creates the request
+    let recovery_request = RecoveryRequest::new(
+        principal_did.clone(),
+        new_principal_did.clone(),
+        recovery_mandate.hash(),
+    );
+
+    // ── Blind co-signing: Each notary signs independently ──
+
+    // Notary 1 signs (doesn't know about notary 2)
+    let partial_sig_1 = PartialRecoverySignature::sign(
+        &recovery_mandate,
+        &recovery_request,
+        &notary1_did,
+        &notary1_key,
+        &principal_key.verifying_key(),
+    )
+    .unwrap();
+
+    // Notary 2 signs (doesn't know about notary 1)
+    let partial_sig_2 = PartialRecoverySignature::sign(
+        &recovery_mandate,
+        &recovery_request,
+        &notary2_did,
+        &notary2_key,
+        &principal_key.verifying_key(),
+    )
+    .unwrap();
+
+    // Verify each partial signature independently
+    assert!(partial_sig_1
+        .verify(&recovery_request, &notary1_key.verifying_key())
+        .is_ok());
+    assert!(partial_sig_2
+        .verify(&recovery_request, &notary2_key.verifying_key())
+        .is_ok());
+
+    // ── Assemble recovery proof (2 of 3 signatures) ──
+
+    let notary_keys = vec![
+        (notary1_did.clone(), notary1_key.verifying_key()),
+        (notary2_did.clone(), notary2_key.verifying_key()),
+        (notary3_did.clone(), notary3_key.verifying_key()),
+    ];
+
+    let recovery_proof = RecoveryProof::assemble(
+        recovery_request,
+        recovery_mandate,
+        vec![partial_sig_1, partial_sig_2],
+        &principal_key.verifying_key(),
+        &notary_keys,
+    )
+    .unwrap();
+
+    // Verify the assembled proof
+    assert!(recovery_proof
+        .verify(&principal_key.verifying_key(), &notary_keys)
+        .is_ok());
+    assert_eq!(recovery_proof.partial_signatures.len(), 2);
+
+    // ── Revocation: Old key is cryptographically revoked ──
+
+    let mut revocation = RevocationProof::from_recovery_proof(&recovery_proof);
+    assert_eq!(revocation.old_principal_did, principal_did);
+    assert_eq!(revocation.new_principal_did, new_principal_did);
+
+    // New principal signs the revocation (proves possession of new key)
+    revocation.sign(&new_principal_key);
+    assert!(revocation
+        .verify(&new_principal_key.verifying_key())
+        .is_ok());
+
+    // Wrong key should fail verification
+    let wrong_key = make_keypair();
+    assert!(revocation.verify(&wrong_key.verifying_key()).is_err());
+}
+
+#[test]
+fn social_recovery_below_threshold_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let notary1_key = make_keypair();
+    let notary1_did = did_from_key(&notary1_key);
+    let notary2_did = did_from_key(&make_keypair());
+    let notary3_did = did_from_key(&make_keypair());
+
+    let mut mandate = RecoveryMandate::new(
+        principal_did.clone(),
+        2,
+        vec![
+            notary1_did.clone(),
+            notary2_did.clone(),
+            notary3_did.clone(),
+        ],
+    )
+    .unwrap();
+    mandate.sign(&principal_key);
+
+    let request =
+        RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+    // Only 1 signature — threshold is 2
+    let ps1 = PartialRecoverySignature::sign(
+        &mandate,
+        &request,
+        &notary1_did,
+        &notary1_key,
+        &principal_key.verifying_key(),
+    )
+    .unwrap();
+
+    let result = RecoveryProof::assemble(
+        request,
+        mandate,
+        vec![ps1],
+        &principal_key.verifying_key(),
+        &[
+            (notary1_did, notary1_key.verifying_key()),
+            (notary2_did, make_keypair().verifying_key()),
+            (notary3_did, make_keypair().verifying_key()),
+        ],
+    );
+
+    assert!(matches!(result, Err(PapError::ThresholdNotMet(2, 1))));
+}
+
+#[test]
+fn social_recovery_outsider_notary_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let notary1_key = make_keypair();
+    let notary1_did = did_from_key(&notary1_key);
+    let outsider_key = make_keypair();
+    let outsider_did = did_from_key(&outsider_key);
+
+    let mut mandate = RecoveryMandate::new(principal_did.clone(), 1, vec![notary1_did]).unwrap();
+    mandate.sign(&principal_key);
+
+    let request =
+        RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+    // Outsider tries to sign — not in notary set
+    let result = PartialRecoverySignature::sign(
+        &mandate,
+        &request,
+        &outsider_did,
+        &outsider_key,
+        &principal_key.verifying_key(),
+    );
+
+    assert!(matches!(result, Err(PapError::NotaryNotInSet(_))));
 }

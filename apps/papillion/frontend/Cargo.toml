@@ -22,3 +22,4 @@ web-sys = { version = "0.3", features = ["Window", "CustomEvent", "EventTarget",
 console_error_panic_hook = "0.1"
 uuid = { version = "1", features = ["v4", "js"] }
 chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+async-trait = "0.1"
