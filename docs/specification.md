@@ -1,8 +1,8 @@
 # Principal Agent Protocol (PAP) Specification
 
-**Version:** 0.1
-**Status:** Draft
-**Date:** 2026-03-15
+**Version:** 1.0
+**Status:** Approved
+**Date:** 2026-03-24
 **Authors:** Todd Baur (Baur Software)
 
 ## Abstract
@@ -18,10 +18,10 @@ requires no central registry, token economy, or trusted third party.
 
 ## Status of This Document
 
-This is a draft specification published for review and
-interoperability testing. Implementations SHOULD treat this document
-as authoritative for PAP v0.1 behavior. Breaking changes MAY occur
-before v1.0.
+This is the approved PAP v1.0 specification. Implementations MUST
+treat this document as authoritative for PAP v1.0 behavior. Future
+revisions will follow semantic versioning; breaking changes require
+a major version increment.
 
 ## Table of Contents
 
@@ -42,6 +42,13 @@ before v1.0.
 15. [Security Considerations](#15-security-considerations)
 16. [IANA and Vocabulary References](#16-iana-and-vocabulary-references)
 17. [References](#17-references)
+18. [Changelog](#18-changelog)
+
+Appendices:
+- [Appendix A. Example: Zero-Disclosure Search](#appendix-a-example-zero-disclosure-search)
+- [Appendix B. Example: Selective Disclosure Flight Booking](#appendix-b-example-selective-disclosure-flight-booking)
+- [Appendix C. Example: 4-Level Delegation Chain](#appendix-c-example-4-level-delegation-chain)
+- [Appendix D. Conformance Test Matrix](#appendix-d-conformance-test-matrix)
 
 ---
 
@@ -1177,7 +1184,10 @@ The `proofValue` is `base64url(Ed25519_sign(JSON_bytes(canonical)))`.
 
 ## 13. Extension Points
 
-The following extensions are defined for PAP v0.1. Extensions are
+The following extensions are defined for PAP v1.0. Core extensions
+(Sections 13.1--13.4) were introduced in v0.4. Recovery mandates
+(Section 13.5), TEE attestation (Section 13.6), and payment proof
+validation (Section 13.7) were added in v0.7. All extensions are
 OPTIONAL; a conformant implementation MAY support none, some, or
 all of them.
 
@@ -1323,6 +1333,205 @@ certain categories of actions without per-transaction approval.
 - If `max_value` is set and the transaction value exceeds it, the
   orchestrator MUST request explicit principal approval.
 
+### 13.5. M-of-N Social Recovery
+
+Principal identity recovery via a designated notary quorum. No central
+recovery authority. The principal designates N notary DIDs at setup
+time; any M co-signers from that set can authorize key rotation.
+
+#### 13.5.1. Recovery Mandate
+
+A principal creates a `RecoveryMandate` while they still control their
+key, designating the notary set and threshold.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `principal_did` | String | REQUIRED | DID of the principal creating the mandate |
+| `threshold` | Integer | REQUIRED | M: minimum co-signatures required (1 ≤ M ≤ N) |
+| `notary_dids` | Array\<String\> | REQUIRED | N designated notary DIDs (no duplicates) |
+| `created_at` | DateTime | REQUIRED | Mandate creation timestamp |
+| `signature` | String | REQUIRED | Ed25519 signature by the principal |
+
+Constraints:
+- `threshold` MUST be ≥ 1 and ≤ `notary_dids.length`.
+- `notary_dids` MUST NOT contain duplicate entries.
+- The mandate MUST be signed by the principal's current key.
+- Only one recovery mandate per principal DID. A new mandate
+  replaces any previous one.
+
+#### 13.5.2. Recovery Request
+
+When recovery is needed, a `RecoveryRequest` is created identifying
+the old principal, the new principal keypair, and the authorizing
+recovery mandate.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `old_principal_did` | String | REQUIRED | DID of the principal being recovered |
+| `new_principal_did` | String | REQUIRED | DID of the new principal keypair |
+| `recovery_mandate_hash` | String | REQUIRED | SHA-256 hash of the authorizing RecoveryMandate |
+| `requested_at` | DateTime | REQUIRED | Request timestamp |
+
+The canonical bytes of the recovery request are the message that each
+notary signs independently.
+
+#### 13.5.3. Partial Recovery Signature (Blind)
+
+Each notary signs the recovery request independently. Notaries MUST
+NOT communicate with each other during recovery — they learn nothing
+about which other notaries have been contacted (threshold blind
+signature scheme).
+
+Before signing, a notary MUST verify:
+1. The recovery mandate was signed by the old principal.
+2. The notary's own DID is in the designated notary set.
+3. The request references the correct recovery mandate hash.
+4. The request's `old_principal_did` matches the mandate.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `notary_did` | String | REQUIRED | DID of the signing notary |
+| `signature` | String | REQUIRED | Ed25519 signature over the RecoveryRequest canonical bytes |
+| `signed_at` | DateTime | REQUIRED | Timestamp of the notary's signature |
+
+#### 13.5.4. Recovery Proof Assembly
+
+A recovery coordinator collects M partial signatures and assembles a
+`RecoveryProof`. Verification of the proof MUST check:
+
+1. The recovery mandate was signed by the old principal.
+2. At least M partial signatures are present.
+3. All signers are in the designated notary set.
+4. No duplicate signers.
+5. All partial signatures are cryptographically valid.
+
+#### 13.5.5. Revocation Proof and Broadcast
+
+After successful recovery, a `RevocationProof` is created and
+broadcast to federation peers.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `old_principal_did` | String | REQUIRED | The revoked DID |
+| `new_principal_did` | String | REQUIRED | The replacement DID |
+| `recovery_proof_hash` | String | REQUIRED | SHA-256 hash of the RecoveryProof |
+| `revoked_at` | DateTime | REQUIRED | Revocation timestamp |
+| `signature` | String | REQUIRED | Ed25519 signature by the new principal key |
+
+The revocation proof MUST be signed by the new principal key (proving
+possession). Federation peers that receive a valid revocation MUST:
+- Mark the old principal DID as revoked.
+- Reject any future operations using the old DID.
+- Remove the old recovery mandate from their NotarySet.
+
+#### 13.5.6. NotarySet Registry
+
+Each federation node maintains a `NotarySet` — a registry of recovery
+mandates queryable by principal DID. The NotarySet:
+- Stores signed recovery mandates.
+- Tracks revoked principal DIDs.
+- Rejects mandate registration for already-revoked DIDs.
+- Processes revocation broadcasts from federation peers.
+
+#### 13.5.7. Security Properties
+
+- **No central authority.** Recovery requires M independent notaries.
+- **Blind co-signing.** Notaries do not learn which other notaries
+  participate in a recovery event.
+- **Old key revocation.** The old principal DID is cryptographically
+  revoked and broadcast to all federation peers.
+- **Notary set immutability.** The notary set is fixed at mandate
+  creation time by the principal. It cannot be modified without
+  creating a new mandate signed by the principal.
+- **Threshold enforcement.** Fewer than M signatures MUST be rejected.
+  Duplicate signers MUST be rejected.
+
+### 13.6. TEE Attestation
+
+A mandate or session MAY carry a Trusted Execution Environment
+(TEE) attestation to provide evidence that an agent is executing
+within an isolated enclave. TEE attestation is OPTIONAL and does
+NOT elevate a TEE to equivalence with local trust (Section 3.4).
+
+#### 13.6.1. Attestation Object
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `enclave_type` | String | REQUIRED | TEE platform identifier (e.g., `"sgx"`, `"sev-snp"`, `"trustzone"`) |
+| `measurement` | String | REQUIRED | Enclave measurement hash (base64url-no-pad) |
+| `attestation_report` | String | REQUIRED | Platform-specific attestation report (base64url-no-pad) |
+| `timestamp` | DateTime | REQUIRED | Attestation generation timestamp (RFC 3339) |
+| `nonce` | String | REQUIRED | Challenge nonce binding this attestation to the current session (UUID v4) |
+
+#### 13.6.2. Attestation Verification
+
+A verifier MUST:
+
+1. Verify the `attestation_report` against the TEE platform's
+   root of trust (platform-specific, out of scope).
+2. Verify that `measurement` matches an expected enclave binary
+   hash (implementation-defined allowlist).
+3. Verify that `nonce` matches the session's challenge nonce.
+4. Verify that `timestamp` is within an acceptable window
+   (implementations SHOULD reject attestations older than 60
+   seconds).
+
+#### 13.6.3. Trust Boundaries
+
+TEE attestation provides evidence of code integrity, not
+behavioral correctness. Specifically:
+
+- A TEE attestation MUST NOT be treated as equivalent to a
+  mandate. An agent in a TEE still requires a valid mandate chain.
+- A TEE attestation MUST NOT be used to expand scope beyond what
+  the mandate permits.
+- The principal MAY use TEE attestation as an input to
+  auto-approval policies (Section 13.4) but MUST NOT be required
+  to accept TEE attestation as a substitute for consent.
+
+### 13.7. Payment Proof Validation
+
+Section 13.1 defines the payment proof integration point. This
+section specifies the validation requirements that a conformant
+implementation MUST satisfy when payment proofs are present.
+
+#### 13.7.1. Proof Format Registry
+
+PAP defines the following payment proof format prefixes:
+
+| Prefix | Protocol | Description |
+|---|---|---|
+| `ecash:blind:v1:` | Chaumian ecash | Blind-signed mint tokens (Section 13.1) |
+| `ln:preimage:v1:` | Lightning Network | Hash preimage proof of payment |
+| `zk:receipt:v1:` | Zero-knowledge proof | ZK proof of value transfer |
+
+Implementations MAY support additional formats using the
+`pap:payment:` namespace prefix.
+
+#### 13.7.2. Validation Requirements
+
+A receiving agent that requires payment MUST:
+
+1. Parse the `payment_proof` field and identify the format prefix.
+2. If the format is not supported, reject the mandate with a
+   `PaymentFormatUnsupported` error.
+3. Verify the proof against the appropriate payment backend
+   (mint, Lightning node, or ZK verifier). The verification
+   protocol is out of scope for this specification.
+4. Verify that the proof amount meets the agent's minimum
+   requirement for the requested action.
+5. Verify that the proof has not been previously consumed
+   (double-spend protection).
+
+#### 13.7.3. Privacy Requirements
+
+- Payment proof verification MUST NOT reveal the payer's
+  identity to the payment backend.
+- The receiving agent MUST NOT store payment proofs beyond the
+  session duration unless required by applicable law.
+- Payment proofs MUST NOT appear in transaction receipts
+  (Section 11.5).
+
 ---
 
 ## 14. Transport Binding
@@ -1330,7 +1539,7 @@ certain categories of actions without per-transaction approval.
 ### 14.1. HTTP/JSON Transport
 
 PAP defines an HTTP/JSON transport binding for the 6-phase
-handshake. This binding is the default transport for PAP v0.1.
+handshake. This binding is the default transport for PAP v1.0.
 Implementations MAY define additional transport bindings.
 
 ### 14.2. Agent Server Endpoints
@@ -1384,13 +1593,166 @@ a `code` and `message`.
 If the request body does not match the expected message type for
 the endpoint, the server MUST respond with HTTP status 400.
 
+### 14.7. WebSocket Transport
+
+Implementations MAY support a WebSocket transport binding as an
+alternative to the HTTP/JSON binding. The WebSocket binding is
+OPTIONAL and provides full-duplex communication for sessions that
+benefit from lower-latency message exchange.
+
+#### 14.7.1. Connection Lifecycle
+
+1. The initiating agent opens a WebSocket connection to the
+   receiving agent's WebSocket endpoint.
+2. All 6 phases of the session handshake (Section 6.3) are
+   conducted as JSON messages over the WebSocket connection.
+3. Each message MUST be a JSON-serialized `Envelope` (Section 8.2).
+4. The connection MUST be closed after Phase 6 (session close).
+
+#### 14.7.2. Endpoint Format
+
+A WebSocket endpoint MUST use the `wss://` scheme. Implementations
+MUST NOT use unencrypted `ws://` connections in production.
+
+The endpoint URL MUST be published in the agent's DID Document
+`service` array with `type` set to `"PAPWebSocket"`:
+
+```json
+{
+  "id": "did:key:z...#pap-ws",
+  "type": "PAPWebSocket",
+  "serviceEndpoint": "wss://agent.example.com/pap/ws"
+}
+```
+
+#### 14.7.3. Message Framing
+
+Each WebSocket text frame MUST contain exactly one JSON-serialized
+`Envelope`. Binary frames MUST NOT be used. Implementations MUST
+reject connections that send binary frames.
+
+#### 14.7.4. Sequence Enforcement
+
+Envelope sequence number rules (Section 8.2.2) apply identically
+over WebSocket. Out-of-order messages MUST be rejected.
+
+### 14.8. Oblivious HTTP (OHTTP) Transport
+
+Implementations MAY support Oblivious HTTP [RFC 9458] as a
+transport binding. OHTTP provides request unlinkability at the
+network layer, preventing the receiving agent's operator from
+correlating requests by IP address.
+
+#### 14.8.1. Architecture
+
+An OHTTP deployment interposes a relay between the initiating
+agent and the receiving agent:
+
+```
+Initiator -> OHTTP Relay -> Receiving Agent (Gateway)
+```
+
+The relay sees the initiator's IP but not the request content.
+The receiving agent sees the request content but not the
+initiator's IP.
+
+#### 14.8.2. Encapsulation
+
+Each PAP protocol message MUST be encapsulated as an OHTTP
+Binary HTTP request targeting the corresponding HTTP/JSON
+endpoint (Section 14.2). The `Content-Type` MUST remain
+`application/json`.
+
+#### 14.8.3. Key Configuration
+
+The receiving agent MUST publish its OHTTP key configuration
+in its DID Document `service` array with `type` set to
+`"PAPObliviousHTTP"`:
+
+```json
+{
+  "id": "did:key:z...#pap-ohttp",
+  "type": "PAPObliviousHTTP",
+  "serviceEndpoint": "https://agent.example.com/pap/ohttp",
+  "ohttpKeyConfig": "<base64url-encoded-key-config>"
+}
+```
+
+#### 14.8.4. Relay Selection
+
+The initiating agent selects the OHTTP relay. The relay MUST
+NOT be operated by the same entity as the receiving agent. The
+protocol does not define relay discovery; implementations
+SHOULD allow the principal to configure trusted relays.
+
+### 14.9. DIDComm Transport
+
+Implementations MAY support DIDComm Messaging v2 [DIDCOMM-V2]
+as a transport binding. DIDComm provides authenticated encryption
+at the message layer, enabling transport-independent secure
+messaging between agents identified by DIDs.
+
+#### 14.9.1. Message Mapping
+
+Each PAP protocol message (Section 8.1) MUST be wrapped in a
+DIDComm plaintext message with the following mapping:
+
+| DIDComm Field | Value |
+|---|---|
+| `type` | `https://pap.dev/protocol/1.0/{message_type}` |
+| `from` | Sender's DID (session DID after Phase 2) |
+| `to` | Array containing recipient's DID |
+| `body` | The PAP protocol message payload |
+| `created_time` | Envelope timestamp (Unix epoch seconds) |
+
+Where `{message_type}` is the lowercase, hyphenated form of the
+PAP message type (e.g., `token-presentation`, `session-did-exchange`).
+
+#### 14.9.2. Encryption
+
+DIDComm messages MUST use authenticated encryption (authcrypt)
+after Phase 2 when both session DIDs are known. Phase 1 messages
+MAY use anonymous encryption (anoncrypt) since the initiator's
+session DID is not yet established.
+
+#### 14.9.3. Service Endpoint
+
+A DIDComm-capable agent MUST publish a DIDComm service endpoint
+in its DID Document:
+
+```json
+{
+  "id": "did:key:z...#pap-didcomm",
+  "type": "DIDCommMessaging",
+  "serviceEndpoint": {
+    "uri": "https://agent.example.com/pap/didcomm",
+    "accept": ["didcomm/v2"]
+  }
+}
+```
+
+### 14.10. Transport Negotiation
+
+When an agent supports multiple transport bindings, the initiating
+agent MUST select a transport by inspecting the receiving agent's
+DID Document `service` array. The preference order SHOULD be:
+
+1. OHTTP (strongest privacy properties)
+2. DIDComm (authenticated encryption at message layer)
+3. WebSocket (lower latency for interactive sessions)
+4. HTTP/JSON (default, widest compatibility)
+
+If the receiving agent's DID Document contains no `service`
+entries, the initiating agent MUST fall back to HTTP/JSON with
+endpoint resolution (Section 14.4).
+
 ---
 
 ## 15. Security Considerations
 
 ### 15.1. Cryptographic Algorithms
 
-PAP v0.1 uses exclusively:
+PAP v1.0 uses exclusively:
 
 - **Ed25519** (RFC 8032) for all signatures.
 - **SHA-256** (FIPS 180-4) for all hashes.
@@ -1573,7 +1935,7 @@ SHOULD be documented.
 | RFC 4648 | Base Encodings | Base64url encoding |
 | RFC 8032 | Edwards-Curve Digital Signature Algorithm | Ed25519 signatures |
 | RFC 8785 | JSON Canonicalization Scheme | Canonical JSON (RECOMMENDED) |
-| RFC 9458 | Oblivious HTTP | Cloud request unlinkability (future) |
+| RFC 9458 | Oblivious HTTP | OHTTP transport binding (Section 14.8) |
 | draft-ietf-oauth-selective-disclosure-jwt-08 | SD-JWT | Selective disclosure |
 
 ### 16.4. WebAuthn
@@ -1593,7 +1955,7 @@ in the Multicodec table (https://github.com/multiformats/multicodec).
 |---|---|---|
 | `schema:` | https://schema.org | Schema.org Community |
 | `operator:` | Implementation-defined | Agent operator |
-| `pap:` | Reserved for future PAP extensions | PAP specification |
+| `pap:` | Reserved for PAP extensions | PAP specification |
 
 ---
 
@@ -1640,6 +2002,69 @@ Canonicalization Scheme (JCS)", RFC 8785, June 2020.
 
 [RFC 9458] Thomson, M. and C. A. Wood, "Oblivious HTTP",
 RFC 9458, January 2024.
+
+[DIDCOMM-V2] Curren, S., Looker, T., and O. Terbu, "DIDComm
+Messaging v2.0", Decentralized Identity Foundation, 2022.
+
+[RFC 6455] Fette, I. and A. Melnikov, "The WebSocket Protocol",
+RFC 6455, December 2011.
+
+---
+
+## 18. Changelog
+
+### v1.0 (2026-03-24)
+
+- Promoted specification from Draft to Approved status.
+- **Section 13.5:** Added recovery mandate extension with recovery
+  proof binding and short-TTL constraints.
+- **Section 13.6:** Added TEE attestation extension with enclave
+  measurement verification and trust boundary rules.
+- **Section 13.7:** Added payment proof validation requirements
+  including format registry, double-spend protection, and privacy
+  constraints.
+- **Section 14.7:** Added WebSocket transport binding with
+  connection lifecycle, message framing, and sequence enforcement.
+- **Section 14.8:** Added Oblivious HTTP (OHTTP) transport binding
+  with relay architecture and key configuration.
+- **Section 14.9:** Added DIDComm v2 transport binding with message
+  mapping and authenticated encryption.
+- **Section 14.10:** Added transport negotiation rules with
+  privacy-preference ordering.
+- **Appendix D:** Added conformance test matrix.
+- Updated all version references from v0.1 to v1.0.
+- Added DIDComm and WebSocket to normative/informative references.
+
+### v0.7 (2026-03-10)
+
+- Added recovery mandate extension (Section 13.5).
+- Added TEE attestation extension (Section 13.6).
+- Added payment proof format registry and validation (Section 13.7).
+
+### v0.6 (2026-02-28)
+
+- Added WebSocket transport binding (Section 14.7).
+- Added OHTTP transport binding (Section 14.8).
+- Added DIDComm transport binding (Section 14.9).
+- Added transport negotiation (Section 14.10).
+
+### v0.4 (2026-02-01)
+
+- Initial public draft with core protocol:
+  - Trust model and threat model (Section 3).
+  - Identity layer with did:key (Section 4).
+  - Mandate structure and delegation rules (Section 5).
+  - Session lifecycle with 6-phase handshake (Section 6).
+  - SD-JWT disclosure protocol (Section 7).
+  - Protocol messages and envelope (Section 8).
+  - Marketplace advertisement schema (Section 9).
+  - Federation protocol (Section 10).
+  - Receipt format (Section 11).
+  - Verifiable Credential envelope (Section 12).
+  - Payment proof integration point (Section 13.1).
+  - Continuity tokens (Section 13.3).
+  - Auto-approval policies (Section 13.4).
+  - HTTP/JSON transport binding (Section 14.1--14.6).
 
 ---
 
@@ -1801,6 +2226,120 @@ Attempted violations:
 - Booking Agent delegates with TTL > 2h -> DelegationExceedsTtl
 
 Chain verification: verify_chain([principal_key, orch_key, planner_key])
+
+---
+
+## Appendix D. Conformance Test Matrix
+
+A conformant PAP v1.0 implementation MUST pass all tests in the
+**Core** category. Tests in the **Extension** category apply only
+when the implementation supports the corresponding extension.
+
+### D.1. Core Protocol Tests
+
+| ID | Test | Spec Section | Requirement |
+|---|---|---|---|
+| C-01 | Root mandate sign and verify | 5.2 | MUST |
+| C-02 | Mandate hash determinism (same input produces same hash) | 5.3 | MUST |
+| C-03 | Scope containment: child subset of parent accepted | 5.4.5 | MUST |
+| C-04 | Scope containment: child exceeding parent rejected | 5.4.5, 5.5 R1 | MUST |
+| C-05 | Scope containment: child broadening object constraint rejected | 5.4.5 | MUST |
+| C-06 | Delegation TTL: child TTL <= parent TTL accepted | 5.5 R2 | MUST |
+| C-07 | Delegation TTL: child TTL > parent TTL rejected | 5.5 R2 | MUST |
+| C-08 | Parent hash binding: correct hash accepted | 5.5 R3 | MUST |
+| C-09 | Parent hash binding: incorrect hash rejected | 5.5 R3 | MUST |
+| C-10 | Issuer chain: child issuer_did == parent agent_did | 5.5 R4 | MUST |
+| C-11 | Principal propagation: child principal_did == parent principal_did | 5.5 R5 | MUST |
+| C-12 | Root mandate: parent_mandate_hash is null | 5.5 R6 | MUST |
+| C-13 | Mandate chain verification: 2-level chain | 5.6 | MUST |
+| C-14 | Mandate chain verification: 3-level chain | 5.6 | MUST |
+| C-15 | Mandate chain verification: invalid signature in chain rejected | 5.6 | MUST |
+| C-16 | Decay state: Active within TTL | 5.7 | MUST |
+| C-17 | Decay state: Degraded within decay window | 5.7 | MUST |
+| C-18 | Decay state: ReadOnly after TTL expiry | 5.7 | MUST |
+| C-19 | Decay state: Suspended is terminal (no renewal) | 5.7.1 | MUST |
+| C-20 | Decay state: invalid transition rejected | 5.7.1 | MUST |
+| C-21 | Capability token sign and verify | 6.2 | MUST |
+| C-22 | Capability token: wrong target_did rejected | 6.2.2 | MUST |
+| C-23 | Capability token: nonce replay rejected | 6.2.2 | MUST |
+| C-24 | Capability token: expired token rejected | 6.2.2 | MUST |
+| C-25 | Session state machine: Initiated -> Open -> Executed -> Closed | 6.1 | MUST |
+| C-26 | Session state machine: invalid transition rejected | 6.1 | MUST |
+| C-27 | Session state machine: early termination from Initiated | 6.1 | MUST |
+| C-28 | SD-JWT commitment and disclosure verification | 7.4, 7.5 | MUST |
+| C-29 | SD-JWT: disclosure hash not in commitment rejected | 7.5 | MUST |
+| C-30 | SD-JWT: unsigned commitment rejected | 7.4 | MUST |
+| C-31 | SD-JWT: zero-disclosure session accepted | 7.6 | MUST |
+| C-32 | SD-JWT: partial disclosure (subset of claims) | 7.3 | MUST |
+| C-33 | Envelope sign and verify with session keys | 8.2.1 | MUST |
+| C-34 | Envelope: wrong key verification fails | 8.2.2 | MUST |
+| C-35 | Envelope: out-of-sequence rejected | 8.2.2 | MUST |
+| C-36 | Envelope: tampered payload detected | 8.2.1 | MUST |
+| C-37 | Receipt: co-signed by both parties | 11.3 | MUST |
+| C-38 | Receipt: contains property references, not values | 11.5 | MUST |
+| C-39 | Receipt: zero-disclosure receipt valid | 11.5 | MUST |
+| C-40 | Receipt: wrong key co-sign verification fails | 11.4 | MUST |
+| C-41 | Advertisement: unsigned advertisement rejected by registry | 9.4 | MUST |
+| C-42 | Advertisement: content hash deduplication | 9.5, 10.5 | MUST |
+| C-43 | Marketplace: query by action returns matching agents | 9.3 | MUST |
+| C-44 | Marketplace: disclosure satisfiability filtering | 9.3 | MUST |
+| C-45 | VC envelope: wrap and unwrap mandate | 12.2 | MUST |
+| C-46 | VC envelope: unsigned VC rejected | 12.3 | MUST |
+
+### D.2. Transport Tests
+
+| ID | Test | Spec Section | Requirement |
+|---|---|---|---|
+| T-01 | HTTP/JSON: full 6-phase handshake over HTTP | 14.2 | MUST |
+| T-02 | HTTP/JSON: error response with code and message | 14.6 | MUST |
+| T-03 | HTTP/JSON: wrong message type returns 400 | 14.6 | MUST |
+| T-04 | WebSocket: full 6-phase handshake over WebSocket | 14.7 | OPTIONAL |
+| T-05 | WebSocket: binary frame rejected | 14.7.3 | OPTIONAL |
+| T-06 | OHTTP: encapsulated request reaches gateway | 14.8 | OPTIONAL |
+| T-07 | DIDComm: message mapping roundtrip | 14.9.1 | OPTIONAL |
+
+### D.3. Extension Tests
+
+| ID | Test | Spec Section | Requirement |
+|---|---|---|---|
+| E-01 | Payment proof: mandate with valid proof accepted | 13.1, 13.7 | OPTIONAL |
+| E-02 | Payment proof: unsupported format rejected | 13.7.2 | OPTIONAL |
+| E-03 | Payment proof: double-spend rejected | 13.7.2 | OPTIONAL |
+| E-04 | Continuity token: creation and expiry check | 13.3 | OPTIONAL |
+| E-05 | Continuity token: expired token rejected | 13.3.1 | OPTIONAL |
+| E-06 | Continuity token: principal-controlled TTL | 13.3.2 | OPTIONAL |
+| E-07 | Auto-approval: policy within mandate scope accepted | 13.4 | OPTIONAL |
+| E-08 | Auto-approval: policy exceeding mandate rejected | 13.4.1 | OPTIONAL |
+| E-09 | Auto-approval: transaction exceeding max_value requires approval | 13.4.1 | OPTIONAL |
+| E-10 | Recovery mandate: pap:RecoverAction in scope | 13.5.1 | OPTIONAL |
+| E-11 | Recovery mandate: delegation attempt rejected | 13.5.3 | OPTIONAL |
+| E-12 | Recovery mandate: short TTL enforced | 13.5.3 | OPTIONAL |
+| E-13 | TEE attestation: valid attestation with matching nonce | 13.6.2 | OPTIONAL |
+| E-14 | TEE attestation: stale attestation rejected | 13.6.2 | OPTIONAL |
+| E-15 | TEE attestation: does not expand mandate scope | 13.6.3 | OPTIONAL |
+
+### D.4. Federation Tests
+
+| ID | Test | Spec Section | Requirement |
+|---|---|---|---|
+| F-01 | Federation: QueryByAction returns matching advertisements | 10.3, 10.4 | MUST |
+| F-02 | Federation: Announce and AnnounceAck roundtrip | 10.3, 10.4 | MUST |
+| F-03 | Federation: content-hash deduplication on merge | 10.5 | MUST |
+| F-04 | Federation: unsigned advertisement skipped on merge | 10.5 | MUST |
+| F-05 | Federation: transitive peer discovery | 10.6 | OPTIONAL |
+
+### D.5. Trust Invariant Summary
+
+A conformant implementation MUST demonstrate all five trust
+invariants hold:
+
+| # | Invariant | Key Tests |
+|---|---|---|
+| TI-1 | Mandate scope is cryptographically bounded | C-03, C-04, C-05 |
+| TI-2 | Session DIDs are ephemeral and unlinkable to principal | C-25, C-27 |
+| TI-3 | Receipts contain property references, never values | C-37, C-38, C-39 |
+| TI-4 | Delegation chains enforce depth and TTL bounds | C-06, C-07, C-13, C-14 |
+| TI-5 | Decay states follow the defined state machine | C-16, C-17, C-18, C-19, C-20 |
 
 ---
 

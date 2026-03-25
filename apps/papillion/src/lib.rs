@@ -102,6 +102,7 @@ pub fn run() {
             commands::canvas::canvas_prompt,
             commands::canvas::canvas_reshape,
             commands::canvas::canvas_retry,
+            commands::pipeline::run_pipeline,
             commands::templates::get_global_templates,
             commands::templates::get_profile_templates,
             commands::templates::create_template,
