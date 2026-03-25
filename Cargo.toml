@@ -16,6 +16,12 @@ members = [
     "crates/papillion-shared",
     "apps/papillion",
     "apps/registry",
+    "examples/search",
+    "examples/travel-booking",
+    "examples/delegation-chain",
+    "examples/payment",
+    "examples/networked-search",
+    "examples/webauthn-ceremony",
 ]
 
 [workspace.package]
