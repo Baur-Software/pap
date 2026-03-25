@@ -16,11 +16,18 @@
 //! // Async constructor — loads existing state from IndexedDB
 //! let db = IndexedDbDatabase::open("did:key:z6Mk...").await?;
 //! db.insert_episode(&episode)?; // automatically persisted
+//!
+//! // Before tab close or profile switch, await pending writes:
+//! db.flush().await?;
 //! ```
 
 use super::wasm::WasmDatabase;
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
 use crate::types::Template;
+
+/// Current snapshot format version. Bump when the schema changes so
+/// `restore_state` can detect and migrate old snapshots.
+const SNAPSHOT_VERSION: u64 = 1;
 
 /// IndexedDB-backed database that persists all operations.
 ///
@@ -55,11 +62,18 @@ impl IndexedDbDatabase {
         };
 
         match super::idb::load(db_name).await {
-            Ok(Some(json_str)) => {
-                if let Ok(state) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                    db.restore_state(&state)?;
+            Ok(Some(json_str)) => match serde_json::from_str::<serde_json::Value>(&json_str) {
+                Ok(state) => db.restore_state(&state)?,
+                Err(e) => {
+                    web_sys::console::error_1(
+                        &format!(
+                            "papillion: corrupt snapshot for {:?}, starting fresh: {}",
+                            db_name, e
+                        )
+                        .into(),
+                    );
                 }
-            }
+            },
             Ok(None) => { /* first launch for this profile */ }
             Err(e) => {
                 web_sys::console::warn_1(
@@ -71,23 +85,53 @@ impl IndexedDbDatabase {
         Ok(db)
     }
 
+    /// Await the most recent IndexedDB write to completion.
+    ///
+    /// Call this before tab close or profile switch to guarantee the
+    /// in-memory state has been flushed to disk.  In normal operation
+    /// writes are fire-and-forget for responsiveness.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn flush(&self) -> Result<(), DbError> {
+        let json_str = self.build_snapshot_json()?;
+        super::idb::save(&self.db_name, &json_str)
+            .await
+            .map_err(|e| DbError(format!("flush: {:?}", e)))
+    }
+
     // ── internal helpers ──────────────────────────────────────────
 
     /// Restore full database state from a JSON snapshot.
     #[allow(dead_code)] // called from open() on wasm32 and from tests
     fn restore_state(&self, state: &serde_json::Value) -> Result<(), DbError> {
+        // Check snapshot version (if missing, assume v1 — the first version)
+        let _version = state.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
+
         if let Some(episodes) = state.get("episodes").and_then(|v| v.as_array()) {
-            for val in episodes {
-                if let Ok(ep) = serde_json::from_value::<Episode>(val.clone()) {
-                    self.inner.insert_episode(&ep)?;
+            for (i, val) in episodes.iter().enumerate() {
+                match serde_json::from_value::<Episode>(val.clone()) {
+                    Ok(ep) => self.inner.insert_episode(&ep)?,
+                    Err(e) => {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::warn_1(
+                            &format!("papillion: skipping corrupt episode[{}]: {}", i, e).into(),
+                        );
+                        let _ = e;
+                    }
                 }
             }
         }
 
         if let Some(profiles) = state.get("profiles").and_then(|v| v.as_array()) {
-            for val in profiles {
-                if let Ok(p) = serde_json::from_value::<AgentProfile>(val.clone()) {
-                    self.inner.upsert_agent_profile(&p)?;
+            for (i, val) in profiles.iter().enumerate() {
+                match serde_json::from_value::<AgentProfile>(val.clone()) {
+                    Ok(p) => self.inner.upsert_agent_profile(&p)?,
+                    Err(e) => {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::warn_1(
+                            &format!("papillion: skipping corrupt profile[{}]: {}", i, e).into(),
+                        );
+                        let _ = e;
+                    }
                 }
             }
         }
@@ -101,9 +145,16 @@ impl IndexedDbDatabase {
         }
 
         if let Some(templates) = state.get("templates").and_then(|v| v.as_array()) {
-            for val in templates {
-                if let Ok(t) = serde_json::from_value::<Template>(val.clone()) {
-                    self.inner.insert_template(&t)?;
+            for (i, val) in templates.iter().enumerate() {
+                match serde_json::from_value::<Template>(val.clone()) {
+                    Ok(t) => self.inner.insert_template(&t)?,
+                    Err(e) => {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::warn_1(
+                            &format!("papillion: skipping corrupt template[{}]: {}", i, e).into(),
+                        );
+                        let _ = e;
+                    }
                 }
             }
         }
@@ -111,30 +162,37 @@ impl IndexedDbDatabase {
         Ok(())
     }
 
+    /// Build the JSON snapshot string for persistence.
+    #[allow(dead_code)] // used only on wasm32 targets
+    fn build_snapshot_json(&self) -> Result<String, DbError> {
+        let settings_map: serde_json::Map<String, serde_json::Value> = self
+            .inner
+            .list_all_settings()?
+            .into_iter()
+            .map(|(k, v)| (k, serde_json::Value::String(v)))
+            .collect();
+
+        let state = serde_json::json!({
+            "version": SNAPSHOT_VERSION,
+            "episodes": self.inner.list_all_episodes()?,
+            "profiles": self.inner.list_agent_profiles()?,
+            "settings": settings_map,
+            "templates": self.inner.list_all_templates()?,
+        });
+
+        serde_json::to_string(&state).map_err(|e| DbError(format!("serialize: {e}")))
+    }
+
     /// Serialise the full in-memory state and persist it to IndexedDB.
     ///
     /// The actual IndexedDB write is fire-and-forget (`spawn_local`) so
-    /// the synchronous `DatabaseOps` methods return immediately.
+    /// the synchronous `DatabaseOps` methods return immediately.  Use
+    /// [`flush`] to await completion before critical transitions.
     fn persist_to_storage(&self) -> Result<(), DbError> {
         #[cfg(target_arch = "wasm32")]
         {
-            let settings_map: serde_json::Map<String, serde_json::Value> = self
-                .inner
-                .list_all_settings()?
-                .into_iter()
-                .map(|(k, v)| (k, serde_json::Value::String(v)))
-                .collect();
-
-            let state = serde_json::json!({
-                "episodes": self.inner.list_all_episodes()?,
-                "profiles": self.inner.list_agent_profiles()?,
-                "settings": settings_map,
-                "templates": self.inner.list_all_templates()?,
-            });
-
             let db_name = self.db_name.clone();
-            let json_str =
-                serde_json::to_string(&state).map_err(|e| DbError(format!("serialize: {e}")))?;
+            let json_str = self.build_snapshot_json()?;
 
             wasm_bindgen_futures::spawn_local(async move {
                 if let Err(e) = super::idb::save(&db_name, &json_str).await {
@@ -334,21 +392,12 @@ mod tests {
         db.upsert_agent_profile(&profile).unwrap();
         db.set_setting("theme", "dark").unwrap();
 
-        // Manually build the JSON snapshot the same way persist_to_storage would
-        let settings_map: serde_json::Map<String, serde_json::Value> = db
-            .inner
-            .list_all_settings()
-            .unwrap()
-            .into_iter()
-            .map(|(k, v)| (k, serde_json::Value::String(v)))
-            .collect();
+        // Build snapshot via the same method persist_to_storage uses
+        let json_str = db.build_snapshot_json().unwrap();
+        let state: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
-        let state = serde_json::json!({
-            "episodes": db.inner.list_all_episodes().unwrap(),
-            "profiles": db.inner.list_agent_profiles().unwrap(),
-            "settings": settings_map,
-            "templates": db.inner.list_all_templates().unwrap(),
-        });
+        // Verify version field is present
+        assert_eq!(state.get("version").and_then(|v| v.as_u64()), Some(1));
 
         // Create a fresh database and restore
         let db2 = IndexedDbDatabase::new_with_persistence("test-db-2").unwrap();
@@ -363,6 +412,29 @@ mod tests {
         assert_eq!(p.success_rate, 0.95);
 
         assert_eq!(db2.get_setting("theme").unwrap(), Some("dark".to_string()));
+    }
+
+    #[test]
+    fn test_restore_state_tolerates_corrupt_entries() {
+        let state = serde_json::json!({
+            "version": 1,
+            "episodes": [
+                {"id": "good", "receipt_session_id": "s", "scenario_id": "s",
+                 "action_type": "search", "agent_did_hash": "a", "agent_name": "A",
+                 "outcome": "success", "scope_exercised": "[]", "disclosure_refs": "[]",
+                 "duration_ms": 1, "decay_state": "Active", "recorded_at": "2026-01-01T00:00:00Z"},
+                {"corrupt": true},
+            ],
+            "profiles": [{"corrupt": true}],
+            "settings": {"key": "val"},
+            "templates": [],
+        });
+
+        let db = IndexedDbDatabase::new_with_persistence("test-corrupt").unwrap();
+        // Should succeed — corrupt entries are skipped, valid ones loaded
+        db.restore_state(&state).unwrap();
+        assert_eq!(db.episode_count().unwrap(), 1);
+        assert_eq!(db.get_setting("key").unwrap(), Some("val".to_string()));
     }
 
     #[test]

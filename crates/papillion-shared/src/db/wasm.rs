@@ -124,8 +124,9 @@ impl DatabaseOps for WasmDatabase {
         // Sort by recorded_at descending
         filtered.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
 
-        // Apply offset and limit
-        let start = offset.unwrap_or(0) as usize;
+        // Apply offset and limit (clamp to valid range)
+        let start = offset.unwrap_or(0).max(0) as usize;
+        let start = start.min(filtered.len());
         let end = (start + limit).min(filtered.len());
 
         Ok(filtered[start..end].to_vec())
