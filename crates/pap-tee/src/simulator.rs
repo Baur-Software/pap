@@ -152,10 +152,12 @@ mod tests {
     #[test]
     fn simulator_wrong_nonce_rejected() {
         let sim = SoftwareSimulator::new(TEST_BINARY);
-        let evidence = sim.generate_attestation("nonce-a");
+        let nonce_a = uuid::Uuid::new_v4().to_string();
+        let nonce_b = uuid::Uuid::new_v4().to_string();
+        let evidence = sim.generate_attestation(&nonce_a);
 
         let allowed = vec![sim.measurement().to_string()];
-        let result = sim.verify(&evidence, "nonce-b", &allowed);
+        let result = sim.verify(&evidence, &nonce_b, &allowed);
         assert!(matches!(result, Err(TeeError::NonceMismatch { .. })));
     }
 

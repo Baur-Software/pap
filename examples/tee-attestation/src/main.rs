@@ -145,7 +145,8 @@ fn main() {
     println!("Step 6: Attestation rejection cases");
 
     // Case A: Wrong nonce
-    let wrong_nonce_evidence = simulator.generate_attestation("wrong-nonce");
+    let wrong_nonce = uuid::Uuid::new_v4().to_string();
+    let wrong_nonce_evidence = simulator.generate_attestation(&wrong_nonce);
     let result = simulator.verify(&wrong_nonce_evidence, &session_nonce, &allowed_measurements);
     match result {
         Err(TeeError::NonceMismatch { .. }) => {

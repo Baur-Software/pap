@@ -100,10 +100,12 @@ mod tests {
     #[test]
     fn verify_common_nonce_mismatch() {
         let measurement = AttestationEvidence::compute_measurement(b"test-enclave");
-        let evidence = make_evidence("nonce-a", &measurement);
+        let nonce_a = uuid::Uuid::new_v4().to_string();
+        let nonce_b = uuid::Uuid::new_v4().to_string();
+        let evidence = make_evidence(&nonce_a, &measurement);
         let result = verify_common(
             &evidence,
-            "nonce-b",
+            &nonce_b,
             &[measurement],
             MAX_ATTESTATION_AGE_SECS,
         );
