@@ -256,6 +256,25 @@ impl DatabaseOps for WasmDatabase {
         Ok(filtered)
     }
 
+    fn query_templates(&self, principal_did: Option<&str>) -> Result<Vec<Template>, DbError> {
+        let templates = self
+            .templates
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+
+        let filtered: Vec<Template> = templates
+            .iter()
+            .filter(|t| {
+                principal_did.is_none()
+                    || t.principal_did.as_deref() == principal_did
+                    || t.principal_did.is_none()
+            })
+            .cloned()
+            .collect();
+
+        Ok(filtered)
+    }
+
     fn list_enabled_templates_for_principal(
         &self,
         principal_did: Option<&str>,
@@ -693,31 +712,273 @@ mod tests {
         assert_eq!(templates.len(), 0);
     }
 
-    fn list_enabled_templates_for_principal(
-        &self,
-        _principal_did: Option<&str>,
-    ) -> Result<Vec<crate::types::Template>, DbError> {
-        // TODO: Implement template querying from sql.js
-        Ok(Vec::new())
+    #[test]
+    fn test_query_templates_returns_all() {
+        let db = WasmDatabase::new().unwrap();
+
+        let enabled = Template {
+            id: "t-1".into(),
+            template_name: "enabled_template".into(),
+            schema_type: "FlightReservation".into(),
+            principal_did: None,
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        let disabled = Template {
+            id: "t-2".into(),
+            template_name: "disabled_template".into(),
+            schema_type: "HotelReservation".into(),
+            principal_did: None,
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: false,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        db.insert_template(&enabled).unwrap();
+        db.insert_template(&disabled).unwrap();
+
+        // query_templates returns ALL templates (enabled + disabled)
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 2);
+
+        // list_enabled only returns the enabled one
+        let enabled_only = db.list_enabled_templates_for_principal(None).unwrap();
+        assert_eq!(enabled_only.len(), 1);
+        assert_eq!(enabled_only[0].template_name, "enabled_template");
     }
 
-    fn insert_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
-        // TODO: Implement template insertion in sql.js
-        Ok(())
+    #[test]
+    fn test_query_templates_filters_by_principal() {
+        let db = WasmDatabase::new().unwrap();
+
+        let global = Template {
+            id: "t-1".into(),
+            template_name: "global_template".into(),
+            schema_type: "FlightReservation".into(),
+            principal_did: None,
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        let alice = Template {
+            id: "t-2".into(),
+            template_name: "alice_template".into(),
+            schema_type: "HotelReservation".into(),
+            principal_did: Some("did:pap:alice".into()),
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        let bob = Template {
+            id: "t-3".into(),
+            template_name: "bob_template".into(),
+            schema_type: "PaymentReceipt".into(),
+            principal_did: Some("did:pap:bob".into()),
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        db.insert_template(&global).unwrap();
+        db.insert_template(&alice).unwrap();
+        db.insert_template(&bob).unwrap();
+
+        // Query all = 3
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 3);
+
+        // Query for alice = global + alice = 2
+        let alice_templates = db.query_templates(Some("did:pap:alice")).unwrap();
+        assert_eq!(alice_templates.len(), 2);
+
+        // Query for bob = global + bob = 2
+        let bob_templates = db.query_templates(Some("did:pap:bob")).unwrap();
+        assert_eq!(bob_templates.len(), 2);
     }
 
-    fn update_template(&self, _template: &crate::types::Template) -> Result<(), DbError> {
-        // TODO: Implement template update in sql.js
-        Ok(())
+    #[test]
+    fn test_template_update() {
+        let db = WasmDatabase::new().unwrap();
+
+        let template = Template {
+            id: "t-1".into(),
+            template_name: "my_template".into(),
+            schema_type: "FlightReservation".into(),
+            principal_did: None,
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        db.insert_template(&template).unwrap();
+
+        // Update the template
+        let mut updated = template.clone();
+        updated.schema_type = "HotelReservation".into();
+        updated.version = 2;
+        db.update_template(&updated).unwrap();
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].schema_type, "HotelReservation");
+        assert_eq!(all[0].version, 2);
     }
 
-    fn delete_template(&self, _template_name: &str) -> Result<(), DbError> {
-        // TODO: Implement template deletion in sql.js
-        Ok(())
+    #[test]
+    fn test_template_update_not_found() {
+        let db = WasmDatabase::new().unwrap();
+
+        let template = Template {
+            id: "nonexistent".into(),
+            template_name: "ghost".into(),
+            schema_type: "FlightReservation".into(),
+            principal_did: None,
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        let result = db.update_template(&template);
+        assert!(result.is_err());
     }
 
-    fn set_template_enabled(&self, _template_name: &str, _enabled: bool) -> Result<(), DbError> {
-        // TODO: Implement template enable/disable in sql.js
-        Ok(())
+    #[test]
+    fn test_template_delete_not_found() {
+        let db = WasmDatabase::new().unwrap();
+        let result = db.delete_template("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_template_enabled_not_found() {
+        let db = WasmDatabase::new().unwrap();
+        let result = db.set_template_enabled("nonexistent", false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_disabled_template_survives_query_templates() {
+        let db = WasmDatabase::new().unwrap();
+
+        let template = Template {
+            id: "t-1".into(),
+            template_name: "toggleable".into(),
+            schema_type: "FlightReservation".into(),
+            principal_did: None,
+            template_config: crate::types::TemplateConfig {
+                version: 1,
+                layout: crate::types::LayoutConfig {
+                    r#type: "grid".into(),
+                    columns: Some(2),
+                    direction: None,
+                    spacing: Some("md".into()),
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+            created_by: None,
+        };
+
+        db.insert_template(&template).unwrap();
+        db.set_template_enabled("toggleable", false).unwrap();
+
+        // Disabled template invisible to list_enabled but visible to query_templates
+        let enabled = db.list_enabled_templates_for_principal(None).unwrap();
+        assert_eq!(enabled.len(), 0);
+
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(!all[0].enabled);
     }
 }

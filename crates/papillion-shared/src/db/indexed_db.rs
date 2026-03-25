@@ -112,7 +112,7 @@ impl IndexedDbDatabase {
                 "episodes": self.inner.list_episodes(None, None, 100000, None)?,
                 "profiles": self.inner.list_agent_profiles()?,
                 "settings": self.get_all_settings()?,
-                "templates": self.inner.list_enabled_templates_for_principal(None)
+                "templates": self.inner.query_templates(None)
                     .unwrap_or_default(),
             });
 
@@ -191,6 +191,10 @@ impl DatabaseOps for IndexedDbDatabase {
 
     fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
         self.inner.search_text(query, limit)
+    }
+
+    fn query_templates(&self, principal_did: Option<&str>) -> Result<Vec<Template>, DbError> {
+        self.inner.query_templates(principal_did)
     }
 
     fn list_enabled_templates_for_principal(
