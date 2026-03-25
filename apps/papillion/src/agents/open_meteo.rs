@@ -95,7 +95,10 @@ impl AgentHandler for OpenMeteoAgent {
             .query(&[
                 ("latitude", lat.to_string()),
                 ("longitude", lon.to_string()),
-                ("current", "temperature_2m,wind_speed_10m,weather_code".into()),
+                (
+                    "current",
+                    "temperature_2m,wind_speed_10m,weather_code".into(),
+                ),
             ])
             .send()
             .map_err(|e: reqwest::Error| {

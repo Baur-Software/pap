@@ -90,11 +90,7 @@ impl AgentHandler for NominatimAgent {
 
         let results: Vec<NominatimResult> = client
             .get("https://nominatim.openstreetmap.org/search")
-            .query(&[
-                ("q", query.as_str()),
-                ("format", "json"),
-                ("limit", "5"),
-            ])
+            .query(&[("q", query.as_str()), ("format", "json"), ("limit", "5")])
             .send()
             .map_err(|e: reqwest::Error| {
                 TransportError::ServerError(format!("Nominatim request: {e}"))

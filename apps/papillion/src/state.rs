@@ -248,10 +248,7 @@ impl AppState {
             "On-Device AI".into(),
             Arc::new(OnDeviceAiAgent::new(model_manager.clone())),
         );
-        local_agents.insert(
-            "Open-Meteo Weather".into(),
-            Arc::new(OpenMeteoAgent::new()),
-        );
+        local_agents.insert("Open-Meteo Weather".into(), Arc::new(OpenMeteoAgent::new()));
         local_agents.insert(
             "Open Library Books".into(),
             Arc::new(OpenLibraryAgent::new()),

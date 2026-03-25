@@ -104,9 +104,9 @@ impl AgentHandler for HackerNewsAgent {
             .into_iter()
             .filter_map(|hit| {
                 let title = hit.title?;
-                let url = hit
-                    .url
-                    .unwrap_or_else(|| format!("https://news.ycombinator.com/item?id={}", hit.object_id));
+                let url = hit.url.unwrap_or_else(|| {
+                    format!("https://news.ycombinator.com/item?id={}", hit.object_id)
+                });
                 let discussion_url =
                     format!("https://news.ycombinator.com/item?id={}", hit.object_id);
 

@@ -22,10 +22,7 @@ fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
     let lower = prompt.to_lowercase();
 
     // Weather / forecast — requires GeoCoordinates disclosure
-    if lower.contains("weather")
-        || lower.contains("forecast")
-        || lower.contains("temperature")
-    {
+    if lower.contains("weather") || lower.contains("forecast") || lower.contains("temperature") {
         let q = prompt
             .replace("weather", "")
             .replace("forecast", "")
