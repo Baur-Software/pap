@@ -91,7 +91,7 @@ impl TransactionReceipt {
             let proof = mandate
                 .payment_proof
                 .as_ref()
-                .ok_or_else(|| PapError::MissingPaymentProof)?;
+                .ok_or(PapError::MissingPaymentProof)?;
 
             // Receipt must carry the commitment
             let receipt_commitment = self.payment_proof_commitment.as_ref().ok_or_else(|| {
