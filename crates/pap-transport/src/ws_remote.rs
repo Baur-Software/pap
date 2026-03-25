@@ -83,9 +83,8 @@ impl AgentHandler for WsRemoteAgentHandler {
             .client
             .lock()
             .map_err(|_| TransportError::HandlerError("client lock poisoned".into()))?;
-        let resp = Self::block_on(
-            client.exchange_did(session_id, initiator_session_did.to_string()),
-        )?;
+        let resp =
+            Self::block_on(client.exchange_did(session_id, initiator_session_did.to_string()))?;
         match resp {
             ProtocolMessage::SessionDidAck => Ok(()),
             other => Err(TransportError::InvalidResponse(format!(

@@ -123,10 +123,7 @@ async fn handle_connection(
             .map_err(|e| TransportError::InvalidResponse(format!("deserialize failed: {e}")))?;
 
         let response = dispatch_message(&handler, &mut session_id, ws_msg)?;
-        let is_close = matches!(
-            &response.payload,
-            Some(ProtocolMessage::SessionClosed)
-        );
+        let is_close = matches!(&response.payload, Some(ProtocolMessage::SessionClosed));
 
         let json = serde_json::to_string(&response)
             .map_err(|e| TransportError::ServerError(e.to_string()))?;
@@ -157,32 +154,30 @@ fn dispatch_message(
     match msg.phase {
         // Phase 1: Token presentation
         1 => {
-            let payload = msg
-                .payload
-                .ok_or_else(|| TransportError::InvalidResponse("phase 1: missing payload".into()))?;
+            let payload = msg.payload.ok_or_else(|| {
+                TransportError::InvalidResponse("phase 1: missing payload".into())
+            })?;
             match payload {
-                ProtocolMessage::TokenPresentation { token } => {
-                    match handler.handle_token(token) {
-                        Ok((sid, receiver_did)) => {
-                            *session_id = Some(sid.clone());
-                            Ok(WsMessage {
-                                phase: 1,
-                                session_id: Some(sid.clone()),
-                                payload: Some(ProtocolMessage::TokenAccepted {
-                                    session_id: sid,
-                                    receiver_session_did: receiver_did,
-                                }),
-                            })
-                        }
-                        Err(e) => Ok(WsMessage {
+                ProtocolMessage::TokenPresentation { token } => match handler.handle_token(token) {
+                    Ok((sid, receiver_did)) => {
+                        *session_id = Some(sid.clone());
+                        Ok(WsMessage {
                             phase: 1,
-                            session_id: None,
-                            payload: Some(ProtocolMessage::TokenRejected {
-                                reason: e.to_string(),
+                            session_id: Some(sid.clone()),
+                            payload: Some(ProtocolMessage::TokenAccepted {
+                                session_id: sid,
+                                receiver_session_did: receiver_did,
                             }),
-                        }),
+                        })
                     }
-                }
+                    Err(e) => Ok(WsMessage {
+                        phase: 1,
+                        session_id: None,
+                        payload: Some(ProtocolMessage::TokenRejected {
+                            reason: e.to_string(),
+                        }),
+                    }),
+                },
                 _ => Err(TransportError::InvalidResponse(
                     "phase 1: expected TokenPresentation".into(),
                 )),
@@ -192,9 +187,9 @@ fn dispatch_message(
         // Phase 2: Ephemeral DID exchange
         2 => {
             let sid = require_session_id(session_id)?;
-            let payload = msg
-                .payload
-                .ok_or_else(|| TransportError::InvalidResponse("phase 2: missing payload".into()))?;
+            let payload = msg.payload.ok_or_else(|| {
+                TransportError::InvalidResponse("phase 2: missing payload".into())
+            })?;
             match payload {
                 ProtocolMessage::SessionDidExchange {
                     initiator_session_did,
@@ -215,9 +210,9 @@ fn dispatch_message(
         // Phase 3: Disclosure
         3 => {
             let sid = require_session_id(session_id)?;
-            let payload = msg
-                .payload
-                .ok_or_else(|| TransportError::InvalidResponse("phase 3: missing payload".into()))?;
+            let payload = msg.payload.ok_or_else(|| {
+                TransportError::InvalidResponse("phase 3: missing payload".into())
+            })?;
             match payload {
                 ProtocolMessage::DisclosureOffer { disclosures } => {
                     handler.handle_disclosure(&sid, disclosures)?;
@@ -247,9 +242,9 @@ fn dispatch_message(
         // Phase 5: Receipt co-signing
         5 => {
             let sid = require_session_id(session_id)?;
-            let payload = msg
-                .payload
-                .ok_or_else(|| TransportError::InvalidResponse("phase 5: missing payload".into()))?;
+            let payload = msg.payload.ok_or_else(|| {
+                TransportError::InvalidResponse("phase 5: missing payload".into())
+            })?;
             match payload {
                 ProtocolMessage::ReceiptForCoSign { receipt } => {
                     let signed = handler.co_sign_receipt(receipt)?;

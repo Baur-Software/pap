@@ -16,10 +16,7 @@ struct TestHandler;
 
 impl AgentHandler for TestHandler {
     fn handle_token(&self, _token: CapabilityToken) -> Result<(String, String), TransportError> {
-        Ok((
-            "test-session-1".into(),
-            "did:key:zReceiverSession".into(),
-        ))
+        Ok(("test-session-1".into(), "did:key:zReceiverSession".into()))
     }
 
     fn handle_did_exchange(
@@ -108,10 +105,7 @@ async fn full_handshake_over_websocket() {
     );
 
     // ── Phase 3: Disclosure (zero-disclosure) ────────────────────
-    let resp = client
-        .send_disclosures(&session_id, vec![])
-        .await
-        .unwrap();
+    let resp = client.send_disclosures(&session_id, vec![]).await.unwrap();
     assert!(
         matches!(resp, ProtocolMessage::DisclosureAccepted),
         "Expected DisclosureAccepted, got: {resp:?}"
@@ -140,10 +134,7 @@ async fn full_handshake_over_websocket() {
         timestamp: Utc::now(),
         signatures: vec!["initiator-sig".into()],
     };
-    let resp = client
-        .exchange_receipt(&session_id, receipt)
-        .await
-        .unwrap();
+    let resp = client.exchange_receipt(&session_id, receipt).await.unwrap();
     match &resp {
         ProtocolMessage::ReceiptCoSigned { receipt } => {
             assert_eq!(receipt.signatures.len(), 2);
@@ -176,11 +167,7 @@ async fn token_rejection_over_websocket() {
             Err(TransportError::HandlerError("token expired".into()))
         }
 
-        fn handle_did_exchange(
-            &self,
-            _session_id: &str,
-            _did: &str,
-        ) -> Result<(), TransportError> {
+        fn handle_did_exchange(&self, _session_id: &str, _did: &str) -> Result<(), TransportError> {
             Ok(())
         }
 

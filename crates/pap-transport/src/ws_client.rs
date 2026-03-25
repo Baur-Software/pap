@@ -122,9 +122,9 @@ impl WsAgentClient {
         match response {
             Message::Text(text) => serde_json::from_str(&text)
                 .map_err(|e| TransportError::InvalidResponse(format!("deserialize failed: {e}"))),
-            Message::Close(_) => {
-                Err(TransportError::ConnectionFailed("peer closed connection".into()))
-            }
+            Message::Close(_) => Err(TransportError::ConnectionFailed(
+                "peer closed connection".into(),
+            )),
             other => Err(TransportError::InvalidResponse(format!(
                 "expected text frame, got: {other:?}"
             ))),
