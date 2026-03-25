@@ -6,7 +6,32 @@ license.workspace = true
 repository.workspace = true
 description = "Federated marketplace discovery for PAP agent networks"
 
+[features]
+default = ["native"]
+native = [
+    "dep:axum",
+    "dep:tokio",
+    "dep:reqwest",
+    "dep:rcgen",
+    "dep:rustls",
+    "dep:rustls-pemfile",
+    "dep:tokio-rustls",
+    "dep:axum-server",
+    "dep:tower-http",
+]
+wasm = [
+    "pap-did/wasm",
+    "dep:web-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:js-sys",
+    "dep:getrandom",
+    "chrono/wasmbind",
+    "uuid/js",
+]
+
 [dependencies]
+# Always-available (core types, parsing, registry logic)
 pap-core = { workspace = true }
 pap-did = { workspace = true }
 pap-marketplace = { workspace = true }
@@ -16,15 +41,35 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
-axum = { workspace = true }
-tokio = { workspace = true }
-reqwest = { workspace = true }
-rcgen = { workspace = true }
-rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
-tokio-rustls = { workspace = true }
-axum-server = { workspace = true }
 hex = { workspace = true }
+uuid = { workspace = true }
+
+# Native-only (server, TLS, reqwest HTTP client)
+axum = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+rcgen = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
+axum-server = { workspace = true, optional = true }
+tower-http = { version = "0.6", features = ["cors"], optional = true }
+
+# WASM-only (browser Fetch API client)
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Headers",
+    "Response",
+], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
+getrandom = { workspace = true, optional = true }
 
 [dev-dependencies]
 rand = { workspace = true }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }

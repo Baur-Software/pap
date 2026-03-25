@@ -2,6 +2,7 @@ use pap_core::recovery::RevocationProof;
 use pap_marketplace::AgentAdvertisement;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "native")]
 use crate::error::FederationError;
 use crate::peer::RegistryPeer;
 
@@ -41,7 +42,7 @@ pub enum FederationMessage {
     },
 }
 
-/// HTTP(S) client for federation operations.
+/// HTTP(S) client for federation operations (native only).
 ///
 /// Two construction modes:
 /// - `pinned(peers)` — fingerprint-pinned TLS. Use for all communication
@@ -49,10 +50,15 @@ pub enum FederationMessage {
 /// - `tofu()` — Trust On First Use. Accepts any cert for bootstrapping
 ///   new peer connections. Record the fingerprint and switch to `pinned()`
 ///   for subsequent connections.
+///
+/// For browser environments, use [`FetchFederationClient`](crate::web_client::FetchFederationClient)
+/// instead — it uses the Fetch API and doesn't require TLS pinning.
+#[cfg(feature = "native")]
 pub struct FederationClient {
     client: reqwest::Client,
 }
 
+#[cfg(feature = "native")]
 impl FederationClient {
     /// Create a federation client with a custom reqwest client.
     pub fn with_client(client: reqwest::Client) -> Self {
@@ -168,7 +174,7 @@ impl FederationClient {
     pub async fn fetch_identity(
         &self,
         endpoint: &str,
-    ) -> Result<crate::server::NodeIdentityResponse, FederationError> {
+    ) -> Result<crate::peer::NodeIdentityResponse, FederationError> {
         let url = format!("{}/federation/identity", endpoint.trim_end_matches('/'));
 
         let resp = self
@@ -211,6 +217,7 @@ impl FederationClient {
     }
 }
 
+#[cfg(feature = "native")]
 impl Default for FederationClient {
     fn default() -> Self {
         Self::new()

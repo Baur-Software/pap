@@ -4,26 +4,13 @@ use std::sync::{Arc, Mutex};
 use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::error::FederationError;
-use crate::peer::RegistryPeer;
+use crate::peer::{NodeIdentityResponse, RegistryPeer};
 use crate::registry::FederatedRegistry;
 use crate::sync::FederationMessage;
-
-/// This node's identity as returned by `/federation/identity`.
-///
-/// A connecting node calls this endpoint to learn who it's talking to
-/// before trusting anything else. The `cert_fingerprint` is verified
-/// against the TLS connection's actual certificate.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeIdentityResponse {
-    pub did: String,
-    pub endpoint: String,
-    pub cert_fingerprint: String,
-    pub agent_count: usize,
-    pub peer_count: usize,
-}
 
 /// TLS-secured HTTP server for federation endpoints.
 ///
@@ -35,6 +22,9 @@ pub struct NodeIdentityResponse {
 ///
 /// All connections are TLS-encrypted using a self-signed certificate
 /// whose fingerprint is published in peer discovery. No CA dependency.
+///
+/// CORS headers are included so browser-based agents using
+/// `pap+https://` can reach federation endpoints.
 pub struct FederationServer {
     registry: Arc<Mutex<FederatedRegistry>>,
     port: u16,
@@ -89,11 +79,21 @@ impl FederationServer {
             cert_fingerprint: self.cert_fingerprint.clone(),
         };
 
+        // CORS: browser agents using pap+https:// need cross-origin access
+        // to federation endpoints. Allow any origin since federation is
+        // public discovery — authentication is at the protocol layer (DIDs),
+        // not the transport layer.
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
         Router::new()
             .route("/federation/identity", get(handle_identity))
             .route("/federation/query", get(handle_query))
             .route("/federation/announce", post(handle_announce))
             .route("/federation/peers", get(handle_peers))
+            .layer(cors)
             .with_state(state)
     }
 
@@ -183,4 +183,293 @@ async fn handle_peers(State(state): State<ServerState>) -> Json<FederationMessag
     }
 
     Json(FederationMessage::PeerListResponse { peers })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Method, Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    fn make_server() -> FederationServer {
+        let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
+        FederationServer::new(
+            registry,
+            7890,
+            "did:key:zTestNode".into(),
+            "https://localhost:7890".into(),
+            "abc123fingerprint".into(),
+        )
+    }
+
+    fn make_server_with_ad() -> FederationServer {
+        let mut reg = FederatedRegistry::new();
+
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let did = pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
+            .unwrap()
+            .did();
+        let mut ad = pap_marketplace::AgentAdvertisement::new(
+            "Test Agent",
+            "TestCorp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec!["schema:SearchResult".into()],
+        );
+        ad.sign(&key);
+        reg.register_local(ad).unwrap();
+
+        let registry = Arc::new(Mutex::new(reg));
+        FederationServer::new(
+            registry,
+            7890,
+            "did:key:zTestNode".into(),
+            "https://localhost:7890".into(),
+            "abc123fingerprint".into(),
+        )
+    }
+
+    #[tokio::test]
+    async fn identity_endpoint_returns_node_info() {
+        let server = make_server();
+        let app = server.router();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/federation/identity")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let identity: NodeIdentityResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(identity.did, "did:key:zTestNode");
+        assert_eq!(identity.endpoint, "https://localhost:7890");
+        assert_eq!(identity.cert_fingerprint, "abc123fingerprint");
+        assert_eq!(identity.agent_count, 0);
+        assert_eq!(identity.peer_count, 0);
+    }
+
+    #[tokio::test]
+    async fn query_endpoint_returns_matching_ads() {
+        let server = make_server_with_ad();
+        let app = server.router();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/federation/query?action=schema:SearchAction")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
+        match msg {
+            FederationMessage::QueryResponse { advertisements } => {
+                assert_eq!(advertisements.len(), 1);
+                assert_eq!(advertisements[0].name, "Test Agent");
+            }
+            _ => panic!("expected QueryResponse"),
+        }
+    }
+
+    #[tokio::test]
+    async fn query_endpoint_returns_empty_for_unknown_action() {
+        let server = make_server_with_ad();
+        let app = server.router();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/federation/query?action=schema:UnknownAction")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
+        match msg {
+            FederationMessage::QueryResponse { advertisements } => {
+                assert!(advertisements.is_empty());
+            }
+            _ => panic!("expected QueryResponse"),
+        }
+    }
+
+    #[tokio::test]
+    async fn peers_endpoint_includes_self() {
+        let server = make_server();
+        let app = server.router();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/federation/peers")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
+        match msg {
+            FederationMessage::PeerListResponse { peers } => {
+                assert_eq!(peers.len(), 1);
+                assert_eq!(peers[0].did, "did:key:zTestNode");
+                assert_eq!(peers[0].cert_fingerprint, Some("abc123fingerprint".into()));
+            }
+            _ => panic!("expected PeerListResponse"),
+        }
+    }
+
+    #[tokio::test]
+    async fn announce_endpoint_accepts_signed_ad() {
+        let server = make_server();
+        let app = server.router();
+
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let did = pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
+            .unwrap()
+            .did();
+        let mut ad = pap_marketplace::AgentAdvertisement::new(
+            "New Agent",
+            "Corp",
+            &did,
+            vec!["schema:BookAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad.sign(&key);
+
+        let msg = FederationMessage::Announce {
+            advertisement: Box::new(ad),
+        };
+        let body = serde_json::to_string(&msg).unwrap();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/federation/announce")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let ack: FederationMessage = serde_json::from_slice(&body).unwrap();
+        match ack {
+            FederationMessage::AnnounceAck { accepted, .. } => {
+                assert!(accepted);
+            }
+            _ => panic!("expected AnnounceAck"),
+        }
+    }
+
+    #[tokio::test]
+    async fn announce_endpoint_rejects_non_announce_message() {
+        let server = make_server();
+        let app = server.router();
+
+        let msg = FederationMessage::PeerList;
+        let body = serde_json::to_string(&msg).unwrap();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/federation/announce")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let ack: FederationMessage = serde_json::from_slice(&body).unwrap();
+        match ack {
+            FederationMessage::AnnounceAck { accepted, hash } => {
+                assert!(!accepted);
+                assert!(hash.is_empty());
+            }
+            _ => panic!("expected AnnounceAck"),
+        }
+    }
+
+    #[tokio::test]
+    async fn cors_preflight_returns_access_control_headers() {
+        let server = make_server();
+        let app = server.router();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::OPTIONS)
+                    .uri("/federation/identity")
+                    .header("origin", "https://browser-app.example.com")
+                    .header("access-control-request-method", "GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(resp.headers().contains_key("access-control-allow-origin"));
+    }
+
+    #[tokio::test]
+    async fn cors_response_includes_allow_origin() {
+        let server = make_server();
+        let app = server.router();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/federation/identity")
+                    .header("origin", "https://browser-app.example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let allow_origin = resp
+            .headers()
+            .get("access-control-allow-origin")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert_eq!(allow_origin, "*");
+    }
 }
