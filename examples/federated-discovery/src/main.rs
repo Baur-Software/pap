@@ -30,9 +30,7 @@ fn make_signed_ad(
     requires_disclosure: Vec<String>,
 ) -> (AgentAdvertisement, SigningKey) {
     let key = SigningKey::generate(&mut OsRng);
-    let did = PrincipalKeypair::from_bytes(&key.to_bytes())
-        .unwrap()
-        .did();
+    let did = PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap().did();
     let mut ad = AgentAdvertisement::new(
         name,
         "ExampleCorp",
@@ -135,7 +133,7 @@ async fn main() {
     println!("  Node B knows {} peer(s)", registry_b.peers().len());
     println!(
         "  Peer B fingerprint: {}...",
-        peer_b.cert_fingerprint.as_ref().unwrap()[..24].to_string()
+        &peer_b.cert_fingerprint.as_ref().unwrap()[..24]
     );
     println!();
 
@@ -198,10 +196,7 @@ async fn main() {
     // With name+email available — should also find BookingBot for ReserveAction
     let full_results = registry_a.query_local_satisfiable(
         "schema:ReserveAction",
-        &[
-            "schema:Person.name".into(),
-            "schema:Person.email".into(),
-        ],
+        &["schema:Person.name".into(), "schema:Person.email".into()],
     );
     println!(
         "  ReserveAction with name+email: {} agents",

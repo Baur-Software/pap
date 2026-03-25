@@ -59,7 +59,9 @@ fn main() {
     // In production this would be a real token from a mint.
     // Only the SHA-256 hash is stored — the vendor receives proof of value
     // transfer but nothing that identifies the payer.
-    let proof = PaymentProof::ecash(b"cashu:blind:v1:mint=example.com:amount=50:token=ZGVtby1ibGluZC1zaWduZWQtdG9rZW4");
+    let proof = PaymentProof::ecash(
+        b"cashu:blind:v1:mint=example.com:amount=50:token=ZGVtby1ibGluZC1zaWduZWQtdG9rZW4",
+    );
     root_mandate.payment_proof = Some(proof);
     root_mandate.sign(principal.signing_key());
 

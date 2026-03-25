@@ -62,7 +62,10 @@ fn main() {
     let proof = vc.proof.as_ref().unwrap();
     println!("  Proof type: {}", proof.proof_type);
     println!("  Proof purpose: {}", proof.proof_purpose);
-    println!("  Verification method: {}...", &proof.verification_method[..30]);
+    println!(
+        "  Verification method: {}...",
+        &proof.verification_method[..30]
+    );
     println!();
 
     // ─── Step 2: VC Verification ──────────────────────────────────────
@@ -103,18 +106,9 @@ fn main() {
         "schema:email".into(),
         serde_json::json!("alice@example.com"),
     );
-    claims.insert(
-        "schema:nationality".into(),
-        serde_json::json!("Wonderland"),
-    );
-    claims.insert(
-        "schema:birthDate".into(),
-        serde_json::json!("1990-01-15"),
-    );
-    claims.insert(
-        "schema:telephone".into(),
-        serde_json::json!("+1-555-0199"),
-    );
+    claims.insert("schema:nationality".into(), serde_json::json!("Wonderland"));
+    claims.insert("schema:birthDate".into(), serde_json::json!("1990-01-15"));
+    claims.insert("schema:telephone".into(), serde_json::json!("+1-555-0199"));
 
     let mut sd_jwt = SelectiveDisclosureJwt::new(holder_did.clone(), claims);
     sd_jwt.sign(&holder_key);
@@ -144,11 +138,13 @@ fn main() {
     // ─── Step 5: Partial Disclosure ───────────────────────────────────
     println!("Step 5: Selective disclosure — reveal only name and email");
 
-    let partial = sd_jwt
-        .disclose(&["schema:name", "schema:email"])
-        .unwrap();
+    let partial = sd_jwt.disclose(&["schema:name", "schema:email"]).unwrap();
     assert_eq!(partial.len(), 2);
-    println!("  Disclosed {} of {} claims:", partial.len(), claim_keys.len());
+    println!(
+        "  Disclosed {} of {} claims:",
+        partial.len(),
+        claim_keys.len()
+    );
     for d in &partial {
         println!("    {} = {} (salt: {}...)", d.key, d.value, &d.salt[..8]);
     }
@@ -157,15 +153,13 @@ fn main() {
         .verify_disclosures(&partial, &holder_key.verifying_key())
         .unwrap();
     println!("  Disclosure verification: VALID");
-    println!(
-        "  Hidden claims: nationality, birthDate, telephone (never sent)"
-    );
+    println!("  Hidden claims: nationality, birthDate, telephone (never sent)");
     println!();
 
     // ─── Step 6: Full Disclosure ──────────────────────────────────────
     println!("Step 6: Full disclosure — all claims revealed");
 
-    let key_refs: Vec<&str> = claim_keys.iter().map(|s| *s).collect();
+    let key_refs: Vec<&str> = claim_keys.to_vec();
     let full = sd_jwt.disclose(&key_refs).unwrap();
     assert_eq!(full.len(), 5);
     sd_jwt
@@ -237,10 +231,7 @@ fn main() {
     // Wrap the VC's subject claims into an SD-JWT for selective disclosure
     let mut vc_claims = HashMap::new();
     vc_claims.insert("vc_id".into(), serde_json::json!(mandate_vc.id));
-    vc_claims.insert(
-        "scope".into(),
-        serde_json::json!("schema:SearchAction"),
-    );
+    vc_claims.insert("scope".into(), serde_json::json!("schema:SearchAction"));
     vc_claims.insert("maxBudget".into(), serde_json::json!(500));
     vc_claims.insert("agent_did".into(), serde_json::json!(agent_did));
 

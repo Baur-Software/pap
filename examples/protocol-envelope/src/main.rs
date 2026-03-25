@@ -47,8 +47,8 @@ fn main() {
 
     let env = Envelope::new(
         session_id,
-        &initiator_session.did(),
-        &receiver_session.did(),
+        initiator_session.did(),
+        receiver_session.did(),
         0,
         ProtocolMessage::SessionDidExchange {
             initiator_session_did: initiator_session.did(),
@@ -75,8 +75,8 @@ fn main() {
 
     let mut signed_env = Envelope::new(
         session_id,
-        &initiator_session.did(),
-        &receiver_session.did(),
+        initiator_session.did(),
+        receiver_session.did(),
         1,
         ProtocolMessage::DisclosureOffer {
             disclosures: vec![serde_json::json!({
@@ -87,7 +87,10 @@ fn main() {
     );
 
     let signable = signed_env.signable_bytes();
-    println!("  Signable bytes: {} bytes (SHA-256 of session_id || seq || payload)", signable.len());
+    println!(
+        "  Signable bytes: {} bytes (SHA-256 of session_id || seq || payload)",
+        signable.len()
+    );
 
     signed_env.sign(initiator_session.signing_key());
     assert!(signed_env.signature.is_some());
@@ -178,7 +181,8 @@ fn main() {
     token.sign(principal.signing_key());
 
     // Create a real session for receipt
-    let mut session = Session::initiate(&token, &receiver_session.did(), &principal.verifying_key()).unwrap();
+    let mut session =
+        Session::initiate(&token, &receiver_session.did(), &principal.verifying_key()).unwrap();
     session
         .open(initiator_session.did(), receiver_session.did())
         .unwrap();
@@ -260,8 +264,8 @@ fn main() {
     for (seq, (name, msg)) in message_types.into_iter().enumerate() {
         let mut env = Envelope::new(
             session_id,
-            &initiator_session.did(),
-            &receiver_session.did(),
+            initiator_session.did(),
+            receiver_session.did(),
             seq as u64,
             msg,
         );
