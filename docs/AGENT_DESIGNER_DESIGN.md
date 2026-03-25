@@ -1,4 +1,4 @@
-# Design: Agent Designer WYSIWYG Editor for Crystalis Registry
+# Design: Agent Designer WYSIWYG Editor for Chrysalis Registry
 
 **Generated:** 2026-03-23
 **Branch:** vk/c893-registry-visual
@@ -10,7 +10,7 @@
 
 ## Context
 
-Crystalis is a self-hosted, federated PAP agent registry. Currently, developers register agents by pasting pre-signed JSON-LD directly into a textarea modal. This works but has friction:
+Chrysalis is a self-hosted, federated PAP agent registry. Currently, developers register agents by pasting pre-signed JSON-LD directly into a textarea modal. This works but has friction:
 
 1. **Schema.org vocab mapping** — Developers must manually map their agent capabilities to schema.org action types and object types
 2. **Property/disclosure requirements** — Specifying which `schema:*` properties their agent needs requires knowing the vocab hierarchy and syntax
@@ -28,7 +28,7 @@ Key constraint: **Export produces JSON-LD only.** This is not a runtime executor
 A developer wants to register a new agent service. They have:
 - A deployed API service (e.g., flight search agent)
 - An understanding of what it does (searches flights, returns results)
-- A desire to register it in the Crystalis registry
+- A desire to register it in the Chrysalis registry
 
 Today they must:
 1. Manually construct JSON-LD with schema.org vocab

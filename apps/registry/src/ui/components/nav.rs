@@ -24,7 +24,7 @@ pub fn Sidebar() -> impl IntoView {
             <div class="sidebar-logo">
                 <div class="sidebar-logo-mark">"🦋"</div>
                 <div>
-                    <div class="sidebar-logo-text">"Crystalis"</div>
+                    <div class="sidebar-logo-text">"Chrysalis"</div>
                     <div class="sidebar-logo-sub">"Agent Registry"</div>
                 </div>
             </div>

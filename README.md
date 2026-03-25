@@ -180,9 +180,9 @@ PAP exposes stable FFI layers for multiple languages:
 
 For language bindings, see `crates/pap-c`, `crates/pap-wasm`, `crates/pap-python`, and `bindings/`.
 
-## Crystalis: Hostable Federated Registry
+## Chrysalis: Hostable Federated Registry
 
-`apps/registry/` is **Crystalis**, a standalone, self-hosted federated PAP registry. Deploy one node to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
+`apps/registry/` is **Chrysalis**, a standalone, self-hosted federated PAP registry. Deploy one node to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
 
 ```bash
 # Run locally (SQLite, no auth)
@@ -209,7 +209,7 @@ An open agent network needs a registry for six distinct reasons: discovery, pre-
 
 **Discovery without a central directory**
 
-An agent advertising `schema:ReserveAction` shouldn't require a platform-controlled directory to be found. Crystalis nodes store signed `AgentAdvertisement` records indexed by Schema.org action type and free-text capability description. An orchestrator looking for a hotel-booking agent queries its local registry — not a platform API — and receives a list of candidates along with their disclosure requirements. Because the federation protocol propagates advertisements across nodes via push/pull sync, no single node is authoritative. The network discovers its topology from the bottom up.
+An agent advertising `schema:ReserveAction` shouldn't require a platform-controlled directory to be found. Chrysalis nodes store signed `AgentAdvertisement` records indexed by Schema.org action type and free-text capability description. An orchestrator looking for a hotel-booking agent queries its local registry — not a platform API — and receives a list of candidates along with their disclosure requirements. Because the federation protocol propagates advertisements across nodes via push/pull sync, no single node is authoritative. The network discovers its topology from the bottom up.
 
 Full-text search over FTS5/tsvector means any node in the mesh can answer capability queries without a custom routing layer or a crawl-the-web index.
 
@@ -225,7 +225,7 @@ Ecash tokens are unlinkable to the principal identity. The vendor learns a trans
 
 **Trust at the edge, not at the center**
 
-Crystalis nodes don't require a trusted third party to validate agent identity. Ed25519 signature verification happens at ingest: an advertisement that wasn't signed by the claiming DID's key is rejected with `422`. Compromise of one peer node cannot inject forged agents into the mesh because every downstream node re-verifies on receipt. TLS fingerprint pinning (TOFU, no CA dependency) means peer connections are authenticated by DID, not by a certificate authority a platform operator controls.
+Chrysalis nodes don't require a trusted third party to validate agent identity. Ed25519 signature verification happens at ingest: an advertisement that wasn't signed by the claiming DID's key is rejected with `422`. Compromise of one peer node cannot inject forged agents into the mesh because every downstream node re-verifies on receipt. TLS fingerprint pinning (TOFU, no CA dependency) means peer connections are authenticated by DID, not by a certificate authority a platform operator controls.
 
 **Accountability without exposure**
 
@@ -235,7 +235,7 @@ This separates accountability from surveillance. You can prove a transaction occ
 
 **Operator sovereignty**
 
-Any organization can run its own Crystalis node. Agents do not need permission from a platform to be discoverable. There is no central index to capture, no API key to revoke, and no terms-of-service gate on discovery. A company running its own registry node can federate selectively — peering with trusted nodes while keeping internal agents off the public mesh entirely. The federation protocol is the same in both cases; the trust boundary is operator-defined.
+Any organization can run its own Chrysalis node. Agents do not need permission from a platform to be discoverable. There is no central index to capture, no API key to revoke, and no terms-of-service gate on discovery. A company running its own registry node can federate selectively — peering with trusted nodes while keeping internal agents off the public mesh entirely. The federation protocol is the same in both cases; the trust boundary is operator-defined.
 
 See [apps/registry/README.md](apps/registry/README.md) for full documentation.
 
@@ -250,7 +250,7 @@ See [apps/registry/README.md](apps/registry/README.md) for full documentation.
 | **Mandate Chain Verification** | No | No | No | Yes (recursive scope/TTL bounds) |
 | **Agent-to-Agent Negotiation** | Yes | No (tool access only) | Yes | Yes |
 | **Economic Primitives** | No | No | No | Ecash / Lightning proofs, receipts |
-| **Marketplace Discovery** | Agent Cards (centralized) | None | HTTP (centralized) | Federated, federated (Crystalis) |
+| **Marketplace Discovery** | Agent Cards (centralized) | None | HTTP (centralized) | Federated, federated (Chrysalis) |
 | **Audit Trail** | No | No | No | Co-signed receipts (property refs only) |
 | **Multi-Language Support** | No | Limited | Limited | Rust, Python, JS/TS, C, C#, Java |
 

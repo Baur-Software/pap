@@ -2,8 +2,8 @@
 
 ### Added
 
-- **Why a Registry? — README** — Six-reason rationale for the Crystalis registry primitive: discovery without a central directory, pre-session SD-JWT disclosure matching, payment negotiation via `Mandate.payment_proof` (ecash/Lightning), trust at the edge (Ed25519 ingest + TLS TOFU pinning), accountability without exposure (receipts with property refs only), and operator sovereignty.
-- **Why a Registry? — GitHub Pages** — Same rationale section added to `docs/crystalis.html` with a numbered six-card grid and a callout explaining the org-internal multi-node mesh pattern (`FederatedRegistry` content-hash dedup + `/federation/peers` gossip, public/private boundary by peering decision).
+- **Why a Registry? — README** — Six-reason rationale for the Chrysalis registry primitive: discovery without a central directory, pre-session SD-JWT disclosure matching, payment negotiation via `Mandate.payment_proof` (ecash/Lightning), trust at the edge (Ed25519 ingest + TLS TOFU pinning), accountability without exposure (receipts with property refs only), and operator sovereignty.
+- **Why a Registry? — GitHub Pages** — Same rationale section added to `docs/chrysalis.html` with a numbered six-card grid and a callout explaining the org-internal multi-node mesh pattern (`FederatedRegistry` content-hash dedup + `/federation/peers` gossip, public/private boundary by peering decision).
 
 ## [0.1.0.0] - 2026-03-23
 
@@ -49,7 +49,7 @@
 ### Changed
 
 - **docs**: Improve README messaging with problem-centric framing — reframe "The Problem" around trust boundaries, clarify MCP spec limitations, add concrete attack scenarios
-- **docs**: Sync README with shipped language bindings (Python, JS/TS, C, C#, Java) and Crystalis registry
+- **docs**: Sync README with shipped language bindings (Python, JS/TS, C, C#, Java) and Chrysalis registry
 - **docs**: Add comprehensive Language Bindings table covering all 6 supported languages
 - **docs**: Expand "Why This Matters" section with three-part structure (Problem → Structural Ceiling → PAP's Answer)
 - **docs**: Rename comparison table to "How PAP Differs" and reframe columns around protocol-enforced disclosure
@@ -57,7 +57,7 @@
 ## [0.4.1.1] - 2026-03-23
 
 ### Changed
-- Rebrand registry as "Crystalis" with butterfly motif (🦋)
+- Rebrand registry as "Chrysalis" with butterfly motif (🦋)
 - Update sidebar branding and dashboard titles
 - Simplify registry subtitle from "Federation Node" to "Agent Registry"
 
@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **papillion**: Health endpoint (`get_health_status` Tauri command) — returns application health status, uptime (calculated from Instant, not UNIX_EPOCH), timestamp, and version. Enables post-deploy canary verification without rolling back broken releases.
 - **ci**: CodeQL workflow with path-based filtering — runs static analysis only when changes include target languages (Rust, Python, JavaScript/TypeScript), reducing unnecessary CI runs on documentation-only or configuration-only commits
 - **docs**: New `pap.html` dedicated page for the PAP protocol targeting developers — covers all six protocol invariants (failure-mode-first framing), protocol stack table, crate grid, Quick Start Rust snippet, examples, and comparison table
-- **docs**: New `crystalis.html` page for the Crystalis self-hostable federated registry product
+- **docs**: New `chrysalis.html` page for the Chrysalis self-hostable federated registry product
 - **docs**: Papillion canvas rendering demo on `index.html` — macOS-style mockup showing flight booking result with privacy disclosure strip
 - **docs**: Six PAP constraint cards on `pap.html`, each leading with the failure mode it prevents; includes new card 06 "Discovery without a standard becomes a silo" covering the federated registry and Papillion visual composer
 - **docs**: Registry and visual composer card explaining signed JSON-LD capability advertisements, federated discovery, and Papillion's drag-and-drop workflow composer
@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **docs**: `index.html` reframed around Papillion product (canvas rendering engine, use cases, how-it-works); PAP protocol content moved to dedicated `pap.html`
 - **docs**: PAP invariants rewritten to lead with failure modes rather than mechanism names — "Sessions that never die drain the internet" instead of "Hard TTL enforcement"
-- **docs**: Nav updated across all pages: `index.html`, `crystalis.html`, and `pap.html` link to each other cohesively
+- **docs**: Nav updated across all pages: `index.html`, `chrysalis.html`, and `pap.html` link to each other cohesively
 
 ## [0.4.1] - 2026-03-23
 
