@@ -49,4 +49,10 @@ pub enum PapError {
 
     #[error("auto-approval policy exceeds mandate scope")]
     PolicyExceedsMandate,
+
+    #[error("payment proof error: {0}")]
+    PaymentProofError(String),
+
+    #[error("missing payment proof: scope includes payment action but mandate has no proof")]
+    MissingPaymentProof,
 }

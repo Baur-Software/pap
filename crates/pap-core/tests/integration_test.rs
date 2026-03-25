@@ -5,6 +5,7 @@ use ed25519_dalek::SigningKey;
 use pap_core::error::PapError;
 use pap_core::extensions::{AutoApprovalPolicy, ContinuityToken};
 use pap_core::mandate::{DecayState, Mandate};
+use pap_core::payment::PaymentProof;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session, SessionState};
@@ -381,10 +382,236 @@ fn mandate_payment_proof_attachment() {
         Utc::now() + Duration::hours(24),
     );
 
-    // Attach payment proof
-    mandate.payment_proof = Some("ecash:blind:v1:token=XYZ123".into());
+    // Attach typed payment proof (ecash commitment)
+    mandate.payment_proof = Some(PaymentProof::ecash(b"blind-signed-token-XYZ123"));
     mandate.sign(&principal_key);
 
     assert!(mandate.payment_proof.is_some());
     assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
+    assert!(mandate.validate_payment_proof().is_ok());
+}
+
+#[test]
+fn lightning_payment_proof_end_to_end() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let orchestrator_key = make_keypair();
+    let orchestrator_did = did_from_key(&orchestrator_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    // Root mandate with PayAction and Lightning proof
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let proof = PaymentProof::lightning(b"bolt11-payment-hash-preimage");
+    let mut root_mandate = Mandate::issue_root(
+        principal_did.clone(),
+        orchestrator_did.clone(),
+        scope.clone(),
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(proof);
+
+    assert!(root_mandate.validate_payment_proof().is_ok());
+    root_mandate.sign(&principal_key);
+    assert!(root_mandate.verify(&principal_key.verifying_key()).is_ok());
+
+    // Capability token for payment action
+    let mut token = CapabilityToken::mint(
+        agent_did.clone(),
+        "schema:PayAction".into(),
+        orchestrator_did.clone(),
+        Utc::now() + Duration::hours(1),
+    );
+    token.sign(&orchestrator_key);
+
+    // Session: initiate -> open -> execute
+    let mut session =
+        Session::initiate(&token, &agent_did, &orchestrator_key.verifying_key()).unwrap();
+    let init_sess_key = make_keypair();
+    let recv_sess_key = make_keypair();
+    session
+        .open(did_from_key(&init_sess_key), did_from_key(&recv_sess_key))
+        .unwrap();
+    session.execute().unwrap();
+
+    // Receipt with payment proof commitment
+    let mut receipt = TransactionReceipt::from_session(
+        &session,
+        vec![],
+        vec!["agent:payment_executed".into()],
+        "schema:PayAction executed".into(),
+        "schema:PaymentReceipt returned".into(),
+    )
+    .unwrap()
+    .with_payment_proof(&root_mandate);
+
+    // Validate commitment matches mandate
+    assert!(receipt.validate_payment_commitment(&root_mandate).is_ok());
+
+    // Co-sign and verify
+    receipt.co_sign(&init_sess_key);
+    receipt.co_sign(&recv_sess_key);
+    assert!(receipt
+        .verify_both(
+            &init_sess_key.verifying_key(),
+            &recv_sess_key.verifying_key()
+        )
+        .is_ok());
+
+    // Verify preimage against proof
+    assert!(root_mandate
+        .payment_proof
+        .as_ref()
+        .unwrap()
+        .verify(b"bolt11-payment-hash-preimage"));
+}
+
+#[test]
+fn ecash_payment_proof_end_to_end() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let proof = PaymentProof::ecash(b"cashuAeyJ0b2tlbiI6W3sibWludCI6Im");
+    let mut mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(proof);
+
+    assert!(mandate.validate_payment_proof().is_ok());
+    mandate.sign(&principal_key);
+    assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
+
+    // Verify the commitment
+    assert!(mandate
+        .payment_proof
+        .as_ref()
+        .unwrap()
+        .verify(b"cashuAeyJ0b2tlbiI6W3sibWludCI6Im"));
+    assert!(!mandate
+        .payment_proof
+        .as_ref()
+        .unwrap()
+        .verify(b"wrong-token"));
+}
+
+#[test]
+fn pay_action_without_proof_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    // PayAction scope but no payment proof attached
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    );
+
+    assert!(matches!(
+        mandate.validate_payment_proof(),
+        Err(PapError::MissingPaymentProof)
+    ));
+}
+
+#[test]
+fn receipt_missing_commitment_for_pay_action_rejected() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let orchestrator_key = make_keypair();
+    let orchestrator_did = did_from_key(&orchestrator_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let mut mandate = Mandate::issue_root(
+        principal_did,
+        orchestrator_did.clone(),
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(PaymentProof::lightning(b"payment-hash"));
+    mandate.sign(&principal_key);
+
+    let mut token = CapabilityToken::mint(
+        agent_did.clone(),
+        "schema:PayAction".into(),
+        orchestrator_did,
+        Utc::now() + Duration::hours(1),
+    );
+    token.sign(&orchestrator_key);
+
+    let mut session =
+        Session::initiate(&token, &agent_did, &orchestrator_key.verifying_key()).unwrap();
+    session
+        .open("did:key:zinit".into(), "did:key:zrecv".into())
+        .unwrap();
+    session.execute().unwrap();
+
+    // Receipt WITHOUT calling with_payment_proof
+    let receipt = TransactionReceipt::from_session(
+        &session,
+        vec![],
+        vec![],
+        "payment executed".into(),
+        "receipt returned".into(),
+    )
+    .unwrap();
+
+    // Validation fails: receipt missing commitment
+    assert!(receipt.validate_payment_commitment(&mandate).is_err());
+}
+
+#[test]
+fn non_payment_action_no_proof_required() {
+    let principal_did = did_from_key(&make_keypair());
+    let agent_did = did_from_key(&make_keypair());
+
+    // SearchAction scope — no payment proof needed
+    let scope = Scope::new(vec![ScopeAction::new("schema:SearchAction")]);
+    let mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    );
+
+    assert!(mandate.validate_payment_proof().is_ok());
+}
+
+#[test]
+fn payment_proof_serialization_in_mandate() {
+    let principal_key = make_keypair();
+    let principal_did = did_from_key(&principal_key);
+    let agent_did = did_from_key(&make_keypair());
+
+    let scope = Scope::new(vec![ScopeAction::new("schema:PayAction")]);
+    let proof = PaymentProof::lightning(b"serialize-test-hash");
+    let mut mandate = Mandate::issue_root(
+        principal_did,
+        agent_did,
+        scope,
+        DisclosureSet::empty(),
+        Utc::now() + Duration::hours(24),
+    )
+    .with_payment_proof(proof);
+    mandate.sign(&principal_key);
+
+    let json = serde_json::to_string(&mandate).unwrap();
+    let mandate2: Mandate = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(
+        mandate.payment_proof.as_ref().unwrap().commitment(),
+        mandate2.payment_proof.as_ref().unwrap().commitment()
+    );
+    assert!(mandate2.verify(&principal_key.verifying_key()).is_ok());
 }

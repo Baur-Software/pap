@@ -304,7 +304,7 @@ contain the following fields:
 | `ttl` | DateTime | REQUIRED | Expiry timestamp (RFC 3339) |
 | `decay_state` | DecayState | REQUIRED | Current lifecycle state (Section 5.7) |
 | `issued_at` | DateTime | REQUIRED | Issuance timestamp (RFC 3339) |
-| `payment_proof` | String or null | OPTIONAL | Payment proof token (Section 13.1) |
+| `payment_proof` | PaymentProof or null | OPTIONAL | ZK payment commitment (Section 13.1) |
 | `signature` | String or null | OPTIONAL | Ed25519 signature (base64url-no-pad) |
 
 ### 5.2. Mandate Signing
@@ -1183,33 +1183,83 @@ all of them.
 
 ### 13.1. Payment Proof
 
-A mandate MAY carry a `payment_proof` field containing an opaque
-payment token. PAP does not define the payment protocol; it defines
-the integration point.
+A mandate MAY carry a `payment_proof` field containing a
+zero-knowledge payment commitment. PAP does not define the payment
+protocol; it defines the integration point. Only cryptographic
+commitments are stored — **never** amounts, destinations, mints, or
+other identifying payment data.
 
-Implementations SHOULD use privacy-preserving payment mechanisms
-such as Chaumian ecash blind-signed tokens:
+The `PaymentProof` type is a tagged enum with two variants:
 
+| Variant | Inner Type | Description |
+|---|---|---|
+| `Lightning` | `Bolt11Hash` | SHA-256 of a BOLT-11 invoice payment hash |
+| `Ecash` | `CashuTokenHash` | SHA-256 of a Cashu blind-signed token |
+
+#### 13.1.1. Bolt11Hash
+
+A commitment to a Lightning Network payment. The `hash` field
+contains the base64url-no-pad encoded SHA-256 of the BOLT-11
+invoice payment hash. The preimage is never stored.
+
+```json
+{
+  "type": "Lightning",
+  "hash": "<base64url-no-pad SHA-256>"
+}
 ```
-ecash:blind:v1:mint=<mint_domain>:amount=<value>:token=<blind_token>
+
+#### 13.1.2. CashuTokenHash
+
+A commitment to a Cashu ecash token. The `hash` field contains the
+base64url-no-pad encoded SHA-256 of the blind-signed token. The
+token itself is never stored.
+
+```json
+{
+  "type": "Ecash",
+  "hash": "<base64url-no-pad SHA-256>"
+}
 ```
 
-Properties:
-- The vendor receives proof of value transfer (amount, mint, token).
-- The vendor MUST NOT be able to identify the payer from the token.
-- The token MUST be unlinkable to the principal's identity.
+#### 13.1.3. Payment Proof Properties
+
+- The proof contains **only** a cryptographic commitment hash.
+- No amounts, destinations, mints, or routing data are stored.
+- The vendor MUST NOT be able to identify the payer from the proof.
+- The proof MUST be unlinkable to the principal's identity.
 - The payment proof is included in the mandate's canonical form for
   signing.
+- If a mandate's scope includes `schema:PayAction`, a payment proof
+  SHOULD be attached. Implementations MAY reject mandates that
+  permit payment actions without a proof.
 
 ### 13.2. Payment Proof Verification
 
 A receiving agent that requires payment MUST:
 1. Extract the `payment_proof` from the mandate.
-2. Verify the proof against the specified mint (out of band).
-3. Accept or reject the session based on verification.
+2. Validate the proof's structural integrity (valid base64url,
+   32-byte SHA-256 commitment).
+3. Verify the proof against the payment network (out of band):
+   - **Lightning**: verify the BOLT-11 payment hash preimage
+   - **Ecash**: verify the Cashu token with the issuing mint
+4. Accept or reject the session based on verification.
 
-The verification protocol between the receiving agent and the mint
-is out of scope for this specification.
+#### 13.2.1. Receipt Payment Proof Commitment
+
+When a transaction receipt is created for a `schema:PayAction`,
+the receipt MUST include a `payment_proof_commitment` field
+containing the commitment hash from the mandate's payment proof.
+This enables auditing without revealing payment details.
+
+A receipt validator MUST check:
+1. The `payment_proof_commitment` is present for payment actions.
+2. The commitment matches the mandate's payment proof commitment.
+3. The commitment is included in the receipt's canonical form for
+   co-signing.
+
+The verification protocol between the receiving agent and the
+payment network is out of scope for this specification.
 
 ### 13.3. Continuity Tokens
 
@@ -1460,7 +1510,7 @@ and document the choice.
 | Delegation bypass | Scope containment + TTL bounds | 5.4.5, 5.5 |
 | Mandate tampering | Parent hash + signature chain | 5.3, 5.6 |
 | Platform lock-in | Federated discovery, no central registry | 10 |
-| Payment linkability | Chaumian ecash blind-signed tokens | 13.1 |
+| Payment linkability | ZK commitments (Lightning BOLT-11, Cashu ecash) | 13.1 |
 | Session correlation | Session keys discarded at close | 4.4, 6.3.6 |
 | Stale authorization | Decay state machine + non-renewal revocation | 5.7 |
 | Advertisement spoofing | Signed advertisements, registry rejects unsigned | 9.4 |

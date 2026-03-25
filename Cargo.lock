@@ -4330,6 +4330,7 @@ version = "0.4.2"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "chrono",
  "console_error_panic_hook",
  "constant_time_eq",
