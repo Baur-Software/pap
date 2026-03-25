@@ -8,16 +8,16 @@
 
 use std::sync::{Arc, Mutex};
 
-use pap_core::session::CapabilityToken;
-use pap_proto::ProtocolMessage;
-use pap_transport::{AgentHandler, OhttpClient, OhttpConfig, TransportError};
+use pap_transport::{AgentHandler, OhttpConfig, TransportError};
 
 /// Mock handler that accepts all tokens and completes all phases.
 #[derive(Clone)]
+#[allow(dead_code)]
 struct MockAgentHandler {
     received_messages: Arc<Mutex<Vec<String>>>,
 }
 
+#[allow(dead_code)]
 impl MockAgentHandler {
     fn new() -> Self {
         Self {

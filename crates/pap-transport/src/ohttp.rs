@@ -72,6 +72,7 @@ impl OhttpConfig {
 /// no state leakage between phases of the PAP handshake.
 #[derive(Clone)]
 pub struct OhttpEncryptor {
+    #[allow(dead_code)]
     config: OhttpConfig,
 }
 
@@ -111,6 +112,7 @@ impl OhttpEncryptor {
 /// OHTTP response decryptor using HPKE.
 #[derive(Clone)]
 pub struct OhttpDecryptor {
+    #[allow(dead_code)]
     config: OhttpConfig,
 }
 
@@ -145,6 +147,7 @@ impl OhttpDecryptor {
 /// OHTTP request decryption for server-side reception.
 #[derive(Clone)]
 pub struct OhttpServerDecryptor {
+    #[allow(dead_code)]
     config: OhttpConfig,
 }
 
@@ -177,6 +180,7 @@ impl OhttpServerDecryptor {
 /// OHTTP response encryption for server-side transmission.
 #[derive(Clone)]
 pub struct OhttpServerEncryptor {
+    #[allow(dead_code)]
     config: OhttpConfig,
 }
 
