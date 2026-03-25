@@ -18,6 +18,9 @@ pub mod native;
 pub mod wasm;
 
 #[cfg(feature = "wasm")]
+pub mod idb;
+
+#[cfg(feature = "wasm")]
 pub mod indexed_db;
 
 #[cfg(test)]
