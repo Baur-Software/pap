@@ -31,6 +31,55 @@ impl Default for CanvasState {
     }
 }
 
+/// Extract block IDs from `{{block:ID}}` patterns in prompt text.
+fn extract_block_ids(text: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut search = text;
+    while let Some(start) = search.find("{{block:") {
+        let after = &search[start + 8..];
+        if let Some(end) = after.find("}}") {
+            let id = &after[..end];
+            if !id.is_empty() {
+                ids.push(id.to_string());
+            }
+            search = &after[end + 2..];
+        } else {
+            break;
+        }
+    }
+    ids
+}
+
+/// Expand `{{block:BLOCK_ID}}` references in prompt text.
+/// Replaces each reference with the JSON content of the referenced block's result.
+fn expand_block_references(text: &str, canvases: &[Canvas]) -> String {
+    let mut result = text.to_string();
+    // Iteratively find and replace {{block:...}} patterns
+    // Use a safety limit to prevent infinite loops on malformed input
+    for _ in 0..50 {
+        if let Some(start) = result.find("{{block:") {
+            if let Some(rel_end) = result[start..].find("}}") {
+                let end = start + rel_end;
+                let full_match = result[start..end + 2].to_string();
+                let block_id = &result[start + 8..end];
+                let replacement = canvases
+                    .iter()
+                    .flat_map(|c| c.blocks.iter())
+                    .find(|b| b.id == block_id)
+                    .and_then(|b| b.content.as_ref())
+                    .map(|c| c.get("result").unwrap_or(c).to_string())
+                    .unwrap_or_else(|| format!("[block {} not found]", block_id));
+                result = result.replace(&full_match, &replacement);
+            } else {
+                break; // Malformed reference
+            }
+        } else {
+            break; // No more references
+        }
+    }
+    result
+}
+
 impl CanvasState {
     /// Create a new blank canvas, set it active, and signal the prompt to focus.
     pub fn new_canvas(&self) -> String {
@@ -98,17 +147,23 @@ impl CanvasState {
             new_id
         });
 
+        // Extract block references and expand them for the backend
+        let all_canvases = canvases.get();
+        let linked_block_ids = extract_block_ids(&text);
+        let expanded_text = expand_block_references(&text, &all_canvases);
+
         // Create a resolving block immediately (optimistic UI)
         let block = CanvasBlock {
             id: generate_id(),
             prompt_id: prompt_id.clone(),
+            prompt_text: Some(text),
             state: BlockState::Resolving {
                 phase: 1,
                 phase_label: "Discovering agents...".into(),
             },
             schema_type: None,
             content: None,
-            linked_block_ids: Vec::new(),
+            linked_block_ids,
             created_at: now_iso(),
             updated_at: now_iso(),
         };
@@ -122,7 +177,7 @@ impl CanvasState {
             }
         });
 
-        // Fire backend command
+        // Fire backend command with expanded text
         let cid = canvas_id.clone();
         spawn_local(async move {
             #[derive(serde::Serialize)]
@@ -136,7 +191,7 @@ impl CanvasState {
                 canvas_id: cid,
                 prompt_id,
                 block_id: block_id.clone(),
-                text,
+                text: expanded_text,
             };
             let result = bridge::invoke::<_, serde_json::Value>("canvas_prompt", &args).await;
             if let Err(e) = result {
@@ -211,7 +266,7 @@ impl CanvasState {
         });
     }
 
-    /// Retry a failed block by re-issuing the mandate.
+    /// Retry a failed block by re-issuing the mandate with the original prompt text.
     pub fn retry_block(&self, block_id: String) {
         let canvases = self.canvases;
         let current_id = self.current_canvas_id;
@@ -219,6 +274,15 @@ impl CanvasState {
             Some(id) => id,
             None => return,
         };
+
+        // Look up the original prompt text from the block
+        let original_text = canvases
+            .get()
+            .iter()
+            .flat_map(|c| c.blocks.iter())
+            .find(|b| b.id == block_id)
+            .and_then(|b| b.prompt_text.clone())
+            .unwrap_or_default();
 
         canvases.update(|cs| {
             if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
@@ -239,10 +303,12 @@ impl CanvasState {
             struct RetryArgs {
                 canvas_id: String,
                 block_id: String,
+                original_text: String,
             }
             let args = RetryArgs {
                 canvas_id: cid.clone(),
                 block_id: bid.clone(),
+                original_text,
             };
             let result = bridge::invoke::<_, serde_json::Value>("canvas_retry", &args).await;
             if let Err(e) = result {
@@ -293,5 +359,118 @@ fn auto_name_from_prompt(prompt: &str) -> String {
         format!("{}...", trimmed)
     } else {
         trimmed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_canvas_with_block(block_id: &str, content: serde_json::Value) -> Canvas {
+        Canvas {
+            id: "c1".into(),
+            name: "Test".into(),
+            blocks: vec![CanvasBlock {
+                id: block_id.into(),
+                prompt_id: "p1".into(),
+                prompt_text: Some("original query".into()),
+                state: BlockState::Resolved,
+                schema_type: None,
+                content: Some(content),
+                linked_block_ids: Vec::new(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            }],
+            created_at: String::new(),
+            updated_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn extract_block_ids_single() {
+        let ids = extract_block_ids("summarize {{block:abc-123}}");
+        assert_eq!(ids, vec!["abc-123"]);
+    }
+
+    #[test]
+    fn extract_block_ids_multiple() {
+        let ids = extract_block_ids("combine {{block:a1}} and {{block:b2}}");
+        assert_eq!(ids, vec!["a1", "b2"]);
+    }
+
+    #[test]
+    fn extract_block_ids_none() {
+        let ids = extract_block_ids("just a normal prompt");
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn extract_block_ids_malformed() {
+        let ids = extract_block_ids("{{block:unclosed");
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn expand_block_references_single() {
+        let canvases = vec![make_canvas_with_block(
+            "blk-1",
+            serde_json::json!({"result": {"title": "Rust"}}),
+        )];
+        let expanded = expand_block_references("summarize {{block:blk-1}}", &canvases);
+        assert!(expanded.contains("Rust"));
+        assert!(!expanded.contains("{{block:"));
+    }
+
+    #[test]
+    fn expand_block_references_multiple() {
+        let canvases = vec![Canvas {
+            id: "c1".into(),
+            name: "Test".into(),
+            blocks: vec![
+                CanvasBlock {
+                    id: "a".into(),
+                    prompt_id: "p".into(),
+                    prompt_text: None,
+                    state: BlockState::Resolved,
+                    schema_type: None,
+                    content: Some(serde_json::json!({"result": "alpha"})),
+                    linked_block_ids: Vec::new(),
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                },
+                CanvasBlock {
+                    id: "b".into(),
+                    prompt_id: "p".into(),
+                    prompt_text: None,
+                    state: BlockState::Resolved,
+                    schema_type: None,
+                    content: Some(serde_json::json!({"result": "beta"})),
+                    linked_block_ids: Vec::new(),
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                },
+            ],
+            created_at: String::new(),
+            updated_at: String::new(),
+        }];
+        let expanded = expand_block_references("{{block:a}} and {{block:b}}", &canvases);
+        assert!(expanded.contains("alpha"));
+        assert!(expanded.contains("beta"));
+        assert!(!expanded.contains("{{block:"));
+    }
+
+    #[test]
+    fn expand_block_references_missing_block() {
+        let canvases = vec![];
+        let expanded = expand_block_references("ref {{block:missing-id}}", &canvases);
+        assert!(expanded.contains("[block missing-id not found]"));
+    }
+
+    #[test]
+    fn expand_block_references_no_refs() {
+        let canvases = vec![];
+        let text = "just a normal prompt";
+        let expanded = expand_block_references(text, &canvases);
+        assert_eq!(expanded, text);
     }
 }

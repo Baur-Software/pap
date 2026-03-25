@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 /// Compute SHA-256 hash of agent DID for profile indexing.
 /// Never stores raw DID in memory DB.
-fn hash_agent_did(agent_did: &str) -> String {
+pub(crate) fn hash_agent_did(agent_did: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(agent_did.as_bytes());
     format!("{:x}", hasher.finalize())
