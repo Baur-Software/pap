@@ -4238,6 +4238,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pap-credential-lifecycle-example"
+version = "0.4.2"
+dependencies = [
+ "chrono",
+ "ed25519-dalek",
+ "pap-core",
+ "pap-credential",
+ "pap-did",
+ "rand 0.8.5",
+ "serde_json",
+]
+
+[[package]]
 name = "pap-delegation-chain-example"
 version = "0.4.2"
 dependencies = [
@@ -4257,6 +4270,22 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "pap-federated-discovery-example"
+version = "0.4.2"
+dependencies = [
+ "chrono",
+ "ed25519-dalek",
+ "pap-core",
+ "pap-did",
+ "pap-federation",
+ "pap-marketplace",
+ "pap-proto",
+ "rand 0.8.5",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -4343,6 +4372,19 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "pap-protocol-envelope-example"
+version = "0.4.2"
+dependencies = [
+ "chrono",
+ "ed25519-dalek",
+ "pap-core",
+ "pap-did",
+ "pap-proto",
+ "rand 0.8.5",
+ "serde_json",
 ]
 
 [[package]]

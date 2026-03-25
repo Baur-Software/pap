@@ -22,6 +22,9 @@ members = [
     "examples/payment",
     "examples/networked-search",
     "examples/webauthn-ceremony",
+    "examples/federated-discovery",
+    "examples/credential-lifecycle",
+    "examples/protocol-envelope",
 ]
 
 [workspace.package]
