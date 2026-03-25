@@ -2,6 +2,8 @@ pub mod client;
 pub mod endpoint;
 pub mod error;
 pub mod handler;
+pub mod ohttp;
+pub mod ohttp_client;
 pub mod remote;
 pub mod server;
 pub mod ws_client;
@@ -14,6 +16,10 @@ pub use client::AgentClient;
 pub use endpoint::EndpointRegistry;
 pub use error::TransportError;
 pub use handler::AgentHandler;
+pub use ohttp::{
+    OhttpConfig, OhttpDecryptor, OhttpEncryptor, OhttpServerDecryptor, OhttpServerEncryptor,
+};
+pub use ohttp_client::OhttpClient;
 pub use remote::RemoteAgentHandler;
 pub use server::AgentServer;
 pub use ws_client::WsAgentClient;
