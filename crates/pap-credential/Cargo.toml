@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+wasm = ["pap-did/wasm", "uuid/js", "getrandom/js"]
+
 [dependencies]
 pap-did = { workspace = true }
 pap-core = { workspace = true }
@@ -18,3 +22,4 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }
+getrandom = { workspace = true, optional = true }

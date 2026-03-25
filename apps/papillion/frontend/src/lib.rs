@@ -1,6 +1,7 @@
 mod app;
 mod bridge;
 pub mod components;
+pub mod handshake;
 pub mod pages;
 pub mod service;
 pub mod state;

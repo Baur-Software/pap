@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 description = "Transport-agnostic protocol messages and envelope for PAP"
 
+[features]
+default = []
+wasm = ["pap-did/wasm", "pap-credential/wasm", "uuid/js", "getrandom/js"]
+
 [dependencies]
 pap-did = { workspace = true }
 pap-core = { workspace = true }
@@ -22,3 +26,4 @@ base64 = { workspace = true }
 x25519-dalek = { workspace = true }
 aes-gcm = { workspace = true }
 curve25519-dalek = { workspace = true }
+getrandom = { workspace = true, optional = true }

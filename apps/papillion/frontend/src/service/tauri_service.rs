@@ -4,6 +4,8 @@
 //! Each method translates the request into a Tauri invoke call and
 //! deserializes the response.
 
+use pap_did::PrincipalKeypair;
+
 use super::{AgentProfileInfo, PapillionService};
 use crate::bridge;
 use papillion_shared::{
@@ -90,6 +92,10 @@ impl PapillionService for TauriService {
 
     async fn get_identity(&self) -> Result<IdentityInfo, String> {
         bridge::invoke_no_args::<IdentityInfo>("get_identity").await
+    }
+
+    fn active_keypair(&self) -> Result<PrincipalKeypair, String> {
+        Err("active_keypair not available in Tauri mode (keypair lives on native backend)".into())
     }
 
     // ============================================================================

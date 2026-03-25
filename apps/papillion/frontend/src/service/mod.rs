@@ -21,6 +21,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use pap_did::PrincipalKeypair;
 use papillion_shared::{
     AgentInfo, ExportedKey, IdentityInfo, KeyBackupStatus, LlmProvider, OrchestratorConfig,
     OrchestratorStatus, ProfileMetadata, ReceiptInfo, RegistryInfo, ScenarioCard, ScenarioRunResult,
@@ -84,6 +85,12 @@ pub trait PapillionService: Send + Sync {
 
     /// Get the current identity information.
     async fn get_identity(&self) -> Result<IdentityInfo, String>;
+
+    /// Get the active principal keypair (with signing key).
+    ///
+    /// Only supported in WASM environments (WebService). Returns an error
+    /// under Tauri where the keypair lives on the native backend.
+    fn active_keypair(&self) -> Result<PrincipalKeypair, String>;
 
     // ============================================================================
     // REGISTRY & AGENTS: Browse and interact with agent registries
