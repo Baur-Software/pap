@@ -2,6 +2,7 @@ mod app;
 mod bridge;
 pub mod components;
 pub mod pages;
+pub mod service;
 pub mod state;
 
 use wasm_bindgen::prelude::*;
