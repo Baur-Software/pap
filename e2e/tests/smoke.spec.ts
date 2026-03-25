@@ -77,8 +77,8 @@ test.describe('Papillion Smoke Tests', () => {
       const firstButton = buttons.nth(0);
       await firstButton.click();
 
-      // App should still be responsive
-      await expect(page).not.toBeClosed();
+      // App should still be responsive after click
+      await expect(page.locator(".app-shell-canvas")).toBeVisible();
     }
 
     // If no buttons found, that's OK - at least the app rendered

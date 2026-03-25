@@ -10,5 +10,8 @@ import { Page, expect } from "@playwright/test";
 export async function waitForApp(page: Page): Promise<void> {
   // The app renders <div class="app-shell-canvas"> as its root element.
   // Wait for this to appear, which confirms WASM loaded, compiled, and mounted.
+  //
+  // Release WASM (~5-20 MB) compiles in seconds; debug WASM (~50-100 MB)
+  // can take much longer. Use a generous timeout for both cases.
   await expect(page.locator(".app-shell-canvas")).toBeVisible({ timeout: 60_000 });
 }
