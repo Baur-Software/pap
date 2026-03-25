@@ -19,12 +19,47 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('Papillion Smoke Tests', () => {
-  test('app window launches without crashing', async ({ page }) => {
-    await page.goto('/');
-    await waitForApp(page);
+  test('WASM loads and app shell renders', async ({ page }) => {
+    // Capture ALL console output and page errors for diagnostics
+    const messages: string[] = [];
+    const errors: string[] = [];
 
-    const appContainer = page.locator('body');
-    await expect(appContainer).toBeVisible();
+    page.on('console', (msg) => {
+      messages.push(`[${msg.type()}] ${msg.text()}`);
+    });
+    page.on('pageerror', (err) => {
+      errors.push(err.message);
+    });
+
+    const response = await page.goto('/');
+    console.log(`Navigation status: ${response?.status()}`);
+
+    // Wait for network to settle (WASM download)
+    await page.waitForLoadState('networkidle', { timeout: 30_000 });
+
+    // Give WASM time to compile and mount
+    await page.waitForTimeout(5_000);
+
+    // Dump diagnostics
+    const html = await page.content();
+    console.log('--- PAGE HTML (first 2000 chars) ---');
+    console.log(html.substring(0, 2000));
+    console.log('--- CONSOLE MESSAGES ---');
+    for (const m of messages) console.log(m);
+    console.log('--- PAGE ERRORS ---');
+    for (const e of errors) console.log(e);
+    console.log('--- END DIAGNOSTICS ---');
+
+    // Now check if the app rendered
+    const appShell = page.locator('.app-shell-canvas');
+    const appShellExists = await appShell.count();
+    console.log(`app-shell-canvas count: ${appShellExists}`);
+
+    // Take a screenshot for the test report
+    await page.screenshot({ path: 'test-results/smoke-diagnostic.png', fullPage: true });
+
+    // The actual assertion
+    await expect(appShell).toBeVisible({ timeout: 60_000 });
   });
 
   test('frontend renders content (not blank screen)', async ({ page }) => {
