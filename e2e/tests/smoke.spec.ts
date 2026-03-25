@@ -1,83 +1,81 @@
 import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
+import { waitForApp } from "./helpers";
 
-/**
- * Diagnostic smoke test — ONE test that captures everything.
- *
- * Previous runs showed .app-shell-canvas never appears even after 4+ minutes.
- * Instead of adding more timeouts, this test captures all page state
- * (network, console, errors, DOM) so we can see WHY the app doesn't render.
- */
-
-test("diagnostic: capture full page state on CI", async ({ page }) => {
-  const messages: string[] = [];
-  const pageErrors: string[] = [];
-  const networkLog: string[] = [];
-
-  page.on("console", (msg) => {
-    messages.push(`[${msg.type()}] ${msg.text()}`);
-  });
-  page.on("pageerror", (err) => {
-    pageErrors.push(`${err.name}: ${err.message}`);
-  });
-  page.on("response", (resp) => {
-    networkLog.push(
-      `${resp.status()} ${resp.headers()["content-type"] ?? "?"} ${resp.url()}`
-    );
-  });
-
-  // Install mock BEFORE navigation
+test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
+});
 
-  // Navigate — use 'load' with generous timeout so we know whether
-  // DOMContentLoaded fires at all (it blocks on the module script's
-  // `await init(WASM)`)
-  let loadSucceeded = false;
-  const loadStart = Date.now();
-  try {
-    await page.goto("/", { waitUntil: "load", timeout: 180_000 });
-    loadSucceeded = true;
-  } catch {
-    // Timeout — page.goto exceeded 180s
-  }
-  const loadMs = Date.now() - loadStart;
+test.describe("Papillion Smoke Tests", () => {
+  test("WASM loads and app shell renders", async ({ page }) => {
+    const messages: string[] = [];
+    const pageErrors: string[] = [];
 
-  // ── Dump diagnostics regardless of load success ──
-  console.log(`\n[diag] ====== DIAGNOSTIC DUMP ======`);
-  console.log(`[diag] page.goto result: ${loadSucceeded ? "OK" : "TIMEOUT"} (${loadMs}ms)`);
+    page.on("console", (msg) => {
+      messages.push(`[${msg.type()}] ${msg.text()}`);
+    });
+    page.on("pageerror", (err) => {
+      pageErrors.push(`${err.name}: ${err.message}`);
+    });
 
-  console.log(`\n[diag] --- NETWORK (${networkLog.length} responses) ---`);
-  for (const n of networkLog) console.log(`[diag]   ${n}`);
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
 
-  console.log(`\n[diag] --- CONSOLE (${messages.length} messages) ---`);
-  for (const m of messages) console.log(`[diag]   ${m}`);
+    // Dump diagnostics for debugging
+    console.log("[diag] console messages:", messages.length);
+    for (const m of messages) console.log(`[diag]   ${m}`);
+    if (pageErrors.length > 0) {
+      console.log("[diag] page errors:");
+      for (const e of pageErrors) console.log(`[diag]   ${e}`);
+    }
 
-  console.log(`\n[diag] --- PAGE ERRORS (${pageErrors.length}) ---`);
-  for (const e of pageErrors) console.log(`[diag]   ${e}`);
-
-  // Check key state
-  const tauriDefined = await page.evaluate(() => typeof (window as any).__TAURI__ !== "undefined");
-  console.log(`\n[diag] window.__TAURI__ defined: ${tauriDefined}`);
-
-  const bodyHTML = await page.evaluate(() => document.body.innerHTML);
-  console.log(`\n[diag] --- BODY innerHTML (${bodyHTML.length} chars) ---`);
-  console.log(`[diag] ${bodyHTML.substring(0, 2000)}`);
-
-  const headScripts = await page.evaluate(() => {
-    return Array.from(document.querySelectorAll("head script")).map((s) => ({
-      type: s.getAttribute("type"),
-      src: s.getAttribute("src"),
-      textLength: s.textContent?.length ?? 0,
-    }));
+    expect(pageErrors).toHaveLength(0);
   });
-  console.log(`\n[diag] --- HEAD SCRIPTS ---`);
-  for (const s of headScripts) console.log(`[diag]   ${JSON.stringify(s)}`);
 
-  const appShellExists = await page.evaluate(() => !!document.querySelector(".app-shell-canvas"));
-  console.log(`\n[diag] .app-shell-canvas exists: ${appShellExists}`);
+  test("frontend renders content (not blank screen)", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
 
-  console.log(`[diag] ====== END DIAGNOSTIC DUMP ======\n`);
+    const bodyText = await page.locator("body").innerText();
+    expect(bodyText.length).toBeGreaterThan(0);
+  });
 
-  // This test's only assertion: diagnostics were captured
-  expect(networkLog.length).toBeGreaterThan(0);
+  test("no unhandled console errors on startup", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        errors.push(msg.text());
+      }
+    });
+    page.on("pageerror", (err) => {
+      errors.push(`${err.name}: ${err.message}`);
+    });
+
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    // Filter out known benign warnings
+    const real = errors.filter(
+      (e) => !e.includes("integrity") && !e.includes("deprecated")
+    );
+    expect(real).toHaveLength(0);
+  });
+
+  test("Tauri mock is available", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const hasTauri = await page.evaluate(
+      () => typeof (window as any).__TAURI__ !== "undefined"
+    );
+    expect(hasTauri).toBe(true);
+  });
+
+  test("status bar shows orchestrator state", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const statusBar = page.locator(".status-bar");
+    await expect(statusBar).toBeVisible();
+  });
 });

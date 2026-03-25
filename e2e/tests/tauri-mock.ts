@@ -57,9 +57,9 @@ const ORCHESTRATOR_CONFIG: Record<string, unknown> = {
 };
 
 const SETUP_STATE = {
-  has_identity: true,
-  setup_complete: true,
+  identity_created: true,
   llm_configured: true,
+  setup_complete: true,
 };
 
 const BUILTIN_MODELS = [
@@ -283,14 +283,14 @@ window.__TAURI__ = {
         // ─── Template CRUD Commands ───
         case 'get_global_templates': {
           return window.__TAURI__.core._templates.filter(
-            (t: any) => t.principal_did === null && t.enabled
+            (t) => t.principal_did === null && t.enabled
           );
         }
 
         case 'get_profile_templates': {
           const principal_did = args?.principalDid;
           return window.__TAURI__.core._templates.filter(
-            (t: any) => (t.principal_did === principal_did || t.principal_did === null) && t.enabled
+            (t) => (t.principal_did === principal_did || t.principal_did === null) && t.enabled
           );
         }
 
@@ -317,7 +317,7 @@ window.__TAURI__ = {
         case 'update_template': {
           const template = args?.template || {};
           const idx = window.__TAURI__.core._templates.findIndex(
-            (t: any) => t.template_name === template.template_name
+            (t) => t.template_name === template.template_name
           );
           if (idx !== -1) {
             window.__TAURI__.core._templates[idx] = {
@@ -332,7 +332,7 @@ window.__TAURI__ = {
         case 'delete_template': {
           const template_name = args?.templateName;
           window.__TAURI__.core._templates = window.__TAURI__.core._templates.filter(
-            (t: any) => t.template_name !== template_name
+            (t) => t.template_name !== template_name
           );
           return null;
         }
@@ -341,7 +341,7 @@ window.__TAURI__ = {
           const template_name = args?.templateName;
           const enabled = args?.enabled;
           const template = window.__TAURI__.core._templates.find(
-            (t: any) => t.template_name === template_name
+            (t) => t.template_name === template_name
           );
           if (template) {
             template.enabled = enabled;

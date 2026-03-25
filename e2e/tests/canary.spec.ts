@@ -66,12 +66,10 @@ test.describe("Canary monitoring (post-deploy health checks)", () => {
 
     const elapsed = Date.now() - start;
 
-    // SLA: app should be interactive within 4 minutes on CI
-    // Cold-start includes: V8 WASM compilation (90-120s on 2-core CI),
-    // frontend bundle loading, initial render.
-    // On local dev/prod: typically 1-3 seconds.
+    // SLA: app should be interactive within 30s on CI
+    // WASM compile+instantiate takes ~15ms; rest is module loading + CSR mount.
     console.log(`[canary] Frontend load time: ${elapsed}ms`);
-    expect(elapsed).toBeLessThan(240_000);
+    expect(elapsed).toBeLessThan(30_000);
   });
 
   test("scenario execution completes within latency SLA", async ({ page }) => {

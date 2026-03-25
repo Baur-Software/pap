@@ -4,8 +4,8 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: "./tests",
-  // Single diagnostic test: 180s for page load + 30s for diagnostics.
-  timeout: 210_000,
+  // WASM compile+mount takes ~15ms; 60s covers slow CI runners.
+  timeout: 60_000,
   retries: 0,
   expect: {
     timeout: 30_000,
