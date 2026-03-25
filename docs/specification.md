@@ -1746,6 +1746,148 @@ If the receiving agent's DID Document contains no `service`
 entries, the initiating agent MUST fall back to HTTP/JSON with
 endpoint resolution (Section 14.4).
 
+### 14.11. DIDComm v2 Envelope Compatibility
+
+PAP defines an optional DIDComm v2 envelope compatibility layer
+that wraps PAP protocol envelopes inside DIDComm v2 message
+formats. This allows PAP agents to interoperate with
+DIDComm-native agents without changing the PAP protocol itself.
+This section specifies the detailed wire formats used by the
+DIDComm transport binding (Section 14.9).
+
+#### 14.11.1. Design Principles
+
+- PAP mandate, session, and receipt semantics are fully preserved.
+- Only the outer transport envelope changes; the inner PAP
+  `Envelope` (including its Ed25519 signature) travels intact
+  inside the DIDComm message body.
+- The DIDComm layer provides additional transport-level integrity
+  (JWS) or confidentiality (JWE) on top of PAP's own signatures.
+- This is a shim — existing `pap-transport` behavior is unaffected.
+
+#### 14.11.2. Plaintext Messages
+
+A PAP envelope is wrapped in a DIDComm v2 plaintext message:
+
+```json
+{
+  "id": "<uuid>",
+  "typ": "application/didcomm-plain+json",
+  "type": "https://pap.baur.dev/proto/1.0/<message-slug>",
+  "from": "<sender-did>",
+  "to": ["<recipient-did>"],
+  "created_time": <unix-timestamp>,
+  "body": { <full PAP Envelope as JSON> }
+}
+```
+
+The `type` field uses PAP message type URIs under the namespace
+`https://pap.baur.dev/proto/1.0/`, with kebab-case slugs derived
+from the `ProtocolMessage` variant name (e.g., `session-did-ack`,
+`execution-result`, `token-presentation`).
+
+The `body` field contains the complete PAP `Envelope` including
+its `signature` field, so the receiving agent can verify the
+PAP-level signature independently of the DIDComm layer.
+
+#### 14.11.3. Signed Messages (Ed25519 JWS)
+
+A signed DIDComm v2 message uses JWS General JSON Serialization
+(RFC 7515) with the `EdDSA` algorithm (RFC 8037):
+
+```json
+{
+  "payload": "<base64url(plaintext-json)>",
+  "signatures": [{
+    "protected": "<base64url({\"typ\":\"application/didcomm-signed+json\",\"alg\":\"EdDSA\"})>",
+    "signature": "<base64url(Ed25519-signature)>"
+  }]
+}
+```
+
+The signing input is `ASCII(protected) || '.' || ASCII(payload)`
+where both values are base64url-encoded without padding (RFC 4648
+Section 5). The signature is computed with Ed25519 (RFC 8032).
+
+Verifiers MUST reject messages where:
+- The `alg` header value is not `"EdDSA"`.
+- The signature does not verify against the expected key.
+- The decoded payload is not valid DIDComm v2 plaintext JSON.
+
+#### 14.11.4. Encrypted Messages (ECDH-ES + A256GCM JWE)
+
+An encrypted DIDComm v2 message uses JWE JSON Serialization with
+anonymous encryption (anoncrypt):
+
+- **Key Agreement**: `ECDH-ES` (direct, no key wrapping) via
+  X25519 Diffie-Hellman. The sender generates an ephemeral X25519
+  keypair. The recipient's Ed25519 public key is converted to
+  X25519 using the Edwards-to-Montgomery birational map.
+- **Key Derivation**: Concat KDF (NIST SP 800-56A Section 5.8.1)
+  with `algId = "A256GCM"`, empty `apu`, and
+  `apv = SHA-256(recipient-did)`.
+- **Content Encryption**: AES-256-GCM with a random 96-bit IV.
+  The base64url-encoded protected header serves as Additional
+  Authenticated Data (AAD).
+
+```json
+{
+  "protected": "<base64url(header-json)>",
+  "recipients": [{
+    "header": { "kid": "<recipient-did>" },
+    "encrypted_key": ""
+  }],
+  "iv": "<base64url(96-bit-nonce)>",
+  "ciphertext": "<base64url(aes-gcm-ciphertext)>",
+  "tag": "<base64url(128-bit-auth-tag)>"
+}
+```
+
+The protected header contains:
+
+| Field | Value |
+|---|---|
+| `typ` | `"application/didcomm-encrypted+json"` |
+| `alg` | `"ECDH-ES"` |
+| `enc` | `"A256GCM"` |
+| `epk` | `{"kty":"OKP","crv":"X25519","x":"<base64url-pubkey>"}` |
+| `apv` | `"<base64url(SHA-256(recipient-did))>"` |
+
+The `encrypted_key` field is empty for ECDH-ES direct key
+agreement (the content encryption key is derived directly from
+the shared secret).
+
+#### 14.11.5. Ed25519 to X25519 Key Conversion
+
+DIDComm v2 encryption requires X25519 keys for key agreement.
+PAP agents use Ed25519 keys (via `did:key`). The conversion is:
+
+- **Public key**: Decompress the Ed25519 compressed Edwards Y
+  coordinate, then apply the Edwards-to-Montgomery birational map
+  to obtain the X25519 public key (32 bytes).
+- **Private key**: Compute `SHA-512(Ed25519-seed)[0..32]`. The
+  X25519 library applies standard clamping (clear bits 0-2,
+  clear bit 255, set bit 254).
+
+This conversion is consistent: the X25519 public key derived from
+the converted private key matches the X25519 public key derived
+from the original Ed25519 public key.
+
+#### 14.11.6. Translation Rules
+
+| Direction | Operation |
+|---|---|
+| PAP → DIDComm Plaintext | Serialize PAP `Envelope` into DIDComm `body` |
+| PAP → DIDComm Signed | Build plaintext, then apply Ed25519 JWS |
+| PAP → DIDComm Encrypted | Build plaintext, then apply ECDH-ES + A256GCM JWE |
+| DIDComm Plaintext → PAP | Deserialize `body` field as PAP `Envelope` |
+| DIDComm Signed → PAP | Verify JWS, then extract PAP `Envelope` from body |
+| DIDComm Encrypted → PAP | Decrypt JWE, then extract PAP `Envelope` from body |
+
+In all cases, the PAP `Envelope.signature` field (if present)
+remains intact and can be verified independently using the
+session's ephemeral key.
+
 ---
 
 ## 15. Security Considerations
