@@ -1,0 +1,24 @@
+[package]
+name = "pap-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-credential = { workspace = true }
+pap-marketplace = { workspace = true }
+pap-federation = { workspace = true }
+pap-proto = { workspace = true }
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "protocol"
+harness = false
