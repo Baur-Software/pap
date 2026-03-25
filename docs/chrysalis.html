@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Crystalis — Self-Hosted Agent Registry</title>
-  <meta name="description" content="Crystalis is a self-hostable federated agent registry built on the Principal Agent Protocol. Run your own node, discover agents, and federate with peers." />
-  <meta property="og:title" content="Crystalis — Self-Hosted Agent Registry" />
+  <title>Chrysalis — Self-Hosted Agent Registry</title>
+  <meta name="description" content="Chrysalis is a self-hostable federated agent registry built on the Principal Agent Protocol. Run your own node, discover agents, and federate with peers." />
+  <meta property="og:title" content="Chrysalis — Self-Hosted Agent Registry" />
   <meta property="og:description" content="Your own federated agent registry. Docker, SQLite or Postgres, DID node identity. Built on PAP." />
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -351,7 +351,7 @@
     <ul class="nav-links" role="list">
       <li><a href="pap/">PAP</a></li>
       <li><a href="papillion/">Papillion</a></li>
-      <li><a href="crystalis.html" aria-current="page">Crystalis</a></li>
+      <li><a href="chrysalis.html" aria-current="page">Chrysalis</a></li>
     </ul>
     <div class="nav-cta">
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
@@ -363,7 +363,7 @@
 </nav>
 
 <!-- ─── HERO ──────────────────────────────────────────────────────────── -->
-<section id="hero" aria-label="Crystalis introduction">
+<section id="hero" aria-label="Chrysalis introduction">
   <div class="hero-bg" aria-hidden="true"></div>
   <div class="container">
     <div class="hero-grid">
@@ -374,7 +374,7 @@
           <span class="badge badge-purple">Built on PAP</span>
         </div>
         <h1 class="hero-title">
-          <span class="gradient-text">Crystalis.</span><br />
+          <span class="gradient-text">Chrysalis.</span><br />
           Your own agent registry,<br />
           on your infrastructure.
         </h1>
@@ -408,7 +408,7 @@
         <span class="gradient-text">PAP federation network</span>
       </h2>
       <p class="section-sub">
-        Crystalis gives teams and developers a place to publish and discover PAP-compatible agents
+        Chrysalis gives teams and developers a place to publish and discover PAP-compatible agents
         without depending on any central directory.
       </p>
     </div>
@@ -418,7 +418,7 @@
         <div class="feature-icon">🪪</div>
         <div class="feature-title">DID Node Identity</div>
         <div class="feature-desc">
-          Each Crystalis instance generates a persistent <code style="font-family:'JetBrains Mono',monospace;font-size:.8em;color:var(--teal)">did:key</code> identity on first boot.
+          Each Chrysalis instance generates a persistent <code style="font-family:'JetBrains Mono',monospace;font-size:.8em;color:var(--teal)">did:key</code> identity on first boot.
           TLS certificates are bound to that DID. Restarts don't break federation peers.
         </div>
       </div>
@@ -490,7 +490,7 @@
           <div class="why-content-title">Discovery without a central directory</div>
           <div class="why-content-body">
             An agent advertising <code>schema:ReserveAction</code> shouldn't require a platform-controlled
-            index to be found. Crystalis nodes store signed <code>AgentAdvertisement</code> records indexed
+            index to be found. Chrysalis nodes store signed <code>AgentAdvertisement</code> records indexed
             by Schema.org action type. Because the federation protocol propagates advertisements across
             nodes via push/pull sync, no single node is authoritative. The network discovers its topology
             from the bottom up.
@@ -533,7 +533,7 @@
         <div>
           <div class="why-content-title">Trust at the edge, not at the center</div>
           <div class="why-content-body">
-            Crystalis nodes don't require a trusted third party to validate agent identity. Ed25519
+            Chrysalis nodes don't require a trusted third party to validate agent identity. Ed25519
             signature verification happens at ingest: an advertisement not signed by the claiming
             DID's key is rejected with <code>422</code>. Compromise of one peer node cannot inject
             forged agents into the mesh because every downstream node re-verifies on receipt. TLS
@@ -564,7 +564,7 @@
         <div>
           <div class="why-content-title">Operator sovereignty</div>
           <div class="why-content-body">
-            Any organization can run its own Crystalis node. Agents don't need permission from a
+            Any organization can run its own Chrysalis node. Agents don't need permission from a
             platform to be discoverable. There is no central index to capture, no API key to revoke,
             and no terms-of-service gate on discovery. The trust boundary is operator-defined:
             federate with everyone, federate selectively, or keep a node entirely internal.
@@ -579,7 +579,7 @@
       <div>
         <div class="mesh-callout-title">One org, many nodes — the internal mesh</div>
         <div class="mesh-callout-body">
-          An organization can run multiple Crystalis instances — one per team, region, or trust
+          An organization can run multiple Chrysalis instances — one per team, region, or trust
           boundary — and peer them together into a private mesh. The <code>FederatedRegistry</code>
           merges advertisements across nodes using content-hash deduplication, so the same ad never
           cycles through the mesh twice. Peer gossip (<code>/federation/peers</code>) lets new nodes
@@ -645,7 +645,7 @@
         <div class="code-body">
           <pre><span class="kw">services</span><span class="c">:</span>
   <span class="kw">registry</span><span class="c">:</span>
-    <span class="kw">image</span><span class="c">: ghcr.io/baur-software/crystalis:latest</span>
+    <span class="kw">image</span><span class="c">: ghcr.io/baur-software/chrysalis:latest</span>
     <span class="kw">ports</span><span class="c">:</span>
       - <span class="st">"8080:8080"</span>
     <span class="kw">environment</span><span class="c">:</span>
@@ -669,7 +669,7 @@
         <img src="assets/images/papillion-icon.png" alt="Papillion butterfly" />
         <div>
           <div class="papillion-link-name">Papillion</div>
-          <div class="papillion-link-desc">The personal AI assistant that connects to Crystalis registries. macOS · Windows · Linux.</div>
+          <div class="papillion-link-desc">The personal AI assistant that connects to Chrysalis registries. macOS · Windows · Linux.</div>
         </div>
       </div>
       <span class="btn btn-outline">Download →</span>
@@ -681,7 +681,7 @@
 <footer>
   <div class="container">
     <div class="footer-inner">
-      <span class="footer-logo">Crystalis</span>
+      <span class="footer-logo">Chrysalis</span>
       <div class="footer-links">
         <a href="papillion/">Papillion</a>
         <a href="pap/">PAP Protocol</a>
