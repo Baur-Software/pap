@@ -1,0 +1,21 @@
+[package]
+name = "tee-attestation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "tee-attestation"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true, features = ["tee"] }
+pap-tee = { workspace = true }
+pap-credential = { workspace = true }
+pap-marketplace = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+base64 = { workspace = true }

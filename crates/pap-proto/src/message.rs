@@ -15,10 +15,15 @@ pub enum ProtocolMessage {
     TokenPresentation { token: CapabilityToken },
 
     /// Receiver accepts the token and returns a session ID + its
-    /// ephemeral session DID.
+    /// ephemeral session DID. May include optional TEE attestation
+    /// evidence (spec section 13.6).
     TokenAccepted {
         session_id: String,
         receiver_session_did: String,
+        /// Optional TEE attestation evidence as opaque JSON.
+        /// Use `pap_tee::AttestationEvidence::from_value()` to parse.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attestation: Option<serde_json::Value>,
     },
 
     /// Receiver rejects the token with a reason.

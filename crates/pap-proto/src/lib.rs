@@ -20,6 +20,7 @@ mod tests {
             ProtocolMessage::TokenAccepted {
                 session_id: "sess-1".into(),
                 receiver_session_did: "did:key:zReceiver".into(),
+                attestation: None,
             },
             ProtocolMessage::TokenRejected {
                 reason: "invalid scope".into(),

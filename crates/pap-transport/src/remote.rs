@@ -55,6 +55,7 @@ impl AgentHandler for RemoteAgentHandler {
             ProtocolMessage::TokenAccepted {
                 session_id,
                 receiver_session_did,
+                ..
             } => {
                 // Store session_id for phase 5 (co_sign_receipt)
                 if let Ok(mut sid) = self.last_session_id.lock() {

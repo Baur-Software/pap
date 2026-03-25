@@ -1489,6 +1489,27 @@ behavioral correctness. Specifically:
   auto-approval policies (Section 13.4) but MUST NOT be required
   to accept TEE attestation as a substitute for consent.
 
+#### 13.6.4. Implementation Notes
+
+The reference implementation provides TEE attestation support via
+the `pap-tee` crate, which is compiled only when opted into as a
+dependency. Integration with `pap-core` is gated behind the `tee`
+Cargo feature flag.
+
+- **`pap-tee` crate**: Defines `AttestationEvidence`,
+  `EnclaveType`, the `AttestationVerifier` trait, and a
+  `SoftwareSimulator` for integration testing without hardware.
+- **`pap-core` `tee` feature**: Adds an optional `attestation`
+  field to `Session` and provides `open_with_attestation()`.
+- **`ProtocolMessage::TokenAccepted`**: Carries an optional
+  `attestation` field as opaque JSON (`serde_json::Value`).
+  Receivers parse it via `AttestationEvidence::from_value()`.
+
+The `SoftwareSimulator` uses `EnclaveType::Software` and signs
+attestation reports with an Ed25519 key. It is intended for
+conformance testing (Appendix D, tests E-13 through E-15) and
+MUST NOT be deployed in production.
+
 ### 13.7. Payment Proof Validation
 
 Section 13.1 defines the payment proof integration point. This

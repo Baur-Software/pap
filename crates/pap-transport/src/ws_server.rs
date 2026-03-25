@@ -167,6 +167,7 @@ fn dispatch_message(
                             payload: Some(ProtocolMessage::TokenAccepted {
                                 session_id: sid,
                                 receiver_session_did: receiver_did,
+                                attestation: None,
                             }),
                         })
                     }
