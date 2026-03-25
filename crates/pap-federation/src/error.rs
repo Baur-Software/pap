@@ -19,4 +19,10 @@ pub enum FederationError {
 
     #[error("invalid URL: {0}")]
     InvalidUrl(String),
+
+    #[error("notary error: {0}")]
+    NotaryError(String),
+
+    #[error("revocation error: {0}")]
+    RevocationError(String),
 }

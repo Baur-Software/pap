@@ -134,6 +134,9 @@ pub trait DatabaseOps: Send + Sync {
 
     // ── Template Management ───────────────────────────────────────────────
 
+    /// List all templates (enabled and disabled), optionally filtered by principal
+    fn query_templates(&self, principal_did: Option<&str>) -> Result<Vec<Template>, DbError>;
+
     /// List all templates enabled for a principal (or global if None)
     fn list_enabled_templates_for_principal(
         &self,

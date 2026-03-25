@@ -1,4 +1,5 @@
 pub mod error;
+pub mod notary;
 pub mod peer;
 pub mod registry;
 pub mod resolve;
@@ -7,6 +8,7 @@ pub mod sync;
 pub mod tls;
 
 pub use error::FederationError;
+pub use notary::NotarySet;
 pub use peer::RegistryPeer;
 pub use registry::FederatedRegistry;
 pub use resolve::PapUrl;
