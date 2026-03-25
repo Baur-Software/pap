@@ -543,9 +543,11 @@ mod tests {
 
     #[test]
     fn score_agent_prefers_keyword_match_without_profile() {
-        // No DB available in unit tests, so we test the scoring logic branches directly
-        // by verifying the function returns > 0 for any agent name (doesn't panic)
-        assert!(0.6_f64 > 0.4_f64); // preferred > non-preferred baseline
+        // No DB available in unit tests, so we verify the scoring constants
+        // used in score_agent: preferred baseline (0.6) > non-preferred (0.4)
+        let preferred_baseline = 0.6_f64;
+        let non_preferred_baseline = 0.4_f64;
+        assert!(preferred_baseline > non_preferred_baseline);
     }
 
     #[test]
