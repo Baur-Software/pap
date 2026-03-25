@@ -206,6 +206,7 @@ async fn main() {
         ProtocolMessage::TokenAccepted {
             session_id,
             receiver_session_did,
+            ..
         } => {
             println!("  [client] Token accepted!");
             println!("  [client] Session ID: {}...", &session_id[..8]);

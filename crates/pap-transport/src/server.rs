@@ -141,6 +141,7 @@ async fn handle_token(State(state): State<AppState>, body: Bytes) -> Result<Vec<
                 let response = ProtocolMessage::TokenAccepted {
                     session_id,
                     receiver_session_did,
+                    attestation: None,
                 };
                 encode_response_body(response, &state)
             }

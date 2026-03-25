@@ -210,6 +210,7 @@ fn main() {
             ProtocolMessage::TokenAccepted {
                 session_id: "sess-1".into(),
                 receiver_session_did: receiver_session.did(),
+                attestation: None,
             },
         ),
         (

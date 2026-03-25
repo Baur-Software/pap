@@ -87,6 +87,7 @@ async fn full_handshake_over_websocket() {
         ProtocolMessage::TokenAccepted {
             session_id,
             receiver_session_did,
+            ..
         } => {
             assert_eq!(receiver_session_did, "did:key:zReceiverSession");
             session_id.clone()

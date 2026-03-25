@@ -166,6 +166,11 @@ pub struct Session {
     pub scope: Scope,
     pub created_at: DateTime<Utc>,
     consumed_nonces: HashSet<String>,
+    /// Optional TEE attestation evidence (spec section 13.6).
+    /// Present only when the `tee` feature is enabled and the
+    /// receiving agent provides attestation during session open.
+    #[cfg(feature = "tee")]
+    pub attestation: Option<pap_tee::AttestationEvidence>,
 }
 
 impl Session {
@@ -188,6 +193,8 @@ impl Session {
             scope: Scope::new(vec![crate::scope::ScopeAction::new(&token.action)]),
             created_at: Utc::now(),
             consumed_nonces: consumed,
+            #[cfg(feature = "tee")]
+            attestation: None,
         })
     }
 
@@ -200,6 +207,24 @@ impl Session {
         self.transition(SessionState::Open)?;
         self.initiator_session_did = Some(initiator_session_did);
         self.receiver_session_did = Some(receiver_session_did);
+        Ok(())
+    }
+
+    /// Open the session with TEE attestation evidence (spec section 13.6).
+    ///
+    /// Like [`open`](Self::open), but additionally stores attestation
+    /// evidence provided by the receiving agent. The caller is responsible
+    /// for verifying the evidence via [`pap_tee::AttestationVerifier`]
+    /// before calling this method.
+    #[cfg(feature = "tee")]
+    pub fn open_with_attestation(
+        &mut self,
+        initiator_session_did: String,
+        receiver_session_did: String,
+        attestation: pap_tee::AttestationEvidence,
+    ) -> Result<(), PapError> {
+        self.open(initiator_session_did, receiver_session_did)?;
+        self.attestation = Some(attestation);
         Ok(())
     }
 

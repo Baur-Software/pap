@@ -59,6 +59,7 @@ impl AgentHandler for WsRemoteAgentHandler {
             ProtocolMessage::TokenAccepted {
                 session_id,
                 receiver_session_did,
+                ..
             } => {
                 if let Ok(mut sid) = self.last_session_id.lock() {
                     *sid = Some(session_id.clone());

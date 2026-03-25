@@ -19,3 +19,6 @@ pub mod scope;
 pub mod session;
 
 pub use error::PapError;
+
+#[cfg(feature = "tee")]
+pub use pap_tee;

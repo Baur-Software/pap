@@ -79,6 +79,7 @@ fn plaintext_roundtrip_all_message_types() {
         ProtocolMessage::TokenAccepted {
             session_id: "s1".into(),
             receiver_session_did: "did:key:zR".into(),
+            attestation: None,
         },
         ProtocolMessage::TokenRejected {
             reason: "expired".into(),
@@ -423,6 +424,7 @@ fn type_uri_maps_all_pap_message_types() {
             ProtocolMessage::TokenAccepted {
                 session_id: "s".into(),
                 receiver_session_did: "d".into(),
+                attestation: None,
             },
             "token-accepted",
         ),

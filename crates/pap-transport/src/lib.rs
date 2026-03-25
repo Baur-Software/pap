@@ -55,6 +55,7 @@ mod tests {
         let msg = ProtocolMessage::TokenAccepted {
             session_id: "s1".into(),
             receiver_session_did: "did:key:z123".into(),
+            attestation: None,
         };
         let json = serde_json::to_value(&msg).unwrap();
         assert_eq!(json["type"], "TokenAccepted");
