@@ -32,13 +32,17 @@ impl PapToDIDComm {
     /// The full PAP envelope (including its own signature) is placed in the
     /// DIDComm `body` field, preserving all PAP semantics.
     pub fn to_plaintext(envelope: &Envelope) -> Result<DIDCommPlaintext, ProtoError> {
-        let body = serde_json::to_value(envelope)
-            .map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
+        let body =
+            serde_json::to_value(envelope).map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
 
         Ok(DIDCommPlaintext {
             id: uuid::Uuid::new_v4().to_string(),
             typ: "application/didcomm-plain+json".into(),
-            type_uri: format!("{}{}", PAP_TYPE_BASE, pap_message_type_slug(&envelope.payload)),
+            type_uri: format!(
+                "{}{}",
+                PAP_TYPE_BASE,
+                pap_message_type_slug(&envelope.payload)
+            ),
             from: Some(envelope.sender.clone()),
             to: vec![envelope.recipient.clone()],
             created_time: Some(envelope.timestamp.timestamp()),

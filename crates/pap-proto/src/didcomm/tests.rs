@@ -8,7 +8,13 @@ use crate::envelope::Envelope;
 use crate::message::ProtocolMessage;
 
 fn make_envelope(payload: ProtocolMessage) -> Envelope {
-    Envelope::new("session-abc", "did:key:zSender", "did:key:zRecipient", 1, payload)
+    Envelope::new(
+        "session-abc",
+        "did:key:zSender",
+        "did:key:zRecipient",
+        1,
+        payload,
+    )
 }
 
 fn make_signed_envelope() -> (Envelope, SigningKey) {
@@ -169,8 +175,7 @@ fn jws_preserves_pap_envelope_signature() {
 
     // Sign with a different DIDComm-level key
     let signed = PapToDIDComm::to_signed(&env, &didcomm_key).unwrap();
-    let restored =
-        DIDCommToPap::from_signed(&signed, &didcomm_key.verifying_key()).unwrap();
+    let restored = DIDCommToPap::from_signed(&signed, &didcomm_key.verifying_key()).unwrap();
 
     // PAP-level signature still verifies with the original key
     restored.verify(&pap_key.verifying_key()).unwrap();
@@ -240,8 +245,7 @@ fn jwe_tampered_ciphertext_fails() {
     let recipient_key = SigningKey::generate(&mut OsRng);
     let env = make_envelope(ProtocolMessage::SessionDidAck);
 
-    let mut encrypted =
-        PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
+    let mut encrypted = PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
 
     // Tamper with the ciphertext
     let mut ct_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -250,8 +254,7 @@ fn jwe_tampered_ciphertext_fails() {
     if let Some(b) = ct_bytes.first_mut() {
         *b ^= 0xff;
     }
-    encrypted.ciphertext =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&ct_bytes);
+    encrypted.ciphertext = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&ct_bytes);
 
     let result = DIDCommToPap::from_encrypted(&encrypted, &recipient_key);
     assert!(result.is_err());
@@ -262,8 +265,7 @@ fn jwe_tampered_header_fails() {
     let recipient_key = SigningKey::generate(&mut OsRng);
     let env = make_envelope(ProtocolMessage::SessionDidAck);
 
-    let mut encrypted =
-        PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
+    let mut encrypted = PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
 
     // Tamper with the protected header (AAD)
     let mut header_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -285,8 +287,7 @@ fn jwe_preserves_pap_signature() {
     let (env, pap_key) = make_signed_envelope();
     let recipient_key = SigningKey::generate(&mut OsRng);
 
-    let encrypted =
-        PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
+    let encrypted = PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
     let restored = DIDCommToPap::from_encrypted(&encrypted, &recipient_key).unwrap();
 
     // PAP-level signature survives encryption round-trip
@@ -298,8 +299,7 @@ fn jwe_serialization_roundtrip() {
     let recipient_key = SigningKey::generate(&mut OsRng);
     let env = make_envelope(ProtocolMessage::SessionDidAck);
 
-    let encrypted =
-        PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
+    let encrypted = PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
     let json = serde_json::to_string(&encrypted).unwrap();
     let deserialized: crate::didcomm::types::DIDCommEncrypted =
         serde_json::from_str(&json).unwrap();
@@ -313,8 +313,7 @@ fn jwe_protected_header_contains_expected_fields() {
     let recipient_key = SigningKey::generate(&mut OsRng);
     let env = make_envelope(ProtocolMessage::SessionDidAck);
 
-    let encrypted =
-        PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
+    let encrypted = PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
 
     let header_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(&encrypted.protected_header)
@@ -394,13 +393,11 @@ fn full_roundtrip_encrypted_with_wire_serialization() {
     env.sign(&session_key);
 
     // PAP → DIDComm encrypted
-    let encrypted =
-        PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
+    let encrypted = PapToDIDComm::to_encrypted(&env, &recipient_key.verifying_key()).unwrap();
 
     // Wire serialization
     let wire = serde_json::to_vec(&encrypted).unwrap();
-    let received: crate::didcomm::types::DIDCommEncrypted =
-        serde_json::from_slice(&wire).unwrap();
+    let received: crate::didcomm::types::DIDCommEncrypted = serde_json::from_slice(&wire).unwrap();
 
     // DIDComm → PAP
     let restored = DIDCommToPap::from_encrypted(&received, &recipient_key).unwrap();
@@ -430,9 +427,7 @@ fn type_uri_maps_all_pap_message_types() {
             "token-accepted",
         ),
         (
-            ProtocolMessage::TokenRejected {
-                reason: "r".into(),
-            },
+            ProtocolMessage::TokenRejected { reason: "r".into() },
             "token-rejected",
         ),
         (
@@ -507,9 +502,8 @@ fn jws_bad_algorithm_rejected() {
 
     // Replace protected header with non-EdDSA algorithm
     let bad_header = serde_json::json!({"typ": "application/didcomm-signed+json", "alg": "RS256"});
-    signed.signatures[0].protected_header =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(serde_json::to_string(&bad_header).unwrap().as_bytes());
+    signed.signatures[0].protected_header = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode(serde_json::to_string(&bad_header).unwrap().as_bytes());
 
     let result = DIDCommToPap::from_signed(&signed, &key.verifying_key());
     assert!(result.is_err());

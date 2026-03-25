@@ -24,12 +24,12 @@ pub fn sign_plaintext(
         alg: "EdDSA".into(),
     };
 
-    let header_json = serde_json::to_string(&header)
-        .map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
+    let header_json =
+        serde_json::to_string(&header).map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
     let header_b64 = URL_SAFE_NO_PAD.encode(header_json.as_bytes());
 
-    let payload_json = serde_json::to_string(plaintext)
-        .map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
+    let payload_json =
+        serde_json::to_string(plaintext).map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
     let payload_b64 = URL_SAFE_NO_PAD.encode(payload_json.as_bytes());
 
     // JWS signing input: header_b64 || '.' || payload_b64

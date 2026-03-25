@@ -54,9 +54,9 @@ pub fn encrypt_plaintext(
     let cek = concat_kdf(
         shared_secret.as_bytes(),
         "A256GCM",
-        &[],            // apu: empty for anoncrypt
-        &apv_hash,      // apv: SHA-256(recipient_did)
-        256,            // key length in bits
+        &[],       // apu: empty for anoncrypt
+        &apv_hash, // apv: SHA-256(recipient_did)
+        256,       // key length in bits
     );
 
     // Build protected header
@@ -71,13 +71,13 @@ pub fn encrypt_plaintext(
         },
         apv: apv_b64,
     };
-    let header_json = serde_json::to_string(&header)
-        .map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
+    let header_json =
+        serde_json::to_string(&header).map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
     let header_b64 = URL_SAFE_NO_PAD.encode(header_json.as_bytes());
 
     // Serialize plaintext
-    let plaintext_json = serde_json::to_string(plaintext)
-        .map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
+    let plaintext_json =
+        serde_json::to_string(plaintext).map_err(|e| ProtoError::DIDCommError(e.to_string()))?;
 
     // Generate random 96-bit IV
     let mut iv_bytes = [0u8; 12];
@@ -106,9 +106,7 @@ pub fn encrypt_plaintext(
     Ok(DIDCommEncrypted {
         protected_header: header_b64,
         recipients: vec![JweRecipient {
-            header: JweRecipientHeader {
-                kid: recipient_did,
-            },
+            header: JweRecipientHeader { kid: recipient_did },
             encrypted_key: String::new(), // empty for ECDH-ES direct
         }],
         iv: URL_SAFE_NO_PAD.encode(iv_bytes),
@@ -166,8 +164,8 @@ pub fn decrypt_message(
     let cek = concat_kdf(
         shared_secret.as_bytes(),
         "A256GCM",
-        &[],         // apu: empty for anoncrypt
-        &apv_bytes,  // apv
+        &[],        // apu: empty for anoncrypt
+        &apv_bytes, // apv
         256,
     );
 
@@ -200,7 +198,9 @@ pub fn decrypt_message(
                 aad,
             },
         )
-        .map_err(|_| ProtoError::DIDCommError("decryption failed: invalid key or tampered data".into()))?;
+        .map_err(|_| {
+            ProtoError::DIDCommError("decryption failed: invalid key or tampered data".into())
+        })?;
 
     serde_json::from_slice(&plaintext_bytes)
         .map_err(|e| ProtoError::DIDCommError(format!("invalid plaintext JSON: {e}")))
