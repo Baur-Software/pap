@@ -20,9 +20,11 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 
 use pap_core::mandate::{DecayState, Mandate};
+use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session, SessionState};
 use pap_did::{PrincipalKeypair, SessionKeypair};
+use pap_marketplace::{AgentAdvertisement, MarketplaceRegistry};
 
 // ---------------------------------------------------------------------------
 // Thread-local last-error storage
@@ -232,6 +234,15 @@ pub struct PapCapabilityToken {
 }
 pub struct PapSession {
     inner: Session,
+}
+pub struct PapReceipt {
+    inner: TransactionReceipt,
+}
+pub struct PapAdvertisement {
+    inner: AgentAdvertisement,
+}
+pub struct PapMarketplaceRegistry {
+    inner: MarketplaceRegistry,
 }
 
 // ---------------------------------------------------------------------------
@@ -1203,4 +1214,440 @@ pub extern "C" fn pap_session_state(s: *const PapSession) -> c_int {
 pub extern "C" fn pap_session_id(s: *const PapSession) -> *mut c_char {
     let s = ref_or_null!(s);
     cstring_or_null!(s.inner.id.as_str())
+}
+
+// ---------------------------------------------------------------------------
+// TransactionReceipt
+// ---------------------------------------------------------------------------
+
+/// Create a receipt from an executed session.
+/// `init_disc` / `recv_disc` are arrays of C strings describing property refs.
+/// # Safety
+/// All pointer arrays must be valid for their given counts.
+#[no_mangle]
+pub unsafe extern "C" fn pap_receipt_from_session(
+    session: *const PapSession,
+    init_disc: *const *const c_char,
+    init_disc_count: usize,
+    recv_disc: *const *const c_char,
+    recv_disc_count: usize,
+    executed: *const c_char,
+    returned: *const c_char,
+) -> *mut PapReceipt {
+    let session = ref_or_null!(session);
+    let executed_str = cstr_or_null!(executed);
+    let returned_str = cstr_or_null!(returned);
+
+    let mut init_vec = Vec::with_capacity(init_disc_count);
+    for i in 0..init_disc_count {
+        if init_disc.is_null() {
+            set_last_error("null init_disc array");
+            return std::ptr::null_mut();
+        }
+        let ptr = unsafe { *init_disc.add(i) };
+        let s = cstr_or_null!(ptr);
+        init_vec.push(s.to_string());
+    }
+
+    let mut recv_vec = Vec::with_capacity(recv_disc_count);
+    for i in 0..recv_disc_count {
+        if recv_disc.is_null() {
+            set_last_error("null recv_disc array");
+            return std::ptr::null_mut();
+        }
+        let ptr = unsafe { *recv_disc.add(i) };
+        let s = cstr_or_null!(ptr);
+        recv_vec.push(s.to_string());
+    }
+
+    match TransactionReceipt::from_session(
+        &session.inner,
+        init_vec,
+        recv_vec,
+        executed_str.to_string(),
+        returned_str.to_string(),
+    ) {
+        Ok(r) => Box::into_raw(Box::new(PapReceipt { inner: r })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a PapReceipt. Passing NULL is a no-op.
+/// # Safety
+/// `r` must be a pointer previously returned by a `pap_receipt_*` function.
+#[no_mangle]
+pub unsafe extern "C" fn pap_receipt_free(r: *mut PapReceipt) {
+    if !r.is_null() {
+        drop(unsafe { Box::from_raw(r) });
+    }
+}
+
+/// Co-sign the receipt with a keypair. Returns 0 on success.
+/// # Safety
+/// Both `r` and `kp` must be valid non-null handles.
+#[no_mangle]
+pub unsafe extern "C" fn pap_receipt_co_sign(
+    r: *mut PapReceipt,
+    kp: *const PapPrincipalKeypair,
+) -> c_int {
+    let r = mut_or_err!(r);
+    let kp = ref_or_err!(kp);
+    r.inner.co_sign(kp.inner.signing_key());
+    0
+}
+
+/// Verify a specific co-signature on the receipt.
+/// `pubkey_bytes` must point to exactly 32 bytes.
+/// Returns 0 on success, -1 on failure.
+/// # Safety
+/// `pubkey_bytes` must point to at least 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn pap_receipt_verify_signature(
+    r: *const PapReceipt,
+    index: usize,
+    pubkey_bytes: *const u8,
+    pubkey_len: usize,
+) -> c_int {
+    let r = ref_or_err!(r);
+    if pubkey_bytes.is_null() || pubkey_len != 32 {
+        set_last_error("pubkey_bytes must be exactly 32 bytes");
+        return -1;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(pubkey_bytes, 32) };
+    let arr: [u8; 32] = bytes.try_into().unwrap();
+    match ed25519_dalek::VerifyingKey::from_bytes(&arr) {
+        Ok(vk) => match r.inner.verify_signature(index, &vk) {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(&e.to_string());
+                -1
+            }
+        },
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Verify both co-signatures on the receipt.
+/// Both key buffers must be exactly 32 bytes.
+/// Returns 0 on success, -1 on failure.
+/// # Safety
+/// Both pubkey pointers must point to at least 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn pap_receipt_verify_both(
+    r: *const PapReceipt,
+    init_pubkey: *const u8,
+    init_len: usize,
+    recv_pubkey: *const u8,
+    recv_len: usize,
+) -> c_int {
+    let r = ref_or_err!(r);
+    if init_pubkey.is_null() || init_len != 32 || recv_pubkey.is_null() || recv_len != 32 {
+        set_last_error("both pubkey buffers must be exactly 32 bytes");
+        return -1;
+    }
+    let init_bytes = unsafe { std::slice::from_raw_parts(init_pubkey, 32) };
+    let recv_bytes = unsafe { std::slice::from_raw_parts(recv_pubkey, 32) };
+    let init_arr: [u8; 32] = init_bytes.try_into().unwrap();
+    let recv_arr: [u8; 32] = recv_bytes.try_into().unwrap();
+    let init_vk = match ed25519_dalek::VerifyingKey::from_bytes(&init_arr) {
+        Ok(k) => k,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            return -1;
+        }
+    };
+    let recv_vk = match ed25519_dalek::VerifyingKey::from_bytes(&recv_arr) {
+        Ok(k) => k,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            return -1;
+        }
+    };
+    match r.inner.verify_both(&init_vk, &recv_vk) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Serialize the receipt to a JSON C string. Caller frees with `pap_string_free`.
+#[no_mangle]
+pub extern "C" fn pap_receipt_to_json(r: *const PapReceipt) -> *mut c_char {
+    let r = ref_or_null!(r);
+    cstring_or_null!(r.inner.to_json())
+}
+
+/// Deserialize a receipt from a JSON C string. Caller frees with `pap_receipt_free`.
+#[no_mangle]
+pub extern "C" fn pap_receipt_from_json(json: *const c_char) -> *mut PapReceipt {
+    let json_str = cstr_or_null!(json);
+    match serde_json::from_str::<TransactionReceipt>(json_str) {
+        Ok(r) => Box::into_raw(Box::new(PapReceipt { inner: r })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Returns the receipt's session ID. Caller frees with `pap_string_free`.
+#[no_mangle]
+pub extern "C" fn pap_receipt_session_id(r: *const PapReceipt) -> *mut c_char {
+    let r = ref_or_null!(r);
+    cstring_or_null!(r.inner.session_id.clone())
+}
+
+/// Returns the receipt's action. Caller frees with `pap_string_free`.
+#[no_mangle]
+pub extern "C" fn pap_receipt_action(r: *const PapReceipt) -> *mut c_char {
+    let r = ref_or_null!(r);
+    cstring_or_null!(r.inner.action.clone())
+}
+
+/// Returns the number of co-signatures on the receipt.
+/// Returns -1 on null input.
+#[no_mangle]
+pub extern "C" fn pap_receipt_signature_count(r: *const PapReceipt) -> c_int {
+    match unsafe { r.as_ref() } {
+        Some(r) => r.inner.signatures.len() as c_int,
+        None => -1,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AgentAdvertisement
+// ---------------------------------------------------------------------------
+
+/// Create a new agent advertisement.
+/// All string arrays are borrowed C strings.
+/// # Safety
+/// All pointer arrays must be valid for their given counts.
+#[no_mangle]
+pub unsafe extern "C" fn pap_advertisement_new(
+    name: *const c_char,
+    provider_name: *const c_char,
+    operator_did: *const c_char,
+    capabilities: *const *const c_char,
+    cap_count: usize,
+    object_types: *const *const c_char,
+    obj_count: usize,
+    requires_disclosure: *const *const c_char,
+    disc_count: usize,
+    returns: *const *const c_char,
+    ret_count: usize,
+) -> *mut PapAdvertisement {
+    let name_str = cstr_or_null!(name);
+    let provider_str = cstr_or_null!(provider_name);
+    let did_str = cstr_or_null!(operator_did);
+
+    macro_rules! collect_strings {
+        ($arr:expr, $count:expr) => {{
+            let mut v = Vec::with_capacity($count);
+            for i in 0..$count {
+                if $arr.is_null() {
+                    set_last_error("null string array");
+                    return std::ptr::null_mut();
+                }
+                let ptr = unsafe { *$arr.add(i) };
+                let s = cstr_or_null!(ptr);
+                v.push(s.to_string());
+            }
+            v
+        }};
+    }
+
+    let caps = collect_strings!(capabilities, cap_count);
+    let objs = collect_strings!(object_types, obj_count);
+    let disc = collect_strings!(requires_disclosure, disc_count);
+    let rets = collect_strings!(returns, ret_count);
+
+    Box::into_raw(Box::new(PapAdvertisement {
+        inner: AgentAdvertisement::new(name_str, provider_str, did_str, caps, objs, disc, rets),
+    }))
+}
+
+/// Free a PapAdvertisement. Passing NULL is a no-op.
+/// # Safety
+/// `a` must be a pointer previously returned by a `pap_advertisement_*` function.
+#[no_mangle]
+pub unsafe extern "C" fn pap_advertisement_free(a: *mut PapAdvertisement) {
+    if !a.is_null() {
+        drop(unsafe { Box::from_raw(a) });
+    }
+}
+
+/// Sign the advertisement with the operator's keypair. Returns 0 on success.
+/// # Safety
+/// Both `a` and `kp` must be valid non-null handles.
+#[no_mangle]
+pub unsafe extern "C" fn pap_advertisement_sign(
+    a: *mut PapAdvertisement,
+    kp: *const PapPrincipalKeypair,
+) -> c_int {
+    let a = mut_or_err!(a);
+    let kp = ref_or_err!(kp);
+    a.inner.sign(kp.inner.signing_key());
+    0
+}
+
+/// Verify the advertisement's signature. Returns 0 on success, -1 on failure.
+/// `pubkey_bytes` must point to exactly 32 bytes.
+/// # Safety
+/// `pubkey_bytes` must point to at least 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn pap_advertisement_verify(
+    a: *const PapAdvertisement,
+    pubkey_bytes: *const u8,
+    pubkey_len: usize,
+) -> c_int {
+    let a = ref_or_err!(a);
+    if pubkey_bytes.is_null() || pubkey_len != 32 {
+        set_last_error("pubkey_bytes must be exactly 32 bytes");
+        return -1;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(pubkey_bytes, 32) };
+    let arr: [u8; 32] = bytes.try_into().unwrap();
+    match ed25519_dalek::VerifyingKey::from_bytes(&arr) {
+        Ok(vk) => match a.inner.verify(&vk) {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(&e.to_string());
+                -1
+            }
+        },
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Returns 1 if the advertisement supports `action`, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn pap_advertisement_supports_action(
+    a: *const PapAdvertisement,
+    action: *const c_char,
+) -> c_int {
+    let a = match unsafe { a.as_ref() } {
+        Some(a) => a,
+        None => return 0,
+    };
+    if action.is_null() {
+        return 0;
+    }
+    let action_str = match unsafe { CStr::from_ptr(action) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    if a.inner.supports_action(action_str) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Serialize the advertisement to a JSON C string. Caller frees with `pap_string_free`.
+#[no_mangle]
+pub extern "C" fn pap_advertisement_to_json(a: *const PapAdvertisement) -> *mut c_char {
+    let a = ref_or_null!(a);
+    cstring_or_null!(a.inner.to_json())
+}
+
+/// Deserialize an advertisement from JSON. Caller frees with `pap_advertisement_free`.
+#[no_mangle]
+pub extern "C" fn pap_advertisement_from_json(json: *const c_char) -> *mut PapAdvertisement {
+    let json_str = cstr_or_null!(json);
+    match serde_json::from_str::<AgentAdvertisement>(json_str) {
+        Ok(a) => Box::into_raw(Box::new(PapAdvertisement { inner: a })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Returns the advertisement name. Caller frees with `pap_string_free`.
+#[no_mangle]
+pub extern "C" fn pap_advertisement_name(a: *const PapAdvertisement) -> *mut c_char {
+    let a = ref_or_null!(a);
+    cstring_or_null!(a.inner.name.clone())
+}
+
+// ---------------------------------------------------------------------------
+// MarketplaceRegistry
+// ---------------------------------------------------------------------------
+
+/// Create an empty marketplace registry.
+#[no_mangle]
+pub extern "C" fn pap_registry_new() -> *mut PapMarketplaceRegistry {
+    Box::into_raw(Box::new(PapMarketplaceRegistry {
+        inner: MarketplaceRegistry::new(),
+    }))
+}
+
+/// Free a PapMarketplaceRegistry. Passing NULL is a no-op.
+/// # Safety
+/// `r` must be a pointer previously returned by `pap_registry_new`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_registry_free(r: *mut PapMarketplaceRegistry) {
+    if !r.is_null() {
+        drop(unsafe { Box::from_raw(r) });
+    }
+}
+
+/// Register an advertisement with the registry. The advertisement is cloned.
+/// Returns 0 on success, -1 if the advertisement is unsigned.
+/// # Safety
+/// Both `r` and `a` must be valid non-null handles.
+#[no_mangle]
+pub unsafe extern "C" fn pap_registry_register(
+    r: *mut PapMarketplaceRegistry,
+    a: *const PapAdvertisement,
+) -> c_int {
+    let r = mut_or_err!(r);
+    let a = ref_or_err!(a);
+    match r.inner.register(a.inner.clone()) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Query for advertisements matching `action`. Returns results as a JSON array
+/// C string. Caller frees with `pap_string_free`.
+/// Returns NULL on error.
+#[no_mangle]
+pub extern "C" fn pap_registry_query_by_action(
+    r: *const PapMarketplaceRegistry,
+    action: *const c_char,
+) -> *mut c_char {
+    let r = ref_or_null!(r);
+    let action_str = cstr_or_null!(action);
+    let results: Vec<&AgentAdvertisement> = r.inner.query_by_action(action_str);
+    match serde_json::to_string(&results) {
+        Ok(s) => cstring_or_null!(s),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Returns the number of advertisements in the registry. -1 on null input.
+#[no_mangle]
+pub extern "C" fn pap_registry_len(r: *const PapMarketplaceRegistry) -> c_int {
+    match unsafe { r.as_ref() } {
+        Some(r) => r.inner.len() as c_int,
+        None => -1,
+    }
 }

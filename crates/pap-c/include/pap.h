@@ -55,6 +55,8 @@
 // Closed — session closed, ephemeral keys discarded.
 #define PAP_SESSION_CLOSED 3
 
+typedef struct PapAdvertisement PapAdvertisement;
+
 typedef struct PapCapabilityToken PapCapabilityToken;
 
 typedef struct PapDisclosureEntry PapDisclosureEntry;
@@ -63,7 +65,11 @@ typedef struct PapDisclosureSet PapDisclosureSet;
 
 typedef struct PapMandate PapMandate;
 
+typedef struct PapMarketplaceRegistry PapMarketplaceRegistry;
+
 typedef struct PapPrincipalKeypair PapPrincipalKeypair;
+
+typedef struct PapReceipt PapReceipt;
 
 typedef struct PapScope PapScope;
 
@@ -372,5 +378,132 @@ int pap_session_state(const struct PapSession *s);
 
 // Returns the session UUID as a C string. Caller frees with `pap_string_free`.
 char *pap_session_id(const struct PapSession *s);
+
+// Create a receipt from an executed session.
+// `init_disc` / `recv_disc` are arrays of C strings describing property refs.
+// # Safety
+// All pointer arrays must be valid for their given counts.
+struct PapReceipt *pap_receipt_from_session(const struct PapSession *session,
+                                            const char *const *init_disc,
+                                            uintptr_t init_disc_count,
+                                            const char *const *recv_disc,
+                                            uintptr_t recv_disc_count,
+                                            const char *executed,
+                                            const char *returned);
+
+// Free a PapReceipt. Passing NULL is a no-op.
+// # Safety
+// `r` must be a pointer previously returned by a `pap_receipt_*` function.
+void pap_receipt_free(struct PapReceipt *r);
+
+// Co-sign the receipt with a keypair. Returns 0 on success.
+// # Safety
+// Both `r` and `kp` must be valid non-null handles.
+int pap_receipt_co_sign(struct PapReceipt *r, const struct PapPrincipalKeypair *kp);
+
+// Verify a specific co-signature on the receipt.
+// `pubkey_bytes` must point to exactly 32 bytes.
+// Returns 0 on success, -1 on failure.
+// # Safety
+// `pubkey_bytes` must point to at least 32 bytes.
+int pap_receipt_verify_signature(const struct PapReceipt *r,
+                                 uintptr_t index,
+                                 const uint8_t *pubkey_bytes,
+                                 uintptr_t pubkey_len);
+
+// Verify both co-signatures on the receipt.
+// Both key buffers must be exactly 32 bytes.
+// Returns 0 on success, -1 on failure.
+// # Safety
+// Both pubkey pointers must point to at least 32 bytes.
+int pap_receipt_verify_both(const struct PapReceipt *r,
+                            const uint8_t *init_pubkey,
+                            uintptr_t init_len,
+                            const uint8_t *recv_pubkey,
+                            uintptr_t recv_len);
+
+// Serialize the receipt to a JSON C string. Caller frees with `pap_string_free`.
+char *pap_receipt_to_json(const struct PapReceipt *r);
+
+// Deserialize a receipt from a JSON C string. Caller frees with `pap_receipt_free`.
+struct PapReceipt *pap_receipt_from_json(const char *json);
+
+// Returns the receipt's session ID. Caller frees with `pap_string_free`.
+char *pap_receipt_session_id(const struct PapReceipt *r);
+
+// Returns the receipt's action. Caller frees with `pap_string_free`.
+char *pap_receipt_action(const struct PapReceipt *r);
+
+// Returns the number of co-signatures on the receipt.
+// Returns -1 on null input.
+int pap_receipt_signature_count(const struct PapReceipt *r);
+
+// Create a new agent advertisement.
+// All string arrays are borrowed C strings.
+// # Safety
+// All pointer arrays must be valid for their given counts.
+struct PapAdvertisement *pap_advertisement_new(const char *name,
+                                               const char *provider_name,
+                                               const char *operator_did,
+                                               const char *const *capabilities,
+                                               uintptr_t cap_count,
+                                               const char *const *object_types,
+                                               uintptr_t obj_count,
+                                               const char *const *requires_disclosure,
+                                               uintptr_t disc_count,
+                                               const char *const *returns,
+                                               uintptr_t ret_count);
+
+// Free a PapAdvertisement. Passing NULL is a no-op.
+// # Safety
+// `a` must be a pointer previously returned by a `pap_advertisement_*` function.
+void pap_advertisement_free(struct PapAdvertisement *a);
+
+// Sign the advertisement with the operator's keypair. Returns 0 on success.
+// # Safety
+// Both `a` and `kp` must be valid non-null handles.
+int pap_advertisement_sign(struct PapAdvertisement *a, const struct PapPrincipalKeypair *kp);
+
+// Verify the advertisement's signature. Returns 0 on success, -1 on failure.
+// `pubkey_bytes` must point to exactly 32 bytes.
+// # Safety
+// `pubkey_bytes` must point to at least 32 bytes.
+int pap_advertisement_verify(const struct PapAdvertisement *a,
+                             const uint8_t *pubkey_bytes,
+                             uintptr_t pubkey_len);
+
+// Returns 1 if the advertisement supports `action`, 0 otherwise.
+int pap_advertisement_supports_action(const struct PapAdvertisement *a, const char *action);
+
+// Serialize the advertisement to a JSON C string. Caller frees with `pap_string_free`.
+char *pap_advertisement_to_json(const struct PapAdvertisement *a);
+
+// Deserialize an advertisement from JSON. Caller frees with `pap_advertisement_free`.
+struct PapAdvertisement *pap_advertisement_from_json(const char *json);
+
+// Returns the advertisement name. Caller frees with `pap_string_free`.
+char *pap_advertisement_name(const struct PapAdvertisement *a);
+
+// Create an empty marketplace registry.
+struct PapMarketplaceRegistry *pap_registry_new(void);
+
+// Free a PapMarketplaceRegistry. Passing NULL is a no-op.
+// # Safety
+// `r` must be a pointer previously returned by `pap_registry_new`.
+void pap_registry_free(struct PapMarketplaceRegistry *r);
+
+// Register an advertisement with the registry. The advertisement is cloned.
+// Returns 0 on success, -1 if the advertisement is unsigned.
+// # Safety
+// Both `r` and `a` must be valid non-null handles.
+int pap_registry_register(struct PapMarketplaceRegistry *r, const struct PapAdvertisement *a);
+
+// Query for advertisements matching `action`. Returns results as a JSON array
+// C string. Caller frees with `pap_string_free`.
+// Returns NULL on error.
+char *pap_registry_query_by_action(const struct PapMarketplaceRegistry *r, const char *action);
+
+// Returns the number of advertisements in the registry. -1 on null input.
+int pap_registry_len(const struct PapMarketplaceRegistry *r);
 
 #endif  /* PAP_H */

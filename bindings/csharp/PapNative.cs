@@ -230,6 +230,103 @@ internal static partial class PapNative
     [LibraryImport(Lib)]
     internal static partial IntPtr pap_session_id(IntPtr s);
 
+    // ---- TransactionReceipt -----------------------------------------------
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_receipt_from_session(
+        IntPtr session,
+        [In] IntPtr[] initDisc, nuint initDiscCount,
+        [In] IntPtr[] recvDisc, nuint recvDiscCount,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string executed,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string returned);
+
+    [LibraryImport(Lib)]
+    internal static partial void pap_receipt_free(IntPtr r);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_receipt_co_sign(IntPtr r, IntPtr kp);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_receipt_verify_signature(
+        IntPtr r, nuint index,
+        [In] byte[] pubkeyBytes, nuint pubkeyLen);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_receipt_verify_both(
+        IntPtr r,
+        [In] byte[] initPubkey, nuint initLen,
+        [In] byte[] recvPubkey, nuint recvLen);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_receipt_to_json(IntPtr r);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_receipt_from_json(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string json);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_receipt_session_id(IntPtr r);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_receipt_action(IntPtr r);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_receipt_signature_count(IntPtr r);
+
+    // ---- AgentAdvertisement -----------------------------------------------
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_advertisement_new(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string providerName,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string operatorDid,
+        [In] IntPtr[] capabilities, nuint capCount,
+        [In] IntPtr[] objectTypes, nuint objCount,
+        [In] IntPtr[] requiresDisclosure, nuint discCount,
+        [In] IntPtr[] returns, nuint retCount);
+
+    [LibraryImport(Lib)]
+    internal static partial void pap_advertisement_free(IntPtr a);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_advertisement_sign(IntPtr a, IntPtr kp);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_advertisement_verify(
+        IntPtr a, [In] byte[] pubkeyBytes, nuint pubkeyLen);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_advertisement_supports_action(
+        IntPtr a, [MarshalAs(UnmanagedType.LPUTF8Str)] string action);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_advertisement_to_json(IntPtr a);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_advertisement_from_json(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string json);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_advertisement_name(IntPtr a);
+
+    // ---- MarketplaceRegistry ----------------------------------------------
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_registry_new();
+
+    [LibraryImport(Lib)]
+    internal static partial void pap_registry_free(IntPtr r);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_registry_register(IntPtr r, IntPtr a);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr pap_registry_query_by_action(
+        IntPtr r, [MarshalAs(UnmanagedType.LPUTF8Str)] string action);
+
+    [LibraryImport(Lib)]
+    internal static partial int pap_registry_len(IntPtr r);
+
     // ---- Helpers ----------------------------------------------------------
 
     /// Read a C string returned by the library, free it, return a managed string.

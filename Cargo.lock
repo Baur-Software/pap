@@ -4395,11 +4395,13 @@ dependencies = [
 name = "pap-c"
 version = "0.4.2"
 dependencies = [
+ "base64 0.22.1",
  "cbindgen",
  "chrono",
  "ed25519-dalek",
  "pap-core",
  "pap-did",
+ "pap-marketplace",
  "serde_json",
 ]
 
