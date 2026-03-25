@@ -16,7 +16,13 @@ use pap_federation::{FederatedRegistry, FederationClient};
 const DISCOVERY_INTERVAL: Duration = Duration::from_secs(5 * 60); // 5 minutes
 
 /// Common action types to auto-sync from peers.
-const SYNC_ACTIONS: &[&str] = &["schema:SearchAction", "schema:AskAction"];
+const SYNC_ACTIONS: &[&str] = &[
+    "schema:SearchAction",
+    "schema:AskAction",
+    "schema:CheckAction",
+    "schema:FindAction",
+    "schema:TradeAction",
+];
 
 /// Run the background discovery loop.
 ///

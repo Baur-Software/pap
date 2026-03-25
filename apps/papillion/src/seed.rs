@@ -75,5 +75,65 @@ pub fn seed_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeypair>)
         &mut keypairs,
     );
 
+    // Open-Meteo Weather — real API, REQUIRES GeoCoordinates disclosure
+    // Backed by Open-Meteo free weather API (no auth required).
+    register(
+        "Open-Meteo Weather",
+        "Open-Meteo",
+        vec!["schema:CheckAction".into()],
+        vec!["schema:WeatherForecast".into()],
+        vec!["schema:GeoCoordinates".into()],
+        vec!["schema:WeatherForecast".into()],
+        &mut keypairs,
+    );
+
+    // Open Library Books — real API, zero disclosure
+    // Backed by Open Library Search API (public, no auth required).
+    register(
+        "Open Library Books",
+        "Internet Archive",
+        vec!["schema:SearchAction".into()],
+        vec!["schema:Book".into()],
+        vec![],
+        vec!["schema:Book".into()],
+        &mut keypairs,
+    );
+
+    // Nominatim Geocoding — real API, zero disclosure
+    // Backed by OpenStreetMap Nominatim API (public, requires User-Agent).
+    register(
+        "Nominatim Geocoding",
+        "OpenStreetMap Foundation",
+        vec!["schema:FindAction".into()],
+        vec!["schema:Place".into()],
+        vec![],
+        vec!["schema:Place".into()],
+        &mut keypairs,
+    );
+
+    // Frankfurter Currency Exchange — real API, zero disclosure
+    // Backed by Frankfurter API with ECB reference rates (public, no auth).
+    register(
+        "Frankfurter Exchange",
+        "Frankfurter",
+        vec!["schema:TradeAction".into()],
+        vec!["schema:MonetaryAmount".into()],
+        vec![],
+        vec!["schema:MonetaryAmount".into()],
+        &mut keypairs,
+    );
+
+    // Hacker News Search — real API, zero disclosure
+    // Backed by HN Algolia search API (public, no auth required).
+    register(
+        "Hacker News",
+        "Y Combinator",
+        vec!["schema:SearchAction".into()],
+        vec!["schema:NewsArticle".into()],
+        vec![],
+        vec!["schema:NewsArticle".into()],
+        &mut keypairs,
+    );
+
     (registry, keypairs)
 }
