@@ -1,4 +1,4 @@
-//! M-of-N social recovery via designated notaries (spec section 9.5).
+//! M-of-N social recovery via designated notaries (spec section 13.5).
 //!
 //! A principal designates N notary DIDs at mandate creation time. If the
 //! principal loses access to their key, any M notaries can co-sign a

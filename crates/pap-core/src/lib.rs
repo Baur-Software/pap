@@ -5,7 +5,7 @@
 //! - `session` — capability tokens, session state machine
 //! - `receipt` — co-signed transaction receipts (property refs only, no values)
 //! - `extensions` — continuity tokens, auto-approval policies (spec section 9)
-//! - `recovery` — M-of-N social recovery via designated notaries (spec section 9.5)
+//! - `recovery` — M-of-N social recovery via designated notaries (spec section 13.5)
 //! - `error` — protocol error types
 
 pub mod error;
