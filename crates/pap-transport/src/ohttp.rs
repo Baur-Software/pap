@@ -25,9 +25,9 @@ impl Default for OhttpConfig {
     fn default() -> Self {
         Self {
             relay_url: std::env::var("PAP_OHTTP_RELAY_URL").ok(),
-            kem_id: 0x0020,   // DH25519
-            kdf_id: 0x0001,   // SHA256
-            aead_id: 0x0001,  // AES128GCM
+            kem_id: 0x0020,  // DH25519
+            kdf_id: 0x0001,  // SHA256
+            aead_id: 0x0001, // AES128GCM
         }
     }
 }
@@ -219,7 +219,10 @@ mod tests {
     #[test]
     fn test_ohttp_config_with_relay() {
         let config = OhttpConfig::new().with_relay(Some("http://relay.example.com".to_string()));
-        assert_eq!(config.relay_url, Some("http://relay.example.com".to_string()));
+        assert_eq!(
+            config.relay_url,
+            Some("http://relay.example.com".to_string())
+        );
     }
 
     #[test]

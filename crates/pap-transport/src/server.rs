@@ -57,12 +57,14 @@ impl AgentServer {
     }
 
     pub fn router(&self) -> Router {
-        let ohttp_decryptor = self.ohttp_config.as_ref().map(|cfg| {
-            OhttpServerDecryptor::new(cfg.clone())
-        });
-        let ohttp_encryptor = self.ohttp_config.as_ref().map(|cfg| {
-            OhttpServerEncryptor::new(cfg.clone())
-        });
+        let ohttp_decryptor = self
+            .ohttp_config
+            .as_ref()
+            .map(|cfg| OhttpServerDecryptor::new(cfg.clone()));
+        let ohttp_encryptor = self
+            .ohttp_config
+            .as_ref()
+            .map(|cfg| OhttpServerEncryptor::new(cfg.clone()));
 
         let state = AppState {
             handler: self.handler.clone(),
@@ -102,10 +104,7 @@ impl AgentServer {
 }
 
 /// Decode request body from OHTTP if enabled, otherwise parse as JSON.
-async fn decode_request_body(
-    body: Bytes,
-    state: &AppState,
-) -> Result<ProtocolMessage, StatusCode> {
+async fn decode_request_body(body: Bytes, state: &AppState) -> Result<ProtocolMessage, StatusCode> {
     if let Some(ref decryptor) = state.ohttp_decryptor {
         // Decrypt OHTTP payload
         let plaintext = decryptor
@@ -119,10 +118,7 @@ async fn decode_request_body(
 }
 
 /// Encode response message in OHTTP if enabled, otherwise return as JSON.
-fn encode_response_body(
-    msg: ProtocolMessage,
-    state: &AppState,
-) -> Result<Vec<u8>, StatusCode> {
+fn encode_response_body(msg: ProtocolMessage, state: &AppState) -> Result<Vec<u8>, StatusCode> {
     let json = serde_json::to_vec(&msg).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if let Some(ref encryptor) = state.ohttp_encryptor {
@@ -136,10 +132,7 @@ fn encode_response_body(
     }
 }
 
-async fn handle_token(
-    State(state): State<AppState>,
-    body: Bytes,
-) -> Result<Vec<u8>, StatusCode> {
+async fn handle_token(State(state): State<AppState>, body: Bytes) -> Result<Vec<u8>, StatusCode> {
     let msg = decode_request_body(body, &state).await?;
 
     match msg {

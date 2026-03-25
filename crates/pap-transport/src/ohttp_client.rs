@@ -9,7 +9,7 @@ use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
 
 use crate::error::TransportError;
-use crate::ohttp::{OhttpConfig, OhttpEncryptor, OhttpDecryptor};
+use crate::ohttp::{OhttpConfig, OhttpDecryptor, OhttpEncryptor};
 
 /// HTTP client for OHTTP-wrapped PAP handshake.
 ///
@@ -44,11 +44,7 @@ impl OhttpClient {
     }
 
     /// Create an OHTTP client with a pre-configured reqwest client.
-    pub fn with_client(
-        origin_url: &str,
-        client: reqwest::Client,
-        config: OhttpConfig,
-    ) -> Self {
+    pub fn with_client(origin_url: &str, client: reqwest::Client, config: OhttpConfig) -> Self {
         let relay_url = config.resolve_relay();
         Self {
             origin_url: origin_url.trim_end_matches('/').to_string(),
@@ -217,7 +213,8 @@ mod tests {
 
     #[test]
     fn test_ohttp_client_with_relay() {
-        let config = OhttpConfig::default().with_relay(Some("http://relay.example.com".to_string()));
+        let config =
+            OhttpConfig::default().with_relay(Some("http://relay.example.com".to_string()));
         let client = OhttpClient::new("http://agent.example.com", config);
         assert_eq!(
             client.relay_url,

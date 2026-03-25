@@ -33,7 +33,10 @@ impl MockAgentHandler {
 }
 
 impl AgentHandler for MockAgentHandler {
-    fn handle_token(&self, _token: pap_core::session::CapabilityToken) -> Result<(String, String), TransportError> {
+    fn handle_token(
+        &self,
+        _token: pap_core::session::CapabilityToken,
+    ) -> Result<(String, String), TransportError> {
         self.record_message("handle_token");
         Ok((
             "sess-test-123".to_string(),
@@ -46,7 +49,11 @@ impl AgentHandler for MockAgentHandler {
         Ok(())
     }
 
-    fn handle_disclosure(&self, session_id: &str, _disclosures: Vec<serde_json::Value>) -> Result<(), TransportError> {
+    fn handle_disclosure(
+        &self,
+        session_id: &str,
+        _disclosures: Vec<serde_json::Value>,
+    ) -> Result<(), TransportError> {
         self.record_message(&format!("handle_disclosure:{}", session_id));
         Ok(())
     }
@@ -56,7 +63,10 @@ impl AgentHandler for MockAgentHandler {
         Ok(serde_json::json!({"status": "success"}))
     }
 
-    fn co_sign_receipt(&self, receipt: pap_core::receipt::TransactionReceipt) -> Result<pap_core::receipt::TransactionReceipt, TransportError> {
+    fn co_sign_receipt(
+        &self,
+        receipt: pap_core::receipt::TransactionReceipt,
+    ) -> Result<pap_core::receipt::TransactionReceipt, TransportError> {
         self.record_message("co_sign_receipt");
         // Return the same receipt for simplicity
         Ok(receipt)
@@ -68,7 +78,6 @@ impl AgentHandler for MockAgentHandler {
     }
 }
 
-
 /// Test that OHTTP encapsulation/decapsulation works correctly
 #[test]
 fn ohttp_encapsulation_roundtrip() -> Result<(), TransportError> {
@@ -76,16 +85,15 @@ fn ohttp_encapsulation_roundtrip() -> Result<(), TransportError> {
     let plaintext = b"test message";
 
     // Encrypt
-    let encrypted = pap_transport::OhttpEncryptor::new(config.clone())
-        .encrypt_request(plaintext)?;
+    let encrypted =
+        pap_transport::OhttpEncryptor::new(config.clone()).encrypt_request(plaintext)?;
 
     // Verify it has the magic header
     assert!(encrypted.starts_with(b"OHTTP\x00"));
     assert!(encrypted.len() > plaintext.len());
 
     // Decrypt
-    let decrypted = pap_transport::OhttpDecryptor::new(config)
-        .decrypt_response(&encrypted)?;
+    let decrypted = pap_transport::OhttpDecryptor::new(config).decrypt_response(&encrypted)?;
 
     assert_eq!(decrypted, plaintext);
     Ok(())
