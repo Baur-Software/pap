@@ -34,12 +34,12 @@ impl PapillionService for TauriService {
     }
 
     async fn create_template(&self, template: &Template) -> Result<(), String> {
-        bridge::invoke::<Value, ()>("create_template", &serde_json::to_value(template)?)
+        bridge::invoke::<Value, ()>("create_template", &serde_json::to_value(template).map_err(|e| e.to_string())?)
             .await
     }
 
     async fn update_template(&self, template: &Template) -> Result<(), String> {
-        bridge::invoke::<Value, ()>("update_template", &serde_json::to_value(template)?)
+        bridge::invoke::<Value, ()>("update_template", &serde_json::to_value(template).map_err(|e| e.to_string())?)
             .await
     }
 
@@ -122,7 +122,7 @@ impl PapillionService for TauriService {
     ) -> Result<OrchestratorConfig, String> {
         bridge::invoke::<Value, OrchestratorConfig>(
             "configure_orchestrator",
-            &serde_json::to_value(config)?,
+            &serde_json::to_value(config).map_err(|e| e.to_string())?,
         )
         .await
     }
@@ -184,7 +184,7 @@ impl PapillionService for TauriService {
     }
 
     async fn update_agent_profile(&self, profile: &AgentProfileInfo) -> Result<(), String> {
-        bridge::invoke::<Value, ()>("update_agent_profile", &serde_json::to_value(profile)?)
+        bridge::invoke::<Value, ()>("update_agent_profile", &serde_json::to_value(profile).map_err(|e| e.to_string())?)
             .await
     }
 

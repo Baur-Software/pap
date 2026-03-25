@@ -29,6 +29,7 @@ use papillion_shared::{
 
 pub mod hooks;
 pub mod tauri_service;
+pub mod web_identity;
 pub mod web_service;
 
 pub use hooks::{init_papillion_service, use_papillion_service};
@@ -166,12 +167,23 @@ pub struct AgentProfileInfo {
 /// Get the appropriate service implementation based on runtime environment.
 ///
 /// Returns TauriService if running inside Tauri, WebService otherwise.
+/// The WebService path loads profiles from IndexedDB asynchronously.
 pub async fn get_papillion_service() -> Arc<dyn PapillionService> {
     use crate::bridge;
 
     if bridge::tauri_available() {
         Arc::new(TauriService)
     } else {
-        Arc::new(WebService)
+        match WebService::new().await {
+            Ok(svc) => Arc::new(svc),
+            Err(e) => {
+                web_sys::console::error_1(
+                    &format!("Failed to init WebService: {e}; falling back to empty").into(),
+                );
+                // Start with no profiles — identity methods will return errors
+                // until a profile is created, but the app remains functional.
+                Arc::new(WebService::empty())
+            }
+        }
     }
 }
