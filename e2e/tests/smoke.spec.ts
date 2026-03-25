@@ -22,41 +22,38 @@ test.describe('Papillion Smoke Tests', () => {
   test('WASM loads and app shell renders', async ({ page }) => {
     // Capture ALL console output and page errors for diagnostics
     const messages: string[] = [];
-    const errors: string[] = [];
+    const pageErrors: string[] = [];
 
     page.on('console', (msg) => {
       messages.push(`[${msg.type()}] ${msg.text()}`);
     });
     page.on('pageerror', (err) => {
-      errors.push(err.message);
+      pageErrors.push(`${err.name}: ${err.message}`);
     });
 
-    const response = await page.goto('/');
-    console.log(`Navigation status: ${response?.status()}`);
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
+    console.log(`[diag] Navigation status: ${response?.status()}`);
 
-    // Wait for network to settle (WASM download)
-    await page.waitForLoadState('networkidle', { timeout: 30_000 });
+    // Wait 15 seconds for WASM to download, compile, and mount.
+    // Do NOT use waitForLoadState('networkidle') — it never fires with
+    // HTTP keep-alive connections from the static server.
+    await page.waitForTimeout(15_000);
 
-    // Give WASM time to compile and mount
-    await page.waitForTimeout(5_000);
-
-    // Dump diagnostics
+    // ── Dump diagnostics BEFORE any assertions ──
     const html = await page.content();
-    console.log('--- PAGE HTML (first 2000 chars) ---');
-    console.log(html.substring(0, 2000));
-    console.log('--- CONSOLE MESSAGES ---');
-    for (const m of messages) console.log(m);
-    console.log('--- PAGE ERRORS ---');
-    for (const e of errors) console.log(e);
-    console.log('--- END DIAGNOSTICS ---');
+    console.log('[diag] --- PAGE HTML (first 3000 chars) ---');
+    console.log(html.substring(0, 3000));
+    console.log('[diag] --- CONSOLE MESSAGES ---');
+    for (const m of messages) console.log(`[diag] ${m}`);
+    console.log('[diag] --- PAGE ERRORS ---');
+    for (const e of pageErrors) console.log(`[diag] ${e}`);
 
-    // Now check if the app rendered
     const appShell = page.locator('.app-shell-canvas');
-    const appShellExists = await appShell.count();
-    console.log(`app-shell-canvas count: ${appShellExists}`);
-
-    // Take a screenshot for the test report
-    await page.screenshot({ path: 'test-results/smoke-diagnostic.png', fullPage: true });
+    const appShellCount = await appShell.count();
+    const bodyChildren = await page.locator('body > *').count();
+    console.log(`[diag] app-shell-canvas count: ${appShellCount}`);
+    console.log(`[diag] body children count: ${bodyChildren}`);
+    console.log('[diag] --- END DIAGNOSTICS ---');
 
     // The actual assertion
     await expect(appShell).toBeVisible({ timeout: 60_000 });
