@@ -162,6 +162,29 @@ impl WebIdentityService {
         self.active_identity_info().ok()
     }
 
+    /// Get the active profile's principal keypair (with signing key).
+    ///
+    /// Used by the WASM handshake executor to sign tokens and mandates.
+    /// The caller must scope the keypair's lifetime appropriately — see
+    /// `handshake::execute()` for the phase-scoped security model.
+    pub fn active_keypair(&self) -> Result<PrincipalKeypair, String> {
+        let active = self
+            .profiles
+            .iter()
+            .find(|p| p.active)
+            .ok_or_else(|| "No active profile".to_string())?;
+
+        let seed_bytes = URL_SAFE_NO_PAD
+            .decode(&active.principal_seed_b64)
+            .map_err(|e| format!("seed decode: {e}"))?;
+
+        let seed: [u8; 32] = seed_bytes
+            .try_into()
+            .map_err(|_| "seed must be 32 bytes".to_string())?;
+
+        PrincipalKeypair::from_bytes(&seed).map_err(|e| format!("keypair restore: {e}"))
+    }
+
     /// Derive identity info from the active profile's seed.
     fn active_identity_info(&self) -> Result<IdentityInfo, String> {
         let active = self

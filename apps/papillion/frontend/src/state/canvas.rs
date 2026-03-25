@@ -180,20 +180,36 @@ impl CanvasState {
         // Fire backend command with expanded text
         let cid = canvas_id.clone();
         spawn_local(async move {
-            #[derive(serde::Serialize)]
-            struct CanvasPromptArgs {
-                canvas_id: String,
-                prompt_id: String,
-                block_id: String,
-                text: String,
-            }
-            let args = CanvasPromptArgs {
-                canvas_id: cid,
-                prompt_id,
-                block_id: block_id.clone(),
-                text: expanded_text,
+            let result = if bridge::tauri_available() {
+                // Tauri IPC path — delegates to native backend handshake
+                #[derive(serde::Serialize)]
+                struct CanvasPromptArgs {
+                    canvas_id: String,
+                    prompt_id: String,
+                    block_id: String,
+                    text: String,
+                }
+                let args = CanvasPromptArgs {
+                    canvas_id: cid,
+                    prompt_id,
+                    block_id: block_id.clone(),
+                    text: expanded_text,
+                };
+                bridge::invoke::<_, serde_json::Value>("canvas_prompt", &args)
+                    .await
+                    .map(|_| ())
+            } else {
+                // WASM-native handshake — runs the 6-phase protocol directly
+                // in the browser via fetch(), bypassing Tauri IPC entirely.
+                crate::handshake::run_prompt(
+                    canvases,
+                    canvas_id.clone(),
+                    block_id.clone(),
+                    expanded_text,
+                )
+                .await
             };
-            let result = bridge::invoke::<_, serde_json::Value>("canvas_prompt", &args).await;
+
             if let Err(e) = result {
                 // Mark block as failed
                 canvases.update(|cs| {

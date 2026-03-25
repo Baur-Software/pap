@@ -15,6 +15,8 @@
 
 use std::sync::Mutex;
 
+use pap_did::PrincipalKeypair;
+
 use super::web_identity::WebIdentityService;
 use super::{AgentProfileInfo, PapillionService};
 use papillion_shared::{
@@ -130,6 +132,14 @@ impl PapillionService for WebService {
         identity
             .get_identity()
             .ok_or_else(|| "No active identity".to_string())
+    }
+
+    fn active_keypair(&self) -> Result<PrincipalKeypair, String> {
+        let identity = self
+            .identity
+            .lock()
+            .map_err(|e| format!("identity lock: {e}"))?;
+        identity.active_keypair()
     }
 
     // ============================================================================
