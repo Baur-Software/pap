@@ -59,16 +59,13 @@ impl FetchFederationClient {
         endpoint: &str,
         ad: &AgentAdvertisement,
     ) -> Result<bool, FederationError> {
-        let url = format!(
-            "{}/federation/announce",
-            endpoint.trim_end_matches('/')
-        );
+        let url = format!("{}/federation/announce", endpoint.trim_end_matches('/'));
 
         let msg = FederationMessage::Announce {
             advertisement: Box::new(ad.clone()),
         };
-        let body = serde_json::to_string(&msg)
-            .map_err(|e| FederationError::SyncFailed(e.to_string()))?;
+        let body =
+            serde_json::to_string(&msg).map_err(|e| FederationError::SyncFailed(e.to_string()))?;
 
         let ack = fetch_post(&url, &body).await?;
 
@@ -79,13 +76,8 @@ impl FetchFederationClient {
     }
 
     /// Fetch a node's identity from its `/federation/identity` endpoint.
-    pub async fn fetch_identity(
-        endpoint: &str,
-    ) -> Result<NodeIdentityResponse, FederationError> {
-        let url = format!(
-            "{}/federation/identity",
-            endpoint.trim_end_matches('/')
-        );
+    pub async fn fetch_identity(endpoint: &str) -> Result<NodeIdentityResponse, FederationError> {
+        let url = format!("{}/federation/identity", endpoint.trim_end_matches('/'));
 
         let text = fetch_text(&url).await?;
 
@@ -94,13 +86,8 @@ impl FetchFederationClient {
     }
 
     /// Discover peers known to a federation endpoint.
-    pub async fn discover_peers(
-        endpoint: &str,
-    ) -> Result<Vec<RegistryPeer>, FederationError> {
-        let url = format!(
-            "{}/federation/peers",
-            endpoint.trim_end_matches('/')
-        );
+    pub async fn discover_peers(endpoint: &str) -> Result<Vec<RegistryPeer>, FederationError> {
+        let url = format!("{}/federation/peers", endpoint.trim_end_matches('/'));
 
         let msg = fetch_get(&url).await?;
 
