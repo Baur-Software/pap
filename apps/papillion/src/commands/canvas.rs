@@ -21,6 +21,106 @@ use super::orchestrator::hash_agent_did;
 fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
     let lower = prompt.to_lowercase();
 
+    // Weather / forecast — requires GeoCoordinates disclosure
+    if lower.contains("weather")
+        || lower.contains("forecast")
+        || lower.contains("temperature")
+    {
+        let q = prompt
+            .replace("weather", "")
+            .replace("forecast", "")
+            .replace("temperature", "")
+            .replace(" in ", " ")
+            .replace(" for ", " ")
+            .trim()
+            .to_string();
+        return (
+            "schema:CheckAction",
+            "Open-Meteo Weather",
+            if q.is_empty() { prompt.into() } else { q },
+        );
+    }
+
+    // Currency exchange
+    if lower.contains("convert")
+        || lower.contains("exchange rate")
+        || lower.contains("currency")
+        || (lower.contains("usd") && (lower.contains("eur") || lower.contains("gbp")))
+        || (lower.contains("eur") && lower.contains("gbp"))
+    {
+        let q = prompt
+            .replace("convert", "")
+            .replace("exchange rate", "")
+            .replace("currency", "")
+            .trim()
+            .to_string();
+        return (
+            "schema:TradeAction",
+            "Frankfurter Exchange",
+            if q.is_empty() { prompt.into() } else { q },
+        );
+    }
+
+    // Geocoding / place finding
+    if lower.contains("where is")
+        || lower.contains("locate")
+        || lower.contains("geocode")
+        || lower.contains("coordinates of")
+    {
+        let q = prompt
+            .replace("where is", "")
+            .replace("locate", "")
+            .replace("geocode", "")
+            .replace("coordinates of", "")
+            .trim()
+            .to_string();
+        return (
+            "schema:FindAction",
+            "Nominatim Geocoding",
+            if q.is_empty() { prompt.into() } else { q },
+        );
+    }
+
+    // Book search
+    if lower.contains("book ")
+        || lower.contains("books by")
+        || lower.contains("isbn")
+        || lower.contains("novel ")
+    {
+        let q = prompt
+            .replace("books by", "")
+            .replace("book ", " ")
+            .replace("novel ", " ")
+            .trim()
+            .to_string();
+        return (
+            "schema:SearchAction",
+            "Open Library Books",
+            if q.is_empty() { prompt.into() } else { q },
+        );
+    }
+
+    // Hacker News
+    if lower.contains("hacker news")
+        || lower.contains("hackernews")
+        || lower.starts_with("hn ")
+        || lower.contains("tech news")
+    {
+        let q = prompt
+            .replace("hacker news", "")
+            .replace("hackernews", "")
+            .replace("tech news", "")
+            .trim()
+            .trim_start_matches("hn ")
+            .to_string();
+        return (
+            "schema:SearchAction",
+            "Hacker News",
+            if q.is_empty() { prompt.into() } else { q },
+        );
+    }
+
+    // Wikipedia / articles
     if lower.contains("wikipedia")
         || lower.contains("wiki")
         || lower.contains("article about")
@@ -39,14 +139,12 @@ fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
             if q.is_empty() { prompt.into() } else { q },
         )
     } else if lower.contains("search")
-        || lower.contains("find")
         || lower.contains("look up")
         || lower.starts_with("what is")
         || lower.starts_with("who is")
     {
         let q = prompt
             .replace("search", "")
-            .replace("find", "")
             .replace("look up", "")
             .trim()
             .to_string();
@@ -150,7 +248,10 @@ pub(crate) async fn resolve_agent(
             .local_registry
             .lock()
             .map_err(|e| PapillionError::from(e.to_string()))?;
-        let candidates = local.query_local_satisfiable(action_type, &[]);
+        // Use query_local (not query_local_satisfiable) for local agents:
+        // local agents run on the user's device and are trusted. Disclosure
+        // filtering is meaningful for remote/federated agents, not local ones.
+        let candidates = local.query_local(action_type);
 
         // Filter out excluded agents, then score the rest
         let eligible: Vec<_> = candidates
@@ -539,6 +640,48 @@ mod tests {
         assert_eq!(action, "schema:AskAction");
         assert_eq!(agent, "On-Device AI");
         assert_eq!(query, "explain quantum computing");
+    }
+
+    #[test]
+    fn detect_intent_weather() {
+        let (action, agent, _query) = detect_intent("weather 48.85,2.35");
+        assert_eq!(action, "schema:CheckAction");
+        assert_eq!(agent, "Open-Meteo Weather");
+    }
+
+    #[test]
+    fn detect_intent_forecast() {
+        let (action, agent, _query) = detect_intent("forecast for tomorrow");
+        assert_eq!(action, "schema:CheckAction");
+        assert_eq!(agent, "Open-Meteo Weather");
+    }
+
+    #[test]
+    fn detect_intent_currency() {
+        let (action, agent, _query) = detect_intent("convert 100 USD EUR");
+        assert_eq!(action, "schema:TradeAction");
+        assert_eq!(agent, "Frankfurter Exchange");
+    }
+
+    #[test]
+    fn detect_intent_geocode() {
+        let (action, agent, _query) = detect_intent("where is Paris");
+        assert_eq!(action, "schema:FindAction");
+        assert_eq!(agent, "Nominatim Geocoding");
+    }
+
+    #[test]
+    fn detect_intent_books() {
+        let (action, agent, _query) = detect_intent("book about rust programming");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "Open Library Books");
+    }
+
+    #[test]
+    fn detect_intent_hackernews() {
+        let (action, agent, _query) = detect_intent("hacker news rust");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "Hacker News");
     }
 
     #[test]

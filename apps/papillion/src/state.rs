@@ -10,7 +10,10 @@ use pap_webauthn::{PrincipalSigner, SoftwareSigner};
 use papillion_shared::{OrchestratorConfig, SuccessorDesignation};
 use zeroize::Zeroizing;
 
-use crate::agents::{DuckDuckGoAgent, OnDeviceAiAgent, WikipediaAgent};
+use crate::agents::{
+    DuckDuckGoAgent, FrankfurterAgent, HackerNewsAgent, NominatimAgent, OnDeviceAiAgent,
+    OpenLibraryAgent, OpenMeteoAgent, WikipediaAgent,
+};
 use crate::db::{prelude::DatabaseOps, Database};
 use crate::error::PapillionError;
 use crate::inference::ModelManager;
@@ -245,6 +248,23 @@ impl AppState {
             "On-Device AI".into(),
             Arc::new(OnDeviceAiAgent::new(model_manager.clone())),
         );
+        local_agents.insert(
+            "Open-Meteo Weather".into(),
+            Arc::new(OpenMeteoAgent::new()),
+        );
+        local_agents.insert(
+            "Open Library Books".into(),
+            Arc::new(OpenLibraryAgent::new()),
+        );
+        local_agents.insert(
+            "Nominatim Geocoding".into(),
+            Arc::new(NominatimAgent::new()),
+        );
+        local_agents.insert(
+            "Frankfurter Exchange".into(),
+            Arc::new(FrankfurterAgent::new()),
+        );
+        local_agents.insert("Hacker News".into(), Arc::new(HackerNewsAgent::new()));
 
         Self {
             signer: RwLock::new(Some(Box::new(signer))),
