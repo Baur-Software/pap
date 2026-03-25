@@ -281,4 +281,68 @@ mod tests {
         assert_eq!(url.port, 443);
         assert_eq!(url.transport, PapTransport::Https);
     }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn leading_trailing_whitespace_trimmed() {
+        let url = PapUrl::parse("  pap://example.com:7890  ").unwrap();
+        assert_eq!(url.host, "example.com");
+        assert_eq!(url.port, 7890);
+    }
+
+    #[test]
+    fn compound_whitespace_trimmed() {
+        let url = PapUrl::parse("  pap+https://example.com  ").unwrap();
+        assert_eq!(url.transport, PapTransport::Https);
+        assert_eq!(url.host, "example.com");
+    }
+
+    #[test]
+    fn reject_raw_ws() {
+        let result = PapUrl::parse("ws://example.com");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn pap_transport_equality() {
+        assert_eq!(PapTransport::Native, PapTransport::Native);
+        assert_eq!(PapTransport::Https, PapTransport::Https);
+        assert_eq!(PapTransport::Wss, PapTransport::Wss);
+        assert_ne!(PapTransport::Native, PapTransport::Https);
+        assert_ne!(PapTransport::Https, PapTransport::Wss);
+    }
+
+    #[test]
+    fn pap_transport_copy() {
+        let t = PapTransport::Https;
+        let t2 = t; // Copy
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn wss_https_endpoint_still_returns_https() {
+        let url = PapUrl::parse("pap+wss://stream.example.com:8443").unwrap();
+        // endpoint() should return wss://
+        assert_eq!(url.endpoint(), "wss://stream.example.com:8443");
+        // https_endpoint() always returns https://
+        assert_eq!(url.https_endpoint(), "https://stream.example.com:8443");
+    }
+
+    #[test]
+    fn native_not_browser_compatible() {
+        let url = PapUrl::parse("pap://node.example.com").unwrap();
+        assert!(!url.is_browser_compatible());
+    }
+
+    #[test]
+    fn wss_is_browser_compatible() {
+        let url = PapUrl::parse("pap+wss://node.example.com").unwrap();
+        assert!(url.is_browser_compatible());
+    }
+
+    #[test]
+    fn default_pap_port_value() {
+        assert_eq!(DEFAULT_PAP_PORT, 7890);
+    }
 }

@@ -71,3 +71,5 @@ getrandom = { workspace = true, optional = true }
 
 [dev-dependencies]
 rand = { workspace = true }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
