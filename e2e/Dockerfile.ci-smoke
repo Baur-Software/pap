@@ -1,0 +1,44 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CI=true
+
+# System deps (matches CI workflow)
+RUN apt-get update && apt-get install -y \
+    curl build-essential pkg-config \
+    libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+    librsvg2-dev libssl-dev \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    --default-toolchain stable --target wasm32-unknown-unknown
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install trunk via cargo-binstall
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
+    && cargo binstall trunk --no-confirm --force
+
+# Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
+WORKDIR /app
+
+# NOTE: When building, use tar context to bypass .dockerignore which excludes e2e/:
+#   tar -c --exclude='target' --exclude='.git' --exclude='node_modules' . | \
+#     docker build -f e2e/Dockerfile.ci-smoke -t pap-smoke-test -
+COPY . .
+
+# Install Playwright + browser
+WORKDIR /app/e2e
+RUN npm install && npx playwright install chromium --with-deps
+
+# Build release WASM
+WORKDIR /app
+RUN cd apps/papillion/frontend && trunk build --release
+
+# Run tests (only smoke.spec.ts)
+WORKDIR /app/e2e
+CMD ["npx", "playwright", "test", "tests/smoke.spec.ts", "--workers=1"]

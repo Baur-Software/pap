@@ -16,6 +16,7 @@ members = [
     "crates/papillion-shared",
     "apps/papillion",
     "apps/registry",
+    "benches",
 ]
 
 [workspace.package]
@@ -59,6 +60,7 @@ candle-core = "0.8"
 candle-transformers = "0.8"
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 zeroize = { version = "1", features = ["derive"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 
 # Local patch to work around Windows registry permission issue on this machine.
 # The icu_locale_core crate in the cargo cache has unreadable src/ files;
