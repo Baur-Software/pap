@@ -14,15 +14,19 @@ rusqlite = { version = "0.32", features = ["bundled", "serde_json"], optional = 
 
 # WASM/IndexedDB dependencies - feature gated
 wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = [
-    "Window", "IdbFactory", "IdbDatabase", "IdbObjectStore",
-    "IdbRequest", "IdbOpenDbRequest", "IdbKeyRange"
+    "Window", "Event", "EventTarget",
+    "IdbFactory", "IdbDatabase", "IdbObjectStore",
+    "IdbRequest", "IdbOpenDbRequest", "IdbKeyRange",
+    "IdbTransaction", "IdbTransactionMode",
+    "DomStringList",
+    "console",
 ] }
 wasm-bindgen-futures = { version = "0.4", optional = true }
-gloo-storage = { version = "0.3", optional = true }
 
 # Feature flags
 [features]
 default = ["native"]
 native = ["rusqlite"]
-wasm = ["wasm-bindgen", "web-sys", "wasm-bindgen-futures", "gloo-storage"]
+wasm = ["wasm-bindgen", "js-sys", "web-sys", "wasm-bindgen-futures"]

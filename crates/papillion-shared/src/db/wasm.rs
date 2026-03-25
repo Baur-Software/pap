@@ -48,16 +48,31 @@ impl WasmDatabase {
         })
     }
 
-    /// Create or load from IndexedDB (currently in-memory only)
-    ///
-    /// TODO: Implement IndexedDB persistence:
-    /// - Try to load existing database from IndexedDB by name
-    /// - If not found, create new empty database
-    /// - Use wasm-bindgen + web-sys to interact with IndexedDB API
-    pub async fn new_with_persistence(_name: &str) -> Result<Self, DbError> {
-        // For now, just create a new in-memory database
-        // Future: load from IndexedDB if exists
-        Self::new()
+    /// List all settings as key-value pairs (for persistence serialization).
+    pub fn list_all_settings(&self) -> Result<Vec<(String, String)>, DbError> {
+        let settings = self
+            .settings
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(settings.clone())
+    }
+
+    /// List all templates regardless of enabled state (for persistence serialization).
+    pub fn list_all_templates(&self) -> Result<Vec<Template>, DbError> {
+        let templates = self
+            .templates
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(templates.clone())
+    }
+
+    /// List all episodes without filtering (for persistence serialization).
+    pub fn list_all_episodes(&self) -> Result<Vec<Episode>, DbError> {
+        let episodes = self
+            .episodes
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(episodes.clone())
     }
 }
 

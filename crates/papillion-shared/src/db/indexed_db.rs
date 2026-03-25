@@ -1,18 +1,22 @@
 //! IndexedDB persistence wrapper for WASM database.
 //!
-//! This module provides a persistence layer that wraps WasmDatabase with
-//! browser IndexedDB storage. All mutations are automatically persisted,
-//! and state is restored from IndexedDB on app startup.
+//! Wraps [`WasmDatabase`] with real browser IndexedDB storage so the
+//! web build survives page reloads.  Every mutation is serialised to
+//! JSON and written to IndexedDB asynchronously (fire-and-forget via
+//! `spawn_local`).  On startup the async [`open`] constructor loads
+//! the snapshot back into memory.
+//!
+//! Profile isolation is maintained by using one IndexedDB key per
+//! principal DID — the caller passes the DID (or a hash of it) as
+//! the `db_name` parameter.
 //!
 //! # Usage
 //!
 //! ```ignore
-//! let db = IndexedDbDatabase::new_with_persistence("papillion-db").await?;
-//! db.insert_episode(&episode)?; // Automatically persisted to IndexedDB
+//! // Async constructor — loads existing state from IndexedDB
+//! let db = IndexedDbDatabase::open("did:key:z6Mk...").await?;
+//! db.insert_episode(&episode)?; // automatically persisted
 //! ```
-
-#[cfg(target_arch = "wasm32")]
-use gloo_storage::{LocalStorage, Storage};
 
 use super::wasm::WasmDatabase;
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
@@ -20,83 +24,86 @@ use crate::types::Template;
 
 /// IndexedDB-backed database that persists all operations.
 ///
-/// Wraps WasmDatabase with automatic persistence to browser storage.
-/// All writes are synchronously persisted via local storage (IndexedDB
-/// integration would add more sophisticated persistence).
+/// Wraps [`WasmDatabase`] (in-memory) and asynchronously serialises the
+/// full state to IndexedDB after every write.  Reads are always served
+/// from memory for zero-latency access.
 pub struct IndexedDbDatabase {
     inner: WasmDatabase,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // used only on wasm32 targets
     db_name: String,
 }
 
 impl IndexedDbDatabase {
-    /// Create a new database with optional persistence loading.
-    ///
-    /// Attempts to load existing data from storage. If not found,
-    /// creates an empty database.
+    /// Synchronous constructor — creates an empty database **without**
+    /// loading from IndexedDB.  Useful for tests and non-browser contexts.
     pub fn new_with_persistence(db_name: &str) -> Result<Self, DbError> {
+        Ok(Self {
+            inner: WasmDatabase::new()?,
+            db_name: db_name.to_string(),
+        })
+    }
+
+    /// Async constructor — creates the database and loads any existing
+    /// snapshot from IndexedDB.  This is the primary entry-point for the
+    /// web build.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn open(db_name: &str) -> Result<Self, DbError> {
         let inner = WasmDatabase::new()?;
         let db = Self {
             inner,
             db_name: db_name.to_string(),
         };
 
-        // Attempt to restore from storage
-        db.restore_from_storage()?;
+        match super::idb::load(db_name).await {
+            Ok(Some(json_str)) => {
+                if let Ok(state) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                    db.restore_state(&state)?;
+                }
+            }
+            Ok(None) => { /* first launch for this profile */ }
+            Err(e) => {
+                web_sys::console::warn_1(
+                    &format!("papillion: failed to load from IndexedDB: {:?}", e).into(),
+                );
+            }
+        }
 
         Ok(db)
     }
 
-    /// Restore database state from browser local storage.
-    fn restore_from_storage(&self) -> Result<(), DbError> {
-        #[cfg(target_arch = "wasm32")]
-        {
-            let storage_key = format!("{}_state", self.db_name);
+    // ── internal helpers ──────────────────────────────────────────
 
-            match LocalStorage::get::<serde_json::Value>(&storage_key) {
-                Ok(state) => {
-                    self.restore_state(&state)?;
-                }
-                Err(_) => {
-                    // No existing data, start fresh
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Restore full database state from JSON.
-    #[allow(dead_code)]
+    /// Restore full database state from a JSON snapshot.
+    #[allow(dead_code)] // called from open() on wasm32 and from tests
     fn restore_state(&self, state: &serde_json::Value) -> Result<(), DbError> {
         if let Some(episodes) = state.get("episodes").and_then(|v| v.as_array()) {
-            for ep_val in episodes {
-                if let Ok(episode) = serde_json::from_value::<Episode>(ep_val.clone()) {
-                    self.inner.insert_episode(&episode)?;
+            for val in episodes {
+                if let Ok(ep) = serde_json::from_value::<Episode>(val.clone()) {
+                    self.inner.insert_episode(&ep)?;
                 }
             }
         }
 
         if let Some(profiles) = state.get("profiles").and_then(|v| v.as_array()) {
-            for prof_val in profiles {
-                if let Ok(profile) = serde_json::from_value::<AgentProfile>(prof_val.clone()) {
-                    self.inner.upsert_agent_profile(&profile)?;
+            for val in profiles {
+                if let Ok(p) = serde_json::from_value::<AgentProfile>(val.clone()) {
+                    self.inner.upsert_agent_profile(&p)?;
                 }
             }
         }
 
         if let Some(settings) = state.get("settings").and_then(|v| v.as_object()) {
             for (key, val) in settings {
-                if let Some(value_str) = val.as_str() {
-                    self.inner.set_setting(key, value_str)?;
+                if let Some(v) = val.as_str() {
+                    self.inner.set_setting(key, v)?;
                 }
             }
         }
 
         if let Some(templates) = state.get("templates").and_then(|v| v.as_array()) {
-            for tpl_val in templates {
-                if let Ok(template) = serde_json::from_value::<Template>(tpl_val.clone()) {
-                    self.inner.insert_template(&template)?;
+            for val in templates {
+                if let Ok(t) = serde_json::from_value::<Template>(val.clone()) {
+                    self.inner.insert_template(&t)?;
                 }
             }
         }
@@ -104,36 +111,45 @@ impl IndexedDbDatabase {
         Ok(())
     }
 
-    /// Persist current database state to storage.
+    /// Serialise the full in-memory state and persist it to IndexedDB.
+    ///
+    /// The actual IndexedDB write is fire-and-forget (`spawn_local`) so
+    /// the synchronous `DatabaseOps` methods return immediately.
     fn persist_to_storage(&self) -> Result<(), DbError> {
         #[cfg(target_arch = "wasm32")]
         {
+            let settings_map: serde_json::Map<String, serde_json::Value> = self
+                .inner
+                .list_all_settings()?
+                .into_iter()
+                .map(|(k, v)| (k, serde_json::Value::String(v)))
+                .collect();
+
             let state = serde_json::json!({
-                "episodes": self.inner.list_episodes(None, None, 100000, None)?,
+                "episodes": self.inner.list_all_episodes()?,
                 "profiles": self.inner.list_agent_profiles()?,
-                "settings": self.get_all_settings()?,
-                "templates": self.inner.query_templates(None)
-                    .unwrap_or_default(),
+                "settings": settings_map,
+                "templates": self.inner.list_all_templates()?,
             });
 
-            let storage_key = format!("{}_state", self.db_name);
-            LocalStorage::set(&storage_key, state)
-                .map_err(|e| DbError(format!("storage error: {e}")))?;
+            let db_name = self.db_name.clone();
+            let json_str =
+                serde_json::to_string(&state).map_err(|e| DbError(format!("serialize: {e}")))?;
+
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Err(e) = super::idb::save(&db_name, &json_str).await {
+                    web_sys::console::error_1(
+                        &format!("papillion: IndexedDB persist error: {:?}", e).into(),
+                    );
+                }
+            });
         }
 
         Ok(())
     }
-
-    /// Get all settings as a JSON object (helper for persistence).
-    #[allow(dead_code)]
-    fn get_all_settings(&self) -> Result<serde_json::Map<String, serde_json::Value>, DbError> {
-        // Note: This is a limitation of the current DatabaseOps interface.
-        // In a real implementation, we'd iterate through all settings.
-        // For now, return empty map - full settings persistence would require
-        // adding a list_all_settings() method to DatabaseOps.
-        Ok(serde_json::Map::new())
-    }
 }
+
+// ── DatabaseOps delegation ───────────────────────────────────────
 
 impl DatabaseOps for IndexedDbDatabase {
     fn insert_episode(&self, episode: &Episode) -> Result<(), DbError> {
@@ -237,8 +253,6 @@ mod tests {
 
     #[test]
     fn test_persistence_wrapper_creation() {
-        // Note: This test runs in native, not WASM, so storage operations are skipped.
-        // For full testing, use wasm-pack test with a browser runtime.
         let db = IndexedDbDatabase::new_with_persistence("test-db");
         assert!(db.is_ok());
     }
@@ -266,12 +280,9 @@ mod tests {
             recorded_at: Utc::now().to_rfc3339(),
         };
 
-        // Insert should work (storage errors are silently ignored in non-WASM)
         db.insert_episode(&episode).unwrap();
-        let count = db.episode_count().unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(db.episode_count().unwrap(), 1);
 
-        // List should work
         let episodes = db.list_episodes(None, None, 10, None).unwrap();
         assert_eq!(episodes.len(), 1);
     }
@@ -281,7 +292,92 @@ mod tests {
         let db = IndexedDbDatabase::new_with_persistence("test-db").unwrap();
 
         db.set_setting("theme", "dark").unwrap();
-        let value = db.get_setting("theme").unwrap();
-        assert_eq!(value, Some("dark".to_string()));
+        assert_eq!(db.get_setting("theme").unwrap(), Some("dark".to_string()));
+    }
+
+    #[test]
+    fn test_restore_state_round_trip() {
+        let db = IndexedDbDatabase::new_with_persistence("test-db").unwrap();
+
+        // Insert some data
+        let episode = Episode {
+            id: "ep-rt".into(),
+            receipt_session_id: "sess-rt".into(),
+            scenario_id: "scenario-rt".into(),
+            action_type: "search".into(),
+            agent_did_hash: "agent-rt".into(),
+            agent_name: "Round Trip Agent".into(),
+            outcome: "success".into(),
+            outcome_detail: None,
+            scope_exercised: "[]".into(),
+            disclosure_refs: "[]".into(),
+            duration_ms: 42,
+            decay_state: "Active".into(),
+            intent_summary: Some("test round trip".into()),
+            result_json: None,
+            query: Some("test".into()),
+            recorded_at: "2026-03-24T12:00:00Z".into(),
+        };
+        db.insert_episode(&episode).unwrap();
+
+        let profile = AgentProfile {
+            agent_did_hash: "agent-rt".into(),
+            agent_name: "Round Trip Agent".into(),
+            success_rate: 0.95,
+            avg_quality: 0.90,
+            avg_duration_ms: 42.0,
+            episode_count: 1,
+            minimal_disclosure_refs: "[]".into(),
+            last_used: "2026-03-24T12:00:00Z".into(),
+            co_sign_refusals: 0,
+        };
+        db.upsert_agent_profile(&profile).unwrap();
+        db.set_setting("theme", "dark").unwrap();
+
+        // Manually build the JSON snapshot the same way persist_to_storage would
+        let settings_map: serde_json::Map<String, serde_json::Value> = db
+            .inner
+            .list_all_settings()
+            .unwrap()
+            .into_iter()
+            .map(|(k, v)| (k, serde_json::Value::String(v)))
+            .collect();
+
+        let state = serde_json::json!({
+            "episodes": db.inner.list_all_episodes().unwrap(),
+            "profiles": db.inner.list_agent_profiles().unwrap(),
+            "settings": settings_map,
+            "templates": db.inner.list_all_templates().unwrap(),
+        });
+
+        // Create a fresh database and restore
+        let db2 = IndexedDbDatabase::new_with_persistence("test-db-2").unwrap();
+        db2.restore_state(&state).unwrap();
+
+        assert_eq!(db2.episode_count().unwrap(), 1);
+        let eps = db2.list_episodes(None, None, 10, None).unwrap();
+        assert_eq!(eps[0].id, "ep-rt");
+        assert_eq!(eps[0].intent_summary, Some("test round trip".into()));
+
+        let p = db2.get_agent_profile("agent-rt").unwrap().unwrap();
+        assert_eq!(p.success_rate, 0.95);
+
+        assert_eq!(db2.get_setting("theme").unwrap(), Some("dark".to_string()));
+    }
+
+    #[test]
+    fn test_profile_isolation_via_db_name() {
+        let db_a = IndexedDbDatabase::new_with_persistence("did:key:alice").unwrap();
+        let db_b = IndexedDbDatabase::new_with_persistence("did:key:bob").unwrap();
+
+        db_a.set_setting("owner", "alice").unwrap();
+        db_b.set_setting("owner", "bob").unwrap();
+
+        // Each instance is independent (in-memory isolation)
+        assert_eq!(
+            db_a.get_setting("owner").unwrap(),
+            Some("alice".to_string())
+        );
+        assert_eq!(db_b.get_setting("owner").unwrap(), Some("bob".to_string()));
     }
 }
