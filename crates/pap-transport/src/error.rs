@@ -17,6 +17,9 @@ pub enum TransportError {
     #[error("server error: {0}")]
     ServerError(String),
 
+    #[error("WebSocket error: {0}")]
+    WebSocketError(String),
+
     #[error("protocol error: {0}")]
     ProtoError(#[from] pap_proto::ProtoError),
 }

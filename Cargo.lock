@@ -4330,6 +4330,7 @@ version = "0.4.2"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "chrono",
  "console_error_panic_hook",
  "constant_time_eq",
@@ -4373,6 +4374,7 @@ dependencies = [
  "axum-server",
  "chrono",
  "ed25519-dalek",
+ "futures-util",
  "pap-core",
  "pap-credential",
  "pap-did",
@@ -4385,6 +4387,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-rustls",
+ "tokio-tungstenite",
  "uuid",
 ]
 
