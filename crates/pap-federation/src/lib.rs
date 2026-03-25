@@ -3,21 +3,35 @@ pub mod notary;
 pub mod peer;
 pub mod registry;
 pub mod resolve;
-pub mod server;
 pub mod sync;
+
+#[cfg(feature = "native")]
+pub mod server;
+#[cfg(feature = "native")]
 pub mod tls;
+
+#[cfg(feature = "wasm")]
+pub mod web_client;
 
 pub use error::FederationError;
 pub use notary::NotarySet;
-pub use peer::RegistryPeer;
+pub use peer::{NodeIdentityResponse, RegistryPeer};
 pub use registry::FederatedRegistry;
-pub use resolve::PapUrl;
-pub use server::{FederationServer, NodeIdentityResponse};
-pub use sync::{FederationClient, FederationMessage};
+pub use resolve::{PapTransport, PapUrl};
+pub use sync::FederationMessage;
+
+#[cfg(feature = "native")]
+pub use server::FederationServer;
+#[cfg(feature = "native")]
+pub use sync::FederationClient;
+#[cfg(feature = "native")]
 pub use tls::{
     build_pinned_client, build_pinned_tls_config, build_tofu_client, cert_fingerprint,
     generate_node_identity, NodeTlsIdentity,
 };
+
+#[cfg(feature = "wasm")]
+pub use web_client::FetchFederationClient;
 
 #[cfg(test)]
 mod tests {

@@ -47,3 +47,18 @@ impl RegistryPeer {
         }
     }
 }
+
+/// A node's identity as returned by `GET /federation/identity`.
+///
+/// A connecting node calls this endpoint to learn who it's talking to
+/// before trusting anything else. The `cert_fingerprint` is verified
+/// against the TLS connection's actual certificate (native clients)
+/// or trusted via HTTPS CA chain (browser clients).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeIdentityResponse {
+    pub did: String,
+    pub endpoint: String,
+    pub cert_fingerprint: String,
+    pub agent_count: usize,
+    pub peer_count: usize,
+}

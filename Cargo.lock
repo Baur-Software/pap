@@ -4601,7 +4601,9 @@ dependencies = [
  "axum-server",
  "chrono",
  "ed25519-dalek",
+ "getrandom 0.2.17",
  "hex",
+ "js-sys",
  "pap-core",
  "pap-did",
  "pap-marketplace",
@@ -4616,6 +4618,11 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-rustls",
+ "tower-http",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

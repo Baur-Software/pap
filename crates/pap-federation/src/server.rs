@@ -4,26 +4,13 @@ use std::sync::{Arc, Mutex};
 use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::error::FederationError;
-use crate::peer::RegistryPeer;
+use crate::peer::{NodeIdentityResponse, RegistryPeer};
 use crate::registry::FederatedRegistry;
 use crate::sync::FederationMessage;
-
-/// This node's identity as returned by `/federation/identity`.
-///
-/// A connecting node calls this endpoint to learn who it's talking to
-/// before trusting anything else. The `cert_fingerprint` is verified
-/// against the TLS connection's actual certificate.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeIdentityResponse {
-    pub did: String,
-    pub endpoint: String,
-    pub cert_fingerprint: String,
-    pub agent_count: usize,
-    pub peer_count: usize,
-}
 
 /// TLS-secured HTTP server for federation endpoints.
 ///
@@ -35,6 +22,9 @@ pub struct NodeIdentityResponse {
 ///
 /// All connections are TLS-encrypted using a self-signed certificate
 /// whose fingerprint is published in peer discovery. No CA dependency.
+///
+/// CORS headers are included so browser-based agents using
+/// `pap+https://` can reach federation endpoints.
 pub struct FederationServer {
     registry: Arc<Mutex<FederatedRegistry>>,
     port: u16,
@@ -89,11 +79,21 @@ impl FederationServer {
             cert_fingerprint: self.cert_fingerprint.clone(),
         };
 
+        // CORS: browser agents using pap+https:// need cross-origin access
+        // to federation endpoints. Allow any origin since federation is
+        // public discovery — authentication is at the protocol layer (DIDs),
+        // not the transport layer.
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
         Router::new()
             .route("/federation/identity", get(handle_identity))
             .route("/federation/query", get(handle_query))
             .route("/federation/announce", post(handle_announce))
             .route("/federation/peers", get(handle_peers))
+            .layer(cors)
             .with_state(state)
     }
 
