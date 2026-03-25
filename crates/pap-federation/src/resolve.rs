@@ -78,20 +78,14 @@ impl PapUrl {
                 trimmed.trim_start_matches("pap+https://"),
             )
         } else if trimmed.starts_with("pap+wss://") {
-            (
-                PapTransport::Wss,
-                trimmed.trim_start_matches("pap+wss://"),
-            )
+            (PapTransport::Wss, trimmed.trim_start_matches("pap+wss://"))
         } else if trimmed.starts_with("pap+") {
             // Reject unknown compound schemes
             return Err(FederationError::InvalidUrl(format!(
                 "unknown PAP transport binding: '{trimmed}'"
             )));
         } else if trimmed.starts_with("pap://") {
-            (
-                PapTransport::Native,
-                trimmed.trim_start_matches("pap://"),
-            )
+            (PapTransport::Native, trimmed.trim_start_matches("pap://"))
         } else {
             // Bare host:port — treat as native
             (PapTransport::Native, trimmed)
