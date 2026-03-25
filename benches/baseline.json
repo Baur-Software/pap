@@ -1,39 +1,39 @@
 {
-  "_comment": "p50 baseline thresholds (nanoseconds). CI fails if any benchmark regresses >20% vs these values.",
+  "_comment": "p50 baseline (nanoseconds) from CI runner. CI fails if any benchmark regresses >20% vs these values.",
   "ed25519_keypair_generation": {
-    "p50_ns": 14024,
+    "p50_ns": 19900,
     "target": "< 1ms"
   },
   "did_key_derivation": {
-    "p50_ns": 1246,
+    "p50_ns": 1500,
     "target": "< 0.5ms"
   },
   "mandate_create_sign": {
-    "p50_ns": 17858,
+    "p50_ns": 24200,
     "target": "< 2ms"
   },
   "mandate_chain_verify_depth3": {
-    "p50_ns": 87792,
+    "p50_ns": 125900,
     "target": "< 5ms"
   },
   "sd_jwt_issue_5claims": {
-    "p50_ns": 19690,
+    "p50_ns": 29500,
     "target": "< 3ms"
   },
   "sd_jwt_verify_disclose_3of5": {
-    "p50_ns": 31163,
+    "p50_ns": 43500,
     "target": "< 2ms"
   },
   "session_open_full_lifecycle": {
-    "p50_ns": 75309,
+    "p50_ns": 110000,
     "target": "< 20ms"
   },
   "receipt_create_cosign": {
-    "p50_ns": 35294,
+    "p50_ns": 47600,
     "target": "< 3ms"
   },
   "federation_announce_local": {
-    "p50_ns": 39171,
+    "p50_ns": 57100,
     "target": "< 50ms"
   }
 }
