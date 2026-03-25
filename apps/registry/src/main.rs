@@ -127,8 +127,8 @@ async fn main() -> anyhow::Result<()> {
     // Static assets (icon, favicon, logo).
     // Local dev: workspace root → apps/registry/assets
     // Docker:    /app → /app/assets  (set PAP_ASSETS_DIR=/app/assets)
-    let assets_dir = std::env::var("PAP_ASSETS_DIR")
-        .unwrap_or_else(|_| "apps/registry/assets".into());
+    let assets_dir =
+        std::env::var("PAP_ASSETS_DIR").unwrap_or_else(|_| "apps/registry/assets".into());
 
     let app = Router::new()
         .merge(federation_router)
