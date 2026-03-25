@@ -83,17 +83,15 @@ impl TransactionReceipt {
     /// Validate that the receipt's payment proof commitment is consistent
     /// with the mandate. If the action is `schema:PayAction`, the mandate
     /// MUST have a payment proof and the receipt MUST carry the commitment.
-    pub fn validate_payment_commitment(
-        &self,
-        mandate: &Mandate,
-    ) -> Result<(), PapError> {
+    pub fn validate_payment_commitment(&self, mandate: &Mandate) -> Result<(), PapError> {
         let is_pay_action = self.action == "schema:PayAction";
 
         if is_pay_action {
             // Mandate must have a proof
-            let proof = mandate.payment_proof.as_ref().ok_or_else(|| {
-                PapError::MissingPaymentProof
-            })?;
+            let proof = mandate
+                .payment_proof
+                .as_ref()
+                .ok_or(PapError::MissingPaymentProof)?;
 
             // Receipt must carry the commitment
             let receipt_commitment = self.payment_proof_commitment.as_ref().ok_or_else(|| {
