@@ -178,18 +178,24 @@
       background: linear-gradient(90deg, var(--teal), #5bdebe);
     }
     .product-icon {
-      width: 48px; height: 48px; border-radius: 12px;
+      width: 56px; height: 56px; border-radius: 14px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 1.5rem;
+      overflow: hidden; flex-shrink: 0;
+    }
+    .product-icon img {
+      width: 100%; height: 100%; object-fit: cover; border-radius: 14px;
     }
     .product-icon-pap {
       background: rgba(108,92,231,.12); border: 1px solid rgba(108,92,231,.2);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem; font-weight: 700; color: var(--indigo);
+      letter-spacing: -.02em;
     }
     .product-icon-papillion {
-      background: rgba(139,127,245,.12); border: 1px solid rgba(139,127,245,.2);
+      background: transparent; border: none;
     }
     .product-icon-chrysalis {
-      background: rgba(46,196,160,.12); border: 1px solid rgba(46,196,160,.2);
+      background: transparent; border: none;
     }
     .product-name {
       font-family: 'Satoshi', sans-serif;
@@ -304,7 +310,7 @@
     <div class="products-grid">
 
       <a href="pap/" class="product-card product-card-pap reveal">
-        <div class="product-icon product-icon-pap" aria-hidden="true">&#128274;</div>
+        <div class="product-icon product-icon-pap" aria-hidden="true">pap://</div>
         <span class="product-tag product-tag-protocol">Protocol Spec</span>
         <div class="product-name">Principal Agent Protocol</div>
         <p class="product-desc">
@@ -315,7 +321,7 @@
       </a>
 
       <a href="papillion/" class="product-card product-card-papillion reveal reveal-delay-1">
-        <div class="product-icon product-icon-papillion" aria-hidden="true">&#129419;</div>
+        <div class="product-icon product-icon-papillion" aria-hidden="true"><img src="assets/images/papillion-icon.png" alt="Papillion" /></div>
         <span class="product-tag product-tag-app">Desktop App</span>
         <div class="product-name">Papillion</div>
         <p class="product-desc">
@@ -326,7 +332,7 @@
       </a>
 
       <a href="chrysalis.html" class="product-card product-card-chrysalis reveal reveal-delay-2">
-        <div class="product-icon product-icon-chrysalis" aria-hidden="true">&#9672;</div>
+        <div class="product-icon product-icon-chrysalis" aria-hidden="true"><img src="assets/images/crystalis-icon.jpg" alt="Chrysalis" /></div>
         <span class="product-tag product-tag-registry">Agent Registry</span>
         <div class="product-name">Chrysalis</div>
         <p class="product-desc">
