@@ -200,8 +200,7 @@ mod tests {
     #[test]
     fn payment_proof_validate_wrong_length() {
         use base64::Engine;
-        let short_hash =
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"too-short");
+        let short_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"too-short");
         let proof = PaymentProof::Lightning(Bolt11Hash { hash: short_hash });
         assert!(proof.validate().is_err());
     }
@@ -230,8 +229,7 @@ mod tests {
     #[test]
     fn bolt11_from_hash_direct() {
         use base64::Engine;
-        let hash =
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(b"data"));
+        let hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(b"data"));
         let bolt11 = Bolt11Hash::from_hash(&hash);
         assert_eq!(bolt11.hash, hash);
     }
@@ -239,8 +237,7 @@ mod tests {
     #[test]
     fn cashu_from_hash_direct() {
         use base64::Engine;
-        let hash =
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(b"data"));
+        let hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(b"data"));
         let cashu = CashuTokenHash::from_hash(&hash);
         assert_eq!(cashu.hash, hash);
     }
