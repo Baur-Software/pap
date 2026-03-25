@@ -10,13 +10,16 @@ repository.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-pap-did  = { workspace = true }
+pap-did  = { workspace = true, features = ["wasm"] }
 pap-core = { workspace = true }
 
 # chrono needs the wasmbind feature so Utc::now() works in WASM via js_sys::Date
 chrono        = { workspace = true, features = ["wasmbind"] }
 serde_json    = { workspace = true }
 ed25519-dalek = { workspace = true }
+
+# uuid needs the js feature for WASM RNG (used transitively via pap-core)
+uuid          = { workspace = true, features = ["js"] }
 
 wasm-bindgen         = "0.2"
 wasm-bindgen-futures = "0.4"

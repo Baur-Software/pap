@@ -13,3 +13,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 bs58 = { workspace = true }
 thiserror = { workspace = true }
+getrandom = { workspace = true, optional = true }
+
+[features]
+default = []
+wasm = ["getrandom/js"]

@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 papillion-shared = { path = "../../../crates/papillion-shared", default-features = false, features = ["wasm"] }
+pap-did = { path = "../../../crates/pap-did", features = ["wasm"] }
 leptos = { version = "0.8", features = ["csr"] }
 leptos_router = "0.8"
 serde = { version = "1", features = ["derive"] }
@@ -23,3 +24,9 @@ console_error_panic_hook = "0.1"
 uuid = { version = "1", features = ["v4", "js"] }
 chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 async-trait = "0.1"
+base64 = "0.22"
+getrandom = { version = "0.2", features = ["js"] }
+
+# Local patch for icu_locale_core (Windows registry permission issue)
+[patch.crates-io]
+icu_locale_core = { path = "../../../vendor-icu" }

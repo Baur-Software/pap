@@ -1,17 +1,21 @@
 //! WebService: Direct IndexedDB backend for WASM environments.
 //!
 //! This implementation provides a fallback for running Papillion in a pure
-//! WebAssembly environment without Tauri. It delegates to IndexedDbDatabase
-//! for persistence and implements stub methods for operations that require
-//! backend compute (like orchestrator).
+//! WebAssembly environment without Tauri. It delegates to WebIdentityService
+//! for identity/profile management (Ed25519 keypairs in IndexedDB) and returns
+//! stub errors for operations that require backend compute.
 //!
 //! # Design
 //!
-//! - **Local storage**: Templates, profiles, and agent metadata use IndexedDB
+//! - **Identity & profiles**: Backed by `WebIdentityService` using `pap-did`
+//!   for Ed25519 keypair generation and IndexedDB for seed persistence
 //! - **Stub implementations**: Operations requiring backend logic (orchestrator,
 //!   registry discovery, scenario execution) return errors or sensible defaults
 //! - **No IPC overhead**: Direct database access provides lower latency
 
+use std::sync::Mutex;
+
+use super::web_identity::WebIdentityService;
 use super::{AgentProfileInfo, PapillionService};
 use papillion_shared::{
     AgentInfo, IdentityInfo, OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RegistryInfo,
@@ -21,10 +25,30 @@ use serde_json::Value;
 
 /// Service implementation for pure WASM environments with IndexedDB.
 ///
-/// This is a placeholder implementation that demonstrates the abstraction.
-/// In production, it would be backed by an actual IndexedDB interface
-/// accessible from WASM (e.g., `web_sys`, `wasm_bindgen`, or a dedicated IndexedDB crate).
-pub struct WebService;
+/// Holds a `WebIdentityService` for identity/profile management. Uses
+/// `std::sync::Mutex` (not `RefCell`) to satisfy `Send + Sync` bounds
+/// required by `PapillionService`. This is safe because WASM is
+/// single-threaded — the mutex never actually contends.
+pub struct WebService {
+    identity: Mutex<WebIdentityService>,
+}
+
+impl WebService {
+    /// Initialize the web service by loading profiles from IndexedDB.
+    pub async fn new() -> Result<Self, String> {
+        let identity = WebIdentityService::load().await?;
+        Ok(Self {
+            identity: Mutex::new(identity),
+        })
+    }
+
+    /// Create a service with no loaded profiles (fallback for init failures).
+    pub fn empty() -> Self {
+        Self {
+            identity: Mutex::new(WebIdentityService::empty()),
+        }
+    }
+}
 
 #[async_trait::async_trait(?Send)]
 impl PapillionService for WebService {
@@ -67,31 +91,45 @@ impl PapillionService for WebService {
     }
 
     // ============================================================================
-    // PROFILES
+    // PROFILES — delegated to WebIdentityService
     // ============================================================================
 
     async fn list_profiles(&self) -> Result<Vec<ProfileMetadata>, String> {
-        // TODO: Implement IndexedDB read for profiles
-        Err("WebService: list_profiles not yet implemented".into())
+        let identity = self
+            .identity
+            .lock()
+            .map_err(|e| format!("identity lock: {e}"))?;
+        Ok(identity.list_profiles())
     }
 
-    async fn create_profile(&self, _name: &str) -> Result<ProfileMetadata, String> {
-        // TODO: Implement IndexedDB write for new profile
-        Err("WebService: create_profile not yet implemented".into())
+    async fn create_profile(&self, name: &str) -> Result<ProfileMetadata, String> {
+        let mut identity = self
+            .identity
+            .lock()
+            .map_err(|e| format!("identity lock: {e}"))?;
+        identity.create_profile(name).await
     }
 
-    async fn switch_profile(&self, _profile_id: &str) -> Result<IdentityInfo, String> {
-        // TODO: Implement profile switching and identity derivation
-        Err("WebService: switch_profile not yet implemented".into())
+    async fn switch_profile(&self, profile_id: &str) -> Result<IdentityInfo, String> {
+        let mut identity = self
+            .identity
+            .lock()
+            .map_err(|e| format!("identity lock: {e}"))?;
+        identity.switch_profile(profile_id).await
     }
 
     // ============================================================================
-    // IDENTITY
+    // IDENTITY — delegated to WebIdentityService
     // ============================================================================
 
     async fn get_identity(&self) -> Result<IdentityInfo, String> {
-        // TODO: Implement identity state retrieval
-        Err("WebService: get_identity not yet implemented".into())
+        let identity = self
+            .identity
+            .lock()
+            .map_err(|e| format!("identity lock: {e}"))?;
+        identity
+            .get_identity()
+            .ok_or_else(|| "No active identity".to_string())
     }
 
     // ============================================================================
@@ -100,7 +138,6 @@ impl PapillionService for WebService {
 
     async fn navigate_registry(&self, _url: &str) -> Result<RegistryInfo, String> {
         // Registry discovery requires network access and TOFU bootstrap.
-        // Stub implementation for web environment.
         Err("WebService: navigate_registry not yet implemented (requires network)".into())
     }
 
@@ -128,7 +165,6 @@ impl PapillionService for WebService {
 
     async fn get_orchestrator_status(&self) -> Result<OrchestratorStatus, String> {
         // Orchestrator status requires runtime state from backend.
-        // Stub implementation for web environment.
         Err("WebService: get_orchestrator_status not yet implemented (requires backend)".into())
     }
 
