@@ -50,6 +50,7 @@ ssr = [
     "dep:hex",
 ]
 hydrate = [
+    "leptos/hydrate",
     "dep:console_error_panic_hook",
 ]
 

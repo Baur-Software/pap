@@ -20,7 +20,9 @@ COPY vendor-icu ./vendor-icu
 
 # All crates in pap-registry's transitive dependency graph:
 #   pap-registry → pap-federation → pap-marketplace → pap-core → pap-did
+#   pap-core optionally depends on pap-tee (workspace member must be present)
 COPY crates/pap-did ./crates/pap-did
+COPY crates/pap-tee ./crates/pap-tee
 COPY crates/pap-core ./crates/pap-core
 COPY crates/pap-marketplace ./crates/pap-marketplace
 COPY crates/pap-federation ./crates/pap-federation
@@ -46,6 +48,8 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
     -e '/^[[:space:]]*"crates\/papillion-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillion"/d' \
+    -e '/^[[:space:]]*"benches"/d' \
+    -e '/^[[:space:]]*"examples\//d' \
     Cargo.toml
 
 # Build server binary (ssr feature) + WASM bundle (hydrate feature) in one step
@@ -66,6 +70,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY vendor-icu ./vendor-icu
 
 COPY crates/pap-did         ./crates/pap-did
+COPY crates/pap-tee         ./crates/pap-tee
 COPY crates/pap-core        ./crates/pap-core
 COPY crates/pap-marketplace ./crates/pap-marketplace
 COPY crates/pap-federation  ./crates/pap-federation
@@ -83,6 +88,8 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d'        \
     -e '/^[[:space:]]*"crates\/papillion-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillion"/d'         \
+    -e '/^[[:space:]]*"benches"/d'                  \
+    -e '/^[[:space:]]*"examples\//d'                \
     Cargo.toml
 
 RUN cargo test -p pap-registry --features ssr
@@ -92,6 +99,7 @@ FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -99,8 +107,8 @@ RUN mkdir -p /data /app/site
 
 WORKDIR /app
 
-# cargo-leptos outputs server binary to target/server/release/
-COPY --from=builder /build/target/server/release/pap-registry ./pap-registry
+# cargo-leptos outputs server binary to target/release/
+COPY --from=builder /build/target/release/pap-registry ./pap-registry
 # WASM pkg + compiled CSS land in target/site/
 COPY --from=builder /build/target/site ./site
 # Static assets (icon, favicon, logo)
