@@ -193,7 +193,6 @@ impl AgentHandler for SocialDiscoveryAgent {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use pap_core::session::CapabilityToken;
     use pap_marketplace::AgentAdvertisement;
 
     fn mint_token(action: &str) -> CapabilityToken {

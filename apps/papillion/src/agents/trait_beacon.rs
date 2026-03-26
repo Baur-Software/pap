@@ -135,7 +135,6 @@ impl AgentHandler for TraitBeaconAgent {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use pap_core::session::CapabilityToken;
 
     fn mint_token(action: &str) -> CapabilityToken {
         CapabilityToken::mint(
