@@ -1,0 +1,24 @@
+{
+  "name": "@baur-software/chrysalis",
+  "version": "0.4.2",
+  "description": "Chrysalis — Self-hostable PAP-compatible federated agent registry. Run locally with npx.",
+  "keywords": ["ai", "agents", "pap", "principal-agent-protocol", "chrysalis", "registry", "federation"],
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Baur-Software/pap",
+    "directory": "packages/chrysalis-cli"
+  },
+  "bin": {
+    "chrysalis": "./bin/cli.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "scripts": {
+    "postinstall": "node bin/download.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
