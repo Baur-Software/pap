@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Crystalis — Agent Registry icon
+    Faceted chrysalis crystal with rainbow spectrum gradient
+  -->
+
+  <!-- Crystal facets — 20 triangular polygons with facet-edge highlights -->
+  <g stroke="#fff" stroke-width="0.6" stroke-opacity="0.25" stroke-linejoin="round">
+
+    <!-- ===== Top crown (magenta/pink) ===== -->
+    <!-- Left crown -->
+    <polygon points="256,28 178,138 262,114" fill="#c840a8"/>
+    <!-- Right crown -->
+    <polygon points="256,28 262,114 336,138" fill="#e84888"/>
+
+    <!-- ===== Upper band ===== -->
+    <!-- Upper-left outer (purple) -->
+    <polygon points="178,138 152,222 254,200" fill="#8050c0"/>
+    <!-- Upper-left inner (magenta-purple) -->
+    <polygon points="178,138 254,200 262,114" fill="#a840b0"/>
+    <!-- Upper-right inner (orange-coral) -->
+    <polygon points="262,114 254,200 360,222" fill="#e87040"/>
+    <!-- Upper-right outer (coral) -->
+    <polygon points="262,114 360,222 336,138" fill="#f05848"/>
+
+    <!-- ===== Mid band ===== -->
+    <!-- Mid-left outer (cyan) -->
+    <polygon points="152,222 146,318 252,300" fill="#38b8c8"/>
+    <!-- Mid-left inner (blue-teal) -->
+    <polygon points="152,222 252,300 254,200" fill="#5090c0"/>
+    <!-- Mid-right inner (golden-yellow) -->
+    <polygon points="254,200 252,300 366,318" fill="#d8b830"/>
+    <!-- Mid-right outer (orange-gold) -->
+    <polygon points="254,200 366,318 360,222" fill="#e89828"/>
+
+    <!-- ===== Lower-mid band ===== -->
+    <!-- Lower-left outer (blue) -->
+    <polygon points="146,318 166,398 254,384" fill="#4870c8"/>
+    <!-- Lower-left inner (teal-blue) -->
+    <polygon points="146,318 254,384 252,300" fill="#38a0b0"/>
+    <!-- Lower-right inner (green) -->
+    <polygon points="252,300 254,384 350,398" fill="#50c858"/>
+    <!-- Lower-right outer (green-teal) -->
+    <polygon points="252,300 350,398 366,318" fill="#48d070"/>
+
+    <!-- ===== Lower band ===== -->
+    <!-- Lower-left outer (indigo) -->
+    <polygon points="166,398 194,444 256,438" fill="#5850b0"/>
+    <!-- Lower-left inner (blue-indigo) -->
+    <polygon points="166,398 256,438 254,384" fill="#5060b8"/>
+    <!-- Lower-right inner (teal-green) -->
+    <polygon points="254,384 256,438 318,444" fill="#38b090"/>
+    <!-- Lower-right outer (green-teal) -->
+    <polygon points="254,384 318,444 350,398" fill="#40c080"/>
+
+    <!-- ===== Bottom point ===== -->
+    <!-- Bottom-left (deep purple) -->
+    <polygon points="194,444 256,486 256,438" fill="#5840a0"/>
+    <!-- Bottom-right (blue-indigo) -->
+    <polygon points="256,438 256,486 318,444" fill="#5068a8"/>
+  </g>
+
+  <!-- Internal facet edge highlights — stronger lines along the central ridge -->
+  <g stroke="#fff" stroke-width="0.8" stroke-opacity="0.18" fill="none" stroke-linecap="round">
+    <!-- Central vertical ridge -->
+    <polyline points="262,114 254,200 252,300 254,384 256,438"/>
+    <!-- Upper cross-edges -->
+    <line x1="178" y1="138" x2="262" y2="114"/>
+    <line x1="262" y1="114" x2="336" y2="138"/>
+    <!-- Mid cross-edges -->
+    <line x1="152" y1="222" x2="254" y2="200"/>
+    <line x1="254" y1="200" x2="360" y2="222"/>
+    <!-- Center cross-edges -->
+    <line x1="146" y1="318" x2="252" y2="300"/>
+    <line x1="252" y1="300" x2="366" y2="318"/>
+    <!-- Lower cross-edges -->
+    <line x1="166" y1="398" x2="254" y2="384"/>
+    <line x1="254" y1="384" x2="350" y2="398"/>
+  </g>
+
+  <!-- Sparkle accent (bottom-right) -->
+  <g transform="translate(420,440)" fill="#b8b0d8" opacity="0.6">
+    <path d="M0,-10 L2.2,-2.2 L10,0 L2.2,2.2 L0,10 L-2.2,2.2 L-10,0 L-2.2,-2.2 Z"/>
+  </g>
+  <!-- Smaller secondary sparkle -->
+  <g transform="translate(438,418)" fill="#c0b8e0" opacity="0.35">
+    <path d="M0,-5 L1.1,-1.1 L5,0 L1.1,1.1 L0,5 L-1.1,1.1 L-5,0 L-1.1,-1.1 Z"/>
+  </g>
+</svg>

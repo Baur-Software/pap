@@ -14,7 +14,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
   <style>
     /* ─── Reset & Base ────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -140,10 +139,9 @@
       display: flex; align-items: center; gap: 10px;
       text-decoration: none; height: 100%; padding: 8px 0;
     }
-    .nav-logo img { height: 32px; width: auto; object-fit: contain; }
-    .nav-wordmark {
-      font-family: 'Satoshi', -apple-system, sans-serif;
-      font-size: 1.1rem; font-weight: 900; letter-spacing: -.03em;
+    .nav-pap-scheme {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.05rem; font-weight: 600; letter-spacing: -.02em;
       background: linear-gradient(135deg, var(--indigo), var(--violet));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -762,9 +760,8 @@
 <!-- ─── NAV ─────────────────────────────────────────────────────────── -->
 <nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="../" class="nav-logo" aria-label="Papillion">
-      <img src="../assets/images/papillion-icon.png" alt="Papillion logo" />
-      <span class="nav-wordmark">Papillion</span>
+    <a href="../" class="nav-logo" aria-label="PAP — Principal Agent Protocol">
+      <span class="nav-pap-scheme">pap://</span>
     </a>
     <ul class="nav-links" role="list">
       <li><a href="#problem">Problem</a></li>
