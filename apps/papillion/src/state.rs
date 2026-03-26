@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 
 use crate::agents::{
     DuckDuckGoAgent, FrankfurterAgent, HackerNewsAgent, NominatimAgent, OnDeviceAiAgent,
-    OpenLibraryAgent, OpenMeteoAgent, WikipediaAgent,
+    OpenLibraryAgent, OpenMeteoAgent, SocialDiscoveryAgent, TraitBeaconAgent, WikipediaAgent,
 };
 use crate::db::{prelude::DatabaseOps, Database};
 use crate::error::PapillionError;
@@ -262,6 +262,11 @@ impl AppState {
             Arc::new(FrankfurterAgent::new()),
         );
         local_agents.insert("Hacker News".into(), Arc::new(HackerNewsAgent::new()));
+        local_agents.insert(
+            "Social Discovery".into(),
+            Arc::new(SocialDiscoveryAgent::new(local_registry.clone())),
+        );
+        local_agents.insert("Trait Beacon".into(), Arc::new(TraitBeaconAgent::new()));
 
         Self {
             signer: RwLock::new(Some(Box::new(signer))),

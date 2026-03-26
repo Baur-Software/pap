@@ -135,5 +135,29 @@ pub fn seed_registry() -> (FederatedRegistry, HashMap<String, PrincipalKeypair>)
         &mut keypairs,
     );
 
+    // Social Discovery — queries federation for person-typed Trait Beacon agents.
+    // Finds people through their advertised traits, not profiles.
+    register(
+        "Social Discovery",
+        "Papillion",
+        vec!["schema:DiscoverAction".into()],
+        vec!["schema:Person".into()],
+        vec![],
+        vec!["schema:ItemList".into()],
+        &mut keypairs,
+    );
+
+    // Trait Beacon — advertises the principal's traits to the federation.
+    // Other nodes discover this agent and query it to learn about the person behind it.
+    register(
+        "Trait Beacon",
+        "Papillion",
+        vec!["schema:InformAction".into()],
+        vec!["schema:Person".into()],
+        vec![],
+        vec!["schema:Person".into()],
+        &mut keypairs,
+    );
+
     (registry, keypairs)
 }
