@@ -213,14 +213,14 @@
     .hero-logo {
       margin-bottom: 32px;
     }
-    .hero-logo img {
-      height: 120px;
-      width: auto;
-      object-fit: contain;
-      transition: transform 0.3s ease;
-    }
-    .hero-logo img:hover {
-      transform: scale(1.02);
+    .hero-logo-mark {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 3.5rem;
+      font-weight: 700;
+      letter-spacing: -.03em;
+      background: linear-gradient(135deg, var(--indigo) 0%, var(--violet) 50%, #a78bfa 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
     .hero-title {
       font-size: clamp(2.5rem, 6vw, 4.25rem);
@@ -792,7 +792,7 @@
       <!-- Left: Copy -->
       <div>
         <div class="hero-logo">
-          <img src="https://github.com/user-attachments/assets/51e636fd-d247-4ef8-aa56-9981ea79b504" alt="PAP Logo - Principal Agent Protocol" />
+          <span class="hero-logo-mark">pap://</span>
         </div>
         <div class="hero-eyebrow">
           <span class="badge">v0.1.0</span>
