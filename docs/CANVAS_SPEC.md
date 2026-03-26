@@ -16,7 +16,53 @@ OpenClaw and similar tools hand the entire user context to every agent in the ch
 
 ---
 
-## 2. Core Principle: Outcome Blocks
+## 2. Why This Changes How Apps Work
+
+Every generation of software has asked people to adapt to the machine. The canvas inverts that. To understand why, look at what's broken in each layer of how people use software today.
+
+### 2.1 The App-Centric World (what we have)
+
+You go to Gmail for email. You go to Google Calendar for your schedule. You go to Expedia for flights. You go to Mint for your budget. Each app owns a slice of your life. Each has its own interface, its own login, its own data silo. **You are the integration layer.** You copy a confirmation number from email, paste it into a spreadsheet, check a date on the calendar, then go back to the booking site. Your brain is the bus that shuttles context between applications that refuse to talk to each other.
+
+The result: people spend their time navigating between apps instead of getting things done. The information is all there — it's just trapped behind 30 different logins.
+
+### 2.2 The Integration Layer (Zapier, Make, IFTTT)
+
+These tools tried to fix the silo problem. Connect App A to App B. When a new email arrives, create a task in Todoist. When a deal closes in Salesforce, post to Slack.
+
+But they moved the configuration problem, they didn't solve it. You still set up OAuth flows. You still map fields between APIs. You still debug broken webhooks when a provider changes their schema. The integration tool becomes another app you have to learn. And the integration tool sees everything — your email content, your calendar events, your CRM data — with no partitioning. You granted it full access because that's the only option.
+
+Configuration is the end user's problem. Privacy is nobody's problem.
+
+### 2.3 The AI Assistant Layer (ChatGPT, Claude Desktop, OpenClaw)
+
+AI assistants are the latest attempt. Talk to one agent that has access to everything. "Read my email and summarize it." "Check my calendar and find a time." The natural language interface is a genuine step forward.
+
+But the privacy model is a genuine step backward. The assistant sees your email, your calendar, your files, your browsing history — all of it, all the time, with no partitioning. You trade your entire context for convenience. OpenClaw connects 50 agents to your personal data and every agent sees the same unscoped context. There is no mandate. There is no selective disclosure. There is no receipt proving what was shared.
+
+This is not a minor concern. It is corrosive to the internet. When every agent can see everything about every user, the incentive structure rewards data hoarding, not data minimization. The more context an agent accumulates, the more "useful" it appears — and the more vulnerable the user becomes.
+
+### 2.4 What the Canvas Changes
+
+The Papillion canvas doesn't iterate on any of these. It replaces the assumptions underneath them.
+
+**Configuration disappears.** You don't set up integrations. You don't authenticate with services. You don't map fields between APIs. You describe what you want. The federated agent network discovers agents that can do it. Agents advertise their capabilities via Schema.org vocabularies. The orchestrator matches your intent to available capabilities. The user never sees a settings page for connecting services — because there isn't one. Agent capability advertisements replace API keys and OAuth flows.
+
+**Privacy becomes additive, not subtractive.** Today's model: grant full access to everything, then hope the service only uses what it needs. The canvas model: start from zero disclosure. Each agent gets a mandate scoped to exactly what it needs for exactly this task, with a TTL that expires. A flight search agent sees your travel dates and destination. It does not see your email. It does not see your budget. It does not see your name. And you can prove this — co-signed receipts contain property references, never values. The privacy guarantee is cryptographic, not a privacy policy you can't read.
+
+**The interface IS the automation.** There is no "build" screen and "use" screen. No workflow editor that looks different from the result. You prompt, the canvas shows you what will happen (ghost blocks), you approve, the outcome appears. Then you reshape the outcome by talking to it. The same surface that displays your morning briefing is the surface where you built it by typing "every morning, summarize my email and check the weather." Draft and live are the same canvas at different lifecycle stages.
+
+**Apps dissolve into agents.** Instead of going to Gmail, an email agent brings relevant messages to your canvas. Instead of going to a weather site, a weather agent contributes to your briefing. The app boundary — the idea that a company's product is a destination you visit — dissolves. What remains is capability: an agent can search, an agent can check, an agent can book. The canvas composes capabilities. The user never thinks about which app is behind which capability.
+
+**The user is the root of trust.** Not a platform. Not a cloud provider. Not a company. The user's cryptographic identity (DID) anchors every interaction. Mandates flow from the user. Receipts are co-signed by the user. The memex — the learning layer — lives on the user's device, in their SQLite database, never uploaded. The orchestrator improves by learning the user's preferences locally. No training data leaves the machine.
+
+### 2.5 The Paradigm in One Sentence
+
+Today, people go to apps and give them everything. With the canvas, agents come to people and get only what they need.
+
+---
+
+## 3. Core Model: Outcome Blocks
 
 The canvas does not show agent plumbing by default. When a user prompts a multi-step workflow, the orchestrator runs the agents, collects their responses, and synthesizes a single **outcome block** that represents the user's desired result.
 
@@ -64,7 +110,7 @@ The orchestrator decides whether a reshape requires re-running agents (scope cha
 
 ---
 
-## 3. Canvas Lifecycle
+## 4. Canvas Lifecycle
 
 ### 3.1 States
 
@@ -109,7 +155,7 @@ Scroll up to see previous runs. Each outcome block retains its provenance layer.
 
 ---
 
-## 4. Prompt Decomposition
+## 5. Prompt Decomposition
 
 ### 4.1 Intent Detection
 
@@ -193,7 +239,7 @@ A commit bar appears below the ghost plan:
 
 ---
 
-## 5. Privacy as UX
+## 6. Privacy as UX
 
 ### 5.1 The Provenance Footer
 
@@ -243,7 +289,7 @@ The posture is visible in the trigger bar and provenance footer.
 
 ---
 
-## 6. Layout Engine
+## 7. Layout Engine
 
 ### 6.1 Derived Layout
 
@@ -306,7 +352,7 @@ Zoom is CSS-driven:
 
 ---
 
-## 7. Onboarding
+## 8. Onboarding
 
 ### 7.1 Purpose
 
@@ -350,7 +396,7 @@ The starter canvas IS the first pipeline run. No tutorial, no walkthrough, no em
 
 ---
 
-## 8. Trigger System
+## 9. Trigger System
 
 ### 8.1 TriggerConfig
 
@@ -404,7 +450,7 @@ A canvas can trigger when an upstream canvas completes. When canvas A finishes a
 
 ---
 
-## 9. Scheduler Architecture
+## 10. Scheduler Architecture
 
 ### 9.1 Placement
 
@@ -441,7 +487,7 @@ pub(crate) async fn execute_pipeline(
 
 ---
 
-## 10. Canvas Persistence
+## 11. Canvas Persistence
 
 ### 10.1 Schema
 
@@ -508,7 +554,7 @@ fn list_canvas_runs(&self, canvas_id: &str, limit: usize) -> Result<Vec<CanvasRu
 
 ---
 
-## 11. Synthesizer Node
+## 12. Synthesizer Node
 
 ### 11.1 Purpose
 
@@ -535,7 +581,7 @@ pub enum NodeType {
 
 ---
 
-## 12. UI Component Architecture
+## 13. UI Component Architecture
 
 ### 12.1 New Components
 
@@ -570,7 +616,7 @@ pub enum NodeType {
 
 ---
 
-## 13. Tauri Commands
+## 14. Tauri Commands
 
 ### 13.1 New Commands
 
@@ -603,7 +649,7 @@ canvas_synthesize(prompt, agent_results) -> OutcomeContent
 
 ---
 
-## 14. Design System Integration
+## 15. Design System Integration
 
 All new components use existing design tokens from DESIGN.md:
 
@@ -625,7 +671,7 @@ Typography:
 
 ---
 
-## 15. Implementation Phases
+## 16. Implementation Phases
 
 ### Phase 1: Outcome Block + Provenance Layer
 - Add `Outcome` and `Ghost` to `BlockState`
