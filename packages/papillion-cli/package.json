@@ -1,0 +1,22 @@
+{
+  "name": "@baur-software/papillion",
+  "version": "0.4.2",
+  "description": "Papillion — PAP-native agent browser. Run locally with npx.",
+  "keywords": ["ai", "agents", "pap", "principal-agent-protocol", "papillion"],
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Baur-Software/pap",
+    "directory": "packages/papillion-cli"
+  },
+  "bin": {
+    "papillion": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "dist/"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
