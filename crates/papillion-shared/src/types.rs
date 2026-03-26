@@ -81,20 +81,15 @@ pub struct PipelineInfo {
 }
 
 /// The type of a pipeline node — either a remote agent or an on-device synthesizer.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum PipelineNodeType {
     /// Standard agent node — executes a PAP handshake.
+    #[default]
     Agent,
     /// On-device synthesizer — merges upstream results into an outcome block.
     /// Never leaves the device; runs the local LLM (Candle/TinyLlama).
     Synthesizer,
-}
-
-impl Default for PipelineNodeType {
-    fn default() -> Self {
-        Self::Agent
-    }
 }
 
 /// A node in a pipeline (represents an agent or synthesizer).
