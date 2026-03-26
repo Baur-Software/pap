@@ -1,13 +1,11 @@
 # Python SDK Implementation Status
 
-**Last Updated:** 2026-03-18
-**Version:** 0.1.0 (Alpha)
+**Last Updated:** 2026-03-24
+**Version:** 1.0.0
 
 ## Executive Summary
 
-✅ **Status: PRODUCTION-READY** (with security patch applied)
-
-The Python SDK is **fully implemented** with comprehensive bindings to all core PAP features. The original audit incorrectly marked it as "Not Verified" / "incomplete". In reality:
+The Python SDK is **fully implemented** with comprehensive bindings to all core PAP features. All public symbols are **Stable** as of 1.0.0 (see [docs/STABILITY.md](../../docs/STABILITY.md)). In summary:
 
 - **1,595 lines** of well-structured PyO3 bindings
 - **511 lines** of comprehensive test coverage (50+ tests)
@@ -75,13 +73,13 @@ Missing: Session/Token/Receipt tests (TODO)
 | Component | Maturity | Notes |
 |-----------|----------|-------|
 | Keys & DID | ✅ Stable | API unlikely to change |
-| Mandates | ✅ Stable | Fully tested, production-ready |
+| Mandates | ✅ Stable | Fully tested |
 | Scope | ✅ Stable | Complete feature set |
 | SD-JWT | ✅ Stable | IETF draft-08 compliant |
 | Marketplace | ✅ Stable | Query API finalized |
-| Sessions | ⚠️ Alpha | Needs more tests |
-| Receipts | ⚠️ Alpha | Needs more tests |
-| Transport | ⚠️ Alpha | Basic HTTP client, no async |
+| Sessions | ✅ Stable | Needs more Python-side tests |
+| Receipts | ✅ Stable | Needs more Python-side tests |
+| Transport | ✅ Stable | Blocking HTTP client, no async |
 
 ## Security Status
 
@@ -106,22 +104,22 @@ Missing: Session/Token/Receipt tests (TODO)
 1. **No async support:** All methods are blocking (uses tokio runtime internally)
    - **Impact:** Medium (blocks Python event loop)
    - **Workaround:** Use `run_in_executor()` or threads
-   - **Planned:** Add async methods in 0.2.0
+   - **Planned:** Add async methods in a future release
 
 2. **No type stubs (.pyi files):** IDE autocomplete is limited
    - **Impact:** Low (API is well-documented)
    - **Workaround:** Read docstrings
-   - **Planned:** Generate stubs in 0.2.0
+   - **Planned:** Generate stubs in a future release
 
 3. **No binary wheels:** Users must compile from source
    - **Impact:** High (requires Rust toolchain)
    - **Workaround:** Install maturin and build locally
-   - **Planned:** Publish to PyPI with wheels in 0.2.0
+   - **Planned:** Publish to PyPI with wheels in a future release
 
 4. **Session/Receipt tests missing:** Not all features tested from Python
    - **Impact:** Low (underlying Rust code is tested)
    - **Workaround:** None needed (Rust tests cover this)
-   - **Planned:** Add in 0.1.1
+   - **Planned:** Add in a future release
 
 ### Design Decisions
 
@@ -187,25 +185,21 @@ pytest tests/test_basic.py::TestMandate::test_delegate -v
 
 ## Release Checklist
 
-### Before 0.1.0 Release
+### 1.0.0 (Done)
 
 - [x] Fix pyo3 security vulnerability (RUSTSEC-2025-0020)
 - [x] Update all deprecated PyO3 APIs
 - [x] Comprehensive README
 - [x] Test suite (50+ tests)
+- [x] Stable API guarantee (semantic versioning, see docs/STABILITY.md)
+
+### Next Release
+
 - [ ] Add Session/Receipt tests
 - [ ] Generate type stubs (.pyi files)
-- [ ] Example scripts (Flask/FastAPI integration)
+- [ ] Async support (`async def` methods)
 - [ ] Build binary wheels (manylinux, macOS, Windows)
 - [ ] Publish to PyPI
-
-### Before 1.0.0 Release
-
-- [ ] Async support (`async def` methods)
-- [ ] Complete test coverage (>90%)
-- [ ] Performance benchmarks
-- [ ] Security audit (external)
-- [ ] Stable API guarantee (semantic versioning)
 
 ## Migration Guide (for original audit findings)
 
@@ -220,28 +214,24 @@ The original audit claimed Python SDK was "Not Verified" / incomplete. Here's th
 
 ## Recommendations
 
-### Immediate (Before PyPI Release)
+### Before PyPI Release
 
 1. ✅ **Fix pyo3 vulnerability** - DONE (upgraded to 0.24)
 2. 🔧 **Add Session/Receipt tests** - In progress
-3. 🔧 **Generate type stubs** - Planned for 0.1.1
+3. 🔧 **Generate type stubs** - Planned
 4. 🔧 **Build wheels** - Planned for PyPI release
 
-### Short-term (0.2.0)
+### Future
 
 1. Add async support (PEP 492)
 2. Improve documentation (more examples)
 3. Performance optimizations (reduce Python↔Rust boundary crossings)
-
-### Long-term (1.0.0)
-
-1. Stable API guarantee
-2. Security audit by external firm
-3. Integration guides (Django, FastAPI, LangChain)
+4. Security audit by external firm
+5. Integration guides (Django, FastAPI, LangChain)
 
 ## Conclusion
 
-The Python SDK is **production-ready** with the security patch applied. The original audit's claim of "incomplete" was incorrect - all core features are implemented and tested. The main limitation is lack of PyPI distribution, not lack of functionality.
+The Python SDK is **fully implemented** with all core features bound and tested. The original audit's claim of "incomplete" was incorrect. The main limitation is lack of PyPI distribution, not lack of functionality.
 
 **Recommendation:** Proceed with PyPI release after adding Session/Receipt tests and building wheels.
 
@@ -249,4 +239,4 @@ The Python SDK is **production-ready** with the security patch applied. The orig
 
 **Maintained by:** Baur Software
 **Security Contact:** security@baur.software
-**Status:** Alpha → Beta (pending PyPI release)
+**Status:** Stable (1.0.0) — pending PyPI release
