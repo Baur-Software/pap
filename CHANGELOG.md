@@ -1,3 +1,16 @@
+## [0.5.0] - 2026-03-26
+
+### Added
+
+- **Multi-platform release workflows** — Per-product CI/CD pipelines for Papillion and Chrysalis covering desktop (macOS/Linux/Windows), mobile (iOS/Android via Capacitor thin clients), web (WASM), Docker, and npm
+- **npm CLI packages** — `@baur-software/papillion` (serves WASM frontend) and `@baur-software/chrysalis` (downloads platform binary)
+- **Papillion Dockerfile** — Multi-stage trunk build to nginx:alpine with COOP/COEP headers
+
+### Fixed
+
+- Windows desktop build: PowerShell compatibility for mkdir and gh commands
+- Capacitor App ID validation: removed dashes from Java package names
+
 ## [0.4.4.0] - 2026-03-24
 
 ### Added
