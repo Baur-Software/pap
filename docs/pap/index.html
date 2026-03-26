@@ -8,14 +8,15 @@
   <meta property="og:title" content="PAP — Principal Agent Protocol" />
   <meta property="og:description" content="AI should answer to you, not to a platform. Zero-trust agent negotiation — no new cryptography, no token economy, no central registry." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
+  <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card-pap.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="PAP — Principal Agent Protocol" />
   <meta name="twitter:description" content="AI should answer to you, not to a platform. A zero-trust protocol for agent negotiation." />
-  <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
+  <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card-pap.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
   <style>
     /* ─── Reset & Base ────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -139,14 +140,12 @@
     }
     .nav-logo {
       display: flex; align-items: center; gap: 10px;
-      text-decoration: none; height: 100%; padding: 8px 0;
+      text-decoration: none; color: var(--text);
     }
-    .nav-pap-scheme {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 1.05rem; font-weight: 600; letter-spacing: -.02em;
-      background: linear-gradient(135deg, var(--indigo), var(--violet));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
+    .nav-logo img { height: 32px; width: auto; }
+    .nav-wordmark {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em;
     }
     .nav-links {
       display: flex; align-items: center; gap: 8px; list-style: none;
@@ -157,10 +156,18 @@
       transition: all .15s ease;
     }
     .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .nav-links a[aria-current="page"] { color: var(--text); }
+    .nav-link-icon {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
     .nav-cta {
       display: flex; align-items: center; gap: 10px;
     }
-    .nav-mobile-toggle { display: none; }
 
     /* ─── Hero ────────────────────────────────────────────────────────── */
     #hero {
@@ -762,21 +769,16 @@
 <!-- ─── NAV ─────────────────────────────────────────────────────────── -->
 <nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="../" class="nav-logo" aria-label="PAP — Principal Agent Protocol">
-      <span class="nav-pap-scheme">pap://</span>
+    <a href="../" class="nav-logo" aria-label="Baur Software">
+      <img src="../assets/images/papillion-icon.png" alt="Baur Software logo" />
+      <span class="nav-wordmark">Baur Software</span>
     </a>
     <ul class="nav-links" role="list">
-      <li><a href="#problem">Problem</a></li>
-      <li><a href="#how">Protocol</a></li>
-      <li><a href="#stack">Stack</a></li>
-      <li><a href="#sdks">SDKs</a></li>
-      <li><a href="#compare">Compare</a></li>
-      <li><a href="#start">Quick Start</a></li>
+      <li><a href="./" aria-current="page"><span class="nav-link-icon">pap://</span> PAP</a></li>
+      <li><a href="../papillion/"><img src="../assets/images/papillion-icon.png" alt="" class="nav-link-icon-img" /> Papillion</a></li>
+      <li><a href="../chrysalis.html"><img src="../assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
     </ul>
-    <div class="nav-cta" style="display:flex;gap:12px;align-items:center;">
-      <a href="../" style="font-size:.88rem;color:var(--muted);font-weight:500;transition:color .15s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">Home</a>
-      <a href="../papillion/" style="font-size:.88rem;color:var(--muted);font-weight:500;transition:color .15s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">Papillion</a>
-      <a href="../chrysalis.html" style="font-size:.88rem;color:var(--muted);font-weight:500;transition:color .15s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">Chrysalis</a>
+    <div class="nav-cta">
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
         <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
         GitHub

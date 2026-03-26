@@ -15,7 +15,7 @@
   <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -69,21 +69,12 @@
     }
     .nav-logo {
       display: flex; align-items: center; gap: 10px;
-      text-decoration: none; height: 100%; padding: 8px 0;
+      text-decoration: none; color: var(--text);
     }
-    .nav-logo img { height: 32px; width: auto; object-fit: contain; }
+    .nav-logo img { height: 32px; width: auto; }
     .nav-wordmark {
       font-family: 'Satoshi', -apple-system, sans-serif;
-      font-size: 1.1rem; font-weight: 900; letter-spacing: -.03em;
-      background: linear-gradient(135deg, var(--indigo), var(--violet));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .dev-badge {
-      font-size: .65rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-      padding: 3px 8px; border-radius: 6px;
-      background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.25);
-      color: var(--amber);
+      font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em;
     }
     .nav-links { display: flex; align-items: center; gap: 8px; list-style: none; }
     .nav-links a {
@@ -92,14 +83,27 @@
       transition: all .15s ease;
     }
     .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
-    .nav-cta { display: flex; align-items: center; gap: 10px; }
-    .btn-nav-cta {
-      display: inline-flex; align-items: center;
-      padding: 8px 20px; border-radius: 8px; font-weight: 600; font-size: .875rem;
-      background: var(--violet); color: #fff;
-      transition: transform .15s, box-shadow .2s;
+    .nav-links a[aria-current="page"] { color: var(--text); }
+    .nav-link-icon {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    .btn-nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(139,92,246,.4); color: #fff; }
+    .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
+    .nav-cta { display: flex; align-items: center; gap: 10px; }
+    .gh-icon { width: 18px; height: 18px; fill: currentColor; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: var(--radius);
+      font-size: .88rem; font-weight: 500; cursor: pointer;
+      transition: all .2s ease; text-decoration: none;
+    }
+    .btn-outline {
+      border: 1px solid var(--border); color: var(--muted); background: transparent;
+    }
+    .btn-outline:hover { border-color: var(--indigo); color: var(--indigo); transform: translateY(-1px); }
     @media (max-width: 768px) { .nav-links { display: none; } }
 
     /* ─── Hero ────────────────────────────────────────────────────── */
@@ -520,20 +524,20 @@
 <!-- ─── Nav ──────────────────────────────────────────────────────── -->
 <nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="#" class="nav-logo" aria-label="Papillion">
-      <img src="../assets/images/papillion-icon.png" alt="Papillion logo" />
-      <span class="nav-wordmark">Papillion</span>
-      <span class="dev-badge">In Development</span>
+    <a href="../" class="nav-logo" aria-label="Baur Software">
+      <img src="../assets/images/papillion-icon.png" alt="Baur Software logo" />
+      <span class="nav-wordmark">Baur Software</span>
     </a>
     <ul class="nav-links" role="list">
-      <li><a href="../">Home</a></li>
-      <li><a href="#problem">Why</a></li>
-      <li><a href="#demo">Demo</a></li>
-      <li><a href="#trust">Trust</a></li>
-      <li><a href="../chrysalis.html">Chrysalis</a></li>
+      <li><a href="../pap/"><span class="nav-link-icon">pap://</span> PAP</a></li>
+      <li><a href="./" aria-current="page"><img src="../assets/images/papillion-icon.png" alt="" class="nav-link-icon-img" /> Papillion</a></li>
+      <li><a href="../chrysalis.html"><img src="../assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
     </ul>
     <div class="nav-cta">
-      <a href="../pap/" class="btn-nav-cta">For Developers</a>
+      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
+        <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
     </div>
   </div>
 </nav>
