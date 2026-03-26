@@ -94,15 +94,12 @@
     }
     .nav-logo {
       display: flex; align-items: center; gap: 10px;
-      text-decoration: none; height: 100%; padding: 8px 0;
+      text-decoration: none; color: var(--text);
     }
-    .nav-logo img { height: 32px; width: auto; object-fit: contain; }
+    .nav-logo img { height: 32px; width: auto; }
     .nav-wordmark {
       font-family: 'Satoshi', -apple-system, sans-serif;
-      font-size: 1.1rem; font-weight: 900; letter-spacing: -.03em;
-      background: linear-gradient(135deg, var(--indigo), var(--violet));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em;
     }
     .nav-links {
       display: flex; align-items: center; gap: 8px; list-style: none;
@@ -113,7 +110,15 @@
       transition: all .15s ease;
     }
     .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
-    .nav-links a[aria-current="page"] { color: var(--teal); }
+    .nav-links a[aria-current="page"] { color: var(--text); }
+    .nav-link-icon {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
     .nav-cta { display: flex; align-items: center; gap: 10px; }
     .gh-icon { width: 18px; height: 18px; fill: currentColor; }
     @media (max-width: 768px) { .nav-links { display: none; } }
@@ -350,14 +355,14 @@
 <!-- ─── NAV ──────────────────────────────────────────────────────────── -->
 <nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="index.html" class="nav-logo" aria-label="Chrysalis">
-      <img src="assets/images/chrysalis-icon.svg" alt="Chrysalis icon" />
-      <span class="nav-wordmark">Chrysalis</span>
+    <a href="index.html" class="nav-logo" aria-label="Baur Software">
+      <img src="assets/images/papillion-icon.png" alt="Baur Software logo" />
+      <span class="nav-wordmark">Baur Software</span>
     </a>
     <ul class="nav-links" role="list">
-      <li><a href="pap/">PAP</a></li>
-      <li><a href="papillion/">Papillion</a></li>
-      <li><a href="chrysalis.html" aria-current="page">Chrysalis</a></li>
+      <li><a href="pap/"><span class="nav-link-icon">pap://</span> PAP</a></li>
+      <li><a href="papillion/"><img src="assets/images/papillion-icon.png" alt="" class="nav-link-icon-img" /> Papillion</a></li>
+      <li><a href="chrysalis.html" aria-current="page"><img src="assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
     </ul>
     <div class="nav-cta">
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
