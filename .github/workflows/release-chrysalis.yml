@@ -298,7 +298,7 @@ jobs:
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/ios
 
-          npx cap init "Chrysalis" "com.baur-software.chrysalis" \
+          npx cap init "Chrysalis" "com.baursoftware.chrysalis" \
             --web-dir ../../../site
 
           npx cap add ios
@@ -424,7 +424,7 @@ jobs:
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-          npx cap init "Chrysalis" "com.baur-software.chrysalis" \
+          npx cap init "Chrysalis" "com.baursoftware.chrysalis" \
             --web-dir ../../../site
 
           npx cap add android

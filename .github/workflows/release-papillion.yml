@@ -144,9 +144,11 @@ jobs:
         run: trunk build --release
 
       - name: Setup model directory
+        shell: bash
         run: mkdir -p apps/papillion/models
 
       - name: Download bundled TinyLlama model from GitHub Release
+        shell: bash
         run: |
           gh release download models-v1 \
             --pattern "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" \
@@ -202,7 +204,7 @@ jobs:
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/ios
 
-          npx cap init "Papillion" "com.baur-software.papillion" \
+          npx cap init "Papillion" "com.baursoftware.papillion" \
             --web-dir frontend/dist
 
           npx cap add ios
@@ -326,7 +328,7 @@ jobs:
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-          npx cap init "Papillion" "com.baur-software.papillion" \
+          npx cap init "Papillion" "com.baursoftware.papillion" \
             --web-dir frontend/dist
 
           npx cap add android
