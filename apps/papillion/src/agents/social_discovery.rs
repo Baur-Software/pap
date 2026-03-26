@@ -110,14 +110,13 @@ impl AgentHandler for SocialDiscoveryAgent {
             .sessions
             .with(session_id, |data| data.clone())?
             .ok_or_else(|| {
-                TransportError::ServerError(
-                    "No discovery criteria provided in disclosures".into(),
-                )
+                TransportError::ServerError("No discovery criteria provided in disclosures".into())
             })?;
 
-        let registry = self.registry.lock().map_err(|e| {
-            TransportError::ServerError(format!("Registry lock failed: {e}"))
-        })?;
+        let registry = self
+            .registry
+            .lock()
+            .map_err(|e| TransportError::ServerError(format!("Registry lock failed: {e}")))?;
 
         // Query for InformAction agents — these are Trait Beacons
         let beacons = registry.query_local("schema:InformAction");
@@ -246,7 +245,9 @@ mod tests {
         disclosure: serde_json::Value,
     ) -> serde_json::Value {
         let agent = SocialDiscoveryAgent::new(registry);
-        let (sid, _) = agent.handle_token(mint_token("schema:DiscoverAction")).unwrap();
+        let (sid, _) = agent
+            .handle_token(mint_token("schema:DiscoverAction"))
+            .unwrap();
         agent.handle_did_exchange(&sid, "did:key:z6Mktest").unwrap();
         agent.handle_disclosure(&sid, vec![disclosure]).unwrap();
         let result = agent.execute(&sid).unwrap();
@@ -258,15 +259,14 @@ mod tests {
     fn rejects_wrong_action() {
         let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
         let agent = SocialDiscoveryAgent::new(registry);
-        assert!(agent.handle_token(mint_token("schema:SearchAction")).is_err());
+        assert!(agent
+            .handle_token(mint_token("schema:SearchAction"))
+            .is_err());
     }
 
     #[test]
     fn discovers_person_beacons_by_keyword() {
-        let result = run_discovery(
-            registry_with_beacons(),
-            json!({ "query": "alice" }),
-        );
+        let result = run_discovery(registry_with_beacons(), json!({ "query": "alice" }));
 
         assert_eq!(result["@type"], "ItemList");
         assert_eq!(result["numberOfItems"], 1);
@@ -281,10 +281,7 @@ mod tests {
 
     #[test]
     fn filters_non_person_agents() {
-        let result = run_discovery(
-            registry_with_beacons(),
-            json!({ "query": "weather" }),
-        );
+        let result = run_discovery(registry_with_beacons(), json!({ "query": "weather" }));
         assert_eq!(result["numberOfItems"], 0);
     }
 
@@ -300,19 +297,13 @@ mod tests {
 
     #[test]
     fn no_keywords_returns_all_person_beacons() {
-        let result = run_discovery(
-            registry_with_beacons(),
-            json!({ "traits": [] }),
-        );
+        let result = run_discovery(registry_with_beacons(), json!({ "traits": [] }));
         assert_eq!(result["numberOfItems"], 1);
     }
 
     #[test]
     fn structured_traits_disclosure() {
-        let result = run_discovery(
-            registry_with_beacons(),
-            json!({ "traits": ["alice"] }),
-        );
+        let result = run_discovery(registry_with_beacons(), json!({ "traits": ["alice"] }));
         assert_eq!(result["numberOfItems"], 1);
     }
 
@@ -320,7 +311,9 @@ mod tests {
     fn no_criteria_errors() {
         let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
         let agent = SocialDiscoveryAgent::new(registry);
-        let (sid, _) = agent.handle_token(mint_token("schema:DiscoverAction")).unwrap();
+        let (sid, _) = agent
+            .handle_token(mint_token("schema:DiscoverAction"))
+            .unwrap();
         agent.handle_did_exchange(&sid, "did:key:z6Mktest").unwrap();
         // No disclosure at all
         agent.handle_disclosure(&sid, vec![]).unwrap();

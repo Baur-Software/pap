@@ -185,7 +185,9 @@ mod tests {
     #[test]
     fn test_rejects_wrong_action() {
         let agent = TraitBeaconAgent::new();
-        assert!(agent.handle_token(mint_token("schema:SearchAction")).is_err());
+        assert!(agent
+            .handle_token(mint_token("schema:SearchAction"))
+            .is_err());
     }
 
     #[test]
