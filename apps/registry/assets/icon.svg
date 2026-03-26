@@ -1,88 +1,89 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!--
     Crystalis — Agent Registry icon
-    Faceted chrysalis crystal with rainbow spectrum gradient
+    70-facet crystal auto-traced from reference
   -->
 
-  <!-- Crystal facets — 20 triangular polygons with facet-edge highlights -->
-  <g stroke="#fff" stroke-width="0.6" stroke-opacity="0.25" stroke-linejoin="round">
-
-    <!-- ===== Top crown (magenta/pink) ===== -->
-    <!-- Left crown -->
-    <polygon points="256,28 178,138 262,114" fill="#c840a8"/>
-    <!-- Right crown -->
-    <polygon points="256,28 262,114 336,138" fill="#e84888"/>
-
-    <!-- ===== Upper band ===== -->
-    <!-- Upper-left outer (purple) -->
-    <polygon points="178,138 152,222 254,200" fill="#8050c0"/>
-    <!-- Upper-left inner (magenta-purple) -->
-    <polygon points="178,138 254,200 262,114" fill="#a840b0"/>
-    <!-- Upper-right inner (orange-coral) -->
-    <polygon points="262,114 254,200 360,222" fill="#e87040"/>
-    <!-- Upper-right outer (coral) -->
-    <polygon points="262,114 360,222 336,138" fill="#f05848"/>
-
-    <!-- ===== Mid band ===== -->
-    <!-- Mid-left outer (cyan) -->
-    <polygon points="152,222 146,318 252,300" fill="#38b8c8"/>
-    <!-- Mid-left inner (blue-teal) -->
-    <polygon points="152,222 252,300 254,200" fill="#5090c0"/>
-    <!-- Mid-right inner (golden-yellow) -->
-    <polygon points="254,200 252,300 366,318" fill="#d8b830"/>
-    <!-- Mid-right outer (orange-gold) -->
-    <polygon points="254,200 366,318 360,222" fill="#e89828"/>
-
-    <!-- ===== Lower-mid band ===== -->
-    <!-- Lower-left outer (blue) -->
-    <polygon points="146,318 166,398 254,384" fill="#4870c8"/>
-    <!-- Lower-left inner (teal-blue) -->
-    <polygon points="146,318 254,384 252,300" fill="#38a0b0"/>
-    <!-- Lower-right inner (green) -->
-    <polygon points="252,300 254,384 350,398" fill="#50c858"/>
-    <!-- Lower-right outer (green-teal) -->
-    <polygon points="252,300 350,398 366,318" fill="#48d070"/>
-
-    <!-- ===== Lower band ===== -->
-    <!-- Lower-left outer (indigo) -->
-    <polygon points="166,398 194,444 256,438" fill="#5850b0"/>
-    <!-- Lower-left inner (blue-indigo) -->
-    <polygon points="166,398 256,438 254,384" fill="#5060b8"/>
-    <!-- Lower-right inner (teal-green) -->
-    <polygon points="254,384 256,438 318,444" fill="#38b090"/>
-    <!-- Lower-right outer (green-teal) -->
-    <polygon points="254,384 318,444 350,398" fill="#40c080"/>
-
-    <!-- ===== Bottom point ===== -->
-    <!-- Bottom-left (deep purple) -->
-    <polygon points="194,444 256,486 256,438" fill="#5840a0"/>
-    <!-- Bottom-right (blue-indigo) -->
-    <polygon points="256,438 256,486 318,444" fill="#5068a8"/>
+  <g stroke="#fff" stroke-width="0.5" stroke-opacity="0.25" stroke-linejoin="round">
+    <polygon points="243,81 256,77 245,84" fill="#e75186"/>
+    <polygon points="243,81 184,137 245,84" fill="#c94281"/>
+    <polygon points="184,137 245,84 199,138" fill="#b33c8e"/>
+    <polygon points="184,137 157,197 199,138" fill="#8a56ae"/>
+    <polygon points="157,197 199,138 178,198" fill="#8061b7"/>
+    <polygon points="157,197 191,393 178,198" fill="#2aa2bf"/>
+    <polygon points="191,393 178,198 204,394" fill="#3f76c0"/>
+    <polygon points="191,393 204,394 244,430" fill="#453bb0"/>
+    <polygon points="191,393 242,433 244,430" fill="#5138ae"/>
+    <polygon points="242,433 256,437 244,430" fill="#6233b0"/>
+    <polygon points="245,84 256,77 248,86" fill="#ea5088"/>
+    <polygon points="245,84 199,138 248,86" fill="#d54187"/>
+    <polygon points="199,138 248,86 214,138" fill="#c43f96"/>
+    <polygon points="199,138 178,198 214,138" fill="#a34eb4"/>
+    <polygon points="178,198 214,138 198,199" fill="#8a56ac"/>
+    <polygon points="178,198 204,394 198,199" fill="#32afbe"/>
+    <polygon points="204,394 198,199 218,395" fill="#378dc5"/>
+    <polygon points="204,394 218,395 247,427" fill="#4438b2"/>
+    <polygon points="204,394 244,430 247,427" fill="#5034b2"/>
+    <polygon points="244,430 256,437 247,427" fill="#6231b3"/>
+    <polygon points="248,86 256,77 253,110" fill="#e8468d"/>
+    <polygon points="248,86 214,138 253,110" fill="#dc4498"/>
+    <polygon points="214,138 253,110 251,142" fill="#cc3e9c"/>
+    <polygon points="214,138 251,142 250,175" fill="#d45b86"/>
+    <polygon points="214,138 198,199 250,175" fill="#bd5b9f"/>
+    <polygon points="198,199 250,175 248,208" fill="#a9758f"/>
+    <polygon points="198,199 248,208 248,240" fill="#8d8187"/>
+    <polygon points="198,199 248,240 248,273" fill="#719d87"/>
+    <polygon points="198,199 248,273 248,306" fill="#5ec090"/>
+    <polygon points="198,199 248,306 250,338" fill="#44cb93"/>
+    <polygon points="198,199 250,338 251,372" fill="#28ccb3"/>
+    <polygon points="198,199 218,395 251,372" fill="#25d0d7"/>
+    <polygon points="218,395 251,372 253,404" fill="#4a58bf"/>
+    <polygon points="218,395 247,427 253,404" fill="#5241ba"/>
+    <polygon points="247,427 256,437 253,404" fill="#6035b9"/>
+    <polygon points="256,77 253,110 262,86" fill="#e4398b"/>
+    <polygon points="253,110 262,86 293,138" fill="#e03c83"/>
+    <polygon points="253,110 251,142 293,138" fill="#e3527c"/>
+    <polygon points="251,142 250,175 293,138" fill="#f19368"/>
+    <polygon points="250,175 293,138 306,199" fill="#e98855"/>
+    <polygon points="250,175 248,208 306,199" fill="#d88140"/>
+    <polygon points="248,208 248,240 306,199" fill="#cc8034"/>
+    <polygon points="248,240 248,273 306,199" fill="#c59941"/>
+    <polygon points="248,273 248,306 306,199" fill="#b6b252"/>
+    <polygon points="248,306 250,338 306,199" fill="#85cd79"/>
+    <polygon points="250,338 251,372 306,199" fill="#5ddb97"/>
+    <polygon points="251,372 306,199 290,395" fill="#4fe5bc"/>
+    <polygon points="251,372 253,404 290,395" fill="#4273c1"/>
+    <polygon points="253,404 290,395 262,427" fill="#5459bf"/>
+    <polygon points="253,404 256,437 262,427" fill="#613abb"/>
+    <polygon points="256,77 262,86 265,84" fill="#dd3085"/>
+    <polygon points="262,86 265,84 310,138" fill="#e0347f"/>
+    <polygon points="262,86 293,138 310,138" fill="#e3497c"/>
+    <polygon points="293,138 310,138 330,198" fill="#e77e68"/>
+    <polygon points="293,138 306,199 330,198" fill="#dd6a4d"/>
+    <polygon points="306,199 330,198 305,394" fill="#ceb54a"/>
+    <polygon points="306,199 290,395 305,394" fill="#40a5ad"/>
+    <polygon points="290,395 262,427 305,394" fill="#445bb9"/>
+    <polygon points="262,427 305,394 265,430" fill="#514eb7"/>
+    <polygon points="262,427 256,437 265,430" fill="#6338b9"/>
+    <polygon points="256,77 265,84 268,81" fill="#d82d82"/>
+    <polygon points="265,84 268,81 328,137" fill="#d73578"/>
+    <polygon points="265,84 310,138 328,137" fill="#db3774"/>
+    <polygon points="310,138 328,137 354,197" fill="#e86564"/>
+    <polygon points="310,138 330,198 354,197" fill="#e2784e"/>
+    <polygon points="330,198 354,197 320,393" fill="#99be5c"/>
+    <polygon points="330,198 305,394 320,393" fill="#46ba8b"/>
+    <polygon points="305,394 265,430 320,393" fill="#4267ba"/>
+    <polygon points="265,430 320,393 269,433" fill="#4f55b4"/>
+    <polygon points="265,430 256,437 269,433" fill="#613cb6"/>
   </g>
 
-  <!-- Internal facet edge highlights — stronger lines along the central ridge -->
-  <g stroke="#fff" stroke-width="0.8" stroke-opacity="0.18" fill="none" stroke-linecap="round">
-    <!-- Central vertical ridge -->
-    <polyline points="262,114 254,200 252,300 254,384 256,438"/>
-    <!-- Upper cross-edges -->
-    <line x1="178" y1="138" x2="262" y2="114"/>
-    <line x1="262" y1="114" x2="336" y2="138"/>
-    <!-- Mid cross-edges -->
-    <line x1="152" y1="222" x2="254" y2="200"/>
-    <line x1="254" y1="200" x2="360" y2="222"/>
-    <!-- Center cross-edges -->
-    <line x1="146" y1="318" x2="252" y2="300"/>
-    <line x1="252" y1="300" x2="366" y2="318"/>
-    <!-- Lower cross-edges -->
-    <line x1="166" y1="398" x2="254" y2="384"/>
-    <line x1="254" y1="384" x2="350" y2="398"/>
+  <g stroke="#fff" stroke-width="0.6" stroke-opacity="0.18" fill="none" stroke-linecap="round">
+    <polyline points="256,77 253,110 251,142 250,175 248,208 248,240 248,273 248,306 250,338 251,372 253,404 256,437"/>
   </g>
 
-  <!-- Sparkle accent (bottom-right) -->
   <g transform="translate(420,440)" fill="#b8b0d8" opacity="0.6">
     <path d="M0,-10 L2.2,-2.2 L10,0 L2.2,2.2 L0,10 L-2.2,2.2 L-10,0 L-2.2,-2.2 Z"/>
   </g>
-  <!-- Smaller secondary sparkle -->
   <g transform="translate(438,418)" fill="#c0b8e0" opacity="0.35">
     <path d="M0,-5 L1.1,-1.1 L5,0 L1.1,1.1 L0,5 L-1.1,1.1 L-5,0 L-1.1,-1.1 Z"/>
   </g>
