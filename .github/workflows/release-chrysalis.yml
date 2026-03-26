@@ -204,14 +204,21 @@ jobs:
           fi
 
       - name: Upload server binary to release
-        uses: actions/upload-release-asset@v1
+        uses: actions/github-script@v7
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url || '' }}
-          asset_path: dist/${{ steps.package.outputs.archive }}
-          asset_name: ${{ steps.package.outputs.archive }}
-          asset_content_type: application/octet-stream
+          script: |
+            const fs = require('fs');
+            const data = fs.readFileSync(`dist/${process.env.ARCHIVE}`);
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: parseInt(process.env.RELEASE_ID),
+              name: process.env.ARCHIVE,
+              data
+            });
 
       - name: Upload artifact for npm packaging
         uses: actions/upload-artifact@v4
@@ -267,6 +274,8 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+    env:
+      HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -296,7 +305,7 @@ jobs:
           npx cap sync ios
 
       - name: Install Apple certificate and provisioning profile
-        if: env.APPLE_CERTIFICATE != ''
+        if: env.HAS_APPLE_SIGNING == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -336,7 +345,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Export IPA (when signing is available)
-        if: env.APPLE_CERTIFICATE != ''
+        if: env.HAS_APPLE_SIGNING == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
         run: |
@@ -382,6 +391,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -423,8 +434,8 @@ jobs:
         working-directory: apps/registry/mobile-android/android
         run: ./gradlew assembleRelease
 
-      - name: Sign APK
-        if: env.ANDROID_KEYSTORE != ''
+      - name: Sign APK (production keystore)
+        if: env.HAS_ANDROID_SIGNING == 'true'
         env:
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -432,13 +443,34 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           echo -n "$ANDROID_KEYSTORE" | base64 --decode > $RUNNER_TEMP/keystore.jks
+          BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
           APK=$(find apps/registry/mobile-android/android -name "*-release-unsigned.apk" -type f | head -1)
           if [ -n "$APK" ]; then
-            $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+            "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
               --ks $RUNNER_TEMP/keystore.jks \
               --ks-pass "pass:${ANDROID_KEYSTORE_PASSWORD}" \
               --ks-key-alias "${ANDROID_KEY_ALIAS}" \
               --key-pass "pass:${ANDROID_KEY_PASSWORD}" \
+              --out "${APK%-unsigned.apk}.apk" \
+              "$APK"
+          fi
+
+      - name: Sign APK (self-signed for sideloading)
+        if: env.HAS_ANDROID_SIGNING != 'true'
+        run: |
+          keytool -genkeypair -v \
+            -keystore $RUNNER_TEMP/debug.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias debug -storepass android -keypass android \
+            -dname "CN=Chrysalis Debug, O=Baur Software"
+          BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
+          APK=$(find apps/registry/mobile-android/android -name "*-release-unsigned.apk" -type f | head -1)
+          if [ -n "$APK" ]; then
+            "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
+              --ks $RUNNER_TEMP/debug.jks \
+              --ks-pass pass:android \
+              --ks-key-alias debug \
+              --key-pass pass:android \
               --out "${APK%-unsigned.apk}.apk" \
               "$APK"
           fi

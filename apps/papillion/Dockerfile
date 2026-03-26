@@ -31,6 +31,22 @@ COPY crates/papillion-shared ./crates/papillion-shared
 # Frontend source
 COPY apps/papillion/frontend ./apps/papillion/frontend
 
+# Patch workspace members to exclude crates we didn't copy.
+# Path deps still resolve; only the member list is trimmed.
+RUN sed -i \
+    -e '/^[[:space:]]*"crates\/pap-webauthn"/d' \
+    -e '/^[[:space:]]*"crates\/pap-transport"/d' \
+    -e '/^[[:space:]]*"crates\/pap-federation"/d' \
+    -e '/^[[:space:]]*"crates\/pap-tee"/d' \
+    -e '/^[[:space:]]*"crates\/pap-python"/d' \
+    -e '/^[[:space:]]*"crates\/pap-c"/d' \
+    -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
+    -e '/^[[:space:]]*"apps\/papillion"/d' \
+    -e '/^[[:space:]]*"apps\/registry"/d' \
+    -e '/^[[:space:]]*"benches"/d' \
+    -e '/^[[:space:]]*"examples\//d' \
+    Cargo.toml
+
 WORKDIR /build/apps/papillion/frontend
 RUN trunk build --release
 
