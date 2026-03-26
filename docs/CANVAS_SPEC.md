@@ -68,14 +68,14 @@ The canvas does not show agent plumbing by default. When a user prompts a multi-
 
 Individual agent interactions are the **provenance layer** — expandable underneath the outcome block. They show which agents contributed, what each agent saw (mandate scope), and cryptographic receipts proving the interaction.
 
-### 2.1 Two-Layer Model
+### 3.1 Two-Layer Model
 
 | Layer | What the user sees | When visible |
 |-------|-------------------|--------------|
 | **Surface** | Outcome blocks — synthesized answers to what the user asked | Always |
 | **Provenance** | Agent blocks — individual handshake results, mandate scopes, receipts | On expand ("N agents contributed") |
 
-### 2.2 Outcome Block Anatomy
+### 3.2 Outcome Block Anatomy
 
 ```
 +---------------------------------------------------+
@@ -98,7 +98,7 @@ Individual agent interactions are the **provenance layer** — expandable undern
 - Timing and quality metrics
 - Co-signed receipt link
 
-### 2.3 Reshaping Outcomes
+### 3.3 Reshaping Outcomes
 
 The user reshapes the **outcome**, not individual agents. Clicking the outcome block opens a re-prompt:
 
@@ -112,7 +112,7 @@ The orchestrator decides whether a reshape requires re-running agents (scope cha
 
 ## 4. Canvas Lifecycle
 
-### 3.1 States
+### 4.1 States
 
 | State | Meaning | Stored |
 |-------|---------|--------|
@@ -121,7 +121,7 @@ The orchestrator decides whether a reshape requires re-running agents (scope cha
 | **Live** | Running on trigger, producing outcome blocks | SQLite, scheduler active |
 | **Paused** | Stopped after failure or user action, retains history | SQLite, scheduler skips |
 
-### 3.2 State Transitions
+### 4.2 State Transitions
 
 ```
 [New Canvas] --> Draft
@@ -133,7 +133,7 @@ Armed --> Draft          (user disarms to edit)
 Live --> Draft           (user disarms to edit — creates new version)
 ```
 
-### 3.3 Canvas as Timeline
+### 4.3 Canvas as Timeline
 
 A live canvas produces one outcome block per run. The canvas becomes a **timeline of outcomes**:
 
@@ -157,7 +157,7 @@ Scroll up to see previous runs. Each outcome block retains its provenance layer.
 
 ## 5. Prompt Decomposition
 
-### 4.1 Intent Detection
+### 5.1 Intent Detection
 
 When the user submits a prompt, the system detects whether it's single-step or multi-step before creating any blocks.
 
@@ -173,7 +173,7 @@ When the user submits a prompt, the system detects whether it's single-step or m
 
 **The user doesn't select a mode.** The system infers it from language. Single-intent prompts bypass planning entirely.
 
-### 4.2 Ghost Blocks
+### 5.2 Ghost Blocks
 
 Multi-step prompts produce **ghost blocks** — a preview of what will happen before it happens.
 
@@ -201,7 +201,7 @@ Ghost blocks render as dashed outlines (semi-transparent, muted wing spectrum co
 - What it will produce
 - How it connects to adjacent ghost blocks
 
-### 4.3 Ghost Outcome Block
+### 5.3 Ghost Outcome Block
 
 Above the ghost agent blocks, a single **ghost outcome block** shows the anticipated result shape:
 
@@ -219,7 +219,7 @@ Above the ghost agent blocks, a single **ghost outcome block** shows the anticip
 + - - - - - - - - - - - - - - - - - - - - -+
 ```
 
-### 4.4 Plan Refinement
+### 5.4 Plan Refinement
 
 All refinement happens through prompts, not UI controls:
 
@@ -241,7 +241,7 @@ A commit bar appears below the ghost plan:
 
 ## 6. Privacy as UX
 
-### 5.1 The Provenance Footer
+### 6.1 The Provenance Footer
 
 Every outcome block shows:
 
@@ -271,11 +271,11 @@ This single line is PAP's differentiator. Expanding it reveals the full provenan
   +--------------------------------------------------+
 ```
 
-### 5.2 Narrowing Scope
+### 6.2 Narrowing Scope
 
 Inside the provenance view, each agent block has a "Narrow scope" affordance. Clicking it opens a re-prompt: "What should this agent NOT see?" The user types constraints in natural language and the mandate tightens. The orchestrator re-runs that agent with the narrower mandate and re-synthesizes the outcome.
 
-### 5.3 Privacy Posture
+### 6.3 Privacy Posture
 
 Each canvas has a privacy posture (seeded from onboarding, overridable per canvas):
 
@@ -291,15 +291,15 @@ The posture is visible in the trigger bar and provenance footer.
 
 ## 7. Layout Engine
 
-### 6.1 Derived Layout
+### 7.1 Derived Layout
 
 Users never drag blocks. The DAG structure (edges between agent blocks in the provenance layer) determines spatial position. The layout algorithm computes positions from topological depth and concurrency.
 
-### 6.2 Surface Layer (Outcome Blocks)
+### 7.2 Surface Layer (Outcome Blocks)
 
 Outcome blocks render as a **vertical timeline** — one per prompt (draft mode) or one per run (live mode). This is a linear list, same as today but with richer block content.
 
-### 6.3 Provenance Layer (Agent Blocks)
+### 7.3 Provenance Layer (Agent Blocks)
 
 When expanded, agent blocks render with topological layout:
 
@@ -330,7 +330,7 @@ Connection lines are SVG paths using wing spectrum colors:
 - `--gold` for in-progress
 - `--text-3` for ghost connections
 
-### 6.4 Zoom Levels
+### 7.4 Zoom Levels
 
 | Level | What's visible | Trigger |
 |-------|---------------|---------|
@@ -354,11 +354,11 @@ Zoom is CSS-driven:
 
 ## 8. Onboarding
 
-### 7.1 Purpose
+### 8.1 Purpose
 
 The memex (SQLite episode store) starts empty. Agent profiles have no EMA scores. The orchestrator guesses during cold-start. Onboarding seeds the memex so the system is useful from minute one.
 
-### 7.2 Three Screens
+### 8.2 Three Screens
 
 **Screen 1: "What matters to you?"**
 
@@ -388,7 +388,7 @@ Based on Screen 1 answers, present 2-3 starter canvas templates pre-wired and re
 
 User picks one, it hydrates into ghost blocks, they hit Run. First outcome block appears. First episodes record. Cold-start cycle broken in under 2 minutes.
 
-### 7.3 First Run as Onboarding
+### 8.3 First Run as Onboarding
 
 The starter canvas IS the first pipeline run. No tutorial, no walkthrough, no empty canvas. The user sees Papillion produce a real result, with privacy guarantees visible, within the first interaction.
 
@@ -398,7 +398,7 @@ The starter canvas IS the first pipeline run. No tutorial, no walkthrough, no em
 
 ## 9. Trigger System
 
-### 8.1 TriggerConfig
+### 9.1 TriggerConfig
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -420,7 +420,7 @@ pub enum TriggerConfig {
 }
 ```
 
-### 8.2 Natural Language Schedule Parsing
+### 9.2 Natural Language Schedule Parsing
 
 User-facing schedules are natural language. Parsing follows the same pattern as `detect_intent()`:
 
@@ -432,7 +432,7 @@ User-facing schedules are natural language. Parsing follows the same pattern as 
 
 Schedules are always displayed in natural language, never cron.
 
-### 8.3 Desktop Catch-Up Semantics
+### 9.3 Desktop Catch-Up Semantics
 
 Papillion is a desktop app. Laptops sleep. The scheduler does not use cron. It uses interval-based evaluation with catch-up:
 
@@ -440,11 +440,11 @@ Papillion is a desktop app. Laptops sleep. The scheduler does not use cron. It u
 - **One catch-up run maximum** — don't queue missed intervals
 - The "Morning Briefing" runs at 8:01am because that's when the laptop opened. This is correct behavior.
 
-### 8.4 Event Triggers
+### 9.4 Event Triggers
 
 For event triggers, the first pipeline node IS the event detector. The scheduler polls it on interval. If the event-source agent returns empty results (no new email, no price change), the pipeline **short-circuits** — recorded as "skipped", no downstream execution.
 
-### 8.5 Canvas Chaining
+### 9.5 Canvas Chaining
 
 A canvas can trigger when an upstream canvas completes. When canvas A finishes a run, the scheduler immediately checks if any canvas depends on A and queues them for execution.
 
@@ -452,11 +452,11 @@ A canvas can trigger when an upstream canvas completes. When canvas A finishes a
 
 ## 10. Scheduler Architecture
 
-### 9.1 Placement
+### 10.1 Placement
 
 The scheduler is a background tokio loop spawned alongside the discovery loop in `start_federation_server_async`. It shares `Arc<AppState>` with the federation server.
 
-### 9.2 Tick Cycle
+### 10.2 Tick Cycle
 
 Every 60 seconds:
 1. Query all live canvases (partial index: `WHERE state = 'live'`)
@@ -465,7 +465,7 @@ Every 60 seconds:
 4. Execute due canvases (oldest-first priority)
 5. Record runs, emit Tauri events, update memex
 
-### 9.3 Pipeline Execution
+### 10.3 Pipeline Execution
 
 The core pipeline executor is extracted from the Tauri command into a shared function callable from both the frontend (via Tauri IPC) and the scheduler (direct call):
 
@@ -478,7 +478,7 @@ pub(crate) async fn execute_pipeline(
 ) -> Result<PipelineExecutionResult, PapillionError>
 ```
 
-### 9.4 Guardrails
+### 10.4 Guardrails
 
 - **Run lock**: One execution per canvas at a time
 - **Failure backoff**: 3 consecutive failures -> auto-pause, notify user
@@ -489,7 +489,7 @@ pub(crate) async fn execute_pipeline(
 
 ## 11. Canvas Persistence
 
-### 10.1 Schema
+### 11.1 Schema
 
 ```sql
 CREATE TABLE IF NOT EXISTS canvases (
@@ -529,7 +529,7 @@ CREATE INDEX IF NOT EXISTS idx_canvas_runs_running ON canvas_runs(canvas_id, sta
     WHERE status = 'running';
 ```
 
-### 10.2 DatabaseOps Extensions
+### 11.2 DatabaseOps Extensions
 
 ```rust
 // Canvas CRUD
@@ -556,11 +556,11 @@ fn list_canvas_runs(&self, canvas_id: &str, limit: usize) -> Result<Vec<CanvasRu
 
 ## 12. Synthesizer Node
 
-### 11.1 Purpose
+### 12.1 Purpose
 
 The synthesizer is the final node in every multi-step pipeline. It takes all upstream agent results and the user's original prompt, runs the on-device LLM, and produces the outcome block content.
 
-### 11.2 Pipeline Node Type
+### 12.2 Pipeline Node Type
 
 ```rust
 pub enum NodeType {
@@ -571,7 +571,7 @@ pub enum NodeType {
 }
 ```
 
-### 11.3 Properties
+### 12.3 Properties
 
 - Runs on-device only (Candle/TinyLlama). Never an external agent.
 - No mandate, no receipt, no external handshake.
@@ -583,7 +583,7 @@ pub enum NodeType {
 
 ## 13. UI Component Architecture
 
-### 12.1 New Components
+### 13.1 New Components
 
 | Component | Purpose |
 |-----------|---------|
@@ -599,7 +599,7 @@ pub enum NodeType {
 | `inter_block_prompt.rs` | Prompt insertion point between ghost blocks |
 | `canvas_layout.rs` | Topological position computation for provenance view |
 
-### 12.2 Modified Components
+### 13.2 Modified Components
 
 | Component | Change |
 |-----------|--------|
@@ -607,7 +607,7 @@ pub enum NodeType {
 | `canvas.rs` (state) | Ghost blocks, plan commit, outcome synthesis |
 | `block_renderer/mod.rs` | Ghost and Outcome block state rendering |
 
-### 12.3 Unchanged Components
+### 13.3 Unchanged Components
 
 - Block renderer dispatch (blessed + generic + templates)
 - All existing typed renderers (Flight, Hotel, Search, Answer)
@@ -618,7 +618,7 @@ pub enum NodeType {
 
 ## 14. Tauri Commands
 
-### 13.1 New Commands
+### 14.1 New Commands
 
 ```rust
 // Canvas lifecycle
@@ -638,7 +638,7 @@ canvas_commit_plan(canvas_id) -> ()
 canvas_synthesize(prompt, agent_results) -> OutcomeContent
 ```
 
-### 13.2 New Events
+### 14.2 New Events
 
 ```rust
 // Scheduler notifications
