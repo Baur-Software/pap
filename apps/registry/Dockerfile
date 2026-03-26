@@ -30,6 +30,8 @@ COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src ./apps/registry/src
 # CSS source referenced by [[workspace.metadata.leptos]] style-file
 COPY apps/registry/styles ./apps/registry/styles
+# Static assets (icon, favicon, logo)
+COPY apps/registry/assets ./apps/registry/assets
 
 # Patch the workspace members list to remove crates we didn't copy.
 # Anchor to lines starting with whitespace+quote (member entries only),
@@ -101,8 +103,11 @@ WORKDIR /app
 COPY --from=builder /build/target/server/release/pap-registry ./pap-registry
 # WASM pkg + compiled CSS land in target/site/
 COPY --from=builder /build/target/site ./site
+# Static assets (icon, favicon, logo)
+COPY --from=builder /build/apps/registry/assets ./assets
 
 ENV PAP_REGISTRY_HOST=0.0.0.0
+ENV PAP_ASSETS_DIR=/app/assets
 ENV PAP_REGISTRY_PORT=7890
 ENV PAP_REGISTRY_DB=/data/registry.db
 ENV LEPTOS_SITE_ROOT=/app/site

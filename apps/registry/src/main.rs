@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use axum::Router;
 use leptos::config::get_configuration;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 use tracing::info;
 
 use pap_did::PrincipalKeypair;
@@ -123,9 +124,16 @@ async fn main() -> anyhow::Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    // Static assets (icon, favicon, logo).
+    // Local dev: workspace root → apps/registry/assets
+    // Docker:    /app → /app/assets  (set PAP_ASSETS_DIR=/app/assets)
+    let assets_dir =
+        std::env::var("PAP_ASSETS_DIR").unwrap_or_else(|_| "apps/registry/assets".into());
+
     let app = Router::new()
         .merge(federation_router)
         .merge(admin_router)
+        .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
         .layer(cors);
 
