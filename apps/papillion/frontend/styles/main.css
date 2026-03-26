@@ -1434,6 +1434,184 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   GHOST BLOCKS — plan preview, dashed outline
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-block.ghost {
+    border: 2px dashed var(--purple-muted);
+    background: transparent;
+    opacity: 0.75;
+}
+
+.canvas-block.ghost:hover {
+    opacity: 1;
+    border-color: var(--purple);
+}
+
+.ghost-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    margin-bottom: var(--sp-xs);
+}
+
+.ghost-agent {
+    font: var(--text-ui);
+    font-family: var(--font-body);
+    font-weight: 600;
+    color: var(--text-2);
+}
+
+.ghost-action {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.ghost-scope {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-xs);
+}
+
+.ghost-scope-label {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-right: var(--sp-xs);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCOPE BADGES — mandate disclosure/returns indicators
+   ═══════════════════════════════════════════════════════════ */
+
+.scope-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.scope-badge {
+    font: var(--text-small);
+    font-family: var(--font-mono);
+    padding: 2px var(--sp-xs);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    background: var(--bg-2);
+}
+
+.scope-badge.disclosure {
+    border-color: rgba(240, 160, 48, 0.3);
+    color: var(--gold);
+    background: rgba(240, 160, 48, 0.08);
+}
+
+.scope-badge.returns {
+    border-color: rgba(46, 196, 160, 0.3);
+    color: var(--teal);
+    background: rgba(46, 196, 160, 0.08);
+}
+
+.scope-badge.receipt {
+    border-color: rgba(108, 92, 231, 0.3);
+    color: var(--purple);
+    background: var(--purple-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   OUTCOME BLOCKS — synthesized user-facing results
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-block.outcome {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 1px rgba(46, 196, 160, 0.15);
+}
+
+.canvas-block.outcome:hover {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 2px rgba(46, 196, 160, 0.2);
+}
+
+.outcome-surface {
+    margin-bottom: var(--sp-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROVENANCE LAYER — expandable agent contribution details
+   ═══════════════════════════════════════════════════════════ */
+
+.provenance-footer {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--sp-xs);
+}
+
+.provenance-toggle {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font: var(--text-small);
+    font-family: var(--font-body);
+    cursor: pointer;
+    padding: var(--sp-2xs) 0;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-xs);
+    transition: color 0.15s ease;
+}
+
+.provenance-toggle:hover {
+    color: var(--text-2);
+}
+
+.provenance-chevron {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    transition: transform 0.15s ease;
+    display: inline-block;
+}
+
+.provenance-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.provenance-layer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-xs);
+    padding: var(--sp-sm) 0 var(--sp-2xs);
+}
+
+.provenance-entry {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    padding: var(--sp-xs) var(--sp-sm);
+    background: var(--bg-2);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-subtle);
+}
+
+.provenance-agent {
+    font: var(--text-small);
+    font-family: var(--font-body);
+    font-weight: 500;
+    color: var(--text-1);
+}
+
+.provenance-action {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+/* ═══════════════════════════════════════════════════════════
    SEMANTIC LINK GROUPS — shared container for linked blocks
    ═══════════════════════════════════════════════════════════ */
 
