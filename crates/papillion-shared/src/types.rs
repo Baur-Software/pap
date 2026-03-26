@@ -80,7 +80,19 @@ pub struct PipelineInfo {
     pub created_at: String,
 }
 
-/// A node in a pipeline (represents an agent).
+/// The type of a pipeline node — either a remote agent or an on-device synthesizer.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum PipelineNodeType {
+    /// Standard agent node — executes a PAP handshake.
+    #[default]
+    Agent,
+    /// On-device synthesizer — merges upstream results into an outcome block.
+    /// Never leaves the device; runs the local LLM (Candle/TinyLlama).
+    Synthesizer,
+}
+
+/// A node in a pipeline (represents an agent or synthesizer).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineNodeInfo {
     pub id: String,
@@ -89,6 +101,9 @@ pub struct PipelineNodeInfo {
     /// The schema.org action this node performs (e.g. "schema:SearchAction").
     #[serde(default)]
     pub action_type: String,
+    /// Node type: "agent" (default) or "synthesizer".
+    #[serde(default)]
+    pub node_type: PipelineNodeType,
     pub position_x: f64,
     pub position_y: f64,
 }
@@ -263,12 +278,29 @@ pub struct SetupState {
 /// The state of a canvas block during the PAP handshake lifecycle.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum BlockState {
+    /// Planning phase — agent identified but not yet executed.
+    /// Shows as a dashed outline with mandate scope preview.
+    Ghost {
+        agent_name: String,
+        action_type: String,
+        /// Properties this agent will need to see.
+        disclosure_preview: Vec<String>,
+        /// Schema types this agent will return.
+        returns_preview: Vec<String>,
+    },
     /// Handshake in progress — `phase` is 1..=6.
     Resolving { phase: u8, phase_label: String },
     /// Handshake completed, JSON-LD content available.
     Resolved,
     /// Handshake failed at a specific phase.
     Failed { phase: u8, reason: String },
+    /// Synthesized outcome — wraps multiple agent results into a single
+    /// user-facing answer. The provenance layer underneath shows individual
+    /// agent blocks with their mandate scopes and receipts.
+    Outcome {
+        /// Block IDs of the agent blocks that contributed to this outcome.
+        provenance_block_ids: Vec<String>,
+    },
 }
 
 /// A single block on the Papillion canvas.
@@ -1128,6 +1160,7 @@ mod tests {
                 agent_hash: "hash123".into(),
                 agent_name: "Agent1".into(),
                 action_type: "schema:SearchAction".into(),
+                node_type: PipelineNodeType::default(),
                 position_x: 100.0,
                 position_y: 200.0,
             }],

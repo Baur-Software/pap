@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
 use papillion_shared::{
-    PipelineExecutionResult, PipelineInfo, PipelineStepEvent, PipelineStepResult,
+    PipelineExecutionResult, PipelineInfo, PipelineNodeType, PipelineStepEvent, PipelineStepResult,
 };
 
 use crate::error::PapillionError;
@@ -113,6 +113,36 @@ async fn run_pipeline_node(
     Ok((session_id, result.content))
 }
 
+/// Run a synthesizer node: compose upstream results into a single outcome
+/// using the on-device LLM. Never leaves the device.
+async fn run_synthesizer_node(
+    state: &State<'_, AppState>,
+    upstream_json: &str,
+    initial_query: &str,
+) -> Result<(String, serde_json::Value), PapillionError> {
+    let prompt = format!(
+        "You are a synthesis assistant. The user asked: \"{}\"\n\n\
+         Multiple agents provided these results:\n{}\n\n\
+         Provide a concise, unified answer that combines the key information from all results. \
+         Focus on what the user actually wanted to know.",
+        initial_query, upstream_json,
+    );
+
+    let generated = {
+        let mut mm = state.model_manager.lock().await;
+        mm.generate(&prompt, 512)
+            .map_err(|e| PapillionError::from(format!("Synthesizer failed: {}", e)))?
+    };
+
+    let result = json!({
+        "@type": "Answer",
+        "agent": "on-device-synthesizer",
+        "result": generated.trim(),
+    });
+
+    Ok(("synthesizer".into(), result))
+}
+
 /// Execute a pipeline: topologically sort, run each node as a handshake.
 /// Upstream result_json is passed as disclosure context to downstream nodes.
 #[tauri::command]
@@ -183,27 +213,35 @@ pub async fn run_pipeline(
             initial_query.clone()
         };
 
-        // Run the handshake for this node
-        let step_result =
-            match run_pipeline_node(&state, &node.agent_name, &node.action_type, &query).await {
-                Ok((session_id, result_json)) => {
-                    node_outputs.insert(node_id.clone(), result_json.clone());
-                    PipelineStepResult {
-                        node_id: node_id.clone(),
-                        session_id,
-                        success: true,
-                        result_json: Some(serde_json::to_string(&result_json).unwrap_or_default()),
-                        error: None,
-                    }
-                }
-                Err(e) => PipelineStepResult {
+        // Dispatch based on node type: agent (PAP handshake) or synthesizer (on-device LLM)
+        let node_result = match node.node_type {
+            PipelineNodeType::Agent => {
+                run_pipeline_node(&state, &node.agent_name, &node.action_type, &query).await
+            }
+            PipelineNodeType::Synthesizer => {
+                run_synthesizer_node(&state, &query, &initial_query).await
+            }
+        };
+
+        let step_result = match node_result {
+            Ok((session_id, result_json)) => {
+                node_outputs.insert(node_id.clone(), result_json.clone());
+                PipelineStepResult {
                     node_id: node_id.clone(),
-                    session_id: String::new(),
-                    success: false,
-                    result_json: None,
-                    error: Some(e.message.clone()),
-                },
-            };
+                    session_id,
+                    success: true,
+                    result_json: Some(serde_json::to_string(&result_json).unwrap_or_default()),
+                    error: None,
+                }
+            }
+            Err(e) => PipelineStepResult {
+                node_id: node_id.clone(),
+                session_id: String::new(),
+                success: false,
+                result_json: None,
+                error: Some(e.message.clone()),
+            },
+        };
 
         let status = if step_result.success {
             "completed"
@@ -236,7 +274,7 @@ pub async fn run_pipeline(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use papillion_shared::{PipelineEdgeInfo, PipelineNodeInfo};
+    use papillion_shared::{PipelineEdgeInfo, PipelineNodeInfo, PipelineNodeType};
 
     fn make_node(id: &str) -> PipelineNodeInfo {
         PipelineNodeInfo {
@@ -244,6 +282,19 @@ mod tests {
             agent_hash: String::new(),
             agent_name: format!("Agent-{}", id),
             action_type: "schema:SearchAction".into(),
+            node_type: PipelineNodeType::Agent,
+            position_x: 0.0,
+            position_y: 0.0,
+        }
+    }
+
+    fn make_synthesizer_node(id: &str) -> PipelineNodeInfo {
+        PipelineNodeInfo {
+            id: id.into(),
+            agent_hash: String::new(),
+            agent_name: "Synthesizer".into(),
+            action_type: String::new(),
+            node_type: PipelineNodeType::Synthesizer,
             position_x: 0.0,
             position_y: 0.0,
         }
@@ -362,5 +413,51 @@ mod tests {
         let c_pos = order.iter().position(|x| x == "C").unwrap();
         assert!(a_pos < b_pos);
         assert!(a_pos < c_pos);
+    }
+
+    #[test]
+    fn topological_sort_diamond_with_synthesizer() {
+        // A -> B, A -> C, B -> S, C -> S (S is synthesizer)
+        let pipeline = PipelineInfo {
+            id: "p7".into(),
+            name: "Diamond+Synth".into(),
+            nodes: vec![
+                make_node("A"),
+                make_node("B"),
+                make_node("C"),
+                make_synthesizer_node("S"),
+            ],
+            edges: vec![
+                make_edge("A", "B"),
+                make_edge("A", "C"),
+                make_edge("B", "S"),
+                make_edge("C", "S"),
+            ],
+            created_at: String::new(),
+        };
+        let order = topological_sort(&pipeline).unwrap();
+        assert_eq!(order.len(), 4);
+        let a_pos = order.iter().position(|x| x == "A").unwrap();
+        let b_pos = order.iter().position(|x| x == "B").unwrap();
+        let c_pos = order.iter().position(|x| x == "C").unwrap();
+        let s_pos = order.iter().position(|x| x == "S").unwrap();
+        // Synthesizer must come last — after all agent nodes
+        assert!(a_pos < b_pos);
+        assert!(a_pos < c_pos);
+        assert!(b_pos < s_pos);
+        assert!(c_pos < s_pos);
+    }
+
+    #[test]
+    fn synthesizer_node_type_default_is_agent() {
+        let node = make_node("test");
+        assert_eq!(node.node_type, PipelineNodeType::Agent);
+    }
+
+    #[test]
+    fn synthesizer_node_type_set_correctly() {
+        let node = make_synthesizer_node("synth");
+        assert_eq!(node.node_type, PipelineNodeType::Synthesizer);
+        assert_eq!(node.agent_name, "Synthesizer");
     }
 }
