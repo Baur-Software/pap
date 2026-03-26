@@ -220,20 +220,24 @@ jobs:
           path: dist/${{ matrix.artifact_name }}/
           retention-days: 5
 
-  # ── 4. Build mobile — iOS (Chrysalis admin client) ──────────────────────────
-  build-mobile-ios:
-    needs: [check-version, create-release]
+  # ── 4. Build WASM site (shared by mobile builds) ─────────────────────────────
+  # Builds the Chrysalis hydration WASM client once for reuse by iOS/Android.
+  build-web:
+    needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: macos-latest
-    permissions:
-      contents: write
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev libpq-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       - uses: Swatinem/rust-cache@v2
 
@@ -243,24 +247,50 @@ jobs:
       - name: Install cargo-leptos
         run: cargo binstall cargo-leptos --no-confirm
 
-      - name: Build WASM hydration frontend
+      - name: Build WASM site via cargo-leptos
         run: cargo leptos build --release -p pap-registry
+
+      - name: Upload WASM site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrysalis-web-site
+          path: target/site/
+          retention-days: 5
+
+  # ── 5. Build mobile — iOS (thin client) ─────────────────────────────────────
+  # Mobile builds are lightweight Capacitor wrappers around the WASM hydration
+  # client. The app connects to a Chrysalis server (hosted or LAN Papillion
+  # instance) — no server-side logic runs on the device.
+  build-mobile-ios:
+    needs: [check-version, create-release, build-web]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: chrysalis-web-site
+          path: site/
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install Capacitor and build iOS app
+      - name: Initialize Capacitor iOS project
         run: |
           mkdir -p apps/registry/mobile-ios
           cd apps/registry/mobile-ios
 
-          # Initialize Capacitor project wrapping the Chrysalis WASM client
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/ios
 
-          npx cap init "Chrysalis" "com.baur-software.chrysalis" --web-dir ../../../target/site
+          npx cap init "Chrysalis" "com.baur-software.chrysalis" \
+            --web-dir ../../../site
 
           npx cap add ios
           npx cap sync ios
@@ -305,16 +335,49 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Upload iOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: chrysalis-ios
-          path: ${{ runner.temp }}/Chrysalis.xcarchive
-          retention-days: 5
+      - name: Export IPA (when signing is available)
+        if: env.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          cat > $RUNNER_TEMP/export.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+          </dict></plist>
+          PLIST
 
-  # ── 5. Build mobile — Android (Chrysalis admin client) ──────────────────────
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/Chrysalis.xcarchive \
+            -exportOptionsPlist $RUNNER_TEMP/export.plist \
+            -exportPath $RUNNER_TEMP/ipa/
+
+      - name: Upload iOS artifacts to release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const glob = require('@actions/glob');
+            const globber = await glob.create(`${process.env.RUNNER_TEMP}/**/*.ipa`);
+            for await (const file of globber.globGenerator()) {
+              const data = fs.readFileSync(file);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: parseInt(process.env.RELEASE_ID),
+                name: `Chrysalis-${process.env.VERSION}-ios.ipa`,
+                data
+              });
+            }
+
+  # ── 6. Build mobile — Android (thin client) ─────────────────────────────────
   build-mobile-android:
-    needs: [check-version, create-release]
+    needs: [check-version, create-release, build-web]
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -322,26 +385,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev libpq-dev
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Download WASM site artifact
+        uses: actions/download-artifact@v4
         with:
-          targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
-      - name: Install cargo-leptos
-        run: cargo binstall cargo-leptos --no-confirm
-
-      - name: Build WASM hydration frontend
-        run: cargo leptos build --release -p pap-registry
+          name: chrysalis-web-site
+          path: site/
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -357,7 +405,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install Capacitor and build Android app
+      - name: Initialize Capacitor Android project
         run: |
           mkdir -p apps/registry/mobile-android
           cd apps/registry/mobile-android
@@ -365,15 +413,15 @@ jobs:
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-          npx cap init "Chrysalis" "com.baur-software.chrysalis" --web-dir ../../../target/site
+          npx cap init "Chrysalis" "com.baur-software.chrysalis" \
+            --web-dir ../../../site
 
           npx cap add android
           npx cap sync android
 
       - name: Build Android APK
         working-directory: apps/registry/mobile-android/android
-        run: |
-          ./gradlew assembleRelease
+        run: ./gradlew assembleRelease
 
       - name: Sign APK
         if: env.ANDROID_KEYSTORE != ''
@@ -391,7 +439,7 @@ jobs:
               --ks-pass "pass:${ANDROID_KEYSTORE_PASSWORD}" \
               --ks-key-alias "${ANDROID_KEY_ALIAS}" \
               --key-pass "pass:${ANDROID_KEY_PASSWORD}" \
-              --out "${APK%.apk}-signed.apk" \
+              --out "${APK%-unsigned.apk}.apk" \
               "$APK"
           fi
 
@@ -403,10 +451,10 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
             const glob = require('@actions/glob');
             const globber = await glob.create('apps/registry/mobile-android/android/**/*-release*.apk');
             for await (const file of globber.globGenerator()) {
+              if (file.includes('unsigned')) continue;
               const data = fs.readFileSync(file);
               await github.rest.repos.uploadReleaseAsset({
                 owner: context.repo.owner,
@@ -417,7 +465,7 @@ jobs:
               });
             }
 
-  # ── 6. Publish npm package (@baur-software/chrysalis) ────────────────────────
+  # ── 7. Publish npm package (@baur-software/chrysalis) ────────────────────────
   publish-npm:
     needs: [check-version, build-server]
     if: needs.check-version.outputs.should_release == 'true'
@@ -441,7 +489,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # ── 7. Publish Docker image (ghcr.io/baur-software/chrysalis) ───────────────
+  # ── 8. Publish Docker image (ghcr.io/baur-software/chrysalis) ───────────────
   publish-docker:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
@@ -473,7 +521,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ── 8. Publish the release (un-draft) ────────────────────────────────────────
+  # ── 9. Publish the release (un-draft) ────────────────────────────────────────
   publish-release:
     needs: [create-release, build-server, build-mobile-ios, build-mobile-android, publish-npm, publish-docker]
     if: |
