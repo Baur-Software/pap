@@ -88,11 +88,13 @@ test.describe("Web standalone: canvas page", () => {
 });
 
 // ── Settings Page ────────────────────────────────────────────
+// Navigate via topbar gear icon — http-server has no SPA fallback.
 
 test.describe("Web standalone: settings page", () => {
   test("renders all five tabs", async ({ page }) => {
-    await page.goto("/settings", { waitUntil: "commit" });
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
+    await page.locator(".topbar-settings-btn").click();
 
     await expect(page.locator(".settings-tab")).toHaveCount(5);
     await expect(page.locator(".settings-tab").nth(0)).toHaveText("General");
@@ -103,8 +105,9 @@ test.describe("Web standalone: settings page", () => {
   });
 
   test("tabs are clickable and switch content", async ({ page }) => {
-    await page.goto("/settings", { waitUntil: "commit" });
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
+    await page.locator(".topbar-settings-btn").click();
 
     // Start on General — should show LLM Provider heading
     await expect(page.locator("text=LLM Provider")).toBeVisible();
@@ -120,18 +123,23 @@ test.describe("Web standalone: settings page", () => {
 });
 
 // ── Browse Page ──────────────────────────────────────────────
+// Navigate via hamburger menu — http-server has no SPA fallback.
 
 test.describe("Web standalone: browse page", () => {
   test("shows registry browser heading", async ({ page }) => {
-    await page.goto("/browse", { waitUntil: "commit" });
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=Browse Registries").click();
 
-    await expect(page.locator("text=Browse Registries")).toBeVisible();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
   });
 
   test("shows disconnected empty state", async ({ page }) => {
-    await page.goto("/browse", { waitUntil: "commit" });
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=Browse Registries").click();
 
     // Registry is not connected → shows prompt to enter URL
     await expect(
@@ -191,20 +199,18 @@ test.describe("Web standalone: graceful degradation", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Navigate to settings
-    await page.goto("/settings", { waitUntil: "commit" });
+    // Navigate to settings via gear icon
+    await page.locator(".topbar-settings-btn").click();
     await expect(page.locator(".settings-tab").first()).toBeVisible();
 
-    // Navigate to browse
-    await page.goto("/browse", { waitUntil: "commit" });
-    await expect(page.locator("text=Browse Registries")).toBeVisible();
+    // Navigate to browse via menu
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=Browse Registries").click();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
 
-    // Navigate to activity
-    await page.goto("/activity", { waitUntil: "commit" });
-    await expect(page.locator(".app-shell-canvas")).toBeVisible();
-
-    // Back to home
-    await page.goto("/", { waitUntil: "commit" });
+    // Back to home via menu
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=+ New Canvas").click();
     await expect(page.locator(".canvas-area")).toBeVisible();
 
     expect(errors).toHaveLength(0);
