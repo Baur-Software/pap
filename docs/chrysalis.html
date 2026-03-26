@@ -140,8 +140,11 @@
       padding: 80px 0; max-width: 860px; margin: 0 auto; text-align: center;
     }
     .hero-icon {
-      font-size: 4rem; color: var(--teal); margin-bottom: 8px;
+      margin-bottom: 8px;
       filter: drop-shadow(0 0 24px rgba(46,196,160,.4));
+    }
+    .hero-icon img {
+      width: 96px; height: 96px; object-fit: contain;
     }
     .hero-eyebrow {
       display: flex; align-items: center; gap: 10px; justify-content: center;
@@ -368,7 +371,7 @@
   <div class="container">
     <div class="hero-grid">
       <div>
-        <div class="hero-icon" aria-hidden="true">◈</div>
+        <div class="hero-icon" aria-hidden="true"><img src="assets/images/chrysalis-icon.png" alt="Chrysalis" width="96" height="96" /></div>
         <div class="hero-eyebrow">
           <span class="badge">Open Source · MIT</span>
           <span class="badge badge-purple">Built on PAP</span>

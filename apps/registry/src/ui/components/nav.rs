@@ -22,7 +22,7 @@ pub fn Sidebar() -> impl IntoView {
     view! {
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <img class="sidebar-logo-mark" src="/assets/icon.svg" alt="Crystalis" width="28" height="28" />
+                <img class="sidebar-logo-mark" src="/assets/icon.png" alt="Crystalis" width="28" height="28" />
                 <div>
                     <div class="sidebar-logo-text">"Chrysalis"</div>
                     <div class="sidebar-logo-sub">"Agent Registry"</div>
