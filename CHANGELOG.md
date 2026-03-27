@@ -1,3 +1,9 @@
+## [0.5.4] - 2026-03-26
+
+### Fixed
+
+- Papillion iOS: use `App.xcodeproj` instead of `App.xcworkspace` (Capacitor 8 uses SPM, not CocoaPods)
+
 ## [0.5.3] - 2026-03-26
 
 ### Fixed
