@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PAP Handshake</title>
+    <link rel="stylesheet" href="../styles/design-system.css" />
+    <link rel="stylesheet" href="handshake.css" />
+  </head>
+  <body>
+    <main id="app">
+      <!-- Header -->
+      <header class="hs-header">
+        <div class="hs-brand">
+          <img src="../icons/icon-48.png" alt="Papillion" class="hs-logo" width="32" height="32" />
+          <h1 class="h2">PAP Handshake</h1>
+        </div>
+        <div class="hs-uri mono" id="uri"></div>
+      </header>
+
+      <!-- Agent discovery (pre-handshake) -->
+      <section class="hs-setup card" id="setup-section">
+        <h2 class="h2">Connect to Agent</h2>
+        <div class="hs-form">
+          <label class="label" for="action-input">Action (Schema.org)</label>
+          <input
+            type="text"
+            id="action-input"
+            class="hs-input"
+            placeholder="SearchAction"
+            value="SearchAction"
+          />
+          <label class="label" for="query-input">Query</label>
+          <input
+            type="text"
+            id="query-input"
+            class="hs-input"
+            placeholder="What would you like to search for?"
+          />
+          <button class="btn btn-primary" id="start-btn">Start Handshake</button>
+        </div>
+      </section>
+
+      <!-- Phase pipeline -->
+      <section class="hs-phases card" id="phases-section" hidden>
+        <h2 class="h2">Protocol Phases</h2>
+        <div class="hs-pipeline" id="pipeline">
+          <!-- Phases rendered by JS -->
+        </div>
+      </section>
+
+      <!-- Result -->
+      <section class="hs-result card" id="result-section" hidden>
+        <h2 class="h2">Result</h2>
+        <div id="result-container"></div>
+      </section>
+
+      <!-- Receipt -->
+      <section class="hs-receipt card" id="receipt-section" hidden>
+        <h2 class="h2">Transaction Receipt</h2>
+        <div id="receipt-container"></div>
+      </section>
+
+      <!-- Error -->
+      <section class="hs-error card" id="error-section" hidden>
+        <div class="hs-error-content">
+          <span class="hs-error-icon">!</span>
+          <div>
+            <h2 class="h2">Handshake Failed</h2>
+            <p class="body" id="error-message"></p>
+          </div>
+        </div>
+        <button class="btn" id="retry-btn">Retry</button>
+      </section>
+    </main>
+
+    <script type="module" src="handshake.js"></script>
+  </body>
+</html>

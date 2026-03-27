@@ -1,0 +1,137 @@
+/* Popup — 320px wide fixed */
+
+body {
+  width: 320px;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+main {
+  padding: var(--sp-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-md);
+}
+
+/* ── Header ─────────────────────────────────────────── */
+
+.pop-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+
+.pop-logo {
+  border-radius: var(--r-sm);
+}
+
+/* ── Sections ───────────────────────────────────────── */
+
+.pop-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+}
+
+.pop-did {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  word-break: break-all;
+  background: var(--bg-1);
+  padding: var(--sp-xs) var(--sp-sm);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-subtle);
+  user-select: all;
+}
+
+.pop-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-xs);
+}
+
+.pop-stat-num {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.pop-stat-label {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.pop-stat-num.zero {
+  color: var(--text-3);
+}
+
+/* ── Native status ──────────────────────────────────── */
+
+.pop-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+
+.pop-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pop-status-dot.connected {
+  background: var(--teal);
+  box-shadow: 0 0 6px var(--teal);
+}
+
+.pop-status-dot.disconnected {
+  background: var(--text-3);
+}
+
+.pop-status-text {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* ── Actions ────────────────────────────────────────── */
+
+.pop-actions {
+  display: flex;
+  gap: var(--sp-sm);
+}
+
+.pop-btn {
+  flex: 1;
+  justify-content: center;
+  font-size: 12px;
+  padding: var(--sp-xs) var(--sp-sm);
+}
+
+/* ── Footer ─────────────────────────────────────────── */
+
+.pop-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--sp-sm);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pop-link {
+  font-size: 11px;
+  color: var(--purple);
+  text-decoration: none;
+}
+
+.pop-link:hover {
+  text-decoration: underline;
+}
+
+.pop-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+}

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Papillion</title>
+    <link rel="stylesheet" href="../styles/design-system.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main id="popup">
+      <!-- Header -->
+      <div class="pop-header">
+        <img src="../icons/icon-48.png" alt="" width="24" height="24" class="pop-logo" />
+        <span class="h2">Papillion</span>
+      </div>
+
+      <!-- Identity -->
+      <section class="pop-section">
+        <div class="label">Principal Identity</div>
+        <div class="pop-did" id="principal-did">Loading...</div>
+      </section>
+
+      <!-- Sessions -->
+      <section class="pop-section">
+        <div class="label">Active Sessions</div>
+        <div class="pop-stat" id="session-count">
+          <span class="pop-stat-num">0</span>
+          <span class="pop-stat-label">handshakes</span>
+        </div>
+      </section>
+
+      <!-- Native App -->
+      <section class="pop-section">
+        <div class="label">Papillion Desktop</div>
+        <div class="pop-status" id="native-status">
+          <span class="pop-status-dot disconnected"></span>
+          <span class="pop-status-text">Checking...</span>
+        </div>
+      </section>
+
+      <!-- Quick Actions -->
+      <section class="pop-actions">
+        <button class="btn btn-primary pop-btn" id="open-handshake">
+          New Handshake
+        </button>
+        <button class="btn pop-btn" id="open-settings">
+          Settings
+        </button>
+      </section>
+
+      <footer class="pop-footer">
+        <a href="https://baur-software.github.io/pap/" target="_blank" class="pop-link">
+          PAP Specification
+        </a>
+        <span class="pop-version">v0.1.0</span>
+      </footer>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

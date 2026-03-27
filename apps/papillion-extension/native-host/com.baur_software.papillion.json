@@ -1,0 +1,9 @@
+{
+  "name": "com.baur_software.papillion",
+  "description": "Papillion PAP desktop application — native messaging bridge for the browser extension",
+  "path": "PAPILLION_BINARY_PATH",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://EXTENSION_ID_HERE/"
+  ]
+}

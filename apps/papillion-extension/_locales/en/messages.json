@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "Papillion — PAP Protocol Handler",
+    "description": "Extension name shown in Chrome Web Store and extensions page"
+  },
+  "extDescription": {
+    "message": "Handle pap:// links with the Principal Agent Protocol. Cryptographic agent delegation in your browser.",
+    "description": "Extension description"
+  }
+}

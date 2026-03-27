@@ -21,6 +21,13 @@
       }
     ]
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["pap", "pap+https", "pap+wss"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

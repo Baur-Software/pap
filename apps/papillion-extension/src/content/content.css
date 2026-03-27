@@ -1,0 +1,50 @@
+/**
+ * Content script styles — injected into all pages.
+ * Keep this minimal to avoid interfering with page styles.
+ */
+
+.pap-link {
+  cursor: pointer !important;
+}
+
+.pap-link-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 12px;
+  line-height: 1;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.pap-link:hover .pap-link-badge {
+  opacity: 1;
+}
+
+/* Tooltip on hover */
+.pap-link::after {
+  content: attr(href);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  padding: 4px 8px;
+  background: #151420;
+  color: #eeeef2;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 10000;
+  border: 1px solid #2c2b40;
+}
+
+.pap-link:hover::after {
+  opacity: 1;
+}
