@@ -1,3 +1,10 @@
+## [0.5.3] - 2026-03-26
+
+### Fixed
+
+- Papillion iOS: remove CocoaPods Podfile sed (Capacitor 8 uses Swift Package Manager)
+- Papillion mobile upload scripts: remove `require('@actions/glob')` (conflicts with Node 22 built-in)
+
 ## [0.5.2] - 2026-03-26
 
 ### Fixed

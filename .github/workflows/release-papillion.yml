@@ -208,10 +208,6 @@ jobs:
             --web-dir frontend/dist
 
           npx cap add ios
-
-          # Capacitor 8 requires iOS 15.0 minimum deployment target
-          sed -i '' "s/platform :ios, '.*'/platform :ios, '15.0'/" ios/App/Podfile
-
           npx cap sync ios
 
       - name: Install Apple certificate and provisioning profile
@@ -280,8 +276,6 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
-            const glob = require('@actions/glob');
             const globber = await glob.create(`${process.env.RUNNER_TEMP}/**/*.ipa`);
             for await (const file of globber.globGenerator()) {
               const data = fs.readFileSync(file);
@@ -391,8 +385,6 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const glob = require('@actions/glob');
-
             const globber = await glob.create('apps/papillion/android/**/*-release*.apk');
             for await (const file of globber.globGenerator()) {
               if (file.includes('unsigned')) continue;
