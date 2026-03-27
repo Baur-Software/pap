@@ -4504,6 +4504,7 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "pap-core",
+ "pap-credential-store",
  "pap-did",
  "pap-federation",
  "pap-marketplace",

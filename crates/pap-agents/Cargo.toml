@@ -8,6 +8,7 @@ description = "Shared PAP agent implementations — reusable across Papillion, C
 [dependencies]
 pap-did = { workspace = true }
 pap-core = { workspace = true }
+pap-credential-store = { workspace = true }
 pap-transport = { workspace = true }
 pap-marketplace = { workspace = true }
 pap-federation = { workspace = true }
@@ -18,3 +19,6 @@ reqwest = { workspace = true, features = ["blocking"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
+
+[dev-dependencies]
+pap-credential-store = { workspace = true, features = ["testing"] }

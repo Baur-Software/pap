@@ -78,7 +78,7 @@ impl<S: VaultStore> Vault<S> {
     }
 
     /// Create a new vault with fast KDF parameters (for testing only).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn create_with_fast_kdf(store: S, master_password: &str) -> Result<Self, VaultError> {
         if store.load_header()?.is_some() {
             return Err(VaultError::VaultAlreadyExists);

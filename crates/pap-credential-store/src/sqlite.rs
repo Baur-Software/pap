@@ -24,7 +24,7 @@ impl SqliteVaultStore {
     }
 
     /// In-memory vault store for testing.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn in_memory() -> Result<Self, VaultError> {
         let conn =
             Connection::open_in_memory().map_err(|e| VaultError::StorageError(e.to_string()))?;
