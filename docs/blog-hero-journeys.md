@@ -78,7 +78,7 @@ The structural ceiling: **unstructured memory cannot support structured decision
 
 ### What "solved" looks like
 
-Kai finds [Papillion](https://github.com/Baur-Software/pap). The desktop app includes an episode store — a SQLite database where every completed agent interaction produces a structured record:
+Kai finds [Papillon](https://github.com/Baur-Software/pap). The desktop app includes an episode store — a SQLite database where every completed agent interaction produces a structured record:
 
 ```sql
 INSERT INTO episodes (
@@ -100,7 +100,7 @@ After five interactions with a flight-booking agent, the system knows: 94% succe
 
 When a new flight request comes in, the orchestrator queries episodes by action type, ranks agents by composite score, and calibrates the mandate's scope and TTL based on the agent's track record. The agent that is fast, accurate, and asks for the least data wins. Not because someone configured a preference. Because the evidence supports it.
 
-The insight from the [Memex(RL) paper](https://arxiv.org/pdf/2603.04257): long-horizon agent capability scales with **indexed, structured experience**. Papillion's episode store is this — Schema.org-typed, composite-indexed, with retention policies and decay states. The orchestrator remembers. The protocol forgets. Downstream agents cannot detect whether the orchestrator has memory. Protocol guarantees are preserved regardless.
+The insight from the [Memex(RL) paper](https://arxiv.org/pdf/2603.04257): long-horizon agent capability scales with **indexed, structured experience**. Papillon's episode store is this — Schema.org-typed, composite-indexed, with retention policies and decay states. The orchestrator remembers. The protocol forgets. Downstream agents cannot detect whether the orchestrator has memory. Protocol guarantees are preserved regardless.
 
 ### The argument
 
@@ -226,7 +226,7 @@ The structural ceiling: **if agents can render arbitrary HTML, they can execute 
 
 ### What "solved" looks like
 
-Chen finds Papillion's JSON-LD rendering engine. Agents do not render HTML. Agents return Schema.org-typed JSON-LD. The rendering engine translates structured data into views:
+Chen finds Papillon's JSON-LD rendering engine. Agents do not render HTML. Agents return Schema.org-typed JSON-LD. The rendering engine translates structured data into views:
 
 ```json
 {

@@ -17,7 +17,7 @@ impl AgentExecutor for WebReaderExecutor {
     fn meta(&self) -> AgentMeta {
         AgentMeta {
             name: "Web Page Reader",
-            provider: "Papillion",
+            provider: "Papillon",
             action: "schema:ReadAction",
             object_types: &["schema:WebPage"],
             requires_disclosure: &["schema:URL"],
@@ -30,7 +30,7 @@ impl AgentExecutor for WebReaderExecutor {
             .ok_or_else(|| TransportError::ServerError("No valid URL found in query".into()))?;
 
         let client = reqwest::blocking::Client::builder()
-            .user_agent("Papillion/0.1 (PAP Browser; +https://pap.dev)")
+            .user_agent("Papillon/0.1 (PAP Browser; +https://pap.dev)")
             .timeout(std::time::Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::limited(5))
             .build()

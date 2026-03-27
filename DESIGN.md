@@ -1,4 +1,4 @@
-# Papillion Design System
+# Papillon Design System
 
 The butterfly logo is the foundation. Its bilateral symmetry represents the **operator** (left wing) and **orchestrator** (right wing). The body is the **zero-trust boundary** — nothing crosses without proof.
 
@@ -6,7 +6,7 @@ This is a consumer desktop application. Not a SaaS dashboard.
 
 ## Logo
 
-`apps/papillion/icons/icon.png` — multicolored butterfly with a spectrum from teal-green through gold to coral-pink, with purple anchoring the base.
+`apps/papillon/icons/icon.png` — multicolored butterfly with a spectrum from teal-green through gold to coral-pink, with purple anchoring the base.
 
 ## Typography
 

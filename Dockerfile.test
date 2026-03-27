@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-# Test runner — excludes pap-wasm (wasm32), pap-python (PyO3), papillion (Tauri)
+# Test runner — excludes pap-wasm (wasm32), pap-python (PyO3), papillon (Tauri)
 FROM rust:latest
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -17,5 +17,5 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo test --workspace \
         --exclude pap-wasm \
         --exclude pap-python \
-        --exclude papillion \
+        --exclude papillon \
         2>&1

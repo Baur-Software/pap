@@ -117,4 +117,4 @@ History says someone will. The incumbents always look entrenched — until they 
 
 ---
 
-*The [Principal Agent Protocol](https://github.com/Baur-Software/pap) is open source under MIT. Papillion is the desktop reference browser. Chrysalis is the federated agent registry. You can clone the repo and run all of it right now.*
+*The [Principal Agent Protocol](https://github.com/Baur-Software/pap) is open source under MIT. Papillon is the desktop reference browser. Chrysalis is the federated agent registry. You can clone the repo and run all of it right now.*

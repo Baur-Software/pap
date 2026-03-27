@@ -1,6 +1,6 @@
 /target
-apps/papillion/frontend/target
-apps/papillion/frontend/dist
+apps/papillon/frontend/target
+apps/papillon/frontend/dist
 apps/registry/registry.db
 .DS_STORE
 .gstack/
@@ -8,4 +8,4 @@ apps/registry/registry.db
 
 # Bundled model weights (too large for git — download during setup)
 *.gguf
-apps/papillion/models/tokenizer.json
+apps/papillon/models/tokenizer.json

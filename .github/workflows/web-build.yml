@@ -1,5 +1,8 @@
 name: Web Build
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -35,14 +38,14 @@ jobs:
         run: cargo binstall trunk --no-confirm --force
 
       - name: Build web with trunk
-        working-directory: apps/papillion/frontend
+        working-directory: apps/papillon/frontend
         run: trunk build --release
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v4
         with:
-          name: papillion-web
-          path: apps/papillion/frontend/dist/
+          name: papillon-web
+          path: apps/papillon/frontend/dist/
           retention-days: 7
 
   web-smoke-test:
@@ -55,8 +58,8 @@ jobs:
       - name: Download web artifact
         uses: actions/download-artifact@v4
         with:
-          name: papillion-web
-          path: apps/papillion/frontend/dist/
+          name: papillon-web
+          path: apps/papillon/frontend/dist/
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -101,7 +104,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check WASM target
-        run: cargo build --target wasm32-unknown-unknown -p papillion-shared --no-default-features --features wasm --lib
+        run: cargo build --target wasm32-unknown-unknown -p papillon-shared --no-default-features --features wasm --lib
 
   web-clippy:
     name: Clippy (WASM target)
@@ -121,8 +124,8 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
-      - name: Clippy papillion-shared (WASM)
-        run: cargo clippy --target wasm32-unknown-unknown -p papillion-shared --no-default-features --features wasm --lib -- -D warnings
+      - name: Clippy papillon-shared (WASM)
+        run: cargo clippy --target wasm32-unknown-unknown -p papillon-shared --no-default-features --features wasm --lib -- -D warnings
 
   web-test:
     name: Test Web Build
@@ -134,8 +137,8 @@ jobs:
       - name: Download web artifact
         uses: actions/download-artifact@v4
         with:
-          name: papillion-web
-          path: apps/papillion/frontend/dist/
+          name: papillon-web
+          path: apps/papillon/frontend/dist/
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -147,14 +150,14 @@ jobs:
           # Install a simple HTTP server
           npm install -g http-server
           # Start server in background
-          http-server apps/papillion/frontend/dist/ -p 8080 &
+          http-server apps/papillon/frontend/dist/ -p 8080 &
           sleep 2
           # Check if index.html is served
           curl -f http://localhost:8080/ || exit 1
           echo "Web app served successfully"
 
   web-unit-test:
-    name: Test papillion-shared (WASM backend)
+    name: Test papillon-shared (WASM backend)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -168,5 +171,5 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
-      - name: Test papillion-shared with WASM feature
-        run: cargo test -p papillion-shared --no-default-features --features wasm
+      - name: Test papillon-shared with WASM feature
+        run: cargo test -p papillon-shared --no-default-features --features wasm

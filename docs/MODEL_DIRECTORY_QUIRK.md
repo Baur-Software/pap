@@ -2,7 +2,7 @@
 
 ## The Problem
 
-Papillion bundles GGUF model files (quantized LLaMA weights) inside the Tauri resource directory under `models/`. However, **Tauri's `resource_dir()` behaves very differently across platforms**, and the bundled model directory path is NOT obvious during development.
+Papillon bundles GGUF model files (quantized LLaMA weights) inside the Tauri resource directory under `models/`. However, **Tauri's `resource_dir()` behaves very differently across platforms**, and the bundled model directory path is NOT obvious during development.
 
 ## Platform-Specific Behavior
 
@@ -12,7 +12,7 @@ Papillion bundles GGUF model files (quantized LLaMA weights) inside the Tauri re
 
 Example:
 ```
-/Applications/Papillion.app/Contents/Resources/models/tinyllama-1.1b.gguf
+/Applications/Papillon.app/Contents/Resources/models/tinyllama-1.1b.gguf
 ```
 
 In development (`cargo tauri dev`), the resource directory is the `src-tauri` directory's configured resources path.
@@ -23,23 +23,23 @@ In development (`cargo tauri dev`), the resource directory is the `src-tauri` di
 
 Example:
 ```
-C:\Users\You\AppData\Local\Papillion\models\tinyllama-1.1b.gguf
+C:\Users\You\AppData\Local\Papillon\models\tinyllama-1.1b.gguf
 ```
 
 ### Linux
 
-**Path:** `{exe_dir}/../resources/models/` or `/usr/share/papillion/models/` (depends on packaging)
+**Path:** `{exe_dir}/../resources/models/` or `/usr/share/papillon/models/` (depends on packaging)
 
 ## The Quirk: Development vs. Production
 
 ### Development Mode (`cargo tauri dev`)
 
-When running `cargo tauri dev`, Tauri resolves `resource_dir()` to the build output directory, which includes files from `apps/papillion/models/`.
+When running `cargo tauri dev`, Tauri resolves `resource_dir()` to the build output directory, which includes files from `apps/papillon/models/`.
 
 **Action Required:**
 Place bundled model files in:
 ```
-apps/papillion/models/
+apps/papillon/models/
 ```
 
 This directory is copied into the Tauri resource directory during the build process.
@@ -55,7 +55,7 @@ When building for production, Tauri bundles the resource directory according to 
 
 ## Files Required
 
-To use the built-in LLM provider in Papillion, you must have:
+To use the built-in LLM provider in Papillon, you must have:
 
 1. **Model file** (GGUF weights):
    ```
@@ -100,11 +100,11 @@ if let LlmProvider::BuiltIn { ref model_id } = config.llm_provider {
     let resource_dir = state
         .resource_dir
         .read()
-        .map_err(|e| PapillionError::from(e.to_string()))?
+        .map_err(|e| PapillonError::from(e.to_string()))?
         .clone();
     let mut mgr = state.model_manager.lock().await;
     mgr.ensure_loaded(model_id, &resource_dir)
-        .map_err(PapillionError::from)?;
+        .map_err(PapillonError::from)?;
 }
 ```
 
@@ -134,15 +134,15 @@ pub fn resolve_bundled_model(
 
 1. Download the model file(s) to your machine
 2. Place them in the correct resource directory for your platform:
-   - **macOS:** `apps/papillion/src-tauri/resources/models/`
-   - **Windows:** `apps/papillion/src-tauri/resources/models/`
-   - **Linux:** `apps/papillion/src-tauri/resources/models/`
+   - **macOS:** `apps/papillon/src-tauri/resources/models/`
+   - **Windows:** `apps/papillon/src-tauri/resources/models/`
+   - **Linux:** `apps/papillon/src-tauri/resources/models/`
 
 3. Also place `tokenizer.json` in the same directory
 
 4. Run `cargo tauri dev`
 
-5. In Papillion: Settings → General → LLM Provider → Built-in (Recommended)
+5. In Papillon: Settings → General → LLM Provider → Built-in (Recommended)
 
 6. Select a model and click Save
 
@@ -184,8 +184,8 @@ This prevents non-standard "lib" directories that would confuse system-level too
 ### For Distributions
 
 - **macOS**: Use `.dmg` packaging to bundle models in the app bundle
-- **Windows**: Use installer to place models in `ProgramFiles\Papillion\models\`
-- **Linux**: Use package manager to place models in `/usr/share/papillion/models/`
+- **Windows**: Use installer to place models in `ProgramFiles\Papillon\models\`
+- **Linux**: Use package manager to place models in `/usr/share/papillon/models/`
 
 ### For Production Deployments
 
