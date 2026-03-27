@@ -109,3 +109,77 @@ fn collect_topics(topics: &[DdgTopic], out: &mut Vec<serde_json::Value>) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real-format DDG Instant Answer payload
+    const REAL_PAYLOAD: &str = r#"{
+        "AbstractText": "Rust is a multi-paradigm, general-purpose programming language.",
+        "AbstractURL": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+        "AbstractSource": "Wikipedia",
+        "RelatedTopics": [
+            {
+                "Text": "Rust (programming language) A systems programming language",
+                "FirstURL": "https://duckduckgo.com/Rust_(programming_language)"
+            },
+            {
+                "Name": "See also",
+                "Topics": [
+                    {
+                        "Text": "Cargo (Rust) The Rust package manager",
+                        "FirstURL": "https://duckduckgo.com/Cargo_(Rust)"
+                    }
+                ]
+            }
+        ],
+        "Heading": "Rust (programming language)",
+        "Answer": "",
+        "Type": "A",
+        "Image": "",
+        "Redirect": ""
+    }"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let resp: DdgResponse = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert_eq!(resp.abstract_source, "Wikipedia");
+        assert!(resp.abstract_text.contains("multi-paradigm"));
+        assert_eq!(
+            resp.abstract_url,
+            "https://en.wikipedia.org/wiki/Rust_(programming_language)"
+        );
+        assert_eq!(resp.related_topics.len(), 2);
+    }
+
+    #[test]
+    fn collect_topics_flattens_groups() {
+        let resp: DdgResponse = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        let mut out = Vec::new();
+        collect_topics(&resp.related_topics, &mut out);
+        // 1 direct result + 1 from nested group
+        assert_eq!(out.len(), 2);
+        assert!(out[0]["description"]
+            .as_str()
+            .unwrap()
+            .contains("systems programming"));
+        assert!(out[1]["description"]
+            .as_str()
+            .unwrap()
+            .contains("package manager"));
+    }
+
+    #[test]
+    fn deserialize_empty_response() {
+        let json = r#"{
+            "AbstractText": "",
+            "AbstractURL": "",
+            "AbstractSource": "",
+            "RelatedTopics": []
+        }"#;
+        let resp: DdgResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.abstract_text.is_empty());
+        assert!(resp.related_topics.is_empty());
+    }
+}

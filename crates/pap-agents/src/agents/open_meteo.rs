@@ -137,3 +137,71 @@ fn weather_code_description(code: i32) -> &'static str {
         _ => "Unknown",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real payload from Open-Meteo forecast API
+    const REAL_PAYLOAD: &str = r#"{
+        "latitude": 48.84,
+        "longitude": 2.3599997,
+        "generationtime_ms": 0.060558319091796875,
+        "utc_offset_seconds": 0,
+        "timezone": "GMT",
+        "timezone_abbreviation": "GMT",
+        "elevation": 46.0,
+        "current_units": {
+            "time": "iso8601",
+            "interval": "seconds",
+            "temperature_2m": "°C",
+            "wind_speed_10m": "km/h",
+            "weather_code": "wmo code"
+        },
+        "current": {
+            "time": "2026-03-27T03:45",
+            "interval": 900,
+            "temperature_2m": 3.1,
+            "wind_speed_10m": 1.1,
+            "weather_code": 1
+        }
+    }"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let resp: OpenMeteoResponse = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert!((resp.latitude - 48.84).abs() < 0.01);
+        assert!((resp.longitude - 2.36).abs() < 0.01);
+        assert!((resp.current.temperature_2m - 3.1).abs() < 0.1);
+        assert!((resp.current.wind_speed_10m - 1.1).abs() < 0.1);
+        assert_eq!(resp.current.weather_code, 1);
+    }
+
+    #[test]
+    fn parse_coordinates_comma() {
+        let (lat, lon) = parse_coordinates("48.85,2.35").unwrap();
+        assert!((lat - 48.85).abs() < 0.01);
+        assert!((lon - 2.35).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_coordinates_space() {
+        let (lat, lon) = parse_coordinates("48.85 2.35").unwrap();
+        assert!((lat - 48.85).abs() < 0.01);
+        assert!((lon - 2.35).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_coordinates_invalid() {
+        assert!(parse_coordinates("not coordinates").is_err());
+        assert!(parse_coordinates("200.0,100.0").is_err());
+    }
+
+    #[test]
+    fn weather_codes_known() {
+        assert_eq!(weather_code_description(0), "Clear sky");
+        assert_eq!(weather_code_description(1), "Mainly clear");
+        assert_eq!(weather_code_description(95), "Thunderstorm");
+        assert_eq!(weather_code_description(999), "Unknown");
+    }
+}

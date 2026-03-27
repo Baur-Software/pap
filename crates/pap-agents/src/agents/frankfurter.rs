@@ -112,3 +112,55 @@ fn parse_currency_query(query: &str) -> Result<(String, String, f64), TransportE
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real payload from https://api.frankfurter.app/latest?from=USD&to=EUR&amount=100
+    const REAL_PAYLOAD: &str = r#"{
+        "amount": 100.0,
+        "base": "USD",
+        "date": "2026-03-26",
+        "rates": { "EUR": 86.66 }
+    }"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let resp: FrankfurterResponse = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert!((resp.amount - 100.0).abs() < 0.01);
+        assert_eq!(resp.base, "USD");
+        assert_eq!(resp.date, "2026-03-26");
+        assert!((resp.rates["EUR"] - 86.66).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_currency_two_tokens() {
+        let (from, to, amount) = parse_currency_query("USD EUR").unwrap();
+        assert_eq!(from, "USD");
+        assert_eq!(to, "EUR");
+        assert!((amount - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_currency_amount_first() {
+        let (from, to, amount) = parse_currency_query("100 USD EUR").unwrap();
+        assert_eq!(from, "USD");
+        assert_eq!(to, "EUR");
+        assert!((amount - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_currency_with_to() {
+        let (from, to, amount) = parse_currency_query("USD to EUR").unwrap();
+        assert_eq!(from, "USD");
+        assert_eq!(to, "EUR");
+        assert!((amount - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_currency_invalid() {
+        assert!(parse_currency_query("USD").is_err());
+        assert!(parse_currency_query("").is_err());
+    }
+}

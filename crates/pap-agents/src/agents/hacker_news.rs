@@ -113,3 +113,77 @@ struct HnHit {
     created_at: String,
     num_comments: Option<i32>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real payload from https://hn.algolia.com/api/v1/search?query=rust&hitsPerPage=1
+    const REAL_PAYLOAD: &str = r#"{
+        "hits": [{
+            "_highlightResult": {
+                "author": { "matchLevel": "none", "matchedWords": [], "value": "Sikul" },
+                "title": { "fullyHighlighted": false, "matchLevel": "full", "matchedWords": ["rust"], "value": "Why Discord is switching from Go to <em>rust</em>" }
+            },
+            "_tags": ["story", "author_Sikul", "story_22238335"],
+            "author": "Sikul",
+            "children": [22238816, 22239186],
+            "created_at": "2020-02-04T17:30:40Z",
+            "created_at_i": 1580837440,
+            "num_comments": 642,
+            "objectID": "22238335",
+            "points": 1582,
+            "story_id": 22238335,
+            "title": "Why Discord is switching from Go to Rust",
+            "updated_at": "2026-03-18T18:22:48Z",
+            "url": "https://blog.discordapp.com/why-discord-is-switching-from-go-to-rust-a190bbca2b1f"
+        }],
+        "nbHits": 50000,
+        "page": 0,
+        "nbPages": 50,
+        "hitsPerPage": 1,
+        "processingTimeMS": 2
+    }"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let resp: HnSearchResponse = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert_eq!(resp.hits.len(), 1);
+
+        let hit = &resp.hits[0];
+        assert_eq!(
+            hit.title.as_deref(),
+            Some("Why Discord is switching from Go to Rust")
+        );
+        assert_eq!(hit.author, "Sikul");
+        assert_eq!(hit.points, Some(1582));
+        assert_eq!(hit.object_id, "22238335");
+        assert_eq!(hit.created_at, "2020-02-04T17:30:40Z");
+        assert_eq!(hit.num_comments, Some(642));
+        assert_eq!(
+            hit.url.as_deref(),
+            Some(
+                "https://blog.discordapp.com/why-discord-is-switching-from-go-to-rust-a190bbca2b1f"
+            )
+        );
+    }
+
+    #[test]
+    fn deserialize_ask_hn_no_url() {
+        // Ask HN posts have no external URL
+        let json = r#"{
+            "hits": [{
+                "author": "dang",
+                "created_at": "2024-01-01T00:00:00Z",
+                "objectID": "12345",
+                "title": "Ask HN: What's new in Rust?",
+                "points": 100,
+                "num_comments": 50
+            }]
+        }"#;
+        let resp: HnSearchResponse = serde_json::from_str(json).unwrap();
+        let hit = &resp.hits[0];
+        assert!(hit.url.is_none());
+        assert_eq!(hit.object_id, "12345");
+    }
+}

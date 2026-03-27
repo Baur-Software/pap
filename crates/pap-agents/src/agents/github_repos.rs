@@ -116,3 +116,103 @@ struct GhRepo {
 struct GhLicense {
     name: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real payload from https://api.github.com/search/repositories?q=rust+web+framework&per_page=1&sort=stars
+    const REAL_PAYLOAD: &str = r#"{
+        "total_count": 1382,
+        "incomplete_results": false,
+        "items": [{
+            "id": 329782568,
+            "node_id": "MDEwOlJlcG9zaXRvcnkzMjk3ODI1Njg=",
+            "name": "dioxus",
+            "full_name": "DioxusLabs/dioxus",
+            "private": false,
+            "owner": {
+                "login": "DioxusLabs",
+                "id": 79236386
+            },
+            "html_url": "https://github.com/DioxusLabs/dioxus",
+            "description": "Fullstack app framework for web, desktop, and mobile.",
+            "fork": false,
+            "url": "https://api.github.com/repos/DioxusLabs/dioxus",
+            "created_at": "2021-01-15T01:57:26Z",
+            "updated_at": "2026-03-27T03:54:11Z",
+            "pushed_at": "2026-03-27T00:14:10Z",
+            "homepage": "https://dioxuslabs.com",
+            "size": 51910,
+            "stargazers_count": 35461,
+            "watchers_count": 35461,
+            "language": "Rust",
+            "has_issues": true,
+            "has_projects": true,
+            "forks_count": 1606,
+            "archived": false,
+            "disabled": false,
+            "open_issues_count": 672,
+            "license": {
+                "key": "apache-2.0",
+                "name": "Apache License 2.0",
+                "spdx_id": "Apache-2.0",
+                "url": "https://api.github.com/licenses/apache-2.0",
+                "node_id": "MDc6TGljZW5zZTI="
+            },
+            "topics": ["android", "css", "desktop", "html", "ios", "native", "react", "rust", "ssr", "ui", "virtualdom", "wasm", "web"],
+            "visibility": "public",
+            "forks": 1606,
+            "watchers": 35461,
+            "default_branch": "main",
+            "score": 1.0
+        }]
+    }"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let resp: GhSearchResponse = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert_eq!(resp.items.len(), 1);
+
+        let repo = &resp.items[0];
+        assert_eq!(repo.full_name, "DioxusLabs/dioxus");
+        assert_eq!(repo.html_url, "https://github.com/DioxusLabs/dioxus");
+        assert_eq!(
+            repo.description.as_deref(),
+            Some("Fullstack app framework for web, desktop, and mobile.")
+        );
+        assert_eq!(repo.language.as_deref(), Some("Rust"));
+        assert_eq!(repo.stargazers_count, 35461);
+        assert_eq!(repo.forks_count, 1606);
+        assert_eq!(
+            repo.license.as_ref().unwrap().name.as_deref(),
+            Some("Apache License 2.0")
+        );
+        assert_eq!(repo.topics.as_ref().unwrap().len(), 13);
+        assert!(repo.topics.as_ref().unwrap().contains(&"rust".to_string()));
+    }
+
+    #[test]
+    fn deserialize_minimal_repo() {
+        // Repos can have null description, language, license, topics
+        let json = r#"{
+            "items": [{
+                "full_name": "user/repo",
+                "html_url": "https://github.com/user/repo",
+                "description": null,
+                "language": null,
+                "stargazers_count": 0,
+                "forks_count": 0,
+                "license": null,
+                "topics": null
+            }]
+        }"#;
+        let resp: GhSearchResponse = serde_json::from_str(json).unwrap();
+        let repo = &resp.items[0];
+        assert_eq!(repo.full_name, "user/repo");
+        assert!(repo.description.is_none());
+        assert!(repo.language.is_none());
+        assert!(repo.license.is_none());
+        assert!(repo.topics.is_none());
+    }
+}

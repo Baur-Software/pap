@@ -122,3 +122,80 @@ struct DictDefinition {
     definition: String,
     example: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real payload from https://api.dictionaryapi.dev/api/v2/entries/en/ephemeral
+    const REAL_PAYLOAD: &str = r#"[{
+        "word": "ephemeral",
+        "phonetic": "/əˈfɛ.mə.ɹəl/",
+        "phonetics": [{
+            "text": "/əˈfɛ.mə.ɹəl/",
+            "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/ephemeral-us.mp3",
+            "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=2526689",
+            "license": { "name": "BY-SA 3.0", "url": "https://creativecommons.org/licenses/by-sa/3.0" }
+        }],
+        "meanings": [
+            {
+                "partOfSpeech": "noun",
+                "definitions": [
+                    { "definition": "Something which lasts for a short period of time.", "synonyms": ["ephemeron"], "antonyms": [] }
+                ],
+                "synonyms": ["ephemeron"],
+                "antonyms": []
+            },
+            {
+                "partOfSpeech": "adjective",
+                "definitions": [
+                    { "definition": "Lasting for a short period of time.", "synonyms": ["evanescent", "fleeting"], "antonyms": ["eternal", "permanent"] },
+                    { "definition": "Existing for only one day, as with some flowers, insects, and diseases.", "synonyms": [], "antonyms": [] },
+                    { "definition": "(of a body of water) Usually dry, but filling with water for brief periods during and after precipitation.", "synonyms": [], "antonyms": [] }
+                ],
+                "synonyms": ["evanescent", "fleeting"],
+                "antonyms": ["eternal", "permanent"]
+            }
+        ],
+        "license": { "name": "CC BY-SA 3.0", "url": "https://creativecommons.org/licenses/by-sa/3.0" },
+        "sourceUrls": ["https://en.wiktionary.org/wiki/ephemeral"]
+    }]"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let entries: Vec<DictEntry> = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert_eq!(entries.len(), 1);
+
+        let entry = &entries[0];
+        assert_eq!(entry.word, "ephemeral");
+        assert_eq!(entry.phonetics.len(), 1);
+        assert_eq!(entry.phonetics[0].text.as_deref(), Some("/əˈfɛ.mə.ɹəl/"));
+        assert_eq!(entry.meanings.len(), 2);
+        assert_eq!(entry.meanings[0].part_of_speech, "noun");
+        assert_eq!(entry.meanings[1].part_of_speech, "adjective");
+        assert_eq!(entry.meanings[1].definitions.len(), 3);
+        assert!(entry.meanings[1].definitions[0]
+            .definition
+            .contains("Lasting for a short period"));
+    }
+
+    #[test]
+    fn deserialize_with_example() {
+        let json = r#"[{
+            "word": "hello",
+            "phonetics": [],
+            "meanings": [{
+                "partOfSpeech": "interjection",
+                "definitions": [{
+                    "definition": "A greeting.",
+                    "example": "Hello, world!"
+                }]
+            }]
+        }]"#;
+        let entries: Vec<DictEntry> = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            entries[0].meanings[0].definitions[0].example.as_deref(),
+            Some("Hello, world!")
+        );
+    }
+}

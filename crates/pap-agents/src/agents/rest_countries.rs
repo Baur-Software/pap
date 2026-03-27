@@ -121,3 +121,67 @@ struct CountryName {
 struct CountryFlags {
     png: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const REAL_PAYLOAD: &str = r#"[{
+        "flags": {
+            "png": "https://flagcdn.com/w320/fr.png",
+            "svg": "https://flagcdn.com/fr.svg",
+            "alt": "The flag of France is composed of three equal vertical bands of blue, white and red."
+        },
+        "name": {
+            "common": "France",
+            "official": "French Republic",
+            "nativeName": { "fra": { "official": "République française", "common": "France" } }
+        },
+        "currencies": { "EUR": { "name": "euro", "symbol": "€" } },
+        "languages": { "fra": "French" },
+        "capital": ["Paris"],
+        "region": "Europe",
+        "subregion": "Western Europe",
+        "population": 66351959
+    }]"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let countries: Vec<RestCountry> = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert_eq!(countries.len(), 1);
+
+        let c = &countries[0];
+        assert_eq!(c.name.common, "France");
+        assert_eq!(c.name.official, "French Republic");
+        assert_eq!(c.capital.as_ref().unwrap(), &["Paris"]);
+        assert_eq!(c.region, "Europe");
+        assert_eq!(c.subregion.as_deref(), Some("Western Europe"));
+        assert_eq!(c.population, 66351959);
+        assert_eq!(
+            c.flags.as_ref().unwrap().png.as_deref(),
+            Some("https://flagcdn.com/w320/fr.png")
+        );
+        assert_eq!(c.languages.as_ref().unwrap().get("fra").unwrap(), "French");
+    }
+
+    #[test]
+    fn deserialize_minimal_country() {
+        // API may return entries with missing optional fields
+        let json = r#"[{
+            "name": { "common": "Atlantis", "official": "Republic of Atlantis" },
+            "region": "Unknown",
+            "population": 0
+        }]"#;
+        let countries: Vec<RestCountry> = serde_json::from_str(json).unwrap();
+        assert_eq!(countries[0].name.common, "Atlantis");
+        assert!(countries[0].capital.is_none());
+        assert!(countries[0].flags.is_none());
+        assert!(countries[0].languages.is_none());
+    }
+
+    #[test]
+    fn url_encode_spaces_and_special() {
+        assert_eq!(url_encode("New Zealand"), "New%20Zealand");
+        assert_eq!(url_encode("Côte d'Ivoire"), "C%C3%B4te%20d%27Ivoire");
+    }
+}

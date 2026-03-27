@@ -74,3 +74,51 @@ struct NominatimResult {
     #[serde(rename = "type")]
     place_type: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real-format Nominatim JSON response for "Paris"
+    const REAL_PAYLOAD: &str = r#"[{
+        "place_id": 308196556,
+        "licence": "Data © OpenStreetMap contributors, ODbL 1.0.",
+        "osm_type": "relation",
+        "osm_id": 7444,
+        "lat": "48.8588897",
+        "lon": "2.3200410217200766",
+        "class": "boundary",
+        "type": "administrative",
+        "place_rank": 15,
+        "importance": 0.8042945684944932,
+        "addresstype": "city",
+        "name": "Paris",
+        "display_name": "Paris, Île-de-France, Metropolitan France, France",
+        "boundingbox": ["48.8155755", "48.9021560", "2.2241220", "2.4697602"]
+    }]"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let results: Vec<NominatimResult> = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert_eq!(results.len(), 1);
+
+        let r = &results[0];
+        assert_eq!(
+            r.display_name,
+            "Paris, Île-de-France, Metropolitan France, France"
+        );
+        assert_eq!(r.lat, "48.8588897");
+        assert_eq!(r.lon, "2.3200410217200766");
+        assert_eq!(r.place_type, "administrative");
+    }
+
+    #[test]
+    fn lat_lon_parse_as_f64() {
+        let results: Vec<NominatimResult> = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        let r = &results[0];
+        let lat: f64 = r.lat.parse().unwrap();
+        let lon: f64 = r.lon.parse().unwrap();
+        assert!((lat - 48.859).abs() < 0.01);
+        assert!((lon - 2.320).abs() < 0.01);
+    }
+}
