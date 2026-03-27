@@ -147,7 +147,7 @@ pub fn TemplatesTab() -> impl IntoView {
         spawn_local(async move {
             match bridge::invoke::<serde_json::Value, ()>(
                 "create_template",
-                &serde_json::to_value(&template).unwrap(),
+                &serde_json::json!({ "template": &template }),
             )
             .await
             {
@@ -206,7 +206,7 @@ pub fn TemplatesTab() -> impl IntoView {
             spawn_local(async move {
                 match bridge::invoke::<serde_json::Value, ()>(
                     "update_template",
-                    &serde_json::to_value(&template).unwrap(),
+                    &serde_json::json!({ "template": &template }),
                 )
                 .await
                 {
