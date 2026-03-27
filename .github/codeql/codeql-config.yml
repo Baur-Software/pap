@@ -1,6 +1,7 @@
 name: "PAP CodeQL Configuration"
 
-# Suppress rust/hardcoded-credentials — structurally incompatible with crypto code.
+# Suppress CWE-798 "Hard-coded cryptographic value" for Rust — structurally
+# incompatible with crypto code.
 #
 # All flagged instances are false positives:
 #   - [0u8; 32] zero-init buffers immediately filled by CSPRNG (standard Rust pattern)
@@ -9,4 +10,4 @@ name: "PAP CodeQL Configuration"
 # Other Rust security queries (cleartext-transmission, request-forgery, etc.) remain active.
 query-filters:
   - exclude:
-      id: rust/hardcoded-credentials
+      id: rust/hard-coded-cryptographic-value
