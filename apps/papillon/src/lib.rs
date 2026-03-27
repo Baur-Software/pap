@@ -39,6 +39,7 @@ pub fn run() {
                 .resource_dir()
                 .expect("failed to resolve resource dir");
             *app_state.resource_dir.write().unwrap() = resource_dir;
+            *app_state.data_dir.write().unwrap() = data_dir.clone();
 
             // Clone state for the background federation server before manage() takes ownership.
             let state_clone = app_state.clone_for_background();
@@ -92,6 +93,8 @@ pub fn run() {
             commands::llm::check_llm_connection,
             commands::orchestrator::list_builtin_models,
             commands::orchestrator::load_builtin_model,
+            commands::orchestrator::check_model_availability,
+            commands::orchestrator::download_builtin_model,
             commands::identity::export_key,
             commands::identity::import_key,
             commands::identity::get_key_backup_status,

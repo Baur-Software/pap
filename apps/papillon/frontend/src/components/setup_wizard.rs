@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::orchestrator::OrchestratorState;
-use papillon_shared::{builtin_model_catalog, OrchestratorConfig, OrchestratorStatus, SetupState};
+use papillon_shared::{builtin_model_catalog, ModelAvailability, OrchestratorConfig, OrchestratorStatus, SetupState};
 
 #[component]
 pub fn SetupWizard() -> impl IntoView {
@@ -18,6 +18,8 @@ pub fn SetupWizard() -> impl IntoView {
     let openai_endpoint = RwSignal::new(String::new());
     let openai_key = RwSignal::new(String::new());
     let openai_model = RwSignal::new(String::new());
+    let model_availability = RwSignal::new(Vec::<ModelAvailability>::new());
+    let downloading = RwSignal::new(false);
 
     // Check setup state on mount
     Effect::new(move || {
@@ -38,6 +40,17 @@ pub fn SetupWizard() -> impl IntoView {
                 }
             });
         }
+    });
+
+    Effect::new(move || {
+        if !bridge::tauri_available() { return; }
+        spawn_local(async move {
+            if let Ok(avail) = bridge::invoke_no_args::<Vec<ModelAvailability>>(
+                "check_model_availability"
+            ).await {
+                model_availability.set(avail);
+            }
+        });
     });
 
     let save_config = move |_| {
@@ -83,8 +96,13 @@ pub fn SetupWizard() -> impl IntoView {
                     }
                     show_wizard.set(false);
                 }
-                Err(_) => {
-                    wizard_error.set(Some("Could not save \u{2014} backend unavailable.".into()));
+                Err(e) => {
+                    let msg = if e.contains("model not found") || e.contains("Tokenizer not found") {
+                        "Model files not downloaded. Use the Download button above first.".to_string()
+                    } else {
+                        "Could not save \u{2014} backend unavailable.".to_string()
+                    };
+                    wizard_error.set(Some(msg));
                 }
             }
         });
@@ -109,7 +127,7 @@ pub fn SetupWizard() -> impl IntoView {
                             on:click=move |_| selected_provider.set("builtin".into())
                         >
                             <div class="setup-option-title">"Built-in (Recommended)"</div>
-                            <div class="setup-option-desc">"On-device TinyLlama via Candle \u{2014} ships bundled, runs fully offline"</div>
+                            <div class="setup-option-desc">"On-device TinyLlama via Candle \u{2014} downloads once, runs fully offline"</div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "ollama" { "setup-option selected" } else { "setup-option" }
@@ -155,9 +173,74 @@ pub fn SetupWizard() -> impl IntoView {
                                     }
                                 />
                             </select>
-                            <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                                "Ships with the app. Runs entirely on-device \u{2014} no network calls."
-                            </p>
+                            {move || {
+                                let mid = builtin_model.get();
+                                let avail = model_availability.get();
+                                let is_ready = avail.iter().any(|a| a.model_id == mid && a.ready);
+
+                                if !bridge::tauri_available() {
+                                    view! {
+                                        <div style="background: rgba(108, 92, 231, 0.08); border: 1px solid rgba(108, 92, 231, 0.3); border-radius: 6px; padding: 10px 12px; margin-top: 8px;">
+                                            <p style="font-size: 12px; font-weight: 600; color: #6c5ce7; margin-bottom: 4px;">
+                                                "Browser extension required"
+                                            </p>
+                                            <p style="font-size: 12px; color: var(--text-secondary);">
+                                                "On-device inference requires the Papillon desktop app. "
+                                                "Install the browser extension to connect pap:// URLs to your local instance."
+                                            </p>
+                                        </div>
+                                    }.into_any()
+                                } else if is_ready {
+                                    view! {
+                                        <p style="font-size: 11px; color: #00b894; margin-top: 4px;">
+                                            "Model ready. Runs entirely on-device \u{2014} no network calls."
+                                        </p>
+                                    }.into_any()
+                                } else {
+                                    view! {
+                                        <div style="margin-top: 8px;">
+                                            <p style="font-size: 11px; color: #fdcb6e; margin-bottom: 8px;">
+                                                "Model download required (~0.6 GB). One-time download, then fully offline."
+                                            </p>
+                                            <Show when=move || !downloading.get()>
+                                                <button
+                                                    class="btn btn-primary"
+                                                    style="font-size: 12px; padding: 6px 16px;"
+                                                    on:click=move |_| {
+                                                        let mid = builtin_model.get();
+                                                        downloading.set(true);
+                                                        spawn_local(async move {
+                                                            match bridge::invoke::<serde_json::Value, ModelAvailability>(
+                                                                "download_builtin_model",
+                                                                &serde_json::json!({ "modelId": mid }),
+                                                            ).await {
+                                                                Ok(avail) => {
+                                                                    model_availability.update(|list| {
+                                                                        if let Some(entry) = list.iter_mut().find(|m| m.model_id == avail.model_id) {
+                                                                            *entry = avail;
+                                                                        } else {
+                                                                            list.push(avail);
+                                                                        }
+                                                                    });
+                                                                }
+                                                                Err(e) => {
+                                                                    wizard_error.set(Some(format!("Download failed: {e}")));
+                                                                }
+                                                            }
+                                                            downloading.set(false);
+                                                        });
+                                                    }
+                                                >"Download Model"</button>
+                                            </Show>
+                                            <Show when=move || downloading.get()>
+                                                <p style="font-size: 11px; color: var(--text-secondary);">
+                                                    "Downloading model files..."
+                                                </p>
+                                            </Show>
+                                        </div>
+                                    }.into_any()
+                                }
+                            }}
                         </div>
                     </Show>
 

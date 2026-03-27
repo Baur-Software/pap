@@ -94,8 +94,13 @@ pub async fn check_llm_connection(
                 .read()
                 .map_err(|e| PapillonError::from(e.to_string()))?
                 .clone();
+            let data_dir = state
+                .data_dir
+                .read()
+                .map_err(|e| PapillonError::from(e.to_string()))?
+                .clone();
             let mut mgr = state.model_manager.lock().await;
-            mgr.ensure_loaded(model_id, &resource_dir)
+            mgr.ensure_loaded(model_id, &resource_dir, &data_dir)
                 .map_err(PapillonError::from)?;
             let response = mgr
                 .generate("[INST] Say hello in one sentence. [/INST]", 50)

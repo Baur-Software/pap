@@ -64,11 +64,19 @@ const SETUP_STATE = {
 
 const BUILTIN_MODELS = [
   {
-    id: "mistral-7b-instruct",
-    display_name: "Mistral 7B Instruct",
-    size_hint: "4.1 GB",
-    quant: "Q4_K_M",
+    id: "tinyllama-1.1b",
+    display_name: "TinyLlama 1.1B Chat (Q4)",
+    repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+    filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+    size_hint: "~0.6 GB",
+    download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+    tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json",
+    web_compatible: false,
   },
+];
+
+const MODEL_AVAILABILITY = [
+  { model_id: "tinyllama-1.1b", model_present: true, tokenizer_present: true, ready: true },
 ];
 
 const BACKUP_STATUS = { backed_up: false };
@@ -147,6 +155,12 @@ window.__TAURI__ = {
 
         case 'list_builtin_models':
           return ${JSON.stringify(BUILTIN_MODELS)};
+
+        case 'check_model_availability':
+          return ${JSON.stringify(MODEL_AVAILABILITY)};
+
+        case 'download_builtin_model':
+          return ${JSON.stringify(MODEL_AVAILABILITY[0])};
 
         case 'configure_orchestrator':
           return args?.config ?? CONFIG;

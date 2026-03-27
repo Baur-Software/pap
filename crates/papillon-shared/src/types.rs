@@ -174,20 +174,49 @@ impl Default for AppSettings {
 
 // ── Orchestrator types ──────────────────────────────────────
 
-/// Known built-in models that ship with Papillon.
-/// Each entry maps to a bundled GGUF file in the app resources.
+/// Known built-in models that ship with (or can be downloaded by) Papillon.
+/// Each entry maps to a GGUF file in either the bundled resources or the
+/// user-writable data directory.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BuiltInModelInfo {
     pub id: String,
     pub display_name: String,
     /// HuggingFace repo this was sourced from (for attribution).
     pub repo: String,
-    /// GGUF filename inside the bundled `models/` resource directory.
+    /// GGUF filename inside the `models/` directory.
     pub filename: String,
     pub size_hint: String,
+    /// Direct download URL for the GGUF weights file.
+    pub download_url: String,
+    /// Direct download URL for the tokenizer.json file.
+    pub tokenizer_url: String,
+    /// Whether this model is small enough to run in-browser via WASM.
+    pub web_compatible: bool,
 }
 
-/// Catalog of models bundled with the app. The first entry is the default.
+/// Availability status of a built-in model on the local filesystem.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelAvailability {
+    pub model_id: String,
+    pub model_present: bool,
+    pub tokenizer_present: bool,
+    /// Both files present and ready to load.
+    pub ready: bool,
+}
+
+/// Emitted during model file download for progress tracking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelDownloadProgress {
+    pub model_id: String,
+    /// Which file is being downloaded: "model" or "tokenizer".
+    pub file_type: String,
+    pub downloaded_bytes: u64,
+    pub total_bytes: u64,
+    pub progress_pct: u8,
+}
+
+/// Catalog of models available for on-device inference.
+/// The first entry is the default.
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
     vec![BuiltInModelInfo {
         id: "tinyllama-1.1b".into(),
@@ -195,6 +224,9 @@ pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
         repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
         filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
         size_hint: "~0.6 GB".into(),
+        download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+        tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
+        web_compatible: false,
     }]
 }
 
@@ -747,6 +779,9 @@ mod tests {
             repo: "test/repo".into(),
             filename: "test.gguf".into(),
             size_hint: "~1 GB".into(),
+            download_url: "https://example.com/test.gguf".into(),
+            tokenizer_url: "https://example.com/tokenizer.json".into(),
+            web_compatible: false,
         };
         let json = serde_json::to_string(&info).unwrap();
         let back: BuiltInModelInfo = serde_json::from_str(&json).unwrap();
