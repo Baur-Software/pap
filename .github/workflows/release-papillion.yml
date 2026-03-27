@@ -240,7 +240,7 @@ jobs:
       - name: Build iOS archive
         working-directory: apps/papillion/ios/App
         run: |
-          xcodebuild -workspace App.xcworkspace \
+          xcodebuild -project App.xcodeproj \
             -scheme App \
             -configuration Release \
             -archivePath $RUNNER_TEMP/Papillion.xcarchive \
