@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Changed
+
+- Rename `papillion` → `papillon` across entire codebase (correct French spelling)
+
 ## [0.5.5] - 2026-03-26
 
 ### Fixed
