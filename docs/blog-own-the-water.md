@@ -12,25 +12,25 @@ PAP uses ephemeral session DIDs. The whole point is that the agent on the other 
 
 This is where most people assume the protocol breaks. It's actually where it gets interesting.
 
-## Credentials Travel With the User
+## The Operator Holds the Credential
 
-Today, if an application wants to access your GitHub repos, it goes through OAuth. Register an app. Redirect the user. Exchange a code for a token. Store the token server-side. Refresh it. Handle revocation webhooks. Build a UI around the data. Every application repeats this ceremony independently. The token lives with the app, not with you.
+Today, every application that wants to access your GitHub repos goes through OAuth. Register an app. Redirect the user to GitHub. Exchange a code for a token. Store the token server-side. Refresh it. Handle revocation webhooks. Build a UI around the data. Every application repeats this ceremony independently. The token lives with the app. The session lives with GitHub. The user is the commodity that flows between them.
 
-In PAP, the credential lives in the user's wallet.
+PAP inverts this.
 
-GitHub issues an SD-JWT — a selectively disclosable credential — bound to the user's GitHub identity. The user stores it in their PAP browser. When they want to search private repos, they attach the credential to their mandate, disclosing *only* the claims the agent needs: a username and an access scope. Their email, their real name, their principal DID — all redacted. The session DID that carries this mandate is ephemeral. When the session closes, it's gone.
+A Chrysalis operator — a company, a university, a community host — runs a node with agents registered in the federation. The operator holds a GitHub App installation token, the same way a company today holds API credentials for the services its infrastructure depends on. When a user asks "search repos for authentication handlers," the query arrives via an ephemeral session DID, scoped by a cryptographic mandate with a TTL. The agent uses the operator's credential to call the GitHub API, returns Schema.org JSON-LD results, and co-signs a receipt that contains property references only — never repo names, never code, never content.
 
-The agent validates the credential, makes the authenticated API call, returns Schema.org JSON-LD results, and co-signs a receipt that contains property references only — never repo names, never code, never content.
+The user never touches a bearer token. The session DID is unlinkable to any previous session. The operator can't accumulate a user profile because the protocol won't let them — ephemeral sessions, scoped mandates, property-reference-only receipts. The operator holds the credential to GitHub. That's it. That's all they hold.
 
-GitHub sees that a valid GitHub user queried repos. They *cannot* correlate that query to a specific PAP principal, because the session DID is unlinkable by design.
+This is the same credential position as GitHub today. The difference is what else the operator holds — which in PAP's case is nothing.
 
 ## The Friction Collapse
 
 But here's what makes this more than a privacy story.
 
-Today's integration tax for accessing GitHub data:
+Today's integration tax for accessing GitHub data through a third-party tool:
 
-1. Register an OAuth application
+1. Register an OAuth application with GitHub
 2. Implement the redirect flow
 3. Exchange authorization codes for tokens
 4. Store tokens securely server-side
@@ -39,81 +39,81 @@ Today's integration tax for accessing GitHub data:
 7. Build your own UI around the API responses
 8. Repeat for every single application that wants repo access
 
-With PAP:
+With a PAP operator:
 
-1. User has a GitHub credential in their wallet
-2. They ask their PAP browser a question
+1. Operator configures their GitHub App token once
+2. Users query through any PAP browser
 3. The agent handles the rest
 
-That's it. The OAuth dance disappears. The token storage liability disappears. The per-app registration disappears. The credential *travels with the user*, not with the app. Any PAP browser can use it. The user discloses it to whichever agent needs it.
+The OAuth dance disappears. Per-user token storage disappears. The per-app registration disappears. The operator's credential serves every user on the node, and no user's identity is exposed to GitHub or to the operator. Any PAP browser can connect to the node. Users switch operators the way they switch DNS providers — invisibly, losslessly, because the relationship is with the protocol, not with the operator.
 
 And this cascades into everything.
 
-**Cross-platform code search.** "Find where we handle authentication" works across GitHub, GitLab, and Bitbucket if each issues credentials. One query, three agents, the PAP browser orchestrates. Nobody builds that integration today because the auth plumbing per provider is brutal.
+**Cross-platform code search.** "Find where we handle authentication" works across a GitHub operator, a GitLab operator, and a Bitbucket operator. One query, three agents, the PAP browser orchestrates. Nobody builds that integration today because the auth plumbing per provider is brutal. With operator-held credentials, the auth plumbing is the operator's problem, not the user's.
 
-**CI visibility.** "Show me failing builds" becomes a mandate to a GitHub Actions agent. The disclosure is a username and `actions:read` scope. No dashboard tab-switching, no API client, no token juggling.
+**CI visibility.** "Show me failing builds" becomes a mandate to a GitHub Actions agent on an operator's Chrysalis node. The operator's credential has `actions:read` scope. No dashboard tab-switching, no API client, no token juggling.
 
-**Issue triage across organizations.** "What's assigned to me across all my orgs" is currently impossible without building a custom aggregator. With PAP, it's one natural-language query that fans out to however many org-scoped agents exist in the federation.
+**Issue triage across organizations.** "What's assigned to me across all my orgs" is currently impossible without building a custom aggregator that holds tokens for every org. With PAP, it's one query that fans out to however many org-scoped operators exist in the federation. Each operator holds their own org's credentials. The user holds nothing.
 
-**Dependency auditing.** "Which of my repos use this vulnerable package" is a mandate to an agent that needs `repo:read` scope and returns structured vulnerability data. Today this requires Dependabot configuration per-repo, or a third-party SCA tool with its own OAuth integration, or a custom script that manages tokens for every org.
+**Dependency auditing.** "Which repos use this vulnerable package" is a mandate to an operator whose credential has `repo:read` scope. Today this requires Dependabot configuration per-repo, or a third-party SCA tool with its own OAuth integration, or a custom script that manages tokens for every org.
 
-All of that friction dissolves. Not because the APIs changed, but because the *authorization model* changed. The credential is portable. The agent is stateless. The protocol handles the handshake.
+All of that friction dissolves. Not because the APIs changed, but because the *authorization model* changed. The credential is operator-held. The session is user-controlled. The protocol enforces the boundary between them.
 
-## The Moat Moves
+## Why Incumbents Won't Do This
 
-This is where platform operators need to pay attention, because the strategic implications are counterintuitive.
+This is where the thought experiment breaks down — and where the real opportunity appears.
 
-GitHub's current moat is the interface. You go to github.com, you log in, you use their UI. Every API integration reinforces this because every integration requires OAuth registration with GitHub as the identity provider and the session host.
+GitHub *could* run a Chrysalis node. The code is open source. The protocol is MIT-licensed. Nothing stops them. But running a Chrysalis node means accepting PAP's constraints: ephemeral sessions they can't track, scoped mandates they can't expand, receipts they can't mine. It means becoming a credential holder and agent host — and giving up session ownership, behavioral data, UI lock-in, and the entire capture stack that funds the business.
 
-With PAP, GitHub stops being the session host. The user's PAP browser is the session host. GitHub becomes a credential issuer and an agent provider. The UI monopoly dissolves.
+GitHub's moat isn't the credential. It's the pipe. OAuth, the web UI, Copilot's full-context access, API rate limits as a monetization lever, the billing relationship, the behavioral graph. The credential is one small piece of a total capture architecture. You can't use GitHub's credential without accepting all of it.
 
-At first glance, that looks like GitHub loses. They don't control the interface anymore.
+Asking GitHub to adopt PAP is asking them to voluntarily dismantle that architecture. History says incumbents don't do this. The innovator's dilemma isn't a pitch deck problem — it's a structural one. The existing revenue model makes the new model irrational, even when the new model is better for everyone including the incumbent in the long run.
 
-But look at what they gain: **distribution**.
+## The New Incumbent
 
-Every PAP browser becomes a GitHub client. Every Chrysalis node that federates GitHub's agents extends their reach. Developers who use Papillion, or whatever PAP browser they prefer, can search GitHub repos without ever opening github.com — but they need a GitHub-issued credential to do it.
+Which means the opportunity isn't getting GitHub to adopt PAP. It's that GitHub's entrenchment in capture creates the opening for someone who doesn't carry that baggage.
 
-GitHub doesn't need to build or maintain the interface. They don't need to support third-party OAuth integrations. They issue credentials, host agents, and collect the federation benefits.
+What does code hosting look like if it's PAP-native from day one?
 
-The moat moves from "you must use github.com" to "you need a GitHub credential to access code." That's the difference between owning the pipe and owning the water.
+No OAuth. No API keys. No rate limit tiers. Repos are agents. Search is a mandate. Access control is a credential the operator holds, not a permission in someone else's database. The operator runs a Chrysalis node with agents that serve code search, CI status, issue triage, dependency graphs — all through the standard six-phase handshake. Users connect from any PAP browser. They switch between operators the way they switch between search engines — by pointing somewhere else.
 
-Owning the pipe means you control distribution but you have to maintain the pipe. You build the UI, handle the sessions, manage the tokens, support the OAuth flows, run the webhooks. Every interaction transits your infrastructure.
+The new incumbent doesn't need to be a better GitHub. It needs to be a GitHub that *can't capture* — and make that the feature. The protocol enforces it structurally. Ephemeral sessions can't be accumulated. Receipts can't be mined. Mandates can't exceed their parent scope. These aren't policy promises — they're cryptographic invariants.
 
-Owning the water means you control *what flows through any pipe*. You issue the credential once. It works everywhere. Every PAP browser, every Chrysalis node, every federated agent — they all need your water. You maintain none of their pipes.
+A platform built on PAP doesn't need a privacy policy because the protocol *is* the privacy policy. And unlike a privacy policy, it can't be amended by lawyers at 2am before a board meeting.
 
-Which is the stronger position?
+## The Operator Ecosystem
 
-## What This Looks Like in Practice
+The real network effect isn't one platform adopting PAP. It's many operators running Chrysalis nodes, each holding credentials for the services their community needs.
 
-The PAP codebase already has the plumbing for this. The `AgentExecutor` trait supports a `requires_disclosure` field on every agent's metadata. The IP Geolocation agent already requires `schema:IPAddress` disclosure — the pattern is proven in code, not just in theory.
+A university runs a node with GitHub Education credentials and IEEE Xplore access. A company runs a node with their GitHub Enterprise token and internal APIs. A community runs a node with public API keys pooled from donations. Each operator federates with the others. A user on the university node can discover agents on the company node through federation, if the company publishes them.
 
-A GitHub-hosted agent would declare `requires_disclosure: ["schema:DigitalCredential"]`. The user's PAP browser would see that requirement, check the wallet for a matching credential, prompt for consent, and attach the selective disclosure to the mandate. The agent would validate the SD-JWT, extract the authorized token, make the API call, and return results.
+The operators compete on quality of service, breadth of agents, and trust — not on data accumulation. Because they *can't* accumulate data. The protocol won't let them.
 
-No new protocol features. No special cases. The same six-phase handshake that handles a zero-disclosure DuckDuckGo search handles an authenticated private-repo query. The only difference is what the user chooses to disclose.
+This is the ecosystem that makes the friction collapse real. Not one platform owning the water. Many operators, each holding a small amount of water, federated into a supply that no single platform controls.
 
-## The Remaining Hard Problem
+## What This Looks Like in Code
 
-This isn't a pure privacy win. Correlation attacks are real.
+The PAP codebase already has the plumbing for this. The `AgentExecutor` trait supports a `requires_disclosure` field on every agent's metadata. Thirteen agents are live — from zero-disclosure public API agents (DuckDuckGo, Wikipedia, arXiv) to disclosure-required agents (IP Geolocation, Web Page Reader) to the bridge pattern previewed by the GitHub Repos agent.
 
-GitHub could attempt timing correlation: this token was used at 3:47pm, and session DID `did:key:z6Mk...` connected at 3:47pm. They could attempt query fingerprinting: only user X has access to repos A, B, and C, and this session queried exactly those repos.
+The public GitHub agent works today with zero authentication: 60 requests per hour, public repos only. The doc comment on line 8 of the implementation already describes the next step: *"Previews the bridge pattern: an operator holding a PAT gets 5000 req/hr, demonstrating how operator credentials enhance service without exposing user identity."*
 
-PAP mitigates this through protocol-level design — batched execution breaks timing correlation, context minimization ensures receipts never contain actual values, and progressive decay limits how long correlation windows exist. But mitigation isn't elimination. A sufficiently motivated host with access to both the credential and the connection metadata can narrow the anonymity set.
+That operator credential is a deployment configuration, not a protocol change. The agent code stays the same. The operator adds a `GITHUB_TOKEN` environment variable. The `AgentExecutor::execute()` method reads it and adds an `Authorization: Bearer` header. The user's query arrives via ephemeral session, gets answered with the operator's credential, and the session closes. No protocol changes. No new disclosure types. No credential relay.
 
-The honest answer is that PAP gives you *unlinkability by default* against casual correlation, and *plausible deniability* against active correlation. It does not give you absolute anonymity against a host that controls both the credential infrastructure and the agent infrastructure. If GitHub issues the credential and hosts the agent, they have both sides. The protocol makes correlation *harder* and *visible in the audit trail*, but not impossible.
-
-That's a meaningful improvement over today, where correlation isn't just possible — it's the business model.
+The protocol already handles everything. The question is who runs the node.
 
 ## The Bet
 
-The friction collapse is real. Portable credentials eliminate the integration tax that makes every cross-platform workflow painful. Federated agents eliminate the UI lock-in that makes every platform a silo. Protocol-enforced context minimization eliminates the surveillance that makes every interaction a data extraction event.
+The friction collapse is real. Operator-held credentials eliminate the integration tax that makes every cross-platform workflow painful. Federated agents eliminate the UI lock-in that makes every platform a silo. Protocol-enforced context minimization eliminates the surveillance that makes every interaction a data extraction event.
 
-But none of this happens unless platforms see credential issuance as more valuable than session ownership. That's the bet. It's a bet that distribution beats lock-in. That the water is worth more than the pipe.
+But none of this happens unless someone builds the first Chrysalis node that matters — one with enough useful agents, enough operator credibility, and enough federation reach that a user chooses it over going directly to github.com.
+
+That's the bet. Not that GitHub will adopt PAP. That someone will build the thing that makes GitHub's capture model feel like what it is: a tax on every developer interaction, collected in behavioral data, enforced by lock-in.
 
 Every previous generation of open standards eventually got captured by platforms that controlled the implementation. PAP's design makes that structurally difficult — ephemeral sessions can't be accumulated, receipts can't be mined, and mandates can't exceed their parent scope. But structural difficulty is not impossibility.
 
-The protocol is open source. The reference implementation runs today. The agents are live. The question isn't whether this architecture works — it's whether platforms are ready to trade control of the interface for control of the credential.
+The protocol is open source. The reference implementation runs today. The agents are live. The question isn't whether this architecture works — it's whether someone is ready to be the operator that proves the model.
 
-History suggests they will. It just takes one to go first.
+History says someone will. The incumbents always look entrenched — until they don't.
 
 ---
 
