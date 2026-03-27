@@ -1,3 +1,10 @@
+## [0.5.1] - 2026-03-26
+
+### Fixed
+
+- Force-reinstall trunk/cargo-leptos binaries to avoid stale cache mismatches
+- Chrysalis server binary path corrected to `target/release/` (matches cargo-leptos output)
+
 ## [0.5.0] - 2026-03-26
 
 ### Added

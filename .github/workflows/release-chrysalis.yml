@@ -146,7 +146,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-leptos
-        run: cargo binstall cargo-leptos --no-confirm
+        run: cargo binstall cargo-leptos --no-confirm --force
 
       - name: Build Chrysalis server (cargo-leptos)
         if: matrix.target != 'universal-apple-darwin' && matrix.cross != true
@@ -157,7 +157,7 @@ jobs:
         run: |
           # Build for both architectures
           cargo leptos build --release -p pap-registry
-          BINARY_PATH="target/server/release/pap-registry"
+          BINARY_PATH="target/release/pap-registry"
           if [ -f "$BINARY_PATH" ]; then
             echo "Built universal binary at $BINARY_PATH"
           fi
@@ -181,9 +181,9 @@ jobs:
 
           # Copy server binary
           if [ "${{ matrix.platform }}" = "windows-latest" ]; then
-            cp target/server/release/pap-registry.exe "dist/${ARTIFACT}/chrysalis.exe"
+            cp target/release/pap-registry.exe "dist/${ARTIFACT}/chrysalis.exe"
           else
-            cp target/server/release/pap-registry "dist/${ARTIFACT}/chrysalis"
+            cp target/release/pap-registry "dist/${ARTIFACT}/chrysalis"
             chmod +x "dist/${ARTIFACT}/chrysalis"
           fi
 
@@ -252,7 +252,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-leptos
-        run: cargo binstall cargo-leptos --no-confirm
+        run: cargo binstall cargo-leptos --no-confirm --force
 
       - name: Build WASM site via cargo-leptos
         run: cargo leptos build --release -p pap-registry
