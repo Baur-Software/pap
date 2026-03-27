@@ -25,7 +25,7 @@ impl AgentExecutor for FrankfurterExecutor {
         let (from, to, amount) = parse_currency_query(query)?;
 
         let client = reqwest::blocking::Client::builder()
-            .user_agent("Papillion/0.1 (PAP Browser)")
+            .user_agent("Papillon/0.1 (PAP Browser)")
             .build()
             .map_err(|e: reqwest::Error| TransportError::ServerError(e.to_string()))?;
 

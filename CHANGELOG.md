@@ -8,20 +8,20 @@
 
 ### Fixed
 
-- Papillion iOS: use `App.xcodeproj` instead of `App.xcworkspace` (Capacitor 8 uses SPM, not CocoaPods)
+- Papillon iOS: use `App.xcodeproj` instead of `App.xcworkspace` (Capacitor 8 uses SPM, not CocoaPods)
 
 ## [0.5.3] - 2026-03-26
 
 ### Fixed
 
-- Papillion iOS: remove CocoaPods Podfile sed (Capacitor 8 uses Swift Package Manager)
-- Papillion mobile upload scripts: remove `require('@actions/glob')` (conflicts with Node 22 built-in)
+- Papillon iOS: remove CocoaPods Podfile sed (Capacitor 8 uses Swift Package Manager)
+- Papillon mobile upload scripts: remove `require('@actions/glob')` (conflicts with Node 22 built-in)
 
 ## [0.5.2] - 2026-03-26
 
 ### Fixed
 
-- Papillion mobile builds: upgrade to Capacitor 8 (Node 22, JDK 21, iOS 15.0 deploy target)
+- Papillon mobile builds: upgrade to Capacitor 8 (Node 22, JDK 21, iOS 15.0 deploy target)
 - Remove Chrysalis mobile builds (SSR app output is incompatible with Capacitor)
 
 ## [0.5.1] - 2026-03-26
@@ -35,9 +35,9 @@
 
 ### Added
 
-- **Multi-platform release workflows** — Per-product CI/CD pipelines for Papillion and Chrysalis covering desktop (macOS/Linux/Windows), mobile (iOS/Android via Capacitor thin clients), web (WASM), Docker, and npm
-- **npm CLI packages** — `@baur-software/papillion` (serves WASM frontend) and `@baur-software/chrysalis` (downloads platform binary)
-- **Papillion Dockerfile** — Multi-stage trunk build to nginx:alpine with COOP/COEP headers
+- **Multi-platform release workflows** — Per-product CI/CD pipelines for Papillon and Chrysalis covering desktop (macOS/Linux/Windows), mobile (iOS/Android via Capacitor thin clients), web (WASM), Docker, and npm
+- **npm CLI packages** — `@baur-software/papillon` (serves WASM frontend) and `@baur-software/chrysalis` (downloads platform binary)
+- **Papillon Dockerfile** — Multi-stage trunk build to nginx:alpine with COOP/COEP headers
 
 ### Fixed
 
@@ -117,16 +117,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **qa**: Tier 1 smoke tests for Papillion desktop app — Playwright-based E2E smoke tests verifying app launches, renders, and loads without WASM errors. Runs in CI on every PR.
-- **qa**: Tier 2 functional tests for Papillion workflows — 11 E2E tests covering agent discovery, scenario selection, PAP handshake (6-step protocol), and settings management. Mock command infrastructure validates state transitions and error scenarios.
+- **qa**: Tier 1 smoke tests for Papillon desktop app — Playwright-based E2E smoke tests verifying app launches, renders, and loads without WASM errors. Runs in CI on every PR.
+- **qa**: Tier 2 functional tests for Papillon workflows — 11 E2E tests covering agent discovery, scenario selection, PAP handshake (6-step protocol), and settings management. Mock command infrastructure validates state transitions and error scenarios.
 - **qa**: Tier 3 canary monitoring for post-deploy health checks — 6 post-deployment health checks (backend health endpoint, frontend load time, scenario execution latency, orchestrator config, identity access, console errors). Runs automatically after release publish.
-- **papillion**: Health endpoint (`get_health_status` Tauri command) — returns application health status, uptime (calculated from Instant, not UNIX_EPOCH), timestamp, and version. Enables post-deploy canary verification without rolling back broken releases.
+- **papillon**: Health endpoint (`get_health_status` Tauri command) — returns application health status, uptime (calculated from Instant, not UNIX_EPOCH), timestamp, and version. Enables post-deploy canary verification without rolling back broken releases.
 - **ci**: CodeQL workflow with path-based filtering — runs static analysis only when changes include target languages (Rust, Python, JavaScript/TypeScript), reducing unnecessary CI runs on documentation-only or configuration-only commits
 - **docs**: New `pap.html` dedicated page for the PAP protocol targeting developers — covers all six protocol invariants (failure-mode-first framing), protocol stack table, crate grid, Quick Start Rust snippet, examples, and comparison table
 - **docs**: New `chrysalis.html` page for the Chrysalis self-hostable federated registry product
-- **docs**: Papillion canvas rendering demo on `index.html` — macOS-style mockup showing flight booking result with privacy disclosure strip
-- **docs**: Six PAP constraint cards on `pap.html`, each leading with the failure mode it prevents; includes new card 06 "Discovery without a standard becomes a silo" covering the federated registry and Papillion visual composer
-- **docs**: Registry and visual composer card explaining signed JSON-LD capability advertisements, federated discovery, and Papillion's drag-and-drop workflow composer
+- **docs**: Papillon canvas rendering demo on `index.html` — macOS-style mockup showing flight booking result with privacy disclosure strip
+- **docs**: Six PAP constraint cards on `pap.html`, each leading with the failure mode it prevents; includes new card 06 "Discovery without a standard becomes a silo" covering the federated registry and Papillon visual composer
+- **docs**: Registry and visual composer card explaining signed JSON-LD capability advertisements, federated discovery, and Papillon's drag-and-drop workflow composer
 
 ### Fixed
 
@@ -136,11 +136,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ci**: Increase canary verification timeout from 5 to 15 minutes — accommodates cold-start WASM compilation and Playwright browser download on CI machines.
 - **qa**: Adjust frontend load time SLA from 3 seconds to 10 seconds — realistic timeout for CI ubuntu-latest cold-start (WASM + bundle = 5-15s).
 - **qa**: Improve console error filtering in canary tests — use regex patterns instead of string includes, properly detects critical errors vs. benign warnings.
-- **papillion**: Use `.map()` instead of `.and_then()` for `Navigator::clipboard()` after `web_sys` return type change from `Option<Clipboard>` to `Clipboard` — fixes WASM compilation failure blocking Tauri desktop builds on all platforms
+- **papillon**: Use `.map()` instead of `.and_then()` for `Navigator::clipboard()` after `web_sys` return type change from `Option<Clipboard>` to `Clipboard` — fixes WASM compilation failure blocking Tauri desktop builds on all platforms
 
 ### Changed
 
-- **docs**: `index.html` reframed around Papillion product (canvas rendering engine, use cases, how-it-works); PAP protocol content moved to dedicated `pap.html`
+- **docs**: `index.html` reframed around Papillon product (canvas rendering engine, use cases, how-it-works); PAP protocol content moved to dedicated `pap.html`
 - **docs**: PAP invariants rewritten to lead with failure modes rather than mechanism names — "Sessions that never die drain the internet" instead of "Hard TTL enforcement"
 - **docs**: Nav updated across all pages: `index.html`, `chrysalis.html`, and `pap.html` link to each other cohesively
 
@@ -148,14 +148,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **registry**: Hostable federated PAP registry — standalone Axum web service that other agents and Papillion instances can discover and query; supports both SQLite (single-node) and Postgres (clustered) backends
+- **registry**: Hostable federated PAP registry — standalone Axum web service that other agents and Papillon instances can discover and query; supports both SQLite (single-node) and Postgres (clustered) backends
 - **registry**: Leptos 0.8 SSR frontend — server-side-rendered agent search UI with live FTS5 results, DID display, capability badges, and pagination; single-crate architecture (no separate WASM build step)
 - **registry**: Federation protocol — push/pull peer sync, `/api/peers` management endpoints, and configurable sync intervals for multi-node mesh
 - **registry**: Admin REST API — token-authenticated endpoints for agent CRUD, peer management, and status; all mutations require `Authorization: Bearer <token>`
 - **registry**: Ed25519 signature verification on agent registration — rejects unsigned or tampered `AgentAdvertisement` payloads at ingest
 - **registry**: Docker-based test execution — `docker buildx build --target test` stage runs the full test suite at build time; CI `test-registry` job added to GitHub Actions
 - **registry**: Comprehensive test suite — 34 tests covering SQLite CRUD layer, auth middleware, and all admin route handlers via `tower::ServiceExt::oneshot()`
-- **papillion**: Local federated registry settings — configure endpoint and sync interval for the Papillion-embedded registry directly in the Settings panel
+- **papillon**: Local federated registry settings — configure endpoint and sync interval for the Papillon-embedded registry directly in the Settings panel
 
 ### Fixed
 
@@ -190,78 +190,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **docs**: Papillion marketing site (`docs/papillion/`) — consumer-facing landing page with interactive 6-step purchase demo showing AI operating within user-defined rules (budget, vendor preferences, approval thresholds)
-- **docs**: Dual GitHub Pages architecture — root landing page (`docs/index.html`) routes to Papillion (consumer) and PAP (developer) sub-sites
-- **docs**: PAP technical spec site relocated to `docs/pap/` with cross-links to Papillion for non-developer visitors
+- **docs**: Papillon marketing site (`docs/papillon/`) — consumer-facing landing page with interactive 6-step purchase demo showing AI operating within user-defined rules (budget, vendor preferences, approval thresholds)
+- **docs**: Dual GitHub Pages architecture — root landing page (`docs/index.html`) routes to Papillon (consumer) and PAP (developer) sub-sites
+- **docs**: PAP technical spec site relocated to `docs/pap/` with cross-links to Papillon for non-developer visitors
 - **docs**: Multi-language SDK roadmap section on PAP site — Rust (shipping), Python/TypeScript/Go/Swift/Kotlin planned
 
 ### Changed
 
-- **docs**: PAP site language aligned with Papillion framing — leads with "why" (control, visibility, safety) before "how" (cryptographic protocol), adds "Not a developer?" CTA linking to Papillion
-- **docs**: README simplified — removed example binary references (examples deleted in 0.2.0), added Papillion link for interactive demos
+- **docs**: PAP site language aligned with Papillon framing — leads with "why" (control, visibility, safety) before "how" (cryptographic protocol), adds "Not a developer?" CTA linking to Papillon
+- **docs**: README simplified — removed example binary references (examples deleted in 0.2.0), added Papillon link for interactive demos
 - **ci**: Release workflow model download switched to HuggingFace hub for reliability
 
 ### Removed
 
-- **docs**: Direct API call examples removed from PAP site — Papillion now covers those use cases through its interactive demo
+- **docs**: Direct API call examples removed from PAP site — Papillon now covers those use cases through its interactive demo
 
 ## [0.3.0] - 2026-03-21
 
 ### Added
 
-- **papillion**: Multi-profile identity support — switch between multiple profiles (like browser profiles), each with its own DID and workspace
-- **papillion**: Profile avatars with deterministic colors — visual distinction between profiles with semantic color palette (purple/teal/gold/coral/blue/rose)
-- **papillion**: Profile manager in Settings — create, rename, delete, and switch profiles with last-used timestamps
-- **papillion**: Profile dropdown in TopBar — quick access to all profiles with active profile indicator
-- **papillion**: Complete state isolation per profile — profile switch resets canvas, registries, and orchestrator config for true workspace separation
-- **papillion-ui**: Schema-driven JSON-LD rendering engine — trait-based registry pattern for custom block renderers; replaces hard-coded dispatch with runtime-registrable templates that handle arbitrary schema.org types by classifying field shapes (dates, prices, URLs, DIDs, nested objects, lists)
-- **papillion-ui**: SOLID-compliant renderer architecture — enables custom templates via registry registration without modifying core code (Open/Closed Principle)
-- **papillion-ui**: Handshake envelope unwrap — extracts agent payload from the PAP handshake wrapper and renders receipt metadata footer (session ID, co-signatures, action)
-- **papillion-ui**: Answer renderer for on-device AI responses displayed as clean paragraph text
-- **papillion-ui**: CSS class sanitization and list item cap (50) to prevent malicious agent payloads from injecting CSS classes or flooding the DOM
+- **papillon**: Multi-profile identity support — switch between multiple profiles (like browser profiles), each with its own DID and workspace
+- **papillon**: Profile avatars with deterministic colors — visual distinction between profiles with semantic color palette (purple/teal/gold/coral/blue/rose)
+- **papillon**: Profile manager in Settings — create, rename, delete, and switch profiles with last-used timestamps
+- **papillon**: Profile dropdown in TopBar — quick access to all profiles with active profile indicator
+- **papillon**: Complete state isolation per profile — profile switch resets canvas, registries, and orchestrator config for true workspace separation
+- **papillon-ui**: Schema-driven JSON-LD rendering engine — trait-based registry pattern for custom block renderers; replaces hard-coded dispatch with runtime-registrable templates that handle arbitrary schema.org types by classifying field shapes (dates, prices, URLs, DIDs, nested objects, lists)
+- **papillon-ui**: SOLID-compliant renderer architecture — enables custom templates via registry registration without modifying core code (Open/Closed Principle)
+- **papillon-ui**: Handshake envelope unwrap — extracts agent payload from the PAP handshake wrapper and renders receipt metadata footer (session ID, co-signatures, action)
+- **papillon-ui**: Answer renderer for on-device AI responses displayed as clean paragraph text
+- **papillon-ui**: CSS class sanitization and list item cap (50) to prevent malicious agent payloads from injecting CSS classes or flooding the DOM
 - **docs**: Built-in LLM setup guide — quick reference for downloading TinyLLaMA and testing locally
 - **docs**: Tauri resource directory quirk — comprehensive guide explaining platform-specific model bundling behavior (macOS/Windows/Linux)
 - **docs**: Manual QA test plan — 20 comprehensive test cases covering profile creation, switching, isolation, persistence, and edge cases
 
 ### Changed
 
-- **papillion**: Profile data now persisted in separate `profiles.db` registry alongside main database
-- **papillion**: Seed zeroization hardened — `Zeroizing<[u8; 32]>` prevents sensitive material from lingering in memory
-- **papillion-ui**: Block renderer converted from single file to module directory with trait-based plugin architecture (mod, field_classify, generic, templates, registry, renderer, receipt)
+- **papillon**: Profile data now persisted in separate `profiles.db` registry alongside main database
+- **papillon**: Seed zeroization hardened — `Zeroizing<[u8; 32]>` prevents sensitive material from lingering in memory
+- **papillon-ui**: Block renderer converted from single file to module directory with trait-based plugin architecture (mod, field_classify, generic, templates, registry, renderer, receipt)
 
 ## [0.2.3] - 2026-03-21
 
 ### Fixed
 
-- **papillion**: Prevent silent identity loss on corrupt seed — now returns error instead of silently generating ephemeral keypair
-- **papillion**: DB persist failures no longer swallowed — seed persistence errors propagated to frontend so users know identity creation failed
-- **papillion**: Raw seed material now zeroized on drop to prevent lingering in memory after use (cryptographic hardening)
+- **papillon**: Prevent silent identity loss on corrupt seed — now returns error instead of silently generating ephemeral keypair
+- **papillon**: DB persist failures no longer swallowed — seed persistence errors propagated to frontend so users know identity creation failed
+- **papillon**: Raw seed material now zeroized on drop to prevent lingering in memory after use (cryptographic hardening)
 
 ## [0.2.2] - 2026-03-21
 
 ### Added
 
-- **papillion**: Papillion now remembers your agent interactions across restarts — episodes, agent profiles, and settings persist in a local SQLite database
-- **papillion**: Smarter agent selection — the app learns from past interactions to calibrate mandate TTL and minimize disclosure based on agent track records
-- **papillion**: Agent performance tracking with rolling averages — success rate, quality, duration, and co-sign refusals tracked per agent
-- **papillion**: Your identity persists across restarts — Ed25519 principal keypair auto-saved on first launch, auto-loaded on subsequent starts
-- **papillion**: Semantic queries over stored interactions — search by Schema.org type or free text across your interaction history
-- **papillion**: Agent profiles now accessible from the frontend via `list_agent_profiles` command
+- **papillon**: Papillon now remembers your agent interactions across restarts — episodes, agent profiles, and settings persist in a local SQLite database
+- **papillon**: Smarter agent selection — the app learns from past interactions to calibrate mandate TTL and minimize disclosure based on agent track records
+- **papillon**: Agent performance tracking with rolling averages — success rate, quality, duration, and co-sign refusals tracked per agent
+- **papillon**: Your identity persists across restarts — Ed25519 principal keypair auto-saved on first launch, auto-loaded on subsequent starts
+- **papillon**: Semantic queries over stored interactions — search by Schema.org type or free text across your interaction history
+- **papillon**: Agent profiles now accessible from the frontend via `list_agent_profiles` command
 - **docs**: Memex(RL) architectural comparison — maps PAP's trust-bounded experience memory against Memex(RL) indexed retrieval patterns
 
 ### Changed
 
-- **papillion**: Scenario history now persists across app restarts (previously in-memory only)
+- **papillon**: Scenario history now persists across app restarts (previously in-memory only)
 
 ### Fixed
 
-- **papillion**: Fixed potential panic on short DID/hash strings in step display (`agent_did[..20]`, `mandate_hash[..16]`, `session.id[..8]`) — now use safe `.get()` fallbacks
-- **papillion**: Fixed protocol violation risk where stale disclosure refs from agent profiles could be used in new mandates — now validates refs are a valid subset of current scenario's allowed disclosures
+- **papillon**: Fixed potential panic on short DID/hash strings in step display (`agent_did[..20]`, `mandate_hash[..16]`, `session.id[..8]`) — now use safe `.get()` fallbacks
+- **papillon**: Fixed protocol violation risk where stale disclosure refs from agent profiles could be used in new mandates — now validates refs are a valid subset of current scenario's allowed disclosures
 
 ### Changed
 
-- **papillion**: Orchestrator now de-duplicates SHA-256 hash computation for agent DIDs — extracted to `hash_agent_did()` helper function (DRY)
-- **papillion**: `list_completed_runs` now supports pagination with optional `offset` and `limit` parameters — prevents returning massive JSON payloads (default: 50, capped at 100)
+- **papillon**: Orchestrator now de-duplicates SHA-256 hash computation for agent DIDs — extracted to `hash_agent_did()` helper function (DRY)
+- **papillon**: `list_completed_runs` now supports pagination with optional `offset` and `limit` parameters — prevents returning massive JSON payloads (default: 50, capped at 100)
 
 ## [Unreleased]
 
@@ -273,7 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **papillion**: Fixed macOS app crash on startup — federation server initialization now runs on dedicated background thread with its own tokio runtime, preventing panic when `tokio::spawn()` is called before runtime initialization
+- **papillon**: Fixed macOS app crash on startup — federation server initialization now runs on dedicated background thread with its own tokio runtime, preventing panic when `tokio::spawn()` is called before runtime initialization
 
 ## [0.2.0] - 2026-03-21
 
@@ -289,8 +289,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **pap-federation**: `FederationClient` constructor API — `new()` now calls `tofu()` (bootstrap); use `pinned(peers)` for verified connections
 - **pap-transport**: `AgentClient::new()` uses standard CA-validated TLS instead of `danger_accept_invalid_certs(true)` — PAP federation uses `with_client()` with pinned clients
-- **papillion**: Registry navigation via explicit TOFU → fingerprint pinning flow instead of blind `resolve_pap_url()` — all peer communication requires known fingerprints
-- **papillion**: Discovery loop only contacts peers with cert fingerprints; rejects gossiped peers without fingerprints
+- **papillon**: Registry navigation via explicit TOFU → fingerprint pinning flow instead of blind `resolve_pap_url()` — all peer communication requires known fingerprints
+- **papillon**: Discovery loop only contacts peers with cert fingerprints; rejects gossiped peers without fingerprints
 
 ### Fixed
 

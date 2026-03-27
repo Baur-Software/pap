@@ -1,5 +1,5 @@
 {
-  "name": "papillion-e2e",
+  "name": "papillon-e2e",
   "private": true,
   "scripts": {
     "test": "playwright test",

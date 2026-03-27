@@ -3,7 +3,7 @@ name = "pap-agents"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Shared PAP agent implementations — reusable across Papillion, Chrysalis, and any PAP node"
+description = "Shared PAP agent implementations — reusable across Papillon, Chrysalis, and any PAP node"
 
 [dependencies]
 pap-did = { workspace = true }

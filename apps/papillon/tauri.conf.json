@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui-org/nicegui/main/nicegui/tauri_app/tauri.conf.schema.json",
+  "productName": "Papillon",
+  "version": "0.1.0",
+  "identifier": "com.baur-software.papillon",
+  "build": {
+    "beforeDevCommand": "cd papillon/frontend && trunk serve --port 1420",
+    "beforeBuildCommand": "cd papillon/frontend && trunk build --release",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "frontend/dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Papillon",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "models/*": "models/"
+    }
+  }
+}

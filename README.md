@@ -62,7 +62,7 @@ cd pap
 cargo test
 ```
 
-For interactive demos, see [Papillion](https://baur-software.github.io/pap/papillion/).
+For interactive demos, see [Papillon](https://baur-software.github.io/pap/papillon/).
 
 ## Protocol Stack
 
@@ -96,10 +96,10 @@ pap/
     pap-c/            # C FFI bindings (cdylib + staticlib)
     pap-wasm/         # WebAssembly bindings (@pap/sdk npm package)
     pap-python/       # Python PyO3 bindings
-    papillion-shared/ # Shared models between Papillion frontend and backend
+    papillon-shared/ # Shared models between Papillon frontend and backend
   apps/
     registry/         # Hostable federated PAP registry (Axum + Leptos SSR, SQLite/Postgres)
-    papillion/        # Desktop reference implementation (Tauri)
+    papillon/        # Desktop reference implementation (Tauri)
   bindings/
     cpp/              # C++ RAII header-only wrapper (pap.hpp)
     csharp/           # .NET 8 C# P/Invoke bindings with SafeHandle RAII

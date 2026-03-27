@@ -5,13 +5,13 @@
 
 ## Overview
 
-This implementation enables building Papillion as a pure web application (WASM) while maintaining full compatibility with the desktop Tauri build. The key innovation is a **database abstraction layer** that allows the same Rust codebase to compile for both native (rusqlite) and web (sql.js) targets using feature flags.
+This implementation enables building Papillon as a pure web application (WASM) while maintaining full compatibility with the desktop Tauri build. The key innovation is a **database abstraction layer** that allows the same Rust codebase to compile for both native (rusqlite) and web (sql.js) targets using feature flags.
 
 ## Architecture
 
 ### Database Abstraction Layer
 
-**Location**: `crates/papillion-shared/src/db/`
+**Location**: `crates/papillon-shared/src/db/`
 
 The abstraction uses Rust's type system and feature flags to provide compile-time database backend selection:
 
@@ -37,7 +37,7 @@ impl DatabaseOps for WasmDatabase { /* placeholder for sql.js */ }
 
 ### Feature Flags
 
-**`papillion-shared/Cargo.toml`**:
+**`papillon-shared/Cargo.toml`**:
 ```toml
 [features]
 default = ["native"]
@@ -61,19 +61,19 @@ This ensures:
 
 ### New Files Created
 
-1. **`crates/papillion-shared/src/db/mod.rs`** (100 lines)
+1. **`crates/papillon-shared/src/db/mod.rs`** (100 lines)
    - `DatabaseOps` trait definition
    - Shared `Episode` and `AgentProfile` types
    - `DbError` wrapper type
    - Feature-gated re-exports
 
-2. **`crates/papillion-shared/src/db/native.rs`** (400+ lines)
+2. **`crates/papillon-shared/src/db/native.rs`** (400+ lines)
    - Complete rusqlite implementation
    - Schema definition (episodes, agent_profiles, retention_policies, settings)
    - All 9 DatabaseOps trait methods
    - Existing tests ported from original db.rs
 
-3. **`crates/papillion-shared/src/db/wasm.rs`** (80 lines)
+3. **`crates/papillon-shared/src/db/wasm.rs`** (80 lines)
    - Placeholder WasmDatabase struct
    - All DatabaseOps trait methods (stubs, ready for sql.js)
    - Framework for IndexedDB persistence integration
@@ -86,35 +86,35 @@ This ensures:
 
 ### Modified Files
 
-1. **`crates/papillion-shared/Cargo.toml`**
+1. **`crates/papillon-shared/Cargo.toml`**
    - Added `rusqlite` as optional dependency
    - Added feature flags: `native` (default), `wasm`
    - `chrono`, `serde`, `serde_json` remain unconditional
 
-2. **`crates/papillion-shared/src/lib.rs`**
+2. **`crates/papillon-shared/src/lib.rs`**
    - Export `db` module when either feature is enabled
 
-3. **`apps/papillion/src/db.rs`** (→ 35 lines)
+3. **`apps/papillon/src/db.rs`** (→ 35 lines)
    - Changed from full implementation to re-export + compatibility layer
    - Type alias: `pub type Database = NativeDatabase;`
    - Helper functions: `open_db()`, `open_db_memory()`
-   - Error conversion: `DbError` → `PapillionError`
+   - Error conversion: `DbError` → `PapillonError`
 
-4. **`apps/papillion/Cargo.toml`**
-   - Updated `papillion-shared` to use `features = ["native"]`
+4. **`apps/papillon/Cargo.toml`**
+   - Updated `papillon-shared` to use `features = ["native"]`
    - Re-added `rusqlite` direct dependency (for `profiles_db.rs`)
 
-5. **`apps/papillion/src/state.rs`**
+5. **`apps/papillon/src/state.rs`**
    - Updated all `Database::open()` calls to `crate::db::open_db()`
    - Updated all `Database::open_memory()` calls to `crate::db::open_db_memory()`
    - Added `use crate::db::prelude::DatabaseOps` to scope trait methods
 
-6. **`apps/papillion/src/commands/{orchestrator,identity,registry}.rs`**
+6. **`apps/papillon/src/commands/{orchestrator,identity,registry}.rs`**
    - Added `use crate::db::prelude::DatabaseOps` to all files
    - Updated `list_agent_profiles()` and `set_setting()` calls with `.map_err()` conversions
 
-7. **`apps/papillion/frontend/Cargo.toml`**
-   - Updated `papillion-shared` to use `default-features = false, features = ["wasm"]`
+7. **`apps/papillon/frontend/Cargo.toml`**
+   - Updated `papillon-shared` to use `default-features = false, features = ["wasm"]`
    - Ensures web builds don't pull in rusqlite
 
 ## Build Instructions
@@ -123,7 +123,7 @@ This ensures:
 
 ```bash
 # Standard desktop app build (no changes to existing workflow)
-cd apps/papillion
+cd apps/papillon
 cargo tauri build
 ```
 
@@ -133,7 +133,7 @@ cargo tauri build
 
 ```bash
 # Build frontend to WASM
-cd apps/papillion/frontend
+cd apps/papillon/frontend
 trunk build --release
 
 # Output in: dist/
@@ -146,14 +146,14 @@ trunk build --release
 
 ```bash
 # Verify desktop builds (should pass)
-cargo check --package papillion
+cargo check --package papillon
 
 # Verify web builds (should pass)
-cd apps/papillion/frontend
+cd apps/papillon/frontend
 cargo build --target wasm32-unknown-unknown --lib
 
 # Verify feature isolation
-cargo build --target wasm32-unknown-unknown -p papillion-shared \
+cargo build --target wasm32-unknown-unknown -p papillon-shared \
   --no-default-features --features wasm --lib
 ```
 
@@ -186,7 +186,7 @@ cargo build --target wasm32-unknown-unknown -p papillion-shared \
 ✅ **Zero breaking changes to desktop**:
 - `crate::db::Database` type is still available
 - All original methods work identically
-- Error handling unchanged (via PapillionError)
+- Error handling unchanged (via PapillonError)
 - Tests migrate directly from old db.rs
 - Profiles database (profiles_db.rs) unaffected
 
@@ -200,11 +200,11 @@ cargo build --target wasm32-unknown-unknown -p papillion-shared \
 The WASM database implementation is a stub ready for full sql.js integration:
 
 ```rust
-// crates/papillion-shared/Cargo.toml - Add:
+// crates/papillon-shared/Cargo.toml - Add:
 sql-js = "0.1"           # JavaScript SQLite
 idb = "0.4"              # IndexedDB wrapper
 
-// apps/papillion/frontend/Cargo.toml - Add:
+// apps/papillon/frontend/Cargo.toml - Add:
 wasm-bindgen-futures = "0.4"
 ```
 
@@ -223,15 +223,15 @@ wasm-bindgen-futures = "0.4"
 
 ```bash
 # Test both builds locally
-cargo check --package papillion              # Desktop
-cd apps/papillion/frontend && \
+cargo check --package papillon              # Desktop
+cd apps/papillon/frontend && \
   cargo build --target wasm32-unknown-unknown --lib  # Web
 
 # Run Tauri desktop
-cd apps/papillion && cargo tauri dev
+cd apps/papillon && cargo tauri dev
 
 # Run web locally
-cd apps/papillion/frontend && trunk serve   # Serves at http://localhost:8080
+cd apps/papillon/frontend && trunk serve   # Serves at http://localhost:8080
 ```
 
 ### CI Testing
@@ -247,10 +247,10 @@ cd apps/papillion/frontend && trunk serve   # Serves at http://localhost:8080
 1. **GitHub Pages** (free, auto-deploy from dist/)
    ```bash
    # After building: dist/ → GitHub Pages
-   # Access at: github.com/user/repo/papillion/
+   # Access at: github.com/user/repo/papillon/
    ```
 
-2. **Custom Domain** (e.g., papillion.example.com)
+2. **Custom Domain** (e.g., papillon.example.com)
    - Host static `dist/` files
    - No backend required (except for future API calls)
 

@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Papillon — One canvas. Many agents. Your rules.</title>
+  <meta name="description" content="A canvas where specialized AI agents work together on your tasks. Preview their plans, approve their actions, verify their results. No agent ever sees your full context." />
+  <meta property="og:title" content="Papillon — One canvas. Many agents. Your rules." />
+  <meta property="og:description" content="Specialized AI agents work together on your tasks. Preview plans, approve actions, verify results. No agent sees your full context." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Papillon — One canvas. Many agents. Your rules." />
+  <meta name="twitter:description" content="Preview plans. Approve actions. Verify results. No agent sees your full context." />
+  <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #060609;
+      --surface:  #0c0d14;
+      --surface2: #12131d;
+      --border:   #1c1e2e;
+      --violet:   #8b5cf6;
+      --indigo:   #6366f1;
+      --emerald:  #10b981;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+      --text:     #e8ecf4;
+      --muted:    #8892a8;
+      --faint:    #4a5068;
+      --radius:   10px;
+      --radius-lg: 20px;
+      scroll-behavior: smooth;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection { background: rgba(139,92,246,.3); }
+    a { color: var(--violet); text-decoration: none; transition: color .2s; }
+    a:hover { color: #a78bfa; }
+
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ─── Nav ─────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(6,6,9,.85);
+      backdrop-filter: blur(16px) saturate(1.5);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1080px; margin: 0 auto; padding: 0 24px;
+      height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text);
+    }
+    .nav-logo img { height: 32px; width: auto; }
+    .nav-wordmark {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em;
+    }
+    .nav-links { display: flex; align-items: center; gap: 8px; list-style: none; }
+    .nav-links a {
+      color: var(--muted); font-size: .9rem; font-weight: 500;
+      padding: 6px 12px; border-radius: var(--radius);
+      transition: all .15s ease;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .nav-links a[aria-current="page"] { color: var(--text); }
+    .nav-link-icon {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
+    .nav-cta { display: flex; align-items: center; gap: 10px; }
+    .gh-icon { width: 18px; height: 18px; fill: currentColor; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: var(--radius);
+      font-size: .88rem; font-weight: 500; cursor: pointer;
+      transition: all .2s ease; text-decoration: none;
+    }
+    .btn-outline {
+      border: 1px solid var(--border); color: var(--muted); background: transparent;
+    }
+    .btn-outline:hover { border-color: var(--indigo); color: var(--indigo); transform: translateY(-1px); }
+    @media (max-width: 768px) { .nav-links { display: none; } }
+
+    /* ─── Hero ────────────────────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      position: relative;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(ellipse, rgba(139,92,246,.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      margin-bottom: 24px;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--violet) 0%, #c084fc 50%, var(--indigo) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .subtitle {
+      font-size: clamp(1.1rem, 2vw, 1.35rem);
+      color: var(--muted);
+      max-width: 540px;
+      margin: 0 auto 48px;
+      line-height: 1.6;
+    }
+    .hero-ctas { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      padding: 14px 32px; border-radius: var(--radius);
+      background: var(--violet); color: #fff; font-weight: 600; font-size: 1rem;
+      border: none; cursor: pointer;
+      transition: transform .15s, box-shadow .2s;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(139,92,246,.35); color: #fff; }
+    .btn-secondary {
+      padding: 14px 32px; border-radius: var(--radius);
+      background: transparent; color: var(--muted); font-weight: 600; font-size: 1rem;
+      border: 1px solid var(--border); cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-secondary:hover { border-color: var(--faint); color: var(--text); }
+
+    /* ─── Sections ────────────────────────────────────────────────── */
+    .section { padding: 100px 0; }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 99px;
+      background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.2);
+      color: var(--violet); font-size: .75rem; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .section h2 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -.02em;
+      margin-bottom: 20px;
+    }
+    .section .lead {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 600px;
+      line-height: 1.7;
+    }
+
+    /* ─── Problem ─────────────────────────────────────────────────── */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+    .problem-card {
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      transition: border-color .2s;
+    }
+    .problem-card:hover { border-color: rgba(239,68,68,.3); }
+    .problem-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin-bottom: 16px;
+      background: rgba(239,68,68,.08);
+    }
+    .problem-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+    .problem-card p { color: var(--muted); font-size: .95rem; }
+
+    /* ─── Shift ───────────────────────────────────────────────────── */
+    .shift-steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+    .shift-step {
+      padding: 32px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      text-align: center;
+      position: relative;
+    }
+    .shift-step:hover { border-color: rgba(139,92,246,.3); }
+    .step-number {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--violet), var(--indigo));
+      color: #fff; font-weight: 700; font-size: .9rem;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .shift-step h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+    .shift-step p { color: var(--muted); font-size: .9rem; }
+
+    /* ─── Rules (What It Feels Like) ─────────────────────────────── */
+    .rules-list {
+      display: flex; flex-direction: column; gap: 16px;
+      margin-top: 40px;
+      max-width: 560px;
+    }
+    .rule-item {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 1.05rem;
+      font-weight: 500;
+      transition: border-color .2s;
+    }
+    .rule-item:hover { border-color: rgba(16,185,129,.3); }
+    .rule-check {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(16,185,129,.1); color: var(--emerald);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem; font-weight: 700; flex-shrink: 0;
+    }
+
+    /* ─── Demo ────────────────────────────────────────────────────── */
+    .demo-section { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .demo-header { text-align: center; margin-bottom: 48px; }
+    .demo-container {
+      max-width: 680px;
+      margin: 0 auto;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .demo-topbar {
+      padding: 14px 20px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .demo-topbar-title { font-size: .85rem; font-weight: 600; color: var(--muted); }
+    .demo-topbar-status { font-size: .75rem; color: var(--faint); }
+    .demo-body { padding: 32px 28px; min-height: 400px; }
+
+    /* Demo progress */
+    .demo-progress {
+      display: flex; gap: 4px; margin-bottom: 32px;
+    }
+    .demo-progress-bar {
+      flex: 1; height: 3px; border-radius: 3px;
+      background: var(--border);
+      transition: background .4s;
+    }
+    .demo-progress-bar.active {
+      background: var(--violet);
+    }
+    .demo-progress-bar.done {
+      background: var(--emerald);
+    }
+
+    /* Demo steps */
+    .demo-step { display: none; animation: fadeUp .4s ease; }
+    .demo-step.active { display: block; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .demo-step-label {
+      font-size: .75rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--violet); margin-bottom: 16px;
+    }
+    .demo-step h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 16px; }
+    .demo-step p { color: var(--muted); margin-bottom: 16px; }
+
+    /* Demo rule tags */
+    .demo-rules {
+      display: flex; flex-direction: column; gap: 10px;
+      margin: 20px 0;
+    }
+    .demo-rule {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: .9rem;
+    }
+    .demo-rule-icon {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem; flex-shrink: 0;
+    }
+    .demo-rule-icon.budget { background: rgba(139,92,246,.15); color: var(--violet); }
+    .demo-rule-icon.vendor { background: rgba(99,102,241,.15); color: var(--indigo); }
+    .demo-rule-icon.approval { background: rgba(245,158,11,.15); color: var(--amber); }
+
+    /* Demo filter results */
+    .demo-filter-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .9rem;
+    }
+    .demo-filter-row:last-child { border-bottom: none; }
+    .demo-filter-count { font-weight: 600; }
+    .demo-filter-count.red { color: var(--red); }
+    .demo-filter-count.green { color: var(--emerald); }
+
+    /* Demo approval */
+    .demo-approval-box {
+      padding: 24px;
+      background: rgba(245,158,11,.04);
+      border: 1px solid rgba(245,158,11,.2);
+      border-radius: var(--radius);
+      text-align: center;
+      margin: 20px 0;
+    }
+    .demo-approval-box .price { font-size: 2rem; font-weight: 800; margin: 12px 0 4px; }
+    .demo-approval-box .reason { color: var(--amber); font-size: .85rem; margin-bottom: 20px; }
+    .demo-approval-actions { display: flex; gap: 12px; justify-content: center; }
+    .demo-btn-approve {
+      padding: 10px 28px; border-radius: 8px;
+      background: var(--emerald); color: #fff; font-weight: 600;
+      border: none; cursor: pointer; font-size: .9rem;
+      transition: transform .15s;
+    }
+    .demo-btn-approve:hover { transform: translateY(-1px); }
+    .demo-btn-reject {
+      padding: 10px 28px; border-radius: 8px;
+      background: transparent; color: var(--muted); font-weight: 600;
+      border: 1px solid var(--border); cursor: pointer; font-size: .9rem;
+    }
+
+    /* Demo receipt */
+    .demo-receipt {
+      border: 1px solid rgba(16,185,129,.2);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .demo-receipt-header {
+      padding: 16px 20px;
+      background: rgba(16,185,129,.06);
+      border-bottom: 1px solid rgba(16,185,129,.15);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .demo-receipt-header .icon { color: var(--emerald); font-size: 1.1rem; }
+    .demo-receipt-header span { font-weight: 600; color: var(--emerald); }
+    .demo-receipt-body { padding: 20px; }
+    .demo-receipt-row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0;
+      font-size: .9rem;
+    }
+    .demo-receipt-row .label { color: var(--muted); }
+    .demo-receipt-row .value { font-weight: 500; }
+    .demo-receipt-rules {
+      margin-top: 16px; padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .demo-receipt-rules h4 { font-size: .8rem; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+    .demo-receipt-rule-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; margin: 0 6px 6px 0;
+      border-radius: 6px;
+      background: rgba(16,185,129,.08);
+      border: 1px solid rgba(16,185,129,.15);
+      color: var(--emerald); font-size: .8rem; font-weight: 500;
+    }
+
+    /* Demo controls */
+    .demo-controls {
+      display: flex; justify-content: center;
+      padding: 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface2);
+      gap: 8px;
+    }
+    .demo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border);
+      cursor: pointer;
+      transition: background .2s, transform .15s;
+    }
+    .demo-dot.active { background: var(--violet); transform: scale(1.3); }
+    .demo-dot.done { background: var(--emerald); }
+
+    .demo-nav-btn {
+      padding: 10px 24px; border-radius: 8px;
+      background: var(--surface2); color: var(--text); font-weight: 600;
+      border: 1px solid var(--border); cursor: pointer; font-size: .85rem;
+      transition: border-color .2s;
+      margin-top: 24px;
+    }
+    .demo-nav-btn:hover { border-color: var(--violet); }
+
+    /* ─── Why / Trust ─────────────────────────────────────────────── */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+    .pillar {
+      padding: 28px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      text-align: center;
+    }
+    .pillar-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 1.3rem;
+    }
+    .pillar-icon.control { background: rgba(139,92,246,.1); }
+    .pillar-icon.visible { background: rgba(99,102,241,.1); }
+    .pillar-icon.safe { background: rgba(16,185,129,.1); }
+    .pillar-icon.delegate { background: rgba(245,158,11,.1); }
+    .pillar h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .pillar p { color: var(--muted); font-size: .9rem; }
+
+    .trust-list {
+      display: flex; flex-direction: column; gap: 16px;
+      margin-top: 40px;
+      max-width: 480px;
+    }
+    .trust-item {
+      display: flex; align-items: center; gap: 14px;
+      font-size: 1.05rem;
+      font-weight: 500;
+    }
+    .trust-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: rgba(139,92,246,.08);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--violet); font-size: .9rem; flex-shrink: 0;
+    }
+
+    /* ─── Footer CTA ──────────────────────────────────────────────── */
+    .footer-cta {
+      text-align: center;
+      padding: 120px 24px;
+    }
+    .footer-cta h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+    .footer-cta p { color: var(--muted); font-size: 1.1rem; margin-bottom: 40px; }
+
+    /* ─── Footer ──────────────────────────────────────────────────── */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    footer .container {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    footer .built-on { color: var(--faint); font-size: .85rem; }
+    footer .built-on a { color: var(--faint); }
+    footer .built-on a:hover { color: var(--muted); }
+    footer .footer-links { display: flex; gap: 24px; }
+    footer .footer-links a { color: var(--faint); font-size: .85rem; }
+    footer .footer-links a:hover { color: var(--muted); }
+
+    /* ─── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .shift-steps { grid-template-columns: 1fr; }
+      .hero { padding: 100px 20px 60px; }
+      .section { padding: 64px 0; }
+      .demo-body { padding: 24px 20px; }
+    }
+
+    /* ─── Fade-in on scroll ───────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Nav ──────────────────────────────────────────────────────── -->
+<nav aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="../" class="nav-logo" aria-label="Baur Software">
+      <img src="../assets/images/papillon-icon.png" alt="Baur Software logo" />
+      <span class="nav-wordmark">Baur Software</span>
+    </a>
+    <ul class="nav-links" role="list">
+      <li><a href="../pap/"><span class="nav-link-icon">pap://</span> PAP</a></li>
+      <li><a href="./" aria-current="page"><img src="../assets/images/papillon-icon.png" alt="" class="nav-link-icon-img" /> Papillon</a></li>
+      <li><a href="../chrysalis.html"><img src="../assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
+        <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Hero ─────────────────────────────────────────────────────── -->
+<section class="hero" id="hero">
+  <div>
+    <h1>See what they'll do<br><span>before they do it.</span></h1>
+    <p class="subtitle">Multiple agents work your task. Each sees only what it needs.<br>Preview the plan, approve the action, expand the receipt.</p>
+    <div class="hero-ctas">
+      <a href="#demo" class="btn-primary">See the canvas</a>
+      <a href="#shift" class="btn-secondary">How it works</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Problem ──────────────────────────────────────────────────── -->
+<section class="section" id="problem">
+  <div class="container reveal">
+    <span class="section-label">The problem</span>
+    <h2>AI assistants see everything.<br>You see nothing.</h2>
+    <p class="lead">Today's AI tools hand your entire context to every agent in the chain. You trade privacy for convenience.</p>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-icon">&#x1F441;</div>
+        <h3>Every agent sees everything</h3>
+        <p>Your email, calendar, budget, browsing history &mdash; all exposed to every service, with no partitioning.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">&#x274C;</div>
+        <h3>You can't verify what happened</h3>
+        <p>Multiple agents acted on your behalf. Which ones? What did they see? No receipts, no proof.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">&#x26A0;&#xFE0F;</div>
+        <h3>No preview, no control</h3>
+        <p>Agents execute before you know what they'll do. No plan to review, no scope to narrow.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Shift ────────────────────────────────────────────────────── -->
+<section class="section" id="shift">
+  <div class="container reveal">
+    <span class="section-label">The shift</span>
+    <h2>The canvas inverts how AI works.</h2>
+    <p class="lead">You describe what you want. Agents come to you with only what they need. The output is the interface.</p>
+    <div class="shift-steps">
+      <div class="shift-step">
+        <div class="step-number">1</div>
+        <h3>Ghost blocks preview the plan</h3>
+        <p>Before anything runs, you see which agents will act, what each one will see, and what it will return.</p>
+      </div>
+      <div class="shift-step">
+        <div class="step-number">2</div>
+        <h3>Agents execute within mandates</h3>
+        <p>Each agent gets a cryptographic scope &mdash; just the data it needs, with a TTL that expires. Nothing more.</p>
+      </div>
+      <div class="shift-step">
+        <div class="step-number">3</div>
+        <h3>Outcomes synthesize on your device</h3>
+        <p>Results merge locally into one outcome block. Expand it to see who contributed and what each agent saw.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── What It Feels Like ───────────────────────────────────────── -->
+<section class="section" id="rules">
+  <div class="container reveal">
+    <span class="section-label">What it feels like</span>
+    <h2>You talk to the canvas.<br>It handles the agents.</h2>
+    <div class="rules-list">
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Plan a Tokyo trip &mdash; flights and hotels under $2k"</span>
+      </div>
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Don't share my email with the hotel agent"</span>
+      </div>
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Show me the plan before you run it"</span>
+      </div>
+      <div class="rule-item">
+        <div class="rule-check">&#x2713;</div>
+        <span>"Every morning, summarize my inbox and check the weather"</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Demo ─────────────────────────────────────────────────────── -->
+<section class="section demo-section" id="demo">
+  <div class="container">
+    <div class="demo-header reveal">
+      <span class="section-label">Live example</span>
+      <h2>Watch the canvas plan a trip &mdash; safely</h2>
+      <p class="lead" style="margin: 12px auto 0;">Three agents, one canvas. Each sees only what it needs. You see everything.</p>
+    </div>
+
+    <div class="demo-container reveal">
+      <div class="demo-topbar">
+        <span class="demo-topbar-title">Canvas</span>
+        <span class="demo-topbar-status" id="demoStatus">Step 1 of 6</span>
+      </div>
+
+      <div class="demo-progress" id="demoProgress">
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+        <div class="demo-progress-bar"></div>
+      </div>
+
+      <div class="demo-body" id="demoBody">
+
+        <!-- Step 1: Prompt -->
+        <div class="demo-step active" data-step="0">
+          <div class="demo-step-label">Step 1 &mdash; You describe what you want</div>
+          <h3>"Plan a weekend trip to Tokyo under $2,000"</h3>
+          <div class="demo-rules">
+            <div class="demo-rule">
+              <div class="demo-rule-icon budget">$</div>
+              <span>Budget: <strong>$2,000 total</strong></span>
+            </div>
+            <div class="demo-rule">
+              <div class="demo-rule-icon vendor">&#x2708;</div>
+              <span>Preference: <strong>Direct flights only</strong></span>
+            </div>
+            <div class="demo-rule">
+              <div class="demo-rule-icon approval">!</div>
+              <span>Privacy: <strong>Guarded &mdash; minimum disclosure</strong></span>
+            </div>
+          </div>
+          <button class="demo-nav-btn" onclick="demoNext()">Show me the plan &rarr;</button>
+        </div>
+
+        <!-- Step 2: Ghost blocks -->
+        <div class="demo-step" data-step="1">
+          <div class="demo-step-label">Step 2 &mdash; Ghost blocks preview the plan</div>
+          <h3>Three agents will work this task</h3>
+          <div style="margin: 20px 0; display: flex; flex-direction: column; gap: 10px;">
+            <div style="padding: 14px 16px; border: 2px dashed rgba(139,92,246,.3); border-radius: var(--radius); background: rgba(139,92,246,.03);">
+              <div style="font-weight: 600; font-size: .9rem; margin-bottom: 4px;">&#x2708; Flight Search Agent</div>
+              <div style="color: var(--muted); font-size: .8rem;">Sees: travel dates, origin, destination &bull; Does not see: name, email, budget</div>
+            </div>
+            <div style="padding: 14px 16px; border: 2px dashed rgba(99,102,241,.3); border-radius: var(--radius); background: rgba(99,102,241,.03);">
+              <div style="font-weight: 600; font-size: .9rem; margin-bottom: 4px;">&#x1F3E8; Hotel Search Agent</div>
+              <div style="color: var(--muted); font-size: .8rem;">Sees: destination city, check-in/out dates &bull; Does not see: flight details, name, budget</div>
+            </div>
+            <div style="padding: 14px 16px; border: 2px dashed rgba(16,185,129,.3); border-radius: var(--radius); background: rgba(16,185,129,.03);">
+              <div style="font-weight: 600; font-size: .9rem; margin-bottom: 4px;">&#x1F4BB; On-Device Synthesis</div>
+              <div style="color: var(--muted); font-size: .8rem;">Merges results locally &bull; Never leaves your device &bull; No external receipt needed</div>
+            </div>
+          </div>
+          <button class="demo-nav-btn" onclick="demoNext()">Run this plan &rarr;</button>
+        </div>
+
+        <!-- Step 3: Agents execute -->
+        <div class="demo-step" data-step="2">
+          <div class="demo-step-label">Step 3 &mdash; Agents execute within mandates</div>
+          <h3>Each agent works its scoped task</h3>
+          <div style="margin: 20px 0;">
+            <div class="demo-filter-row">
+              <span>&#x2708; Flight agent &mdash; searched 4 carriers</span>
+              <span class="demo-filter-count green">3 options</span>
+            </div>
+            <div class="demo-filter-row">
+              <span>&#x1F3E8; Hotel agent &mdash; searched 12 properties</span>
+              <span class="demo-filter-count green">5 options</span>
+            </div>
+            <div class="demo-filter-row">
+              <span>&#x26D4; Flight agent did not see</span>
+              <span class="demo-filter-count" style="color: var(--muted);">name, email, budget</span>
+            </div>
+            <div class="demo-filter-row">
+              <span>&#x26D4; Hotel agent did not see</span>
+              <span class="demo-filter-count" style="color: var(--muted);">flight prices, name, budget</span>
+            </div>
+          </div>
+          <button class="demo-nav-btn" onclick="demoNext()">See outcome &rarr;</button>
+        </div>
+
+        <!-- Step 4: Outcome block -->
+        <div class="demo-step" data-step="3">
+          <div class="demo-step-label">Step 4 &mdash; Outcome synthesized on your device</div>
+          <h3>Tokyo Trip Options</h3>
+          <div style="padding: 20px; background: var(--surface2); border-radius: var(--radius); border: 1px solid var(--border); margin: 20px 0;">
+            <div style="font-weight: 700; font-size: 1rem; margin-bottom: 8px;">Best combo: ANA direct + Shinjuku Granbell</div>
+            <div style="color: var(--muted); font-size: .9rem; margin-bottom: 8px;">Flight $680 round-trip &bull; Hotel $420 for 2 nights</div>
+            <div style="font-size: 1.5rem; font-weight: 800;">$1,100 total</div>
+            <div style="color: var(--emerald); font-size: .85rem; margin-top: 6px;">Within budget &bull; Direct flight &bull; 4.6&#x2605; hotel</div>
+          </div>
+          <p style="color: var(--violet); font-size: .85rem; cursor: pointer;">&#x25B6; 3 agents contributed &bull; None saw your full context</p>
+          <button class="demo-nav-btn" onclick="demoNext()">Expand provenance &rarr;</button>
+        </div>
+
+        <!-- Step 5: Provenance -->
+        <div class="demo-step" data-step="4">
+          <div class="demo-step-label">Step 5 &mdash; Provenance layer</div>
+          <h3>Who did what &mdash; with proof</h3>
+          <div style="margin: 16px 0; display: flex; flex-direction: column; gap: 10px;">
+            <div style="padding: 14px 16px; border-left: 3px solid var(--violet); background: var(--surface2); border-radius: 0 var(--radius) var(--radius) 0;">
+              <div style="font-weight: 600; font-size: .85rem;">&#x2708; Flight Search Agent</div>
+              <div style="color: var(--muted); font-size: .8rem; margin-top: 4px;">Saw: dates, origin, destination &bull; Receipt: co-signed, did:key:z6Mk...</div>
+            </div>
+            <div style="padding: 14px 16px; border-left: 3px solid var(--indigo); background: var(--surface2); border-radius: 0 var(--radius) var(--radius) 0;">
+              <div style="font-weight: 600; font-size: .85rem;">&#x1F3E8; Hotel Search Agent</div>
+              <div style="color: var(--muted); font-size: .8rem; margin-top: 4px;">Saw: city, dates &bull; Receipt: co-signed, did:key:z6Qr...</div>
+            </div>
+            <div style="padding: 14px 16px; border-left: 3px solid var(--emerald); background: var(--surface2); border-radius: 0 var(--radius) var(--radius) 0;">
+              <div style="font-weight: 600; font-size: .85rem;">&#x1F4BB; On-Device Synthesis</div>
+              <div style="color: var(--muted); font-size: .8rem; margin-top: 4px;">Composed locally via Candle &bull; No network calls &bull; No external receipt</div>
+            </div>
+          </div>
+          <button class="demo-nav-btn" onclick="demoNext()">Reshape outcome &rarr;</button>
+        </div>
+
+        <!-- Step 6: Reshape -->
+        <div class="demo-step" data-step="5">
+          <div class="demo-step-label">Step 6 &mdash; Reshape the outcome</div>
+          <h3>"Only direct flights, add weather"</h3>
+          <div class="demo-receipt">
+            <div class="demo-receipt-header">
+              <span class="icon">&#x2713;</span>
+              <span>Canvas updated</span>
+            </div>
+            <div class="demo-receipt-body">
+              <div class="demo-receipt-row">
+                <span class="label">Re-ran</span>
+                <span class="value">Flight agent (narrower scope)</span>
+              </div>
+              <div class="demo-receipt-row">
+                <span class="label">Added</span>
+                <span class="value">Weather agent (city + dates only)</span>
+              </div>
+              <div class="demo-receipt-row">
+                <span class="label">Re-synthesized</span>
+                <span class="value">On-device, locally</span>
+              </div>
+              <div class="demo-receipt-row">
+                <span class="label">New total</span>
+                <span class="value" style="font-weight: 800;">$1,100 &bull; 72&deg;F avg</span>
+              </div>
+              <div class="demo-receipt-rules">
+                <h4>Privacy maintained</h4>
+                <span class="demo-receipt-rule-tag">&#x2713; Weather agent saw only city + dates</span>
+                <span class="demo-receipt-rule-tag">&#x2713; No agent saw your budget</span>
+                <span class="demo-receipt-rule-tag">&#x2713; All receipts co-signed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="demo-controls">
+        <div class="demo-dot active" onclick="demoGoTo(0)"></div>
+        <div class="demo-dot" onclick="demoGoTo(1)"></div>
+        <div class="demo-dot" onclick="demoGoTo(2)"></div>
+        <div class="demo-dot" onclick="demoGoTo(3)"></div>
+        <div class="demo-dot" onclick="demoGoTo(4)"></div>
+        <div class="demo-dot" onclick="demoGoTo(5)"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Why This Matters ─────────────────────────────────────────── -->
+<section class="section" id="why">
+  <div class="container reveal">
+    <span class="section-label">Why this matters</span>
+    <h2>Today, you go to apps and give them everything.<br>The canvas inverts that.</h2>
+    <p class="lead">Agents come to you and get only what they need.</p>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-icon control">&#x1F3AF;</div>
+        <h3>Scoped mandates</h3>
+        <p>Each agent gets exactly the data it needs, with a TTL that expires. Nothing more.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon visible">&#x1F441;</div>
+        <h3>Visible privacy</h3>
+        <p>"3 agents contributed. None saw your full context." Privacy you can see, not just a policy.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon safe">&#x1F6E1;</div>
+        <h3>On-device synthesis</h3>
+        <p>Results merge locally. The synthesizer never makes a network call. Your data stays yours.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon delegate">&#x26A1;</div>
+        <h3>Ghost previews</h3>
+        <p>See the plan before it runs. Know what each agent will do and see before you approve.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Trust ────────────────────────────────────────────────────── -->
+<section class="section" id="trust">
+  <div class="container reveal">
+    <span class="section-label">Trust</span>
+    <h2>Provenance at every layer.</h2>
+    <div class="trust-list">
+      <div class="trust-item">
+        <div class="trust-icon">&#x1F4CB;</div>
+        <span>Co-signed receipts prove what each agent saw and did</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon">&#x1F50D;</div>
+        <span>Expand any outcome to see the full agent contribution chain</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon">&#x270E;</div>
+        <span>Narrow scope on any agent &mdash; re-run with tighter mandates</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon">&#x23F8;</div>
+        <span>Pause, reshape, or cancel at any point in the lifecycle</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer CTA ───────────────────────────────────────────────── -->
+<section class="footer-cta reveal">
+  <h2>One canvas. Many agents. Your rules.</h2>
+  <p>See what happens when agents come to you &mdash; and each one gets only what it needs.</p>
+  <div class="hero-ctas">
+    <a href="#demo" class="btn-primary">See the canvas</a>
+    <a href="../pap/" class="btn-secondary">Read the protocol</a>
+  </div>
+</section>
+
+<!-- ─── Footer ───────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <span class="built-on">Built on <a href="../pap/">PAP (Principal Agent Protocol)</a></span>
+    <div class="footer-links">
+      <a href="https://github.com/Baur-Software">GitHub</a>
+      <a href="../pap/">Documentation</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ─── Scroll reveal ──────────────────────────────────────────────
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ─── Demo ───────────────────────────────────────────────────────
+let currentStep = 0;
+const totalSteps = 6;
+const steps = document.querySelectorAll('.demo-step');
+const bars = document.querySelectorAll('.demo-progress-bar');
+const dots = document.querySelectorAll('.demo-dot');
+const status = document.getElementById('demoStatus');
+
+function updateDemo() {
+  steps.forEach((s, i) => s.classList.toggle('active', i === currentStep));
+  bars.forEach((b, i) => {
+    b.classList.toggle('active', i === currentStep);
+    b.classList.toggle('done', i < currentStep);
+  });
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === currentStep);
+    d.classList.toggle('done', i < currentStep);
+  });
+  status.textContent = 'Step ' + (currentStep + 1) + ' of ' + totalSteps;
+}
+
+function demoNext() {
+  if (currentStep < totalSteps - 1) { currentStep++; updateDemo(); }
+}
+function demoGoTo(i) {
+  currentStep = i; updateDemo();
+}
+</script>
+</body>
+</html>

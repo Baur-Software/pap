@@ -86,7 +86,7 @@ jobs:
         run: bash benches/check_regression.sh
 
   smoke-test:
-    name: Smoke Test (Papillion Desktop App)
+    name: Smoke Test (Papillon Desktop App)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,18 +110,18 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
       - name: Build frontend (release WASM)
-        run: cd apps/papillion/frontend && trunk build --release
+        run: cd apps/papillon/frontend && trunk build --release
       - name: Inspect dist output
         run: |
           echo "=== dist directory listing ==="
-          ls -lah apps/papillion/frontend/dist/
+          ls -lah apps/papillon/frontend/dist/
           echo "=== generated index.html ==="
-          cat apps/papillion/frontend/dist/index.html
+          cat apps/papillon/frontend/dist/index.html
           echo ""
           echo "=== WASM file size ==="
-          ls -lh apps/papillion/frontend/dist/*.wasm 2>/dev/null || echo "No .wasm files found"
+          ls -lh apps/papillon/frontend/dist/*.wasm 2>/dev/null || echo "No .wasm files found"
           echo "=== JS files ==="
-          ls -lh apps/papillion/frontend/dist/*.js 2>/dev/null || echo "No .js files found"
+          ls -lh apps/papillon/frontend/dist/*.js 2>/dev/null || echo "No .js files found"
       - name: Run smoke tests
         working-directory: e2e
         run: npx playwright test tests/smoke.spec.ts --workers=1

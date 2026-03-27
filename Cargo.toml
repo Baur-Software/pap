@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-exclude = ["apps/papillion/frontend", "apps/registry/frontend"]
+exclude = ["apps/papillon/frontend", "apps/registry/frontend"]
 members = [
     "crates/pap-did",
     "crates/pap-core",
@@ -15,8 +15,8 @@ members = [
     "crates/pap-python",
     "crates/pap-c",
     "crates/pap-wasm",
-    "crates/papillion-shared",
-    "apps/papillion",
+    "crates/papillon-shared",
+    "apps/papillon",
     "apps/registry",
     "benches",
     "examples/search",
@@ -48,7 +48,7 @@ pap-transport = { path = "crates/pap-transport" }
 pap-federation = { path = "crates/pap-federation" }
 pap-agents = { path = "crates/pap-agents" }
 pap-tee = { path = "crates/pap-tee" }
-papillion-shared = { path = "crates/papillion-shared" }
+papillon-shared = { path = "crates/papillon-shared" }
 
 ed25519-dalek = { version = "2", features = ["rand_core", "zeroize"] }
 rand = "0.8"

@@ -1,6 +1,6 @@
 # Quick Setup: Built-In LLM Provider for Development
 
-**Problem:** Papillion's BuiltIn LLM provider requires bundled GGUF model files.
+**Problem:** Papillon's BuiltIn LLM provider requires bundled GGUF model files.
 
 **Solution:** Follow these steps to test locally.
 
@@ -10,10 +10,10 @@ Download a small quantized model. Recommended: **TinyLLaMA 1.1B** (2.2GB)
 
 ```bash
 # Create the models directory
-mkdir -p apps/papillion/models
+mkdir -p apps/papillon/models
 
 # Download TinyLLaMA weights (~2.2GB)
-cd apps/papillion/models
+cd apps/papillon/models
 curl -L -O https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 
 # Download tokenizer (shared across all models)
@@ -25,7 +25,7 @@ cd ../../
 ## Step 2: Verify File Placement
 
 ```bash
-ls -lh apps/papillion/models/
+ls -lh apps/papillon/models/
 ```
 
 Expected output:
@@ -36,7 +36,7 @@ Expected output:
 
 ## Step 3: Update Model Catalog
 
-Edit `crates/papillion-shared/src/types.rs` to match your downloaded filename:
+Edit `crates/papillon-shared/src/types.rs` to match your downloaded filename:
 
 ```rust
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
@@ -55,7 +55,7 @@ pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
 ## Step 4: Run Development Server
 
 ```bash
-cd apps/papillion
+cd apps/papillon
 cargo tauri dev
 ```
 
@@ -84,7 +84,7 @@ Bundled model not found: tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf (expected at ...)
 
 ```bash
 # Check file exists
-file apps/papillion/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+file apps/papillon/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 
 # Check Tauri is looking in the right place
 # Run: cargo tauri dev
@@ -95,7 +95,7 @@ file apps/papillion/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 
 ```bash
 # Tokenizer must be named exactly "tokenizer.json"
-ls apps/papillion/models/tokenizer.json
+ls apps/papillon/models/tokenizer.json
 ```
 
 ### Model Load Takes Forever
@@ -106,7 +106,7 @@ TinyLLaMA first-load can take 30-60 seconds (loading 2GB into RAM). Be patient.
 
 Check tokenizer.json is valid JSON:
 ```bash
-python3 -m json.tool apps/papillion/models/tokenizer.json > /dev/null && echo "Valid JSON"
+python3 -m json.tool apps/papillon/models/tokenizer.json > /dev/null && echo "Valid JSON"
 ```
 
 ## Verify It Works
@@ -124,7 +124,7 @@ Models are LARGE. **Do NOT commit to git.**
 
 Check `.gitignore` — should already have:
 ```
-apps/papillion/models/*.gguf
+apps/papillon/models/*.gguf
 ```
 
 (Keep `tokenizer.json` in git, it's only 500KB.)

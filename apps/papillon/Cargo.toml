@@ -1,0 +1,43 @@
+[package]
+name = "papillon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+papillon-shared = { workspace = true, features = ["native"] }
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-credential = { workspace = true }
+pap-marketplace = { workspace = true }
+pap-webauthn = { workspace = true }
+pap-proto = { workspace = true }
+pap-transport = { workspace = true }
+pap-agents = { workspace = true }
+pap-federation = { workspace = true }
+
+tauri = { version = "2", features = [] }
+tauri-plugin-store = "2"
+
+candle-core = { workspace = true }
+candle-transformers = { workspace = true }
+tokenizers = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+axum = { workspace = true }
+axum-server = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+sha2 = { workspace = true }
+rusqlite = { version = "0.32", features = ["bundled", "serde_json"] }
+
+ed25519-dalek = { workspace = true }
+zeroize = { workspace = true }
+if-addrs = "0.7"

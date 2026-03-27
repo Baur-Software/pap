@@ -190,9 +190,9 @@ This is where Memex and PAP meet: the orchestrator remembers, the protocol forge
 
 ### The orchestrator is left to the implementor
 
-Any PAP-compliant orchestrator can add memory without changing the protocol. A minimal orchestrator could forget everything after each session. Papillion — the reference implementation — chooses to remember every mandated interaction on-device, giving users a full picture of their agent relationships.
+Any PAP-compliant orchestrator can add memory without changing the protocol. A minimal orchestrator could forget everything after each session. Papillon — the reference implementation — chooses to remember every mandated interaction on-device, giving users a full picture of their agent relationships.
 
-Papillion already holds past interactions in `AppState.completed_runs` (`apps/papillion/src/state.rs:37`). The question is making this structured, persistent, and useful rather than a flat in-memory log that disappears on restart.
+Papillon already holds past interactions in `AppState.completed_runs` (`apps/papillon/src/state.rs:37`). The question is making this structured, persistent, and useful rather than a flat in-memory log that disappears on restart.
 
 ### Why persistence matters for adoption
 
@@ -207,7 +207,7 @@ The orchestrator remembers so the protocol can forget. Agents stay stateless. Se
 
 ### The persistence gap
 
-Papillion today is entirely in-memory. `AppState` holds everything in `RwLock<>` — completed runs, principal keypairs, federation caches, bookmarks. All lost on restart. There is no SQLite, no file-based storage, no database backend. The `tauri-plugin-store` dependency exists in `Cargo.toml` but is unused.
+Papillon today is entirely in-memory. `AppState` holds everything in `RwLock<>` — completed runs, principal keypairs, federation caches, bookmarks. All lost on restart. There is no SQLite, no file-based storage, no database backend. The `tauri-plugin-store` dependency exists in `Cargo.toml` but is unused.
 
 The memory layer requires actual persistence: episodes anchored to receipts, agent profiles aggregated from outcomes, principal keypairs auto-saved, retention policies stored durably.
 
@@ -241,14 +241,14 @@ User Intent
 
 Memory operates before phase 1 (informing decisions) and after phase 6 (recording outcomes). The 6-phase handshake is untouched. No protocol messages change. No new information flows to downstream agents.
 
-### What's protocol vs. what's Papillion
+### What's protocol vs. what's Papillon
 
 **PAP protocol (unchanged):**
 - 6-phase handshake, mandate issuance, scope containment, session lifecycle
 - SD-JWT selective disclosure, receipt structure (refs only), federation sync
 - Downstream agents remain stateless — they have no idea the orchestrator remembers
 
-**Papillion app (implementation choice):**
+**Papillon app (implementation choice):**
 - `completed_runs` becomes a persistent SQLite episode store
 - Agent selection goes from first-match to outcome-ranked
 - Scope configuration goes from hardcoded to informed-by-experience
@@ -267,7 +267,7 @@ The `compute_decay_state` method still calculates state from TTL. The `transitio
 
 **All PAP protocol guarantees preserved.** Memory never crosses the trust boundary. Downstream agents cannot tell the difference between an orchestrator with memory and one without.
 
-**Added by Papillion's memory layer:**
+**Added by Papillon's memory layer:**
 - Memory is principal-controlled — the user can view, export, and delete their history
 - Memory is on-device only — never serialized to protocol messages, never transmitted
 - Memory degradation is safe — bad or missing memory leads to suboptimal agent selection, not data leakage
@@ -289,7 +289,7 @@ All optimization targets orchestrator policy, never agent behavior:
 - **Which agent to pick**: Outcome quality vs. historical average for that action type
 - **How tight the scope**: Successful handshake with tighter scope = better
 
-This is future work. The immediate value is simpler: Papillion persists mandated interactions in an encrypted, queryable, JSON-LD-indexed store so users can see their agent relationships working.
+This is future work. The immediate value is simpler: Papillon persists mandated interactions in an encrypted, queryable, JSON-LD-indexed store so users can see their agent relationships working.
 
 ---
 
@@ -305,5 +305,5 @@ This is future work. The immediate value is simpler: Papillion persists mandated
 | `pap-credential/src/sd_jwt.rs` | Selective disclosure JWT — per-claim salting and disclosure |
 | `pap-federation/src/registry.rs` | Federated discovery with no central state |
 | `pap-marketplace/src/registry.rs` | Pre-handshake filtering by disclosure requirements |
-| `apps/papillion/src/state.rs` | AppState with in-memory `completed_runs` (persistence gap) |
-| `apps/papillion/src/commands/orchestrator.rs` | Scenario execution, agent selection, mandate issuance |
+| `apps/papillon/src/state.rs` | AppState with in-memory `completed_runs` (persistence gap) |
+| `apps/papillon/src/commands/orchestrator.rs` | Scenario execution, agent selection, mandate issuance |

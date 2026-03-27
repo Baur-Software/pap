@@ -37,7 +37,7 @@ RUN npm install && npx playwright install chromium --with-deps
 
 # Build release WASM
 WORKDIR /app
-RUN cd apps/papillion/frontend && trunk build --release
+RUN cd apps/papillon/frontend && trunk build --release
 
 # Run tests (only smoke.spec.ts)
 WORKDIR /app/e2e
