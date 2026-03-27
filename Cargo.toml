@@ -15,6 +15,7 @@ members = [
     "crates/pap-python",
     "crates/pap-c",
     "crates/pap-wasm",
+    "crates/pap-credential-store",
     "crates/papillion-shared",
     "apps/papillion",
     "apps/registry",
@@ -48,6 +49,7 @@ pap-transport = { path = "crates/pap-transport" }
 pap-federation = { path = "crates/pap-federation" }
 pap-agents = { path = "crates/pap-agents" }
 pap-tee = { path = "crates/pap-tee" }
+pap-credential-store = { path = "crates/pap-credential-store" }
 papillion-shared = { path = "crates/papillion-shared" }
 
 ed25519-dalek = { version = "2", features = ["rand_core", "zeroize"] }

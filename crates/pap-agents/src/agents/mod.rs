@@ -1,4 +1,5 @@
 pub mod arxiv;
+pub mod credential_store;
 pub mod dictionary;
 pub mod duckduckgo;
 pub mod frankfurter;
@@ -13,6 +14,7 @@ pub mod web_reader;
 pub mod wikipedia;
 
 pub use arxiv::ArxivExecutor;
+pub use credential_store::CredentialStoreExecutor;
 pub use dictionary::DictionaryExecutor;
 pub use duckduckgo::DuckDuckGoExecutor;
 pub use frankfurter::FrankfurterExecutor;

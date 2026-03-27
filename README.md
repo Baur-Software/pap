@@ -85,25 +85,27 @@ Built entirely on existing, standardized primitives:
 ```
 pap/
   crates/
-    pap-did/          # DID generation, session keypairs (did:key, Ed25519)
-    pap-core/         # Mandate, scope, session, receipt, extensions
-    pap-credential/   # W3C VC envelope, SD-JWT selective disclosure
-    pap-marketplace/  # Agent advertisement, registry, discovery
-    pap-proto/        # Protocol message types and envelope
-    pap-transport/    # HTTP client/server for 6-phase handshake
-    pap-federation/   # Cross-registry sync, announce, peer exchange
-    pap-webauthn/     # WebAuthn signer abstraction + software fallback
-    pap-c/            # C FFI bindings (cdylib + staticlib)
-    pap-wasm/         # WebAssembly bindings (@pap/sdk npm package)
-    pap-python/       # Python PyO3 bindings
-    papillion-shared/ # Shared models between Papillion frontend and backend
+    pap-did/              # DID generation, session keypairs (did:key, Ed25519)
+    pap-core/             # Mandate, scope, session, receipt, extensions
+    pap-credential/       # W3C VC envelope, SD-JWT selective disclosure
+    pap-credential-store/ # Encrypted vault for principal seeds, VCs, continuity tokens
+    pap-marketplace/      # Agent advertisement, registry, discovery
+    pap-agents/           # Shared agent implementations (AgentExecutor trait)
+    pap-proto/            # Protocol message types and envelope
+    pap-transport/        # HTTP client/server for 6-phase handshake
+    pap-federation/       # Cross-registry sync, announce, peer exchange
+    pap-webauthn/         # WebAuthn signer abstraction + software fallback
+    pap-c/                # C FFI bindings (cdylib + staticlib)
+    pap-wasm/             # WebAssembly bindings (@pap/sdk npm package)
+    pap-python/           # Python PyO3 bindings
+    papillion-shared/     # Shared models between Papillion frontend and backend
   apps/
-    registry/         # Hostable federated PAP registry (Axum + Leptos SSR, SQLite/Postgres)
-    papillion/        # Desktop reference implementation (Tauri)
+    registry/             # Hostable federated PAP registry (Axum + Leptos SSR, SQLite/Postgres)
+    papillion/            # Desktop reference implementation (Tauri)
   bindings/
-    cpp/              # C++ RAII header-only wrapper (pap.hpp)
-    csharp/           # .NET 8 C# P/Invoke bindings with SafeHandle RAII
-    java/             # JNA-based Java bindings (io.pap.*)
+    cpp/                  # C++ RAII header-only wrapper (pap.hpp)
+    csharp/               # .NET 8 C# P/Invoke bindings with SafeHandle RAII
+    java/                 # JNA-based Java bindings (io.pap.*)
 ```
 
 ### pap-did
@@ -127,6 +129,21 @@ pap/
 
 - `VerifiableCredential` — W3C VC 2.0 envelope wrapping mandate payloads.
 - `SelectiveDisclosureJwt` — SD-JWT. Over-disclosure structurally prevented.
+
+### pap-credential-store
+
+- `Vault<S>` — Encrypted-at-rest storage for PAP protocol material. Two-layer encryption: master password → Argon2id → AES-256-GCM vault key.
+- `VaultStore` trait — Pluggable backend (SQLite shipped, IndexedDB planned for browser extension).
+- `VaultSigner` — `PrincipalSigner` implementation backed by encrypted vault. Drop-in replacement for `SoftwareSigner`.
+- Four item types: `PrincipalSeed`, `ContinuityToken`, `VerifiableCredential`, `NotaryDesignation`.
+- Auto-lock with configurable timeout. Vault key zeroized on lock.
+
+### pap-agents
+
+- `AgentExecutor` trait — Simplified 2-method interface (`meta()` + `execute(query)`) for agent implementations.
+- `SimpleAgent<E>` wrapper — Adapts any `AgentExecutor` into the full 6-phase `AgentHandler` protocol.
+- 14 built-in agents including `CredentialStoreExecutor` for vault operations via Schema.org JSON-LD.
+- Shared across Papillion and Chrysalis — agents are defined once, used everywhere.
 
 ### pap-marketplace
 
