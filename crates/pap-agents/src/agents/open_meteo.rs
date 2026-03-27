@@ -1,89 +1,26 @@
-use pap_core::receipt::TransactionReceipt;
-use pap_core::session::CapabilityToken;
-use pap_did::SessionKeypair;
-use pap_transport::{AgentHandler, TransportError};
+use pap_transport::TransportError;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::session_store::SessionStore;
+use crate::executor::{AgentExecutor, AgentMeta};
 
-/// Open-Meteo weather forecast agent.
-///
-/// Calls the Open-Meteo API — REQUIRES disclosure of GeoCoordinates.
-/// This is the first agent in Papillion that exercises disclosure filtering:
-/// users must authorize location sharing for this agent to appear in queries.
-/// Coordinates arrive as "lat,lon" via `handle_disclosure`.
-/// Sessions are TTL-bounded and reaped automatically.
-pub struct OpenMeteoAgent {
-    sessions: SessionStore<Option<String>>, // query containing lat,lon
-}
+/// Open-Meteo weather forecast — REQUIRES GeoCoordinates disclosure.
+pub struct OpenMeteoExecutor;
 
-impl Default for OpenMeteoAgent {
-    fn default() -> Self {
-        Self {
-            sessions: SessionStore::new(),
+impl AgentExecutor for OpenMeteoExecutor {
+    fn meta(&self) -> AgentMeta {
+        AgentMeta {
+            name: "Open-Meteo Weather",
+            provider: "Open-Meteo",
+            action: "schema:CheckAction",
+            object_types: &["schema:WeatherForecast"],
+            requires_disclosure: &["schema:GeoCoordinates"],
+            returns: &["schema:WeatherForecast"],
         }
     }
-}
 
-impl OpenMeteoAgent {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl AgentHandler for OpenMeteoAgent {
-    fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
-        if token.action != "schema:CheckAction" {
-            return Err(TransportError::ServerError(format!(
-                "Unsupported action: {}",
-                token.action
-            )));
-        }
-
-        let session_id = uuid::Uuid::new_v4().to_string();
-        let did = self.sessions.insert(session_id.clone(), None);
-        Ok((session_id, did))
-    }
-
-    fn handle_did_exchange(
-        &self,
-        session_id: &str,
-        _initiator_session_did: &str,
-    ) -> Result<(), TransportError> {
-        if !self.sessions.exists(session_id) {
-            return Err(TransportError::ServerError("Unknown session".into()));
-        }
-        Ok(())
-    }
-
-    fn handle_disclosure(
-        &self,
-        session_id: &str,
-        disclosures: Vec<serde_json::Value>,
-    ) -> Result<(), TransportError> {
-        let query = disclosures
-            .iter()
-            .find_map(|d| d.get("query").and_then(|v| v.as_str()))
-            .map(String::from);
-
-        if let Some(q) = query {
-            self.sessions.with_mut(session_id, |data| {
-                *data = Some(q);
-            })?;
-        }
-        Ok(())
-    }
-
-    fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let query = self
-            .sessions
-            .with(session_id, |data| data.clone())?
-            .ok_or_else(|| {
-                TransportError::ServerError("No coordinates provided in disclosures".into())
-            })?;
-
-        let (lat, lon) = parse_coordinates(&query)?;
+    fn execute(&self, query: &str) -> Result<serde_json::Value, TransportError> {
+        let (lat, lon) = parse_coordinates(query)?;
 
         let client = reqwest::blocking::Client::builder()
             .user_agent("Papillion/0.1 (PAP Browser)")
@@ -133,29 +70,7 @@ impl AgentHandler for OpenMeteoAgent {
             "weatherCode": resp.current.weather_code
         }))
     }
-
-    fn co_sign_receipt(
-        &self,
-        mut receipt: TransactionReceipt,
-    ) -> Result<TransactionReceipt, TransportError> {
-        let key = self.sessions.signing_key(&receipt.session_id);
-        match key {
-            Some(k) => receipt.co_sign(&k),
-            None => {
-                let k = SessionKeypair::generate();
-                receipt.co_sign(k.signing_key());
-            }
-        }
-        Ok(receipt)
-    }
-
-    fn handle_close(&self, session_id: &str) -> Result<(), TransportError> {
-        self.sessions.remove(session_id);
-        Ok(())
-    }
 }
-
-// ── Open-Meteo API types ──────────────────────────────────────
 
 #[derive(Deserialize)]
 struct OpenMeteoResponse {
@@ -170,8 +85,6 @@ struct CurrentWeather {
     wind_speed_10m: f64,
     weather_code: i32,
 }
-
-// ── Helpers ───────────────────────────────────────────────────
 
 fn parse_coordinates(query: &str) -> Result<(f64, f64), TransportError> {
     let parts: Vec<&str> = query
@@ -191,7 +104,6 @@ fn parse_coordinates(query: &str) -> Result<(f64, f64), TransportError> {
     ))
 }
 
-/// Map WMO weather interpretation codes to human-readable descriptions.
 fn weather_code_description(code: i32) -> &'static str {
     match code {
         0 => "Clear sky",
@@ -223,5 +135,73 @@ fn weather_code_description(code: i32) -> &'static str {
         96 => "Thunderstorm with slight hail",
         99 => "Thunderstorm with heavy hail",
         _ => "Unknown",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real payload from Open-Meteo forecast API
+    const REAL_PAYLOAD: &str = r#"{
+        "latitude": 48.84,
+        "longitude": 2.3599997,
+        "generationtime_ms": 0.060558319091796875,
+        "utc_offset_seconds": 0,
+        "timezone": "GMT",
+        "timezone_abbreviation": "GMT",
+        "elevation": 46.0,
+        "current_units": {
+            "time": "iso8601",
+            "interval": "seconds",
+            "temperature_2m": "°C",
+            "wind_speed_10m": "km/h",
+            "weather_code": "wmo code"
+        },
+        "current": {
+            "time": "2026-03-27T03:45",
+            "interval": 900,
+            "temperature_2m": 3.1,
+            "wind_speed_10m": 1.1,
+            "weather_code": 1
+        }
+    }"#;
+
+    #[test]
+    fn deserialize_real_payload() {
+        let resp: OpenMeteoResponse = serde_json::from_str(REAL_PAYLOAD).unwrap();
+        assert!((resp.latitude - 48.84).abs() < 0.01);
+        assert!((resp.longitude - 2.36).abs() < 0.01);
+        assert!((resp.current.temperature_2m - 3.1).abs() < 0.1);
+        assert!((resp.current.wind_speed_10m - 1.1).abs() < 0.1);
+        assert_eq!(resp.current.weather_code, 1);
+    }
+
+    #[test]
+    fn parse_coordinates_comma() {
+        let (lat, lon) = parse_coordinates("48.85,2.35").unwrap();
+        assert!((lat - 48.85).abs() < 0.01);
+        assert!((lon - 2.35).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_coordinates_space() {
+        let (lat, lon) = parse_coordinates("48.85 2.35").unwrap();
+        assert!((lat - 48.85).abs() < 0.01);
+        assert!((lon - 2.35).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_coordinates_invalid() {
+        assert!(parse_coordinates("not coordinates").is_err());
+        assert!(parse_coordinates("200.0,100.0").is_err());
+    }
+
+    #[test]
+    fn weather_codes_known() {
+        assert_eq!(weather_code_description(0), "Clear sky");
+        assert_eq!(weather_code_description(1), "Mainly clear");
+        assert_eq!(weather_code_description(95), "Thunderstorm");
+        assert_eq!(weather_code_description(999), "Unknown");
     }
 }

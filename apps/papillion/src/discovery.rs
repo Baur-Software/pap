@@ -22,6 +22,7 @@ const SYNC_ACTIONS: &[&str] = &[
     "schema:CheckAction",
     "schema:FindAction",
     "schema:TradeAction",
+    "schema:ReadAction",
 ];
 
 /// Run the background discovery loop.

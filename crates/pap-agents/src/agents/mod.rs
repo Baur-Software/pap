@@ -1,0 +1,27 @@
+pub mod arxiv;
+pub mod dictionary;
+pub mod duckduckgo;
+pub mod frankfurter;
+pub mod github_repos;
+pub mod hacker_news;
+pub mod ip_geolocation;
+pub mod nominatim;
+pub mod open_library;
+pub mod open_meteo;
+pub mod rest_countries;
+pub mod web_reader;
+pub mod wikipedia;
+
+pub use arxiv::ArxivExecutor;
+pub use dictionary::DictionaryExecutor;
+pub use duckduckgo::DuckDuckGoExecutor;
+pub use frankfurter::FrankfurterExecutor;
+pub use github_repos::GitHubReposExecutor;
+pub use hacker_news::HackerNewsExecutor;
+pub use ip_geolocation::IpGeolocationExecutor;
+pub use nominatim::NominatimExecutor;
+pub use open_library::OpenLibraryExecutor;
+pub use open_meteo::OpenMeteoExecutor;
+pub use rest_countries::RestCountriesExecutor;
+pub use web_reader::WebReaderExecutor;
+pub use wikipedia::WikipediaExecutor;

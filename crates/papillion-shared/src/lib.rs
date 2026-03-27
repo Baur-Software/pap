@@ -1,4 +1,5 @@
 pub mod events;
+pub mod intent;
 pub mod types;
 
 #[cfg(any(feature = "native", feature = "wasm"))]

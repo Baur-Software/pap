@@ -6,7 +6,6 @@ pub mod error;
 pub mod handshake;
 pub mod inference;
 pub mod profiles_db;
-pub mod seed;
 pub mod state;
 
 use std::net::SocketAddr;

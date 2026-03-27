@@ -16,6 +16,7 @@ pap-marketplace = { workspace = true }
 pap-webauthn = { workspace = true }
 pap-proto = { workspace = true }
 pap-transport = { workspace = true }
+pap-agents = { workspace = true }
 pap-federation = { workspace = true }
 
 tauri = { version = "2", features = [] }

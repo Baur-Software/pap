@@ -5,7 +5,7 @@ use pap_transport::{AgentHandler, TransportError};
 use serde_json::json;
 use std::sync::RwLock;
 
-use super::session_store::SessionStore;
+use pap_agents::session_store::SessionStore;
 
 /// Trait Beacon agent — advertises the principal's traits to the federation.
 ///

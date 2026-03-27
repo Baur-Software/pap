@@ -24,6 +24,12 @@ pub struct SessionStore<T> {
     inner: Mutex<HashMap<String, Entry<T>>>,
 }
 
+impl<T> Default for SessionStore<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> SessionStore<T> {
     pub fn new() -> Self {
         Self {
