@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>PAP Offscreen</title>
+  </head>
+  <body>
+    <!-- No UI — this document exists only to host WASM operations.
+         MV3 service workers can't reliably instantiate WASM, so the
+         offscreen document provides a stable execution context. -->
+    <script type="module" src="../offscreen/offscreen.js"></script>
+  </body>
+</html>

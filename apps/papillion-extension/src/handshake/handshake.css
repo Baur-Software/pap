@@ -1,0 +1,262 @@
+/* Handshake page layout */
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--sp-xl) var(--sp-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-lg);
+}
+
+/* ── Header ─────────────────────────────────────────── */
+
+.hs-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+
+.hs-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+
+.hs-logo {
+  border-radius: var(--r-sm);
+}
+
+.hs-uri {
+  color: var(--text-2);
+  padding: var(--sp-xs) var(--sp-sm);
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  word-break: break-all;
+}
+
+/* ── Setup Form ─────────────────────────────────────── */
+
+.hs-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+
+.hs-input {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: var(--sp-sm) var(--sp-md);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-1);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.hs-input:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px var(--purple-glow);
+}
+
+.hs-input::placeholder {
+  color: var(--text-3);
+}
+
+/* ── Phase Pipeline ─────────────────────────────────── */
+
+.hs-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+.hs-phase {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-md);
+  padding: var(--sp-md) 0;
+  position: relative;
+}
+
+/* Vertical connector line */
+.hs-phase:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 42px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--border);
+  transition: background 0.3s ease;
+}
+
+.hs-phase.complete:not(:last-child)::after {
+  background: var(--teal);
+}
+
+.hs-phase.active:not(:last-child)::after {
+  background: linear-gradient(to bottom, var(--gold) 50%, var(--border) 50%);
+}
+
+.hs-phase-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  border: 2px solid var(--border);
+  background: var(--bg-1);
+  color: var(--text-3);
+}
+
+.hs-phase.pending .hs-phase-dot {
+  border-color: var(--border);
+  color: var(--text-3);
+}
+
+.hs-phase.active .hs-phase-dot {
+  border-color: var(--gold);
+  background: rgba(240, 160, 48, 0.15);
+  color: var(--gold);
+  box-shadow: 0 0 12px rgba(240, 160, 48, 0.3);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.hs-phase.complete .hs-phase-dot {
+  border-color: var(--teal);
+  background: rgba(46, 196, 160, 0.15);
+  color: var(--teal);
+}
+
+.hs-phase.failed .hs-phase-dot {
+  border-color: var(--coral);
+  background: rgba(232, 112, 106, 0.15);
+  color: var(--coral);
+}
+
+.hs-phase-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2xs);
+  min-height: 32px;
+  justify-content: center;
+}
+
+.hs-phase-name {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.hs-phase.pending .hs-phase-name {
+  color: var(--text-3);
+}
+
+.hs-phase-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+/* ── Result ──────────────────────────────────────────── */
+
+#result-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-md);
+}
+
+.result-type {
+  display: inline-block;
+  padding: var(--sp-2xs) var(--sp-sm);
+  background: var(--purple-muted);
+  color: var(--purple);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: var(--r-sm);
+}
+
+.result-content {
+  padding: var(--sp-md);
+  background: var(--bg-0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+/* ── Receipt ─────────────────────────────────────────── */
+
+#receipt-container {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-xs) var(--sp-md);
+  font-size: 13px;
+}
+
+.receipt-key {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding-top: 2px;
+}
+
+.receipt-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.receipt-val.teal {
+  color: var(--teal);
+}
+
+/* ── Error ───────────────────────────────────────────── */
+
+.hs-error .card {
+  border-color: var(--coral);
+}
+
+.hs-error-content {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-md);
+  margin-bottom: var(--sp-md);
+}
+
+.hs-error-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(232, 112, 106, 0.15);
+  color: var(--coral);
+  font-weight: 700;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+#error-message {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  margin-top: var(--sp-xs);
+  word-break: break-word;
+}

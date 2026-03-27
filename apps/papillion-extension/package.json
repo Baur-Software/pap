@@ -1,0 +1,25 @@
+{
+  "name": "@pap/browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PAP protocol handler browser extension",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "tsc --noEmit && vite build",
+    "build:wasm": "wasm-pack build ../../crates/pap-wasm --target web --out-dir ../../apps/papillion-extension/wasm",
+    "clean": "rm -rf dist wasm",
+    "typecheck": "tsc --noEmit",
+    "firefox:manifest": "node scripts/firefox-manifest.mjs"
+  },
+  "dependencies": {
+    "@pap/sdk": "file:../../crates/pap-wasm/pkg"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.50.0",
+    "@types/chrome": "^0.0.287",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vite-plugin-static-copy": "^2.2.0"
+  }
+}

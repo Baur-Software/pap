@@ -1,0 +1,44 @@
+{
+  "protocol": "pap",
+  "version": "1.0",
+  "specification": "https://github.com/Baur-Software/pap/blob/main/docs/specification.md",
+  "extensions": {
+    "chrome": {
+      "store_url": null,
+      "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillion-extension"
+    },
+    "firefox": {
+      "addon_url": null,
+      "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillion-extension"
+    }
+  },
+  "desktop": {
+    "name": "Papillion",
+    "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillion",
+    "native_messaging_host": "com.baur_software.papillion"
+  },
+  "sdk": {
+    "npm": "@pap/sdk",
+    "source": "https://github.com/Baur-Software/pap/tree/main/crates/pap-wasm"
+  },
+  "transport_bindings": [
+    {
+      "scheme": "pap",
+      "transport": "native",
+      "default_port": 7890,
+      "browser_compatible": false
+    },
+    {
+      "scheme": "pap+https",
+      "transport": "https",
+      "default_port": 7890,
+      "browser_compatible": true
+    },
+    {
+      "scheme": "pap+wss",
+      "transport": "wss",
+      "default_port": 7890,
+      "browser_compatible": true
+    }
+  ]
+}

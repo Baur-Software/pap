@@ -1,0 +1,468 @@
+/**
+ * PAP Design System — Browser Extension
+ * Port of DESIGN.md token system.
+ */
+
+/* ── Fonts ─────────────────────────────────────────────── */
+
+@import url("https://api.fontshare.com/v2/css?f[]=satoshi@700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* ── Tokens: Dark Mode (default) ───────────────────────── */
+
+:root {
+  /* Brand */
+  --purple: #6c5ce7;
+  --purple-hover: #7f6ff0;
+  --purple-muted: rgba(108, 92, 231, 0.12);
+  --purple-glow: rgba(108, 92, 231, 0.25);
+
+  /* Wing spectrum — semantic */
+  --teal: #2ec4a0;
+  --gold: #f0a030;
+  --coral: #e8706a;
+  --blue: #5098e0;
+  --rose: #e060a0;
+
+  /* Surfaces — dark */
+  --bg-0: #0c0b14;
+  --bg-1: #151420;
+  --bg-2: #1f1e2e;
+  --bg-3: #2a2940;
+  --text-1: #eeeef2;
+  --text-2: #9494a8;
+  --text-3: #6a6a80;
+  --border: #2c2b40;
+  --border-subtle: #222136;
+
+  /* Spacing */
+  --sp-2xs: 2px;
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 16px;
+  --sp-lg: 24px;
+  --sp-xl: 32px;
+  --sp-2xl: 48px;
+  --sp-3xl: 64px;
+
+  /* Radius */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+
+  /* Typography */
+  --font-display: "Satoshi", -apple-system, system-ui, sans-serif;
+  --font-body: "DM Sans", -apple-system, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+}
+
+/* ── Tokens: Light Mode ────────────────────────────────── */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-0: #faf9fc;
+    --bg-1: #f0eff5;
+    --bg-2: #e6e5ee;
+    --bg-3: #d8d7e2;
+    --text-1: #1a1928;
+    --text-2: #5c5b70;
+    --text-3: #8888a0;
+    --border: #d0cfdc;
+    --border-subtle: #e2e1ec;
+  }
+}
+
+/* ── Base Reset ────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  color: var(--text-1);
+  background: var(--bg-0);
+  line-height: 1.5;
+}
+
+/* ── Typography ────────────────────────────────────────── */
+
+.h1 {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.ui {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.small {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-sm) var(--sp-md);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn:hover {
+  background: var(--bg-3);
+  border-color: var(--text-3);
+}
+
+.btn-primary {
+  background: var(--purple);
+  border-color: var(--purple);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--purple-hover);
+  border-color: var(--purple-hover);
+}
+
+/* ── Cards ─────────────────────────────────────────────── */
+
+.card {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-md);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  margin-bottom: var(--sp-md);
+}
+
+/* ── DID display ───────────────────────────────────────── */
+
+.did {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+.did-short {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* ── Phase indicators ──────────────────────────────────── */
+
+.phase-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  transition: background 0.3s ease;
+}
+
+.phase-dot.pending {
+  background: var(--bg-3);
+}
+
+.phase-dot.active {
+  background: var(--gold);
+  box-shadow: 0 0 8px var(--gold);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.phase-dot.complete {
+  background: var(--teal);
+}
+
+.phase-dot.failed {
+  background: var(--coral);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-2) 25%,
+    var(--bg-3) 50%,
+    var(--bg-2) 75%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+
+/* ── Schema.org typed renderers ────────────────────────── */
+
+.typed-generic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+
+.typed-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.typed-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-xs);
+}
+
+.typed-key {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  min-width: 120px;
+}
+
+.typed-val {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-1);
+}
+
+.typed-field-date {
+  color: var(--blue);
+}
+
+.typed-field-price {
+  color: var(--teal);
+  font-weight: 500;
+}
+
+.typed-field-url {
+  color: var(--purple);
+  text-decoration: underline;
+  text-decoration-color: var(--purple-muted);
+}
+
+.typed-field-did {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  word-break: break-all;
+}
+
+.typed-nested {
+  padding-left: var(--sp-md);
+  border-left: 2px solid var(--border-subtle);
+  margin: var(--sp-xs) 0;
+}
+
+.typed-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+}
+
+.typed-truncated {
+  color: var(--text-3);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* Search results */
+.typed-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-md);
+}
+
+.typed-search-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2xs);
+}
+
+.typed-search-title {
+  color: var(--purple);
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.typed-search-url {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.typed-search-snippet {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* Flight reservation */
+.typed-flight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+
+.typed-flight-route {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.typed-flight-route .arrow {
+  color: var(--text-3);
+}
+
+.typed-flight-date {
+  color: var(--blue);
+  font-size: 13px;
+}
+
+.typed-flight-price {
+  color: var(--teal);
+  font-weight: 500;
+  font-size: 18px;
+}
+
+.typed-flight-carrier {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* Hotel reservation */
+.typed-hotel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+
+.typed-hotel-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.typed-hotel-dates {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  color: var(--blue);
+  font-size: 13px;
+}
+
+.typed-hotel-price {
+  color: var(--teal);
+  font-weight: 500;
+  font-size: 18px;
+}
+
+/* Answer (LLM) */
+.typed-answer {
+  padding: var(--sp-md);
+}
+
+.typed-answer-text {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-1);
+}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
