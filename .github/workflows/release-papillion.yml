@@ -519,22 +519,32 @@ jobs:
   # ── 10. Post-deploy canary ───────────────────────────────────────────────────
   canary-verify:
     name: Post-Deploy Canary Verification
-    needs: publish-release
+    needs: [publish-release, build-web]
     runs-on: ubuntu-latest
     if: success()
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download WASM frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: papillion-web-dist
+          path: apps/papillion/frontend/dist/
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install dependencies
-        run: npm install -D @playwright/test
+        working-directory: e2e
+        run: |
+          npm install -D @playwright/test
+          npx playwright install --with-deps chromium
 
       - name: Run canary health checks
-        run: npm exec playwright test e2e/tests/canary.spec.ts --reporter=html
+        working-directory: e2e
+        run: npx playwright test tests/canary.spec.ts --reporter=html
         timeout-minutes: 15
 
       - name: Upload canary report on failure

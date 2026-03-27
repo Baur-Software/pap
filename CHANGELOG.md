@@ -1,3 +1,9 @@
+## [0.5.5] - 2026-03-26
+
+### Fixed
+
+- Canary: download WASM artifact, install Playwright chromium, run from e2e/ working directory
+
 ## [0.5.4] - 2026-03-26
 
 ### Fixed
