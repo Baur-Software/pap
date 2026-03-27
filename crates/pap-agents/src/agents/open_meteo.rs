@@ -33,7 +33,7 @@ impl AgentExecutor for OpenMeteoExecutor {
                 ("latitude", lat.to_string()),
                 ("longitude", lon.to_string()),
                 (
-                    "current".into(),
+                    "current",
                     "temperature_2m,wind_speed_10m,weather_code".into(),
                 ),
             ])
