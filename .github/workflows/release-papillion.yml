@@ -137,7 +137,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install trunk
-        run: cargo binstall trunk --no-confirm
+        run: cargo binstall trunk --no-confirm --force
 
       - name: Build frontend (WASM)
         working-directory: apps/papillion/frontend
@@ -421,7 +421,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install trunk
-        run: cargo binstall trunk --no-confirm
+        run: cargo binstall trunk --no-confirm --force
 
       - name: Build frontend (WASM)
         working-directory: apps/papillion/frontend
