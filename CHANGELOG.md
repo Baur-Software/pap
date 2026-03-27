@@ -1,3 +1,10 @@
+## [0.5.2] - 2026-03-26
+
+### Fixed
+
+- Papillion mobile builds: upgrade to Capacitor 8 (Node 22, JDK 21, iOS 15.0 deploy target)
+- Remove Chrysalis mobile builds (SSR app output is incompatible with Capacitor)
+
 ## [0.5.1] - 2026-03-26
 
 ### Fixed

@@ -196,18 +196,22 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Initialize Capacitor iOS project
         working-directory: apps/papillion
         run: |
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/ios
+          npm install @capacitor/core@^8 @capacitor/cli@^8 @capacitor/ios@^8
 
           npx cap init "Papillion" "com.baursoftware.papillion" \
             --web-dir frontend/dist
 
           npx cap add ios
+
+          # Capacitor 8 requires iOS 15.0 minimum deployment target
+          sed -i '' "s/platform :ios, '.*'/platform :ios, '15.0'/" ios/App/Podfile
+
           npx cap sync ios
 
       - name: Install Apple certificate and provisioning profile
@@ -312,7 +316,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -320,13 +324,13 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Initialize Capacitor Android project
         working-directory: apps/papillion
         run: |
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install @capacitor/core@^8 @capacitor/cli@^8 @capacitor/android@^8
 
           npx cap init "Papillion" "com.baursoftware.papillion" \
             --web-dir frontend/dist
