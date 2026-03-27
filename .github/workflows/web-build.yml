@@ -1,5 +1,8 @@
 name: Web Build
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
