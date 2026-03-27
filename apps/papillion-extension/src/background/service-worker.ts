@@ -25,26 +25,53 @@ let nativePort: chrome.runtime.Port | null = null;
 
 // ── Offscreen Document Lifecycle ───────────────────────────────────────
 
+let offscreenCreating: Promise<void> | null = null;
+
 async function ensureOffscreen(): Promise<void> {
   if (offscreenReady) return;
 
-  // Check if already exists
-  const contexts = await chrome.runtime.getContexts({
-    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-  });
+  // Deduplicate concurrent creation calls
+  if (offscreenCreating) return offscreenCreating;
 
-  if (contexts.length > 0) {
+  offscreenCreating = (async () => {
+    // chrome.runtime.getContexts is Chrome 116+, not in Firefox
+    if (chrome.runtime.getContexts) {
+      const contexts = await chrome.runtime.getContexts({
+        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+      });
+      if (contexts.length > 0) {
+        offscreenReady = true;
+        return;
+      }
+    }
+
+    // Firefox uses background pages with full DOM — no offscreen needed.
+    // The offscreen API only exists in Chrome.
+    if (!chrome.offscreen) {
+      offscreenReady = true;
+      return;
+    }
+
+    try {
+      await chrome.offscreen.createDocument({
+        url: "offscreen/offscreen.html",
+        reasons: [chrome.offscreen.Reason.WORKERS],
+        justification: "Host PAP WASM module for cryptographic operations",
+      });
+    } catch {
+      // Document may already exist if getContexts wasn't available
+    }
+
+    // Brief delay to let the offscreen script register its message listener
+    await new Promise((r) => setTimeout(r, 100));
     offscreenReady = true;
-    return;
+  })();
+
+  try {
+    await offscreenCreating;
+  } finally {
+    offscreenCreating = null;
   }
-
-  await chrome.offscreen.createDocument({
-    url: "offscreen/offscreen.html",
-    reasons: [chrome.offscreen.Reason.WORKERS],
-    justification: "Host PAP WASM module for cryptographic operations",
-  });
-
-  offscreenReady = true;
 }
 
 // ── Handshake Tab Management ───────────────────────────────────────────

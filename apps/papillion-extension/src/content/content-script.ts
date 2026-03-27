@@ -84,3 +84,10 @@ observer.observe(document.body, {
 // ── Click handler ──────────────────────────────────────────────────────
 
 document.addEventListener("click", interceptClick, true);
+
+// ── Cleanup on page unload ─────────────────────────────────────────────
+
+window.addEventListener("pagehide", () => {
+  observer.disconnect();
+  document.removeEventListener("click", interceptClick, true);
+});

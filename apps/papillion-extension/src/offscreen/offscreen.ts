@@ -49,23 +49,16 @@ async function ensureIdentity(): Promise<string> {
     return did;
   }
 
-  // First run: generate a new principal keypair
-  const kp = sdk.PrincipalKeypair.generate();
-  const did = kp.did();
-  const secret = kp.publicKeyBytes(); // We need the secret, not public — reconstruct from signing key
-  // Actually, PrincipalKeypair.fromSecretBytes expects the 32-byte seed.
-  // The WASM SDK exposes generate() + fromSecretBytes() but not a direct
-  // secret export. Store the full keypair bytes instead by sign-test round-trip.
-  // For now, we serialize via the keypair's internal representation.
-  // NOTE: The SDK needs a `secretBytes()` method. For now, store a flag
-  // and regenerate deterministically from a stored seed.
+  // First run: generate from a random 32-byte seed.
+  // PrincipalKeypair.generate() uses internal entropy we can't extract,
+  // so we generate our own seed and use fromSecretBytes() to ensure
+  // the same seed can reconstruct the keypair from storage.
   const seed = crypto.getRandomValues(new Uint8Array(32));
-  const newKp = sdk.PrincipalKeypair.fromSecretBytes(seed);
-  const newDid = newKp.did();
+  const kp = sdk.PrincipalKeypair.fromSecretBytes(seed);
+  const did = kp.did();
   await storePrincipalKey(seed);
-  newKp.free();
   kp.free();
-  return newDid;
+  return did;
 }
 
 /** Load the principal keypair from storage. Caller must free(). */
@@ -148,15 +141,19 @@ async function executeHandshake(params: HandshakeParams): Promise<void> {
     token.sign(principalKp);
     const tokenJson = JSON.parse(token.toJson());
 
-    const phase1Resp = (await protocolPost(endpoint, "/session", {
+    const phase1Resp = await protocolPost(endpoint, "/session", {
       type: "TokenPresentation",
       token: tokenJson,
-    })) as TokenAccepted;
+    });
 
-    if ((phase1Resp as ProtocolMessage).type === "TokenRejected") {
-      throw new Error(
-        `Token rejected: ${(phase1Resp as unknown as { reason: string }).reason}`
-      );
+    if (phase1Resp.type === "TokenRejected") {
+      throw new Error(`Token rejected: ${phase1Resp.reason}`);
+    }
+    if (phase1Resp.type === "Error") {
+      throw new Error(`Protocol error: ${phase1Resp.message}`);
+    }
+    if (phase1Resp.type !== "TokenAccepted") {
+      throw new Error(`Unexpected response: ${phase1Resp.type}`);
     }
 
     const agentSessionId = phase1Resp.session_id;

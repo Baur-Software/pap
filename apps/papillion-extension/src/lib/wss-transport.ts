@@ -42,14 +42,22 @@ export function connectWss(endpoint: string): Promise<WssConnection> {
           ws.send(JSON.stringify(msg));
         },
 
-        receive(): Promise<ProtocolMessage> {
+        receive(timeoutMs = 30_000): Promise<ProtocolMessage> {
           // If there's a queued message, return it immediately
           const queued = messageQueue.shift();
           if (queued) return Promise.resolve(queued);
 
-          // Otherwise, wait for the next message
-          return new Promise((res) => {
-            waitingResolve = res;
+          // Otherwise, wait for the next message with timeout
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+              waitingResolve = null;
+              reject(new Error("WSS receive timed out"));
+            }, timeoutMs);
+
+            waitingResolve = (msg) => {
+              clearTimeout(timer);
+              resolve(msg);
+            };
           });
         },
 

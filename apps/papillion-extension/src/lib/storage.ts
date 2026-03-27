@@ -2,7 +2,11 @@
  * Encrypted key storage for principal keypairs.
  *
  * AES-256-GCM encryption via Web Crypto API. The encryption key is derived
- * from PBKDF2 with extension-scoped entropy (extension ID + salt).
+ * from PBKDF2 using a device-unique random secret + per-key salt.
+ *
+ * The device secret is generated once on first use and stored separately
+ * from the encrypted keys. This ensures encryption can't be broken from
+ * just the extension ID (which is public).
  *
  * Session keypairs are NEVER stored — they live in memory only.
  */
@@ -10,10 +14,33 @@
 import type { EncryptedKeyData } from "./types.js";
 
 const STORAGE_KEY = "pap_principal_key";
+const DEVICE_SECRET_KEY = "pap_device_secret";
 const PBKDF2_ITERATIONS = 100_000;
 
+/** Get or create a device-unique secret for PBKDF2 key material. */
+async function getDeviceSecret(): Promise<Uint8Array> {
+  const result = await chrome.storage.local.get(DEVICE_SECRET_KEY);
+  if (result[DEVICE_SECRET_KEY]) {
+    return new Uint8Array(result[DEVICE_SECRET_KEY]);
+  }
+
+  // First run: generate 32 bytes of random entropy
+  const secret = crypto.getRandomValues(new Uint8Array(32));
+  await chrome.storage.local.set({
+    [DEVICE_SECRET_KEY]: Array.from(secret),
+  });
+  return secret;
+}
+
 async function deriveKey(salt: Uint8Array): Promise<CryptoKey> {
-  const material = new TextEncoder().encode(chrome.runtime.id);
+  const deviceSecret = await getDeviceSecret();
+
+  // Combine device secret + extension ID for key material
+  const idBytes = new TextEncoder().encode(chrome.runtime.id);
+  const material = new Uint8Array(deviceSecret.length + idBytes.length);
+  material.set(deviceSecret);
+  material.set(idBytes, deviceSecret.length);
+
   const baseKey = await crypto.subtle.importKey(
     "raw",
     material as BufferSource,
