@@ -1,89 +1,26 @@
-use pap_core::receipt::TransactionReceipt;
-use pap_core::session::CapabilityToken;
-use pap_did::SessionKeypair;
-use pap_transport::{AgentHandler, TransportError};
+use pap_transport::TransportError;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::session_store::SessionStore;
+use crate::executor::{AgentExecutor, AgentMeta};
 
-/// Open-Meteo weather forecast agent.
-///
-/// Calls the Open-Meteo API — REQUIRES disclosure of GeoCoordinates.
-/// This is the first agent in Papillion that exercises disclosure filtering:
-/// users must authorize location sharing for this agent to appear in queries.
-/// Coordinates arrive as "lat,lon" via `handle_disclosure`.
-/// Sessions are TTL-bounded and reaped automatically.
-pub struct OpenMeteoAgent {
-    sessions: SessionStore<Option<String>>, // query containing lat,lon
-}
+/// Open-Meteo weather forecast — REQUIRES GeoCoordinates disclosure.
+pub struct OpenMeteoExecutor;
 
-impl Default for OpenMeteoAgent {
-    fn default() -> Self {
-        Self {
-            sessions: SessionStore::new(),
+impl AgentExecutor for OpenMeteoExecutor {
+    fn meta(&self) -> AgentMeta {
+        AgentMeta {
+            name: "Open-Meteo Weather",
+            provider: "Open-Meteo",
+            action: "schema:CheckAction",
+            object_types: &["schema:WeatherForecast"],
+            requires_disclosure: &["schema:GeoCoordinates"],
+            returns: &["schema:WeatherForecast"],
         }
     }
-}
 
-impl OpenMeteoAgent {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl AgentHandler for OpenMeteoAgent {
-    fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
-        if token.action != "schema:CheckAction" {
-            return Err(TransportError::ServerError(format!(
-                "Unsupported action: {}",
-                token.action
-            )));
-        }
-
-        let session_id = uuid::Uuid::new_v4().to_string();
-        let did = self.sessions.insert(session_id.clone(), None);
-        Ok((session_id, did))
-    }
-
-    fn handle_did_exchange(
-        &self,
-        session_id: &str,
-        _initiator_session_did: &str,
-    ) -> Result<(), TransportError> {
-        if !self.sessions.exists(session_id) {
-            return Err(TransportError::ServerError("Unknown session".into()));
-        }
-        Ok(())
-    }
-
-    fn handle_disclosure(
-        &self,
-        session_id: &str,
-        disclosures: Vec<serde_json::Value>,
-    ) -> Result<(), TransportError> {
-        let query = disclosures
-            .iter()
-            .find_map(|d| d.get("query").and_then(|v| v.as_str()))
-            .map(String::from);
-
-        if let Some(q) = query {
-            self.sessions.with_mut(session_id, |data| {
-                *data = Some(q);
-            })?;
-        }
-        Ok(())
-    }
-
-    fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let query = self
-            .sessions
-            .with(session_id, |data| data.clone())?
-            .ok_or_else(|| {
-                TransportError::ServerError("No coordinates provided in disclosures".into())
-            })?;
-
-        let (lat, lon) = parse_coordinates(&query)?;
+    fn execute(&self, query: &str) -> Result<serde_json::Value, TransportError> {
+        let (lat, lon) = parse_coordinates(query)?;
 
         let client = reqwest::blocking::Client::builder()
             .user_agent("Papillion/0.1 (PAP Browser)")
@@ -96,7 +33,7 @@ impl AgentHandler for OpenMeteoAgent {
                 ("latitude", lat.to_string()),
                 ("longitude", lon.to_string()),
                 (
-                    "current",
+                    "current".into(),
                     "temperature_2m,wind_speed_10m,weather_code".into(),
                 ),
             ])
@@ -133,29 +70,7 @@ impl AgentHandler for OpenMeteoAgent {
             "weatherCode": resp.current.weather_code
         }))
     }
-
-    fn co_sign_receipt(
-        &self,
-        mut receipt: TransactionReceipt,
-    ) -> Result<TransactionReceipt, TransportError> {
-        let key = self.sessions.signing_key(&receipt.session_id);
-        match key {
-            Some(k) => receipt.co_sign(&k),
-            None => {
-                let k = SessionKeypair::generate();
-                receipt.co_sign(k.signing_key());
-            }
-        }
-        Ok(receipt)
-    }
-
-    fn handle_close(&self, session_id: &str) -> Result<(), TransportError> {
-        self.sessions.remove(session_id);
-        Ok(())
-    }
 }
-
-// ── Open-Meteo API types ──────────────────────────────────────
 
 #[derive(Deserialize)]
 struct OpenMeteoResponse {
@@ -170,8 +85,6 @@ struct CurrentWeather {
     wind_speed_10m: f64,
     weather_code: i32,
 }
-
-// ── Helpers ───────────────────────────────────────────────────
 
 fn parse_coordinates(query: &str) -> Result<(f64, f64), TransportError> {
     let parts: Vec<&str> = query
@@ -191,7 +104,6 @@ fn parse_coordinates(query: &str) -> Result<(f64, f64), TransportError> {
     ))
 }
 
-/// Map WMO weather interpretation codes to human-readable descriptions.
 fn weather_code_description(code: i32) -> &'static str {
     match code {
         0 => "Clear sky",

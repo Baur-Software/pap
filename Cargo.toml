@@ -10,6 +10,7 @@ members = [
     "crates/pap-proto",
     "crates/pap-transport",
     "crates/pap-federation",
+    "crates/pap-agents",
     "crates/pap-tee",
     "crates/pap-python",
     "crates/pap-c",
@@ -45,6 +46,7 @@ pap-webauthn = { path = "crates/pap-webauthn" }
 pap-proto = { path = "crates/pap-proto" }
 pap-transport = { path = "crates/pap-transport" }
 pap-federation = { path = "crates/pap-federation" }
+pap-agents = { path = "crates/pap-agents" }
 pap-tee = { path = "crates/pap-tee" }
 papillion-shared = { path = "crates/papillion-shared" }
 

@@ -6,7 +6,7 @@ use pap_transport::{AgentHandler, TransportError};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
-use super::session_store::SessionStore;
+use pap_agents::session_store::SessionStore;
 
 /// Session data for an in-progress discovery query.
 #[derive(Clone)]

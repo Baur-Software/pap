@@ -1,0 +1,20 @@
+[package]
+name = "pap-agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared PAP agent implementations — reusable across Papillion, Chrysalis, and any PAP node"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-transport = { workspace = true }
+pap-marketplace = { workspace = true }
+pap-federation = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+uuid = { workspace = true }
+chrono = { workspace = true }
+ed25519-dalek = { workspace = true }

@@ -1,22 +1,13 @@
-pub mod duckduckgo;
-pub mod frankfurter;
-pub mod hacker_news;
-pub mod nominatim;
+//! Papillion agent wiring.
+//!
+//! Standard agents live in `pap-agents` crate (shared with Chrysalis).
+//! Only app-specific agents (on-device AI, social discovery, trait beacon)
+//! remain here — they need app-level dependencies like ModelManager or
+//! FederatedRegistry that don't belong in the shared crate.
+
 pub mod on_device_ai;
-pub mod open_library;
-pub mod open_meteo;
-mod session_store;
 pub mod social_discovery;
 pub mod trait_beacon;
-pub mod wikipedia;
 
-pub use duckduckgo::DuckDuckGoAgent;
-pub use frankfurter::FrankfurterAgent;
-pub use hacker_news::HackerNewsAgent;
-pub use nominatim::NominatimAgent;
-pub use on_device_ai::OnDeviceAiAgent;
-pub use open_library::OpenLibraryAgent;
-pub use open_meteo::OpenMeteoAgent;
-pub use social_discovery::SocialDiscoveryAgent;
-pub use trait_beacon::TraitBeaconAgent;
-pub use wikipedia::WikipediaAgent;
+// Re-export the shared agent crate so existing `crate::agents::*` imports work.
+pub use pap_agents::*;

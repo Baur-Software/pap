@@ -10,15 +10,14 @@ use pap_webauthn::{PrincipalSigner, SoftwareSigner};
 use papillion_shared::{OrchestratorConfig, SuccessorDesignation};
 use zeroize::Zeroizing;
 
-use crate::agents::{
-    DuckDuckGoAgent, FrankfurterAgent, HackerNewsAgent, NominatimAgent, OnDeviceAiAgent,
-    OpenLibraryAgent, OpenMeteoAgent, SocialDiscoveryAgent, TraitBeaconAgent, WikipediaAgent,
-};
+use crate::agents::on_device_ai::OnDeviceAiExecutor;
+use crate::agents::social_discovery::SocialDiscoveryAgent;
+use crate::agents::trait_beacon::TraitBeaconAgent;
 use crate::db::{prelude::DatabaseOps, Database};
 use crate::error::PapillionError;
 use crate::inference::ModelManager;
 use crate::profiles_db::ProfilesDatabase;
-use crate::seed::seed_registry;
+use pap_agents::{build_agents, AgentExecutor, SimpleAgent};
 use papillion_shared::ProfileMetadata;
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
@@ -125,8 +124,19 @@ impl AppState {
     }
 
     fn with_db(db: Arc<Database>, profiles_db: Arc<ProfilesDatabase>) -> Self {
-        let (registry, agent_keypairs) = seed_registry();
-        let local_registry = Arc::new(Mutex::new(registry));
+        let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
+
+        // On-device AI needs the local model manager — register as an extra agent.
+        let ai_executor = OnDeviceAiExecutor::new(model_manager.clone());
+        let ai_meta = ai_executor.meta();
+        let extra = vec![(
+            ai_meta.name,
+            Arc::new(SimpleAgent::new(ai_executor)) as Arc<dyn pap_transport::AgentHandler>,
+            ai_meta,
+        )];
+
+        let agent_set = build_agents(extra);
+        let local_registry = Arc::new(Mutex::new(agent_set.registry));
 
         // Load or create profiles
         let profiles = profiles_db.list_profiles().unwrap_or_default();
@@ -235,38 +245,16 @@ impl AppState {
             }
         }
 
-        let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
+        // App-specific agents that need runtime state (not in shared pap-agents crate):
+        // - SocialDiscovery needs the local_registry Arc
+        // - TraitBeacon has mutable profile state from the UI
+        let social = SocialDiscoveryAgent::new(local_registry.clone());
+        let beacon = TraitBeaconAgent::new();
 
-        // Spawn local agents — these are real AgentHandler implementations
-        let mut local_agents: HashMap<String, Arc<dyn AgentHandler>> = HashMap::new();
-        local_agents.insert("DuckDuckGo Search".into(), Arc::new(DuckDuckGoAgent::new()));
-        local_agents.insert(
-            "Wikipedia Knowledge".into(),
-            Arc::new(WikipediaAgent::new()),
-        );
-        local_agents.insert(
-            "On-Device AI".into(),
-            Arc::new(OnDeviceAiAgent::new(model_manager.clone())),
-        );
-        local_agents.insert("Open-Meteo Weather".into(), Arc::new(OpenMeteoAgent::new()));
-        local_agents.insert(
-            "Open Library Books".into(),
-            Arc::new(OpenLibraryAgent::new()),
-        );
-        local_agents.insert(
-            "Nominatim Geocoding".into(),
-            Arc::new(NominatimAgent::new()),
-        );
-        local_agents.insert(
-            "Frankfurter Exchange".into(),
-            Arc::new(FrankfurterAgent::new()),
-        );
-        local_agents.insert("Hacker News".into(), Arc::new(HackerNewsAgent::new()));
-        local_agents.insert(
-            "Social Discovery".into(),
-            Arc::new(SocialDiscoveryAgent::new(local_registry.clone())),
-        );
-        local_agents.insert("Trait Beacon".into(), Arc::new(TraitBeaconAgent::new()));
+        // Merge app-specific agents into the agent_set built by build_agents()
+        let mut handlers = agent_set.handlers;
+        handlers.insert("Social Discovery".into(), Arc::new(social));
+        handlers.insert("Trait Beacon".into(), Arc::new(beacon));
 
         Self {
             signer: RwLock::new(Some(Box::new(signer))),
@@ -279,12 +267,12 @@ impl AppState {
             bookmarks: RwLock::new(bookmarks),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager,
-            agent_keypairs: RwLock::new(agent_keypairs),
+            agent_keypairs: RwLock::new(agent_set.keypairs),
             db,
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
             resource_dir: RwLock::new(PathBuf::new()),
-            local_agents,
+            local_agents: handlers,
             endpoint_registry: RwLock::new(EndpointRegistry::new()),
             federation_port: DEFAULT_FEDERATION_PORT,
             node_endpoint: RwLock::new(String::new()),
