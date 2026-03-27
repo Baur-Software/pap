@@ -1,12 +1,12 @@
 # Web Build Feature Parity Report
 
-**Issue**: #71 — Validate Papillion web build feature parity with native
+**Issue**: #71 — Validate Papillon web build feature parity with native
 **Date**: 2026-03-24
 **Branch**: `feat/eab4-validate-papilli`
 
 ## Executive Summary
 
-The web build compiles and serves correctly, but **all five audited features are non-functional in standalone web mode**. The root cause is architectural: the Leptos frontend calls every backend operation through `bridge::invoke()` (Tauri IPC), which returns `Err("Tauri IPC not available")` when running outside the Tauri shell. The database abstraction layer (`papillion-shared`) has working WASM implementations, but the frontend never uses them directly.
+The web build compiles and serves correctly, but **all five audited features are non-functional in standalone web mode**. The root cause is architectural: the Leptos frontend calls every backend operation through `bridge::invoke()` (Tauri IPC), which returns `Err("Tauri IPC not available")` when running outside the Tauri shell. The database abstraction layer (`papillon-shared`) has working WASM implementations, but the frontend never uses them directly.
 
 | Feature | Native | Web (in Tauri) | Web (Standalone) | Gap Severity |
 |---------|--------|----------------|------------------|-------------|
@@ -66,7 +66,7 @@ The frontend has consistent `if !bridge::tauri_available() { return; }` guards i
 
 **Root cause**: Two missing capabilities:
 1. **No web-native identity generation** — `ed25519-dalek` and `pap-did::PrincipalKeypair` are not compiled into WASM frontend. The web build cannot generate a DID keypair.
-2. **No web-native profile storage** — Profile metadata is stored in a separate SQLite DB (`profiles_db.rs`), not in `papillion-shared`'s `DatabaseOps` trait. No WASM equivalent exists.
+2. **No web-native profile storage** — Profile metadata is stored in a separate SQLite DB (`profiles_db.rs`), not in `papillon-shared`'s `DatabaseOps` trait. No WASM equivalent exists.
 
 **What works**: Profile UI components render. State reset on DID change (`app.rs:87-128`) is correctly implemented. `IdentityState` struct is platform-agnostic.
 
@@ -113,7 +113,7 @@ The current `web-build.yml` workflow:
 
 **Missing from CI**:
 - No clippy for WASM target
-- No `wasm-pack test` for `papillion-shared` WASM backend
+- No `wasm-pack test` for `papillon-shared` WASM backend
 - No Playwright e2e for the web build (only verifies index.html is served)
 
 ## Recommendations
@@ -123,7 +123,7 @@ The current `web-build.yml` workflow:
 2. **File follow-up issues** for each gap area
 
 ### Short-term (follow-up issues)
-1. **Service abstraction layer**: Create a `PapillionService` trait dispatching to IPC or WASM DB
+1. **Service abstraction layer**: Create a `PapillonService` trait dispatching to IPC or WASM DB
 2. **Web-native identity**: Compile `pap-did` to WASM, generate keypairs in browser
 3. **Web-native templates**: Wire `IndexedDbDatabase` template ops directly into frontend
 

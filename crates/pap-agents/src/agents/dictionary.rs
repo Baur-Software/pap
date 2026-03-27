@@ -35,7 +35,7 @@ impl AgentExecutor for DictionaryExecutor {
         let word = query.split_whitespace().next().unwrap_or(query);
 
         let client = reqwest::blocking::Client::builder()
-            .user_agent("Papillion/0.1 (PAP Browser)")
+            .user_agent("Papillon/0.1 (PAP Browser)")
             .build()
             .map_err(|e: reqwest::Error| TransportError::ServerError(e.to_string()))?;
 

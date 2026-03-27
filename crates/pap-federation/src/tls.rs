@@ -231,7 +231,7 @@ pub fn build_pinned_client(
     let config = build_pinned_tls_config(trusted_fingerprints)?;
 
     reqwest::Client::builder()
-        .user_agent("Papillion/0.1 (PAP Federation Node)")
+        .user_agent("Papillon/0.1 (PAP Federation Node)")
         .use_preconfigured_tls(config)
         .build()
         .map_err(|e| FederationError::ServerError(format!("HTTP client build failed: {e}")))
@@ -248,7 +248,7 @@ pub fn build_pinned_client(
 /// connections MUST use `build_pinned_client()`.
 pub fn build_tofu_client() -> Result<reqwest::Client, FederationError> {
     reqwest::Client::builder()
-        .user_agent("Papillion/0.1 (PAP Federation Node)")
+        .user_agent("Papillon/0.1 (PAP Federation Node)")
         .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| FederationError::ServerError(format!("HTTP client build failed: {e}")))

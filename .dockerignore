@@ -1,6 +1,6 @@
 target/
-apps/papillion/frontend/target/
-apps/papillion/frontend/dist/
+apps/papillon/frontend/target/
+apps/papillon/frontend/dist/
 **/*.o
 **/*.so
 .git/

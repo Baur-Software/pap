@@ -1,0 +1,556 @@
+name: Release Papillon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/papillon/**"
+      - "crates/pap-core/**"
+      - "crates/pap-did/**"
+      - "crates/pap-credential/**"
+      - "crates/pap-marketplace/**"
+      - "crates/pap-proto/**"
+      - "crates/pap-webauthn/**"
+      - "crates/pap-transport/**"
+      - "crates/papillon-shared/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+  PRODUCT_NAME: Papillon
+  DOCKER_IMAGE: ghcr.io/baur-software/papillon
+
+jobs:
+  # ── 1. Detect new version and create tag ─────────────────────────────────────
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read workspace version and check for existing tag
+        id: check
+        run: |
+          VERSION=$(sed -n '/\[workspace\.package\]/,/^$/{s/^version *= *"\(.*\)"/\1/p}' Cargo.toml)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          TAG="papillon-v${VERSION}"
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version ${VERSION} detected — will tag and release"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          git tag "papillon-v${{ steps.check.outputs.version }}"
+          git push origin "papillon-v${{ steps.check.outputs.version }}"
+
+  # ── 2. Create a draft GitHub Release ─────────────────────────────────────────
+  create-release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          echo "${NOTES}" > /tmp/release-notes.md
+
+      - name: Create draft release
+        id: create
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const notes = fs.readFileSync('/tmp/release-notes.md', 'utf8').trim();
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `papillon-v${process.env.VERSION}`,
+              name: `Papillon v${process.env.VERSION}`,
+              body: notes || `See [CHANGELOG](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CHANGELOG.md) for details.`,
+              draft: true,
+              prerelease: false
+            });
+            return data.id;
+
+  # ── 3. Build Tauri desktop app (macOS / Linux / Windows) ─────────────────────
+  build-desktop:
+    needs: [check-version, create-release]
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            tauri_args: --target universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin,wasm32-unknown-unknown
+          - platform: ubuntu-22.04
+            tauri_args: ""
+            rust_targets: wasm32-unknown-unknown
+          - platform: windows-latest
+            tauri_args: ""
+            rust_targets: wasm32-unknown-unknown
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install trunk
+        run: cargo binstall trunk --no-confirm --force
+
+      - name: Build frontend (WASM)
+        working-directory: apps/papillon/frontend
+        run: trunk build --release
+
+      - name: Setup model directory
+        shell: bash
+        run: mkdir -p apps/papillon/models
+
+      - name: Download bundled TinyLlama model from GitHub Release
+        shell: bash
+        run: |
+          gh release download models-v1 \
+            --pattern "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" \
+            --dir apps/papillon/models \
+            --repo ${{ github.repository }} 2>/dev/null || {
+            echo "Model release not found — proceeding without bundled model."
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cargo-tauri
+        run: cargo install tauri-cli --locked
+
+      - name: Build and upload Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/papillon
+          tauriScript: cargo tauri
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: ${{ matrix.tauri_args }}
+
+  # ── 4. Build mobile — iOS (thin client) ──────────────────────────────────────
+  # Mobile builds are lightweight Capacitor wrappers around the WASM frontend.
+  # The app connects to a Papillon desktop instance (LAN) or Chrysalis server
+  # (internet) — no local LLM inference or Rust backend on the device.
+  build-mobile-ios:
+    needs: [check-version, create-release, build-web]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: papillon-web-dist
+          path: apps/papillon/frontend/dist/
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Initialize Capacitor iOS project
+        working-directory: apps/papillon
+        run: |
+          npm init -y
+          npm install @capacitor/core@^8 @capacitor/cli@^8 @capacitor/ios@^8
+
+          npx cap init "Papillon" "com.baursoftware.papillon" \
+            --web-dir frontend/dist
+
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Install Apple certificate and provisioning profile
+        if: env.HAS_APPLE_SIGNING == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ github.run_id }}
+        run: |
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          PP_PATH=$RUNNER_TEMP/provision.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o "$CERT_PATH"
+          echo -n "$APPLE_PROVISIONING_PROFILE" | base64 --decode -o "$PP_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build iOS archive
+        working-directory: apps/papillon/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/Papillon.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export IPA (when signing is available)
+        if: env.HAS_APPLE_SIGNING == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          cat > $RUNNER_TEMP/export.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+          </dict></plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/Papillon.xcarchive \
+            -exportOptionsPlist $RUNNER_TEMP/export.plist \
+            -exportPath $RUNNER_TEMP/ipa/
+
+      - name: Upload iOS artifacts to release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const globber = await glob.create(`${process.env.RUNNER_TEMP}/**/*.ipa`);
+            for await (const file of globber.globGenerator()) {
+              const data = fs.readFileSync(file);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: parseInt(process.env.RELEASE_ID),
+                name: `Papillon-${process.env.VERSION}-ios.ipa`,
+                data
+              });
+            }
+
+  # ── 5. Build mobile — Android (thin client) ─────────────────────────────────
+  build-mobile-android:
+    needs: [check-version, create-release, build-web]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: papillon-web-dist
+          path: apps/papillon/frontend/dist/
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Initialize Capacitor Android project
+        working-directory: apps/papillon
+        run: |
+          npm init -y
+          npm install @capacitor/core@^8 @capacitor/cli@^8 @capacitor/android@^8
+
+          npx cap init "Papillon" "com.baursoftware.papillon" \
+            --web-dir frontend/dist
+
+          npx cap add android
+          npx cap sync android
+
+      - name: Build Android APK
+        working-directory: apps/papillon/android
+        run: ./gradlew assembleRelease
+
+      - name: Sign APK (production keystore)
+        if: env.HAS_ANDROID_SIGNING == 'true'
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo -n "$ANDROID_KEYSTORE" | base64 --decode > $RUNNER_TEMP/keystore.jks
+          BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
+          APK=$(find apps/papillon/android -name "*-release-unsigned.apk" -type f | head -1)
+          if [ -n "$APK" ]; then
+            "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
+              --ks $RUNNER_TEMP/keystore.jks \
+              --ks-pass "pass:${ANDROID_KEYSTORE_PASSWORD}" \
+              --ks-key-alias "${ANDROID_KEY_ALIAS}" \
+              --key-pass "pass:${ANDROID_KEY_PASSWORD}" \
+              --out "${APK%-unsigned.apk}.apk" \
+              "$APK"
+          fi
+
+      - name: Sign APK (self-signed for sideloading)
+        if: env.HAS_ANDROID_SIGNING != 'true'
+        run: |
+          keytool -genkeypair -v \
+            -keystore $RUNNER_TEMP/debug.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias debug -storepass android -keypass android \
+            -dname "CN=Papillon Debug, O=Baur Software"
+          BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
+          APK=$(find apps/papillon/android -name "*-release-unsigned.apk" -type f | head -1)
+          if [ -n "$APK" ]; then
+            "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
+              --ks $RUNNER_TEMP/debug.jks \
+              --ks-pass pass:android \
+              --ks-key-alias debug \
+              --key-pass pass:android \
+              --out "${APK%-unsigned.apk}.apk" \
+              "$APK"
+          fi
+
+      - name: Upload Android artifacts to release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const globber = await glob.create('apps/papillon/android/**/*-release*.apk');
+            for await (const file of globber.globGenerator()) {
+              if (file.includes('unsigned')) continue;
+              const data = fs.readFileSync(file);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: parseInt(process.env.RELEASE_ID),
+                name: `Papillon-${process.env.VERSION}-android.apk`,
+                data
+              });
+            }
+
+  # ── 6. Build web (WASM) ─────────────────────────────────────────────────────
+  build-web:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install trunk
+        run: cargo binstall trunk --no-confirm --force
+
+      - name: Build frontend (WASM)
+        working-directory: apps/papillon/frontend
+        run: trunk build --release
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: papillon-web-dist
+          path: apps/papillon/frontend/dist/
+          retention-days: 5
+
+  # ── 7. Publish npm package (@baur-software/papillon) ────────────────────────
+  publish-npm:
+    needs: [check-version, build-web]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: papillon-web-dist
+          path: packages/papillon-cli/dist/
+
+      - name: Set package version
+        working-directory: packages/papillon-cli
+        run: npm version "${{ needs.check-version.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Publish to npm
+        working-directory: packages/papillon-cli
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ── 8. Publish Docker image (ghcr.io/baur-software/papillon) ───────────────
+  publish-docker:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/papillon/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ needs.check-version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── 9. Publish the release (un-draft) ────────────────────────────────────────
+  publish-release:
+    needs: [create-release, build-desktop, build-mobile-ios, build-mobile-android, publish-npm, publish-docker]
+    if: |
+      always() &&
+      needs.create-release.result == 'success' &&
+      needs.build-desktop.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: parseInt(process.env.RELEASE_ID),
+              draft: false
+            });
+
+  # ── 10. Post-deploy canary ───────────────────────────────────────────────────
+  canary-verify:
+    name: Post-Deploy Canary Verification
+    needs: [publish-release, build-web]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: papillon-web-dist
+          path: apps/papillon/frontend/dist/
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: e2e
+        run: |
+          npm install -D @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Run canary health checks
+        working-directory: e2e
+        run: npx playwright test tests/canary.spec.ts --reporter=html
+        timeout-minutes: 15
+
+      - name: Upload canary report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: papillon-canary-report
+          path: playwright-report/
+          retention-days: 7

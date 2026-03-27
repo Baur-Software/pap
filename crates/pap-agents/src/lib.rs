@@ -1,7 +1,7 @@
 //! Shared PAP agent implementations.
 //!
 //! This crate provides the `AgentExecutor` trait, `SimpleAgent<E>` wrapper,
-//! and all standard agent implementations. Both Papillion and Chrysalis
+//! and all standard agent implementations. Both Papillon and Chrysalis
 //! depend on this crate — agents are defined once, used everywhere.
 //!
 //! # Architecture

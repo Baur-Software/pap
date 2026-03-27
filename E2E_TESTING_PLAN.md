@@ -1,8 +1,8 @@
-# E2E Testing Strategy for Papillion
+# E2E Testing Strategy for Papillon
 
 ## Problem
 
-The release workflow builds Papillion for macOS/Linux/Windows but **never tests if the app actually works**.
+The release workflow builds Papillon for macOS/Linux/Windows but **never tests if the app actually works**.
 
 - ✓ CI tests the Rust crates (unit + integration tests)
 - ✓ Release workflow builds the Tauri desktop app
@@ -64,7 +64,7 @@ Result: The blank UI bug in v0.3.0 was only caught after manually building and i
 ### Step 1: Add Smoke Test to CI (`.github/workflows/ci.yml`)
 
 ```bash
-# New job: smoke-test-papillion
+# New job: smoke-test-papillon
 # Runs on Linux only (fastest, same code path as Windows/macOS for most issues)
 # 1. Build the app in release mode
 # 2. Launch it headless with Tauri automation
@@ -98,14 +98,14 @@ After the `build` job (lines 84-157), add a new `smoke-test` job that:
 
 ---
 
-### Step 3: Create Tauri App Harness (`crates/papillion-test/`)
+### Step 3: Create Tauri App Harness (`crates/papillon-test/`)
 
 New test crate with helpers:
 
 ```rust
 // Launch app instance
-fn launch_papillion_dev() -> Result<Child>
-fn launch_papillion_release(path: &Path) -> Result<Child>
+fn launch_papillon_dev() -> Result<Child>
+fn launch_papillon_release(path: &Path) -> Result<Child>
 
 // Assertions
 fn assert_window_exists(app: &mut Child, timeout: Duration) -> Result<()>
@@ -113,7 +113,7 @@ fn assert_content_visible(app: &mut Child) -> Result<String>  // Returns screens
 fn assert_no_console_errors(app: &mut Child) -> Result<()>
 
 // Cleanup
-impl Drop for PapillionApp { fn drop(&mut self) { kill() } }
+impl Drop for PapillonApp { fn drop(&mut self) { kill() } }
 ```
 
 **Estimated effort:** 200 lines = 45 min
@@ -122,11 +122,11 @@ impl Drop for PapillionApp { fn drop(&mut self) { kill() } }
 
 ### Step 4: Local Development Convenience
 
-Add npm scripts to `apps/papillion/frontend/package.json`:
+Add npm scripts to `apps/papillon/frontend/package.json`:
 
 ```json
-"test:e2e:dev": "cargo run -p papillion-test -- --dev",
-"test:e2e:release": "cargo build -p papillion --release && cargo run -p papillion-test -- --release target/release/Papillion"
+"test:e2e:dev": "cargo run -p papillon-test -- --dev",
+"test:e2e:release": "cargo build -p papillon --release && cargo run -p papillon-test -- --release target/release/Papillon"
 ```
 
 So developers can verify locally before pushing.
@@ -139,9 +139,9 @@ So developers can verify locally before pushing.
 |------|--------|-----|
 | `.github/workflows/ci.yml` | Add smoke-test job | +50 |
 | `.github/workflows/release.yml` | Add platform-specific smoke-test | +80 |
-| `crates/papillion-test/` | New test crate | +300 |
+| `crates/papillon-test/` | New test crate | +300 |
 | `Cargo.toml` (root) | Add workspace member | +2 |
-| `apps/papillion/frontend/package.json` | Add npm scripts | +4 |
+| `apps/papillon/frontend/package.json` | Add npm scripts | +4 |
 
 **Total effort:** ~2 hours
 
@@ -184,7 +184,7 @@ Cost of recurrence: Reputation + future rework.
 
 **Status:** Implemented on branch `vk/1f28-fix-tauri-releas`
 **Date Completed:** 2026-03-23
-**Commits:** `d538381` — feat(qa): add Tier 1 smoke tests for Papillion desktop app
+**Commits:** `d538381` — feat(qa): add Tier 1 smoke tests for Papillon desktop app
 
 ### Files Created/Modified
 
@@ -213,7 +213,7 @@ Cost of recurrence: Reputation + future rework.
 
 ```bash
 # Prerequisites: Must have built the app first
-cd apps/papillion
+cd apps/papillon
 cargo tauri build
 
 # Run smoke tests

@@ -46,8 +46,8 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-python"/d' \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
-    -e '/^[[:space:]]*"crates\/papillion-shared"/d' \
-    -e '/^[[:space:]]*"apps\/papillion"/d' \
+    -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
+    -e '/^[[:space:]]*"apps\/papillon"/d' \
     -e '/^[[:space:]]*"benches"/d' \
     -e '/^[[:space:]]*"examples\//d' \
     Cargo.toml
@@ -86,8 +86,8 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-python"/d'      \
     -e '/^[[:space:]]*"crates\/pap-c"/d'           \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d'        \
-    -e '/^[[:space:]]*"crates\/papillion-shared"/d' \
-    -e '/^[[:space:]]*"apps\/papillion"/d'         \
+    -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
+    -e '/^[[:space:]]*"apps\/papillon"/d'         \
     -e '/^[[:space:]]*"benches"/d'                  \
     -e '/^[[:space:]]*"examples\//d'                \
     Cargo.toml

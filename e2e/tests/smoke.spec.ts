@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
-test.describe("Papillion Smoke Tests", () => {
+test.describe("Papillon Smoke Tests", () => {
   test("WASM loads and app shell renders", async ({ page }) => {
     const messages: string[] = [];
     const pageErrors: string[] = [];

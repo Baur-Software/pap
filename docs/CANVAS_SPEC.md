@@ -12,7 +12,7 @@ The user describes what they want. The canvas discovers agents that can do it. P
 
 There is no build mode. There is no use mode. There is no settings page for integrations. There is one surface, one prompt, and the outcome blocks that emerge from it.
 
-OpenClaw and similar tools hand the entire user context to every agent in the chain. Papillion doesn't. That's the product.
+OpenClaw and similar tools hand the entire user context to every agent in the chain. Papillon doesn't. That's the product.
 
 ---
 
@@ -44,7 +44,7 @@ This is not a minor concern. It is corrosive to the internet. When every agent c
 
 ### 2.4 What the Canvas Changes
 
-The Papillion canvas doesn't iterate on any of these. It replaces the assumptions underneath them.
+The Papillon canvas doesn't iterate on any of these. It replaces the assumptions underneath them.
 
 **Configuration disappears.** You don't set up integrations. You don't authenticate with services. You don't map fields between APIs. You describe what you want. The federated agent network discovers agents that can do it. Agents advertise their capabilities via Schema.org vocabularies. The orchestrator matches your intent to available capabilities. The user never sees a settings page for connecting services — because there isn't one. Agent capability advertisements replace API keys and OAuth flows.
 
@@ -390,7 +390,7 @@ User picks one, it hydrates into ghost blocks, they hit Run. First outcome block
 
 ### 8.3 First Run as Onboarding
 
-The starter canvas IS the first pipeline run. No tutorial, no walkthrough, no empty canvas. The user sees Papillion produce a real result, with privacy guarantees visible, within the first interaction.
+The starter canvas IS the first pipeline run. No tutorial, no walkthrough, no empty canvas. The user sees Papillon produce a real result, with privacy guarantees visible, within the first interaction.
 
 "Want this every morning?" -> Arms the canvas with schedule trigger -> Now it's live. The memex learns. The orchestrator improves. The person has a working automation.
 
@@ -434,7 +434,7 @@ Schedules are always displayed in natural language, never cron.
 
 ### 9.3 Desktop Catch-Up Semantics
 
-Papillion is a desktop app. Laptops sleep. The scheduler does not use cron. It uses interval-based evaluation with catch-up:
+Papillon is a desktop app. Laptops sleep. The scheduler does not use cron. It uses interval-based evaluation with catch-up:
 
 - If anchor time has passed and interval elapsed since last run: **fire on next tick**
 - **One catch-up run maximum** — don't queue missed intervals
@@ -475,7 +475,7 @@ pub(crate) async fn execute_pipeline(
     state: &AppState,
     pipeline: &PipelineInfo,
     initial_query: &str,
-) -> Result<PipelineExecutionResult, PapillionError>
+) -> Result<PipelineExecutionResult, PapillonError>
 ```
 
 ### 10.4 Guardrails

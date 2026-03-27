@@ -150,7 +150,7 @@ Intellectual honesty requires stating explicit non-goals:
 - **Transport security.** PAP assumes HTTPS/TLS. It does not replace it.
 - **Key storage.** The principal must secure their private key. PAP does not specify how.
 - **Model behavior.** PAP constrains what data reaches the model, not what the model does with it. A model that hallucinates within its permitted scope is outside the protocol's concern.
-- **Single-agent cognition.** PAP is a multi-agent coordination protocol. How one agent reasons, remembers, or plans is not specified. (Papillion's episode store addresses this at the application layer, not the protocol layer.)
+- **Single-agent cognition.** PAP is a multi-agent coordination protocol. How one agent reasons, remembers, or plans is not specified. (Papillon's episode store addresses this at the application layer, not the protocol layer.)
 - **Payment anonymity.** PAP defines extension points for ecash but relies on external payment systems.
 - **DID resolution.** PAP uses `did:key` only — self-contained, no resolver required. Supporting other DID methods is a future consideration.
 

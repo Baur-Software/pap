@@ -2,7 +2,7 @@
 
 This document covers security implications of running Ed25519 key material
 in WebAssembly (WASM) linear memory, as used by `pap-did` in the browser
-build of Papillion.
+build of Papillon.
 
 ## Memory Zeroization
 

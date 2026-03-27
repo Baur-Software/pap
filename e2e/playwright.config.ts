@@ -20,8 +20,8 @@ export default defineConfig({
     //     npx serve handles WASM MIME types correctly.
     // Local: trunk serve compiles on-the-fly in dev mode.
     command: isCI
-      ? "npx -y http-server ../apps/papillion/frontend/dist -p 1420 -c-1 --cors --silent"
-      : "cd ../apps/papillion/frontend && trunk serve --port 1420",
+      ? "npx -y http-server ../apps/papillon/frontend/dist -p 1420 -c-1 --cors --silent"
+      : "cd ../apps/papillon/frontend && trunk serve --port 1420",
     port: 1420,
     reuseExistingServer: !isCI,
     timeout: isCI ? 30_000 : 120_000,

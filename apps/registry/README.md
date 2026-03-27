@@ -1,6 +1,6 @@
 # pap-registry
 
-A standalone, hostable federated PAP agent registry. Deploy one registry node (or a mesh of them) so that PAP-compatible agents and Papillion instances can discover each other across an open network.
+A standalone, hostable federated PAP agent registry. Deploy one registry node (or a mesh of them) so that PAP-compatible agents and Papillon instances can discover each other across an open network.
 
 This is the reference implementation of the federation protocol described in the PAP specification. It is not a SaaS product or a central authority — anyone can run their own node.
 

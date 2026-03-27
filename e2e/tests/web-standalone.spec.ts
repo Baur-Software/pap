@@ -1,7 +1,7 @@
 /**
  * Standalone Web Build Smoke Tests (Tier 1)
  *
- * These tests verify the Papillion frontend works correctly when served
+ * These tests verify the Papillon frontend works correctly when served
  * as a standalone web build — NO Tauri mock injected, no desktop shell.
  * The app should degrade gracefully: shell renders, pages are navigable,
  * and no JS errors from missing Tauri IPC.
