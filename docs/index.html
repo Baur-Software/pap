@@ -158,7 +158,7 @@
     /* ─── Products ────────────────────────────────────────────────────── */
     .products { padding: 0 0 120px; }
     .products-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;
     }
     .product-card {
       background: var(--surface); border: 1px solid var(--border);
@@ -187,6 +187,9 @@
     .product-card-chrysalis::before {
       background: linear-gradient(90deg, var(--teal), #5bdebe);
     }
+    .product-card-extension::before {
+      background: linear-gradient(90deg, var(--amber), #f5c060);
+    }
     .product-icon {
       width: 48px; height: 48px; border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
@@ -203,6 +206,13 @@
     }
     .product-icon-chrysalis {
       background: rgba(46,196,160,.12); border: 1px solid rgba(46,196,160,.2);
+    }
+    .product-icon-extension {
+      background: rgba(240,160,48,.12); border: 1px solid rgba(240,160,48,.2);
+    }
+    .product-tag-extension {
+      background: rgba(240,160,48,.1); color: var(--amber);
+      border: 1px solid rgba(240,160,48,.2);
     }
     .product-icon-chrysalis img {
       width: 32px; height: 32px; object-fit: contain;
@@ -281,6 +291,7 @@
       <li><a href="pap/"><span class="nav-link-icon">pap://</span> PAP</a></li>
       <li><a href="papillon/"><img src="assets/images/papillon-icon.png" alt="" class="nav-link-icon-img" /> Papillon</a></li>
       <li><a href="chrysalis.html"><img src="assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
+      <li><a href="extension/">Extension</a></li>
     </ul>
     <div class="nav-cta">
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
@@ -350,6 +361,17 @@
           sign a capability ad, push it to a node, and any PAP canvas can find you. No app store, no gatekeeper.
         </p>
         <span class="product-link">Learn more &#8594;</span>
+      </a>
+
+      <a href="extension/" class="product-card product-card-extension reveal reveal-delay-3">
+        <div class="product-icon product-icon-extension" aria-hidden="true">&#129419;</div>
+        <span class="product-tag product-tag-extension">Browser Extension</span>
+        <div class="product-name">Papillion Extension</div>
+        <p class="product-desc">
+          Handle pap:// links natively in Chrome and Firefox. 6-phase cryptographic handshake,
+          Schema.org result rendering, and native messaging bridge to the desktop app.
+        </p>
+        <span class="product-link">Get the extension &#8594;</span>
       </a>
 
     </div>
