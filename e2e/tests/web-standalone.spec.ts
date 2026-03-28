@@ -24,31 +24,32 @@ test.describe("Web standalone: app shell", () => {
     await expect(page.locator(".app-shell-canvas")).toBeVisible();
   });
 
-  test("top bar renders with identity placeholder", async ({ page }) => {
+  test("top bar renders with identity", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
     await expect(page.locator(".topbar")).toBeVisible();
-    // Without Tauri, no identity is loaded — topbar shows "No identity"
-    await expect(page.locator(".topbar-identity")).toContainText("No identity");
+    // WebService auto-creates a default identity in browser mode
+    const identityText = await page.locator(".topbar-identity").innerText();
+    expect(identityText.length).toBeGreaterThan(0);
   });
 
-  test("status bar shows disconnected state", async ({ page }) => {
+  test("status bar shows agents-only state", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
     const statusBar = page.locator(".status-bar");
     await expect(statusBar).toBeVisible();
-    // Default OrchestratorStatus is Disconnected → status bar text is "Disconnected"
-    await expect(statusBar).toContainText("Disconnected");
+    // Browser mode sets Unconfigured → status bar shows "Agents only"
+    await expect(statusBar).toContainText("Agents only");
   });
 
-  test("top bar shows offline orchestrator status", async ({ page }) => {
+  test("top bar shows agents-only orchestrator status", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Topbar maps Disconnected → "Offline"
-    await expect(page.locator(".topbar-status")).toContainText("Offline");
+    // Browser mode: Unconfigured → topbar shows "Agents only"
+    await expect(page.locator(".topbar-status")).toContainText("Agents only");
   });
 
   test("navigation menu opens and shows links", async ({ page }) => {
@@ -57,7 +58,7 @@ test.describe("Web standalone: app shell", () => {
 
     await page.locator(".topbar-menu-btn").click();
     await expect(page.locator(".menu-dropdown")).toBeVisible();
-    await expect(page.locator("text=Browse Registries")).toBeVisible();
+    await expect(page.locator(".menu-dropdown >> text=Browse Registries")).toBeVisible();
     await expect(page.locator(".menu-dropdown >> text=Settings")).toBeVisible();
   });
 });
@@ -65,25 +66,21 @@ test.describe("Web standalone: app shell", () => {
 // ── Canvas Page ──────────────────────────────────────────────
 
 test.describe("Web standalone: canvas page", () => {
-  test("shows empty state with inspiration lines", async ({ page }) => {
+  test("shows new-tab empty state with agent tiles", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
     await expect(page.locator(".canvas-area")).toBeVisible();
+    // No Tauri backend → no seed → shows the new-tab page with agent tiles
     await expect(page.locator(".canvas-empty")).toBeVisible();
-    await expect(page.locator(".inspiration-line").first()).toBeVisible();
   });
 
-  test("shows setup prompt instead of inline prompt", async ({ page }) => {
+  test("shows inline prompt for user queries", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Orchestrator is Disconnected → SetupPrompt renders, not InlinePrompt
-    await expect(page.locator(".canvas-prompt-setup")).toBeVisible();
-    await expect(
-      page.locator("text=Configure an LLM provider")
-    ).toBeVisible();
-    await expect(page.locator("text=Open Settings")).toBeVisible();
+    // InlinePrompt renders inside the new-tab canvas
+    await expect(page.locator(".palette-input")).toBeVisible();
   });
 });
 
@@ -130,7 +127,7 @@ test.describe("Web standalone: browse page", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=Browse Registries").click();
+    await page.locator(".menu-dropdown >> text=Browse Registries").click();
 
     await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
   });
@@ -139,11 +136,11 @@ test.describe("Web standalone: browse page", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=Browse Registries").click();
+    await page.locator(".menu-dropdown >> text=Browse Registries").click();
 
-    // Registry is not connected → shows prompt to enter URL
+    // Registry is not connected → shows quickstart to connect
     await expect(
-      page.locator("text=Enter a registry URL in the address bar")
+      page.locator("text=Connect to a Chrysalis Registry")
     ).toBeVisible();
   });
 });
@@ -205,12 +202,12 @@ test.describe("Web standalone: graceful degradation", () => {
 
     // Navigate to browse via menu
     await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=Browse Registries").click();
+    await page.locator(".menu-dropdown >> text=Browse Registries").click();
     await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
 
     // Back to home via menu
     await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=+ New Canvas").click();
+    await page.locator(".menu-dropdown >> text=New Canvas").click();
     await expect(page.locator(".canvas-area")).toBeVisible();
 
     expect(errors).toHaveLength(0);

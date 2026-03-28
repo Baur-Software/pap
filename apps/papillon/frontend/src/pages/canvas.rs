@@ -9,24 +9,37 @@ use crate::state::canvas::CanvasState;
 use crate::state::orchestrator::OrchestratorState;
 use papillon_shared::OrchestratorStatus;
 
-const INSPIRATION_LINES: &[&str] = &[
-    "People are booking travel without giving away their passport number",
-    "Your agents built this page. No one built a profile on you.",
-    "The token economy is on your machine",
+/// Try-it-now prompts that match real intent rules in `papillon_shared::intent`.
+const QUICK_PROMPTS: &[&str] = &[
+    "search for Rust programming",
+    "weather in Tokyo",
+    "define ephemeral",
+    "paper on zero-knowledge proofs",
+    "tell me about photosynthesis",
+    "convert 100 USD to EUR",
 ];
 
-const GHOST_EXAMPLES: &[&str] = &[
-    "Book a flight SAN \u{2192} SJC",
-    "Compare hotel rates in Tokyo",
-    "Find a PAP-compatible payment agent",
-    "Search the web without disclosure",
-    "Ask AI about zero-trust protocols",
+/// Agent capabilities shown as clickable tiles on the new-tab canvas.
+/// Each entry is (label, example_prompt).
+const AGENT_TILES: &[(&str, &str)] = &[
+    ("Web Search", "search for "),
+    ("Wikipedia", "tell me about "),
+    ("Weather", "weather in "),
+    ("Dictionary", "define "),
+    ("Currency", "convert 100 USD to EUR"),
+    ("Countries", "country "),
+    ("Research Papers", "paper on "),
+    ("GitHub Repos", "github "),
+    ("Books", "book about "),
+    ("Hacker News", "hacker news "),
+    ("Geocoding", "where is "),
+    ("Web Reader", "https://"),
+    ("AI Chat", "explain "),
 ];
 
 #[component]
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let orchestrator = expect_context::<OrchestratorState>();
 
     let blocks = move || {
         canvas_state
@@ -36,8 +49,6 @@ pub fn CanvasPage() -> impl IntoView {
     };
 
     let has_blocks = move || !blocks().is_empty();
-
-    let is_ready = move || matches!(orchestrator.status.get(), OrchestratorStatus::Ready);
 
     // Group blocks by semantic links for rendering
     let grouped_blocks = move || {
@@ -72,19 +83,7 @@ pub fn CanvasPage() -> impl IntoView {
     view! {
         <div class="canvas-area">
             <Show when=has_blocks fallback=move || view! {
-                <div class="canvas-empty">
-                    <div class="canvas-inspiration">
-                        {INSPIRATION_LINES.iter().map(|&line| {
-                            view! { <div class="inspiration-line">{line}</div> }
-                        }).collect::<Vec<_>>()}
-                    </div>
-                    <Show
-                        when=is_ready
-                        fallback=move || view! { <SetupPrompt /> }
-                    >
-                        <InlinePrompt />
-                    </Show>
-                </div>
+                <NewTabCanvas />
             }>
                 <div class="canvas-blocks">
                     <For
@@ -111,14 +110,92 @@ pub fn CanvasPage() -> impl IntoView {
                         }
                     />
                 </div>
-                // Inline prompt at bottom when blocks exist
                 <InlinePrompt />
             </Show>
         </div>
     }
 }
 
-/// Prompt input embedded directly in the canvas — not an overlay.
+/// The empty canvas — like a new tab page in a browser.
+/// Shows the prompt bar, available agents, and quick-start actions.
+#[component]
+fn NewTabCanvas() -> impl IntoView {
+    let orchestrator = expect_context::<OrchestratorState>();
+    let navigate = use_navigate();
+
+    let is_unconfigured =
+        move || matches!(orchestrator.status.get(), OrchestratorStatus::Unconfigured);
+
+    let nav = navigate.clone();
+    let go_browse = move |_| {
+        let n = nav.clone();
+        n("/browse", Default::default());
+    };
+
+    view! {
+        <div class="canvas-empty">
+            <div class="newtab-hero">
+                <img src="/logo.png" alt="" class="newtab-logo" />
+                <p class="newtab-tagline">
+                    "The browser for the agent web"
+                </p>
+            </div>
+
+            <InlinePrompt />
+
+            <Show when=is_unconfigured>
+                <div class="newtab-setup-hint">
+                    "On-device AI not configured yet \u{2014} "
+                    "search, weather, wiki, and 10 more agents work without it. "
+                    <a href="/settings" class="newtab-link">"Set up AI"</a>
+                </div>
+            </Show>
+
+            <div class="agent-capabilities">
+                <div class="capabilities-label">"Agents available now"</div>
+                <AgentTiles />
+            </div>
+
+            <div class="newtab-footer">
+                <button class="newtab-action" on:click=go_browse>
+                    "Browse Registries"
+                </button>
+                <span class="newtab-hint">
+                    {"\u{2318}K new canvas"}
+                </span>
+            </div>
+        </div>
+    }
+}
+
+/// Grid of clickable agent capability tiles.
+/// Each tile populates the prompt input with an example query via signal.
+#[component]
+fn AgentTiles() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+
+    view! {
+        <div class="capabilities-grid">
+            {AGENT_TILES.iter().map(|&(label, example)| {
+                let cs = canvas_state;
+                let ex = example.to_string();
+                view! {
+                    <button
+                        class="capability-chip"
+                        on:click=move |_| {
+                            cs.prefill_prompt.set(Some(ex.clone()));
+                            cs.focus_prompt.set(cs.focus_prompt.get_untracked() + 1);
+                        }
+                    >
+                        {label}
+                    </button>
+                }
+            }).collect::<Vec<_>>()}
+        </div>
+    }
+}
+
+/// Prompt input embedded directly in the canvas — the address bar of the agent web.
 #[component]
 fn InlinePrompt() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
@@ -147,6 +224,14 @@ fn InlinePrompt() -> impl IntoView {
         }
     };
 
+    // Pick up prefill values from agent tile clicks
+    Effect::new(move || {
+        if let Some(text) = canvas_state.prefill_prompt.get() {
+            input_value.set(text);
+            canvas_state.prefill_prompt.set(None);
+        }
+    });
+
     // Focus the input on mount and whenever focus_prompt is bumped (e.g. ⌘K)
     Effect::new(move || {
         let _ = canvas_state.focus_prompt.get(); // subscribe to signal
@@ -164,15 +249,11 @@ fn InlinePrompt() -> impl IntoView {
 
     view! {
         <div class="canvas-prompt">
-            <div class="canvas-prompt-header">
-                <span class="palette-icon">{"\u{2318}"}</span>
-                <span class="palette-label">"What do you want to build?"</span>
-            </div>
             <input
                 node_ref=input_ref
                 class="palette-input"
                 type="text"
-                placeholder="Type your prompt..."
+                placeholder="Search agents, ask a question, or enter a pap:// address\u{2026}"
                 prop:value=move || input_value.get()
                 on:input=move |e| {
                     input_value.set(event_target_value(&e));
@@ -181,7 +262,7 @@ fn InlinePrompt() -> impl IntoView {
             />
             <Show when=move || input_value.get().is_empty()>
                 <div class="palette-suggestions">
-                    {GHOST_EXAMPLES.iter().map(|&text| {
+                    {QUICK_PROMPTS.iter().map(|&text| {
                         let t = text;
                         view! {
                             <button
@@ -194,28 +275,6 @@ fn InlinePrompt() -> impl IntoView {
                     }).collect::<Vec<_>>()}
                 </div>
             </Show>
-        </div>
-    }
-}
-
-/// Shown when LLM isn't configured — directs user to Settings.
-#[component]
-fn SetupPrompt() -> impl IntoView {
-    let navigate = use_navigate();
-
-    view! {
-        <div class="canvas-prompt canvas-prompt-setup">
-            <h2 class="setup-heading">"Configure an LLM provider to start building."</h2>
-            <p class="setup-description">
-                "The orchestrator needs a language model to route prompts to agents. "
-                "Choose built-in (on-device) or connect an external provider."
-            </p>
-            <button class="btn btn-primary" on:click=move |_| {
-                let nav = navigate.clone();
-                nav("/settings", Default::default());
-            }>
-                "Open Settings"
-            </button>
         </div>
     }
 }

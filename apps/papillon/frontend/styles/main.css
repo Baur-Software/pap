@@ -956,9 +956,19 @@ body {
     color: var(--teal);
 }
 
+.topbar-status.working {
+    background: rgba(240, 160, 48, 0.15);
+    color: var(--gold);
+}
+
 .topbar-status.demo {
     background: rgba(240, 160, 48, 0.15);
     color: var(--gold);
+}
+
+.topbar-status.agents-only {
+    background: rgba(80, 152, 224, 0.12);
+    color: var(--blue);
 }
 
 .topbar-status.offline {
@@ -1132,6 +1142,210 @@ body {
     font: var(--text-label);
     font-family: var(--font-mono);
     font-size: 10px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NEW TAB CANVAS — the home page of the agent web
+   ═══════════════════════════════════════════════════════════ */
+
+.newtab-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-sm);
+}
+
+.newtab-logo {
+    width: 48px;
+    height: 48px;
+    opacity: 0.9;
+}
+
+.newtab-tagline {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-3);
+    letter-spacing: 0.02em;
+}
+
+.newtab-setup-hint {
+    font: var(--text-ui);
+    color: var(--text-3);
+    text-align: center;
+    max-width: 480px;
+    line-height: 1.5;
+}
+
+.newtab-link {
+    color: var(--purple);
+    text-decoration: none;
+}
+
+.newtab-link:hover {
+    text-decoration: underline;
+}
+
+.newtab-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-lg);
+    margin-top: var(--sp-sm);
+}
+
+.newtab-action {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    color: var(--text-2);
+    font: var(--text-ui);
+    padding: var(--sp-xs) var(--sp-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.newtab-action:hover {
+    border-color: var(--purple);
+    color: var(--purple);
+    background: var(--purple-muted);
+}
+
+.newtab-hint {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    color: var(--text-3);
+    font-size: 10px;
+    letter-spacing: var(--ls-label);
+}
+
+/* ─── Agent Capabilities Grid ─── */
+
+.agent-capabilities {
+    width: 100%;
+    max-width: 560px;
+    text-align: center;
+}
+
+.capabilities-label {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: var(--sp-sm);
+}
+
+.capabilities-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sp-xs);
+}
+
+.capability-chip {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: var(--sp-xs) var(--sp-sm);
+    font: var(--text-ui);
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.capability-chip:hover {
+    border-color: var(--purple);
+    color: var(--purple);
+    background: var(--purple-muted);
+    transform: translateY(-1px);
+}
+
+/* ─── Registry Quickstart ─── */
+
+.registry-quickstart {
+    padding: var(--sp-xl) var(--sp-lg);
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.quickstart-section {
+    margin-bottom: var(--sp-lg);
+}
+
+.quickstart-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: var(--sp-xs);
+}
+
+.quickstart-desc {
+    font: var(--text-ui);
+    color: var(--text-2);
+    line-height: 1.5;
+}
+
+.quickstart-label {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: var(--sp-sm);
+}
+
+.quickstart-options {
+    display: flex;
+    gap: var(--sp-sm);
+}
+
+.quickstart-btn {
+    flex: 1;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: var(--sp-md);
+    color: var(--text-1);
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.quickstart-btn:hover {
+    border-color: var(--purple);
+    background: var(--purple-muted);
+}
+
+.quickstart-btn-desc {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-3);
+    margin-top: 2px;
+}
+
+.quickstart-hint {
+    font: var(--text-ui);
+    font-size: 12px;
+    color: var(--text-3);
+    text-align: center;
+}
+
+.quickstart-hint code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg-2);
+    padding: 1px 5px;
+    border-radius: 3px;
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -98,9 +98,29 @@ pub fn RegistryBrowser() -> impl IntoView {
 
             <Show when=is_connected fallback=move || view! {
                 <Show when=move || !is_loading()>
-                    <div style="text-align: center; padding: 48px 0; color: var(--text-secondary);">
-                        <p style="font-size: 16px; margin-bottom: 8px;">"Enter a registry URL in the address bar"</p>
-                        <p style="font-size: 13px;">"e.g. pap://localhost:8080"</p>
+                    <div class="registry-quickstart">
+                        <div class="quickstart-section">
+                            <h3 class="quickstart-title">"Connect to a Chrysalis Registry"</h3>
+                            <p class="quickstart-desc">
+                                "Enter a pap:// address above to discover federated agents. "
+                                "Built-in agents (search, weather, wiki, and more) already work from the canvas \u{2014} "
+                                "this page is for connecting to external registries."
+                            </p>
+                        </div>
+                        <div class="quickstart-section">
+                            <div class="quickstart-label">"Quick connect"</div>
+                            <div class="quickstart-options">
+                                <button class="quickstart-btn" on:click=move |_| {
+                                    registry.connect_to("pap://localhost:7890");
+                                }>
+                                    "Local Chrysalis"
+                                    <span class="quickstart-btn-desc">"pap://localhost:7890"</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="quickstart-hint">
+                            "Run "<code>"cargo run -p pap-registry"</code>" to start a local Chrysalis instance"
+                        </div>
                     </div>
                 </Show>
             }>

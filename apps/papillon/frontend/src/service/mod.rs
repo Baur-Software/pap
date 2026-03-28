@@ -14,18 +14,17 @@
 //! # Usage
 //!
 //! ```ignore
-//! let service = get_papillon_service();
+//! // In App: provided as context during component creation
+//! let service = use_papillon_service();
 //! let templates = service.get_global_templates().await?;
 //! ```
 
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 use pap_did::PrincipalKeypair;
 use papillon_shared::{
-    AgentInfo, ExportedKey, IdentityInfo, KeyBackupStatus, LlmProvider, OrchestratorConfig,
-    OrchestratorStatus, ProfileMetadata, ReceiptInfo, RegistryInfo, ScenarioCard, ScenarioRunResult,
-    SetupState, SuccessorDesignation, Template,
+    AgentInfo, IdentityInfo, OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RegistryInfo,
+    ScenarioCard, ScenarioRunResult, SetupState, Template,
 };
 
 pub mod hooks;
@@ -33,7 +32,7 @@ pub mod tauri_service;
 pub mod web_identity;
 pub mod web_service;
 
-pub use hooks::{init_papillon_service, use_papillon_service};
+pub use hooks::use_papillon_service;
 pub use tauri_service::TauriService;
 pub use web_service::WebService;
 
@@ -123,6 +122,15 @@ pub trait PapillonService: Send + Sync {
     /// Get the current setup state.
     async fn get_setup_state(&self) -> Result<SetupState, String>;
 
+    /// Post-construction async initialization.
+    ///
+    /// Called after the service is provided as Leptos context. The WASM
+    /// implementation uses this to load profiles from IndexedDB; the Tauri
+    /// implementation is a no-op since backend state is ready at launch.
+    async fn initialize(&self) -> Result<(), String> {
+        Ok(())
+    }
+
     // ============================================================================
     // SCENARIOS & EPISODES: Run and retrieve scenario results
     // ============================================================================
@@ -171,26 +179,3 @@ pub struct AgentProfileInfo {
     pub updated_at: String,
 }
 
-/// Get the appropriate service implementation based on runtime environment.
-///
-/// Returns TauriService if running inside Tauri, WebService otherwise.
-/// The WebService path loads profiles from IndexedDB asynchronously.
-pub async fn get_papillon_service() -> Arc<dyn PapillonService> {
-    use crate::bridge;
-
-    if bridge::tauri_available() {
-        Arc::new(TauriService)
-    } else {
-        match WebService::new().await {
-            Ok(svc) => Arc::new(svc),
-            Err(e) => {
-                web_sys::console::error_1(
-                    &format!("Failed to init WebService: {e}; falling back to empty").into(),
-                );
-                // Start with no profiles — identity methods will return errors
-                // until a profile is created, but the app remains functional.
-                Arc::new(WebService::empty())
-            }
-        }
-    }
-}

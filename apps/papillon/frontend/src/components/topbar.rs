@@ -64,15 +64,16 @@ pub fn TopBar() -> impl IntoView {
     };
 
     let status_label = move || match orchestrator.status.get() {
-        OrchestratorStatus::Ready => "Ready",
-        OrchestratorStatus::Downloading { .. } => "Downloading...",
-        OrchestratorStatus::Disconnected => "Offline",
-        OrchestratorStatus::Unconfigured => "Setup",
+        OrchestratorStatus::Ready => "Papillon",
+        OrchestratorStatus::Downloading { .. } => "Setting up\u{2026}",
+        OrchestratorStatus::Disconnected => "Agents only",
+        OrchestratorStatus::Unconfigured => "Agents only",
     };
 
     let status_class = move || match orchestrator.status.get() {
         OrchestratorStatus::Ready => "topbar-status ready",
-        _ => "topbar-status offline",
+        OrchestratorStatus::Downloading { .. } => "topbar-status working",
+        _ => "topbar-status agents-only",
     };
 
     let toggle_menu = move |_| {

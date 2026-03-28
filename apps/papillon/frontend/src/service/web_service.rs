@@ -187,6 +187,26 @@ impl PapillonService for WebService {
         Err("WebService: get_setup_state not yet implemented".into())
     }
 
+    async fn initialize(&self) -> Result<(), String> {
+        let loaded = super::web_identity::WebIdentityService::load().await?;
+        let mut identity = self
+            .identity
+            .lock()
+            .map_err(|e| format!("identity lock: {e}"))?;
+        *identity = loaded;
+
+        // Auto-create a default profile if none exist
+        if identity.list_profiles().is_empty() {
+            identity.create_profile("Default").await?;
+            // Activate the newly created profile
+            let profiles = identity.list_profiles();
+            if let Some(first) = profiles.first() {
+                identity.switch_profile(&first.id).await?;
+            }
+        }
+        Ok(())
+    }
+
     // ============================================================================
     // SCENARIOS & EPISODES
     // ============================================================================

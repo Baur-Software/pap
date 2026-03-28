@@ -4,6 +4,8 @@ use leptos_router::path;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
+use std::sync::Arc;
+
 use crate::bridge;
 use crate::components::setup_wizard::SetupWizard;
 use crate::components::topbar::TopBar;
@@ -12,12 +14,13 @@ use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
+use crate::service::{PapillonService, TauriService, WebService};
 use crate::state::canvas::CanvasState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::registry::RegistryState;
 use crate::state::templates::TemplatesState;
-use papillon_shared::{IdentityInfo, OrchestratorStatus, ProfileMetadata, Template};
+use papillon_shared::{BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -32,7 +35,51 @@ pub fn App() -> impl IntoView {
     provide_context(canvas_state);
     provide_context(templates_state);
 
-    // Auto-load profiles and identity on startup
+    // Provide PapillonService context — prevents panic in WASM handshake path.
+    // Tauri mode: TauriService delegates to native backend via IPC.
+    // Browser mode: WebService starts empty, then loads from IndexedDB asynchronously.
+    let service: Arc<dyn PapillonService> = if bridge::tauri_available() {
+        Arc::new(TauriService)
+    } else {
+        Arc::new(WebService::empty())
+    };
+    provide_context(service.clone());
+
+    // Seed the first canvas if this is a fresh install.
+    // Only in Tauri mode — the backend resolves prompts via IPC. In browser mode
+    // the WASM handshake has no agents to query, so seed would just panic.
+    if bridge::tauri_available() && canvas_state.canvases.get_untracked().is_empty() {
+        canvas_state.seed_first_canvas();
+    }
+
+    // WASM browser startup — initialize identity from IndexedDB
+    if !bridge::tauri_available() {
+        let identity = identity_state;
+        let orchestrator = orchestrator_state;
+        let svc = service;
+        spawn_local(async move {
+            // Load profiles and identity from IndexedDB (auto-creates default if needed)
+            if let Err(e) = svc.initialize().await {
+                web_sys::console::error_1(&format!("Service init failed: {e}").into());
+            }
+
+            // Populate identity signals from the now-initialized service
+            if let Ok(profiles) = svc.list_profiles().await {
+                if let Some(active) = profiles.iter().find(|p| p.active) {
+                    identity.current_profile_id.set(Some(active.id.clone()));
+                }
+                identity.profiles.set(profiles);
+            }
+            if let Ok(info) = svc.get_identity().await {
+                identity.info.set(Some(info));
+            }
+
+            // No backend orchestrator in browser mode
+            orchestrator.status.set(OrchestratorStatus::Unconfigured);
+        });
+    }
+
+    // Auto-load profiles and identity on startup (Tauri path)
     Effect::new(move || {
         let identity = identity_state;
         let orchestrator = orchestrator_state;
@@ -65,8 +112,24 @@ pub fn App() -> impl IntoView {
             {
                 orchestrator.status.set(status);
             }
+
         });
     });
+
+    // Listen for backend block events (handshake phase progress + results).
+    // These events are emitted by the Rust backend during the 6-phase handshake
+    // and are the only way the frontend learns about phase transitions and results
+    // when running inside Tauri (the WASM path updates signals directly instead).
+    if bridge::tauri_available() {
+        let cs = canvas_state;
+        bridge::listen::<BlockEvent>("block_updated", move |event| {
+            cs.apply_block_event(event.block);
+        });
+        let cs = canvas_state;
+        bridge::listen::<BlockEvent>("block_resolved", move |event| {
+            cs.apply_block_event(event.block);
+        });
+    }
 
     // Load global templates on startup
     Effect::new(move || {
@@ -178,14 +241,13 @@ pub fn App() -> impl IntoView {
             let _ = progress_pct;
             "Downloading\u{2026}"
         }
-        OrchestratorStatus::Disconnected => "Disconnected",
-        OrchestratorStatus::Unconfigured => "Unconfigured",
+        OrchestratorStatus::Disconnected => "Agents only",
+        OrchestratorStatus::Unconfigured => "Agents only",
     };
     let status_class = move || match orchestrator_for_status.status.get() {
         OrchestratorStatus::Ready => "status-indicator ready",
         OrchestratorStatus::Downloading { .. } => "status-indicator working",
-        OrchestratorStatus::Disconnected => "status-indicator offline",
-        OrchestratorStatus::Unconfigured => "status-indicator offline",
+        _ => "status-indicator ready",
     };
 
     view! {

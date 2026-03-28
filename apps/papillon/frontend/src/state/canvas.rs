@@ -17,6 +17,8 @@ pub struct CanvasState {
     pub recent_prompts: RwSignal<Vec<String>>,
     /// Bumped to signal the inline prompt should grab focus.
     pub focus_prompt: RwSignal<u32>,
+    /// Set by agent tiles to prefill the prompt input.
+    pub prefill_prompt: RwSignal<Option<String>>,
 }
 
 impl Default for CanvasState {
@@ -27,6 +29,7 @@ impl Default for CanvasState {
             reshape_block_id: RwSignal::new(None),
             recent_prompts: RwSignal::new(Vec::new()),
             focus_prompt: RwSignal::new(0),
+            prefill_prompt: RwSignal::new(None),
         }
     }
 }
@@ -96,6 +99,27 @@ impl CanvasState {
         self.current_canvas_id.set(Some(id.clone()));
         self.focus_prompt.update(|n| *n += 1);
         id
+    }
+
+    /// Seed the first-ever canvas with live agent queries so the app
+    /// opens with real content resolving through the handshake pipeline.
+    pub fn seed_first_canvas(&self) {
+        const SEED_PROMPTS: &[&str] = &[
+            "hacker news",
+            "define protocol",
+            "tell me about decentralized identity",
+        ];
+
+        let canvas_id = self.new_canvas();
+        self.canvases.update(|cs| {
+            if let Some(c) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                c.name = "Welcome".into();
+            }
+        });
+
+        for prompt in SEED_PROMPTS {
+            self.submit_prompt(prompt.to_string());
+        }
     }
 
     /// Get the currently active canvas, if any.
@@ -351,6 +375,30 @@ impl CanvasState {
                     *b = updated_block;
                 }
                 canvas.updated_at = now_iso();
+            }
+        });
+    }
+
+    /// Apply a streaming phase update from the backend.
+    /// Searches all canvases for the block by ID, preserving prompt_text
+    /// and other frontend-only fields that the backend doesn't have.
+    pub fn apply_block_event(&self, event_block: CanvasBlock) {
+        self.canvases.update(|cs| {
+            for canvas in cs.iter_mut() {
+                if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == event_block.id) {
+                    // Preserve prompt_text — backend phase events don't carry it
+                    let prompt_text = b.prompt_text.take();
+                    let linked = std::mem::take(&mut b.linked_block_ids);
+                    *b = event_block;
+                    if b.prompt_text.is_none() {
+                        b.prompt_text = prompt_text;
+                    }
+                    if b.linked_block_ids.is_empty() {
+                        b.linked_block_ids = linked;
+                    }
+                    canvas.updated_at = now_iso();
+                    return;
+                }
             }
         });
     }

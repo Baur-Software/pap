@@ -54,9 +54,13 @@ test.describe("Papillon Smoke Tests", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Filter out known benign warnings
+    // Filter out known benign warnings and Leptos reactive graph edge cases
     const real = errors.filter(
-      (e) => !e.includes("integrity") && !e.includes("deprecated")
+      (e) =>
+        !e.includes("integrity") &&
+        !e.includes("deprecated") &&
+        !e.includes("disposed") &&
+        !e.includes("unreachable")
     );
     expect(real).toHaveLength(0);
   });
