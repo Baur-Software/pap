@@ -58,6 +58,10 @@ pub struct AppState {
     /// Tauri resource directory (set during app setup).
     /// Bundled model files live under `{resource_dir}/models/`.
     pub resource_dir: RwLock<PathBuf>,
+    /// Writable data directory for downloaded models and other user data.
+    /// On macOS the resource_dir is inside the read-only app bundle, so
+    /// downloaded models go here instead.
+    pub data_dir: RwLock<PathBuf>,
     /// Local agent handlers keyed by agent name.
     /// These implement `AgentHandler` and process the 6-phase handshake.
     pub local_agents: HashMap<String, Arc<dyn AgentHandler>>,
@@ -114,6 +118,7 @@ impl AppState {
                 self.successor_designations.read().unwrap().clone(),
             ),
             resource_dir: RwLock::new(self.resource_dir.read().unwrap().clone()),
+            data_dir: RwLock::new(self.data_dir.read().unwrap().clone()),
             local_agents: self.local_agents.clone(),
             endpoint_registry: RwLock::new(EndpointRegistry::new()),
             federation_port: self.federation_port,
@@ -272,6 +277,7 @@ impl AppState {
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
             resource_dir: RwLock::new(PathBuf::new()),
+            data_dir: RwLock::new(PathBuf::new()),
             local_agents: handlers,
             endpoint_registry: RwLock::new(EndpointRegistry::new()),
             federation_port: DEFAULT_FEDERATION_PORT,

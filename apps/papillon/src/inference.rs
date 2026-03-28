@@ -11,9 +11,10 @@ use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
 use candle_transformers::generation::{LogitsProcessor, Sampling};
 use candle_transformers::models::quantized_llama as model;
+use futures_util::StreamExt;
 use tokenizers::Tokenizer;
 
-use papillon_shared::{builtin_model_catalog, BuiltInModelInfo};
+use papillon_shared::{builtin_model_catalog, BuiltInModelInfo, ModelAvailability};
 
 /// A loaded model ready for inference.
 pub struct LoadedModel {
@@ -62,6 +63,131 @@ pub fn resolve_bundled_tokenizer(resource_dir: &Path) -> Result<PathBuf, String>
     }
 }
 
+/// Resolve the GGUF weights file, checking bundled resources first, then
+/// the user-writable data directory (for downloaded models).
+pub fn resolve_model_file(
+    resource_dir: &Path,
+    data_dir: &Path,
+    info: &BuiltInModelInfo,
+) -> Result<PathBuf, String> {
+    let bundled = resource_dir.join("models").join(&info.filename);
+    if bundled.exists() {
+        return Ok(bundled);
+    }
+    let downloaded = data_dir.join("models").join(&info.filename);
+    if downloaded.exists() {
+        return Ok(downloaded);
+    }
+    Err(format!(
+        "Bundled model not found: {} (checked {} and {})",
+        info.filename,
+        bundled.display(),
+        downloaded.display(),
+    ))
+}
+
+/// Resolve tokenizer.json, checking bundled resources first, then data dir.
+pub fn resolve_tokenizer_file(resource_dir: &Path, data_dir: &Path) -> Result<PathBuf, String> {
+    let bundled = resource_dir.join("models").join("tokenizer.json");
+    if bundled.exists() {
+        return Ok(bundled);
+    }
+    let downloaded = data_dir.join("models").join("tokenizer.json");
+    if downloaded.exists() {
+        return Ok(downloaded);
+    }
+    Err(format!(
+        "Tokenizer not found (checked {} and {})",
+        bundled.display(),
+        downloaded.display(),
+    ))
+}
+
+/// Check whether a model's files are available on disk (without loading).
+pub fn check_model_availability(
+    resource_dir: &Path,
+    data_dir: &Path,
+    info: &BuiltInModelInfo,
+) -> ModelAvailability {
+    let model_present = resource_dir.join("models").join(&info.filename).exists()
+        || data_dir.join("models").join(&info.filename).exists();
+    let tokenizer_present = resource_dir.join("models").join("tokenizer.json").exists()
+        || data_dir.join("models").join("tokenizer.json").exists();
+    ModelAvailability {
+        model_id: info.id.clone(),
+        model_present,
+        tokenizer_present,
+        ready: model_present && tokenizer_present,
+    }
+}
+
+/// Download a file from `url` to `dest_path`, calling `on_progress` with
+/// (downloaded_bytes, total_bytes). Streams to a `.tmp` file then renames.
+pub async fn download_file(
+    url: &str,
+    dest_path: &Path,
+    on_progress: impl Fn(u64, u64),
+) -> Result<(), String> {
+    if let Some(parent) = dest_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Create directory {}: {e}", parent.display()))?;
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("Papillon/0.1 (PAP Desktop)")
+        .build()
+        .map_err(|e| format!("HTTP client: {e}"))?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Download request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Download failed: HTTP {}", response.status()));
+    }
+
+    let total = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+
+    let tmp_path = dest_path.with_extension("tmp");
+    let mut file = std::fs::File::create(&tmp_path)
+        .map_err(|e| format!("Create file {}: {e}", tmp_path.display()))?;
+
+    let mut stream = response.bytes_stream();
+    let result: Result<(), String> = async {
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download stream error: {e}"))?;
+            std::io::Write::write_all(&mut file, &chunk)
+                .map_err(|e| format!("Write error: {e}"))?;
+            downloaded += chunk.len() as u64;
+            on_progress(downloaded, total);
+        }
+
+        std::io::Write::flush(&mut file).map_err(|e| format!("Flush error: {e}"))?;
+        drop(file);
+
+        std::fs::rename(&tmp_path, dest_path).map_err(|e| {
+            format!(
+                "Rename {} -> {}: {e}",
+                tmp_path.display(),
+                dest_path.display()
+            )
+        })?;
+
+        Ok(())
+    }
+    .await;
+
+    // Clean up tmp file on error
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    result
+}
+
 /// Load a downloaded GGUF model into memory, ready for inference.
 pub fn load_model(model_path: &Path, tokenizer_path: &Path) -> Result<LoadedModel, String> {
     let device = Device::Cpu;
@@ -83,6 +209,9 @@ pub fn load_model(model_path: &Path, tokenizer_path: &Path) -> Result<LoadedMode
             repo: String::new(),
             filename: String::new(),
             size_hint: String::new(),
+            download_url: String::new(),
+            tokenizer_url: String::new(),
+            web_compatible: false,
         },
         model: weights,
         tokenizer,
@@ -213,17 +342,22 @@ impl ModelManager {
         Self::default()
     }
 
-    /// Load the bundled model from the resource directory.
+    /// Load the model from bundled resources or user data directory.
     /// No-op if already loaded with the same model_id.
-    pub fn ensure_loaded(&mut self, model_id: &str, resource_dir: &Path) -> Result<(), String> {
+    pub fn ensure_loaded(
+        &mut self,
+        model_id: &str,
+        resource_dir: &Path,
+        data_dir: &Path,
+    ) -> Result<(), String> {
         if self.loaded.is_some() && self.model_id == model_id {
             return Ok(());
         }
 
         let info = resolve_model(model_id).ok_or_else(|| format!("Unknown model: {model_id}"))?;
 
-        let model_path = resolve_bundled_model(resource_dir, &info)?;
-        let tokenizer_path = resolve_bundled_tokenizer(resource_dir)?;
+        let model_path = resolve_model_file(resource_dir, data_dir, &info)?;
+        let tokenizer_path = resolve_tokenizer_file(resource_dir, data_dir)?;
 
         let mut loaded = load_model(&model_path, &tokenizer_path)?;
         loaded.info = info;
@@ -365,5 +499,236 @@ mod tests {
         assert_eq!(tool.name, "test");
         assert_eq!(tool.description, "a test tool");
         assert_eq!(tool.action_type, "schema:TestAction");
+    }
+
+    // ── Dual-path model resolution & availability ─────────────
+
+    #[test]
+    fn catalog_models_have_download_urls() {
+        for entry in builtin_model_catalog() {
+            assert!(
+                !entry.download_url.is_empty(),
+                "model {} has empty download_url",
+                entry.id,
+            );
+            assert!(
+                entry.download_url.starts_with("https://"),
+                "model {} download_url is not HTTPS: {}",
+                entry.id,
+                entry.download_url,
+            );
+            assert!(
+                !entry.tokenizer_url.is_empty(),
+                "model {} has empty tokenizer_url",
+                entry.id,
+            );
+            assert!(
+                entry.tokenizer_url.starts_with("https://"),
+                "model {} tokenizer_url is not HTTPS: {}",
+                entry.id,
+                entry.tokenizer_url,
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_model_file_prefers_bundled() {
+        let pid = std::process::id();
+        let base = std::env::temp_dir().join(format!("pap_test_prefers_bundled_{pid}"));
+        let resource_dir = base.join("resources");
+        let data_dir = base.join("data");
+
+        std::fs::create_dir_all(resource_dir.join("models")).unwrap();
+        std::fs::create_dir_all(data_dir.join("models")).unwrap();
+
+        let info = builtin_model_catalog().into_iter().next().unwrap();
+
+        // Place file in both locations
+        std::fs::write(resource_dir.join("models").join(&info.filename), b"bundled").unwrap();
+        std::fs::write(data_dir.join("models").join(&info.filename), b"downloaded").unwrap();
+
+        let result = resolve_model_file(&resource_dir, &data_dir, &info).unwrap();
+        assert_eq!(result, resource_dir.join("models").join(&info.filename));
+
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn resolve_model_file_falls_back_to_data_dir() {
+        let pid = std::process::id();
+        let base = std::env::temp_dir().join(format!("pap_test_fallback_data_{pid}"));
+        let resource_dir = base.join("resources");
+        let data_dir = base.join("data");
+
+        std::fs::create_dir_all(resource_dir.join("models")).unwrap();
+        std::fs::create_dir_all(data_dir.join("models")).unwrap();
+
+        let info = builtin_model_catalog().into_iter().next().unwrap();
+
+        // Only place file in data_dir
+        std::fs::write(data_dir.join("models").join(&info.filename), b"downloaded").unwrap();
+
+        let result = resolve_model_file(&resource_dir, &data_dir, &info).unwrap();
+        assert_eq!(result, data_dir.join("models").join(&info.filename));
+
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn resolve_model_file_errors_when_missing() {
+        let pid = std::process::id();
+        let base = std::env::temp_dir().join(format!("pap_test_missing_{pid}"));
+        let resource_dir = base.join("resources");
+        let data_dir = base.join("data");
+
+        std::fs::create_dir_all(resource_dir.join("models")).unwrap();
+        std::fs::create_dir_all(data_dir.join("models")).unwrap();
+
+        let info = builtin_model_catalog().into_iter().next().unwrap();
+
+        let result = resolve_model_file(&resource_dir, &data_dir, &info);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains(
+                &resource_dir
+                    .join("models")
+                    .join(&info.filename)
+                    .display()
+                    .to_string()
+            ),
+            "error should mention resource path: {err}",
+        );
+        assert!(
+            err.contains(
+                &data_dir
+                    .join("models")
+                    .join(&info.filename)
+                    .display()
+                    .to_string()
+            ),
+            "error should mention data path: {err}",
+        );
+
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn resolve_tokenizer_file_dual_path() {
+        let pid = std::process::id();
+        let base = std::env::temp_dir().join(format!("pap_test_tokenizer_dual_{pid}"));
+        let resource_dir = base.join("resources");
+        let data_dir = base.join("data");
+
+        std::fs::create_dir_all(resource_dir.join("models")).unwrap();
+        std::fs::create_dir_all(data_dir.join("models")).unwrap();
+
+        // Both present: should prefer bundled (resource_dir)
+        std::fs::write(
+            resource_dir.join("models").join("tokenizer.json"),
+            b"bundled",
+        )
+        .unwrap();
+        std::fs::write(
+            data_dir.join("models").join("tokenizer.json"),
+            b"downloaded",
+        )
+        .unwrap();
+
+        let result = resolve_tokenizer_file(&resource_dir, &data_dir).unwrap();
+        assert_eq!(result, resource_dir.join("models").join("tokenizer.json"));
+
+        // Remove bundled: should fall back to data_dir
+        std::fs::remove_file(resource_dir.join("models").join("tokenizer.json")).unwrap();
+
+        let result = resolve_tokenizer_file(&resource_dir, &data_dir).unwrap();
+        assert_eq!(result, data_dir.join("models").join("tokenizer.json"));
+
+        // Remove both: should error mentioning both paths
+        std::fs::remove_file(data_dir.join("models").join("tokenizer.json")).unwrap();
+
+        let result = resolve_tokenizer_file(&resource_dir, &data_dir);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains(&resource_dir.join("models").display().to_string()),
+            "error should mention resource path: {err}",
+        );
+        assert!(
+            err.contains(&data_dir.join("models").display().to_string()),
+            "error should mention data path: {err}",
+        );
+
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn check_model_availability_both_missing() {
+        let pid = std::process::id();
+        let base = std::env::temp_dir().join(format!("pap_test_avail_missing_{pid}"));
+        let resource_dir = base.join("resources");
+        let data_dir = base.join("data");
+
+        std::fs::create_dir_all(resource_dir.join("models")).unwrap();
+        std::fs::create_dir_all(data_dir.join("models")).unwrap();
+
+        let info = builtin_model_catalog().into_iter().next().unwrap();
+
+        let avail = check_model_availability(&resource_dir, &data_dir, &info);
+        assert!(!avail.ready, "should not be ready when both files missing");
+        assert!(!avail.model_present, "model should not be present");
+        assert!(!avail.tokenizer_present, "tokenizer should not be present");
+        assert_eq!(avail.model_id, info.id);
+
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn check_model_availability_ready() {
+        let pid = std::process::id();
+        let base = std::env::temp_dir().join(format!("pap_test_avail_ready_{pid}"));
+        let resource_dir = base.join("resources");
+        let data_dir = base.join("data");
+
+        std::fs::create_dir_all(resource_dir.join("models")).unwrap();
+        std::fs::create_dir_all(data_dir.join("models")).unwrap();
+
+        let info = builtin_model_catalog().into_iter().next().unwrap();
+
+        // Place both files in data_dir
+        std::fs::write(data_dir.join("models").join(&info.filename), b"model").unwrap();
+        std::fs::write(data_dir.join("models").join("tokenizer.json"), b"tok").unwrap();
+
+        let avail = check_model_availability(&resource_dir, &data_dir, &info);
+        assert!(avail.ready, "should be ready when both files present");
+        assert!(avail.model_present, "model should be present");
+        assert!(avail.tokenizer_present, "tokenizer should be present");
+        assert_eq!(avail.model_id, info.id);
+
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn check_model_availability_partial() {
+        let pid = std::process::id();
+        let base = std::env::temp_dir().join(format!("pap_test_avail_partial_{pid}"));
+        let resource_dir = base.join("resources");
+        let data_dir = base.join("data");
+
+        std::fs::create_dir_all(resource_dir.join("models")).unwrap();
+        std::fs::create_dir_all(data_dir.join("models")).unwrap();
+
+        let info = builtin_model_catalog().into_iter().next().unwrap();
+
+        // Only model file, no tokenizer
+        std::fs::write(data_dir.join("models").join(&info.filename), b"model").unwrap();
+
+        let avail = check_model_availability(&resource_dir, &data_dir, &info);
+        assert!(!avail.ready, "should not be ready with only model present");
+        assert!(avail.model_present, "model should be present");
+        assert!(!avail.tokenizer_present, "tokenizer should not be present");
+        assert_eq!(avail.model_id, info.id);
+
+        std::fs::remove_dir_all(&base).unwrap();
     }
 }

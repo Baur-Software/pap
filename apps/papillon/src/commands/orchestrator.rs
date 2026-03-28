@@ -20,9 +20,11 @@ use crate::db::{prelude::DatabaseOps, AgentProfile, Episode};
 use crate::error::PapillonError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillon_shared::{
-    builtin_model_catalog, BuiltInModelInfo, LlmProvider, OrchestratorConfig, OrchestratorStatus,
-    ReceiptInfo, ScenarioCard, ScenarioRunResult, ScenarioStepResult, SearchResult, SetupState,
+    builtin_model_catalog, BuiltInModelInfo, LlmProvider, ModelAvailability, ModelDownloadProgress,
+    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, ScenarioRunResult,
+    ScenarioStepResult, SearchResult, SetupState,
 };
+use tauri::{AppHandle, Emitter};
 
 /// Get the current orchestrator configuration.
 #[tauri::command]
@@ -60,8 +62,13 @@ pub async fn configure_orchestrator(
             .read()
             .map_err(|e| PapillonError::from(e.to_string()))?
             .clone();
+        let data_dir = state
+            .data_dir
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?
+            .clone();
         let mut mgr = state.model_manager.lock().await;
-        mgr.ensure_loaded(model_id, &resource_dir)
+        mgr.ensure_loaded(model_id, &resource_dir, &data_dir)
             .map_err(PapillonError::from)?;
     }
 
@@ -139,11 +146,125 @@ pub async fn load_builtin_model(
         .read()
         .map_err(|e| PapillonError::from(e.to_string()))?
         .clone();
+    let data_dir = state
+        .data_dir
+        .read()
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .clone();
     let mut mgr = state.model_manager.lock().await;
-    mgr.ensure_loaded(&model_id, &resource_dir)
+    mgr.ensure_loaded(&model_id, &resource_dir, &data_dir)
         .map_err(PapillonError::from)?;
 
     Ok(OrchestratorStatus::Ready)
+}
+
+/// Check whether each catalog model's files are present on disk.
+#[tauri::command]
+pub fn check_model_availability(
+    state: State<'_, AppState>,
+) -> Result<Vec<ModelAvailability>, PapillonError> {
+    let resource_dir = state
+        .resource_dir
+        .read()
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .clone();
+    let data_dir = state
+        .data_dir
+        .read()
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .clone();
+    let catalog = builtin_model_catalog();
+    Ok(catalog
+        .iter()
+        .map(|info| crate::inference::check_model_availability(&resource_dir, &data_dir, info))
+        .collect())
+}
+
+/// Download a built-in model's GGUF weights and tokenizer from HuggingFace.
+/// Emits `model_download_progress` events during the download.
+#[tauri::command]
+pub async fn download_builtin_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    model_id: String,
+) -> Result<ModelAvailability, PapillonError> {
+    let info = builtin_model_catalog()
+        .into_iter()
+        .find(|m| m.id == model_id)
+        .ok_or_else(|| PapillonError::from(format!("Unknown model: {model_id}")))?;
+
+    let data_dir = state
+        .data_dir
+        .read()
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .clone();
+    let resource_dir = state
+        .resource_dir
+        .read()
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .clone();
+
+    let models_dir = data_dir.join("models");
+    std::fs::create_dir_all(&models_dir)
+        .map_err(|e| PapillonError::from(format!("Create models dir: {e}")))?;
+
+    // Download tokenizer first (small, ~500KB)
+    let tokenizer_path = models_dir.join("tokenizer.json");
+    if !tokenizer_path.exists() {
+        let app_ref = app.clone();
+        let mid: std::sync::Arc<str> = model_id.as_str().into();
+        crate::inference::download_file(&info.tokenizer_url, &tokenizer_path, move |dl, total| {
+            let pct = if total > 0 {
+                std::cmp::min((dl * 100 / total) as u8, 100)
+            } else {
+                0
+            };
+            let _ = app_ref.emit(
+                "model_download_progress",
+                ModelDownloadProgress {
+                    model_id: mid.to_string(),
+                    file_type: "tokenizer".into(),
+                    downloaded_bytes: dl,
+                    total_bytes: total,
+                    progress_pct: pct,
+                },
+            );
+        })
+        .await
+        .map_err(PapillonError::from)?;
+    }
+
+    // Download GGUF weights (large, ~600MB+)
+    let model_path = models_dir.join(&info.filename);
+    if !model_path.exists() {
+        let app_ref = app.clone();
+        let mid: std::sync::Arc<str> = model_id.as_str().into();
+        crate::inference::download_file(&info.download_url, &model_path, move |dl, total| {
+            let pct = if total > 0 {
+                std::cmp::min((dl * 100 / total) as u8, 100)
+            } else {
+                0
+            };
+            let _ = app_ref.emit(
+                "model_download_progress",
+                ModelDownloadProgress {
+                    model_id: mid.to_string(),
+                    file_type: "model".into(),
+                    downloaded_bytes: dl,
+                    total_bytes: total,
+                    progress_pct: pct,
+                },
+            );
+        })
+        .await
+        .map_err(PapillonError::from)?;
+    }
+
+    Ok(crate::inference::check_model_availability(
+        &resource_dir,
+        &data_dir,
+        &info,
+    ))
 }
 
 /// List scenario cards backed by real agents in the local registry.
