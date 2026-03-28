@@ -169,7 +169,7 @@ fn NewTabCanvas() -> impl IntoView {
 }
 
 /// Grid of clickable agent capability tiles.
-/// Each tile populates the prompt input with an example query.
+/// Each tile populates the prompt input with an example query via signal.
 #[component]
 fn AgentTiles() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
@@ -178,29 +178,13 @@ fn AgentTiles() -> impl IntoView {
         <div class="capabilities-grid">
             {AGENT_TILES.iter().map(|&(label, example)| {
                 let cs = canvas_state;
+                let ex = example.to_string();
                 view! {
                     <button
                         class="capability-chip"
                         on:click=move |_| {
+                            cs.prefill_prompt.set(Some(ex.clone()));
                             cs.focus_prompt.set(cs.focus_prompt.get_untracked() + 1);
-                            // If the example is a complete query, submit it directly.
-                            // If it ends with a space, it's a prefix — user fills in the rest.
-                            // We set the prompt input value via a custom event.
-                            if let Some(window) = web_sys::window() {
-                                if let Some(doc) = window.document() {
-                                    if let Some(input) = doc.query_selector(".palette-input").ok().flatten() {
-                                        let input: web_sys::HtmlInputElement = input.unchecked_into();
-                                        input.set_value(example);
-                                        // Fire an input event so Leptos picks up the value
-                                        let evt = web_sys::Event::new_with_event_init_dict(
-                                            "input",
-                                            web_sys::EventInit::new().bubbles(true),
-                                        ).unwrap();
-                                        let _ = input.dispatch_event(&evt);
-                                        let _ = input.focus();
-                                    }
-                                }
-                            }
                         }
                     >
                         {label}
@@ -239,6 +223,14 @@ fn InlinePrompt() -> impl IntoView {
             let _ = el.focus();
         }
     };
+
+    // Pick up prefill values from agent tile clicks
+    Effect::new(move || {
+        if let Some(text) = canvas_state.prefill_prompt.get() {
+            input_value.set(text);
+            canvas_state.prefill_prompt.set(None);
+        }
+    });
 
     // Focus the input on mount and whenever focus_prompt is bumped (e.g. ⌘K)
     Effect::new(move || {

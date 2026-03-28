@@ -65,6 +65,12 @@ pub fn App() -> impl IntoView {
             {
                 orchestrator.status.set(status);
             }
+
+            // Seed the first canvas if this is a fresh install.
+            // Fires 3 real agent queries so the app opens with live content.
+            if canvas_state.canvases.get_untracked().is_empty() {
+                canvas_state.seed_first_canvas();
+            }
         });
     });
 
