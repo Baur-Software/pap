@@ -156,25 +156,36 @@ pub async fn download_file(
         .map_err(|e| format!("Create file {}: {e}", tmp_path.display()))?;
 
     let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Download stream error: {e}"))?;
-        std::io::Write::write_all(&mut file, &chunk).map_err(|e| format!("Write error: {e}"))?;
-        downloaded += chunk.len() as u64;
-        on_progress(downloaded, total);
+    let result: Result<(), String> = async {
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download stream error: {e}"))?;
+            std::io::Write::write_all(&mut file, &chunk)
+                .map_err(|e| format!("Write error: {e}"))?;
+            downloaded += chunk.len() as u64;
+            on_progress(downloaded, total);
+        }
+
+        std::io::Write::flush(&mut file).map_err(|e| format!("Flush error: {e}"))?;
+        drop(file);
+
+        std::fs::rename(&tmp_path, dest_path).map_err(|e| {
+            format!(
+                "Rename {} -> {}: {e}",
+                tmp_path.display(),
+                dest_path.display()
+            )
+        })?;
+
+        Ok(())
+    }
+    .await;
+
+    // Clean up tmp file on error
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
     }
 
-    std::io::Write::flush(&mut file).map_err(|e| format!("Flush error: {e}"))?;
-    drop(file);
-
-    std::fs::rename(&tmp_path, dest_path).map_err(|e| {
-        format!(
-            "Rename {} -> {}: {e}",
-            tmp_path.display(),
-            dest_path.display()
-        )
-    })?;
-
-    Ok(())
+    result
 }
 
 /// Load a downloaded GGUF model into memory, ready for inference.

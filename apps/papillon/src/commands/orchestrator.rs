@@ -212,17 +212,17 @@ pub async fn download_builtin_model(
     let tokenizer_path = models_dir.join("tokenizer.json");
     if !tokenizer_path.exists() {
         let app_ref = app.clone();
-        let mid = model_id.clone();
+        let mid: std::sync::Arc<str> = model_id.as_str().into();
         crate::inference::download_file(&info.tokenizer_url, &tokenizer_path, move |dl, total| {
             let pct = if total > 0 {
-                (dl * 100 / total) as u8
+                std::cmp::min((dl * 100 / total) as u8, 100)
             } else {
                 0
             };
             let _ = app_ref.emit(
                 "model_download_progress",
                 ModelDownloadProgress {
-                    model_id: mid.clone(),
+                    model_id: mid.to_string(),
                     file_type: "tokenizer".into(),
                     downloaded_bytes: dl,
                     total_bytes: total,
@@ -238,17 +238,17 @@ pub async fn download_builtin_model(
     let model_path = models_dir.join(&info.filename);
     if !model_path.exists() {
         let app_ref = app.clone();
-        let mid = model_id.clone();
+        let mid: std::sync::Arc<str> = model_id.as_str().into();
         crate::inference::download_file(&info.download_url, &model_path, move |dl, total| {
             let pct = if total > 0 {
-                (dl * 100 / total) as u8
+                std::cmp::min((dl * 100 / total) as u8, 100)
             } else {
                 0
             };
             let _ = app_ref.emit(
                 "model_download_progress",
                 ModelDownloadProgress {
-                    model_id: mid.clone(),
+                    model_id: mid.to_string(),
                     file_type: "model".into(),
                     downloaded_bytes: dl,
                     total_bytes: total,
