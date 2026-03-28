@@ -193,14 +193,13 @@ pub fn App() -> impl IntoView {
             let _ = progress_pct;
             "Downloading\u{2026}"
         }
-        OrchestratorStatus::Disconnected => "Disconnected",
-        OrchestratorStatus::Unconfigured => "Unconfigured",
+        OrchestratorStatus::Disconnected => "Agents only",
+        OrchestratorStatus::Unconfigured => "Agents only",
     };
     let status_class = move || match orchestrator_for_status.status.get() {
         OrchestratorStatus::Ready => "status-indicator ready",
         OrchestratorStatus::Downloading { .. } => "status-indicator working",
-        OrchestratorStatus::Disconnected => "status-indicator offline",
-        OrchestratorStatus::Unconfigured => "status-indicator offline",
+        _ => "status-indicator ready",
     };
 
     view! {

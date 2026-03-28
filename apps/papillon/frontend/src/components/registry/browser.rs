@@ -15,6 +15,46 @@ pub fn RegistryBrowser() -> impl IntoView {
     let is_loading = move || registry.loading.get();
     let error_msg = move || registry.error.get();
 
+    let connect_to = move |url: &str| {
+        let url = url.to_string();
+        registry.current_url.set(url.clone());
+        registry.loading.set(true);
+        registry.error.set(None);
+
+        spawn_local(async move {
+            #[derive(serde::Serialize)]
+            struct NavArgs {
+                url: String,
+            }
+            match bridge::invoke::<NavArgs, RegistryInfo>(
+                "navigate_registry",
+                &NavArgs { url: url.clone() },
+            )
+            .await
+            {
+                Ok(info) => {
+                    registry.info.set(Some(info));
+                    #[derive(serde::Serialize)]
+                    struct ListArgs {
+                        registry_url: String,
+                    }
+                    if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
+                        "list_agents",
+                        &ListArgs {
+                            registry_url: url,
+                        },
+                    )
+                    .await
+                    {
+                        registry.agents.set(agents);
+                    }
+                }
+                Err(e) => registry.error.set(Some(e)),
+            }
+            registry.loading.set(false);
+        });
+    };
+
     let on_sync = move |_| {
         let url = registry.current_url.get();
         if url.is_empty() {
@@ -98,9 +138,33 @@ pub fn RegistryBrowser() -> impl IntoView {
 
             <Show when=is_connected fallback=move || view! {
                 <Show when=move || !is_loading()>
-                    <div style="text-align: center; padding: 48px 0; color: var(--text-secondary);">
-                        <p style="font-size: 16px; margin-bottom: 8px;">"Enter a registry URL in the address bar"</p>
-                        <p style="font-size: 13px;">"e.g. pap://localhost:8080"</p>
+                    <div class="registry-quickstart">
+                        <div class="quickstart-section">
+                            <h3 class="quickstart-title">"Connect to a Registry"</h3>
+                            <p class="quickstart-desc">
+                                "Enter a pap:// address in the address bar above to browse a Chrysalis registry and discover federated agents."
+                            </p>
+                        </div>
+                        <div class="quickstart-section">
+                            <div class="quickstart-label">"Quick connect"</div>
+                            <div class="quickstart-options">
+                                <button class="quickstart-btn" on:click=move |_| {
+                                    connect_to("pap://local");
+                                }>
+                                    "Local Agents"
+                                    <span class="quickstart-btn-desc">"Built-in agents on this device"</span>
+                                </button>
+                                <button class="quickstart-btn" on:click=move |_| {
+                                    connect_to("pap://localhost:7890");
+                                }>
+                                    "Local Chrysalis"
+                                    <span class="quickstart-btn-desc">"pap://localhost:7890"</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="quickstart-hint">
+                            "Run "<code>"cargo run -p pap-registry"</code>" to start a local Chrysalis instance"
+                        </div>
                     </div>
                 </Show>
             }>
