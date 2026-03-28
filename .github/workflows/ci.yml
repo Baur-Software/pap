@@ -69,6 +69,14 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  docker-workspace:
+    name: Docker workspace consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Dockerfile workspace members
+        run: bash ci/check-docker-workspace.sh
+
   bench:
     name: Benchmark (regression gate)
     runs-on: ubuntu-latest
