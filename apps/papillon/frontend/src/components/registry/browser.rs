@@ -100,20 +100,16 @@ pub fn RegistryBrowser() -> impl IntoView {
                 <Show when=move || !is_loading()>
                     <div class="registry-quickstart">
                         <div class="quickstart-section">
-                            <h3 class="quickstart-title">"Connect to a Registry"</h3>
+                            <h3 class="quickstart-title">"Connect to a Chrysalis Registry"</h3>
                             <p class="quickstart-desc">
-                                "Enter a pap:// address in the address bar above to browse a Chrysalis registry and discover federated agents."
+                                "Enter a pap:// address above to discover federated agents. "
+                                "Built-in agents (search, weather, wiki, and more) already work from the canvas \u{2014} "
+                                "this page is for connecting to external registries."
                             </p>
                         </div>
                         <div class="quickstart-section">
                             <div class="quickstart-label">"Quick connect"</div>
                             <div class="quickstart-options">
-                                <button class="quickstart-btn" on:click=move |_| {
-                                    registry.connect_to("pap://local");
-                                }>
-                                    "Local Agents"
-                                    <span class="quickstart-btn-desc">"Built-in agents on this device"</span>
-                                </button>
                                 <button class="quickstart-btn" on:click=move |_| {
                                     registry.connect_to("pap://localhost:7890");
                                 }>

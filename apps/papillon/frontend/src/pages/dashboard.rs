@@ -2,18 +2,15 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 
 use crate::state::identity::IdentityState;
-use crate::state::registry::RegistryState;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
     let identity = expect_context::<IdentityState>();
-    let registry = expect_context::<RegistryState>();
     let navigate = use_navigate();
 
     let has_identity = move || identity.info.get().is_some();
 
-    let browse_registry = move |_| {
-        registry.connect_to("pap://local");
+    let go_browse = move |_| {
         let nav = navigate.clone();
         nav("/browse", Default::default());
     };
@@ -23,12 +20,12 @@ pub fn DashboardPage() -> impl IntoView {
             <h2 class="page-title">"Dashboard"</h2>
 
             <div class="card" style="margin-bottom: 16px;">
-                <h3 style="font-size: 14px; margin-bottom: 8px;">"Local Agent Registry"</h3>
+                <h3 style="font-size: 14px; margin-bottom: 8px;">"External Registries"</h3>
                 <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                    "Browse agents backed by real services: DuckDuckGo search, Wikipedia knowledge, and on-device Mistral AI. Zero disclosure, fully functional."
+                    "Connect to a Chrysalis registry to discover federated agents beyond the built-in set."
                 </p>
-                <button class="btn btn-primary" on:click=browse_registry>
-                    "Browse Agents"
+                <button class="btn btn-primary" on:click=go_browse>
+                    "Browse Registries"
                 </button>
             </div>
 
