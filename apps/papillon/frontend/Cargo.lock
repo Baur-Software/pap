@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "papillon-shared"
-version = "0.4.2"
+version = "0.5.5"
 dependencies = [
  "chrono",
  "js-sys",

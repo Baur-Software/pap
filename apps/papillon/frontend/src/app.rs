@@ -17,7 +17,7 @@ use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::registry::RegistryState;
 use crate::state::templates::TemplatesState;
-use papillon_shared::{IdentityInfo, OrchestratorStatus, ProfileMetadata, Template};
+use papillon_shared::{BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -67,6 +67,21 @@ pub fn App() -> impl IntoView {
             }
         });
     });
+
+    // Listen for backend block events (handshake phase progress + results).
+    // These events are emitted by the Rust backend during the 6-phase handshake
+    // and are the only way the frontend learns about phase transitions and results
+    // when running inside Tauri (the WASM path updates signals directly instead).
+    if bridge::tauri_available() {
+        let cs = canvas_state;
+        bridge::listen::<BlockEvent>("block_updated", move |event| {
+            cs.apply_block_event(event.block);
+        });
+        let cs = canvas_state;
+        bridge::listen::<BlockEvent>("block_resolved", move |event| {
+            cs.apply_block_event(event.block);
+        });
+    }
 
     // Load global templates on startup
     Effect::new(move || {

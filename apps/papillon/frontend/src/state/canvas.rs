@@ -354,6 +354,30 @@ impl CanvasState {
             }
         });
     }
+
+    /// Apply a streaming phase update from the backend.
+    /// Searches all canvases for the block by ID, preserving prompt_text
+    /// and other frontend-only fields that the backend doesn't have.
+    pub fn apply_block_event(&self, event_block: CanvasBlock) {
+        self.canvases.update(|cs| {
+            for canvas in cs.iter_mut() {
+                if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == event_block.id) {
+                    // Preserve prompt_text — backend phase events don't carry it
+                    let prompt_text = b.prompt_text.take();
+                    let linked = std::mem::take(&mut b.linked_block_ids);
+                    *b = event_block;
+                    if b.prompt_text.is_none() {
+                        b.prompt_text = prompt_text;
+                    }
+                    if b.linked_block_ids.is_empty() {
+                        b.linked_block_ids = linked;
+                    }
+                    canvas.updated_at = now_iso();
+                    return;
+                }
+            }
+        });
+    }
 }
 
 fn generate_id() -> String {
