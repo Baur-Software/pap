@@ -1,11 +1,8 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
-use wasm_bindgen_futures::spawn_local;
 
-use crate::bridge;
 use crate::state::identity::IdentityState;
 use crate::state::registry::RegistryState;
-use papillon_shared::{AgentInfo, RegistryInfo};
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -16,46 +13,9 @@ pub fn DashboardPage() -> impl IntoView {
     let has_identity = move || identity.info.get().is_some();
 
     let browse_registry = move |_| {
+        registry.connect_to("pap://local");
         let nav = navigate.clone();
-        registry.current_url.set("pap://local".to_string());
-        registry.loading.set(true);
-        registry.error.set(None);
-
-        spawn_local(async move {
-            #[derive(serde::Serialize)]
-            struct Args {
-                url: String,
-            }
-            match bridge::invoke::<Args, RegistryInfo>(
-                "navigate_registry",
-                &Args {
-                    url: "pap://local".to_string(),
-                },
-            )
-            .await
-            {
-                Ok(info) => {
-                    registry.info.set(Some(info));
-                    #[derive(serde::Serialize)]
-                    struct ListArgs {
-                        registry_url: String,
-                    }
-                    if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
-                        "list_agents",
-                        &ListArgs {
-                            registry_url: "pap://local".to_string(),
-                        },
-                    )
-                    .await
-                    {
-                        registry.agents.set(agents);
-                    }
-                }
-                Err(e) => registry.error.set(Some(e)),
-            }
-            registry.loading.set(false);
-            nav("/browse", Default::default());
-        });
+        nav("/browse", Default::default());
     };
 
     view! {

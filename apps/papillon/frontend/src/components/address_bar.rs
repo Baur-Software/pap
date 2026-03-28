@@ -1,9 +1,6 @@
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 
-use crate::bridge;
 use crate::state::registry::RegistryState;
-use papillon_shared::{AgentInfo, RegistryInfo};
 
 #[component]
 pub fn AddressBar() -> impl IntoView {
@@ -16,45 +13,7 @@ pub fn AddressBar() -> impl IntoView {
             if value.is_empty() {
                 return;
             }
-            registry.current_url.set(value.clone());
-            registry.loading.set(true);
-            registry.error.set(None);
-
-            spawn_local(async move {
-                #[derive(serde::Serialize)]
-                struct Args {
-                    url: String,
-                }
-                match bridge::invoke::<Args, RegistryInfo>(
-                    "navigate_registry",
-                    &Args { url: value.clone() },
-                )
-                .await
-                {
-                    Ok(info) => {
-                        registry.info.set(Some(info));
-                        // Auto-load agents after successful navigation
-                        #[derive(serde::Serialize)]
-                        struct ListArgs {
-                            registry_url: String,
-                        }
-                        if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
-                            "list_agents",
-                            &ListArgs {
-                                registry_url: value,
-                            },
-                        )
-                        .await
-                        {
-                            registry.agents.set(agents);
-                        }
-                    }
-                    Err(e) => {
-                        registry.error.set(Some(e));
-                    }
-                }
-                registry.loading.set(false);
-            });
+            registry.connect_to(&value);
         }
     };
 

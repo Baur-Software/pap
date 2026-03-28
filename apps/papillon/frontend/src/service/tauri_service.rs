@@ -108,7 +108,7 @@ impl PapillonService for TauriService {
 
     async fn list_registry_agents(&self, registry_url: &str) -> Result<Vec<AgentInfo>, String> {
         bridge::invoke::<Value, Vec<AgentInfo>>(
-            "list_registry_agents",
+            "list_agents",
             &json!({ "registry_url": registry_url }),
         )
         .await
