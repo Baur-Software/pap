@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Papillion — PAP Protocol Handler for Browsers</title>
+    <meta
+      name="description"
+      content="Handle pap:// links natively in your browser with the Principal Agent Protocol extension. Cryptographic agent delegation, zero-trust handshakes, in-browser WASM execution."
+    />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Papillion — PAP Browser Extension" />
+    <meta
+      property="og:description"
+      content="Handle pap:// links natively in your browser. Cryptographic agent delegation with the Principal Agent Protocol."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://baur-software.github.io/pap/extension/" />
+
+    <!-- .well-known/pap-configuration link -->
+    <link
+      rel="alternate"
+      type="application/json"
+      href="/.well-known/pap-configuration"
+      title="PAP Configuration"
+    />
+
+    <style>
+      /* PAP Design System — inline for zero-dependency landing page */
+      :root {
+        --purple: #6c5ce7;
+        --purple-hover: #7f6ff0;
+        --purple-muted: rgba(108, 92, 231, 0.12);
+        --teal: #2ec4a0;
+        --gold: #f0a030;
+        --coral: #e8706a;
+        --bg-0: #0c0b14;
+        --bg-1: #151420;
+        --bg-2: #1f1e2e;
+        --bg-3: #2a2940;
+        --text-1: #eeeef2;
+        --text-2: #9494a8;
+        --text-3: #6a6a80;
+        --border: #2c2b40;
+        --font-display: "Satoshi", -apple-system, system-ui, sans-serif;
+        --font-body: "DM Sans", -apple-system, system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", "SF Mono", monospace;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg-0: #faf9fc;
+          --bg-1: #f0eff5;
+          --bg-2: #e6e5ee;
+          --bg-3: #d8d7e2;
+          --text-1: #1a1928;
+          --text-2: #5c5b70;
+          --text-3: #8888a0;
+          --border: #d0cfdc;
+        }
+      }
+
+      @import url("https://api.fontshare.com/v2/css?f[]=satoshi@700&display=swap");
+      @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400&display=swap");
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html {
+        font-size: 16px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        font-family: var(--font-body);
+        color: var(--text-1);
+        background: var(--bg-0);
+        line-height: 1.6;
+      }
+
+      .page {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 80px 24px;
+      }
+
+      /* Hero */
+      .hero {
+        text-align: center;
+        margin-bottom: 64px;
+      }
+
+      .hero-logo {
+        width: 96px;
+        height: 96px;
+        margin-bottom: 24px;
+        border-radius: 16px;
+      }
+
+      .hero h1 {
+        font-family: var(--font-display);
+        font-size: 40px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 16px;
+      }
+
+      .hero h1 span {
+        color: var(--purple);
+      }
+
+      .hero p {
+        font-size: 18px;
+        color: var(--text-2);
+        max-width: 480px;
+        margin: 0 auto 32px;
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-family: var(--font-body);
+        font-size: 15px;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .btn-primary {
+        background: var(--purple);
+        border-color: var(--purple);
+        color: #fff;
+      }
+
+      .btn-primary:hover {
+        background: var(--purple-hover);
+        border-color: var(--purple-hover);
+      }
+
+      .btn-secondary {
+        background: var(--bg-2);
+        color: var(--text-1);
+      }
+
+      .btn-secondary:hover {
+        background: var(--bg-3);
+      }
+
+      /* Features */
+      .features {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 64px;
+      }
+
+      @media (max-width: 600px) {
+        .features {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .feature {
+        background: var(--bg-1);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+      }
+
+      .feature-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+      }
+
+      .feature h3 {
+        font-family: var(--font-display);
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .feature p {
+        font-size: 14px;
+        color: var(--text-2);
+      }
+
+      /* Protocol URI section */
+      .protocol {
+        background: var(--bg-1);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 32px;
+        margin-bottom: 64px;
+      }
+
+      .protocol h2 {
+        font-family: var(--font-display);
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 16px;
+      }
+
+      .uri-examples {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .uri-example {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        background: var(--bg-0);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+
+      .uri-scheme {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        color: var(--purple);
+        min-width: 200px;
+      }
+
+      .uri-desc {
+        font-size: 13px;
+        color: var(--text-3);
+      }
+
+      /* Handshake phases */
+      .phases {
+        margin-bottom: 64px;
+      }
+
+      .phases h2 {
+        font-family: var(--font-display);
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 24px;
+        text-align: center;
+      }
+
+      .phase-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .phase {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .phase:last-child {
+        border-bottom: none;
+      }
+
+      .phase-num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 14px;
+        font-weight: 700;
+        background: var(--purple-muted);
+        color: var(--purple);
+        flex-shrink: 0;
+      }
+
+      .phase-info h4 {
+        font-family: var(--font-body);
+        font-size: 15px;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+
+      .phase-info p {
+        font-size: 13px;
+        color: var(--text-3);
+      }
+
+      /* Footer */
+      footer {
+        text-align: center;
+        padding-top: 32px;
+        border-top: 1px solid var(--border);
+      }
+
+      footer p {
+        font-size: 13px;
+        color: var(--text-3);
+      }
+
+      footer a {
+        color: var(--purple);
+        text-decoration: none;
+      }
+
+      footer a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <!-- Hero -->
+      <section class="hero">
+        <img src="icon-128.png" alt="Papillion" class="hero-logo" />
+        <h1>Handle <span>pap://</span> in your browser</h1>
+        <p>
+          The Principal Agent Protocol extension gives your browser native
+          support for cryptographic agent delegation. Zero-trust handshakes
+          run locally via WebAssembly.
+        </p>
+        <div class="hero-actions">
+          <a
+            href="#install"
+            class="btn btn-primary"
+            id="install-btn"
+          >
+            Install for Chrome
+          </a>
+          <a
+            href="https://github.com/Baur-Software/pap"
+            class="btn btn-secondary"
+            target="_blank"
+          >
+            View Source
+          </a>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="features">
+        <div class="feature">
+          <div class="feature-icon" style="color: var(--purple)">&#9919;</div>
+          <h3>Protocol-Native</h3>
+          <p>
+            Intercepts pap://, pap+https://, and pap+wss:// links.
+            No URL rewriting, no proxies — the extension speaks PAP directly.
+          </p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon" style="color: var(--teal)">&#128274;</div>
+          <h3>Zero-Trust Crypto</h3>
+          <p>
+            Ed25519 keypairs, capability tokens, and mandate chains execute
+            in WebAssembly. Your private key never leaves the extension.
+          </p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon" style="color: var(--gold)">&#9889;</div>
+          <h3>6-Phase Handshake</h3>
+          <p>
+            Watch token presentation, DID exchange, selective disclosure,
+            execution, co-signing, and session close in real time.
+          </p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon" style="color: var(--coral)">&#127760;</div>
+          <h3>Desktop Bridge</h3>
+          <p>
+            When Papillion desktop is running, the extension bridges to it
+            via native messaging for WebAuthn and full crate access.
+          </p>
+        </div>
+      </section>
+
+      <!-- Protocol URIs -->
+      <section class="protocol">
+        <h2>PAP URI Schemes</h2>
+        <div class="uri-examples">
+          <div class="uri-example">
+            <span class="uri-scheme">pap://agent.example.com</span>
+            <span class="uri-desc">Native PAP transport</span>
+          </div>
+          <div class="uri-example">
+            <span class="uri-scheme">pap+https://agent.example.com</span>
+            <span class="uri-desc">PAP over HTTPS (browser-native)</span>
+          </div>
+          <div class="uri-example">
+            <span class="uri-scheme">pap+wss://agent.example.com</span>
+            <span class="uri-desc">PAP over WebSocket (full-duplex)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Handshake Phases -->
+      <section class="phases">
+        <h2>The PAP Handshake</h2>
+        <div class="phase-list">
+          <div class="phase">
+            <div class="phase-num">1</div>
+            <div class="phase-info">
+              <h4>Token Presentation</h4>
+              <p>Present a signed capability token to the agent</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">2</div>
+            <div class="phase-info">
+              <h4>DID Exchange</h4>
+              <p>Exchange ephemeral session DIDs — unlinked to your identity</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">3</div>
+            <div class="phase-info">
+              <h4>Selective Disclosure</h4>
+              <p>Share only what the agent needs — nothing more</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">4</div>
+            <div class="phase-info">
+              <h4>Execution</h4>
+              <p>Agent performs the action, returns Schema.org JSON-LD</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">5</div>
+            <div class="phase-info">
+              <h4>Receipt Co-signing</h4>
+              <p>Both parties co-sign a transaction receipt with property references only</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">6</div>
+            <div class="phase-info">
+              <h4>Close</h4>
+              <p>Session keys are discarded. No residual tracking.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          <a href="https://github.com/Baur-Software/pap">Baur Software</a>
+          &middot;
+          <a href="https://github.com/Baur-Software/pap/tree/main/docs/specification.md">PAP Specification</a>
+          &middot;
+          <a href="https://github.com/Baur-Software/pap/tree/main/apps/papillion-extension">Extension Source</a>
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
