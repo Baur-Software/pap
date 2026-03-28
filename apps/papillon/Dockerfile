@@ -34,6 +34,8 @@ COPY apps/papillon/frontend ./apps/papillon/frontend
 # Patch workspace members to exclude crates we didn't copy.
 # Path deps still resolve; only the member list is trimmed.
 RUN sed -i \
+    -e '/^[[:space:]]*"crates\/pap-credential-store"/d' \
+    -e '/^[[:space:]]*"crates\/pap-agents"/d' \
     -e '/^[[:space:]]*"crates\/pap-webauthn"/d' \
     -e '/^[[:space:]]*"crates\/pap-transport"/d' \
     -e '/^[[:space:]]*"crates\/pap-federation"/d' \

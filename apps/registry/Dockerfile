@@ -40,6 +40,8 @@ COPY apps/registry/assets ./apps/registry/assets
 # so workspace.dependencies path entries are left intact.
 RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-credential"/d' \
+    -e '/^[[:space:]]*"crates\/pap-credential-store"/d' \
+    -e '/^[[:space:]]*"crates\/pap-agents"/d' \
     -e '/^[[:space:]]*"crates\/pap-webauthn"/d' \
     -e '/^[[:space:]]*"crates\/pap-proto"/d' \
     -e '/^[[:space:]]*"crates\/pap-transport"/d' \
@@ -80,6 +82,8 @@ COPY apps/registry/src        ./apps/registry/src
 
 RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-credential"/d' \
+    -e '/^[[:space:]]*"crates\/pap-credential-store"/d' \
+    -e '/^[[:space:]]*"crates\/pap-agents"/d'     \
     -e '/^[[:space:]]*"crates\/pap-webauthn"/d'   \
     -e '/^[[:space:]]*"crates\/pap-proto"/d'       \
     -e '/^[[:space:]]*"crates\/pap-transport"/d'   \
