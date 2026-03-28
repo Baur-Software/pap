@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [0.5.6] - 2026-03-27
+
+### Added
+
+- **papillon**: On-demand model downloading for built-in LLM models — models are fetched at first use instead of bundled with the app binary, reducing initial download size
+
+### Fixed
+
+- **papillon**: Wrap Tauri IPC args in named parameter objects — fixes invoke serialization for commands expecting structured arguments
+
 ### Changed
 
 - Rename `papillion` → `papillon` across entire codebase (correct French spelling)
