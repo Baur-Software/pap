@@ -66,20 +66,20 @@ test.describe("Web standalone: app shell", () => {
 // ── Canvas Page ──────────────────────────────────────────────
 
 test.describe("Web standalone: canvas page", () => {
-  test("shows canvas area with seeded blocks", async ({ page }) => {
+  test("shows new-tab empty state with agent tiles", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
     await expect(page.locator(".canvas-area")).toBeVisible();
-    // seed_first_canvas() creates blocks immediately on first launch
-    await expect(page.locator(".canvas-blocks")).toBeVisible();
+    // No Tauri backend → no seed → shows the new-tab page with agent tiles
+    await expect(page.locator(".canvas-empty")).toBeVisible();
   });
 
   test("shows inline prompt for user queries", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // InlinePrompt always renders alongside canvas blocks
+    // InlinePrompt renders inside the new-tab canvas
     await expect(page.locator(".palette-input")).toBeVisible();
   });
 });
