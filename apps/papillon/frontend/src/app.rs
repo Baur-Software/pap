@@ -45,6 +45,12 @@ pub fn App() -> impl IntoView {
     };
     provide_context(service.clone());
 
+    // Seed the first canvas if this is a fresh install (both Tauri and web paths).
+    // Runs synchronously to create resolving blocks before any async Effects fire.
+    if canvas_state.canvases.get_untracked().is_empty() {
+        canvas_state.seed_first_canvas();
+    }
+
     // WASM browser startup — initialize identity from IndexedDB
     if !bridge::tauri_available() {
         let identity = identity_state;
@@ -106,11 +112,6 @@ pub fn App() -> impl IntoView {
                 orchestrator.status.set(status);
             }
 
-            // Seed the first canvas if this is a fresh install.
-            // Fires 3 real agent queries so the app opens with live content.
-            if canvas_state.canvases.get_untracked().is_empty() {
-                canvas_state.seed_first_canvas();
-            }
         });
     });
 
