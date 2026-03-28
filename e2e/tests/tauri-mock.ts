@@ -452,6 +452,12 @@ window.__TAURI__ = {
           return null;
       }
     }
+  },
+  event: {
+    listen: async function(event, handler) {
+      console.log('[tauri-mock] event.listen:', event);
+      return function() {};
+    }
   }
 };
 `;
