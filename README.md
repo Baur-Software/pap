@@ -54,6 +54,46 @@ Five constraints enforced at the protocol level:
 4. **Receipts contain property references only** — never values
 5. **Non-renewal is revocation** — mandates degrade progressively (Active → Degraded → ReadOnly → Suspended)
 
+## Applications
+
+### Papillon — Desktop Agent Canvas
+
+One canvas. Many agents. Your rules. Papillon is a Tauri desktop app that lets you compose specialized AI agents — each scoped by a cryptographic mandate, each running in its own ephemeral session. Preview their plans, approve their actions, verify their results. No agent ever sees your full context.
+
+- **Built-in LLM support** with on-demand model downloading
+- **Canvas-based agent orchestration** with PAP mandates enforcing scope
+- **WebAuthn device-bound identity** — your keys never leave your hardware
+- **Deep-link protocol** (`pap://`, `pap+https://`, `pap+wss://`)
+
+```bash
+# Run from the repo root
+cargo tauri dev -p papillon
+```
+
+[Documentation](https://baur-software.github.io/pap/papillon/) · [Source](apps/papillon/)
+
+### Chrysalis — Federated Agent Registry
+
+Publish your agent. Let any canvas find it. Chrysalis is a self-hostable federated registry node. Deploy one to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
+
+- **Axum + Leptos SSR** — server-rendered web UI, admin REST API, federation endpoints
+- **SQLite or Postgres** — single-node or clustered deployments
+- **Ed25519 signature verification** at ingest — unsigned or tampered advertisements rejected
+- **TLS fingerprint pinning** — no CA dependency; DIDs are the trust root
+- **Full-text search** via FTS5 / tsvector with paginated results
+
+```bash
+# Run locally (SQLite, no auth)
+cargo run -p pap-registry --features ssr
+
+# Docker
+docker build -f apps/registry/Dockerfile -t pap-registry .
+docker run -p 7890:7890 -v registry_data:/data \
+  -e PAP_REGISTRY_ADMIN_TOKEN=change-me pap-registry
+```
+
+[Documentation](https://baur-software.github.io/pap/chrysalis.html) · [Source](apps/registry/) · [Detailed README](apps/registry/README.md)
+
 ## Quick Start
 
 ```bash
@@ -61,8 +101,6 @@ git clone https://github.com/Baur-Software/pap.git
 cd pap
 cargo test
 ```
-
-For interactive demos, see [Papillon](https://baur-software.github.io/pap/papillon/).
 
 ## Protocol Stack
 
@@ -143,7 +181,7 @@ pap/
 - `AgentExecutor` trait — Simplified 2-method interface (`meta()` + `execute(query)`) for agent implementations.
 - `SimpleAgent<E>` wrapper — Adapts any `AgentExecutor` into the full 6-phase `AgentHandler` protocol.
 - 14 built-in agents including `CredentialStoreExecutor` for vault operations via Schema.org JSON-LD.
-- Shared across Papillion and Chrysalis — agents are defined once, used everywhere.
+- Shared across Papillon and Chrysalis — agents are defined once, used everywhere.
 
 ### pap-marketplace
 
@@ -197,64 +235,9 @@ PAP exposes stable FFI layers for multiple languages:
 
 For language bindings, see `crates/pap-c`, `crates/pap-wasm`, `crates/pap-python`, and `bindings/`.
 
-## Chrysalis: Hostable Federated Registry
+## Why a Federated Registry?
 
-`apps/registry/` is **Chrysalis**, a standalone, self-hosted federated PAP registry. Deploy one node to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
-
-```bash
-# Run locally (SQLite, no auth)
-cargo run -p pap-registry --features ssr
-
-# Docker (with persistent volume and admin token)
-docker build -f apps/registry/Dockerfile -t pap-registry .
-docker run -p 7890:7890 -v registry_data:/data \
-  -e PAP_REGISTRY_ADMIN_TOKEN=change-me pap-registry
-```
-
-Key characteristics:
-- **Self-hosted registry node** — Each instance is a DID-bound agent discoverable by peers
-- **Federated discovery** — Mesh multiple registry nodes; agents propagate across the network via announce/sync
-- **TLS fingerprint pinning** — No CA dependency; each node has a self-signed cert bound to its DID
-- **Ed25519 signature verification** — Unsigned or tampered agent advertisements rejected at ingest
-- **Admin REST API** (`/api/*`) + Leptos SSR web UI at `/`
-- **Full-text search** — SQLite FTS5 or Postgres tsvector with paginated results
-- **Multi-backend support** — SQLite for single-node, Postgres for clustered deployments
-
-### Why a Registry?
-
-An open agent network needs a registry for six distinct reasons: discovery, pre-session disclosure matching, payment negotiation, trust at the edge, accountability, and operator sovereignty.
-
-**Discovery without a central directory**
-
-An agent advertising `schema:ReserveAction` shouldn't require a platform-controlled directory to be found. Chrysalis nodes store signed `AgentAdvertisement` records indexed by Schema.org action type and free-text capability description. An orchestrator looking for a hotel-booking agent queries its local registry — not a platform API — and receives a list of candidates along with their disclosure requirements. Because the federation protocol propagates advertisements across nodes via push/pull sync, no single node is authoritative. The network discovers its topology from the bottom up.
-
-Full-text search over FTS5/tsvector means any node in the mesh can answer capability queries without a custom routing layer or a crawl-the-web index.
-
-**Pre-session disclosure matching**
-
-Before initiating a session, an orchestrator can inspect a candidate's `AgentAdvertisement` to see exactly which SD-JWT claims the agent requires. If the principal's current mandate doesn't cover those fields, the orchestrator can skip that candidate — without establishing a session, exchanging DIDs, or transmitting any context at all. Unnecessary exposure during candidate evaluation is eliminated at the query stage, not the session stage.
-
-**Payment as a first-class protocol primitive**
-
-Agents in an open network need to charge for execution. PAP's `Mandate` includes an optional `payment_proof` field — an ecash token or Lightning preimage that the service-side agent verifies before processing the request. The registry is where an agent *advertises* its payment terms: denomination, mechanism, and whether the caller needs a prior proof-of-funds before the session begins.
-
-Ecash tokens are unlinkable to the principal identity. The vendor learns a transaction occurred but not who paid. This is not a payment processor — it is a mechanism for agents to negotiate micro-transactions without routing through a platform's billing infrastructure. The registry publishes the terms; the session handshake carries the proof; neither touches a centralized payment rail.
-
-**Trust at the edge, not at the center**
-
-Chrysalis nodes don't require a trusted third party to validate agent identity. Ed25519 signature verification happens at ingest: an advertisement that wasn't signed by the claiming DID's key is rejected with `422`. Compromise of one peer node cannot inject forged agents into the mesh because every downstream node re-verifies on receipt. TLS fingerprint pinning (TOFU, no CA dependency) means peer connections are authenticated by DID, not by a certificate authority a platform operator controls.
-
-**Accountability without exposure**
-
-The registry creates a verifiable record of which agents exist and what they claim to do. Co-signed `TransactionReceipt`s — containing property references only, never values — are the per-session record of what was disclosed and executed. Registry advertisements plus session receipts produce a complete audit trail: what the agent advertised, what the principal authorized, and what categories of data were exchanged. No values appear anywhere in this chain.
-
-This separates accountability from surveillance. You can prove a transaction occurred and what types of data it touched. You cannot reconstruct the data itself.
-
-**Operator sovereignty**
-
-Any organization can run its own Chrysalis node. Agents do not need permission from a platform to be discoverable. There is no central index to capture, no API key to revoke, and no terms-of-service gate on discovery. A company running its own registry node can federate selectively — peering with trusted nodes while keeping internal agents off the public mesh entirely. The federation protocol is the same in both cases; the trust boundary is operator-defined.
-
-See [apps/registry/README.md](apps/registry/README.md) for full documentation.
+An open agent network needs a registry for discovery, pre-session disclosure matching, payment negotiation, trust at the edge, accountability, and operator sovereignty. Chrysalis provides all six — without a central authority. See the [Chrysalis documentation](https://baur-software.github.io/pap/chrysalis.html) and [registry README](apps/registry/README.md) for the full rationale and API reference.
 
 ## How PAP Differs
 
@@ -324,8 +307,11 @@ Good feedback makes the protocol harder to capture.
 
 ## Documentation
 
-- **[PAP v0.1 Architecture Specification](https://baursoftware.com/pap)** — Full protocol design and cryptographic model
-- **[Transport Bindings](docs/TRANSPORT_BINDINGS.md)** — How PAP works across HTTP, WebSocket, gRPC, IoT, and custom transport protocols
+- **[Baur Software](https://baur-software.github.io/pap/)** — Project home
+- **[PAP Protocol](https://baur-software.github.io/pap/pap/)** — Architecture specification, cryptographic model, and protocol design
+- **[Papillon](https://baur-software.github.io/pap/papillon/)** — Desktop app documentation
+- **[Chrysalis](https://baur-software.github.io/pap/chrysalis.html)** — Federated registry documentation
+- **[Transport Bindings](docs/TRANSPORT_BINDINGS.md)** — HTTP, WebSocket, gRPC, IoT, and custom transport protocols
 - **[Design System](DESIGN.md)** — Visual design and component conventions
 
 ## License
