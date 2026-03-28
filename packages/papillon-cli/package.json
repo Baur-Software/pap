@@ -1,6 +1,6 @@
 {
   "name": "@baur-software/papillon",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Papillon — PAP-native agent browser. Run locally with npx.",
   "keywords": ["ai", "agents", "pap", "principal-agent-protocol", "papillon"],
   "license": "MIT OR Apache-2.0",

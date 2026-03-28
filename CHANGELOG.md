@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.5.7] - 2026-03-27
+
+### Fixed
+
+- Sync `tauri.conf.json` version with workspace — desktop artifacts (rpm, deb, dmg, exe, msi, AppImage) now use the correct version in filenames
+
 ## [0.5.6] - 2026-03-27
 
 ### Added
