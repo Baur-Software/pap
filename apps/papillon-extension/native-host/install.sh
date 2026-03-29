@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# Install the Papillion native messaging host manifest.
+# Install the Papillon native messaging host manifest.
 #
-# This script is run during Papillion desktop installation to register
+# This script is run during Papillon desktop installation to register
 # the native messaging host with Chrome/Chromium and Firefox.
 #
-# Usage: ./install.sh <papillion-binary-path> <chrome-extension-id>
+# Usage: ./install.sh <papillon-binary-path> <chrome-extension-id>
 
 set -euo pipefail
 
-PAPILLION_PATH="${1:?Usage: install.sh <papillion-binary-path> <chrome-extension-id>}"
-EXTENSION_ID="${2:?Usage: install.sh <papillion-binary-path> <chrome-extension-id>}"
-HOST_NAME="com.baur_software.papillion"
+PAPILLON_PATH="${1:?Usage: install.sh <papillon-binary-path> <chrome-extension-id>}"
+EXTENSION_ID="${2:?Usage: install.sh <papillon-binary-path> <chrome-extension-id>}"
+HOST_NAME="com.baur_software.papillon"
 
 # Generate manifest
 MANIFEST=$(cat <<EOF
 {
   "name": "${HOST_NAME}",
-  "description": "Papillion PAP desktop application — native messaging bridge",
-  "path": "${PAPILLION_PATH}",
+  "description": "Papillon PAP desktop application — native messaging bridge",
+  "path": "${PAPILLON_PATH}",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://${EXTENSION_ID}/"
@@ -36,7 +36,7 @@ case "$(uname -s)" in
     echo "Installed Chrome native messaging host: $CHROME_DIR/${HOST_NAME}.json"
 
     # macOS — Firefox
-    FIREFOX_MANIFEST=$(echo "$MANIFEST" | sed 's/"allowed_origins"/"allowed_extensions"/' | sed "s|chrome-extension://${EXTENSION_ID}/|papillion@baur-software.com|")
+    FIREFOX_MANIFEST=$(echo "$MANIFEST" | sed 's/"allowed_origins"/"allowed_extensions"/' | sed "s|chrome-extension://${EXTENSION_ID}/|papillon@baur-software.com|")
     FIREFOX_DIR="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
     mkdir -p "$FIREFOX_DIR"
     echo "$FIREFOX_MANIFEST" > "$FIREFOX_DIR/${HOST_NAME}.json"
@@ -57,7 +57,7 @@ case "$(uname -s)" in
     echo "Installed Chromium native messaging host: $CHROMIUM_DIR/${HOST_NAME}.json"
 
     # Linux — Firefox
-    FIREFOX_MANIFEST=$(echo "$MANIFEST" | sed 's/"allowed_origins"/"allowed_extensions"/' | sed "s|chrome-extension://${EXTENSION_ID}/|papillion@baur-software.com|")
+    FIREFOX_MANIFEST=$(echo "$MANIFEST" | sed 's/"allowed_origins"/"allowed_extensions"/' | sed "s|chrome-extension://${EXTENSION_ID}/|papillon@baur-software.com|")
     FIREFOX_DIR="$HOME/.mozilla/native-messaging-hosts"
     mkdir -p "$FIREFOX_DIR"
     echo "$FIREFOX_MANIFEST" > "$FIREFOX_DIR/${HOST_NAME}.json"
@@ -70,7 +70,7 @@ case "$(uname -s)" in
     echo "  HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${HOST_NAME}"
     echo "  Value: path to ${HOST_NAME}.json"
     echo ""
-    echo "Writing manifest to: %LOCALAPPDATA%\\Papillion\\${HOST_NAME}.json"
+    echo "Writing manifest to: %LOCALAPPDATA%\\Papillon\\${HOST_NAME}.json"
     ;;
 
   *)

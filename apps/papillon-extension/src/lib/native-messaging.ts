@@ -1,7 +1,7 @@
 /**
- * Native messaging bridge to Papillion desktop app.
+ * Native messaging bridge to Papillon desktop app.
  *
- * When Papillion is installed and the native messaging host is registered,
+ * When Papillon is installed and the native messaging host is registered,
  * the extension can delegate WASM operations to the desktop app. This provides:
  * - Access to the full Rust crate ecosystem (receipts, credentials, federation)
  * - Hardware-backed WebAuthn for principal key operations
@@ -11,7 +11,7 @@
  * offscreen document via @pap/sdk WASM.
  */
 
-const NATIVE_APP_ID = "com.baur_software.papillion";
+const NATIVE_APP_ID = "com.baur_software.papillon";
 
 export interface NativeHost {
   readonly connected: boolean;
@@ -91,17 +91,17 @@ export function connectNativeHost(): NativeHost {
 }
 
 /**
- * Native messaging host manifest for Papillion.
+ * Native messaging host manifest for Papillon.
  *
  * Install locations:
- * - Windows: HKCU\Software\Google\Chrome\NativeMessagingHosts\com.baur_software.papillion
- * - macOS:   ~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.baur_software.papillion.json
- * - Linux:   ~/.config/google-chrome/NativeMessagingHosts/com.baur_software.papillion.json
+ * - Windows: HKCU\Software\Google\Chrome\NativeMessagingHosts\com.baur_software.papillon
+ * - macOS:   ~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.baur_software.papillon.json
+ * - Linux:   ~/.config/google-chrome/NativeMessagingHosts/com.baur_software.papillon.json
  */
 export const NATIVE_HOST_MANIFEST = {
   name: NATIVE_APP_ID,
-  description: "Papillion PAP desktop application",
-  path: "", // Set during Papillion installation
+  description: "Papillon PAP desktop application",
+  path: "", // Set during Papillon installation
   type: "stdio" as const,
   allowed_origins: [] as string[], // Set to chrome-extension://<id>/
 };

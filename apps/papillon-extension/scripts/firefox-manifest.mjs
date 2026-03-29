@@ -40,7 +40,7 @@ const firefoxManifest = {
   // Add Firefox-specific settings
   browser_specific_settings: {
     gecko: {
-      id: "papillion@baur-software.com",
+      id: "papillon@baur-software.com",
       strict_min_version: "128.0",
     },
   },
@@ -71,4 +71,4 @@ console.log(`Firefox manifest written to ${outDir}/manifest.json`);
 console.log("Key differences from Chrome:");
 console.log("  - background.scripts instead of service_worker");
 console.log("  - No offscreen permission (background page has DOM)");
-console.log("  - gecko.id: papillion@baur-software.com");
+console.log("  - gecko.id: papillon@baur-software.com");

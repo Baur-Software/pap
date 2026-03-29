@@ -5,7 +5,7 @@
  * 1. Crypto operations (keypair generation, signing, DID resolution)
  * 2. Full 6-phase PAP handshake execution over fetch()
  *
- * Mirrors the security model from apps/papillion/src/handshake.rs:
+ * Mirrors the security model from apps/papillon/src/handshake.rs:
  * - Principal key only signs in phases 1-2, then reference is dropped
  * - Session key only signs in phase 5, then dropped
  * - All agent communication goes through the protocol REST surface
