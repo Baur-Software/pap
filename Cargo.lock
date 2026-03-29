@@ -4812,6 +4812,7 @@ dependencies = [
  "pap-did",
  "pap-federation",
  "pap-marketplace",
+ "pap-transport",
  "percent-encoding",
  "rand 0.8.5",
  "reqwest 0.12.12",

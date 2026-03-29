@@ -64,39 +64,65 @@ impl BlockRenderer for HotelTemplate {
 }
 
 /// SearchResultsPage / SearchAction template — list of search results.
+///
+/// All agents return schema.org JSON-LD with `mainEntity.itemListElement`.
+/// Individual items vary by type (NewsArticle uses `headline`, SearchResult
+/// uses `name`, Article uses `name`, etc.) so we try multiple field names.
 pub struct SearchTemplate;
+
+impl SearchTemplate {
+    /// Extract the best display title from a schema.org item.
+    fn item_title(item: &Value) -> String {
+        item.get("headline")
+            .or_else(|| item.get("name"))
+            .or_else(|| item.get("title"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("-")
+            .to_string()
+    }
+
+    /// Extract description/snippet text from a schema.org item.
+    fn item_description(item: &Value) -> String {
+        item.get("description")
+            .or_else(|| item.get("snippet"))
+            .or_else(|| item.get("abstract"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// Extract items from the JSON-LD content.
+    /// Schema.org path: `mainEntity.itemListElement`
+    fn extract_items(content: &Value) -> Vec<Value> {
+        // Schema.org: mainEntity.itemListElement
+        content
+            .get("mainEntity")
+            .and_then(|me| me.get("itemListElement"))
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+    }
+}
 
 impl BlockRenderer for SearchTemplate {
     fn render(&self, content: &Value) -> AnyView {
-        let items = content
-            .get("results")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default();
+        let items = Self::extract_items(content);
 
         let rendered = items
             .into_iter()
             .map(|item| {
-                let title = item
-                    .get("title")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-")
-                    .to_string();
+                let title = Self::item_title(&item);
                 let url = item
                     .get("url")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let snippet = item
-                    .get("snippet")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let description = Self::item_description(&item);
                 view! {
                     <div class="typed-search-item">
                         <span class="typed-search-title">{title}</span>
                         <span class="typed-search-url">{url}</span>
-                        <span class="typed-search-snippet">{snippet}</span>
+                        <span class="typed-search-snippet">{description}</span>
                     </div>
                 }
             })

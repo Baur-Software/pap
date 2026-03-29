@@ -18,6 +18,10 @@ pub struct Config {
     /// Public endpoint URL advertised to federation peers.
     /// Example: "https://registry.example.com:7890"
     pub public_endpoint: String,
+
+    /// Disable TLS and serve over plain HTTP.
+    /// Set `PAP_REGISTRY_NO_TLS=true` for local development.
+    pub no_tls: bool,
 }
 
 impl Config {
@@ -29,8 +33,13 @@ impl Config {
 
         let host = env::var("PAP_REGISTRY_HOST").unwrap_or_else(|_| "0.0.0.0".into());
 
+        let no_tls = env::var("PAP_REGISTRY_NO_TLS")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let scheme = if no_tls { "http" } else { "https" };
         let public_endpoint = env::var("PAP_REGISTRY_ENDPOINT")
-            .unwrap_or_else(|_| format!("https://{}:{}", host, port));
+            .unwrap_or_else(|_| format!("{scheme}://{}:{}", host, port));
 
         let admin_token = env::var("PAP_REGISTRY_ADMIN_TOKEN").ok();
 
@@ -39,6 +48,7 @@ impl Config {
             host,
             admin_token,
             public_endpoint,
+            no_tls,
         }
     }
 }
@@ -56,6 +66,7 @@ mod tests {
         env::remove_var("PAP_REGISTRY_HOST");
         env::remove_var("PAP_REGISTRY_ENDPOINT");
         env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
+        env::remove_var("PAP_REGISTRY_NO_TLS");
     }
 
     #[test]
@@ -68,6 +79,7 @@ mod tests {
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.public_endpoint, "https://0.0.0.0:7890");
         assert!(config.admin_token.is_none());
+        assert!(!config.no_tls);
     }
 
     #[test]
@@ -143,6 +155,19 @@ mod tests {
         assert_eq!(config.admin_token.as_deref(), Some("secret-token-123"));
 
         env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
+    }
+
+    #[test]
+    fn no_tls_uses_http_endpoint() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_NO_TLS", "true");
+
+        let config = Config::from_env();
+        assert!(config.no_tls);
+        assert_eq!(config.public_endpoint, "http://0.0.0.0:7890");
+
+        env::remove_var("PAP_REGISTRY_NO_TLS");
     }
 
     #[test]
