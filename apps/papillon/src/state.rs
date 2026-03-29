@@ -258,8 +258,47 @@ impl AppState {
 
         // Merge app-specific agents into the agent_set built by build_agents()
         let mut handlers = agent_set.handlers;
+        let mut keypairs = agent_set.keypairs;
         handlers.insert("Social Discovery".into(), Arc::new(social));
         handlers.insert("Trait Beacon".into(), Arc::new(beacon));
+
+        // Register app-specific agents in local_registry so they appear in
+        // list_agents() and resolve_agent() discovery — not just in handlers.
+        {
+            let mut reg = local_registry.lock().expect("registry lock poisoned");
+
+            // Social Discovery — finds people via their Trait Beacons
+            let social_kp = PrincipalKeypair::generate();
+            let mut social_ad = pap_marketplace::AgentAdvertisement::new(
+                "Social Discovery",
+                "Papillon",
+                &social_kp.did(),
+                vec!["schema:DiscoverAction".into()],
+                vec!["schema:Person".into()],
+                vec![],
+                vec!["schema:ItemList".into()],
+            );
+            social_ad.sign(social_kp.signing_key());
+            reg.register_local(social_ad)
+                .expect("Social Discovery registration should not fail");
+            keypairs.insert("Social Discovery".into(), social_kp);
+
+            // Trait Beacon — advertises the principal's profile
+            let beacon_kp = PrincipalKeypair::generate();
+            let mut beacon_ad = pap_marketplace::AgentAdvertisement::new(
+                "Trait Beacon",
+                "Papillon",
+                &beacon_kp.did(),
+                vec!["schema:InformAction".into()],
+                vec!["schema:Person".into()],
+                vec![],
+                vec!["schema:Person".into()],
+            );
+            beacon_ad.sign(beacon_kp.signing_key());
+            reg.register_local(beacon_ad)
+                .expect("Trait Beacon registration should not fail");
+            keypairs.insert("Trait Beacon".into(), beacon_kp);
+        }
 
         Self {
             signer: RwLock::new(Some(Box::new(signer))),
@@ -272,7 +311,7 @@ impl AppState {
             bookmarks: RwLock::new(bookmarks),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager,
-            agent_keypairs: RwLock::new(agent_set.keypairs),
+            agent_keypairs: RwLock::new(keypairs),
             db,
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
