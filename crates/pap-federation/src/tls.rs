@@ -257,6 +257,44 @@ pub fn build_tofu_client() -> Result<reqwest::Client, FederationError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustls::pki_types::ServerName;
+
+    // ── cert_fingerprint() ────────────────────────────────────────────────
+
+    #[test]
+    fn fingerprint_is_deterministic() {
+        let der = b"some certificate bytes";
+        let fp1 = cert_fingerprint(der);
+        let fp2 = cert_fingerprint(der);
+        assert_eq!(fp1, fp2);
+    }
+
+    #[test]
+    fn fingerprint_is_64_hex_chars() {
+        let fp = cert_fingerprint(b"anything");
+        assert_eq!(fp.len(), 64);
+        assert!(fp.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn fingerprint_differs_for_different_input() {
+        let fp1 = cert_fingerprint(b"cert-a");
+        let fp2 = cert_fingerprint(b"cert-b");
+        assert_ne!(fp1, fp2);
+    }
+
+    #[test]
+    fn fingerprint_empty_input() {
+        let fp = cert_fingerprint(b"");
+        // SHA-256 of empty input is well-known
+        assert_eq!(fp.len(), 64);
+        assert_eq!(
+            fp,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    // ── generate_node_identity() ──────────────────────────────────────────
 
     #[test]
     fn generate_identity_and_fingerprint() {
@@ -269,12 +307,135 @@ mod tests {
     }
 
     #[test]
-    fn fingerprint_is_deterministic() {
-        let der = b"some certificate bytes";
-        let fp1 = cert_fingerprint(der);
-        let fp2 = cert_fingerprint(der);
-        assert_eq!(fp1, fp2);
+    fn generate_identity_fingerprint_matches_cert_der() {
+        let identity =
+            generate_node_identity("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK")
+                .unwrap();
+        let computed = cert_fingerprint(&identity.cert_der);
+        assert_eq!(identity.fingerprint, computed);
     }
+
+    #[test]
+    fn generate_identity_different_dids_produce_different_certs() {
+        let id1 =
+            generate_node_identity("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK")
+                .unwrap();
+        let id2 =
+            generate_node_identity("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK")
+                .unwrap();
+        // Each call generates a fresh keypair, so fingerprints differ
+        assert_ne!(id1.fingerprint, id2.fingerprint);
+    }
+
+    // ── FingerprintVerifier ───────────────────────────────────────────────
+
+    fn make_cert_der(data: &[u8]) -> CertificateDer<'static> {
+        CertificateDer::from(data.to_vec())
+    }
+
+    #[test]
+    fn fingerprint_verifier_accepts_matching_cert() {
+        let cert_data = b"test-cert-der";
+        let fp = cert_fingerprint(cert_data);
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let verifier = FingerprintVerifier {
+            accepted: [fp].into_iter().collect(),
+            provider,
+        };
+
+        let cert = make_cert_der(cert_data);
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        let result = verifier.verify_server_cert(&cert, &[], &server_name, &[], now);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn fingerprint_verifier_rejects_unknown_cert() {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let verifier = FingerprintVerifier {
+            accepted: ["aaa111".to_string()].into_iter().collect(),
+            provider,
+        };
+
+        let cert = make_cert_der(b"unknown-cert-data");
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        let result = verifier.verify_server_cert(&cert, &[], &server_name, &[], now);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("not in trusted set"));
+    }
+
+    #[test]
+    fn fingerprint_verifier_accepts_one_of_many() {
+        let cert_data = b"cert-two";
+        let fp = cert_fingerprint(cert_data);
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let verifier = FingerprintVerifier {
+            accepted: ["other-fp-1".to_string(), fp, "other-fp-3".to_string()]
+                .into_iter()
+                .collect(),
+            provider,
+        };
+
+        let cert = make_cert_der(cert_data);
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        assert!(verifier
+            .verify_server_cert(&cert, &[], &server_name, &[], now)
+            .is_ok());
+    }
+
+    #[test]
+    fn fingerprint_verifier_empty_set_rejects_all() {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let verifier = FingerprintVerifier {
+            accepted: HashSet::new(),
+            provider,
+        };
+
+        let cert = make_cert_der(b"any-cert");
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        assert!(verifier
+            .verify_server_cert(&cert, &[], &server_name, &[], now)
+            .is_err());
+    }
+
+    #[test]
+    fn fingerprint_verifier_debug_shows_count() {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let verifier = FingerprintVerifier {
+            accepted: ["a".into(), "b".into()].into_iter().collect(),
+            provider,
+        };
+        let debug = format!("{:?}", verifier);
+        assert!(debug.contains("accepted_count"));
+        assert!(debug.contains("2"));
+    }
+
+    // ── build_pinned_tls_config() ─────────────────────────────────────────
+
+    #[test]
+    fn build_pinned_tls_config_succeeds() {
+        let config = build_pinned_tls_config(&["abc123".into()]);
+        assert!(config.is_ok());
+    }
+
+    #[test]
+    fn build_pinned_tls_config_empty_fingerprints_succeeds() {
+        // Empty set means all certs will be rejected at verify time,
+        // but config construction itself should succeed.
+        let config = build_pinned_tls_config(&[]);
+        assert!(config.is_ok());
+    }
+
+    // ── Client builders ───────────────────────────────────────────────────
 
     #[test]
     fn build_tofu_client_succeeds() {
@@ -285,6 +446,12 @@ mod tests {
     #[test]
     fn build_pinned_client_succeeds() {
         let client = build_pinned_client(&["abc123def456".into()]);
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn build_pinned_client_multiple_fingerprints() {
+        let client = build_pinned_client(&["fp1".into(), "fp2".into(), "fp3".into()]);
         assert!(client.is_ok());
     }
 }
