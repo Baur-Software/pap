@@ -147,3 +147,159 @@ pub(crate) fn build_peer_client(
         reqwest::Client::builder().timeout(timeout).build()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustls::pki_types::ServerName;
+
+    // ── normalise() ───────────────────────────────────────────────────────
+
+    #[test]
+    fn normalise_strips_colons() {
+        assert_eq!(normalise("AA:BB:CC"), "aabbcc");
+    }
+
+    #[test]
+    fn normalise_strips_spaces() {
+        assert_eq!(normalise("AA BB CC"), "aabbcc");
+    }
+
+    #[test]
+    fn normalise_lowercases() {
+        assert_eq!(normalise("DEADBEEF"), "deadbeef");
+    }
+
+    #[test]
+    fn normalise_mixed_separators() {
+        assert_eq!(normalise("DE:AD BE:EF"), "deadbeef");
+    }
+
+    #[test]
+    fn normalise_already_normalised() {
+        assert_eq!(normalise("aabb0011"), "aabb0011");
+    }
+
+    #[test]
+    fn normalise_empty_string() {
+        assert_eq!(normalise(""), "");
+    }
+
+    #[test]
+    fn normalise_only_separators() {
+        assert_eq!(normalise(":: ::"), "");
+    }
+
+    #[test]
+    fn normalise_equivalence() {
+        // These should all normalise to the same string.
+        let a = normalise("AA:BB:CC:DD");
+        let b = normalise("aabbccdd");
+        let c = normalise("Aa Bb Cc Dd");
+        assert_eq!(a, b);
+        assert_eq!(b, c);
+    }
+
+    // ── PinnedCertVerifier ────────────────────────────────────────────────
+
+    fn make_cert_der(data: &[u8]) -> CertificateDer<'static> {
+        CertificateDer::from(data.to_vec())
+    }
+
+    fn fingerprint_of(data: &[u8]) -> String {
+        hex::encode(Sha256::digest(data))
+    }
+
+    #[test]
+    fn verifier_accepts_matching_fingerprint() {
+        let cert_bytes = b"test-certificate-bytes";
+        let fp = fingerprint_of(cert_bytes);
+        let verifier = PinnedCertVerifier::new(&fp);
+
+        let cert = make_cert_der(cert_bytes);
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        let result = verifier.verify_server_cert(&cert, &[], &server_name, &[], now);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn verifier_accepts_uppercase_fingerprint() {
+        let cert_bytes = b"test-certificate-bytes";
+        let fp = fingerprint_of(cert_bytes).to_uppercase();
+        let verifier = PinnedCertVerifier::new(&fp);
+
+        let cert = make_cert_der(cert_bytes);
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        let result = verifier.verify_server_cert(&cert, &[], &server_name, &[], now);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn verifier_accepts_colon_separated_fingerprint() {
+        let cert_bytes = b"test-certificate-bytes";
+        let raw_fp = fingerprint_of(cert_bytes);
+        // Insert colons every 2 chars: "aa:bb:cc:..."
+        let colon_fp: String = raw_fp
+            .as_bytes()
+            .chunks(2)
+            .map(|c| std::str::from_utf8(c).unwrap())
+            .collect::<Vec<_>>()
+            .join(":");
+        let verifier = PinnedCertVerifier::new(&colon_fp);
+
+        let cert = make_cert_der(cert_bytes);
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        let result = verifier.verify_server_cert(&cert, &[], &server_name, &[], now);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn verifier_rejects_mismatched_fingerprint() {
+        let verifier = PinnedCertVerifier::new(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+
+        let cert = make_cert_der(b"some-cert-data");
+        let server_name = ServerName::try_from("localhost").unwrap();
+        let now = UnixTime::now();
+
+        let result = verifier.verify_server_cert(&cert, &[], &server_name, &[], now);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("fingerprint mismatch"));
+    }
+
+    #[test]
+    fn verifier_supported_schemes_includes_ed25519() {
+        let verifier = PinnedCertVerifier::new("deadbeef");
+        let schemes = verifier.supported_verify_schemes();
+        assert!(schemes.contains(&SignatureScheme::ED25519));
+    }
+
+    #[test]
+    fn verifier_supported_schemes_includes_ecdsa_p256() {
+        let verifier = PinnedCertVerifier::new("deadbeef");
+        let schemes = verifier.supported_verify_schemes();
+        assert!(schemes.contains(&SignatureScheme::ECDSA_NISTP256_SHA256));
+    }
+
+    // ── build_peer_client() ───────────────────────────────────────────────
+
+    #[test]
+    fn build_peer_client_with_fingerprint_succeeds() {
+        let client = build_peer_client(Some("aabbccdd"));
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn build_peer_client_without_fingerprint_succeeds() {
+        let client = build_peer_client(None);
+        assert!(client.is_ok());
+    }
+}

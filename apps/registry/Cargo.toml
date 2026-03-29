@@ -30,6 +30,7 @@ ssr = [
     "dep:pap-marketplace",
     "dep:pap-did",
     "dep:axum",
+    "dep:axum-server",
     "dep:tokio",
     "dep:reqwest",
     "dep:tower-http",
@@ -68,6 +69,7 @@ pap-federation     = { workspace = true, optional = true }
 pap-marketplace    = { workspace = true, optional = true }
 pap-did            = { workspace = true, optional = true }
 axum               = { workspace = true, optional = true }
+axum-server        = { workspace = true, optional = true }
 tokio              = { workspace = true, optional = true }
 reqwest            = { workspace = true, optional = true }
 tower-http         = { version = "0.6", features = ["fs", "cors"], optional = true }

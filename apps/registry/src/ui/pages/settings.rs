@@ -64,9 +64,9 @@ pub fn SettingsPage() -> impl IntoView {
                     <p style="font-size: 13px; color: var(--text-2); margin-bottom: var(--sp-md)">
                         "Configure the registry via environment variables:"
                     </p>
-                    <EnvVar name="PAP_REGISTRY_PORT" default="7890" desc="HTTP port to listen on" />
+                    <EnvVar name="PAP_REGISTRY_PORT" default="7890" desc="HTTPS port to listen on" />
                     <EnvVar name="PAP_REGISTRY_HOST" default="0.0.0.0" desc="Host to bind to" />
-                    <EnvVar name="PAP_REGISTRY_ENDPOINT" default="http://host:port" desc="Public URL advertised to peers" />
+                    <EnvVar name="PAP_REGISTRY_ENDPOINT" default="https://host:port" desc="Public URL advertised to peers" />
                     <EnvVar name="PAP_REGISTRY_ADMIN_TOKEN" default="(none — unrestricted)" desc="Bearer token for admin API routes" />
                 </div>
             </div>

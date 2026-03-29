@@ -138,12 +138,17 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
-    info!("Registry running on http://{}", addr);
-    info!("Admin UI available at http://{}/", addr);
-    info!("Federation endpoint: http://{}/federation/identity", addr);
+    info!("Registry running on https://{}", addr);
+    info!("Admin UI available at https://{}/", addr);
+    info!("Federation endpoint: https://{}/federation/identity", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    // Serve over HTTPS using the node's self-signed TLS certificate.
+    // Papillon clients connect via TOFU (Trust On First Use) and pin
+    // the cert fingerprint for subsequent connections.
+    let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(tls_identity.server_config);
+    axum_server::bind_rustls(addr, tls_config)
+        .serve(app.into_make_service())
+        .await?;
 
     Ok(())
 }
