@@ -142,3 +142,38 @@ pub async fn import_templates(
         "total": imported_count + skipped_count
     }))
 }
+
+/// Auto-generate a template from a JSON-LD payload and save it.
+///
+/// Analyzes the schema type and content structure to produce a declarative
+/// template with appropriate field mappings. Does NOT overwrite existing
+/// templates — returns None if a template already covers this schema type.
+#[tauri::command]
+pub async fn auto_generate_template(
+    state: tauri::State<'_, AppState>,
+    schema_type: String,
+    content: serde_json::Value,
+) -> Result<Option<Template>, String> {
+    let exists = state
+        .db
+        .has_enabled_template_for_schema_type(&schema_type)
+        .map_err(|e| e.to_string())?;
+
+    if exists {
+        return Ok(None);
+    }
+
+    let template = papillon_shared::generate_template_from_json_ld(&schema_type, &content);
+
+    template
+        .template_config
+        .validate()
+        .map_err(|e| format!("Generated template validation failed: {}", e))?;
+
+    state
+        .db
+        .insert_template(&template)
+        .map_err(|e| e.to_string())?;
+
+    Ok(Some(template))
+}

@@ -157,4 +157,7 @@ pub trait DatabaseOps: Send + Sync {
 
     /// Enable or disable a template
     fn set_template_enabled(&self, template_name: &str, enabled: bool) -> Result<(), DbError>;
+
+    /// Check if any enabled template exists for the given schema type.
+    fn has_enabled_template_for_schema_type(&self, schema_type: &str) -> Result<bool, DbError>;
 }

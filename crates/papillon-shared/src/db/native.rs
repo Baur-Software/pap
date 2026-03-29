@@ -747,6 +747,18 @@ impl DatabaseOps for NativeDatabase {
 
         Ok(())
     }
+
+    fn has_enabled_template_for_schema_type(&self, schema_type: &str) -> Result<bool, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM templates WHERE schema_type = ?1 AND enabled = 1",
+                params![schema_type],
+                |row| row.get(0),
+            )
+            .map_err(|e| DbError(format!("db query: {e}")))?;
+        Ok(count > 0)
+    }
 }
 
 #[cfg(test)]
@@ -1001,5 +1013,77 @@ mod tests {
         let all = db.query_templates(None).unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].template_config, config);
+    }
+
+    #[test]
+    fn has_enabled_template_for_schema_type_returns_true_when_exists() {
+        let db = test_db();
+        let t = sample_template("t-1", "flight_tpl");
+        db.insert_template(&t).unwrap();
+
+        assert!(db
+            .has_enabled_template_for_schema_type("FlightReservation")
+            .unwrap());
+        assert!(!db
+            .has_enabled_template_for_schema_type("HotelReservation")
+            .unwrap());
+    }
+
+    #[test]
+    fn has_enabled_template_for_schema_type_ignores_disabled() {
+        let db = test_db();
+        let t = sample_template("t-1", "disabled_flight");
+        db.insert_template(&t).unwrap();
+        db.set_template_enabled("disabled_flight", false).unwrap();
+
+        assert!(!db
+            .has_enabled_template_for_schema_type("FlightReservation")
+            .unwrap());
+    }
+
+    #[test]
+    fn auto_generated_template_does_not_overwrite_user_template() {
+        let db = test_db();
+
+        // User creates a template first
+        let user_template = sample_template("user-1", "user_flight");
+        db.insert_template(&user_template).unwrap();
+
+        // Orchestrator checks before inserting
+        let exists = db
+            .has_enabled_template_for_schema_type("FlightReservation")
+            .unwrap();
+        assert!(exists);
+
+        // Verify only the user template is in the DB
+        let all = db.query_templates(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].template_name, "user_flight");
+    }
+
+    #[test]
+    fn auto_generated_template_roundtrips_through_db() {
+        let db = test_db();
+        let content = serde_json::json!({
+            "name": "Test Recipe",
+            "totalTime": "PT30M",
+            "totalPrice": 12.99,
+            "url": "https://example.com/recipe"
+        });
+
+        let template = crate::template_gen::generate_template_from_json_ld("Recipe", &content);
+
+        assert!(template.template_config.validate().is_ok());
+
+        db.insert_template(&template).unwrap();
+
+        let loaded = db.query_templates(None).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].schema_type, "Recipe");
+        assert_eq!(loaded[0].created_by, Some("orchestrator".to_string()));
+        assert_eq!(
+            loaded[0].template_config.fields.len(),
+            template.template_config.fields.len()
+        );
     }
 }

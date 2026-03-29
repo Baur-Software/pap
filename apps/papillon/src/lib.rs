@@ -113,6 +113,7 @@ pub fn run() {
             commands::templates::set_template_enabled,
             commands::templates::export_templates,
             commands::templates::import_templates,
+            commands::templates::auto_generate_template,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");

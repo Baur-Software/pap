@@ -370,6 +370,16 @@ impl DatabaseOps for WasmDatabase {
             Err(DbError(format!("Template not found: {}", template_name)))
         }
     }
+
+    fn has_enabled_template_for_schema_type(&self, schema_type: &str) -> Result<bool, DbError> {
+        let templates = self
+            .templates
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(templates
+            .iter()
+            .any(|t| t.enabled && t.schema_type == schema_type))
+    }
 }
 
 #[cfg(test)]
