@@ -148,11 +148,10 @@ impl PapUrl {
         }
     }
 
-    /// The HTTPS endpoint URL for this PAP address.
+    /// The federation REST endpoint URL for this PAP address.
     ///
-    /// Always returns the HTTPS form regardless of transport binding.
-    /// Useful for federation REST calls that always go over HTTPS.
-    /// For Http transport, returns the HTTP form instead.
+    /// Returns HTTPS for all transports except `Http`, which returns HTTP.
+    /// Used for federation REST calls that ride on top of the transport.
     pub fn https_endpoint(&self) -> String {
         match self.transport {
             PapTransport::Http => format!("http://{}:{}", self.host, self.port),
