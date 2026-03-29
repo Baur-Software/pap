@@ -202,9 +202,14 @@ async fn handle_execute(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Vec<u8>, StatusCode> {
-    let result = state
-        .handler
-        .execute(&session_id)
+    // Agent executors use reqwest::blocking::Client, which panics inside a
+    // tokio async context.  Offload to spawn_blocking so the blocking I/O
+    // runs on a dedicated thread-pool thread.
+    let handler = state.handler.clone();
+    let sid = session_id.clone();
+    let result = tokio::task::spawn_blocking(move || handler.execute(&sid))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let response = ProtocolMessage::ExecutionResult { result };
     encode_response_body(response, &state)

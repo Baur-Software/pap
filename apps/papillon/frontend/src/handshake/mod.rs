@@ -17,7 +17,6 @@ pub mod intent;
 use chrono::{Duration, Utc};
 use serde_json::json;
 
-use ed25519_dalek::VerifyingKey;
 use pap_core::mandate::Mandate;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
@@ -46,7 +45,6 @@ struct AuthArtifacts {
     agent_session_id: String,
     receiver_session_did: String,
     principal_did: String,
-    principal_verifying_key: VerifyingKey,
     disclosure_set: DisclosureSet,
     initiator_did: String,
     initiator_kp: SessionKeypair,
@@ -181,14 +179,12 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
             agent_session_id,
             receiver_session_did,
             principal_did,
-            principal_verifying_key: principal_kp.verifying_key(),
             disclosure_set,
             initiator_did,
             initiator_kp,
         }
     };
-    // principal_kp borrow ends here — only the public VerifyingKey survives.
-    // The signing key is no longer reachable from any live binding.
+    // principal_kp borrow ends here — signing key is no longer reachable.
 
     // ── Phase 3: Send disclosures (query goes here) ─────────
     on_phase(3, "Opening session...");
@@ -259,10 +255,15 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
         // bookkeeping, not a fresh delegation.
         let receipt_signer = SessionKeypair::generate();
         receipt_token.sign(receipt_signer.signing_key());
+        // Session::initiate verifies the token signature, so we must pass the
+        // key that signed it (receipt_signer), not the principal key (which was
+        // dropped after Phase 2 for security). The receipt token is for session
+        // bookkeeping — it is NOT a delegation from the principal.
+        let receipt_verifying_key = receipt_signer.verifying_key();
         // receipt_signer drops here (zeroized)
 
         let mut session =
-            Session::initiate(&receipt_token, agent_did, &auth.principal_verifying_key).map_err(
+            Session::initiate(&receipt_token, agent_did, &receipt_verifying_key).map_err(
                 |e| {
                     on_fail(5, &e.to_string());
                     FetchError(e.to_string())
@@ -371,13 +372,11 @@ pub async fn run_prompt(
     canvas_id: String,
     block_id: String,
     text: String,
+    service: std::sync::Arc<dyn crate::service::PapillonService>,
+    registry: crate::state::registry::RegistryState,
 ) -> Result<(), String> {
-    use crate::service::use_papillon_service;
-    use crate::state::registry::RegistryState;
     use leptos::prelude::*;
     use papillon_shared::BlockState;
-
-    let service = use_papillon_service();
 
     // 1. Get the principal keypair from the service layer
     let principal_kp = service
@@ -388,7 +387,6 @@ pub async fn run_prompt(
     let (action_type, preferred_agent, query) = intent::detect_intent(&text);
 
     // 3. Resolve agent from RegistryState (populated via Browse page)
-    let registry = expect_context::<RegistryState>();
     let agents = registry.agents.get();
 
     let agent = agents

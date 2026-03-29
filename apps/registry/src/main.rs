@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
+use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
 use tower_http::cors::{Any, CorsLayer};
@@ -14,6 +15,7 @@ use pap_registry::config::Config;
 use pap_registry::db::{DbConfig, NodeIdentity, RegistryStore};
 use pap_registry::routes;
 use pap_registry::state::AppState;
+use pap_transport::server::AgentServer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -56,12 +58,28 @@ async fn main() -> anyhow::Result<()> {
     };
     let node_did = node_keypair.did();
 
-    // TLS cert is still ephemeral — bound to the (now stable) DID.
-    let tls_identity = pap_federation::generate_node_identity(&node_did)?;
-    let cert_fingerprint = tls_identity.fingerprint.clone();
+    // TLS cert is ephemeral — bound to the (now stable) DID.
+    // Skipped entirely in no-TLS mode.
+    let (tls_identity, cert_fingerprint) = if config.no_tls {
+        (None, String::new())
+    } else {
+        let id = pap_federation::generate_node_identity(&node_did)?;
+        let fp = id.fingerprint.clone();
+        (Some(id), fp)
+    };
 
     info!("Node DID: {}", node_did);
-    info!("Cert fingerprint: {}", cert_fingerprint);
+    if !cert_fingerprint.is_empty() {
+        info!("Cert fingerprint: {}", cert_fingerprint);
+    }
+
+    // Build agent set once — used for both DB seeding and execution routing.
+    // A single build ensures the advertised DIDs match the execution handler DIDs.
+    let agent_set = pap_agents::build_agents(vec![]);
+    info!(
+        "Built {} agent handlers for execution",
+        agent_set.handlers.len()
+    );
 
     // ── Hydrate in-memory registry from DB ────────────────────────────────────
     let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
@@ -87,7 +105,6 @@ async fn main() -> anyhow::Result<()> {
         // Seed standard agents on first boot so the registry is useful out of the box.
         // Only runs when no agents exist in the DB (fresh install).
         if agent_count == 0 {
-            let agent_set = pap_agents::build_agents(vec![]);
             let seed_ads = agent_set.registry.all_advertisements().to_vec();
             let seed_count = seed_ads.len();
             for ad in &seed_ads {
@@ -147,25 +164,77 @@ async fn main() -> anyhow::Result<()> {
     let assets_dir =
         std::env::var("PAP_ASSETS_DIR").unwrap_or_else(|_| "apps/registry/assets".into());
 
+    // CSS: cargo-leptos writes to target/site/pkg/pap-registry-ui.css.
+    // When running via plain `cargo run` that file doesn't exist, so fall
+    // back to the source stylesheet at apps/registry/styles/main.css.
+    let css_path = {
+        let leptos_css = std::path::PathBuf::from("target/site/pkg/pap-registry-ui.css");
+        if leptos_css.exists() {
+            leptos_css
+        } else {
+            std::path::PathBuf::from("apps/registry/styles/main.css")
+        }
+    };
+    info!("Serving CSS from {}", css_path.display());
+
+    // Mount each agent's PAP handshake endpoints under /agents/{slug}/
+    let mut agent_router = Router::new();
+    for (name, handler) in &agent_set.handlers {
+        let agent_server = AgentServer::new(handler.clone(), 0);
+        let slug = name.to_lowercase().replace(' ', "-");
+        agent_router = agent_router.nest(&format!("/agents/{slug}"), agent_server.router());
+    }
+    info!(
+        "Mounted {} agent execution endpoints under /agents/",
+        agent_set.handlers.len()
+    );
+
     let app = Router::new()
         .merge(federation_router)
         .merge(admin_router)
+        .merge(agent_router)
+        .route(
+            "/pkg/pap-registry-ui.css",
+            get(move || {
+                let path = css_path.clone();
+                async move {
+                    match tokio::fs::read(&path).await {
+                        Ok(bytes) => axum::response::Response::builder()
+                            .header("content-type", "text/css")
+                            .body(axum::body::Body::from(bytes))
+                            .unwrap(),
+                        Err(_) => axum::response::Response::builder()
+                            .status(404)
+                            .body(axum::body::Body::empty())
+                            .unwrap(),
+                    }
+                }
+            }),
+        )
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
         .layer(cors);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
-    info!("Registry running on https://{}", addr);
-    info!("Admin UI available at https://{}/", addr);
-    info!("Federation endpoint: https://{}/federation/identity", addr);
+    let scheme = if config.no_tls { "http" } else { "https" };
+    info!("Registry running on {scheme}://{addr}");
+    info!("Admin UI available at {scheme}://{addr}/");
+    info!("Federation endpoint: {scheme}://{addr}/federation/identity");
 
-    // Serve over HTTPS using the node's self-signed TLS certificate.
-    // Papillon clients connect via TOFU (Trust On First Use) and pin
-    // the cert fingerprint for subsequent connections.
-    let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(tls_identity.server_config);
-    axum_server::bind_rustls(addr, tls_config)
-        .serve(app.into_make_service())
-        .await?;
+    if let Some(tls_id) = tls_identity {
+        // Serve over HTTPS using the node's self-signed TLS certificate.
+        // Papillon clients connect via TOFU (Trust On First Use) and pin
+        // the cert fingerprint for subsequent connections.
+        let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(tls_id.server_config);
+        axum_server::bind_rustls(addr, tls_config)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        // Plain HTTP — for local development only.
+        info!("TLS disabled (PAP_REGISTRY_NO_TLS=true)");
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, app).await?;
+    }
 
     Ok(())
 }

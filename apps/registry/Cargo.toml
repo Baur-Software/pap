@@ -30,6 +30,7 @@ ssr = [
     "dep:pap-marketplace",
     "dep:pap-did",
     "dep:pap-agents",
+    "dep:pap-transport",
     "dep:axum",
     "dep:axum-server",
     "dep:tokio",
@@ -70,6 +71,7 @@ pap-federation     = { workspace = true, optional = true }
 pap-marketplace    = { workspace = true, optional = true }
 pap-did            = { workspace = true, optional = true }
 pap-agents         = { workspace = true, optional = true }
+pap-transport      = { workspace = true, optional = true }
 axum               = { workspace = true, optional = true }
 axum-server        = { workspace = true, optional = true }
 tokio              = { workspace = true, optional = true }
