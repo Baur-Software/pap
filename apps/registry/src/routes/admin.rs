@@ -57,6 +57,21 @@ pub struct AgentListResponse {
     pub total_pages: u32,
 }
 
+/// Agent info returned by the public browse endpoint.
+/// Matches `papillon_shared::AgentInfo` so the web client can use it directly.
+#[derive(Debug, Serialize)]
+pub struct BrowseAgentInfo {
+    pub name: String,
+    pub provider_name: String,
+    pub provider_did: String,
+    pub capabilities: Vec<String>,
+    pub object_types: Vec<String>,
+    pub requires_disclosure: Vec<String>,
+    pub returns: Vec<String>,
+    pub endpoint: Option<String>,
+    pub content_hash: String,
+}
+
 /// Assemble the admin API router under `/api`.
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -64,6 +79,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/agents", get(list_agents))
         .route("/api/agents", post(register_agent))
         .route("/api/agents/{hash}", delete(remove_agent))
+        // Public (no auth) endpoint for the web client to discover agents with endpoints.
+        .route("/api/browse", get(browse_agents))
         .route("/api/peers", get(list_peers))
         .route("/api/peers", post(add_peer))
         .route("/api/peers/{did}", delete(remove_peer))
@@ -134,6 +151,31 @@ async fn list_agents(
         )
             .into_response(),
     }
+}
+
+/// Public endpoint for web clients to discover agents with execution endpoints.
+/// No authentication required — returns agent metadata + endpoint URLs.
+async fn browse_agents(State(state): State<AppState>) -> Response {
+    let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
+    let agents: Vec<BrowseAgentInfo> = registry
+        .all_advertisements()
+        .iter()
+        .map(|ad| {
+            let slug = ad.name.to_lowercase().replace(' ', "-");
+            BrowseAgentInfo {
+                name: ad.name.clone(),
+                provider_name: ad.provider.name.clone(),
+                provider_did: ad.provider.did.clone(),
+                capabilities: ad.capability.clone(),
+                object_types: ad.object_types.clone(),
+                requires_disclosure: ad.requires_disclosure.clone(),
+                returns: ad.returns.clone(),
+                endpoint: Some(format!("{}/agents/{slug}", state.node_endpoint)),
+                content_hash: ad.hash(),
+            }
+        })
+        .collect();
+    Json(agents).into_response()
 }
 
 async fn register_agent(

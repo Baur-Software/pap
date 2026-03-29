@@ -32,6 +32,9 @@ impl Default for RegistryState {
 impl RegistryState {
     /// Connect to a registry by URL — navigates, loads agents, updates signals.
     /// Used by the browse page auto-connect and the quickstart buttons.
+    ///
+    /// In Tauri mode, uses IPC to the backend. In browser mode, fetches
+    /// directly from the registry's `/api/browse` endpoint.
     pub fn connect_to(&self, url: &str) {
         let url = url.to_string();
         self.current_url.set(url.clone());
@@ -39,37 +42,103 @@ impl RegistryState {
         self.error.set(None);
 
         let registry = *self;
-        spawn_local(async move {
-            #[derive(serde::Serialize)]
-            struct NavArgs {
-                url: String,
-            }
-            match bridge::invoke::<NavArgs, RegistryInfo>(
-                "navigate_registry",
-                &NavArgs { url: url.clone() },
-            )
-            .await
-            {
-                Ok(info) => {
-                    registry.info.set(Some(info));
-                    #[derive(serde::Serialize)]
-                    struct ListArgs {
-                        registry_url: String,
+
+        if bridge::tauri_available() {
+            // Tauri IPC path — backend handles TLS, TOFU, and agent listing.
+            spawn_local(async move {
+                #[derive(serde::Serialize)]
+                struct NavArgs {
+                    url: String,
+                }
+                match bridge::invoke::<NavArgs, RegistryInfo>(
+                    "navigate_registry",
+                    &NavArgs { url: url.clone() },
+                )
+                .await
+                {
+                    Ok(info) => {
+                        registry.info.set(Some(info));
+                        #[derive(serde::Serialize)]
+                        struct ListArgs {
+                            registry_url: String,
+                        }
+                        if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
+                            "list_agents",
+                            &ListArgs {
+                                registry_url: url,
+                            },
+                        )
+                        .await
+                        {
+                            registry.agents.set(agents);
+                        }
                     }
-                    if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
-                        "list_agents",
-                        &ListArgs {
-                            registry_url: url,
-                        },
-                    )
-                    .await
-                    {
+                    Err(e) => registry.error.set(Some(e)),
+                }
+                registry.loading.set(false);
+            });
+        } else {
+            // Browser mode — fetch directly from the registry's HTTP API.
+            spawn_local(async move {
+                match fetch_agents_from_registry(&url).await {
+                    Ok(agents) => {
+                        registry.info.set(Some(RegistryInfo {
+                            url: url.clone(),
+                            agent_count: agents.len(),
+                            peer_count: 0,
+                        }));
                         registry.agents.set(agents);
                     }
+                    Err(e) => registry.error.set(Some(e)),
                 }
-                Err(e) => registry.error.set(Some(e)),
-            }
-            registry.loading.set(false);
-        });
+                registry.loading.set(false);
+            });
+        }
     }
+}
+
+/// Fetch agent list from a registry's `/api/browse` endpoint using the Fetch API.
+/// Returns `AgentInfo` with endpoint URLs ready for the WASM handshake.
+async fn fetch_agents_from_registry(registry_url: &str) -> Result<Vec<AgentInfo>, String> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::{Request, RequestInit, RequestMode, Response};
+
+    // Convert pap:// URL to https:// for the API call
+    let base = if registry_url.starts_with("pap://") {
+        registry_url.replace("pap://", "https://")
+    } else {
+        registry_url.to_string()
+    };
+    let base = base.trim_end_matches('/');
+    let api_url = format!("{base}/api/browse");
+
+    let mut opts = RequestInit::new();
+    opts.set_method("GET");
+    opts.set_mode(RequestMode::Cors);
+
+    let request = Request::new_with_str_and_init(&api_url, &opts)
+        .map_err(|e| format!("Failed to create request: {:?}", e))?;
+
+    let window = web_sys::window().ok_or("No window object")?;
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch failed: {:?}", e))?;
+    let resp: Response = resp_value.dyn_into().map_err(|_| "Response cast failed")?;
+
+    if !resp.ok() {
+        return Err(format!(
+            "Registry returned HTTP {}",
+            resp.status()
+        ));
+    }
+
+    let json = JsFuture::from(resp.json().map_err(|e| format!("JSON parse error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("JSON await failed: {:?}", e))?;
+
+    let agents: Vec<AgentInfo> =
+        serde_wasm_bindgen::from_value(json).map_err(|e| format!("Deserialize failed: {e}"))?;
+
+    Ok(agents)
 }

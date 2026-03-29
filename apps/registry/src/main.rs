@@ -10,6 +10,7 @@ use tracing::info;
 use pap_did::PrincipalKeypair;
 use pap_federation::registry::FederatedRegistry;
 use pap_federation::server::FederationServer;
+use pap_transport::server::AgentServer;
 use pap_registry::config::Config;
 use pap_registry::db::{DbConfig, NodeIdentity, RegistryStore};
 use pap_registry::routes;
@@ -102,6 +103,14 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // Build agent handlers so the registry can serve PAP handshake endpoints.
+    // This makes the registry a full-service node: discovery + execution.
+    let agent_set = pap_agents::build_agents(vec![]);
+    info!(
+        "Built {} agent handlers for execution",
+        agent_set.handlers.len()
+    );
+
     let app_state = AppState::new(
         registry.clone(),
         store.clone(),
@@ -147,9 +156,22 @@ async fn main() -> anyhow::Result<()> {
     let assets_dir =
         std::env::var("PAP_ASSETS_DIR").unwrap_or_else(|_| "apps/registry/assets".into());
 
+    // Mount each agent's PAP handshake endpoints under /agents/{slug}/
+    let mut agent_router = Router::new();
+    for (name, handler) in &agent_set.handlers {
+        let agent_server = AgentServer::new(handler.clone(), 0);
+        let slug = name.to_lowercase().replace(' ', "-");
+        agent_router = agent_router.nest(&format!("/agents/{slug}"), agent_server.router());
+    }
+    info!(
+        "Mounted {} agent execution endpoints under /agents/",
+        agent_set.handlers.len()
+    );
+
     let app = Router::new()
         .merge(federation_router)
         .merge(admin_router)
+        .merge(agent_router)
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
         .layer(cors);
