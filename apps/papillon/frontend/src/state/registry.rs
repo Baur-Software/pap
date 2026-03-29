@@ -104,9 +104,16 @@ async fn fetch_agents_from_registry(registry_url: &str) -> Result<Vec<AgentInfo>
     use wasm_bindgen_futures::JsFuture;
     use web_sys::{Request, RequestInit, RequestMode, Response};
 
-    // Convert pap:// URL to https:// for the API call
-    let base = if registry_url.starts_with("pap://") {
-        registry_url.replace("pap://", "https://")
+    // Convert PAP URL schemes to HTTP(S) for the API call:
+    //   pap+http://  → http://   (dev/local)
+    //   pap+https:// → https://  (production)
+    //   pap://       → https://  (native transport, TLS underneath)
+    let base = if registry_url.starts_with("pap+http://") {
+        registry_url.replacen("pap+http://", "http://", 1)
+    } else if registry_url.starts_with("pap+https://") {
+        registry_url.replacen("pap+https://", "https://", 1)
+    } else if registry_url.starts_with("pap://") {
+        registry_url.replacen("pap://", "https://", 1)
     } else {
         registry_url.to_string()
     };

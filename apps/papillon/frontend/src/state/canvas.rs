@@ -250,15 +250,18 @@ impl CanvasState {
             };
 
             if let Err(e) = result {
-                // Mark block as failed
+                // Mark block as failed — but only if the on_fail callback hasn't
+                // already set it (the callback knows the correct phase number).
                 canvases.update(|cs| {
                     if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
                         if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id) {
-                            b.state = BlockState::Failed {
-                                phase: 1,
-                                reason: e,
-                            };
-                            b.updated_at = now_iso();
+                            if !matches!(b.state, BlockState::Failed { .. }) {
+                                b.state = BlockState::Failed {
+                                    phase: 1,
+                                    reason: e,
+                                };
+                                b.updated_at = now_iso();
+                            }
                         }
                     }
                 });

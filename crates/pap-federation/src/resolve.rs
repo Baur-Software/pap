@@ -6,6 +6,7 @@
 //! transport binding:
 //!
 //! - `pap://`       — native PAP transport (DID + fingerprint trust)
+//! - `pap+http://`  — PAP federation over plain HTTP (dev/local only)
 //! - `pap+https://` — PAP federation over HTTPS (browser-compatible)
 //! - `pap+wss://`   — PAP federation over WebSocket Secure
 //!
@@ -29,6 +30,10 @@ pub enum PapTransport {
     /// Not available from browsers (no mDNS/UDP, no cert pinning).
     Native,
 
+    /// `pap+http://` — PAP federation carried over plain HTTP.
+    /// Browser-compatible. For local development and trusted networks only.
+    Http,
+
     /// `pap+https://` — PAP federation carried over HTTPS.
     /// Browser-compatible. Requires CORS headers on the server.
     Https,
@@ -51,6 +56,7 @@ impl PapUrl {
     ///
     /// Accepts:
     /// - `pap://host:port`          — native transport
+    /// - `pap+http://host:port`     — plain HTTP binding (dev only)
     /// - `pap+https://host:port`    — HTTPS binding
     /// - `pap+wss://host:port`      — WSS binding
     /// - `pap://host`               — native, default port 7890
@@ -76,6 +82,11 @@ impl PapUrl {
             (
                 PapTransport::Https,
                 trimmed.trim_start_matches("pap+https://"),
+            )
+        } else if trimmed.starts_with("pap+http://") {
+            (
+                PapTransport::Http,
+                trimmed.trim_start_matches("pap+http://"),
             )
         } else if trimmed.starts_with("pap+wss://") {
             (PapTransport::Wss, trimmed.trim_start_matches("pap+wss://"))
@@ -120,12 +131,16 @@ impl PapUrl {
     ///
     /// Returns the underlying transport URL:
     /// - Native → `https://host:port` (PAP uses TLS underneath)
+    /// - Http   → `http://host:port`  (dev/local only)
     /// - Https  → `https://host:port`
     /// - Wss    → `wss://host:port`
     pub fn endpoint(&self) -> String {
         match self.transport {
             PapTransport::Native | PapTransport::Https => {
                 format!("https://{}:{}", self.host, self.port)
+            }
+            PapTransport::Http => {
+                format!("http://{}:{}", self.host, self.port)
             }
             PapTransport::Wss => {
                 format!("wss://{}:{}", self.host, self.port)
@@ -137,13 +152,20 @@ impl PapUrl {
     ///
     /// Always returns the HTTPS form regardless of transport binding.
     /// Useful for federation REST calls that always go over HTTPS.
+    /// For Http transport, returns the HTTP form instead.
     pub fn https_endpoint(&self) -> String {
-        format!("https://{}:{}", self.host, self.port)
+        match self.transport {
+            PapTransport::Http => format!("http://{}:{}", self.host, self.port),
+            _ => format!("https://{}:{}", self.host, self.port),
+        }
     }
 
     /// Whether this URL uses a browser-compatible transport.
     pub fn is_browser_compatible(&self) -> bool {
-        matches!(self.transport, PapTransport::Https | PapTransport::Wss)
+        matches!(
+            self.transport,
+            PapTransport::Http | PapTransport::Https | PapTransport::Wss
+        )
     }
 }
 
@@ -185,6 +207,32 @@ mod tests {
         let url = PapUrl::parse("registry.example.com").unwrap();
         assert_eq!(url.host, "registry.example.com");
         assert_eq!(url.port, DEFAULT_PAP_PORT);
+    }
+
+    // --- Compound pap+http:// ---
+
+    #[test]
+    fn parse_pap_http() {
+        let url = PapUrl::parse("pap+http://localhost:7890").unwrap();
+        assert_eq!(url.host, "localhost");
+        assert_eq!(url.port, 7890);
+        assert_eq!(url.transport, PapTransport::Http);
+        assert_eq!(url.endpoint(), "http://localhost:7890");
+        assert!(url.is_browser_compatible());
+    }
+
+    #[test]
+    fn parse_pap_http_default_port() {
+        let url = PapUrl::parse("pap+http://localhost").unwrap();
+        assert_eq!(url.host, "localhost");
+        assert_eq!(url.port, DEFAULT_PAP_PORT);
+        assert_eq!(url.transport, PapTransport::Http);
+    }
+
+    #[test]
+    fn pap_http_https_endpoint_returns_http() {
+        let url = PapUrl::parse("pap+http://localhost:7890").unwrap();
+        assert_eq!(url.https_endpoint(), "http://localhost:7890");
     }
 
     // --- Compound pap+https:// ---
@@ -301,9 +349,11 @@ mod tests {
     #[test]
     fn pap_transport_equality() {
         assert_eq!(PapTransport::Native, PapTransport::Native);
+        assert_eq!(PapTransport::Http, PapTransport::Http);
         assert_eq!(PapTransport::Https, PapTransport::Https);
         assert_eq!(PapTransport::Wss, PapTransport::Wss);
         assert_ne!(PapTransport::Native, PapTransport::Https);
+        assert_ne!(PapTransport::Http, PapTransport::Https);
         assert_ne!(PapTransport::Https, PapTransport::Wss);
     }
 

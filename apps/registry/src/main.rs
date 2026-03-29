@@ -57,12 +57,20 @@ async fn main() -> anyhow::Result<()> {
     };
     let node_did = node_keypair.did();
 
-    // TLS cert is still ephemeral — bound to the (now stable) DID.
-    let tls_identity = pap_federation::generate_node_identity(&node_did)?;
-    let cert_fingerprint = tls_identity.fingerprint.clone();
+    // TLS cert is ephemeral — bound to the (now stable) DID.
+    // Skipped entirely in no-TLS mode.
+    let (tls_identity, cert_fingerprint) = if config.no_tls {
+        (None, String::new())
+    } else {
+        let id = pap_federation::generate_node_identity(&node_did)?;
+        let fp = id.fingerprint.clone();
+        (Some(id), fp)
+    };
 
     info!("Node DID: {}", node_did);
-    info!("Cert fingerprint: {}", cert_fingerprint);
+    if !cert_fingerprint.is_empty() {
+        info!("Cert fingerprint: {}", cert_fingerprint);
+    }
 
     // ── Hydrate in-memory registry from DB ────────────────────────────────────
     let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
@@ -177,17 +185,26 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
-    info!("Registry running on https://{}", addr);
-    info!("Admin UI available at https://{}/", addr);
-    info!("Federation endpoint: https://{}/federation/identity", addr);
+    let scheme = if config.no_tls { "http" } else { "https" };
+    info!("Registry running on {scheme}://{addr}");
+    info!("Admin UI available at {scheme}://{addr}/");
+    info!("Federation endpoint: {scheme}://{addr}/federation/identity");
 
-    // Serve over HTTPS using the node's self-signed TLS certificate.
-    // Papillon clients connect via TOFU (Trust On First Use) and pin
-    // the cert fingerprint for subsequent connections.
-    let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(tls_identity.server_config);
-    axum_server::bind_rustls(addr, tls_config)
-        .serve(app.into_make_service())
-        .await?;
+    if let Some(tls_id) = tls_identity {
+        // Serve over HTTPS using the node's self-signed TLS certificate.
+        // Papillon clients connect via TOFU (Trust On First Use) and pin
+        // the cert fingerprint for subsequent connections.
+        let tls_config =
+            axum_server::tls_rustls::RustlsConfig::from_config(tls_id.server_config);
+        axum_server::bind_rustls(addr, tls_config)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        // Plain HTTP — for local development only.
+        info!("TLS disabled (PAP_REGISTRY_NO_TLS=true)");
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, app).await?;
+    }
 
     Ok(())
 }

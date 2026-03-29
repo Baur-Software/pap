@@ -43,7 +43,6 @@ struct AuthArtifacts {
     agent_session_id: String,
     receiver_session_did: String,
     principal_did: String,
-    principal_verifying_key: VerifyingKey,
     disclosure_set: DisclosureSet,
     initiator_did: String,
     initiator_kp: SessionKeypair,
@@ -140,7 +139,6 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             agent_session_id,
             receiver_session_did,
             principal_did,
-            principal_verifying_key: principal_kp.verifying_key(),
             disclosure_set,
             initiator_did,
             initiator_kp,
@@ -190,16 +188,17 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             auth.principal_did.clone(),
             ttl,
         );
-        // Receipt token is signed with the verifying key derivation only —
-        // we already proved principal ownership in phase 1. This token is
-        // for session bookkeeping, not a fresh delegation.
-        // Use a fresh ephemeral signer for the receipt token structure.
+        // Receipt token is signed with a fresh ephemeral signer for session
+        // bookkeeping — we already proved principal ownership in phase 1.
+        // Session::initiate verifies the token signature, so we must pass the
+        // key that signed it, not the principal key (dropped after Phase 2).
         let receipt_signer = SessionKeypair::generate();
         receipt_token.sign(receipt_signer.signing_key());
+        let receipt_verifying_key = receipt_signer.verifying_key();
         // receipt_signer drops here (zeroized)
 
         let mut session =
-            Session::initiate(&receipt_token, agent_did, &auth.principal_verifying_key).map_err(
+            Session::initiate(&receipt_token, agent_did, &receipt_verifying_key).map_err(
                 |e| {
                     on_fail(5, &e.to_string());
                     PapillonError::from(e.to_string())
