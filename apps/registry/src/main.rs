@@ -83,6 +83,23 @@ async fn main() -> anyhow::Result<()> {
             "Hydrated registry: {} agents, {} peers",
             agent_count, peer_count
         );
+
+        // Seed standard agents on first boot so the registry is useful out of the box.
+        // Only runs when no agents exist in the DB (fresh install).
+        if agent_count == 0 {
+            let agent_set = pap_agents::build_agents(vec![]);
+            let seed_ads = agent_set.registry.all_advertisements().to_vec();
+            let seed_count = seed_ads.len();
+            for ad in &seed_ads {
+                let hash = ad.hash();
+                if let Err(e) = store.insert_agent(&hash, ad).await {
+                    tracing::warn!("Failed to seed agent {}: {e}", ad.name);
+                } else if let Err(e) = reg.register_local(ad.clone()) {
+                    tracing::warn!("Failed to register seeded agent {}: {e}", ad.name);
+                }
+            }
+            info!("Seeded registry with {} standard agents", seed_count);
+        }
     }
 
     let app_state = AppState::new(

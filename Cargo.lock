@@ -4808,6 +4808,7 @@ dependencies = [
  "leptos_meta",
  "leptos_router",
  "libsqlite3-sys",
+ "pap-agents",
  "pap-did",
  "pap-federation",
  "pap-marketplace",

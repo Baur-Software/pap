@@ -266,4 +266,105 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn all_advertisements_are_signed() {
+        let set = build_agents(vec![]);
+        for ad in set.registry.all_advertisements() {
+            assert!(
+                ad.signature.is_some(),
+                "Agent '{}' has empty signature",
+                ad.name
+            );
+            assert!(
+                ad.signed_by.starts_with("did:key:"),
+                "Agent '{}' signed_by is not a valid DID: {}",
+                ad.name,
+                ad.signed_by
+            );
+        }
+    }
+
+    #[test]
+    fn all_advertisements_have_valid_schema_org_actions() {
+        let set = build_agents(vec![]);
+        for ad in set.registry.all_advertisements() {
+            assert!(
+                !ad.capability.is_empty(),
+                "Agent '{}' has no capabilities",
+                ad.name
+            );
+            for cap in &ad.capability {
+                assert!(
+                    cap.starts_with("schema:"),
+                    "Agent '{}' capability '{}' is not a Schema.org action",
+                    ad.name,
+                    cap
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn advertisements_match_handler_count() {
+        let set = build_agents(vec![]);
+        assert_eq!(
+            set.registry.all_advertisements().len(),
+            set.handlers.len(),
+            "Advertisement count doesn't match handler count"
+        );
+    }
+
+    #[test]
+    fn advertisements_are_re_registrable_in_fresh_registry() {
+        // This tests the seeding pattern used by the registry app:
+        // build_agents() → iterate advertisements → register in new registry
+        let set = build_agents(vec![]);
+        let ads = set.registry.all_advertisements().to_vec();
+
+        let mut fresh_registry = FederatedRegistry::new();
+        for ad in &ads {
+            fresh_registry
+                .register_local(ad.clone())
+                .unwrap_or_else(|e| panic!("Failed to re-register '{}': {e}", ad.name));
+        }
+
+        assert_eq!(
+            fresh_registry.all_advertisements().len(),
+            ads.len(),
+            "Re-registered registry should have same agent count"
+        );
+    }
+
+    #[test]
+    fn advertisements_queryable_by_action_type() {
+        let set = build_agents(vec![]);
+        let search_agents = set.registry.query_local("schema:SearchAction");
+        assert!(
+            !search_agents.is_empty(),
+            "Should have at least one SearchAction agent"
+        );
+
+        // DuckDuckGo should be discoverable
+        assert!(
+            search_agents.iter().any(|a| a.name == "DuckDuckGo Search"),
+            "DuckDuckGo Search should be queryable by SearchAction"
+        );
+    }
+
+    #[test]
+    fn disclosure_required_agents_declare_properties() {
+        let set = build_agents(vec![]);
+        let ip_geo = set
+            .registry
+            .all_advertisements()
+            .iter()
+            .find(|a| a.name == "IP Geolocation")
+            .expect("IP Geolocation agent should exist");
+
+        assert!(
+            !ip_geo.requires_disclosure.is_empty(),
+            "IP Geolocation should require disclosure"
+        );
+    }
 }

@@ -113,6 +113,9 @@ pub fn App() -> impl IntoView {
                 orchestrator.status.set(status);
             }
 
+            // Auto-connect to the local registry so agents are immediately
+            // available in the Browse page and for canvas workflow resolution.
+            registry_state.connect_to("pap://local");
         });
     });
 
@@ -186,6 +189,9 @@ pub fn App() -> impl IntoView {
                         orchestrator.status.set(status);
                     }
                 });
+
+                // Reconnect to local registry after profile switch
+                registry_state.connect_to("pap://local");
             }
         }
 

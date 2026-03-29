@@ -258,8 +258,49 @@ impl AppState {
 
         // Merge app-specific agents into the agent_set built by build_agents()
         let mut handlers = agent_set.handlers;
+        let mut keypairs = agent_set.keypairs;
         handlers.insert("Social Discovery".into(), Arc::new(social));
         handlers.insert("Trait Beacon".into(), Arc::new(beacon));
+
+        // Register app-specific agents in local_registry so they appear in
+        // list_agents() and resolve_agent() discovery — not just in handlers.
+        {
+            let mut reg = local_registry.lock().expect("registry lock poisoned");
+
+            // Social Discovery — finds people via their Trait Beacons
+            let social_kp = PrincipalKeypair::generate();
+            let social_did = social_kp.did();
+            let mut social_ad = pap_marketplace::AgentAdvertisement::new(
+                "Social Discovery",
+                "Papillon",
+                &social_did,
+                vec!["schema:DiscoverAction".into()],
+                vec!["schema:Person".into()],
+                vec![],
+                vec!["schema:ItemList".into()],
+            );
+            social_ad.sign(social_kp.signing_key());
+            reg.register_local(social_ad)
+                .expect("Social Discovery registration should not fail");
+            keypairs.insert("Social Discovery".into(), social_kp);
+
+            // Trait Beacon — advertises the principal's profile
+            let beacon_kp = PrincipalKeypair::generate();
+            let beacon_did = beacon_kp.did();
+            let mut beacon_ad = pap_marketplace::AgentAdvertisement::new(
+                "Trait Beacon",
+                "Papillon",
+                &beacon_did,
+                vec!["schema:InformAction".into()],
+                vec!["schema:Person".into()],
+                vec![],
+                vec!["schema:Person".into()],
+            );
+            beacon_ad.sign(beacon_kp.signing_key());
+            reg.register_local(beacon_ad)
+                .expect("Trait Beacon registration should not fail");
+            keypairs.insert("Trait Beacon".into(), beacon_kp);
+        }
 
         Self {
             signer: RwLock::new(Some(Box::new(signer))),
@@ -272,7 +313,7 @@ impl AppState {
             bookmarks: RwLock::new(bookmarks),
             orchestrator_config: RwLock::new(OrchestratorConfig::default()),
             model_manager,
-            agent_keypairs: RwLock::new(agent_set.keypairs),
+            agent_keypairs: RwLock::new(keypairs),
             db,
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
@@ -459,5 +500,143 @@ mod tests {
         // Just verify the type works and zeroizes on drop
         drop(seed);
         // If this test passes, zeroization happened (verified via MSAN/valgrind in CI)
+    }
+
+    // ── Agent registration tests ──────────────────────────────────────────
+
+    fn make_app_state() -> AppState {
+        let db = Arc::new(
+            Database::open_memory()
+                .map_err(|e| PapillonError::from(e.0))
+                .expect("in-memory db"),
+        );
+        let profiles_db = Arc::new(
+            crate::profiles_db::ProfilesDatabase::open_memory().expect("in-memory profiles db"),
+        );
+        AppState::with_db(db, profiles_db)
+    }
+
+    #[test]
+    fn local_registry_contains_all_agents() {
+        let state = make_app_state();
+        let registry = state.local_registry.lock().unwrap();
+        let ads = registry.all_advertisements();
+
+        // 13 standard + On-Device AI + Social Discovery + Trait Beacon = 16
+        assert_eq!(
+            ads.len(),
+            16,
+            "Expected 16 agents in local_registry, got {}. Names: {:?}",
+            ads.len(),
+            ads.iter().map(|a| &a.name).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn social_discovery_registered_with_correct_metadata() {
+        let state = make_app_state();
+        let registry = state.local_registry.lock().unwrap();
+        let ads = registry.query_local("schema:DiscoverAction");
+
+        assert!(!ads.is_empty(), "No agents found for schema:DiscoverAction");
+        let social = ads.iter().find(|a| a.name == "Social Discovery");
+        assert!(social.is_some(), "Social Discovery not found in registry");
+
+        let ad = social.unwrap();
+        assert_eq!(ad.provider.name, "Papillon");
+        assert!(ad.object_types.contains(&"schema:Person".to_string()));
+        assert!(ad.returns.contains(&"schema:ItemList".to_string()));
+        assert!(ad.requires_disclosure.is_empty());
+        assert!(ad.provider.did.starts_with("did:key:"));
+        assert!(ad.signature.is_some(), "Advertisement must be signed");
+    }
+
+    #[test]
+    fn trait_beacon_registered_with_correct_metadata() {
+        let state = make_app_state();
+        let registry = state.local_registry.lock().unwrap();
+        let ads = registry.query_local("schema:InformAction");
+
+        assert!(!ads.is_empty(), "No agents found for schema:InformAction");
+        let beacon = ads.iter().find(|a| a.name == "Trait Beacon");
+        assert!(beacon.is_some(), "Trait Beacon not found in registry");
+
+        let ad = beacon.unwrap();
+        assert_eq!(ad.provider.name, "Papillon");
+        assert!(ad.object_types.contains(&"schema:Person".to_string()));
+        assert!(ad.returns.contains(&"schema:Person".to_string()));
+        assert!(ad.requires_disclosure.is_empty());
+        assert!(ad.provider.did.starts_with("did:key:"));
+        assert!(ad.signature.is_some(), "Advertisement must be signed");
+    }
+
+    #[test]
+    fn app_specific_agents_have_handlers() {
+        let state = make_app_state();
+        assert!(
+            state.local_agents.contains_key("Social Discovery"),
+            "Social Discovery handler missing"
+        );
+        assert!(
+            state.local_agents.contains_key("Trait Beacon"),
+            "Trait Beacon handler missing"
+        );
+    }
+
+    #[test]
+    fn app_specific_agents_have_keypairs() {
+        let state = make_app_state();
+        let keypairs = state.agent_keypairs.read().unwrap();
+        assert!(
+            keypairs.contains_key("Social Discovery"),
+            "Social Discovery keypair missing"
+        );
+        assert!(
+            keypairs.contains_key("Trait Beacon"),
+            "Trait Beacon keypair missing"
+        );
+    }
+
+    #[test]
+    fn all_handlers_have_matching_keypairs() {
+        let state = make_app_state();
+        let keypairs = state.agent_keypairs.read().unwrap();
+        for name in state.local_agents.keys() {
+            assert!(
+                keypairs.contains_key(name),
+                "Handler '{}' has no matching keypair",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn all_handlers_have_matching_advertisements() {
+        let state = make_app_state();
+        let registry = state.local_registry.lock().unwrap();
+        let ads = registry.all_advertisements();
+        let ad_names: Vec<&str> = ads.iter().map(|a| a.name.as_str()).collect();
+
+        for name in state.local_agents.keys() {
+            assert!(
+                ad_names.contains(&name.as_str()),
+                "Handler '{}' has no matching advertisement in local_registry",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn local_registry_bookmarks_include_local() {
+        let state = make_app_state();
+        let bookmarks = state.bookmarks.read().unwrap();
+        assert!(
+            bookmarks.contains(&LOCAL_REGISTRY_URL.to_string()),
+            "pap://local must always be in bookmarks"
+        );
+        assert_eq!(
+            bookmarks[0], LOCAL_REGISTRY_URL,
+            "pap://local must be the first bookmark"
+        );
     }
 }
