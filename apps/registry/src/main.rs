@@ -72,6 +72,14 @@ async fn main() -> anyhow::Result<()> {
         info!("Cert fingerprint: {}", cert_fingerprint);
     }
 
+    // Build agent set once — used for both DB seeding and execution routing.
+    // A single build ensures the advertised DIDs match the execution handler DIDs.
+    let agent_set = pap_agents::build_agents(vec![]);
+    info!(
+        "Built {} agent handlers for execution",
+        agent_set.handlers.len()
+    );
+
     // ── Hydrate in-memory registry from DB ────────────────────────────────────
     let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
     {
@@ -96,7 +104,6 @@ async fn main() -> anyhow::Result<()> {
         // Seed standard agents on first boot so the registry is useful out of the box.
         // Only runs when no agents exist in the DB (fresh install).
         if agent_count == 0 {
-            let agent_set = pap_agents::build_agents(vec![]);
             let seed_ads = agent_set.registry.all_advertisements().to_vec();
             let seed_count = seed_ads.len();
             for ad in &seed_ads {
@@ -110,14 +117,6 @@ async fn main() -> anyhow::Result<()> {
             info!("Seeded registry with {} standard agents", seed_count);
         }
     }
-
-    // Build agent handlers so the registry can serve PAP handshake endpoints.
-    // This makes the registry a full-service node: discovery + execution.
-    let agent_set = pap_agents::build_agents(vec![]);
-    info!(
-        "Built {} agent handlers for execution",
-        agent_set.handlers.len()
-    );
 
     let app_state = AppState::new(
         registry.clone(),
