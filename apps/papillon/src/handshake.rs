@@ -14,7 +14,6 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 use serde_json::json;
 
-use ed25519_dalek::VerifyingKey;
 use pap_core::mandate::Mandate;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
@@ -43,7 +42,6 @@ struct AuthArtifacts {
     agent_session_id: String,
     receiver_session_did: String,
     principal_did: String,
-    principal_verifying_key: VerifyingKey,
     disclosure_set: DisclosureSet,
     initiator_did: String,
     initiator_kp: SessionKeypair,
@@ -140,7 +138,6 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             agent_session_id,
             receiver_session_did,
             principal_did,
-            principal_verifying_key: principal_kp.verifying_key(),
             disclosure_set,
             initiator_did,
             initiator_kp,
@@ -190,21 +187,20 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             auth.principal_did.clone(),
             ttl,
         );
-        // Receipt token is signed with the verifying key derivation only —
-        // we already proved principal ownership in phase 1. This token is
-        // for session bookkeeping, not a fresh delegation.
-        // Use a fresh ephemeral signer for the receipt token structure.
+        // Receipt token is signed with a fresh ephemeral signer for session
+        // bookkeeping — we already proved principal ownership in phase 1.
+        // Session::initiate verifies the token signature, so we must pass the
+        // key that signed it, not the principal key (dropped after Phase 2).
         let receipt_signer = SessionKeypair::generate();
         receipt_token.sign(receipt_signer.signing_key());
+        let receipt_verifying_key = receipt_signer.verifying_key();
         // receipt_signer drops here (zeroized)
 
-        let mut session =
-            Session::initiate(&receipt_token, agent_did, &auth.principal_verifying_key).map_err(
-                |e| {
-                    on_fail(5, &e.to_string());
-                    PapillonError::from(e.to_string())
-                },
-            )?;
+        let mut session = Session::initiate(&receipt_token, agent_did, &receipt_verifying_key)
+            .map_err(|e| {
+                on_fail(5, &e.to_string());
+                PapillonError::from(e.to_string())
+            })?;
 
         session
             .open(
@@ -276,4 +272,82 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         content,
         agent_name: agent_name.to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Agent handler flow: token → disclosure → execute → real HTTP results.
+    /// Tests the exact code path that canvas_prompt uses in Tauri mode.
+    #[tokio::test]
+    async fn agent_handler_returns_real_results() {
+        use pap_core::session::CapabilityToken;
+
+        let agents = pap_agents::build_agents(vec![]);
+        let handler = agents
+            .handlers
+            .get("Hacker News")
+            .expect("Hacker News handler");
+        let ad = agents
+            .registry
+            .all_advertisements()
+            .iter()
+            .find(|a| a.name == "Hacker News")
+            .expect("Hacker News advertisement");
+
+        let kp = PrincipalKeypair::generate();
+        let ttl = chrono::Utc::now() + chrono::Duration::hours(1);
+
+        // Phase 1: Present token
+        let mut token = CapabilityToken::mint(
+            ad.provider.did.clone(),
+            "schema:SearchAction".to_string(),
+            kp.did(),
+            ttl,
+        );
+        token.sign(kp.signing_key());
+        let (session_id, _receiver_did) = handler.handle_token(token).expect("token accepted");
+
+        // Phase 2: DID exchange
+        let session_kp = SessionKeypair::generate();
+        handler
+            .handle_did_exchange(&session_id, &session_kp.did())
+            .expect("DID exchange");
+
+        // Phase 3: Disclosure (query goes here)
+        handler
+            .handle_disclosure(
+                &session_id,
+                vec![serde_json::json!({
+                    "@type": "schema:SearchAction",
+                    "query": "rust programming"
+                })],
+            )
+            .expect("disclosure accepted");
+
+        // Phase 4: Execute — the real HTTP call to hn.algolia.com
+        let result = tokio::task::spawn_blocking({
+            let handler = handler.clone();
+            let sid = session_id.clone();
+            move || handler.execute(&sid)
+        })
+        .await
+        .expect("task didn't panic")
+        .expect("execute succeeded");
+
+        // Verify real data came back (schema.org ItemList format)
+        assert_eq!(result["@type"].as_str(), Some("SearchResultsPage"));
+        let list = result["mainEntity"]["itemListElement"].as_array();
+        assert!(list.is_some(), "should have itemListElement");
+        assert!(!list.unwrap().is_empty(), "results should not be empty");
+
+        let first = &list.unwrap()[0];
+        assert!(first["headline"].is_string(), "item should have headline");
+        assert!(first["url"].is_string(), "item should have url");
+        eprintln!("HN result: {} — {}", first["headline"], first["url"]);
+
+        // Phase 6: Close
+        handler.handle_close(&session_id).expect("close");
+    }
 }

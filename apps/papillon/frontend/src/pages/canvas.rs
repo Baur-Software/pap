@@ -89,8 +89,8 @@ pub fn CanvasPage() -> impl IntoView {
                     <For
                         each=grouped_blocks
                         key=|g| match g {
-                            BlockGroup::Single(b) => b.id.clone(),
-                            BlockGroup::Linked(bs) => bs.iter().map(|b| b.id.as_str()).collect::<Vec<_>>().join("-"),
+                            BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
+                            BlockGroup::Linked(bs) => bs.iter().map(|b| format!("{}@{}", b.id, b.updated_at)).collect::<Vec<_>>().join("-"),
                         }
                         children=move |group| {
                             match group {

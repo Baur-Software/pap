@@ -1,7 +1,7 @@
 /target
 apps/papillon/frontend/target
 apps/papillon/frontend/dist
-apps/registry/registry.db
+registry.db
 .DS_STORE
 .gstack/
 .playwright-mcp/
