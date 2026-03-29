@@ -266,9 +266,6 @@ window.__TAURI__ = {
             { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['ai.inference'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash' },
           ];
 
-        case 'search_agents':
-          return [];
-
         case 'sync_agents':
           return null;
 
@@ -338,13 +335,13 @@ window.__TAURI__ = {
             id,
             template_name: template.template_name,
             schema_type: template.schema_type,
-            principal_did: template.principal_did || null,
+            principal_did: template.principal_did ?? null,
             template_config: template.template_config || {},
             version: 1,
             enabled: true,
             created_at: now,
             updated_at: now,
-            created_by: template.created_by,
+            created_by: template.created_by ?? null,
           };
           window.__TAURI__.core._templates.push(newTemplate);
           return null; // Success (returns () in actual Rust)
