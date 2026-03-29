@@ -5,6 +5,7 @@ registry.db
 .DS_STORE
 .gstack/
 .playwright-mcp/
+test-results/
 
 # Bundled model weights (too large for git — download during setup)
 *.gguf
