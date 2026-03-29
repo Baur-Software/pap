@@ -11,11 +11,11 @@ use tracing::info;
 use pap_did::PrincipalKeypair;
 use pap_federation::registry::FederatedRegistry;
 use pap_federation::server::FederationServer;
-use pap_transport::server::AgentServer;
 use pap_registry::config::Config;
 use pap_registry::db::{DbConfig, NodeIdentity, RegistryStore};
 use pap_registry::routes;
 use pap_registry::state::AppState;
+use pap_transport::server::AgentServer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -193,21 +193,24 @@ async fn main() -> anyhow::Result<()> {
         .merge(federation_router)
         .merge(admin_router)
         .merge(agent_router)
-        .route("/pkg/pap-registry-ui.css", get(move || {
-            let path = css_path.clone();
-            async move {
-                match tokio::fs::read(&path).await {
-                    Ok(bytes) => axum::response::Response::builder()
-                        .header("content-type", "text/css")
-                        .body(axum::body::Body::from(bytes))
-                        .unwrap(),
-                    Err(_) => axum::response::Response::builder()
-                        .status(404)
-                        .body(axum::body::Body::empty())
-                        .unwrap(),
+        .route(
+            "/pkg/pap-registry-ui.css",
+            get(move || {
+                let path = css_path.clone();
+                async move {
+                    match tokio::fs::read(&path).await {
+                        Ok(bytes) => axum::response::Response::builder()
+                            .header("content-type", "text/css")
+                            .body(axum::body::Body::from(bytes))
+                            .unwrap(),
+                        Err(_) => axum::response::Response::builder()
+                            .status(404)
+                            .body(axum::body::Body::empty())
+                            .unwrap(),
+                    }
                 }
-            }
-        }))
+            }),
+        )
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
         .layer(cors);
@@ -222,8 +225,7 @@ async fn main() -> anyhow::Result<()> {
         // Serve over HTTPS using the node's self-signed TLS certificate.
         // Papillon clients connect via TOFU (Trust On First Use) and pin
         // the cert fingerprint for subsequent connections.
-        let tls_config =
-            axum_server::tls_rustls::RustlsConfig::from_config(tls_id.server_config);
+        let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(tls_id.server_config);
         axum_server::bind_rustls(addr, tls_config)
             .serve(app.into_make_service())
             .await?;

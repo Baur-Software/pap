@@ -14,7 +14,6 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 use serde_json::json;
 
-use ed25519_dalek::VerifyingKey;
 use pap_core::mandate::Mandate;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
@@ -197,13 +196,11 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         let receipt_verifying_key = receipt_signer.verifying_key();
         // receipt_signer drops here (zeroized)
 
-        let mut session =
-            Session::initiate(&receipt_token, agent_did, &receipt_verifying_key).map_err(
-                |e| {
-                    on_fail(5, &e.to_string());
-                    PapillonError::from(e.to_string())
-                },
-            )?;
+        let mut session = Session::initiate(&receipt_token, agent_did, &receipt_verifying_key)
+            .map_err(|e| {
+                on_fail(5, &e.to_string());
+                PapillonError::from(e.to_string())
+            })?;
 
         session
             .open(
@@ -295,7 +292,7 @@ mod tests {
         let ad = agents
             .registry
             .all_advertisements()
-            .into_iter()
+            .iter()
             .find(|a| a.name == "Hacker News")
             .expect("Hacker News advertisement");
 
@@ -310,9 +307,7 @@ mod tests {
             ttl,
         );
         token.sign(kp.signing_key());
-        let (session_id, _receiver_did) = handler
-            .handle_token(token)
-            .expect("token accepted");
+        let (session_id, _receiver_did) = handler.handle_token(token).expect("token accepted");
 
         // Phase 2: DID exchange
         let session_kp = SessionKeypair::generate();
