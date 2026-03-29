@@ -12,7 +12,7 @@ services:
     environment:
       # Public URL peers will use to connect to this node.
       # Change to your server's hostname/IP before deploying.
-      PAP_REGISTRY_ENDPOINT: "http://localhost:7890"
+      PAP_REGISTRY_ENDPOINT: "https://localhost:7890"
       PAP_REGISTRY_PORT: "7890"
       PAP_REGISTRY_HOST: "0.0.0.0"
       # SQLite DB path inside the container (persisted via the registry_data volume).
@@ -22,7 +22,7 @@ services:
       # PAP_REGISTRY_ADMIN_TOKEN: "change-me-before-deploying"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7890/federation/identity"]
+      test: ["CMD", "curl", "-fk", "https://localhost:7890/federation/identity"]
       interval: 30s
       timeout: 5s
       retries: 3

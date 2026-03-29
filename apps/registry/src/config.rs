@@ -30,7 +30,7 @@ impl Config {
         let host = env::var("PAP_REGISTRY_HOST").unwrap_or_else(|_| "0.0.0.0".into());
 
         let public_endpoint = env::var("PAP_REGISTRY_ENDPOINT")
-            .unwrap_or_else(|_| format!("http://{}:{}", host, port));
+            .unwrap_or_else(|_| format!("https://{}:{}", host, port));
 
         let admin_token = env::var("PAP_REGISTRY_ADMIN_TOKEN").ok();
 

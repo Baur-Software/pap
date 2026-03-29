@@ -9,7 +9,7 @@
 #   6. Agent deletion
 set -uo pipefail
 
-BASE_URL="${PAP_REGISTRY_URL:-http://localhost:7890}"
+BASE_URL="${PAP_REGISTRY_URL:-https://localhost:7890}"
 PASS=0
 FAIL=0
 TOTAL=0
@@ -27,7 +27,7 @@ fail() { FAIL=$((FAIL + 1)); TOTAL=$((TOTAL + 1)); echo "  FAIL: $1 — $2"; }
 
 assert_status() {
     local desc="$1" url="$2" expected="$3" method="${4:-GET}" body="${5:-}"
-    local args=(-s -o /dev/null -w '%{http_code}' -X "$method")
+    local args=(-sk -o /dev/null -w '%{http_code}' -X "$method")
     if [ -n "$body" ]; then
         args+=(-H 'Content-Type: application/json' -d "$body")
     fi
@@ -52,7 +52,7 @@ echo ""
 
 echo "--- Waiting for registry to be ready ---"
 for i in $(seq 1 30); do
-    if curl -sf "$BASE_URL/federation/identity" > /dev/null 2>&1; then
+    if curl -sfk "$BASE_URL/federation/identity" > /dev/null 2>&1; then
         echo "  Registry is up (attempt $i)"
         break
     fi
@@ -69,7 +69,7 @@ echo ""
 echo "--- T1: Federation Identity Endpoint ---"
 assert_status "GET /federation/identity returns 200" "$BASE_URL/federation/identity" "200"
 
-IDENTITY=$(curl -s "$BASE_URL/federation/identity" 2>/dev/null)
+IDENTITY=$(curl -sk "$BASE_URL/federation/identity" 2>/dev/null)
 NODE_DID=$(echo "$IDENTITY" | pyjson "print(d['did'])" || echo "")
 if [ -n "$NODE_DID" ] && [[ "$NODE_DID" == did:key:* ]]; then
     pass "Node has valid DID ($NODE_DID)"
@@ -94,7 +94,7 @@ echo ""
 echo "--- T2: Admin API Status ---"
 assert_status "GET /api/status returns 200" "$BASE_URL/api/status" "200"
 
-STATUS=$(curl -s "$BASE_URL/api/status" 2>/dev/null)
+STATUS=$(curl -sk "$BASE_URL/api/status" 2>/dev/null)
 VERSION=$(echo "$STATUS" | pyjson "print(d['version'])" || echo "")
 if [ -n "$VERSION" ]; then
     pass "Registry version: $VERSION"
@@ -106,7 +106,7 @@ echo ""
 # ── T3: Agent List (empty) ─────────────────────────────────────────────────
 
 echo "--- T3: Agent List (initially empty) ---"
-AGENTS_RESP=$(curl -s "$BASE_URL/api/agents" 2>/dev/null)
+AGENTS_RESP=$(curl -sk "$BASE_URL/api/agents" 2>/dev/null)
 AGENT_TOTAL=$(echo "$AGENTS_RESP" | pyjson "print(d['total'])" || echo "-1")
 if [ "$AGENT_TOTAL" -ge 0 ] 2>/dev/null; then
     pass "Agent list returns paginated response (total=$AGENT_TOTAL)"
@@ -192,10 +192,10 @@ PYEOF
 AGENT_HASH=""
 if [ -n "$SIGNED_AD" ]; then
     # Register the agent
-    REG_RESP=$(curl -s -X POST "$BASE_URL/api/agents" \
+    REG_RESP=$(curl -sk -X POST "$BASE_URL/api/agents" \
         -H 'Content-Type: application/json' \
         -d "$SIGNED_AD" 2>/dev/null)
-    REG_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/agents" \
+    REG_STATUS=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/agents" \
         -H 'Content-Type: application/json' \
         -d "$SIGNED_AD" 2>/dev/null)
 
@@ -229,7 +229,7 @@ echo "--- T6: Federation Query (Network Advertisement) ---"
 assert_status "GET /federation/query?action=schema:SearchAction returns 200" \
     "$BASE_URL/federation/query?action=schema:SearchAction" "200"
 
-FED_RESP=$(curl -s "$BASE_URL/federation/query?action=schema:SearchAction" 2>/dev/null)
+FED_RESP=$(curl -sk "$BASE_URL/federation/query?action=schema:SearchAction" 2>/dev/null)
 if echo "$FED_RESP" | $PY -c "import sys,json; d=json.loads(sys.stdin.read()); assert 'advertisements' in str(d) or 'QueryResponse' in str(d)" 2>/dev/null; then
     pass "Federation query returns advertisement list"
 
@@ -260,7 +260,7 @@ assert_status "GET /api/peers returns 200" "$BASE_URL/api/peers" "200"
 
 # Add a test peer
 PEER_BODY='{"did":"did:key:zE2EPeer","endpoint":"https://e2e-peer.example.com"}'
-PEER_RESP=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/peers" \
+PEER_RESP=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/peers" \
     -H 'Content-Type: application/json' \
     -d "$PEER_BODY" 2>/dev/null)
 if [ "$PEER_RESP" = "201" ]; then
@@ -270,7 +270,7 @@ else
 fi
 
 # Verify peer appears in list
-PEERS=$(curl -s "$BASE_URL/api/peers" 2>/dev/null)
+PEERS=$(curl -sk "$BASE_URL/api/peers" 2>/dev/null)
 if echo "$PEERS" | grep -q "zE2EPeer"; then
     pass "Peer appears in /api/peers list"
 else
@@ -280,7 +280,7 @@ fi
 # Also check federation peers endpoint
 assert_status "GET /federation/peers returns 200" "$BASE_URL/federation/peers" "200"
 
-FED_PEERS=$(curl -s "$BASE_URL/federation/peers" 2>/dev/null)
+FED_PEERS=$(curl -sk "$BASE_URL/federation/peers" 2>/dev/null)
 if echo "$FED_PEERS" | grep -q "zE2EPeer"; then
     pass "Peer visible in /federation/peers"
 else
@@ -288,7 +288,7 @@ else
 fi
 
 # Remove the test peer
-DEL_PEER_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+DEL_PEER_STATUS=$(curl -sk -o /dev/null -w '%{http_code}' -X DELETE \
     "$BASE_URL/api/peers/did%3Akey%3AzE2EPeer" 2>/dev/null)
 if [ "$DEL_PEER_STATUS" = "200" ]; then
     pass "Delete peer returns 200"
@@ -305,7 +305,7 @@ assert_status "GET /api/agents?q=test returns 200" \
 
 # If we registered an agent, search for it by name
 if [ -n "$AGENT_HASH" ]; then
-    SEARCH_RESP=$(curl -s "$BASE_URL/api/agents?q=E2E" 2>/dev/null)
+    SEARCH_RESP=$(curl -sk "$BASE_URL/api/agents?q=E2E" 2>/dev/null)
     SEARCH_TOTAL=$(echo "$SEARCH_RESP" | pyjson "print(d['total'])" || echo "0")
     if [ "$SEARCH_TOTAL" -gt 0 ] 2>/dev/null; then
         pass "Search finds registered agent (total=$SEARCH_TOTAL for 'E2E')"
@@ -323,7 +323,7 @@ echo ""
 
 echo "--- T9: Agent Deletion ---"
 if [ -n "$AGENT_HASH" ]; then
-    DEL_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+    DEL_STATUS=$(curl -sk -o /dev/null -w '%{http_code}' -X DELETE \
         "$BASE_URL/api/agents/$AGENT_HASH" 2>/dev/null)
     if [ "$DEL_STATUS" = "200" ]; then
         pass "Delete agent returns 200 (hash=$AGENT_HASH)"
@@ -332,7 +332,7 @@ if [ -n "$AGENT_HASH" ]; then
     fi
 
     # Verify agent no longer appears in specific action query after deletion
-    POST_DEL=$(curl -s "$BASE_URL/federation/query?action=schema:SearchAction" 2>/dev/null)
+    POST_DEL=$(curl -sk "$BASE_URL/federation/query?action=schema:SearchAction" 2>/dev/null)
     POST_COUNT=$(echo "$POST_DEL" | pyjson "print(len(d.get('QueryResponse',{}).get('advertisements',d.get('advertisements',[]))))" || echo "0")
     if [ "$POST_COUNT" -eq 0 ] 2>/dev/null; then
         pass "Agent removed from federation after deletion"
@@ -351,7 +351,7 @@ echo ""
 # ── T10: Pagination ───────────────────────────────────────────────────────
 
 echo "--- T10: Pagination ---"
-PAGINATED=$(curl -s "$BASE_URL/api/agents?page=1&per_page=5" 2>/dev/null)
+PAGINATED=$(curl -sk "$BASE_URL/api/agents?page=1&per_page=5" 2>/dev/null)
 HAS_PAGE=$(echo "$PAGINATED" | pyjson "print('yes' if 'page' in d and 'per_page' in d and 'total_pages' in d else 'no')" || echo "no")
 if [ "$HAS_PAGE" = "yes" ]; then
     pass "Paginated response has page/per_page/total_pages fields"
