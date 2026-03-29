@@ -269,10 +269,11 @@ impl AppState {
 
             // Social Discovery — finds people via their Trait Beacons
             let social_kp = PrincipalKeypair::generate();
+            let social_did = social_kp.did();
             let mut social_ad = pap_marketplace::AgentAdvertisement::new(
                 "Social Discovery",
                 "Papillon",
-                &social_kp.did(),
+                &social_did,
                 vec!["schema:DiscoverAction".into()],
                 vec!["schema:Person".into()],
                 vec![],
@@ -285,10 +286,11 @@ impl AppState {
 
             // Trait Beacon — advertises the principal's profile
             let beacon_kp = PrincipalKeypair::generate();
+            let beacon_did = beacon_kp.did();
             let mut beacon_ad = pap_marketplace::AgentAdvertisement::new(
                 "Trait Beacon",
                 "Papillon",
-                &beacon_kp.did(),
+                &beacon_did,
                 vec!["schema:InformAction".into()],
                 vec!["schema:Person".into()],
                 vec![],
