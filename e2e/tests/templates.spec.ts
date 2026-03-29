@@ -98,8 +98,9 @@ test.describe("Templates", () => {
     // Delete template
     await templateRow(page, templateName).locator('button:has-text("Delete")').click();
 
-    // Confirm deletion
-    await page.locator('button:has-text("Confirm")').click();
+    // Confirm deletion — the modal has "Delete Template" button
+    await expect(page.getByText("Delete Template?")).toBeVisible();
+    await page.locator('div[style*="position: fixed"]').filter({ hasText: "Delete Template?" }).locator('button:has-text("Delete Template")').click();
 
     // Verify deleted
     await expect(

@@ -316,8 +316,10 @@ window.__TAURI__ = {
           // Return all global templates (including disabled) so the settings
           // page can display and re-enable them. The enabled flag is metadata
           // rendered in the UI, not a query filter for the settings list.
+          // Use == null (loose) to match both null and undefined — serde_wasm_bindgen
+          // double-serialization converts Option::None → Value::Null → undefined.
           return window.__TAURI__.core._templates.filter(
-            (t) => t.principal_did === null
+            (t) => t.principal_did == null
           );
         }
 
@@ -357,6 +359,10 @@ window.__TAURI__ = {
             window.__TAURI__.core._templates[idx] = {
               ...window.__TAURI__.core._templates[idx],
               ...template,
+              // Normalize undefined → null for nullable fields (serde_wasm_bindgen
+              // double-serialization turns Option::None into JS undefined).
+              principal_did: template.principal_did ?? window.__TAURI__.core._templates[idx].principal_did ?? null,
+              created_by: template.created_by ?? window.__TAURI__.core._templates[idx].created_by ?? null,
               updated_at: new Date().toISOString(),
             };
           }
