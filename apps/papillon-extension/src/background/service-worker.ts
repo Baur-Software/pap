@@ -6,7 +6,7 @@
  * - Handle omnibox input (pap keyword → handshake tab)
  * - Manage offscreen document lifecycle
  * - Track active sessions for badge count
- * - Native messaging bridge to Papillion desktop
+ * - Native messaging bridge to Papillon desktop
  */
 
 import { parsePapUri } from "../lib/uri.js";
@@ -102,7 +102,7 @@ function updateBadge() {
 
 // ── Native Messaging ───────────────────────────────────────────────────
 
-const NATIVE_APP_ID = "com.baur_software.papillion";
+const NATIVE_APP_ID = "com.baur_software.papillon";
 
 function connectNative(): chrome.runtime.Port | null {
   try {

@@ -5,17 +5,17 @@
   "extensions": {
     "chrome": {
       "store_url": null,
-      "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillion-extension"
+      "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillon-extension"
     },
     "firefox": {
       "addon_url": null,
-      "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillion-extension"
+      "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillon-extension"
     }
   },
   "desktop": {
-    "name": "Papillion",
-    "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillion",
-    "native_messaging_host": "com.baur_software.papillion"
+    "name": "Papillon",
+    "source": "https://github.com/Baur-Software/pap/tree/main/apps/papillon",
+    "native_messaging_host": "com.baur_software.papillon"
   },
   "sdk": {
     "npm": "@pap/sdk",
