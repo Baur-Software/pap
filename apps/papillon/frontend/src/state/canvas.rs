@@ -406,7 +406,7 @@ impl CanvasState {
 
 fn generate_id() -> String {
     let ts = js_sys::Date::now() as u64;
-    let rand: u32 = (ts as u32).wrapping_mul(2654435761);
+    let rand = (js_sys::Math::random() * 4_294_967_295.0) as u32;
     format!("{:x}-{:x}", ts, rand)
 }
 
