@@ -1,5 +1,25 @@
 ## [Unreleased]
 
+## [0.5.8] - 2026-03-29
+
+### Fixed
+
+- **papillon**: Fix disposed NodeRef panic when navigating away from canvas — eagerly capture DOM element in reactive context instead of accessing NodeRef inside setTimeout callback
+- **papillon**: serde_wasm_bindgen double-serialization handling — `Option::None` becomes JS `undefined` (not `null`), requiring loose equality (`== null`) and nullish coalescing (`??`) in E2E mocks
+- **papillon**: Remove dead code duplicate `search_agents` case that shadowed the full implementation with query/actionType filtering
+- **papillon**: Null normalization for `principal_did` and `created_by` in template create/update paths
+
+### Changed
+
+- **papillon**: Canvas shows LLM provider setup prompt when orchestrator is disconnected, with link to Settings
+- **papillon**: Canvas prompt label "What do you want to build?" added above input
+- **papillon**: Topbar status label changed from "Papillon" to "Ready" when orchestrator is connected
+- **papillon**: Template placeholders improved ("Name (e.g., My Flight Template)", "Schema type (e.g., FlightReservation)")
+- **papillon**: Template list uses composite key (id + schema_type + enabled + updated_at) for immediate UI updates on edit/toggle
+- **e2e**: Complete template CRUD test rewrite — 8 tests covering create, read, edit, delete, enable/disable, persistence, validation, and default templates
+- **e2e**: Tauri mock updated with `mapToObj()` for serde_wasm_bindgen Map→Object conversion, updated agent format (provider_name, capabilities, object_types), and snake_case arg fallbacks
+- **e2e**: App shell tests updated for 5-tab settings layout and new canvas empty state navigation
+
 ## [0.4.5.0] - 2026-03-29
 
 ### Added
