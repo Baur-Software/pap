@@ -487,7 +487,7 @@ pub fn TemplatesTab() -> impl IntoView {
                     </label>
                     <input
                         type="text"
-                        placeholder="e.g., My Flight Template"
+                        placeholder="Name (e.g., My Flight Template)"
                         prop:value=move || new_name.get()
                         on:input=move |ev| new_name.set(event_target_value(&ev))
                         aria-label="Template name"
@@ -504,7 +504,7 @@ pub fn TemplatesTab() -> impl IntoView {
                     </label>
                     <input
                         type="text"
-                        placeholder="e.g., FlightReservation"
+                        placeholder="Schema type (e.g., FlightReservation)"
                         prop:value=move || new_schema_type.get()
                         on:input=move |ev| new_schema_type.set(event_target_value(&ev))
                         aria-label="Schema type"
@@ -614,7 +614,7 @@ pub fn TemplatesTab() -> impl IntoView {
                 >
                     <For
                         each=all_templates
-                        key=|t| t.id.clone()
+                        key=|t| format!("{}_{}_{}_{}", t.id, t.schema_type, t.enabled, t.updated_at)
                         children=move |template| {
                             let name_for_check = template.template_name.clone();
                             let name_for_toggle = template.template_name.clone();

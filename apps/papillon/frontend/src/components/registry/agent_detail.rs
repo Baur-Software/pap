@@ -25,9 +25,9 @@ pub fn AgentDetail() -> impl IntoView {
             let has_disclosure = !agent.requires_disclosure.is_empty();
 
             view! {
-                <div style="position: fixed; right: 0; top: var(--header-height); bottom: var(--status-height); width: 400px; background: var(--bg-secondary); border-left: 1px solid var(--border); padding: 20px; overflow-y: auto; z-index: 10;">
+                <div class="agent-detail" style="position: fixed; right: 0; top: var(--header-height); bottom: var(--status-height); width: 400px; background: var(--bg-secondary); border-left: 1px solid var(--border); padding: 20px; overflow-y: auto; z-index: 10;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h3 style="font-size: 16px;">{name}</h3>
+                        <h3 class="agent-detail-name" style="font-size: 16px;">{name}</h3>
                         <button class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary); padding: 4px 8px;" on:click=close>
                             "X"
                         </button>

@@ -26,7 +26,7 @@ pub fn AgentCard(agent: AgentInfo) -> impl IntoView {
     };
 
     view! {
-        <div class="card" style="cursor: pointer;" on:click=on_click>
+        <div class="card agent-card" style="cursor: pointer;" on:click=on_click>
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                 <h4 style="font-size: 14px; font-weight: 600;">{name}</h4>
                 <span class="badge badge-accent">{cap_count}" cap"</span>

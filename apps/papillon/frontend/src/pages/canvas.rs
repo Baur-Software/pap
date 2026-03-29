@@ -125,6 +125,8 @@ fn NewTabCanvas() -> impl IntoView {
 
     let is_unconfigured =
         move || matches!(orchestrator.status.get(), OrchestratorStatus::Unconfigured);
+    let is_disconnected =
+        move || matches!(orchestrator.status.get(), OrchestratorStatus::Disconnected);
 
     let nav = navigate.clone();
     let go_browse = move |_| {
@@ -141,7 +143,18 @@ fn NewTabCanvas() -> impl IntoView {
                 </p>
             </div>
 
-            <InlinePrompt />
+            <p class="inspiration-line">"Search the web, check the weather, or explore knowledge \u{2014} all through privacy-preserving agents."</p>
+
+            <Show when=is_disconnected>
+                <div class="canvas-prompt-setup">
+                    <p>"Configure an LLM provider to unlock on-device AI capabilities."</p>
+                    <a href="/settings" class="newtab-link">"Open Settings"</a>
+                </div>
+            </Show>
+
+            <Show when=move || !is_disconnected()>
+                <InlinePrompt />
+            </Show>
 
             <Show when=is_unconfigured>
                 <div class="newtab-setup-hint">
@@ -232,12 +245,14 @@ fn InlinePrompt() -> impl IntoView {
         }
     });
 
-    // Focus the input on mount and whenever focus_prompt is bumped (e.g. ⌘K)
+    // Focus the input on mount and whenever focus_prompt is bumped (e.g. ⌘K).
+    // Capture the DOM element eagerly in the reactive context (still alive)
+    // so the setTimeout callback doesn't access a disposed NodeRef.
     Effect::new(move || {
         let _ = canvas_state.focus_prompt.get(); // subscribe to signal
-        let ir = input_ref;
+        let el_opt = input_ref.get();
         let cb = Closure::once(move || {
-            if let Some(el) = ir.get() {
+            if let Some(el) = el_opt {
                 let _ = el.focus();
             }
         });
@@ -249,6 +264,7 @@ fn InlinePrompt() -> impl IntoView {
 
     view! {
         <div class="canvas-prompt">
+            <span class="palette-label">"What do you want to build?"</span>
             <input
                 node_ref=input_ref
                 class="palette-input"

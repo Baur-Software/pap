@@ -49,10 +49,13 @@ test.describe("App shell", () => {
 // ── Canvas Page (Home) ───────────────────────────────────────
 
 test.describe("Canvas page", () => {
-  test("shows empty state with inspiration lines", async ({ page }) => {
+  test("shows empty state with inspiration lines on new canvas", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(page.locator(".canvas-area")).toBeVisible();
+    // Seed canvas has blocks — create a new empty canvas via menu
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=+ New Canvas").click();
     await expect(page.locator(".canvas-empty")).toBeVisible();
     await expect(page.locator(".inspiration-line").first()).toBeVisible();
   });
@@ -94,6 +97,9 @@ test.describe("Canvas page", () => {
     `);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
+    // Seed canvas has blocks — create a new empty canvas to see the setup prompt
+    await page.locator(".topbar-menu-btn").click();
+    await page.locator("text=+ New Canvas").click();
     await expect(page.locator(".canvas-prompt-setup")).toBeVisible();
     await expect(page.locator("text=Configure an LLM provider")).toBeVisible();
     await expect(page.locator("text=Open Settings")).toBeVisible();
@@ -115,13 +121,15 @@ test.describe("Activity page", () => {
 // ── Settings Page ────────────────────────────────────────────
 
 test.describe("Settings page", () => {
-  test("renders three tabs", async ({ page }) => {
+  test("renders five tabs", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".settings-tab")).toHaveCount(3);
-    await expect(page.locator(".settings-tab").first()).toHaveText("General");
-    await expect(page.locator(".settings-tab").nth(1)).toHaveText("Identity");
-    await expect(page.locator(".settings-tab").nth(2)).toHaveText("Advanced");
+    await expect(page.locator(".settings-tab")).toHaveCount(5);
+    await expect(page.locator(".settings-tab").nth(0)).toHaveText("General");
+    await expect(page.locator(".settings-tab").nth(1)).toHaveText("Profiles");
+    await expect(page.locator(".settings-tab").nth(2)).toHaveText("Templates");
+    await expect(page.locator(".settings-tab").nth(3)).toHaveText("Identity");
+    await expect(page.locator(".settings-tab").nth(4)).toHaveText("Advanced");
   });
 
   test("General tab shows LLM Provider config", async ({ page }) => {
@@ -137,7 +145,7 @@ test.describe("Settings page", () => {
   }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(1).click();
+    await page.locator(".settings-tab").nth(3).click();
 
     // Should show backup warning (key not backed up)
     await expect(page.locator(".backup-warning")).toBeVisible();
@@ -156,7 +164,7 @@ test.describe("Settings page", () => {
   test("Export key shows seed and clears backup warning", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(1).click();
+    await page.locator(".settings-tab").nth(3).click();
     await expect(page.locator(".backup-warning")).toBeVisible();
 
     // Click export
@@ -175,7 +183,7 @@ test.describe("Settings page", () => {
   test("Add Successor form works", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(1).click();
+    await page.locator(".settings-tab").nth(3).click();
 
     // Wait for Identity tab content
     await expect(page.locator("text=Designated Successors")).toBeVisible();
@@ -215,11 +223,11 @@ test.describe("Settings page", () => {
     await expect(page.locator("text=LLM Provider")).toBeVisible();
 
     // Switch to Identity
-    await page.locator(".settings-tab").nth(1).click();
+    await page.locator(".settings-tab").nth(3).click();
     await expect(page.locator("text=Export Key")).toBeVisible();
 
     // Switch to Advanced
-    await page.locator(".settings-tab").nth(2).click();
+    await page.locator(".settings-tab").nth(4).click();
     await expect(page.locator("text=Registry Browser")).toBeVisible();
   });
 });
