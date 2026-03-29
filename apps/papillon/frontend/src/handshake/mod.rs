@@ -371,13 +371,11 @@ pub async fn run_prompt(
     canvas_id: String,
     block_id: String,
     text: String,
+    service: std::sync::Arc<dyn crate::service::PapillonService>,
+    registry: crate::state::registry::RegistryState,
 ) -> Result<(), String> {
-    use crate::service::use_papillon_service;
-    use crate::state::registry::RegistryState;
     use leptos::prelude::*;
     use papillon_shared::BlockState;
-
-    let service = use_papillon_service();
 
     // 1. Get the principal keypair from the service layer
     let principal_kp = service
@@ -388,7 +386,6 @@ pub async fn run_prompt(
     let (action_type, preferred_agent, query) = intent::detect_intent(&text);
 
     // 3. Resolve agent from RegistryState (populated via Browse page)
-    let registry = expect_context::<RegistryState>();
     let agents = registry.agents.get();
 
     let agent = agents

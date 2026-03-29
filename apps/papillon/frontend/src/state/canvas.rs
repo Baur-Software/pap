@@ -3,6 +3,8 @@ use papillon_shared::{BlockState, Canvas, CanvasBlock};
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
+use crate::service::PapillonService;
+use crate::state::registry::RegistryState;
 
 /// Global canvas state — tracks canvases, blocks, and prompts.
 #[derive(Clone, Copy)]
@@ -203,6 +205,12 @@ impl CanvasState {
 
         // Fire backend command with expanded text
         let cid = canvas_id.clone();
+
+        // Capture Leptos contexts now (in the component scope) — spawn_local
+        // runs outside reactive ownership so expect_context would panic there.
+        let service = use_context::<std::sync::Arc<dyn PapillonService>>();
+        let registry = use_context::<RegistryState>();
+
         spawn_local(async move {
             let result = if bridge::tauri_available() {
                 // Tauri IPC path — delegates to native backend handshake
@@ -225,13 +233,20 @@ impl CanvasState {
             } else {
                 // WASM-native handshake — runs the 6-phase protocol directly
                 // in the browser via fetch(), bypassing Tauri IPC entirely.
-                crate::handshake::run_prompt(
-                    canvases,
-                    canvas_id.clone(),
-                    block_id.clone(),
-                    expanded_text,
-                )
-                .await
+                match (service, registry) {
+                    (Some(svc), Some(reg)) => {
+                        crate::handshake::run_prompt(
+                            canvases,
+                            canvas_id.clone(),
+                            block_id.clone(),
+                            expanded_text,
+                            svc,
+                            reg,
+                        )
+                        .await
+                    }
+                    _ => Err("Service or registry context not available".to_string()),
+                }
             };
 
             if let Err(e) = result {
