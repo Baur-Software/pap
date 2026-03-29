@@ -337,26 +337,26 @@ impl ProfilesDatabase {
     }
 }
 
+/// Test-only: in-memory ProfilesDatabase for unit tests across the crate.
+#[cfg(test)]
+impl ProfilesDatabase {
+    pub fn open_memory() -> Result<Self, crate::error::PapillonError> {
+        let conn = Connection::open_in_memory()
+            .map_err(|e| crate::error::PapillonError::from(format!("profiles_db open: {e}")))?;
+        let db = Self {
+            conn: Mutex::new(conn),
+        };
+        db.migrate()?;
+        Ok(db)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn test_db() -> ProfilesDatabase {
         ProfilesDatabase::open_memory().expect("in-memory profiles db")
-    }
-
-    #[cfg(test)]
-    impl ProfilesDatabase {
-        /// Open an in-memory database (for tests).
-        fn open_memory() -> Result<Self, PapillonError> {
-            let conn = Connection::open_in_memory()
-                .map_err(|e| PapillonError::from(format!("profiles_db open: {e}")))?;
-            let db = Self {
-                conn: Mutex::new(conn),
-            };
-            db.migrate()?;
-            Ok(db)
-        }
     }
 
     #[test]
