@@ -20,12 +20,20 @@ COPY vendor-icu ./vendor-icu
 
 # All crates in pap-registry's transitive dependency graph:
 #   pap-registry → pap-federation → pap-marketplace → pap-core → pap-did
+#   pap-registry (ssr) → pap-agents → pap-credential-store → pap-webauthn
+#                       → pap-transport → pap-proto, pap-credential
 #   pap-core optionally depends on pap-tee (workspace member must be present)
-COPY crates/pap-did ./crates/pap-did
-COPY crates/pap-tee ./crates/pap-tee
-COPY crates/pap-core ./crates/pap-core
-COPY crates/pap-marketplace ./crates/pap-marketplace
-COPY crates/pap-federation ./crates/pap-federation
+COPY crates/pap-did              ./crates/pap-did
+COPY crates/pap-tee              ./crates/pap-tee
+COPY crates/pap-core             ./crates/pap-core
+COPY crates/pap-marketplace      ./crates/pap-marketplace
+COPY crates/pap-federation       ./crates/pap-federation
+COPY crates/pap-credential       ./crates/pap-credential
+COPY crates/pap-credential-store ./crates/pap-credential-store
+COPY crates/pap-webauthn         ./crates/pap-webauthn
+COPY crates/pap-proto            ./crates/pap-proto
+COPY crates/pap-transport        ./crates/pap-transport
+COPY crates/pap-agents           ./crates/pap-agents
 
 # The registry app (server + UI in one crate)
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
@@ -39,12 +47,6 @@ COPY apps/registry/assets ./apps/registry/assets
 # Anchor to lines starting with whitespace+quote (member entries only),
 # so workspace.dependencies path entries are left intact.
 RUN sed -i \
-    -e '/^[[:space:]]*"crates\/pap-credential"/d' \
-    -e '/^[[:space:]]*"crates\/pap-credential-store"/d' \
-    -e '/^[[:space:]]*"crates\/pap-agents"/d' \
-    -e '/^[[:space:]]*"crates\/pap-webauthn"/d' \
-    -e '/^[[:space:]]*"crates\/pap-proto"/d' \
-    -e '/^[[:space:]]*"crates\/pap-transport"/d' \
     -e '/^[[:space:]]*"crates\/pap-python"/d' \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
@@ -71,29 +73,29 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY vendor-icu ./vendor-icu
 
-COPY crates/pap-did         ./crates/pap-did
-COPY crates/pap-tee         ./crates/pap-tee
-COPY crates/pap-core        ./crates/pap-core
-COPY crates/pap-marketplace ./crates/pap-marketplace
-COPY crates/pap-federation  ./crates/pap-federation
+COPY crates/pap-did              ./crates/pap-did
+COPY crates/pap-tee              ./crates/pap-tee
+COPY crates/pap-core             ./crates/pap-core
+COPY crates/pap-marketplace      ./crates/pap-marketplace
+COPY crates/pap-federation       ./crates/pap-federation
+COPY crates/pap-credential       ./crates/pap-credential
+COPY crates/pap-credential-store ./crates/pap-credential-store
+COPY crates/pap-webauthn         ./crates/pap-webauthn
+COPY crates/pap-proto            ./crates/pap-proto
+COPY crates/pap-transport        ./crates/pap-transport
+COPY crates/pap-agents           ./crates/pap-agents
 
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src        ./apps/registry/src
 
 RUN sed -i \
-    -e '/^[[:space:]]*"crates\/pap-credential"/d' \
-    -e '/^[[:space:]]*"crates\/pap-credential-store"/d' \
-    -e '/^[[:space:]]*"crates\/pap-agents"/d'     \
-    -e '/^[[:space:]]*"crates\/pap-webauthn"/d'   \
-    -e '/^[[:space:]]*"crates\/pap-proto"/d'       \
-    -e '/^[[:space:]]*"crates\/pap-transport"/d'   \
-    -e '/^[[:space:]]*"crates\/pap-python"/d'      \
-    -e '/^[[:space:]]*"crates\/pap-c"/d'           \
-    -e '/^[[:space:]]*"crates\/pap-wasm"/d'        \
+    -e '/^[[:space:]]*"crates\/pap-python"/d' \
+    -e '/^[[:space:]]*"crates\/pap-c"/d' \
+    -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
-    -e '/^[[:space:]]*"apps\/papillon"/d'         \
-    -e '/^[[:space:]]*"benches"/d'                  \
-    -e '/^[[:space:]]*"examples\//d'                \
+    -e '/^[[:space:]]*"apps\/papillon"/d' \
+    -e '/^[[:space:]]*"benches"/d' \
+    -e '/^[[:space:]]*"examples\//d' \
     Cargo.toml
 
 RUN cargo test -p pap-registry --features ssr
