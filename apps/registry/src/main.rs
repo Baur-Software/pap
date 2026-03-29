@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
+use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
 use tower_http::cors::{Any, CorsLayer};
@@ -163,6 +164,19 @@ async fn main() -> anyhow::Result<()> {
     let assets_dir =
         std::env::var("PAP_ASSETS_DIR").unwrap_or_else(|_| "apps/registry/assets".into());
 
+    // CSS: cargo-leptos writes to target/site/pkg/pap-registry-ui.css.
+    // When running via plain `cargo run` that file doesn't exist, so fall
+    // back to the source stylesheet at apps/registry/styles/main.css.
+    let css_path = {
+        let leptos_css = std::path::PathBuf::from("target/site/pkg/pap-registry-ui.css");
+        if leptos_css.exists() {
+            leptos_css
+        } else {
+            std::path::PathBuf::from("apps/registry/styles/main.css")
+        }
+    };
+    info!("Serving CSS from {}", css_path.display());
+
     // Mount each agent's PAP handshake endpoints under /agents/{slug}/
     let mut agent_router = Router::new();
     for (name, handler) in &agent_set.handlers {
@@ -179,6 +193,21 @@ async fn main() -> anyhow::Result<()> {
         .merge(federation_router)
         .merge(admin_router)
         .merge(agent_router)
+        .route("/pkg/pap-registry-ui.css", get(move || {
+            let path = css_path.clone();
+            async move {
+                match tokio::fs::read(&path).await {
+                    Ok(bytes) => axum::response::Response::builder()
+                        .header("content-type", "text/css")
+                        .body(axum::body::Body::from(bytes))
+                        .unwrap(),
+                    Err(_) => axum::response::Response::builder()
+                        .status(404)
+                        .body(axum::body::Body::empty())
+                        .unwrap(),
+                }
+            }
+        }))
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
         .layer(cors);
