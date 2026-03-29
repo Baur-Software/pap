@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [0.4.5.0] - 2026-03-29
+
+### Added
+
+- **papillon**: Auto-generate declarative templates from JSON-LD agent results when no matching template exists for a schema type
+- **papillon-shared**: `generate_template_from_json_ld` function with field classification (date, price, url, title, text) based on key names and value shapes
+- **papillon-shared**: `has_enabled_template_for_schema_type` trait method for native, WASM, and IndexedDB database backends
+- **papillon**: `auto_generate_template` Tauri command for explicit frontend-triggered template generation
+- **papillon**: Automatic template generation in canvas prompt and reshape flows (fire-and-forget, never blocks results)
+
 ## [0.5.7] - 2026-03-27
 
 ### Fixed
