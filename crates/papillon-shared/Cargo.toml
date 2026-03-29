@@ -8,6 +8,7 @@ license.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
+uuid = { workspace = true }
 
 # Database abstraction - feature gated
 rusqlite = { version = "0.32", features = ["bundled", "serde_json"], optional = true }
@@ -29,4 +30,4 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 [features]
 default = ["native"]
 native = ["rusqlite"]
-wasm = ["wasm-bindgen", "js-sys", "web-sys", "wasm-bindgen-futures"]
+wasm = ["wasm-bindgen", "js-sys", "web-sys", "wasm-bindgen-futures", "uuid/js"]

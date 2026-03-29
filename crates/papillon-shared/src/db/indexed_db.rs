@@ -303,6 +303,10 @@ impl DatabaseOps for IndexedDbDatabase {
         self.persist_to_storage()?;
         Ok(())
     }
+
+    fn has_enabled_template_for_schema_type(&self, schema_type: &str) -> Result<bool, DbError> {
+        self.inner.has_enabled_template_for_schema_type(schema_type)
+    }
 }
 
 #[cfg(test)]
