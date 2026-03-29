@@ -130,7 +130,24 @@ window.__TAURI__ = {
         created_by: null,
       },
     ],
-    invoke: async function(cmd, args) {
+    invoke: async function(cmd, rawArgs) {
+      // serde_wasm_bindgen serializes serde_json::Value objects as JS Maps.
+      // Convert Maps to plain objects so property access (args.key) works.
+      function mapToObj(val) {
+        if (val instanceof Map) {
+          const obj = {};
+          for (const [k, v] of val) obj[k] = mapToObj(v);
+          return obj;
+        }
+        if (Array.isArray(val)) return val.map(mapToObj);
+        if (val && typeof val === 'object' && !(val instanceof Date)) {
+          const obj = {};
+          for (const k of Object.keys(val)) obj[k] = mapToObj(val[k]);
+          return obj;
+        }
+        return val;
+      }
+      const args = mapToObj(rawArgs);
       console.log('[tauri-mock] invoke:', cmd, args);
       const IDENTITY = ${JSON.stringify(IDENTITY)};
       const SCENARIOS = ${JSON.stringify(SCENARIOS)};
@@ -244,9 +261,9 @@ window.__TAURI__ = {
 
         case 'list_agents':
           return [
-            { name: 'DuckDuckGo Search', did: 'did:key:z6MkDDG', action_types: ['search.web'], requires_disclosure: [], description: 'Web search via DuckDuckGo Instant Answer API' },
-            { name: 'Wikipedia', did: 'did:key:z6MkWiki', action_types: ['knowledge.lookup'], requires_disclosure: [], description: 'Knowledge lookup via Wikipedia REST API' },
-            { name: 'Mistral AI', did: 'did:key:z6MkMistral', action_types: ['ai.inference'], requires_disclosure: [], description: 'On-device inference via Candle' },
+            { name: 'DuckDuckGo Search', provider_name: 'DuckDuckGo', provider_did: 'did:key:z6MkDDG', capabilities: ['search.web'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['results'], endpoint: null, content_hash: 'ddg-hash' },
+            { name: 'Wikipedia', provider_name: 'Wikimedia', provider_did: 'did:key:z6MkWiki', capabilities: ['knowledge.lookup'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['article'], endpoint: null, content_hash: 'wiki-hash' },
+            { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['ai.inference'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash' },
           ];
 
         case 'search_agents':
@@ -296,15 +313,18 @@ window.__TAURI__ = {
 
         // ─── Template CRUD Commands ───
         case 'get_global_templates': {
+          // Return all global templates (including disabled) so the settings
+          // page can display and re-enable them. The enabled flag is metadata
+          // rendered in the UI, not a query filter for the settings list.
           return window.__TAURI__.core._templates.filter(
-            (t) => t.principal_did === null && t.enabled
+            (t) => t.principal_did === null
           );
         }
 
         case 'get_profile_templates': {
-          const principal_did = args?.principalDid;
+          const principal_did = args?.principal_did || args?.principalDid;
           return window.__TAURI__.core._templates.filter(
-            (t) => (t.principal_did === principal_did || t.principal_did === null) && t.enabled
+            (t) => t.principal_did === principal_did && t.enabled
           );
         }
 
@@ -344,7 +364,7 @@ window.__TAURI__ = {
         }
 
         case 'delete_template': {
-          const template_name = args?.templateName;
+          const template_name = args?.template_name || args?.templateName;
           window.__TAURI__.core._templates = window.__TAURI__.core._templates.filter(
             (t) => t.template_name !== template_name
           );
@@ -352,7 +372,7 @@ window.__TAURI__ = {
         }
 
         case 'set_template_enabled': {
-          const template_name = args?.templateName;
+          const template_name = args?.template_name || args?.templateName;
           const enabled = args?.enabled;
           const template = window.__TAURI__.core._templates.find(
             (t) => t.template_name === template_name

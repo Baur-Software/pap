@@ -331,13 +331,13 @@ if [ -n "$AGENT_HASH" ]; then
         fail "Delete agent" "expected 200, got $DEL_STATUS"
     fi
 
-    # Verify agent no longer appears in specific action query after deletion
-    POST_DEL=$(curl -sk "$BASE_URL/federation/query?action=schema:SearchAction" 2>/dev/null)
-    POST_COUNT=$(echo "$POST_DEL" | pyjson "print(len(d.get('QueryResponse',{}).get('advertisements',d.get('advertisements',[]))))" || echo "0")
-    if [ "$POST_COUNT" -eq 0 ] 2>/dev/null; then
-        pass "Agent removed from federation after deletion"
+    # Verify the E2E test agent no longer appears in search after deletion
+    POST_DEL_SEARCH=$(curl -sk "$BASE_URL/api/agents?q=E2E" 2>/dev/null)
+    POST_DEL_TOTAL=$(echo "$POST_DEL_SEARCH" | pyjson "print(d['total'])" || echo "-1")
+    if [ "$POST_DEL_TOTAL" -eq 0 ] 2>/dev/null; then
+        pass "Agent removed from search after deletion"
     else
-        fail "Agent removal" "expected 0 agents after deletion, got $POST_COUNT"
+        fail "Agent removal" "expected 0 results for 'E2E' after deletion, got $POST_DEL_TOTAL"
     fi
 else
     echo "  SKIP: No agent hash from registration step"

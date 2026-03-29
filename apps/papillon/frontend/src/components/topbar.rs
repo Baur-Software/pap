@@ -64,7 +64,7 @@ pub fn TopBar() -> impl IntoView {
     };
 
     let status_label = move || match orchestrator.status.get() {
-        OrchestratorStatus::Ready => "Papillon",
+        OrchestratorStatus::Ready => "Ready",
         OrchestratorStatus::Downloading { .. } => "Setting up\u{2026}",
         OrchestratorStatus::Disconnected => "Agents only",
         OrchestratorStatus::Unconfigured => "Agents only",
@@ -105,7 +105,7 @@ pub fn TopBar() -> impl IntoView {
                     <ProfileAvatar name=current_profile_name() />
                 </button>
                 <span class=status_class>{status_label}</span>
-                <A href="/settings" attr:class="topbar-settings-btn" attr:title="Settings">
+                <A href="/settings" attr:class="topbar-settings-btn settings-gear" attr:title="Settings">
                     "\u{2699}"
                 </A>
             </div>
