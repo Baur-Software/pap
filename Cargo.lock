@@ -4663,6 +4663,7 @@ version = "0.5.7"
 dependencies = [
  "axum",
  "axum-server",
+ "base64 0.22.1",
  "chrono",
  "ed25519-dalek",
  "getrandom 0.2.17",

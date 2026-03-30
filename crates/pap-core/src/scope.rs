@@ -240,4 +240,56 @@ mod tests {
         let scope2: Scope = serde_json::from_str(&json).unwrap();
         assert_eq!(scope, scope2);
     }
+
+    #[test]
+    fn requires_tee_when_no_retention_present() {
+        let ds = DisclosureSet::new(vec![DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .no_retention()]);
+        assert!(ds.requires_tee());
+    }
+
+    #[test]
+    fn does_not_require_tee_without_no_retention() {
+        let ds = DisclosureSet::new(vec![DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )]);
+        assert!(!ds.requires_tee());
+    }
+
+    #[test]
+    fn does_not_require_tee_for_empty_disclosure() {
+        let ds = DisclosureSet::empty();
+        assert!(!ds.requires_tee());
+    }
+
+    #[test]
+    fn requires_tee_with_mixed_entries() {
+        let ds = DisclosureSet::new(vec![
+            DisclosureEntry::new("schema:Person", vec!["schema:name".into()], vec![]),
+            DisclosureEntry::new(
+                "schema:PostalAddress",
+                vec!["schema:streetAddress".into()],
+                vec![],
+            )
+            .no_retention(),
+        ]);
+        assert!(ds.requires_tee());
+    }
+
+    #[test]
+    fn session_only_does_not_require_tee() {
+        let ds = DisclosureSet::new(vec![DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .session_only()]);
+        assert!(!ds.requires_tee());
+    }
 }

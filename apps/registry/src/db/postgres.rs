@@ -211,6 +211,9 @@ impl PostgresStore {
                     endpoint,
                     cert_fingerprint,
                     last_sync,
+                    trust_signals: None,
+                    status: pap_federation::PeerStatus::Active,
+                    registered_at: None,
                 }
             })
             .collect())
