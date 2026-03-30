@@ -135,6 +135,7 @@ async fn full_handshake_over_websocket() {
         payment_proof_commitment: None,
         timestamp: Utc::now(),
         signatures: vec!["initiator-sig".into()],
+        attestations: vec![],
     };
     let resp = client.exchange_receipt(&session_id, receipt).await.unwrap();
     match &resp {

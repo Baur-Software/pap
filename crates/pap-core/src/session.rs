@@ -460,4 +460,182 @@ mod tests {
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
         assert!(session.execute().is_err());
     }
+
+    #[cfg(not(feature = "tee"))]
+    #[test]
+    fn has_tee_attestation_false_without_feature() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let _session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        // Without tee feature, attestation is always absent
+        assert!(!_session.has_tee_attestation());
+    }
+
+    #[test]
+    fn validate_disclosure_ok_without_no_retention() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        // Disclosure set without no_retention should always pass
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )]);
+        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+    }
+
+    #[test]
+    fn validate_disclosure_ok_for_empty_set() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        let ds = crate::scope::DisclosureSet::empty();
+        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+    }
+
+    /// When TEE feature is NOT enabled and no_retention is present,
+    /// validation should warn but not block (backward compatibility).
+    #[cfg(not(feature = "tee"))]
+    #[test]
+    fn validate_disclosure_warns_without_tee_feature() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .no_retention()]);
+        // Without tee feature: warn but return Ok for backward compatibility
+        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+    }
+
+    /// When TEE feature IS enabled and no_retention is present but
+    /// no attestation was provided, validation must fail.
+    #[cfg(feature = "tee")]
+    #[test]
+    fn validate_disclosure_fails_without_attestation() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .no_retention()]);
+        // With tee feature but no attestation: must fail
+        let result = session.validate_disclosure_requirements(&ds);
+        assert!(matches!(result, Err(PapError::NoRetentionRequiresTee(_))));
+    }
+
+    /// When TEE feature IS enabled and attestation is present,
+    /// validation should pass even with no_retention.
+    #[cfg(feature = "tee")]
+    #[test]
+    fn validate_disclosure_passes_with_attestation() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let mut session =
+            Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        // Open with attestation
+        let measurement = pap_tee::AttestationEvidence::compute_measurement(b"test-enclave-v1");
+        let report = {
+            use base64::Engine;
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"mock-report")
+        };
+        let evidence = pap_tee::AttestationEvidence {
+            enclave_type: pap_tee::EnclaveType::Software,
+            measurement,
+            attestation_report: report,
+            timestamp: Utc::now(),
+            nonce: uuid::Uuid::new_v4().to_string(),
+        };
+
+        session
+            .open_with_attestation(
+                "did:key:zinit_sess".into(),
+                "did:key:zrecv_sess".into(),
+                evidence,
+            )
+            .unwrap();
+
+        assert!(session.has_tee_attestation());
+
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .no_retention()]);
+        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+    }
 }
