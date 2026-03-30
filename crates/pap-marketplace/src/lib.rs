@@ -9,6 +9,6 @@ mod advertisement;
 mod error;
 mod registry;
 
-pub use advertisement::AgentAdvertisement;
+pub use advertisement::{AgentAdvertisement, OperatorMetrics};
 pub use error::MarketplaceError;
 pub use registry::MarketplaceRegistry;

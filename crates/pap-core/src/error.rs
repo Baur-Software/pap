@@ -70,4 +70,10 @@ pub enum PapError {
 
     #[error("invalid recovery mandate: {0}")]
     InvalidRecoveryMandate(String),
+
+    #[error("no_retention disclosure requires TEE attestation: {0}")]
+    NoRetentionRequiresTee(String),
+
+    #[error("attestation error: {0}")]
+    AttestationError(String),
 }

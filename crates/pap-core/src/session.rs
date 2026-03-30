@@ -5,7 +5,23 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::error::PapError;
-use crate::scope::Scope;
+use crate::scope::{DisclosureSet, Scope};
+
+/// Result of validating disclosure requirements against TEE availability.
+///
+/// This enum communicates the enforcement level to callers without
+/// making policy decisions (e.g., printing warnings or blocking).
+/// Callers inspect the variant and decide their own response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisclosureValidation {
+    /// No `no_retention` entries — no TEE required.
+    NotRequired,
+    /// TEE attestation present — `no_retention` is cryptographically enforced.
+    TeeEnforced,
+    /// No TEE available — `no_retention` is a contractual term only.
+    /// The protocol cannot prevent post-session data retention without TEE.
+    ContractualOnly,
+}
 
 /// Session state machine: Initiated -> Open -> Executed -> Closed
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -198,6 +214,44 @@ impl Session {
         })
     }
 
+    /// Validate that disclosure requirements are satisfiable for the
+    /// current session. If any disclosure entry has `no_retention: true`,
+    /// the session MUST have TEE attestation — without it, the protocol
+    /// cannot enforce the retention constraint once plaintext enters
+    /// untrusted host memory.
+    ///
+    /// Returns [`DisclosureValidation`] indicating the enforcement level:
+    /// - `TeeEnforced` — TEE attestation present, retention constraint is cryptographic
+    /// - `ContractualOnly` — no TEE available, `no_retention` is a contractual term only
+    /// - `NotRequired` — no `no_retention` entries in the disclosure set
+    ///
+    /// With the `tee` feature enabled, `ContractualOnly` is promoted to an error
+    /// (the caller opted into TEE enforcement but the session lacks attestation).
+    pub fn validate_disclosure_requirements(
+        &self,
+        disclosure_set: &DisclosureSet,
+    ) -> Result<DisclosureValidation, PapError> {
+        if !disclosure_set.requires_tee() {
+            return Ok(DisclosureValidation::NotRequired);
+        }
+
+        #[cfg(feature = "tee")]
+        {
+            if self.attestation.is_none() {
+                return Err(PapError::NoRetentionRequiresTee(
+                    "mandate contains no_retention disclosure but session has no TEE attestation"
+                        .into(),
+                ));
+            }
+            Ok(DisclosureValidation::TeeEnforced)
+        }
+
+        #[cfg(not(feature = "tee"))]
+        {
+            Ok(DisclosureValidation::ContractualOnly)
+        }
+    }
+
     /// Open the session by exchanging ephemeral session DIDs.
     pub fn open(
         &mut self,
@@ -236,6 +290,18 @@ impl Session {
     /// Close the session.
     pub fn close(&mut self) -> Result<(), PapError> {
         self.transition(SessionState::Closed)
+    }
+
+    /// Returns true if this session has TEE attestation evidence.
+    pub fn has_tee_attestation(&self) -> bool {
+        #[cfg(feature = "tee")]
+        {
+            self.attestation.is_some()
+        }
+        #[cfg(not(feature = "tee"))]
+        {
+            false
+        }
     }
 
     /// Check if a nonce has been consumed in this session.
@@ -405,5 +471,195 @@ mod tests {
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
         assert!(session.execute().is_err());
+    }
+
+    #[cfg(not(feature = "tee"))]
+    #[test]
+    fn has_tee_attestation_false_without_feature() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let _session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        // Without tee feature, attestation is always absent
+        assert!(!_session.has_tee_attestation());
+    }
+
+    #[test]
+    fn validate_disclosure_ok_without_no_retention() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        // Disclosure set without no_retention should return NotRequired
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )]);
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::NotRequired
+        );
+    }
+
+    #[test]
+    fn validate_disclosure_ok_for_empty_set() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        let ds = crate::scope::DisclosureSet::empty();
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::NotRequired
+        );
+    }
+
+    /// When TEE feature is NOT enabled and no_retention is present,
+    /// validation returns ContractualOnly (caller decides what to do).
+    #[cfg(not(feature = "tee"))]
+    #[test]
+    fn validate_disclosure_contractual_without_tee_feature() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .no_retention()]);
+        // Without tee feature: returns ContractualOnly, caller decides policy
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::ContractualOnly
+        );
+    }
+
+    /// When TEE feature IS enabled and no_retention is present but
+    /// no attestation was provided, validation must fail.
+    #[cfg(feature = "tee")]
+    #[test]
+    fn validate_disclosure_fails_without_attestation() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .no_retention()]);
+        // With tee feature but no attestation: must fail
+        let result = session.validate_disclosure_requirements(&ds);
+        assert!(matches!(result, Err(PapError::NoRetentionRequiresTee(_))));
+    }
+
+    /// When TEE feature IS enabled and attestation is present,
+    /// validation should pass even with no_retention.
+    #[cfg(feature = "tee")]
+    #[test]
+    fn validate_disclosure_passes_with_attestation() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(&issuer_key);
+
+        let mut session =
+            Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
+
+        // Open with attestation
+        let measurement = pap_tee::AttestationEvidence::compute_measurement(b"test-enclave-v1");
+        let report = {
+            use base64::Engine;
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"mock-report")
+        };
+        let evidence = pap_tee::AttestationEvidence {
+            enclave_type: pap_tee::EnclaveType::Software,
+            measurement,
+            attestation_report: report,
+            timestamp: Utc::now(),
+            nonce: uuid::Uuid::new_v4().to_string(),
+        };
+
+        session
+            .open_with_attestation(
+                "did:key:zinit_sess".into(),
+                "did:key:zrecv_sess".into(),
+                evidence,
+            )
+            .unwrap();
+
+        assert!(session.has_tee_attestation());
+
+        let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
+            "schema:Person",
+            vec!["schema:name".into()],
+            vec![],
+        )
+        .no_retention()]);
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::TeeEnforced
+        );
     }
 }
