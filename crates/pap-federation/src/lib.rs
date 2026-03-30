@@ -584,8 +584,7 @@ mod tests {
             .peers()
             .iter()
             .take(2)
-            .enumerate()
-            .map(|(_, _)| outsider_vouch.clone())
+            .map(|_| outsider_vouch.clone())
             .collect();
         vouches.clear();
 
