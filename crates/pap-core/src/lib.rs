@@ -23,6 +23,7 @@ pub use error::PapError;
 pub use receipt::{
     AttestationStatus, ReputationProfile, ReputationSegment, SessionAttestation, SessionOutcome,
 };
+pub use session::DisclosureValidation;
 
 #[cfg(feature = "tee")]
 pub use pap_tee;

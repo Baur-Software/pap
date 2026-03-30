@@ -448,6 +448,20 @@ only — the protocol cannot enforce data deletion on an untrusted host.
 Implementations SHOULD clearly communicate this limitation to
 principals when TEE attestation is unavailable.
 
+An implementation's disclosure validation MUST return one of three
+states to the caller:
+
+| State | Meaning |
+|---|---|
+| `NotRequired` | No `no_retention` entries in the disclosure set |
+| `TeeEnforced` | TEE attestation present; retention constraint is cryptographic |
+| `ContractualOnly` | No TEE available; `no_retention` is a contractual term only |
+
+Implementations that support the TEE extension (Section 13.6) MUST
+treat `ContractualOnly` as an error. Implementations without TEE
+support MAY proceed with `ContractualOnly` but MUST expose this
+state to the caller so the principal can make an informed decision.
+
 #### 5.4.5. Scope Containment
 
 A child scope S_c is **contained by** a parent scope S_p (written

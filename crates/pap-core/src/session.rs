@@ -7,6 +7,22 @@ use uuid::Uuid;
 use crate::error::PapError;
 use crate::scope::{DisclosureSet, Scope};
 
+/// Result of validating disclosure requirements against TEE availability.
+///
+/// This enum communicates the enforcement level to callers without
+/// making policy decisions (e.g., printing warnings or blocking).
+/// Callers inspect the variant and decide their own response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisclosureValidation {
+    /// No `no_retention` entries — no TEE required.
+    NotRequired,
+    /// TEE attestation present — `no_retention` is cryptographically enforced.
+    TeeEnforced,
+    /// No TEE available — `no_retention` is a contractual term only.
+    /// The protocol cannot prevent post-session data retention without TEE.
+    ContractualOnly,
+}
+
 /// Session state machine: Initiated -> Open -> Executed -> Closed
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SessionState {
@@ -204,15 +220,19 @@ impl Session {
     /// cannot enforce the retention constraint once plaintext enters
     /// untrusted host memory.
     ///
-    /// When the `tee` feature is enabled this is a hard error.
-    /// When the `tee` feature is not enabled this logs a warning and
-    /// returns `Ok(())` for backward compatibility.
+    /// Returns [`DisclosureValidation`] indicating the enforcement level:
+    /// - `TeeEnforced` — TEE attestation present, retention constraint is cryptographic
+    /// - `ContractualOnly` — no TEE available, `no_retention` is a contractual term only
+    /// - `NotRequired` — no `no_retention` entries in the disclosure set
+    ///
+    /// With the `tee` feature enabled, `ContractualOnly` is promoted to an error
+    /// (the caller opted into TEE enforcement but the session lacks attestation).
     pub fn validate_disclosure_requirements(
         &self,
         disclosure_set: &DisclosureSet,
-    ) -> Result<(), PapError> {
+    ) -> Result<DisclosureValidation, PapError> {
         if !disclosure_set.requires_tee() {
-            return Ok(());
+            return Ok(DisclosureValidation::NotRequired);
         }
 
         #[cfg(feature = "tee")]
@@ -223,21 +243,13 @@ impl Session {
                         .into(),
                 ));
             }
+            return Ok(DisclosureValidation::TeeEnforced);
         }
 
         #[cfg(not(feature = "tee"))]
         {
-            // Without the tee feature, we cannot enforce no_retention
-            // cryptographically. Warn but do not block for backward
-            // compatibility.
-            eprintln!(
-                "WARNING: session {} has no_retention disclosure but TEE feature is not enabled; \
-                 enforcement is best-effort only",
-                self.id
-            );
+            Ok(DisclosureValidation::ContractualOnly)
         }
-
-        Ok(())
     }
 
     /// Open the session by exchanging ephemeral session DIDs.
@@ -498,13 +510,16 @@ mod tests {
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
-        // Disclosure set without no_retention should always pass
+        // Disclosure set without no_retention should return NotRequired
         let ds = crate::scope::DisclosureSet::new(vec![crate::scope::DisclosureEntry::new(
             "schema:Person",
             vec!["schema:name".into()],
             vec![],
         )]);
-        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::NotRequired
+        );
     }
 
     #[test]
@@ -524,14 +539,17 @@ mod tests {
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
         let ds = crate::scope::DisclosureSet::empty();
-        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::NotRequired
+        );
     }
 
     /// When TEE feature is NOT enabled and no_retention is present,
-    /// validation should warn but not block (backward compatibility).
+    /// validation returns ContractualOnly (caller decides what to do).
     #[cfg(not(feature = "tee"))]
     #[test]
-    fn validate_disclosure_warns_without_tee_feature() {
+    fn validate_disclosure_contractual_without_tee_feature() {
         let issuer_key = make_keypair();
         let issuer_did = did_from_key(&issuer_key);
         let target_did = "did:key:ztarget".to_string();
@@ -552,8 +570,11 @@ mod tests {
             vec![],
         )
         .no_retention()]);
-        // Without tee feature: warn but return Ok for backward compatibility
-        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+        // Without tee feature: returns ContractualOnly, caller decides policy
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::ContractualOnly
+        );
     }
 
     /// When TEE feature IS enabled and no_retention is present but
@@ -636,6 +657,9 @@ mod tests {
             vec![],
         )
         .no_retention()]);
-        assert!(session.validate_disclosure_requirements(&ds).is_ok());
+        assert_eq!(
+            session.validate_disclosure_requirements(&ds).unwrap(),
+            DisclosureValidation::TeeEnforced
+        );
     }
 }
