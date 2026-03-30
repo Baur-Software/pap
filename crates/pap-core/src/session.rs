@@ -243,7 +243,7 @@ impl Session {
                         .into(),
                 ));
             }
-            return Ok(DisclosureValidation::TeeEnforced);
+            Ok(DisclosureValidation::TeeEnforced)
         }
 
         #[cfg(not(feature = "tee"))]
