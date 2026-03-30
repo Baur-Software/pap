@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::error::PapError;
-use crate::scope::Scope;
+use crate::scope::{DisclosureSet, Scope};
 
 /// Session state machine: Initiated -> Open -> Executed -> Closed
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -198,6 +198,48 @@ impl Session {
         })
     }
 
+    /// Validate that disclosure requirements are satisfiable for the
+    /// current session. If any disclosure entry has `no_retention: true`,
+    /// the session MUST have TEE attestation — without it, the protocol
+    /// cannot enforce the retention constraint once plaintext enters
+    /// untrusted host memory.
+    ///
+    /// When the `tee` feature is enabled this is a hard error.
+    /// When the `tee` feature is not enabled this logs a warning and
+    /// returns `Ok(())` for backward compatibility.
+    pub fn validate_disclosure_requirements(
+        &self,
+        disclosure_set: &DisclosureSet,
+    ) -> Result<(), PapError> {
+        if !disclosure_set.requires_tee() {
+            return Ok(());
+        }
+
+        #[cfg(feature = "tee")]
+        {
+            if self.attestation.is_none() {
+                return Err(PapError::NoRetentionRequiresTee(
+                    "mandate contains no_retention disclosure but session has no TEE attestation"
+                        .into(),
+                ));
+            }
+        }
+
+        #[cfg(not(feature = "tee"))]
+        {
+            // Without the tee feature, we cannot enforce no_retention
+            // cryptographically. Warn but do not block for backward
+            // compatibility.
+            eprintln!(
+                "WARNING: session {} has no_retention disclosure but TEE feature is not enabled; \
+                 enforcement is best-effort only",
+                self.id
+            );
+        }
+
+        Ok(())
+    }
+
     /// Open the session by exchanging ephemeral session DIDs.
     pub fn open(
         &mut self,
@@ -236,6 +278,18 @@ impl Session {
     /// Close the session.
     pub fn close(&mut self) -> Result<(), PapError> {
         self.transition(SessionState::Closed)
+    }
+
+    /// Returns true if this session has TEE attestation evidence.
+    pub fn has_tee_attestation(&self) -> bool {
+        #[cfg(feature = "tee")]
+        {
+            self.attestation.is_some()
+        }
+        #[cfg(not(feature = "tee"))]
+        {
+            false
+        }
     }
 
     /// Check if a nonce has been consumed in this session.

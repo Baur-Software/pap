@@ -1,10 +1,251 @@
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::error::PapError;
 use crate::mandate::Mandate;
 use crate::session::Session;
+
+// ─── Bilateral Session Attestation ──────────────────────────────────
+
+/// Outcome of a session as attested by one party.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionOutcome {
+    /// Both parties agree the action completed successfully
+    Fulfilled,
+    /// The action was partially completed
+    Partial,
+    /// The action failed
+    Failed,
+    /// One party disputes the other's characterization of the session
+    Disputed,
+}
+
+impl SessionOutcome {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SessionOutcome::Fulfilled => "fulfilled",
+            SessionOutcome::Partial => "partial",
+            SessionOutcome::Failed => "failed",
+            SessionOutcome::Disputed => "disputed",
+        }
+    }
+}
+
+impl std::fmt::Display for SessionOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A session attestation from one party, stating their view of the
+/// session outcome. Both parties should attest for bilateral verification
+/// — unilateral attestation enables selective reporting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionAttestation {
+    /// Ephemeral session ID this attestation refers to
+    pub session_id: String,
+    /// Ephemeral session DID of the attesting party
+    pub attester_did: String,
+    /// The attester's assessment of the session outcome
+    pub outcome: SessionOutcome,
+    /// Schema.org action type that was performed
+    pub action_type: String,
+    /// When this attestation was created
+    pub timestamp: DateTime<Utc>,
+    /// Ed25519 signature over the canonical bytes (base64url-no-pad)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}
+
+impl SessionAttestation {
+    /// Create a new unsigned attestation.
+    pub fn new(
+        session_id: impl Into<String>,
+        attester_did: impl Into<String>,
+        outcome: SessionOutcome,
+        action_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            session_id: session_id.into(),
+            attester_did: attester_did.into(),
+            outcome,
+            action_type: action_type.into(),
+            timestamp: Utc::now(),
+            signature: None,
+        }
+    }
+
+    /// Sign this attestation with the attester's session key.
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+        let bytes = self.canonical_bytes();
+        let sig = signing_key.sign(&bytes);
+        use base64::Engine;
+        self.signature =
+            Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+    }
+
+    /// Verify this attestation's signature.
+    pub fn verify(&self, verifying_key: &VerifyingKey) -> Result<(), PapError> {
+        let sig_b64 = self
+            .signature
+            .as_ref()
+            .ok_or_else(|| PapError::AttestationError("unsigned attestation".into()))?;
+        use base64::Engine;
+        let sig_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(sig_b64)
+            .map_err(|e| PapError::AttestationError(format!("invalid signature encoding: {e}")))?;
+        let signature = Signature::from_bytes(
+            sig_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| PapError::AttestationError("invalid signature length".into()))?,
+        );
+        let bytes = self.canonical_bytes();
+        verifying_key
+            .verify(&bytes, &signature)
+            .map_err(|_| PapError::VerificationFailed)
+    }
+
+    /// Canonical bytes for signing (excludes signature field).
+    fn canonical_bytes(&self) -> Vec<u8> {
+        let canonical = serde_json::json!({
+            "session_id": self.session_id,
+            "attester_did": self.attester_did,
+            "outcome": self.outcome,
+            "action_type": self.action_type,
+            "timestamp": self.timestamp.to_rfc3339(),
+        });
+        serde_json::to_vec(&canonical).expect("canonical serialization cannot fail")
+    }
+}
+
+/// Attestation status of a receipt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttestationStatus {
+    /// No attestations present
+    Unattested,
+    /// Only one party has attested
+    UnilaterallyAttested,
+    /// Both parties have attested
+    BilaterallyAttested,
+}
+
+impl AttestationStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AttestationStatus::Unattested => "unattested",
+            AttestationStatus::UnilaterallyAttested => "unilaterally_attested",
+            AttestationStatus::BilaterallyAttested => "bilaterally_attested",
+        }
+    }
+}
+
+impl std::fmt::Display for AttestationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// ─── Per-Action Reputation Segmentation ─────────────────────────────
+
+/// Reputation data for a single action type. Zero-disclosure search
+/// reputation does not transfer to flight-booking reputation.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ReputationSegment {
+    /// Schema.org action type for this segment
+    pub action_type: String,
+    /// Total number of receipts recorded for this action type
+    pub total_receipts: u64,
+    /// Number of receipts with bilateral attestation
+    pub bilateral_attestations: u64,
+    /// Number of unique counterparty ephemeral DIDs seen
+    pub unique_counterparties: u64,
+    /// Internal set for tracking unique counterparties (not serialized)
+    #[serde(skip)]
+    counterparty_set: std::collections::HashSet<String>,
+}
+
+impl ReputationSegment {
+    /// Create a new empty reputation segment for the given action type.
+    pub fn new(action_type: impl Into<String>) -> Self {
+        Self {
+            action_type: action_type.into(),
+            total_receipts: 0,
+            bilateral_attestations: 0,
+            unique_counterparties: 0,
+            counterparty_set: std::collections::HashSet::new(),
+        }
+    }
+}
+
+/// A reputation profile segmented by action type. Prevents reputation
+/// earned in zero-disclosure contexts (e.g. search) from inflating
+/// reputation in high-trust contexts (e.g. flight booking, payments).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ReputationProfile {
+    /// Map from Schema.org action type to reputation segment
+    pub segments: HashMap<String, ReputationSegment>,
+}
+
+impl ReputationProfile {
+    /// Create an empty reputation profile.
+    pub fn new() -> Self {
+        Self {
+            segments: HashMap::new(),
+        }
+    }
+
+    /// Record a transaction receipt into the appropriate reputation segment.
+    /// The receipt's action type determines which segment it goes into.
+    /// If the receipt has bilateral attestation, the bilateral count is
+    /// incremented. Counterparty uniqueness is tracked by ephemeral DID.
+    pub fn record_receipt(&mut self, receipt: &TransactionReceipt) {
+        let segment = self
+            .segments
+            .entry(receipt.action.clone())
+            .or_insert_with(|| ReputationSegment::new(&receipt.action));
+
+        segment.total_receipts += 1;
+
+        if receipt.attestation_status() == AttestationStatus::BilaterallyAttested {
+            segment.bilateral_attestations += 1;
+        }
+
+        // Track unique counterparties — both initiator and receiver are
+        // ephemeral session DIDs, so we count both for diversity.
+        if segment
+            .counterparty_set
+            .insert(receipt.receiving_agent_did.clone())
+        {
+            segment.unique_counterparties += 1;
+        }
+        if segment
+            .counterparty_set
+            .insert(receipt.initiating_agent_did.clone())
+        {
+            segment.unique_counterparties += 1;
+        }
+    }
+
+    /// Look up a specific action type's reputation segment.
+    pub fn segment(&self, action_type: &str) -> Option<&ReputationSegment> {
+        self.segments.get(action_type)
+    }
+
+    /// Total receipts across all segments.
+    pub fn total_receipts(&self) -> u64 {
+        self.segments.values().map(|s| s.total_receipts).sum()
+    }
+
+    /// Number of distinct action types with reputation data.
+    pub fn segment_count(&self) -> usize {
+        self.segments.len()
+    }
+}
 
 /// A transaction receipt co-signed by both session parties.
 /// Contains property references only — never values.
@@ -35,6 +276,11 @@ pub struct TransactionReceipt {
     pub timestamp: DateTime<Utc>,
     /// Co-signatures from both session DIDs (base64-encoded)
     pub signatures: Vec<String>,
+    /// Bilateral session attestations from each party (spec hardening).
+    /// A receipt with attestations from both parties is `BilaterallyAttested`;
+    /// with only one party it is `UnilaterallyAttested`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attestations: Vec<SessionAttestation>,
 }
 
 impl TransactionReceipt {
@@ -67,6 +313,7 @@ impl TransactionReceipt {
             payment_proof_commitment: None,
             timestamp: Utc::now(),
             signatures: vec![],
+            attestations: vec![],
         })
     }
 
@@ -177,6 +424,85 @@ impl TransactionReceipt {
         }
         self.verify_signature(0, initiator_key)?;
         self.verify_signature(1, receiver_key)?;
+        Ok(())
+    }
+
+    /// Return the Schema.org action type for this receipt.
+    pub fn action_type(&self) -> &str {
+        &self.action
+    }
+
+    /// Add a session attestation from one party.
+    /// Both the initiating and receiving agents should attest to the
+    /// session outcome for bilateral verification.
+    pub fn add_attestation(&mut self, attestation: SessionAttestation) -> Result<(), PapError> {
+        // Validate that the attestation refers to this receipt's session
+        if attestation.session_id != self.session_id {
+            return Err(PapError::AttestationError(format!(
+                "attestation session_id {} does not match receipt session_id {}",
+                attestation.session_id, self.session_id
+            )));
+        }
+
+        // Validate that the attester is one of the session parties
+        if attestation.attester_did != self.initiating_agent_did
+            && attestation.attester_did != self.receiving_agent_did
+        {
+            return Err(PapError::AttestationError(format!(
+                "attester {} is not a party to session {}",
+                attestation.attester_did, self.session_id
+            )));
+        }
+
+        // Prevent duplicate attestation from the same party
+        if self
+            .attestations
+            .iter()
+            .any(|a| a.attester_did == attestation.attester_did)
+        {
+            return Err(PapError::AttestationError(format!(
+                "duplicate attestation from {}",
+                attestation.attester_did
+            )));
+        }
+
+        self.attestations.push(attestation);
+        Ok(())
+    }
+
+    /// Determine the attestation status of this receipt.
+    pub fn attestation_status(&self) -> AttestationStatus {
+        let has_initiator = self
+            .attestations
+            .iter()
+            .any(|a| a.attester_did == self.initiating_agent_did);
+        let has_receiver = self
+            .attestations
+            .iter()
+            .any(|a| a.attester_did == self.receiving_agent_did);
+
+        match (has_initiator, has_receiver) {
+            (true, true) => AttestationStatus::BilaterallyAttested,
+            (true, false) | (false, true) => AttestationStatus::UnilaterallyAttested,
+            (false, false) => AttestationStatus::Unattested,
+        }
+    }
+
+    /// Verify all attestation signatures on this receipt.
+    /// Takes a mapping from DID to verifying key.
+    pub fn verify_attestations(
+        &self,
+        keys: &HashMap<String, VerifyingKey>,
+    ) -> Result<(), PapError> {
+        for attestation in &self.attestations {
+            let key = keys.get(&attestation.attester_did).ok_or_else(|| {
+                PapError::AttestationError(format!(
+                    "no verifying key for attester {}",
+                    attestation.attester_did
+                ))
+            })?;
+            attestation.verify(key)?;
+        }
         Ok(())
     }
 

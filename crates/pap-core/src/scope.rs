@@ -115,6 +115,13 @@ impl DisclosureSet {
         Self { entries: vec![] }
     }
 
+    /// Returns true if any disclosure entry has `no_retention: true`,
+    /// meaning the receiving agent must execute within a TEE to enforce
+    /// the retention constraint cryptographically.
+    pub fn requires_tee(&self) -> bool {
+        self.entries.iter().any(|e| e.no_retention)
+    }
+
     /// Property references only (for receipts — never values).
     pub fn property_refs(&self) -> Vec<String> {
         self.entries

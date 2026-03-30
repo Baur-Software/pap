@@ -192,7 +192,10 @@ signatures (Section 5.2) detect any modification.
 **T6. Platform capture.** A platform operator accumulates control
 over agent transactions through infrastructure dependency.
 *Mitigation:* Federated discovery (Section 10), no central
-registry, no token economy, principal-held keys.
+registry, no token economy, principal-held keys. Marketplace
+registries MUST NOT rank query results by operator metrics
+(Section 9.6) — ranking power is platform capture power. Trust
+evaluation is the principal's responsibility.
 
 **T7. Payment linkability.** A payment is correlated with the
 principal's identity. *Mitigation:* Chaumian ecash blind-signed
@@ -431,6 +434,19 @@ Property references MUST use Schema.org property names with the
 **Property Reference Format:** When used in receipts or marketplace
 advertisements, a fully qualified property reference is formed as
 `{type}.{property}`, e.g., `schema:Person.schema:name`.
+
+#### 5.4.4.1. TEE Requirement for No-Retention Disclosures
+
+When a disclosure entry has `no_retention` set to true, the receiving
+agent MUST provide TEE attestation (Section 13.6) during session
+establishment. If the receiving agent cannot provide valid TEE
+attestation, the initiating agent MUST NOT disclose properties from
+that entry.
+
+Without TEE attestation, `no_retention` is a contractual constraint
+only — the protocol cannot enforce data deletion on an untrusted host.
+Implementations SHOULD clearly communicate this limitation to
+principals when TEE attestation is unavailable.
 
 #### 5.4.5. Scope Containment
 
@@ -971,6 +987,37 @@ base64url(SHA-256(canonical_bytes))
 This hash is used for deduplication in federated registries
 (Section 10).
 
+### 9.6. Operator Metrics
+
+An agent advertisement MAY include an `operator_metrics` field
+containing self-reported operational statistics. Metrics are
+informational metadata for principal evaluation and MUST NOT be
+used by marketplace registries for ranking, sorting, or filtering
+query results.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `total_receipts` | Integer | OPTIONAL | Total co-signed transaction receipts |
+| `bilateral_attestations` | Integer | OPTIONAL | Receipts with bilateral session attestation |
+| `unique_counterparties` | Integer | OPTIONAL | Distinct counterparty session DIDs |
+| `action_types` | Array of String | OPTIONAL | Distinct Schema.org action types performed |
+| `tee_sessions_pct` | Number | OPTIONAL | Fraction of sessions with TEE attestation (0.0 to 1.0) |
+| `first_seen` | DateTime | OPTIONAL | RFC 3339 timestamp of first registration |
+| `uptime_days` | Integer | OPTIONAL | Days the operator has been active |
+
+The `operator_metrics` field MUST be excluded from the advertisement
+content hash (Section 9.5) and signature computation (Section 9.4).
+Metrics change over time while the advertisement identity remains
+stable.
+
+**Anti-ranking requirement:** Marketplace registries MUST return
+query results in insertion order. Registries MUST NOT rank, sort,
+or filter results based on operator metrics. The principal's
+orchestrator is responsible for evaluating metrics and making
+selection decisions. This requirement prevents marketplace
+registries from accumulating ranking power, which would constitute
+platform capture.
+
 ---
 
 ## 10. Federation Protocol
@@ -1039,6 +1086,54 @@ A registry MAY discover new peers transitively:
 
 Implementations SHOULD implement rate limiting and SHOULD validate
 that newly discovered peers are reachable before adding them.
+
+### 10.7. Peer Trust Signals
+
+A federation peer MAY present trust signals to establish
+credibility with other registries. Trust signals are additive —
+more signals increase confidence but no single signal is
+sufficient alone.
+
+#### 10.7.1. Signal Categories
+
+| Signal | Weight | Description |
+|---|---|---|
+| Social vouching | Primary | Signed vouches from existing peers |
+| TEE attestation | Supplementary | Hardware attestation of registry software |
+| Operational history | Supplementary | Observable uptime and sync metrics |
+| Domain verification | Supplementary | DNS or TLS proof of domain ownership |
+
+A registry SHOULD require at least two signal categories before
+granting a peer full synchronization privileges.
+
+#### 10.7.2. Peer Vouch
+
+A peer vouch is a signed statement by an existing peer that they
+have evaluated the new peer and believe it operates a conformant
+registry.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `voucher_did` | String | REQUIRED | DID of the vouching peer |
+| `vouchee_did` | String | REQUIRED | DID of the peer being vouched |
+| `timestamp` | DateTime | REQUIRED | RFC 3339 timestamp |
+| `justification` | String | REQUIRED | Structured reason for vouching |
+| `signature` | String | REQUIRED | Ed25519 signature by voucher |
+
+#### 10.7.3. Vouch Budget
+
+To prevent vouch ring attacks (where colluding peers mutually
+vouch to create Sybil identities), implementations SHOULD enforce:
+
+- **Vouch budget:** Each peer MAY issue at most 3 vouches per year.
+- **Minimum age:** A peer MUST be registered for at least 90 days
+  before it is eligible to vouch for others.
+- **Probationary period:** Newly registered peers operate in
+  probationary status for 60 days. During probation, a peer MAY
+  receive advertisements but MUST NOT vouch for other peers.
+- **Diverse trust paths:** The vouchers for a new peer SHOULD NOT
+  all trace their own vouching chains through the same set of
+  peers.
 
 ---
 
@@ -1120,6 +1215,28 @@ Receipts MUST contain only:
 
 This ensures receipts are auditable by both principals without
 revealing the data exchanged in the transaction.
+
+### 11.6. Session Attestation
+
+A session attestation is a signed statement by a session
+participant recording their assessment of the session outcome.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `session_id` | String | REQUIRED | Session identifier |
+| `attester_did` | String | REQUIRED | Ephemeral session DID of attester |
+| `outcome` | String | REQUIRED | One of: `fulfilled`, `partial`, `failed`, `disputed` |
+| `action_type` | String | REQUIRED | Schema.org action type executed |
+| `timestamp` | DateTime | REQUIRED | RFC 3339 timestamp |
+| `signature` | String | REQUIRED | Ed25519 signature by attester |
+
+A receipt with attestations from both the initiating and receiving
+agents is **bilaterally attested**. Bilaterally attested receipts
+carry higher evidentiary weight for operator metric computation.
+
+Attestations are per-action-type. An operator's reputation in one
+action domain (e.g., `schema:SearchAction`) MUST NOT be conflated
+with reputation in another domain (e.g., `schema:ReserveAction`).
 
 ---
 
@@ -2039,6 +2156,9 @@ and document the choice.
 | Session correlation | Session keys discarded at close | 4.4, 6.3.6 |
 | Stale authorization | Decay state machine + non-renewal revocation | 5.7 |
 | Advertisement spoofing | Signed advertisements, registry rejects unsigned | 9.4 |
+| Retention violation | TEE attestation for no_retention sessions | 5.4.4.1, 13.6 |
+| Vouch ring / Sybil peers | Vouch budget + age requirement + diverse paths | 10.7.3 |
+| Metric-based ranking capture | Anti-ranking requirement on marketplace queries | 9.6 |
 
 ---
 
@@ -2448,6 +2568,9 @@ when the implementation supports the corresponding extension.
 | C-44 | Marketplace: disclosure satisfiability filtering | 9.3 | MUST |
 | C-45 | VC envelope: wrap and unwrap mandate | 12.2 | MUST |
 | C-46 | VC envelope: unsigned VC rejected | 12.3 | MUST |
+| C-47 | Session: no_retention disclosure rejected without TEE attestation | 5.4.4.1 | MUST |
+| C-48 | Session attestation: sign and verify bilateral attestation | 11.6 | MUST |
+| C-49 | Session attestation: per-action-type segmentation enforced | 11.6 | MUST |
 
 ### D.2. Transport Tests
 
@@ -2480,6 +2603,8 @@ when the implementation supports the corresponding extension.
 | E-13 | TEE attestation: valid attestation with matching nonce | 13.6.2 | OPTIONAL |
 | E-14 | TEE attestation: stale attestation rejected | 13.6.2 | OPTIONAL |
 | E-15 | TEE attestation: does not expand mandate scope | 13.6.3 | OPTIONAL |
+| E-16 | Marketplace: query results not ranked by operator metrics | 9.6 | MUST |
+| E-17 | Marketplace: operator metrics excluded from content hash | 9.6 | MUST |
 
 ### D.4. Federation Tests
 
@@ -2490,10 +2615,14 @@ when the implementation supports the corresponding extension.
 | F-03 | Federation: content-hash deduplication on merge | 10.5 | MUST |
 | F-04 | Federation: unsigned advertisement skipped on merge | 10.5 | MUST |
 | F-05 | Federation: transitive peer discovery | 10.6 | OPTIONAL |
+| F-06 | Federation: peer registration requires minimum vouches | 10.7.2 | SHOULD |
+| F-07 | Federation: vouch budget enforced (max 3/year) | 10.7.3 | SHOULD |
+| F-08 | Federation: probationary peer cannot vouch | 10.7.3 | SHOULD |
+| F-09 | Federation: vouch signature verification | 10.7.2 | MUST |
 
 ### D.5. Trust Invariant Summary
 
-A conformant implementation MUST demonstrate all five trust
+A conformant implementation MUST demonstrate all eight trust
 invariants hold:
 
 | # | Invariant | Key Tests |
@@ -2503,6 +2632,9 @@ invariants hold:
 | TI-3 | Receipts contain property references, never values | C-37, C-38, C-39 |
 | TI-4 | Delegation chains enforce depth and TTL bounds | C-06, C-07, C-13, C-14 |
 | TI-5 | Decay states follow the defined state machine | C-16, C-17, C-18, C-19, C-20 |
+| TI-6 | no_retention requires TEE attestation | C-47 |
+| TI-7 | Marketplace queries are ranking-free | E-16, E-17 |
+| TI-8 | Peer vouching enforces budget and age constraints | F-06, F-07, F-08 |
 
 ---
 

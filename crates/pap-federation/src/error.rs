@@ -25,4 +25,23 @@ pub enum FederationError {
 
     #[error("revocation error: {0}")]
     RevocationError(String),
+
+    #[error("insufficient vouches: need {needed}, got {got}")]
+    InsufficientVouches { needed: usize, got: usize },
+
+    #[error("voucher too young: {did} (age {age_days} days, minimum {min_days} days)")]
+    VoucherTooYoung {
+        did: String,
+        age_days: u64,
+        min_days: u64,
+    },
+
+    #[error("invalid vouch: {0}")]
+    InvalidVouch(String),
+
+    #[error("voucher not found: {0}")]
+    VoucherNotFound(String),
+
+    #[error("peer is probationary and cannot vouch: {0}")]
+    PeerProbationary(String),
 }
