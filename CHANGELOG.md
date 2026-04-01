@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.5.9] - 2026-04-01
+
+### Fixed
+
+- **pap-python**: Add `build.rs` to emit `-undefined dynamic_lookup` linker flag on macOS, fixing linker errors when building the PyO3 extension module (`cdylib`) — Python symbols are resolved at load time by the embedding interpreter, not at build time
+
 ## [0.5.8] - 2026-03-29
 
 ### Fixed
