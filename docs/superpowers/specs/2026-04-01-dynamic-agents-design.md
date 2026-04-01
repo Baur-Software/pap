@@ -8,12 +8,16 @@
 
 ## 1. Problem
 
-The current agent library is 13 compiled Rust structs. Adding a new agent requires writing
+The current agent library is 14 compiled Rust structs. Adding a new agent requires writing
 Rust, rebuilding the binary, and shipping a release. This limits the ecosystem to what the
 core team has time to implement and makes the protocol feel small. The goal is to let agents
 be defined from structured config — enabling a pre-built catalog of hundreds of agents and
 letting users create new agents from a natural language prompt — while keeping the full
 PAP trust model intact.
+
+13 of those 14 agents are simple HTTP GET + JSON transform — identical to what a catalog
+TOML entry can express. Moving them to catalog reduces the compiled footprint to a single
+special-case agent and makes the whole ecosystem data-driven and easier to maintain.
 
 ---
 
@@ -406,13 +410,51 @@ Internal steps:
 
 `build_agents()` is unchanged. Dynamic registration is a post-build step.
 
-### 9.2. Startup Sequence
+### 9.2. pap-agents Crate Slimming
+
+As part of this change, the 13 compiled JSON-over-HTTP agent implementations are removed
+from `crates/pap-agents/src/agents/` and replaced by equivalent catalog TOML entries.
+
+Removed compiled agents (migrated to catalog):
+
+| File | Catalog path |
+|------|-------------|
+| `agents/arxiv.rs` | `science/arxiv.toml` |
+| `agents/credential_store.rs` | *(internal utility — deleted, not migrated)* |
+| `agents/dictionary.rs` | `knowledge/dictionary.toml` |
+| `agents/duckduckgo.rs` | `search/duckduckgo.toml` |
+| `agents/frankfurter.rs` | `finance/frankfurter.toml` |
+| `agents/github_repos.rs` | `culture/github_repos.toml` |
+| `agents/hacker_news.rs` | `culture/hacker_news.toml` |
+| `agents/ip_geolocation.rs` | `geo/ip_geolocation.toml` |
+| `agents/nominatim.rs` | `geo/nominatim.toml` |
+| `agents/open_library.rs` | `culture/open_library.toml` |
+| `agents/open_meteo.rs` | `science/open_meteo.toml` |
+| `agents/rest_countries.rs` | `knowledge/rest_countries.toml` |
+| `agents/wikipedia.rs` | `knowledge/wikipedia.toml` |
+
+`WebReaderExecutor` (`agents/web_reader.rs`) is **retained as compiled code** — it performs
+HTML parsing, entity decoding, script/style stripping, and visible-text extraction. This
+logic cannot be expressed as a JSONPath + LLM pattern; it requires custom Rust.
+
+After migration, `crates/pap-agents/src/agents/` contains only:
+- `mod.rs` (exports `WebReaderExecutor` only)
+- `web_reader.rs`
+
+`build_agents()` is updated accordingly — it registers `WebReaderExecutor` only.
+The `extra` parameter continues to allow the caller to inject additional compiled agents
+(used by `pap-python` and `pap-c` FFI crates for language-bridge agents).
+
+The `CredentialStoreExecutor` is an internal utility (writes to Papillon profile DB),
+not a user-facing agent. It is deleted without a catalog replacement.
+
+### 9.3. Startup Sequence
 
 ```rust
-// 1. Compiled agents (unchanged)
+// 1. Compiled agents (WebReaderExecutor + any FFI extras)
 let mut agent_set = build_agents(extra);
 
-// 2. DB agents
+// 2. DB agents (catalog + user_created + generated)
 let defs = db.load_all_agents().await?;
 for def in defs {
     agent_set.register_dynamic(&def, llm_provider.clone())?;
@@ -422,7 +464,7 @@ for def in defs {
 let local_registry = Arc::new(Mutex::new(agent_set.registry));
 ```
 
-### 9.3. Runtime Registration
+### 9.4. Runtime Registration
 
 Creating a new agent mid-session:
 
@@ -560,14 +602,41 @@ operations and protocol invariants.
 
 ## 14. Files Changed
 
+### New files
+
+| File | Purpose |
+|------|---------|
+| `crates/pap-agents/src/dynamic.rs` | `DynamicAgentDef`, `HttpEndpointConfig`, `DynamicAgentHandler` |
+| `crates/pap-agents/catalog/**/*.toml` | ~300 catalog entries replacing the 13 removed Rust agents + more |
+| `apps/papillon/src/commands/agents.rs` | Tauri commands for agent lifecycle |
+
+### Modified files
+
 | File | Change |
 |------|--------|
-| `crates/pap-agents/src/dynamic.rs` | New — `DynamicAgentDef`, `HttpEndpointConfig`, `DynamicAgentHandler` |
 | `crates/pap-agents/src/registry.rs` | Add `AgentSet::register_dynamic()` |
 | `crates/pap-agents/src/lib.rs` | Export `dynamic` module |
-| `crates/pap-agents/catalog/**/*.toml` | New — ~300 catalog entries |
+| `crates/pap-agents/src/agents/mod.rs` | Remove 13 executor exports; keep `WebReaderExecutor` only |
+| `crates/pap-agents/src/agents/web_reader.rs` | Unchanged |
 | `crates/papillon-shared/src/db/native.rs` | Add migration `0002_agents.sql` |
 | `crates/papillon-shared/src/types.rs` | Add `AgentInfo` safe frontend type, `DynamicAgentSource` |
-| `apps/papillon/src/commands/agents.rs` | New — Tauri commands |
 | `apps/papillon/src/commands/mod.rs` | Register agents commands |
 | `apps/papillon/src/lib.rs` | Startup: load DB agents → `register_dynamic()` |
+
+### Deleted files
+
+| File | Reason |
+|------|--------|
+| `crates/pap-agents/src/agents/arxiv.rs` | Replaced by `catalog/science/arxiv.toml` |
+| `crates/pap-agents/src/agents/credential_store.rs` | Internal utility; deleted (not user-facing) |
+| `crates/pap-agents/src/agents/dictionary.rs` | Replaced by `catalog/knowledge/dictionary.toml` |
+| `crates/pap-agents/src/agents/duckduckgo.rs` | Replaced by `catalog/search/duckduckgo.toml` |
+| `crates/pap-agents/src/agents/frankfurter.rs` | Replaced by `catalog/finance/frankfurter.toml` |
+| `crates/pap-agents/src/agents/github_repos.rs` | Replaced by `catalog/culture/github_repos.toml` |
+| `crates/pap-agents/src/agents/hacker_news.rs` | Replaced by `catalog/culture/hacker_news.toml` |
+| `crates/pap-agents/src/agents/ip_geolocation.rs` | Replaced by `catalog/geo/ip_geolocation.toml` |
+| `crates/pap-agents/src/agents/nominatim.rs` | Replaced by `catalog/geo/nominatim.toml` |
+| `crates/pap-agents/src/agents/open_library.rs` | Replaced by `catalog/culture/open_library.toml` |
+| `crates/pap-agents/src/agents/open_meteo.rs` | Replaced by `catalog/science/open_meteo.toml` |
+| `crates/pap-agents/src/agents/rest_countries.rs` | Replaced by `catalog/knowledge/rest_countries.toml` |
+| `crates/pap-agents/src/agents/wikipedia.rs` | Replaced by `catalog/knowledge/wikipedia.toml` |
