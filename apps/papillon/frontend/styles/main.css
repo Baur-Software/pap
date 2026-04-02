@@ -3358,7 +3358,7 @@ body {
 .partition-decay-degraded { font-family: var(--font-mono); font-size: 10px; color: var(--gold, #f0a030); margin-left: auto; }
 .partition-decay-compressed { font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,0.3); margin-left: auto; }
 .partition-outcome-success { font-family: var(--font-mono); font-size: 10px; color: var(--sys-green); padding: 1px 5px; border: 1px solid rgba(0,217,166,0.3); border-radius: 2px; }
-.partition-outcome-failure { font-family: var(--font-mono); font-size: 10px; color: var(--coral, #ff6b6b); padding: 1px 5px; border: 1px solid rgba(255,107,107,0.3); border-radius: 2px; }
+.partition-outcome-failure { font-family: var(--font-mono); font-size: 10px; color: var(--coral, #e8706a); padding: 1px 5px; border: 1px solid rgba(232,112,106,0.3); border-radius: 2px; }
 .partition-outcome-rejected { font-family: var(--font-mono); font-size: 10px; color: var(--gold, #f0a030); padding: 1px 5px; border: 1px solid rgba(240,160,48,0.3); border-radius: 2px; }
 
 /* ── Partition Stats Panel ── */
