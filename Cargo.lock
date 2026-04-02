@@ -4512,6 +4512,7 @@ dependencies = [
  "reqwest 0.12.12",
  "serde",
  "serde_json",
+ "toml 0.8.23",
  "uuid",
 ]
 
@@ -4986,6 +4987,7 @@ version = "0.5.7"
 dependencies = [
  "chrono",
  "js-sys",
+ "pap-agents",
  "rusqlite",
  "serde",
  "serde_json",
