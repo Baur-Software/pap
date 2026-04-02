@@ -20,6 +20,8 @@ reqwest = { workspace = true, features = ["blocking", "json"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 pap-credential-store = { workspace = true, features = ["testing"] }
+rand = { workspace = true }
