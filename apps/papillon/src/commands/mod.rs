@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod canvas;
 pub mod health;
 pub mod identity;

@@ -31,7 +31,9 @@ pub struct RegistryInfo {
     pub peer_count: usize,
 }
 
-/// Agent information for display in the registry browser.
+/// Agent information for display in the registry browser and agent management UI.
+/// This is the safe frontend-facing type — never contains operator_key_seed,
+/// HttpEndpointConfig, llm_instructions, or endpoint internals.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
     pub name: String,
@@ -43,6 +45,15 @@ pub struct AgentInfo {
     pub returns: Vec<String>,
     pub endpoint: Option<String>,
     pub content_hash: String,
+    /// The agent's DID (did:key:z...). None for remote registry agents.
+    #[serde(default)]
+    pub agent_did: Option<String>,
+    /// Origin: "compiled", "catalog", "user_created", or "generated".
+    #[serde(default)]
+    pub source: String,
+    /// Registry URLs this agent's advertisement has been published to.
+    #[serde(default)]
+    pub published_to: Vec<String>,
 }
 
 /// Federation peer information.

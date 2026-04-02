@@ -151,6 +151,13 @@ pub fn run() {
             commands::templates::export_templates,
             commands::templates::import_templates,
             commands::templates::auto_generate_template,
+            commands::agents::list_local_agents,
+            commands::agents::save_agent,
+            commands::agents::delete_agent,
+            commands::agents::update_agent,
+            commands::agents::generate_agent,
+            commands::agents::publish_agent,
+            commands::agents::unpublish_agent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");
