@@ -1023,6 +1023,25 @@ pub fn list_completed_runs(
     Ok(results)
 }
 
+/// List raw episodes for the Intent Partitions timeline.
+///
+/// Returns the full `Episode` records from the episode store so the frontend
+/// can display decay state, scope, duration, and other partition metadata that
+/// is not preserved in `ScenarioRunResult`.
+#[tauri::command]
+pub fn list_episodes(
+    state: State<'_, AppState>,
+    offset: Option<u32>,
+    limit: Option<u32>,
+) -> Result<Vec<Episode>, PapillonError> {
+    let offset = offset.unwrap_or(0);
+    let limit = std::cmp::min(limit.unwrap_or(50), 200) as usize;
+    state
+        .db
+        .list_episodes(None, None, limit, Some(offset as i64))
+        .map_err(|e| PapillonError::from(e.0))
+}
+
 /// List agent profiles for the frontend.
 #[tauri::command]
 pub fn list_agent_profiles(state: State<'_, AppState>) -> Result<Vec<AgentProfile>, PapillonError> {

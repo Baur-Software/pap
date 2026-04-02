@@ -126,6 +126,7 @@ pub fn run() {
             commands::orchestrator::list_scenarios,
             commands::orchestrator::run_scenario,
             commands::orchestrator::list_completed_runs,
+            commands::orchestrator::list_episodes,
             commands::orchestrator::list_agent_profiles,
             commands::llm::check_llm_connection,
             commands::orchestrator::list_builtin_models,

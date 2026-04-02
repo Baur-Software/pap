@@ -3329,3 +3329,50 @@ body {
     background: rgba(0, 217, 166, 0.18);
     box-shadow: 0 0 8px rgba(0, 217, 166, 0.2);
 }
+
+/* ── Intent Partitions ── */
+.partitions-page { display: grid; grid-template-columns: 1fr 280px; gap: var(--sp-lg); height: 100%; overflow: hidden; }
+.partitions-timeline { display: flex; flex-direction: column; overflow: hidden; }
+.partitions-header { display: flex; align-items: center; gap: var(--sp-md); padding: var(--sp-md) 0; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: var(--sp-md); flex-shrink: 0; }
+.partitions-title { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.1em; color: rgba(255,255,255,0.5); text-transform: uppercase; }
+.partitions-filters { display: flex; gap: 4px; margin-left: auto; }
+.partitions-filter-btn { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; padding: 3px 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; background: transparent; color: rgba(255,255,255,0.4); cursor: pointer; }
+.partitions-filter-btn.active { border-color: var(--sys-green); color: var(--sys-green); }
+.partitions-loading, .partitions-empty { font-family: var(--font-mono); font-size: 13px; color: rgba(255,255,255,0.3); padding: var(--sp-xl) 0; }
+.partitions-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: var(--sp-sm); }
+
+.partition-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--r-sm); padding: var(--sp-sm) var(--sp-md); display: flex; flex-direction: column; gap: 6px; }
+.partition-card:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
+.partition-card-header { display: flex; align-items: center; gap: 8px; }
+.partition-live-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.2); flex-shrink: 0; }
+.partition-live-dot.active { background: var(--sys-green); box-shadow: 0 0 6px var(--sys-green); }
+.partition-type { font-family: var(--font-mono); font-size: 12px; color: var(--text-1, #eeeef2); font-weight: 600; letter-spacing: 0.04em; }
+.partition-ts { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.3); margin-left: auto; }
+.partition-card-body { display: flex; align-items: center; gap: var(--sp-md); }
+.partition-agent { font-family: var(--font-mono); font-size: 12px; color: rgba(255,255,255,0.6); }
+.partition-dur { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.35); margin-left: auto; }
+.partition-summary { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.45); margin: 0; padding-left: 2px; }
+.partition-card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.partition-scope-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.1); border-radius: 2px; color: rgba(255,255,255,0.4); }
+.partition-decay-active { font-family: var(--font-mono); font-size: 10px; color: var(--sys-green); margin-left: auto; }
+.partition-decay-degraded { font-family: var(--font-mono); font-size: 10px; color: var(--gold, #f0a030); margin-left: auto; }
+.partition-decay-compressed { font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,0.3); margin-left: auto; }
+.partition-outcome-success { font-family: var(--font-mono); font-size: 10px; color: var(--sys-green); padding: 1px 5px; border: 1px solid rgba(0,217,166,0.3); border-radius: 2px; }
+.partition-outcome-failure { font-family: var(--font-mono); font-size: 10px; color: var(--coral, #ff6b6b); padding: 1px 5px; border: 1px solid rgba(255,107,107,0.3); border-radius: 2px; }
+.partition-outcome-rejected { font-family: var(--font-mono); font-size: 10px; color: var(--gold, #f0a030); padding: 1px 5px; border: 1px solid rgba(240,160,48,0.3); border-radius: 2px; }
+
+/* ── Partition Stats Panel ── */
+.partitions-stats { border-left: 1px solid rgba(255,255,255,0.06); padding-left: var(--sp-lg); overflow-y: auto; }
+.partitions-stats-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.4); padding-bottom: var(--sp-md); border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: var(--sp-md); }
+.partitions-stat-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; }
+.partitions-stat-label { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 0.06em; text-transform: uppercase; }
+.partitions-stat-value { font-family: var(--font-mono); font-size: 13px; color: var(--text-1, #eeeef2); font-weight: 600; }
+.partitions-stat-div { height: 1px; background: rgba(255,255,255,0.06); margin: var(--sp-sm) 0; }
+.partitions-decay-row { display: flex; align-items: center; gap: var(--sp-sm); padding: 3px 0; }
+.partitions-decay-label { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.4); width: 80px; }
+.partitions-decay-bar-wrap { flex: 1; height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; }
+.partitions-decay-bar { height: 100%; border-radius: 2px; }
+.partitions-decay-bar.active { background: var(--sys-green); }
+.partitions-decay-bar.degraded { background: var(--gold, #f0a030); }
+.partitions-decay-bar.compressed { background: rgba(255,255,255,0.2); }
+.partitions-decay-count { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.4); width: 24px; text-align: right; }
