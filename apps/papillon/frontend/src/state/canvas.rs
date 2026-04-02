@@ -6,6 +6,16 @@ use crate::bridge;
 use crate::service::PapillonService;
 use crate::state::registry::RegistryState;
 
+/// A pending Human-in-the-Loop gate request.
+#[derive(Clone, Debug)]
+pub struct HitlRequest {
+    pub agent_name: String,
+    pub action_type: String,  // e.g. "schema:WriteAction"
+    pub risk_level: String,   // "HIGH" or "CRITICAL"
+    pub disclosure_props: Vec<String>,
+    pub description: String,
+}
+
 /// Global canvas state — tracks canvases, blocks, and prompts.
 #[derive(Clone, Copy)]
 pub struct CanvasState {
@@ -21,6 +31,8 @@ pub struct CanvasState {
     pub focus_prompt: RwSignal<u32>,
     /// Set by agent tiles to prefill the prompt input.
     pub prefill_prompt: RwSignal<Option<String>>,
+    /// Pending HitL gate — set by the protocol layer, cleared by user decision.
+    pub hitl_pending: RwSignal<Option<HitlRequest>>,
 }
 
 impl Default for CanvasState {
@@ -32,6 +44,7 @@ impl Default for CanvasState {
             recent_prompts: RwSignal::new(Vec::new()),
             focus_prompt: RwSignal::new(0),
             prefill_prompt: RwSignal::new(None),
+            hitl_pending: RwSignal::new(None),
         }
     }
 }
