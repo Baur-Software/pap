@@ -15,6 +15,7 @@ use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
 use crate::pages::dashboard::DashboardPage;
 use crate::pages::home::HomePage;
+use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
 use crate::service::{PapillonService, TauriService, WebService};
@@ -270,6 +271,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/home") view=HomePage />
                         <Route path=path!("/scenario/:id") view=ScenarioPage />
                         <Route path=path!("/activity") view=ActivityPage />
+                        <Route path=path!("/receipts") view=ReceiptsPage />
                         <Route path=path!("/settings") view=SettingsPage />
                         <Route path=path!("/browse") view=BrowsePage />
                         <Route path=path!("/fleet") view=DashboardPage />

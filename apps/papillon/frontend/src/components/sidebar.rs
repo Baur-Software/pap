@@ -56,6 +56,18 @@ pub fn Sidebar() -> impl IntoView {
             >
                 <IconDatabase />
             </A>
+            <A
+                href="/receipts"
+                attr:class=move || {
+                    if location.pathname.get().starts_with("/receipts") {
+                        "sidebar-icon active"
+                    } else {
+                        "sidebar-icon"
+                    }
+                }
+            >
+                <IconReceipt />
+            </A>
             <div style="flex:1" />
             <A
                 href="/settings"
@@ -112,6 +124,17 @@ fn IconDatabase() -> impl IntoView {
             <ellipse cx="12" cy="5" rx="9" ry="3"/>
             <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
             <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+        </svg>
+    }
+}
+
+#[component]
+fn IconReceipt() -> impl IntoView {
+    view! {
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
         </svg>
     }
 }
