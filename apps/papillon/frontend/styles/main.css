@@ -792,6 +792,35 @@ body {
     box-shadow: 0 0 0 2px rgba(0, 217, 166, 0.15);
 }
 
+.setup-inputs select {
+    width: 100%;
+    background: var(--bg-2, var(--bg-tertiary));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 4px;
+    padding: 8px;
+    color: var(--text-1, var(--text-primary));
+    font-size: 13px;
+    font-family: var(--font-mono);
+}
+
+.setup-download-wrap { margin-top: 8px; }
+
+.setup-model-status-wrap { margin-top: 8px; }
+
+.setup-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.setup-error {
+    color: var(--error, var(--coral));
+    font-size: 12px;
+    margin-top: 12px;
+    font-family: var(--font-mono);
+}
+
 /* ═══════════════════════════════════════════════════════════
    SETTINGS TABS
    ═══════════════════════════════════════════════════════════ */
@@ -1522,20 +1551,6 @@ body {
     padding: var(--sp-xl) var(--sp-lg);
 }
 
-.setup-heading {
-    font-family: var(--font-display);
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-1);
-    margin-bottom: var(--sp-sm);
-}
-
-.setup-description {
-    font-size: 13px;
-    color: var(--text-2);
-    margin-bottom: var(--sp-md);
-    line-height: 1.5;
-}
 
 /* ═══════════════════════════════════════════════════════════
    PROMPT INPUT — shared styles used by the inline canvas prompt

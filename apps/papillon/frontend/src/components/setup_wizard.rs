@@ -129,14 +129,7 @@ pub fn SetupWizard() -> impl IntoView {
 
                     // Step progress strip
                     <div class="setup-step-strip">
-                        <div class=move || {
-                            let p = selected_provider.get();
-                            if p == "builtin" || p == "ollama" || p == "openai" || p == "none" {
-                                "setup-step active"
-                            } else {
-                                "setup-step"
-                            }
-                        }>
+                        <div class="setup-step active">
                             "[01] ROOT_OF_TRUST"
                         </div>
                         <div class=move || {
@@ -190,7 +183,6 @@ pub fn SetupWizard() -> impl IntoView {
                         <div class="setup-inputs">
                             <label>"MODEL"</label>
                             <select
-                                style="width: 100%; background: var(--bg-2); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 8px; color: var(--fg-0); font-size: 13px; font-family: var(--font-mono);"
                                 on:change=move |ev| builtin_model.set(event_target_value(&ev))
                                 prop:value=move || builtin_model.get()
                             >
@@ -229,14 +221,14 @@ pub fn SetupWizard() -> impl IntoView {
                                     }.into_any()
                                 } else {
                                     view! {
-                                        <div style="margin-top: 8px;">
+                                        <div class="setup-model-status-wrap">
                                             <p class="setup-model-pending">
                                                 "\u{26a0} DOWNLOAD_REQUIRED (~0.6 GB) \u{2014} one-time download, then fully offline."
                                             </p>
                                             <Show when=move || !downloading.get()>
+                                                <div class="setup-download-wrap">
                                                 <button
-                                                    class="btn btn-sys"
-                                                    style="font-size: 12px; padding: 6px 16px; margin-top: 8px;"
+                                                    class="btn-sys"
                                                     on:click=move |_| {
                                                         let mid = builtin_model.get();
                                                         downloading.set(true);
@@ -262,9 +254,10 @@ pub fn SetupWizard() -> impl IntoView {
                                                         });
                                                     }
                                                 >"[ DOWNLOAD_MODEL ]"</button>
+                                                </div>
                                             </Show>
                                             <Show when=move || downloading.get()>
-                                                <p style="font-size: 11px; color: var(--text-2); margin-top: 6px; font-family: var(--font-mono);">
+                                                <p class="setup-model-pending">
                                                     "> Downloading model files..."
                                                 </p>
                                             </Show>
@@ -332,12 +325,12 @@ pub fn SetupWizard() -> impl IntoView {
                     </Show>
 
                     <Show when=move || wizard_error.get().is_some()>
-                        <p style="color: var(--error); font-size: 12px; margin-top: 12px; font-family: var(--font-mono);">
+                        <p class="setup-error">
                             {move || wizard_error.get().unwrap_or_default()}
                         </p>
                     </Show>
 
-                    <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">
+                    <div class="setup-actions">
                         <button class="btn-ghost" on:click=skip>
                             "[ SKIP ]"
                         </button>
