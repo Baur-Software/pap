@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
@@ -21,29 +22,32 @@ pub fn SettingsPage() -> impl IntoView {
     let active_tab = RwSignal::new("general".to_string());
 
     view! {
-        <div class="page">
-            <h2 class="page-title">"Settings"</h2>
-            <div class="settings-tabs">
+        <div class="settings-page">
+            <div class="settings-tab-bar">
                 <button
                     class=move || if active_tab.get() == "general" { "settings-tab active" } else { "settings-tab" }
                     on:click=move |_| active_tab.set("general".into())
-                >"General"</button>
+                >"GENERAL"</button>
                 <button
                     class=move || if active_tab.get() == "profiles" { "settings-tab active" } else { "settings-tab" }
                     on:click=move |_| active_tab.set("profiles".into())
-                >"Profiles"</button>
+                >"PROFILES"</button>
                 <button
                     class=move || if active_tab.get() == "templates" { "settings-tab active" } else { "settings-tab" }
                     on:click=move |_| active_tab.set("templates".into())
-                >"Templates"</button>
+                >"TEMPLATES"</button>
                 <button
                     class=move || if active_tab.get() == "identity" { "settings-tab active" } else { "settings-tab" }
                     on:click=move |_| active_tab.set("identity".into())
-                >"Identity"</button>
+                >"IDENTITY"</button>
                 <button
                     class=move || if active_tab.get() == "advanced" { "settings-tab active" } else { "settings-tab" }
                     on:click=move |_| active_tab.set("advanced".into())
-                >"Advanced"</button>
+                >"ADVANCED"</button>
+                <button
+                    class=move || if active_tab.get() == "mandates" { "settings-tab active" } else { "settings-tab" }
+                    on:click=move |_| active_tab.set("mandates".into())
+                >"MANDATES"</button>
             </div>
 
             <Show when=move || active_tab.get() == "general">
@@ -60,6 +64,9 @@ pub fn SettingsPage() -> impl IntoView {
             </Show>
             <Show when=move || active_tab.get() == "advanced">
                 <AdvancedTab />
+            </Show>
+            <Show when=move || active_tab.get() == "mandates">
+                <MandateBuilderTab />
             </Show>
         </div>
     }
@@ -1212,5 +1219,113 @@ fn ProfilesTab() -> impl IntoView {
                 }
             }
         </Show>
+    }
+}
+
+#[component]
+fn MandateBuilderTab() -> impl IntoView {
+    let scope_input = RwSignal::new(String::new());
+    let ttl_hours = RwSignal::new(8u32);
+    let auto_approve_zero = RwSignal::new(true);
+    let principal_did = RwSignal::new(String::new());
+
+    let preview_json = move || {
+        let scope: Vec<String> = scope_input.get()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        serde_json::to_string_pretty(&serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "Mandate",
+            "scope": scope,
+            "ttl_hours": ttl_hours.get(),
+            "auto_approve_zero_disclosure": auto_approve_zero.get(),
+            "principal": if principal_did.get().is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::String(principal_did.get())
+            }
+        })).unwrap_or_default()
+    };
+
+    view! {
+        <div class="mandate-builder">
+            <div class="mandate-form-col">
+                <div class="mandate-section">
+                    <div class="mandate-section-label">"SCOPE_OBJECTIVES"</div>
+                    <div class="mandate-field">
+                        <label class="mandate-field-label">"ACTION_TYPES"</label>
+                        <input
+                            class="mandate-input"
+                            type="text"
+                            placeholder="schema:SearchAction, schema:ReadAction"
+                            prop:value=move || scope_input.get()
+                            on:input=move |ev| scope_input.set(event_target_value(&ev))
+                        />
+                        <div class="mandate-field-hint">"Comma-separated Schema.org action types"</div>
+                    </div>
+                </div>
+
+                <div class="mandate-section">
+                    <div class="mandate-section-label">"CONSTRAINTS"</div>
+                    <div class="mandate-field">
+                        <label class="mandate-field-label">"TTL_HOURS"</label>
+                        <input
+                            class="mandate-input mandate-input-narrow"
+                            type="number"
+                            min="1"
+                            max="720"
+                            prop:value=move || ttl_hours.get().to_string()
+                            on:input=move |ev| {
+                                if let Ok(v) = event_target_value(&ev).parse::<u32>() {
+                                    ttl_hours.set(v);
+                                }
+                            }
+                        />
+                    </div>
+                    <div class="mandate-field">
+                        <label class="mandate-field-label mandate-field-row">
+                            <input
+                                type="checkbox"
+                                class="mandate-checkbox"
+                                prop:checked=move || auto_approve_zero.get()
+                                on:change=move |ev| {
+                                    if let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+                                        auto_approve_zero.set(input.checked());
+                                    }
+                                }
+                            />
+                            "AUTO_APPROVE_ZERO_DISCLOSURE"
+                        </label>
+                        <div class="mandate-field-hint">"Allow agents to run without requesting any personal data"</div>
+                    </div>
+                </div>
+
+                <div class="mandate-section">
+                    <div class="mandate-section-label">"DELEGATION_TARGET"</div>
+                    <div class="mandate-field">
+                        <label class="mandate-field-label">"PRINCIPAL_DID"</label>
+                        <input
+                            class="mandate-input"
+                            type="text"
+                            placeholder="did:key:z6Mk..."
+                            prop:value=move || principal_did.get()
+                            on:input=move |ev| principal_did.set(event_target_value(&ev))
+                        />
+                        <div class="mandate-field-hint">"Leave empty for self-mandate"</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mandate-preview-col">
+                <div class="mandate-section-label">"MANDATE_PREVIEW"</div>
+                <pre class="mandate-preview-code">{preview_json}</pre>
+                <div class="mandate-preview-note">
+                    "Mandates are co-signed by the principal and scoped by TTL. "
+                    "This preview shows the unsigned structure."
+                </div>
+            </div>
+        </div>
     }
 }
