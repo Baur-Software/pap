@@ -13,6 +13,7 @@ use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
+use crate::pages::home::HomePage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
 use crate::service::{PapillonService, TauriService, WebService};
@@ -265,6 +266,7 @@ pub fn App() -> impl IntoView {
                 <main class="app-main">
                     <Routes fallback=|| "Page not found.">
                         <Route path=path!("/") view=CanvasPage />
+                        <Route path=path!("/home") view=HomePage />
                         <Route path=path!("/scenario/:id") view=ScenarioPage />
                         <Route path=path!("/activity") view=ActivityPage />
                         <Route path=path!("/settings") view=SettingsPage />
