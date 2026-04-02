@@ -116,38 +116,71 @@ pub fn SetupWizard() -> impl IntoView {
         <Show when=move || show_wizard.get()>
             <div class="setup-overlay">
                 <div class="setup-wizard">
-                    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">"Welcome to Papillon"</h2>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
-                        "Choose how the orchestrator runs inference. The built-in model runs entirely on your device \u{2014} no network calls, no data leaks."
-                    </p>
+                    // Terminal boot header
+                    <div class="setup-boot-header">
+                        <div class="setup-boot-line">"PAPILLON_SYS v0.9 \u{2014} ROOT OF TRUST INITIALIZATION"</div>
+                        <div class="setup-boot-line">"> Establishing principal identity..."</div>
+                        <div class="setup-boot-line">"> Configuring inference substrate..."</div>
+                        <div class="setup-boot-line">
+                            "> Verifying local vault..."
+                            <span class="setup-boot-cursor">"_"</span>
+                        </div>
+                    </div>
+
+                    // Step progress strip
+                    <div class="setup-step-strip">
+                        <div class=move || {
+                            let p = selected_provider.get();
+                            if p == "builtin" || p == "ollama" || p == "openai" || p == "none" {
+                                "setup-step active"
+                            } else {
+                                "setup-step"
+                            }
+                        }>
+                            "[01] ROOT_OF_TRUST"
+                        </div>
+                        <div class=move || {
+                            let p = selected_provider.get();
+                            if p == "builtin" || p == "ollama" || p == "openai" {
+                                "setup-step active"
+                            } else {
+                                "setup-step"
+                            }
+                        }>
+                            "[02] INFERENCE_SUBSTRATE"
+                        </div>
+                        <div class="setup-step">
+                            "[03] VAULT_VERIFY"
+                        </div>
+                    </div>
 
                     <div class="setup-options">
                         <div
                             class=move || if selected_provider.get() == "builtin" { "setup-option selected" } else { "setup-option" }
                             on:click=move |_| selected_provider.set("builtin".into())
                         >
-                            <div class="setup-option-title">"Built-in (Recommended)"</div>
+                            <div class="setup-option-title">"BUILTIN \u{2014} ON_DEVICE (RECOMMENDED)"</div>
                             <div class="setup-option-desc">"On-device TinyLlama via Candle \u{2014} downloads once, runs fully offline"</div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "ollama" { "setup-option selected" } else { "setup-option" }
                             on:click=move |_| selected_provider.set("ollama".into())
                         >
-                            <div class="setup-option-title">"Ollama (requires HTTP)"</div>
+                            <div class="setup-option-title">"OLLAMA \u{2014} LOCAL_HTTP"</div>
                             <div class="setup-option-desc">"External process \u{2014} prompts leave this app via localhost"</div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "openai" { "setup-option selected" } else { "setup-option" }
                             on:click=move |_| selected_provider.set("openai".into())
                         >
-                            <div class="setup-option-title">"OpenAI-compatible (requires network)"</div>
+                            <div class="setup-option-title">"OPENAI_COMPAT \u{2014} REMOTE_API"</div>
                             <div class="setup-option-desc">"Remote API \u{2014} prompts sent over the internet"</div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "none" { "setup-option selected" } else { "setup-option" }
                             on:click=move |_| selected_provider.set("none".into())
                         >
-                            <div class="setup-option-title">"Skip for now"</div>
+                            <div class="setup-option-title">"NONE \u{2014} SKIP_INFERENCE"</div>
                             <div class="setup-option-desc">"Search and knowledge agents only, no AI"</div>
                         </div>
                     </div>
@@ -155,9 +188,9 @@ pub fn SetupWizard() -> impl IntoView {
                     // Built-in model picker
                     <Show when=move || selected_provider.get() == "builtin">
                         <div class="setup-inputs">
-                            <label>"Model"</label>
+                            <label>"MODEL"</label>
                             <select
-                                style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px;"
+                                style="width: 100%; background: var(--bg-2); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 8px; color: var(--fg-0); font-size: 13px; font-family: var(--font-mono);"
                                 on:change=move |ev| builtin_model.set(event_target_value(&ev))
                                 prop:value=move || builtin_model.get()
                             >
@@ -180,11 +213,9 @@ pub fn SetupWizard() -> impl IntoView {
 
                                 if !bridge::tauri_available() {
                                     view! {
-                                        <div style="background: rgba(108, 92, 231, 0.08); border: 1px solid rgba(108, 92, 231, 0.3); border-radius: 6px; padding: 10px 12px; margin-top: 8px;">
-                                            <p style="font-size: 12px; font-weight: 600; color: #6c5ce7; margin-bottom: 4px;">
-                                                "Browser extension required"
-                                            </p>
-                                            <p style="font-size: 12px; color: var(--text-secondary);">
+                                        <div class="setup-ext-info">
+                                            <p class="setup-ext-info-label">"EXTENSION_REQUIRED"</p>
+                                            <p class="setup-ext-info-body">
                                                 "On-device inference requires the Papillon desktop app. "
                                                 "Install the browser extension to connect pap:// URLs to your local instance."
                                             </p>
@@ -192,20 +223,20 @@ pub fn SetupWizard() -> impl IntoView {
                                     }.into_any()
                                 } else if is_ready {
                                     view! {
-                                        <p style="font-size: 11px; color: #00b894; margin-top: 4px;">
-                                            "Model ready. Runs entirely on-device \u{2014} no network calls."
+                                        <p class="setup-model-ready">
+                                            "\u{25c6} SUBSTRATE_READY \u{2014} runs entirely on-device, no network calls."
                                         </p>
                                     }.into_any()
                                 } else {
                                     view! {
                                         <div style="margin-top: 8px;">
-                                            <p style="font-size: 11px; color: #fdcb6e; margin-bottom: 8px;">
-                                                "Model download required (~0.6 GB). One-time download, then fully offline."
+                                            <p class="setup-model-pending">
+                                                "\u{26a0} DOWNLOAD_REQUIRED (~0.6 GB) \u{2014} one-time download, then fully offline."
                                             </p>
                                             <Show when=move || !downloading.get()>
                                                 <button
-                                                    class="btn btn-primary"
-                                                    style="font-size: 12px; padding: 6px 16px;"
+                                                    class="btn btn-sys"
+                                                    style="font-size: 12px; padding: 6px 16px; margin-top: 8px;"
                                                     on:click=move |_| {
                                                         let mid = builtin_model.get();
                                                         downloading.set(true);
@@ -230,11 +261,11 @@ pub fn SetupWizard() -> impl IntoView {
                                                             downloading.set(false);
                                                         });
                                                     }
-                                                >"Download Model"</button>
+                                                >"[ DOWNLOAD_MODEL ]"</button>
                                             </Show>
                                             <Show when=move || downloading.get()>
-                                                <p style="font-size: 11px; color: var(--text-secondary);">
-                                                    "Downloading model files..."
+                                                <p style="font-size: 11px; color: var(--text-2); margin-top: 6px; font-family: var(--font-mono);">
+                                                    "> Downloading model files..."
                                                 </p>
                                             </Show>
                                         </div>
@@ -246,11 +277,9 @@ pub fn SetupWizard() -> impl IntoView {
 
                     // Security warning for HTTP providers
                     <Show when=move || selected_provider.get() == "ollama" || selected_provider.get() == "openai">
-                        <div style="background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 6px; padding: 10px 12px; margin-top: 12px;">
-                            <p style="font-size: 12px; font-weight: 600; color: var(--error); margin-bottom: 4px;">
-                                "Security disclosure"
-                            </p>
-                            <p style="font-size: 12px; color: var(--text-secondary);">
+                        <div class="setup-sec-warning">
+                            <p class="setup-sec-warning-label">"SECURITY_DISCLOSURE"</p>
+                            <p class="setup-sec-warning-body">
                                 "The orchestrator has full context over your tokens, keys, and agent actions. "
                                 "Sending prompts to an external API discloses this context to the provider. "
                                 "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
@@ -261,13 +290,13 @@ pub fn SetupWizard() -> impl IntoView {
                     // Conditional config inputs
                     <Show when=move || selected_provider.get() == "ollama">
                         <div class="setup-inputs">
-                            <label>"Endpoint"</label>
+                            <label>"ENDPOINT"</label>
                             <input
                                 type="text"
                                 prop:value=move || ollama_endpoint.get()
                                 on:input=move |ev| ollama_endpoint.set(event_target_value(&ev))
                             />
-                            <label>"Model"</label>
+                            <label>"MODEL"</label>
                             <input
                                 type="text"
                                 prop:value=move || ollama_model.get()
@@ -278,21 +307,21 @@ pub fn SetupWizard() -> impl IntoView {
 
                     <Show when=move || selected_provider.get() == "openai">
                         <div class="setup-inputs">
-                            <label>"Endpoint"</label>
+                            <label>"ENDPOINT"</label>
                             <input
                                 type="text"
                                 placeholder="https://api.openai.com/v1"
                                 prop:value=move || openai_endpoint.get()
                                 on:input=move |ev| openai_endpoint.set(event_target_value(&ev))
                             />
-                            <label>"API Key"</label>
+                            <label>"API_KEY"</label>
                             <input
                                 type="password"
                                 placeholder="sk-..."
                                 prop:value=move || openai_key.get()
                                 on:input=move |ev| openai_key.set(event_target_value(&ev))
                             />
-                            <label>"Model"</label>
+                            <label>"MODEL"</label>
                             <input
                                 type="text"
                                 placeholder="gpt-4o"
@@ -303,17 +332,17 @@ pub fn SetupWizard() -> impl IntoView {
                     </Show>
 
                     <Show when=move || wizard_error.get().is_some()>
-                        <p style="color: var(--error); font-size: 12px; margin-top: 12px;">
+                        <p style="color: var(--error); font-size: 12px; margin-top: 12px; font-family: var(--font-mono);">
                             {move || wizard_error.get().unwrap_or_default()}
                         </p>
                     </Show>
 
                     <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">
-                        <button class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary);" on:click=skip>
-                            "Skip"
+                        <button class="btn-ghost" on:click=skip>
+                            "[ SKIP ]"
                         </button>
-                        <button class="btn btn-primary" on:click=save_config>
-                            "Save"
+                        <button class="btn-sys" on:click=save_config>
+                            "[ INITIALIZE ]"
                         </button>
                     </div>
                 </div>
