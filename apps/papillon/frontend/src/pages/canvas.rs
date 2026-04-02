@@ -80,38 +80,174 @@ pub fn CanvasPage() -> impl IntoView {
         rendered
     };
 
+    let left_collapsed = RwSignal::new(false);
+    let right_collapsed = RwSignal::new(false);
+
+    let toggle_left = move |_| left_collapsed.set(!left_collapsed.get_untracked());
+    let toggle_right = move |_| right_collapsed.set(!right_collapsed.get_untracked());
+
     view! {
-        <div class="canvas-area">
-            <Show when=has_blocks fallback=move || view! {
-                <NewTabCanvas />
-            }>
-                <div class="canvas-blocks">
-                    <For
-                        each=grouped_blocks
-                        key=|g| match g {
-                            BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
-                            BlockGroup::Linked(bs) => bs.iter().map(|b| format!("{}@{}", b.id, b.updated_at)).collect::<Vec<_>>().join("-"),
-                        }
-                        children=move |group| {
-                            match group {
-                                BlockGroup::Single(block) => {
-                                    view! { <BlockRenderer block=block /> }.into_any()
-                                }
-                                BlockGroup::Linked(blocks) => {
-                                    view! {
-                                        <div class="block-group">
-                                            {blocks.into_iter().map(|block| {
-                                                view! { <BlockRenderer block=block /> }
-                                            }).collect::<Vec<_>>()}
-                                        </div>
-                                    }.into_any()
-                                }
-                            }
-                        }
-                    />
+        <div class="canvas-workspace">
+            // Left: Intent & Memory panel (collapsible)
+            <div class="canvas-intent-panel" class:collapsed=left_collapsed>
+                <div class="canvas-panel-header">
+                    <span class="canvas-panel-label">"INTENT_MEMORY"</span>
+                    <button class="canvas-panel-toggle" on:click=toggle_left>"◀"</button>
                 </div>
-                <InlinePrompt />
-            </Show>
+                <div class="canvas-panel-body">
+                    <IntentPanel />
+                </div>
+            </div>
+
+            // Center: main canvas (unchanged content)
+            <div class="canvas-viewport">
+                <div class="canvas-area">
+                    <Show when=has_blocks fallback=move || view! {
+                        <NewTabCanvas />
+                    }>
+                        <div class="canvas-blocks">
+                            <For
+                                each=grouped_blocks
+                                key=|g| match g {
+                                    BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
+                                    BlockGroup::Linked(bs) => bs.iter().map(|b| format!("{}@{}", b.id, b.updated_at)).collect::<Vec<_>>().join("-"),
+                                }
+                                children=move |group| {
+                                    match group {
+                                        BlockGroup::Single(block) => {
+                                            view! { <BlockRenderer block=block /> }.into_any()
+                                        }
+                                        BlockGroup::Linked(blocks) => {
+                                            view! {
+                                                <div class="block-group">
+                                                    {blocks.into_iter().map(|block| {
+                                                        view! { <BlockRenderer block=block /> }
+                                                    }).collect::<Vec<_>>()}
+                                                </div>
+                                            }.into_any()
+                                        }
+                                    }
+                                }
+                            />
+                        </div>
+                        <InlinePrompt />
+                    </Show>
+                </div>
+            </div>
+
+            // Right: Negotiation Ledger panel (collapsible)
+            <div class="canvas-ledger-panel" class:collapsed=right_collapsed>
+                <div class="canvas-panel-header">
+                    <button class="canvas-panel-toggle" on:click=toggle_right>"▶"</button>
+                    <span class="canvas-panel-label">"NEGOTIATION_LEDGER"</span>
+                </div>
+                <div class="canvas-panel-body">
+                    <CanvasLedger />
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// Left panel: shows session context from CanvasState and OrchestratorState.
+#[component]
+fn IntentPanel() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let orchestrator = expect_context::<OrchestratorState>();
+
+    let session_id = move || {
+        canvas_state.current_canvas()
+            .map(|c| c.id.chars().take(12).collect::<String>())
+            .unwrap_or_else(|| "NO_SESSION".to_string())
+    };
+
+    let block_count = move || {
+        canvas_state.current_canvas()
+            .map(|c| c.blocks.len())
+            .unwrap_or(0)
+    };
+
+    let llm_status = move || {
+        match orchestrator.status.get() {
+            OrchestratorStatus::Ready => "SUBSTRATE_READY",
+            OrchestratorStatus::Unconfigured => "NOT_CONFIGURED",
+            OrchestratorStatus::Disconnected => "DISCONNECTED",
+            _ => "UNKNOWN",
+        }
+    };
+
+    view! {
+        <div class="intent-section">
+            <div class="intent-section-label">"SESSION"</div>
+            <div class="intent-kv">
+                <span class="intent-key">"ID"</span>
+                <span class="intent-val">{session_id}</span>
+            </div>
+            <div class="intent-kv">
+                <span class="intent-key">"BLOCKS"</span>
+                <span class="intent-val">{block_count}</span>
+            </div>
+        </div>
+        <div class="intent-divider" />
+        <div class="intent-section">
+            <div class="intent-section-label">"SUBSTRATE"</div>
+            <div class="intent-kv">
+                <span class="intent-key">"LLM"</span>
+                <span class="intent-val intent-val-status">{llm_status}</span>
+            </div>
+        </div>
+        <div class="intent-divider" />
+        <div class="intent-section">
+            <div class="intent-section-label">"SCOPE"</div>
+            <div class="intent-hint">"No active mandate"</div>
+            <div class="intent-hint">"Agents run zero-disclosure by default"</div>
+        </div>
+    }
+}
+
+/// Right panel: shows recent canvas blocks as ledger entries.
+#[component]
+fn CanvasLedger() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+
+    let recent_blocks = move || {
+        canvas_state.current_canvas()
+            .map(|c| {
+                let mut blocks = c.blocks;
+                blocks.reverse();
+                blocks.truncate(8);
+                blocks
+            })
+            .unwrap_or_default()
+    };
+
+    view! {
+        <Show when=move || recent_blocks().is_empty()>
+            <div class="canvas-ledger-empty">"AWAITING_EVENTS"</div>
+        </Show>
+        <div class="canvas-ledger-entries">
+            <For
+                each=recent_blocks
+                key=|b| b.id.clone()
+                children=move |block| {
+                    let action = block.schema_type.clone()
+                        .unwrap_or_else(|| "Event".to_string());
+                    let action_display = action.strip_prefix("schema:").unwrap_or(&action).to_string();
+                    let ts = block.updated_at.chars().take(16).collect::<String>();
+                    let is_failed = matches!(block.state, papillon_shared::BlockState::Failed { .. });
+                    let outcome_class = if is_failed {
+                        "canvas-ledger-entry canvas-ledger-entry-error"
+                    } else {
+                        "canvas-ledger-entry canvas-ledger-entry-ok"
+                    };
+                    view! {
+                        <div class=outcome_class>
+                            <span class="canvas-ledger-type">{action_display}</span>
+                            <span class="canvas-ledger-ts">{ts}</span>
+                        </div>
+                    }
+                }
+            />
         </div>
     }
 }
