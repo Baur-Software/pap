@@ -12,7 +12,7 @@ use pap_federation::FederatedRegistry;
 use pap_marketplace::AgentAdvertisement;
 use pap_transport::AgentHandler;
 
-use crate::agents::*;
+use crate::agents::web_reader::WebReaderExecutor;
 use crate::executor::{AgentExecutor, AgentMeta};
 use crate::simple::SimpleAgent;
 
@@ -38,80 +38,7 @@ pub fn build_agents(extra: Vec<(&'static str, Arc<dyn AgentHandler>, AgentMeta)>
     let mut keypairs = HashMap::new();
     let mut handlers: HashMap<String, Arc<dyn AgentHandler>> = HashMap::new();
 
-    // Register all standard executors — Tier 0 (original)
-    register_executor(
-        DuckDuckGoExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        WikipediaExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        OpenMeteoExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        OpenLibraryExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        NominatimExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        FrankfurterExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        HackerNewsExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-
-    // Tier 1 — zero-auth public APIs
-    register_executor(
-        RestCountriesExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        DictionaryExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(ArxivExecutor, &mut registry, &mut keypairs, &mut handlers);
-    register_executor(
-        GitHubReposExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-
-    // Tier 2 — disclosure-required
-    register_executor(
-        IpGeolocationExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-
-    // Tier 3 — bridge agent (zero-trust ↔ legacy web)
+    // Only compiled agent: HTML parsing requires custom Rust (not expressible as TOML).
     register_executor(
         WebReaderExecutor,
         &mut registry,
@@ -230,28 +157,8 @@ mod tests {
     #[test]
     fn build_agents_registers_all_standard() {
         let set = build_agents(vec![]);
-        assert_eq!(set.handlers.len(), 13);
-        assert_eq!(set.keypairs.len(), 13);
-
-        // Tier 0 — original agents
-        assert!(set.handlers.contains_key("DuckDuckGo Search"));
-        assert!(set.handlers.contains_key("Wikipedia Knowledge"));
-        assert!(set.handlers.contains_key("Open-Meteo Weather"));
-        assert!(set.handlers.contains_key("Open Library Books"));
-        assert!(set.handlers.contains_key("Nominatim Geocoding"));
-        assert!(set.handlers.contains_key("Frankfurter Exchange"));
-        assert!(set.handlers.contains_key("Hacker News"));
-
-        // Tier 1 — zero-auth public APIs
-        assert!(set.handlers.contains_key("REST Countries"));
-        assert!(set.handlers.contains_key("Free Dictionary"));
-        assert!(set.handlers.contains_key("arXiv Papers"));
-        assert!(set.handlers.contains_key("GitHub Repos"));
-
-        // Tier 2 — disclosure-required
-        assert!(set.handlers.contains_key("IP Geolocation"));
-
-        // Tier 3 — bridge agent
+        assert_eq!(set.handlers.len(), 1);
+        assert_eq!(set.keypairs.len(), 1);
         assert!(set.handlers.contains_key("Web Page Reader"));
     }
 
@@ -336,35 +243,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn advertisements_queryable_by_action_type() {
-        let set = build_agents(vec![]);
-        let search_agents = set.registry.query_local("schema:SearchAction");
-        assert!(
-            !search_agents.is_empty(),
-            "Should have at least one SearchAction agent"
-        );
-
-        // DuckDuckGo should be discoverable
-        assert!(
-            search_agents.iter().any(|a| a.name == "DuckDuckGo Search"),
-            "DuckDuckGo Search should be queryable by SearchAction"
-        );
-    }
-
-    #[test]
-    fn disclosure_required_agents_declare_properties() {
-        let set = build_agents(vec![]);
-        let ip_geo = set
-            .registry
-            .all_advertisements()
-            .iter()
-            .find(|a| a.name == "IP Geolocation")
-            .expect("IP Geolocation agent should exist");
-
-        assert!(
-            !ip_geo.requires_disclosure.is_empty(),
-            "IP Geolocation should require disclosure"
-        );
-    }
 }
