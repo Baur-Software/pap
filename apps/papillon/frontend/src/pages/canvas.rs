@@ -92,7 +92,7 @@ pub fn CanvasPage() -> impl IntoView {
             <div class="canvas-intent-panel" class:collapsed=left_collapsed>
                 <div class="canvas-panel-header">
                     <span class="canvas-panel-label">"INTENT_MEMORY"</span>
-                    <button class="canvas-panel-toggle" on:click=toggle_left>"◀"</button>
+                    <button class="canvas-panel-toggle" on:click=toggle_left>{move || if left_collapsed.get() { "▶" } else { "◀" }}</button>
                 </div>
                 <div class="canvas-panel-body">
                     <IntentPanel />
@@ -138,7 +138,7 @@ pub fn CanvasPage() -> impl IntoView {
             // Right: Negotiation Ledger panel (collapsible)
             <div class="canvas-ledger-panel" class:collapsed=right_collapsed>
                 <div class="canvas-panel-header">
-                    <button class="canvas-panel-toggle" on:click=toggle_right>"▶"</button>
+                    <button class="canvas-panel-toggle" on:click=toggle_right>{move || if right_collapsed.get() { "◀" } else { "▶" }}</button>
                     <span class="canvas-panel-label">"NEGOTIATION_LEDGER"</span>
                 </div>
                 <div class="canvas-panel-body">
