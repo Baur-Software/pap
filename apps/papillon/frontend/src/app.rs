@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use crate::bridge;
 use crate::components::setup_wizard::SetupWizard;
+use crate::components::sidebar::Sidebar;
 use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
@@ -260,15 +261,29 @@ pub fn App() -> impl IntoView {
         <Router>
             <div class="app-shell-canvas">
                 <TopBar />
-                <Routes fallback=|| "Page not found.">
-                    <Route path=path!("/") view=CanvasPage />
-                    <Route path=path!("/scenario/:id") view=ScenarioPage />
-                    <Route path=path!("/activity") view=ActivityPage />
-                    <Route path=path!("/settings") view=SettingsPage />
-                    <Route path=path!("/browse") view=BrowsePage />
-                </Routes>
-                <footer class="status-bar">
-                    <span class=status_class>{status_label}</span>
+                <Sidebar />
+                <main class="app-main">
+                    <Routes fallback=|| "Page not found.">
+                        <Route path=path!("/") view=CanvasPage />
+                        <Route path=path!("/scenario/:id") view=ScenarioPage />
+                        <Route path=path!("/activity") view=ActivityPage />
+                        <Route path=path!("/settings") view=SettingsPage />
+                        <Route path=path!("/browse") view=BrowsePage />
+                    </Routes>
+                </main>
+                <footer class="status-bar app-statusbar">
+                    <span class="status-bar-item active">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>
+                        "ZERO_TRUST_ENFORCED"
+                    </span>
+                    <span class="status-bar-sep">"|"</span>
+                    <span class="status-bar-item">"LOCAL_VAULT_ENCRYPTED"</span>
+                    <span class="status-bar-sep">"|"</span>
+                    <span class="status-bar-item">"NO_TELEMETRY"</span>
+                    <span class="status-bar-spacer" />
+                    <span class="status-bar-item">"PAPILLON_v0.5.7"</span>
+                    <span class="status-bar-sep">"|"</span>
+                    <span class=move || format!("status-bar-item {}", status_class())>{status_label}</span>
                 </footer>
             </div>
             <SetupWizard />

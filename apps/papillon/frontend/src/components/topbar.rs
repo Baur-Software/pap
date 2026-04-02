@@ -88,28 +88,25 @@ pub fn TopBar() -> impl IntoView {
     let active_id = move || canvas_state.current_canvas_id.get();
 
     view! {
-        <div class="topbar">
-            <div class="topbar-left">
-                <button class="topbar-menu-btn" on:click=toggle_menu title="Menu">
-                    "\u{2630}"
-                </button>
-                <img src="/logo.png" alt="Papillon" class="topbar-logo" />
-                <span class="topbar-identity">{did_display}</span>
+        <header class="topbar app-topbar">
+            <div class="topbar-brand">
+                <svg class="topbar-brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                <span class="topbar-brand-name">"PAPILLON_SYS"</span>
             </div>
-            <div class="topbar-right">
-                <button
-                    class="topbar-profile-btn"
-                    on:click=move |_| profile_menu_open.update(|v| *v = !*v)
-                    title=current_profile_name
-                >
-                    <ProfileAvatar name=current_profile_name() />
-                </button>
-                <span class=status_class>{status_label}</span>
-                <A href="/settings" attr:class="topbar-settings-btn settings-gear" attr:title="Settings">
-                    "\u{2699}"
-                </A>
+            <div class="topbar-spacer" />
+            <div class="topbar-meta">
+                <div class="topbar-session-badge">
+                    <div class="topbar-session-dot" />
+                    {status_label}
+                </div>
+                <span class="topbar-meta-sep">"|"</span>
+                <span>"BUILD_9.4.2"</span>
+                <span class="topbar-meta-sep">"|"</span>
+                <span>"UTC 2026-04-02"</span>
             </div>
-        </div>
+        </header>
         <Show when=move || menu_open.get()>
             <div class="menu-backdrop" on:click=close_menu></div>
             <div class="menu-dropdown">
@@ -190,7 +187,7 @@ pub fn TopBar() -> impl IntoView {
                 </div>
                 <div class="profile-menu-divider"></div>
                 <A href="/settings?tab=profiles" attr:class="profile-menu-link" on:click=move |_| profile_menu_open.set(false)>
-                    "⚙ Profiles Settings"
+                    "\u{2699} Profiles Settings"
                 </A>
             </div>
         </Show>
