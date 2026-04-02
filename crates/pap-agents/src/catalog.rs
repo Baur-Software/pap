@@ -1,7 +1,7 @@
 //! Catalog loader — reads all *.toml files from the catalog directory
 //! and converts them to DynamicAgentDef values ready for DB insertion.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use serde::Deserialize;
 use crate::dynamic::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig, is_safe_url};
 

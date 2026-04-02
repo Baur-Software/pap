@@ -30,14 +30,18 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
             let db_path = data_dir.join("papillon.db");
 
-            // Create AppState with persistent database.
-            // Identity is auto-loaded from SQLite or generated on first launch.
-            let app_state = AppState::new(&db_path);
-
+            // Resolve resource directory before creating AppState so we can pass
+            // catalog_dir for first-run seeding.
             let resource_dir = app
                 .path()
                 .resource_dir()
                 .expect("failed to resolve resource dir");
+            let catalog_dir = resource_dir.join("catalog");
+
+            // Create AppState with persistent database.
+            // Identity is auto-loaded from SQLite or generated on first launch.
+            let app_state = AppState::new(&db_path, catalog_dir);
+
             *app_state.resource_dir.write().unwrap() = resource_dir;
             *app_state.data_dir.write().unwrap() = data_dir.clone();
 
