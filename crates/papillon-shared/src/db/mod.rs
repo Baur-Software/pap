@@ -160,4 +160,26 @@ pub trait DatabaseOps: Send + Sync {
 
     /// Check if any enabled template exists for the given schema type.
     fn has_enabled_template_for_schema_type(&self, schema_type: &str) -> Result<bool, DbError>;
+
+    /// Apply the active retention policy to the episode store.
+    ///
+    /// Two-phase reducer:
+    /// 1. **Compress** — episodes older than `full_retention_days` (or success episodes beyond
+    ///    `max_full_episodes`) have their `result_json` nulled and `decay_state` set to
+    ///    `"Compressed"`. Failure episodes use `failure_retention_multiplier × full_retention_days`.
+    /// 2. **Delete** — episodes already in `"Compressed"` state and older than
+    ///    `compressed_retention_days` are permanently removed. Again, failures use the multiplier.
+    ///
+    /// The policy values are read from the `retention_policies` table (`name = 'default'`).
+    /// If no policy row exists the call is a no-op.
+    ///
+    /// Returns the number of episodes compressed and deleted.
+    fn apply_retention_policy(&self) -> Result<RetentionStats, DbError>;
+}
+
+/// Summary of what the retention reducer did in a single pass.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RetentionStats {
+    pub compressed: usize,
+    pub deleted: usize,
 }

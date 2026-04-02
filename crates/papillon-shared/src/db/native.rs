@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
 
@@ -759,6 +759,117 @@ impl DatabaseOps for NativeDatabase {
             .map_err(|e| DbError(format!("db query: {e}")))?;
         Ok(count > 0)
     }
+
+    fn apply_retention_policy(&self) -> Result<super::RetentionStats, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        // Read the active retention policy.
+        let policy_row: Option<(i64, i64, i64, f64)> = conn
+            .query_row(
+                "SELECT max_full_episodes, full_retention_days, compressed_retention_days,
+                         failure_retention_multiplier
+                  FROM retention_policies WHERE name = 'default'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()
+            .map_err(|e| DbError(format!("db read policy: {e}")))?;
+
+        let (max_full, full_days, compressed_days, failure_mult) = match policy_row {
+            Some(r) => r,
+            None => return Ok(super::RetentionStats::default()), // no policy → no-op
+        };
+
+        let mut stats = super::RetentionStats::default();
+
+        // ── Phase 1: Age-based compression ────────────────────────────────
+        //
+        // Compress Active episodes older than `full_retention_days`.
+        // Failures use `failure_retention_multiplier × full_retention_days`.
+        //
+        // SQLite date arithmetic: julianday('now') - julianday(recorded_at) gives age in days.
+
+        let success_compress_threshold = full_days as f64;
+        let failure_compress_threshold = full_days as f64 * failure_mult;
+
+        let compressed_age = conn
+            .execute(
+                "UPDATE episodes
+                    SET decay_state = 'Compressed', result_json = NULL
+                  WHERE decay_state = 'Active'
+                    AND (
+                        (outcome != 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?1)
+                        OR
+                        (outcome = 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?2)
+                    )",
+                params![success_compress_threshold, failure_compress_threshold],
+            )
+            .map_err(|e| DbError(format!("db compress by age: {e}")))?;
+
+        stats.compressed += compressed_age;
+
+        // ── Phase 2: Count-based compression ──────────────────────────────
+        //
+        // If total Active episodes exceed max_full_episodes, compress the oldest
+        // ones (by recorded_at) beyond the cap. Only success/rejected are eligible —
+        // failures already get extra time via the age path above.
+
+        let active_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM episodes WHERE decay_state = 'Active' AND outcome != 'failure'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| DbError(format!("db count active: {e}")))?;
+
+        let excess = active_count - max_full;
+        if excess > 0 {
+            let compressed_count = conn
+                .execute(
+                    "UPDATE episodes
+                        SET decay_state = 'Compressed', result_json = NULL
+                      WHERE id IN (
+                          SELECT id FROM episodes
+                           WHERE decay_state = 'Active' AND outcome != 'failure'
+                           ORDER BY recorded_at ASC
+                           LIMIT ?1
+                      )",
+                    params![excess],
+                )
+                .map_err(|e| DbError(format!("db compress by count: {e}")))?;
+
+            stats.compressed += compressed_count;
+        }
+
+        // ── Phase 3: Delete expired compressed episodes ────────────────────
+        //
+        // Delete Compressed episodes older than `compressed_retention_days`.
+        // Failures again use the multiplier.
+
+        let success_delete_threshold = compressed_days as f64;
+        let failure_delete_threshold = compressed_days as f64 * failure_mult;
+
+        let deleted = conn
+            .execute(
+                "DELETE FROM episodes
+                  WHERE decay_state = 'Compressed'
+                    AND (
+                        (outcome != 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?1)
+                        OR
+                        (outcome = 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?2)
+                    )",
+                params![success_delete_threshold, failure_delete_threshold],
+            )
+            .map_err(|e| DbError(format!("db delete expired: {e}")))?;
+
+        stats.deleted += deleted;
+
+        Ok(stats)
+    }
 }
 
 #[cfg(test)]
@@ -800,6 +911,150 @@ mod tests {
 
         let episodes = db.list_episodes(None, None, 100, None).unwrap();
         assert_eq!(episodes.len(), 2);
+    }
+
+    // ── Retention policy tests ───────────────────────────────────────────
+
+    /// Insert an episode with a manually overridden recorded_at timestamp.
+    fn old_episode(id: &str, days_ago: i64) -> Episode {
+        let ts = chrono::Utc::now() - chrono::Duration::days(days_ago);
+        Episode {
+            recorded_at: ts.to_rfc3339(),
+            ..sample_episode(id)
+        }
+    }
+
+    fn failure_episode(id: &str, days_ago: i64) -> Episode {
+        let ts = chrono::Utc::now() - chrono::Duration::days(days_ago);
+        Episode {
+            outcome: "failure".to_string(),
+            recorded_at: ts.to_rfc3339(),
+            ..sample_episode(id)
+        }
+    }
+
+    #[test]
+    fn retention_no_op_when_no_policy_row() {
+        // Delete the default policy row that migrate() inserts, then run reducer.
+        let db = test_db();
+        db.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM retention_policies WHERE name = 'default'", [])
+            .unwrap();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 0);
+        assert_eq!(stats.deleted, 0);
+        // episode is untouched
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        assert_eq!(eps[0].decay_state, "Active");
+    }
+
+    #[test]
+    fn retention_compresses_old_success_episodes() {
+        let db = test_db();
+        // Policy: full_retention_days=90
+        // Insert an episode 100 days old — should be compressed.
+        db.insert_episode(&old_episode("old", 100)).unwrap();
+        db.insert_episode(&sample_episode("new")).unwrap(); // recorded_at = now, stays Active
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 1);
+        assert_eq!(stats.deleted, 0);
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        let old = eps.iter().find(|e| e.id == "old").unwrap();
+        let new = eps.iter().find(|e| e.id == "new").unwrap();
+        assert_eq!(old.decay_state, "Compressed");
+        assert!(old.result_json.is_none(), "result_json must be nulled after compression");
+        assert_eq!(new.decay_state, "Active");
+        assert!(new.result_json.is_some(), "recent episode result_json must be preserved");
+    }
+
+    #[test]
+    fn retention_failure_episodes_live_longer() {
+        let db = test_db();
+        // Policy: full_retention_days=90, failure_retention_multiplier=2.0
+        // So failures should not be compressed until 180 days.
+        // Insert a failure at 100 days — should NOT be compressed yet.
+        db.insert_episode(&failure_episode("fail-100", 100)).unwrap();
+        // Insert a failure at 200 days — SHOULD be compressed.
+        db.insert_episode(&failure_episode("fail-200", 200)).unwrap();
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 1);
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        let fail100 = eps.iter().find(|e| e.id == "fail-100").unwrap();
+        let fail200 = eps.iter().find(|e| e.id == "fail-200").unwrap();
+        assert_eq!(fail100.decay_state, "Active", "100-day failure should still be Active");
+        assert_eq!(fail200.decay_state, "Compressed", "200-day failure should be Compressed");
+    }
+
+    #[test]
+    fn retention_count_cap_compresses_oldest() {
+        let db = test_db();
+        // Set max_full_episodes = 2 so that with 4 episodes, 2 oldest get compressed.
+        db.conn.lock().unwrap().execute(
+            "UPDATE retention_policies SET max_full_episodes = 2 WHERE name = 'default'",
+            [],
+        ).unwrap();
+
+        // Insert 4 episodes with staggered times (all within 90-day window).
+        for i in 1..=4_i64 {
+            db.insert_episode(&old_episode(&format!("ep-{i}"), i)).unwrap();
+        }
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 2); // 2 oldest compressed to get down to cap
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        let active: Vec<_> = eps.iter().filter(|e| e.decay_state == "Active").collect();
+        let compressed: Vec<_> = eps.iter().filter(|e| e.decay_state == "Compressed").collect();
+        assert_eq!(active.len(), 2);
+        assert_eq!(compressed.len(), 2);
+        // The two oldest (ep-4, ep-3) should be compressed.
+        assert!(compressed.iter().any(|e| e.id == "ep-4"));
+        assert!(compressed.iter().any(|e| e.id == "ep-3"));
+    }
+
+    #[test]
+    fn retention_deletes_expired_compressed_episodes() {
+        let db = test_db();
+        // Policy: compressed_retention_days=365
+        // Insert a Compressed episode at 400 days — should be deleted.
+        let mut ep = old_episode("stale", 400);
+        ep.decay_state = "Compressed".to_string();
+        ep.result_json = None;
+        db.insert_episode(&ep).unwrap();
+
+        // Also insert a recently-compressed episode — should NOT be deleted.
+        let mut recent = old_episode("recent-compressed", 10);
+        recent.decay_state = "Compressed".to_string();
+        recent.result_json = None;
+        db.insert_episode(&recent).unwrap();
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.deleted, 1);
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        assert_eq!(eps.len(), 1);
+        assert_eq!(eps[0].id, "recent-compressed");
+    }
+
+    #[test]
+    fn retention_reducer_is_idempotent() {
+        let db = test_db();
+        db.insert_episode(&old_episode("ep-1", 100)).unwrap();
+
+        let stats1 = db.apply_retention_policy().unwrap();
+        let stats2 = db.apply_retention_policy().unwrap();
+
+        assert_eq!(stats1.compressed, 1);
+        // Second run: already Compressed, nothing left to compress.
+        assert_eq!(stats2.compressed, 0);
+        assert_eq!(stats2.deleted, 0);
     }
 
     fn sample_template(id: &str, name: &str) -> crate::types::Template {

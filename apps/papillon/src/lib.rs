@@ -44,6 +44,39 @@ pub fn run() {
             // Clone state for the background federation server before manage() takes ownership.
             let state_clone = app_state.clone_for_background();
 
+            // Run the retention reducer once at startup to clean up any accumulated episodes
+            // from previous sessions, then hand off to a periodic background task.
+            let retention_db = app_state.db.clone();
+            std::thread::spawn(move || {
+                use papillon_shared::db::DatabaseOps;
+                // Initial pass — run immediately.
+                match retention_db.apply_retention_policy() {
+                    Ok(stats) if stats.compressed > 0 || stats.deleted > 0 => {
+                        eprintln!(
+                            "Retention reducer: compressed={}, deleted={}",
+                            stats.compressed, stats.deleted
+                        );
+                    }
+                    Err(e) => eprintln!("Retention reducer error: {e}"),
+                    _ => {}
+                }
+
+                // Hourly pass — reduces unbounded episode growth over long sessions.
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(3600));
+                    match retention_db.apply_retention_policy() {
+                        Ok(stats) if stats.compressed > 0 || stats.deleted > 0 => {
+                            eprintln!(
+                                "Retention reducer (hourly): compressed={}, deleted={}",
+                                stats.compressed, stats.deleted
+                            );
+                        }
+                        Err(e) => eprintln!("Retention reducer error: {e}"),
+                        _ => {}
+                    }
+                }
+            });
+
             app.manage(app_state);
 
             // Spawn federation server on a separate thread with its own tokio runtime.
