@@ -197,6 +197,31 @@ async fn register_agent(
                 .into_response();
         }
     }
+    // Per-principal advertisement count limit (spec §10.1).
+    let principal_did = ad.provider.did.clone();
+    match state.store.count_agents_by_principal(&principal_did).await {
+        Ok(count) if count >= state.max_ads_per_principal as i64 => {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(serde_json::json!({
+                    "error": format!(
+                        "Principal {} has reached the advertisement limit of {}",
+                        principal_did, state.max_ads_per_principal
+                    )
+                })),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("Rate limit check failed: {e}")})),
+            )
+                .into_response();
+        }
+        Ok(_) => {} // under limit — proceed
+    }
+
     // DB first — persist before updating in-memory state.
     let hash = ad.hash();
     if let Err(e) = state.store.insert_agent(&hash, &ad).await {
@@ -511,6 +536,7 @@ mod tests {
             node_endpoint: "http://localhost:7890".into(),
             cert_fingerprint: "sha256:deadbeef".into(),
             admin_token: token.map(str::to_owned),
+            max_ads_per_principal: 100,
         };
         router().with_state(state)
     }
@@ -701,6 +727,7 @@ mod tests {
             node_endpoint: "http://localhost".into(),
             cert_fingerprint: "sha256:test".into(),
             admin_token: None,
+            max_ads_per_principal: 100,
         };
         let app = router().with_state(state);
 
@@ -753,6 +780,7 @@ mod tests {
             node_endpoint: "http://localhost".into(),
             cert_fingerprint: "sha256:test".into(),
             admin_token: None,
+            max_ads_per_principal: 100,
         };
         let app = router().with_state(state);
 
@@ -802,6 +830,7 @@ mod tests {
             node_endpoint: "http://localhost".into(),
             cert_fingerprint: "sha256:test".into(),
             admin_token: None,
+            max_ads_per_principal: 100,
         };
         let app = router().with_state(state);
 
@@ -835,5 +864,189 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    // ── Rate limiting ─────────────────────────────────────────────────────────
+
+    /// Helper: build a router with a custom max_ads_per_principal limit.
+    async fn test_router_with_limit(limit: usize) -> axum::Router {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zTestNode".into(),
+            node_endpoint: "http://localhost:7890".into(),
+            cert_fingerprint: "sha256:deadbeef".into(),
+            admin_token: None,
+            max_ads_per_principal: limit,
+        };
+        router().with_state(state)
+    }
+
+    /// Helper: POST a signed AgentAdvertisement and return the HTTP status code.
+    async fn post_ad(app: axum::Router, ad: &AgentAdvertisement) -> StatusCode {
+        let body = serde_json::to_vec(ad).unwrap();
+        let req = Request::post("/api/agents")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        app.oneshot(req).await.unwrap().status()
+    }
+
+    #[tokio::test]
+    async fn rate_limit_rejects_101st_advertisement() {
+        // Use limit=2 to keep the test fast (3 POSTs total).
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zTestNode".into(),
+            node_endpoint: "http://localhost:7890".into(),
+            cert_fingerprint: "sha256:deadbeef".into(),
+            admin_token: None,
+            max_ads_per_principal: 2,
+        };
+        let app = router().with_state(state);
+
+        // Same principal key for all three ads.
+        let key = SigningKey::generate(&mut OsRng);
+        let kp = PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap();
+        let did = kp.did();
+
+        // First ad — must succeed.
+        let mut ad1 = AgentAdvertisement::new(
+            "RateLimitBot1",
+            "Corp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad1.sign(&key);
+        let status1 = post_ad(app.clone(), &ad1).await;
+        assert_eq!(status1, StatusCode::CREATED, "first ad should be accepted");
+
+        // Second ad (different hash via different name) — must succeed.
+        let mut ad2 = AgentAdvertisement::new(
+            "RateLimitBot2",
+            "Corp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad2.sign(&key);
+        let status2 = post_ad(app.clone(), &ad2).await;
+        assert_eq!(status2, StatusCode::CREATED, "second ad should be accepted");
+
+        // Third ad — must be rejected with 429.
+        let mut ad3 = AgentAdvertisement::new(
+            "RateLimitBot3",
+            "Corp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad3.sign(&key);
+        let status3 = post_ad(app.clone(), &ad3).await;
+        assert_eq!(
+            status3,
+            StatusCode::TOO_MANY_REQUESTS,
+            "third ad should be rejected with 429"
+        );
+    }
+
+    #[tokio::test]
+    async fn rate_limit_allows_different_principals() {
+        // Limit=1: each principal gets one slot, but not two.
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zTestNode".into(),
+            node_endpoint: "http://localhost:7890".into(),
+            cert_fingerprint: "sha256:deadbeef".into(),
+            admin_token: None,
+            max_ads_per_principal: 1,
+        };
+        let app = router().with_state(state);
+
+        let key_a = SigningKey::generate(&mut OsRng);
+        let kp_a = PrincipalKeypair::from_bytes(&key_a.to_bytes()).unwrap();
+        let did_a = kp_a.did();
+
+        let key_b = SigningKey::generate(&mut OsRng);
+        let kp_b = PrincipalKeypair::from_bytes(&key_b.to_bytes()).unwrap();
+        let did_b = kp_b.did();
+
+        // Principal A — first ad accepted.
+        let mut ad_a1 = AgentAdvertisement::new(
+            "AgentA1",
+            "Corp",
+            &did_a,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad_a1.sign(&key_a);
+        assert_eq!(
+            post_ad(app.clone(), &ad_a1).await,
+            StatusCode::CREATED,
+            "principal A first ad should be accepted"
+        );
+
+        // Principal B — first ad accepted (separate principal).
+        let mut ad_b1 = AgentAdvertisement::new(
+            "AgentB1",
+            "Corp",
+            &did_b,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad_b1.sign(&key_b);
+        assert_eq!(
+            post_ad(app.clone(), &ad_b1).await,
+            StatusCode::CREATED,
+            "principal B first ad should be accepted"
+        );
+
+        // Principal A — second ad rejected (over limit=1).
+        let mut ad_a2 = AgentAdvertisement::new(
+            "AgentA2",
+            "Corp",
+            &did_a,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad_a2.sign(&key_a);
+        assert_eq!(
+            post_ad(app.clone(), &ad_a2).await,
+            StatusCode::TOO_MANY_REQUESTS,
+            "principal A second ad should be rejected with 429"
+        );
     }
 }

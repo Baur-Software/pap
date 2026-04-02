@@ -102,6 +102,16 @@ impl SqliteStore {
         Ok(result.rows_affected() > 0)
     }
 
+    pub async fn count_agents_by_principal(&self, provider_did: &str) -> Result<i64> {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM agents WHERE json_extract(ad_json, '$.provider.did') = ?",
+        )
+        .bind(provider_did)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(count)
+    }
+
     pub async fn search_agents(
         &self,
         q: Option<&str>,
