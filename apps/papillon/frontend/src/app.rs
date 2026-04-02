@@ -13,6 +13,7 @@ use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
+use crate::pages::dashboard::DashboardPage;
 use crate::pages::home::HomePage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
@@ -271,6 +272,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/activity") view=ActivityPage />
                         <Route path=path!("/settings") view=SettingsPage />
                         <Route path=path!("/browse") view=BrowsePage />
+                        <Route path=path!("/fleet") view=DashboardPage />
                     </Routes>
                 </main>
                 <footer class="status-bar app-statusbar">

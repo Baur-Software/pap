@@ -33,6 +33,18 @@ pub fn Sidebar() -> impl IntoView {
                 <IconLayers />
             </A>
             <A
+                href="/fleet"
+                attr:class=move || {
+                    if location.pathname.get().starts_with("/fleet") {
+                        "sidebar-icon active"
+                    } else {
+                        "sidebar-icon"
+                    }
+                }
+            >
+                <IconChip />
+            </A>
+            <A
                 href="/activity"
                 attr:class=move || {
                     if location.pathname.get().starts_with("/activity") {
@@ -58,6 +70,17 @@ pub fn Sidebar() -> impl IntoView {
                 <IconGear />
             </A>
         </nav>
+    }
+}
+
+#[component]
+fn IconChip() -> impl IntoView {
+    view! {
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="6" height="6" rx="1"/>
+            <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+        </svg>
     }
 }
 
