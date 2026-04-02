@@ -9,6 +9,7 @@
 //! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
 use crate::types::Template;
+use pap_agents::DynamicAgentDef;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "native")]
@@ -175,6 +176,20 @@ pub trait DatabaseOps: Send + Sync {
     ///
     /// Returns the number of episodes compressed and deleted.
     fn apply_retention_policy(&self) -> Result<RetentionStats, DbError>;
+
+    // ── Agent Management ─────────────────────────────────────────────────
+
+    /// Insert a new dynamic agent definition.
+    fn insert_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError>;
+
+    /// Load all non-removed agent definitions.
+    fn load_all_agents(&self) -> Result<Vec<DynamicAgentDef>, DbError>;
+
+    /// Update an existing agent definition in-place (same agent_did).
+    fn update_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError>;
+
+    /// Delete an agent by DID. Catalog agents should use removed_from_catalog instead.
+    fn delete_agent(&self, agent_did: &str) -> Result<(), DbError>;
 }
 
 /// Summary of what the retention reducer did in a single pass.
