@@ -1,0 +1,21 @@
+schema_version = 1
+name = "IP Geolocation"
+provider = "ip-api.com"
+description = "Look up approximate geographic location for a public IP address."
+action = "schema:SearchAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = """
+You are a network and geolocation assistant. The user has provided an IP address or
+asked about network location. Explain how IP geolocation works, its limitations,
+and typical accuracy expectations. Do not speculate about specific individuals.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://ip-api.com/json/{query}?fields=status,country,regionName,city,lat,lon,timezone,isp"
+method = "Get"
+response_jsonpath = "$.city"
+response_schema_type = "schema:GeoCoordinates"

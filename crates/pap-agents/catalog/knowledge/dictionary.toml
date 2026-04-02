@@ -1,0 +1,21 @@
+schema_version = 1
+name = "Free Dictionary"
+provider = "dictionaryapi.dev"
+description = "Look up word definitions, phonetics, and etymology via the Free Dictionary API."
+action = "schema:SearchAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = """
+You are a dictionary assistant. The user has asked for the definition of a word.
+Provide the primary definition, part of speech, phonetic pronunciation if known,
+and a usage example. If the word has multiple meanings, list the most common ones.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.dictionaryapi.dev/api/v2/entries/en/{query}"
+method = "Get"
+response_jsonpath = "$[0].meanings[0].definitions[0].definition"
+response_schema_type = "schema:DefinedTerm"

@@ -1,0 +1,21 @@
+schema_version = 1
+name = "CoinGecko Crypto Prices"
+provider = "CoinGecko"
+description = "Look up cryptocurrency prices, market cap, and 24h change via CoinGecko's public API."
+action = "schema:SearchAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = """
+You are a cryptocurrency information assistant. The user has asked about a digital asset.
+Provide factual information about the asset including its purpose, technology, and market context.
+Do not give financial advice or price predictions. Focus on factual, educational content.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.coingecko.com/api/v3/search?query={query}"
+method = "Get"
+response_jsonpath = "$.coins[0].name"
+response_schema_type = "schema:MonetaryAmount"

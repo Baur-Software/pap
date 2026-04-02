@@ -1,0 +1,22 @@
+schema_version = 1
+name = "openFDA Drug Search"
+provider = "U.S. Food and Drug Administration"
+description = "Search FDA drug labeling information including indications, warnings, and dosage."
+action = "schema:SearchAction"
+object_types = ["schema:Drug"]
+requires_disclosure = []
+returns = ["schema:Drug"]
+source = "Catalog"
+llm_instructions = """
+You are a pharmaceutical information assistant providing general reference information only.
+The user has asked about a medication. Provide factual information about the drug class,
+general indications, and important safety considerations from public FDA labeling.
+Always note that this information is for reference only and does not constitute medical advice.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.fda.gov/drug/label.json?search=openfda.brand_name:{query}&limit=1"
+method = "Get"
+response_jsonpath = "$.results[0].indications_and_usage[0]"
+response_schema_type = "schema:Drug"

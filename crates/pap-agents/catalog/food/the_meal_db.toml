@@ -1,0 +1,21 @@
+schema_version = 1
+name = "TheMealDB Recipe Search"
+provider = "TheMealDB"
+description = "Search for recipes and meal ideas by name or ingredient via TheMealDB."
+action = "schema:SearchAction"
+object_types = ["schema:Recipe"]
+requires_disclosure = []
+returns = ["schema:Recipe"]
+source = "Catalog"
+llm_instructions = """
+You are a culinary assistant. The user has asked about a recipe or dish.
+Provide a concise description of the dish including its origin, key ingredients,
+cooking method, and serving suggestions.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://www.themealdb.com/api/json/v1/1/search.php?s={query}"
+method = "Get"
+response_jsonpath = "$.meals[0].strMeal"
+response_schema_type = "schema:Recipe"

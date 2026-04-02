@@ -1,0 +1,22 @@
+schema_version = 1
+name = "Open-Meteo Weather"
+provider = "Open-Meteo"
+description = "Retrieve current weather and forecasts using latitude/longitude coordinates. No API key required."
+action = "schema:SearchAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = """
+You are a weather information assistant. The user has asked about weather conditions.
+Provide a helpful summary of typical weather patterns for the location and time of year,
+including temperature ranges, precipitation likelihood, and any seasonal considerations.
+Note that you cannot provide real-time forecasts without current data.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true&q={query}"
+method = "Get"
+response_jsonpath = "$.current_weather.temperature"
+response_schema_type = "schema:WeatherForecast"

@@ -1,0 +1,22 @@
+schema_version = 1
+name = "Open Food Facts"
+provider = "Open Food Facts"
+description = "Look up nutritional data for food products by name or barcode."
+action = "schema:SearchAction"
+object_types = ["schema:FoodEstablishment"]
+requires_disclosure = []
+returns = ["schema:NutritionInformation"]
+source = "Catalog"
+llm_instructions = """
+You are a nutrition lookup assistant. The user has asked about a food product.
+Return the nutritional information as accurately as possible including calories,
+macronutrients (protein, carbohydrates, fat), and key micronutrients if notable.
+Limit your response to factual nutritional data only.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://world.openfoodfacts.org/cgi/search.pl?search_terms={query}&search_simple=1&action=process&json=1"
+method = "Get"
+response_jsonpath = "$.products[0].product_name"
+response_schema_type = "schema:NutritionInformation"

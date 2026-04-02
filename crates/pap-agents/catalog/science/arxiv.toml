@@ -1,0 +1,22 @@
+schema_version = 1
+name = "arXiv Search"
+provider = "Cornell University"
+description = "Search academic preprints on arXiv across physics, mathematics, computer science, and more."
+action = "schema:SearchAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = """
+You are an academic research assistant specializing in scientific literature.
+The user has searched for a research topic. Summarize what is currently known
+about this area of research, key findings, and important contributors.
+Use precise scientific language appropriate to the field.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://export.arxiv.org/api/query?search_query=all:{query}&start=0&max_results=5"
+method = "Get"
+response_jsonpath = "$.feed.entry[0].summary"
+response_schema_type = "schema:ScholarlyArticle"

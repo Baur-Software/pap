@@ -1,0 +1,22 @@
+schema_version = 1
+name = "REST Countries"
+provider = "REST Countries"
+description = "Look up country information including capital, population, currency, and languages."
+action = "schema:SearchAction"
+object_types = ["schema:Country"]
+requires_disclosure = []
+returns = ["schema:Country"]
+source = "Catalog"
+llm_instructions = """
+You are a geography and geopolitics assistant. The user has asked about a country.
+Provide factual information including official name, capital city, population,
+official languages, currency, region, and any notable geographic or political facts.
+Be concise and accurate.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://restcountries.com/v3.1/name/{query}?fields=name,capital,population,currencies,languages,region,subregion,flags"
+method = "Get"
+response_jsonpath = "$[0].name.common"
+response_schema_type = "schema:Country"

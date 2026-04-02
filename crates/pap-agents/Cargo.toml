@@ -25,3 +25,4 @@ thiserror = { workspace = true }
 [dev-dependencies]
 pap-credential-store = { workspace = true, features = ["testing"] }
 rand = { workspace = true }
+tempfile = "3"

@@ -1,0 +1,21 @@
+schema_version = 1
+name = "Frankfurter Exchange Rates"
+provider = "Frankfurter"
+description = "Look up current and historical foreign exchange rates from the European Central Bank."
+action = "schema:SearchAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:ExchangeRateSpecification"]
+source = "Catalog"
+llm_instructions = """
+You are a foreign exchange information assistant. The user has asked about currency exchange rates.
+Provide context about the currency pair, typical rate ranges, and factors that influence
+exchange rates between these currencies. Note that exact current rates require live data.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.frankfurter.app/latest?from={query}"
+method = "Get"
+response_jsonpath = "$.rates"
+response_schema_type = "schema:ExchangeRateSpecification"

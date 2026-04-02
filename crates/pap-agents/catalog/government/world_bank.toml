@@ -1,0 +1,22 @@
+schema_version = 1
+name = "World Bank Indicators"
+provider = "World Bank"
+description = "Query World Bank development indicators including GDP, population, and poverty data."
+action = "schema:SearchAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = """
+You are a development economics and international statistics assistant.
+The user has asked about a country's economic or social development indicators.
+Provide factual information from publicly available World Bank data including GDP,
+population, poverty rates, education, and health indicators where relevant.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.worldbank.org/v2/country/{query}/indicator/NY.GDP.MKTP.CD?format=json&mrv=1"
+method = "Get"
+response_jsonpath = "$[1][0].value"
+response_schema_type = "schema:Dataset"

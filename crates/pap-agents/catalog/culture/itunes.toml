@@ -1,0 +1,21 @@
+schema_version = 1
+name = "iTunes Search"
+provider = "Apple"
+description = "Search the iTunes catalog for music, podcasts, apps, and other media."
+action = "schema:SearchAction"
+object_types = ["schema:MusicRecording"]
+requires_disclosure = []
+returns = ["schema:MusicRecording"]
+source = "Catalog"
+llm_instructions = """
+You are a music and media discovery assistant. The user has searched for an artist,
+album, song, or podcast. Provide factual information about the requested media including
+genre, release date, key tracks or episodes, and cultural significance where applicable.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://itunes.apple.com/search?term={query}&limit=5&media=music"
+method = "Get"
+response_jsonpath = "$.results[0].trackName"
+response_schema_type = "schema:MusicRecording"

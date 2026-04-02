@@ -1,0 +1,22 @@
+schema_version = 1
+name = "Open Library Books"
+provider = "Internet Archive"
+description = "Search for books and authors via Open Library's public API."
+action = "schema:SearchAction"
+object_types = ["schema:Book"]
+requires_disclosure = []
+returns = ["schema:Book"]
+source = "Catalog"
+llm_instructions = """
+You are a literary research assistant. The user has searched for a book or author.
+Provide factual information about the work including author, publication year,
+themes, and significance. If it is a well-known work, briefly describe its plot
+and cultural impact. Keep your response to 2-3 paragraphs.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://openlibrary.org/search.json?q={query}&limit=5&fields=title,author_name,first_publish_year,subject"
+method = "Get"
+response_jsonpath = "$.docs[0].title"
+response_schema_type = "schema:Book"
