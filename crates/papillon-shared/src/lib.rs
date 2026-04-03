@@ -1,5 +1,6 @@
 pub mod events;
 pub mod intent;
+pub mod pap_uri;
 pub mod template_gen;
 pub mod types;
 
