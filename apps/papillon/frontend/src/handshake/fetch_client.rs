@@ -43,11 +43,7 @@ impl FetchClient {
     }
 
     /// Send a POST request with JSON body and parse the response as ProtocolMessage.
-    async fn post_json(
-        &self,
-        url: &str,
-        body: &str,
-    ) -> Result<ProtocolMessage, FetchError> {
+    async fn post_json(&self, url: &str, body: &str) -> Result<ProtocolMessage, FetchError> {
         let opts = RequestInit::new();
         opts.set_method("POST");
         opts.set_mode(RequestMode::Cors);
@@ -61,8 +57,7 @@ impl FetchClient {
             .set("Content-Type", "application/json")
             .map_err(|e| FetchError(format!("Header set failed: {:?}", e)))?;
 
-        let window = web_sys::window()
-            .ok_or_else(|| FetchError("No window object".into()))?;
+        let window = web_sys::window().ok_or_else(|| FetchError("No window object".into()))?;
 
         let resp_value = JsFuture::from(window.fetch_with_request(&request))
             .await
@@ -99,8 +94,7 @@ impl FetchClient {
         let request = Request::new_with_str_and_init(url, &opts)
             .map_err(|e| FetchError(format!("Request creation failed: {:?}", e)))?;
 
-        let window = web_sys::window()
-            .ok_or_else(|| FetchError("No window object".into()))?;
+        let window = web_sys::window().ok_or_else(|| FetchError("No window object".into()))?;
 
         let resp_value = JsFuture::from(window.fetch_with_request(&request))
             .await
@@ -173,15 +167,9 @@ impl FetchClient {
     }
 
     /// Phase 4: Request execution and receive the result.
-    pub async fn request_execution(
-        &self,
-        session_id: &str,
-    ) -> Result<ProtocolMessage, FetchError> {
-        self.post_empty(&format!(
-            "{}/session/{}/execute",
-            self.base_url, session_id
-        ))
-        .await
+    pub async fn request_execution(&self, session_id: &str) -> Result<ProtocolMessage, FetchError> {
+        self.post_empty(&format!("{}/session/{}/execute", self.base_url, session_id))
+            .await
     }
 
     /// Phase 5: Send a receipt for co-signing. Returns the co-signed receipt.
@@ -200,10 +188,7 @@ impl FetchClient {
     }
 
     /// Phase 6: Close the session.
-    pub async fn close_session(
-        &self,
-        session_id: &str,
-    ) -> Result<ProtocolMessage, FetchError> {
+    pub async fn close_session(&self, session_id: &str) -> Result<ProtocolMessage, FetchError> {
         let msg = ProtocolMessage::SessionClose {
             session_id: session_id.to_string(),
         };

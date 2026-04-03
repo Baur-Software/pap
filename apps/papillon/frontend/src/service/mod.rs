@@ -62,8 +62,7 @@ pub trait PapillonService: Send + Sync {
     async fn delete_template(&self, template_name: &str) -> Result<(), String>;
 
     /// Enable or disable a template without deleting it.
-    async fn set_template_enabled(&self, template_name: &str, enabled: bool)
-        -> Result<(), String>;
+    async fn set_template_enabled(&self, template_name: &str, enabled: bool) -> Result<(), String>;
 
     // ============================================================================
     // PROFILES: List and manage principal profiles
@@ -109,8 +108,10 @@ pub trait PapillonService: Send + Sync {
     async fn get_orchestrator_config(&self) -> Result<OrchestratorConfig, String>;
 
     /// Save orchestrator configuration.
-    async fn configure_orchestrator(&self, config: &OrchestratorConfig)
-        -> Result<OrchestratorConfig, String>;
+    async fn configure_orchestrator(
+        &self,
+        config: &OrchestratorConfig,
+    ) -> Result<OrchestratorConfig, String>;
 
     /// Get the current orchestrator status.
     async fn get_orchestrator_status(&self) -> Result<OrchestratorStatus, String>;
@@ -178,4 +179,3 @@ pub struct AgentProfileInfo {
     pub created_at: String,
     pub updated_at: String,
 }
-

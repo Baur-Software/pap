@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use papillon_shared::types::{TemplateConfig, LayoutConfig, FieldMapping, Condition};
+use papillon_shared::types::{Condition, FieldMapping, LayoutConfig, TemplateConfig};
 
 #[component]
 pub fn TemplateBuilder(

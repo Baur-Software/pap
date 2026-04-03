@@ -36,13 +36,11 @@ impl PapillonService for TauriService {
     }
 
     async fn create_template(&self, template: &Template) -> Result<(), String> {
-        bridge::invoke::<Value, ()>("create_template", &json!({ "template": template }))
-            .await
+        bridge::invoke::<Value, ()>("create_template", &json!({ "template": template })).await
     }
 
     async fn update_template(&self, template: &Template) -> Result<(), String> {
-        bridge::invoke::<Value, ()>("update_template", &json!({ "template": template }))
-            .await
+        bridge::invoke::<Value, ()>("update_template", &json!({ "template": template })).await
     }
 
     async fn delete_template(&self, template_name: &str) -> Result<(), String> {
@@ -53,11 +51,7 @@ impl PapillonService for TauriService {
         .await
     }
 
-    async fn set_template_enabled(
-        &self,
-        template_name: &str,
-        enabled: bool,
-    ) -> Result<(), String> {
+    async fn set_template_enabled(&self, template_name: &str, enabled: bool) -> Result<(), String> {
         bridge::invoke::<Value, ()>(
             "set_template_enabled",
             &json!({ "template_name": template_name, "enabled": enabled }),
@@ -74,8 +68,7 @@ impl PapillonService for TauriService {
     }
 
     async fn create_profile(&self, name: &str) -> Result<ProfileMetadata, String> {
-        bridge::invoke::<Value, ProfileMetadata>("create_profile", &json!({ "name": name }))
-            .await
+        bridge::invoke::<Value, ProfileMetadata>("create_profile", &json!({ "name": name })).await
     }
 
     async fn switch_profile(&self, profile_id: &str) -> Result<IdentityInfo, String> {
@@ -190,15 +183,11 @@ impl PapillonService for TauriService {
     }
 
     async fn update_agent_profile(&self, profile: &AgentProfileInfo) -> Result<(), String> {
-        bridge::invoke::<Value, ()>("update_agent_profile", &json!({ "profile": profile }))
-            .await
+        bridge::invoke::<Value, ()>("update_agent_profile", &json!({ "profile": profile })).await
     }
 
     async fn delete_agent_profile(&self, profile_id: &str) -> Result<(), String> {
-        bridge::invoke::<Value, ()>(
-            "delete_agent_profile",
-            &json!({ "profile_id": profile_id }),
-        )
-        .await
+        bridge::invoke::<Value, ()>("delete_agent_profile", &json!({ "profile_id": profile_id }))
+            .await
     }
 }

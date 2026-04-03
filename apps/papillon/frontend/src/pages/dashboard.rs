@@ -26,7 +26,11 @@ pub fn DashboardPage() -> impl IntoView {
     });
 
     let active_count = move || {
-        agents.get().iter().filter(|a| a.source == "compiled" || a.source == "catalog").count()
+        agents
+            .get()
+            .iter()
+            .filter(|a| a.source == "compiled" || a.source == "catalog")
+            .count()
     };
     let total_count = move || agents.get().len();
 
@@ -103,13 +107,17 @@ pub fn DashboardPage() -> impl IntoView {
 
 #[component]
 fn AgentCard(agent: AgentInfo) -> impl IntoView {
-    let short_did = agent.agent_did.as_deref().map(|d| {
-        if d.len() > 20 {
-            format!("{}...{}", &d[..10], &d[d.len()-6..])
-        } else {
-            d.to_string()
-        }
-    }).unwrap_or_else(|| "compiled".to_string());
+    let short_did = agent
+        .agent_did
+        .as_deref()
+        .map(|d| {
+            if d.len() > 20 {
+                format!("{}...{}", &d[..10], &d[d.len() - 6..])
+            } else {
+                d.to_string()
+            }
+        })
+        .unwrap_or_else(|| "compiled".to_string());
 
     let action = agent.capabilities.first().cloned().unwrap_or_default();
     let action_label = action.trim_start_matches("schema:").to_string();

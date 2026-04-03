@@ -3,7 +3,9 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::orchestrator::OrchestratorState;
-use papillon_shared::{builtin_model_catalog, ModelAvailability, OrchestratorConfig, OrchestratorStatus, SetupState};
+use papillon_shared::{
+    builtin_model_catalog, ModelAvailability, OrchestratorConfig, OrchestratorStatus, SetupState,
+};
 
 #[component]
 pub fn SetupWizard() -> impl IntoView {
@@ -43,11 +45,13 @@ pub fn SetupWizard() -> impl IntoView {
     });
 
     Effect::new(move || {
-        if !bridge::tauri_available() { return; }
+        if !bridge::tauri_available() {
+            return;
+        }
         spawn_local(async move {
-            if let Ok(avail) = bridge::invoke_no_args::<Vec<ModelAvailability>>(
-                "check_model_availability"
-            ).await {
+            if let Ok(avail) =
+                bridge::invoke_no_args::<Vec<ModelAvailability>>("check_model_availability").await
+            {
                 model_availability.set(avail);
             }
         });
@@ -97,8 +101,10 @@ pub fn SetupWizard() -> impl IntoView {
                     show_wizard.set(false);
                 }
                 Err(e) => {
-                    let msg = if e.contains("model not found") || e.contains("Tokenizer not found") {
-                        "Model files not downloaded. Use the Download button above first.".to_string()
+                    let msg = if e.contains("model not found") || e.contains("Tokenizer not found")
+                    {
+                        "Model files not downloaded. Use the Download button above first."
+                            .to_string()
                     } else {
                         "Could not save \u{2014} backend unavailable.".to_string()
                     };
