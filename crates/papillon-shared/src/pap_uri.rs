@@ -72,30 +72,29 @@ pub fn resolve_pap_uri(
         return Ok(ResolvedUri::Did(uri.to_string()));
     }
 
-    // Step 3: hostname / localhost / IPv4 → registry
-    if is_registry_host(authority) {
-        return Ok(ResolvedUri::Registry(uri.to_string()));
+    // Step 2: catalog name (no dot in authority, not a registry host)
+    if !is_registry_host(authority) {
+        if let Some(did) = catalog.get(authority_lower.as_str()) {
+            let rewritten = format!("pap://{}{}", did, path);
+            return Ok(ResolvedUri::Did(rewritten));
+        }
+        return Err(PapUriError::NotFound(authority_lower));
     }
 
-    // Step 2: catalog name
-    if let Some(did) = catalog.get(authority_lower.as_str()) {
-        let rewritten = format!("pap://{}{}", did, path);
-        return Ok(ResolvedUri::Did(rewritten));
-    }
-
-    Err(PapUriError::NotFound(authority_lower))
+    // Step 3: registry hostname / localhost / IPv4
+    Ok(ResolvedUri::Registry(uri.to_string()))
 }
 
 fn is_registry_host(authority: &str) -> bool {
     authority == "localhost"
         || authority.starts_with('[')
-        || authority.contains('.')
         || is_ipv4(authority)
+        || authority.contains('.')
 }
 
 fn is_ipv4(s: &str) -> bool {
-    let count = s.split('.').count();
-    count == 4 && s.split('.').all(|p| p.parse::<u8>().is_ok())
+    let parts: Vec<&str> = s.split('.').collect();
+    parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok())
 }
 
 fn special_to_intent(authority: &str, path: &str) -> String {
@@ -125,7 +124,7 @@ fn special_to_intent(authority: &str, path: &str) -> String {
                 format!("open settings {}", path)
             }
         }
-        other => format!("open {}", other),
+        _ => unreachable!("special_to_intent called with non-reserved authority"),
     }
 }
 
@@ -263,6 +262,12 @@ mod tests {
         let cat = catalog(&[("arxiv", "did:key:z6MkTestKey")]);
         let r = resolve_pap_uri("pap://ARXIV/SearchAction", &cat, LinkOrigin::Principal).unwrap();
         assert!(matches!(r, ResolvedUri::Did(_)));
+    }
+
+    #[test]
+    fn special_canvas_without_block() {
+        let r = resolve_pap_uri("pap://canvas/cid", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::LocalIntent("show canvas cid".into()));
     }
 
     #[test]
