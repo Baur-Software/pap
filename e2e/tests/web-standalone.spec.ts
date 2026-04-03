@@ -88,17 +88,18 @@ test.describe("Web standalone: canvas page", () => {
 // Navigate via topbar gear icon — http-server has no SPA fallback.
 
 test.describe("Web standalone: settings page", () => {
-  test("renders all five tabs", async ({ page }) => {
+  test("renders all settings tabs", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-settings-btn").click();
 
-    await expect(page.locator(".settings-tab")).toHaveCount(5);
+    await expect(page.locator(".settings-tab")).toHaveCount(6);
     await expect(page.locator(".settings-tab").nth(0)).toHaveText("General");
     await expect(page.locator(".settings-tab").nth(1)).toHaveText("Profiles");
     await expect(page.locator(".settings-tab").nth(2)).toHaveText("Templates");
     await expect(page.locator(".settings-tab").nth(3)).toHaveText("Identity");
     await expect(page.locator(".settings-tab").nth(4)).toHaveText("Advanced");
+    await expect(page.locator(".settings-tab").nth(5)).toHaveText("MANDATES");
   });
 
   test("tabs are clickable and switch content", async ({ page }) => {
