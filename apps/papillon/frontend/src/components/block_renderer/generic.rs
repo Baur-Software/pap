@@ -516,10 +516,16 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
                             // submit_agent_link enforces LinkOrigin::Agent so
                             // special authorities (receipt/canvas/settings) are blocked.
                             let url_inner = url_for_click.clone();
+                            // Strip control characters from the URL before embedding
+                            // it in the confirmation dialog. Without this, an agent
+                            // could inject newlines to rewrite the dialog text shown
+                            // to the principal.
+                            let safe_url: String =
+                                url_inner.chars().filter(|c| !c.is_control()).collect();
                             let confirmed = web_sys::window()
                                 .and_then(|w| {
                                     w.confirm_with_message(
-                                        &format!("Activate PAP link?\n{}", url_inner),
+                                        &format!("Activate PAP link?\n{}", safe_url),
                                     )
                                     .ok()
                                 })

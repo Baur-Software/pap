@@ -70,19 +70,24 @@ pub fn resolve_pap_uri(
         )));
     }
 
-    // Step 1: did:key: authority
-    if authority.starts_with("did:key:") {
+    // Step 1: did:key: authority (case-insensitive match to match Step 0 behaviour)
+    if authority_lower.starts_with("did:key:") {
         return Ok(ResolvedUri::Did(uri.to_string()));
     }
 
     // Step 2: catalog name (no dot in authority, not a registry host)
     if !is_registry_host(authority) {
         if let Some(did) = catalog.get(authority_lower.as_str()) {
-            // Reject path traversal before rewriting
-            if path.split('/').any(|seg| seg == "..") {
+            // Reject path traversal before rewriting.
+            // Check both literal ".." and common percent-encoded forms.
+            if path.split('/').any(|seg| is_dotdot(seg)) {
                 return Err(PapUriError::ParseError("path traversal not allowed".into()));
             }
-            let rewritten = format!("pap://{}{}", did, path);
+            // Strip control characters from the path before constructing the
+            // rewritten DID URI.  Special-authority paths are sanitized in
+            // special_to_intent; catalog-rewrite paths need the same treatment.
+            let safe_path: String = path.chars().filter(|c| !c.is_control()).collect();
+            let rewritten = format!("pap://{}{}", did, safe_path);
             return Ok(ResolvedUri::Did(rewritten));
         }
         return Err(PapUriError::NotFound(authority_lower));
@@ -102,6 +107,47 @@ fn is_registry_host(authority: &str) -> bool {
 fn is_ipv4(s: &str) -> bool {
     let parts: Vec<&str> = s.split('.').collect();
     parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok())
+}
+
+/// Returns true if a path segment is a dot-dot traversal, in literal or
+/// percent-encoded forms (`%2e%2e`, `%2e.`, `.%2e`).
+fn is_dotdot(seg: &str) -> bool {
+    if seg == ".." {
+        return true;
+    }
+    // Case-insensitive comparison after normalising %2e → .
+    let lower = seg.to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "%2e%2e" | "%2e." | ".%2e" | "%2e%2F" | "%2f"
+    ) || {
+        // Percent-decode the segment and check again
+        let decoded = percent_decode(seg);
+        decoded == ".."
+    }
+}
+
+/// Minimal percent-decoder for the ASCII subset used in pap:// paths.
+/// Only decodes %XX sequences; leaves everything else intact.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(hi), Some(lo)) = (
+                (bytes[i + 1] as char).to_digit(16),
+                (bytes[i + 2] as char).to_digit(16),
+            ) {
+                out.push((hi * 16 + lo) as u8 as char);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
 }
 
 /// Strip control characters from a path segment before embedding in an intent string.
@@ -316,6 +362,24 @@ mod tests {
     }
 
     #[test]
+    fn percent_encoded_dotdot_traversal_is_rejected() {
+        let cat = catalog(&[("arxiv", "did:key:z6MkTestKey")]);
+        // %2e%2e is a percent-encoded ".."
+        let err = resolve_pap_uri("pap://arxiv/%2e%2e/etc/passwd", &cat, LinkOrigin::Principal)
+            .unwrap_err();
+        assert!(matches!(err, PapUriError::ParseError(_)));
+    }
+
+    #[test]
+    fn mixed_encoded_dotdot_traversal_is_rejected() {
+        let cat = catalog(&[("arxiv", "did:key:z6MkTestKey")]);
+        // %2e. is ".." with one dot encoded
+        let err = resolve_pap_uri("pap://arxiv/%2e./etc/passwd", &cat, LinkOrigin::Principal)
+            .unwrap_err();
+        assert!(matches!(err, PapUriError::ParseError(_)));
+    }
+
+    #[test]
     fn control_chars_stripped_from_intent_path() {
         let r = resolve_pap_uri(
             "pap://receipt/RCP_1\nDelete%20all",
@@ -328,5 +392,29 @@ mod tests {
             r,
             ResolvedUri::LocalIntent("show receipt RCP_1Delete%20all".into())
         );
+    }
+
+    #[test]
+    fn control_chars_stripped_from_catalog_rewrite_path() {
+        let cat = catalog(&[("arxiv", "did:key:z6MkTestKey")]);
+        let r = resolve_pap_uri(
+            "pap://arxiv/Action\x00injected",
+            &cat,
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        // Null byte must be stripped from the rewritten DID URI
+        assert_eq!(
+            r,
+            ResolvedUri::Did("pap://did:key:z6MkTestKey/Actioninjected".into())
+        );
+    }
+
+    #[test]
+    fn did_key_authority_is_case_insensitive() {
+        let uri = "pap://DID:KEY:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK/SearchAction";
+        let r = resolve_pap_uri(uri, &empty(), LinkOrigin::Principal).unwrap();
+        // Uppercased DID:KEY: must be treated as a DID passthrough, not NotFound
+        assert_eq!(r, ResolvedUri::Did(uri.into()));
     }
 }

@@ -181,16 +181,39 @@ impl CanvasState {
 
     /// Submit a new prompt — creates blocks via the backend.
     pub fn submit_prompt(&self, text: String) {
-        let canvases = self.canvases;
-        let current_id = self.current_canvas_id;
         let recent = self.recent_prompts;
-
-        // Track recent prompts (max 10)
         recent.update(|r| {
             r.retain(|p| p != &text);
             r.insert(0, text.clone());
             r.truncate(10);
         });
+
+        let resolved = match resolve_prompt_text(&text, LinkOrigin::Principal) {
+            Some(t) => t,
+            None => return,
+        };
+        self.dispatch_prompt_inner(text, resolved);
+    }
+
+    /// Dispatch a pap:// link that originated from an agent-rendered block.
+    /// Resolves under `LinkOrigin::Agent` so special authorities
+    /// (receipt, canvas, settings) are blocked.  The resolved text is then
+    /// dispatched directly to the backend without a second Principal-origin
+    /// resolution pass.
+    pub fn submit_agent_link(&self, url: String) {
+        if let Some(resolved) = resolve_prompt_text(&url, LinkOrigin::Agent) {
+            self.dispatch_prompt_inner(url, resolved);
+        }
+        // On None: error already logged by resolve_prompt_text
+    }
+
+    /// Core dispatch: creates an optimistic block, then fires the backend
+    /// command with the pre-resolved text.  Never runs the URI resolver —
+    /// callers are responsible for resolving under the correct `LinkOrigin`
+    /// before calling this method.
+    fn dispatch_prompt_inner(&self, display_text: String, resolved_text: String) {
+        let canvases = self.canvases;
+        let current_id = self.current_canvas_id;
 
         let prompt_id = generate_id();
 
@@ -199,7 +222,7 @@ impl CanvasState {
             canvases.update(|cs| {
                 if let Some(c) = cs.iter_mut().find(|c| c.id == id) {
                     if c.name == "Untitled canvas" && c.blocks.is_empty() {
-                        c.name = auto_name_from_prompt(&text);
+                        c.name = auto_name_from_prompt(&display_text);
                     }
                 }
             });
@@ -208,7 +231,7 @@ impl CanvasState {
         let canvas_id = current_id.get().unwrap_or_else(|| {
             // Create a new canvas auto-named from the prompt
             let new_id = generate_id();
-            let name = auto_name_from_prompt(&text);
+            let name = auto_name_from_prompt(&display_text);
             let now = now_iso();
             let canvas = Canvas {
                 id: new_id.clone(),
@@ -222,15 +245,14 @@ impl CanvasState {
             new_id
         });
 
-        // Extract block references. Resolution happens after block creation
-        // so a Failed state is visible if pap:// resolution fails.
-        let linked_block_ids = extract_block_ids(&text);
+        // Extract block references from the display text (original form).
+        let linked_block_ids = extract_block_ids(&display_text);
 
         // Create a resolving block immediately (optimistic UI)
         let block = CanvasBlock {
             id: generate_id(),
             prompt_id: prompt_id.clone(),
-            prompt_text: Some(text.clone()),
+            prompt_text: Some(display_text),
             state: BlockState::Resolving {
                 phase: 1,
                 phase_label: "Discovering agents...".into(),
@@ -250,27 +272,6 @@ impl CanvasState {
                 canvas.updated_at = now_iso();
             }
         });
-
-        // Resolve pap:// URIs before block reference expansion.
-        // Block is already in the canvas, so failures show as a Failed tile.
-        let resolved_text = match resolve_prompt_text(&text, LinkOrigin::Principal) {
-            Some(t) => t,
-            None => {
-                canvases.update(|cs| {
-                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
-                        if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id) {
-                            b.state = BlockState::Failed {
-                                phase: 1,
-                                reason: "PAP URI resolution failed — see console for details."
-                                    .into(),
-                            };
-                            b.updated_at = now_iso();
-                        }
-                    }
-                });
-                return;
-            }
-        };
 
         // Expand block references in the resolved text for the backend
         let all_canvases = canvases.get();
@@ -395,16 +396,6 @@ impl CanvasState {
                 });
             }
         });
-    }
-
-    /// Dispatch a `pap://` link that originated from an agent-rendered block.
-    /// Uses `LinkOrigin::Agent` so `resolve_pap_uri` blocks special authorities
-    /// (receipt, canvas, settings) that an agent must not be able to activate.
-    pub fn submit_agent_link(&self, url: String) {
-        if let Some(resolved) = resolve_prompt_text(&url, LinkOrigin::Agent) {
-            self.submit_prompt(resolved);
-        }
-        // On None: error already logged by resolve_prompt_text
     }
 
     /// Retry a failed block by re-issuing the mandate with the original prompt text.
