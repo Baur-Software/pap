@@ -492,9 +492,9 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
             // Full implementation in Task 6 — stub renders as plain text for now
             let display = val.as_str().unwrap_or("-").to_string();
             view! {
-                <div class=format!("typed-field typed-field-pap-link {}", css_field)>
+                <div class=format!("typed-field typed-field-pap-link-stub {}", css_field)>
                     <span class="typed-key">{label}</span>
-                    <span class="typed-val typed-pap-link">{display}</span>
+                    <span class="typed-val typed-pap-link-stub">{display}</span>
                 </div>
             }
             .into_any()

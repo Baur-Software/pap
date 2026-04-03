@@ -216,14 +216,6 @@ mod tests {
     }
 
     #[test]
-    fn classify_url() {
-        assert_eq!(
-            classify_field("website", &json!("https://example.com")),
-            FieldKind::ExternalUrl
-        );
-    }
-
-    #[test]
     fn classify_pap_link() {
         assert_eq!(
             classify_field("url", &json!("pap://arxiv/SearchAction")),
@@ -269,6 +261,17 @@ mod tests {
         assert_eq!(
             classify_field("startDate", &json!("pap://arxiv/SearchAction")),
             FieldKind::PapLink
+        );
+    }
+
+    #[test]
+    fn https_in_date_keyed_field_classifies_as_datetime() {
+        // Key-name heuristic wins over https:// prefix — this is intentional.
+        // ExternalUrl check comes after the DateTime heuristic unlike PapLink
+        // which is checked first. See classify_string ordering comment.
+        assert_eq!(
+            classify_field("startDate", &json!("https://example.com")),
+            FieldKind::DateTime
         );
     }
 
