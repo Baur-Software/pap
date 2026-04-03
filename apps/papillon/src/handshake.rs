@@ -277,24 +277,64 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pap_agents::executor::{AgentExecutor, AgentMeta};
+    use pap_transport::TransportError;
+    use std::sync::Arc;
 
-    /// Agent handler flow: token → disclosure → execute → real HTTP results.
-    /// Tests the exact code path that canvas_prompt uses in Tauri mode.
+    /// Echo executor — returns the query as a schema:Thing with no network calls.
+    /// Used to test the full 6-phase handshake protocol mechanics in isolation.
+    struct EchoExecutor;
+
+    impl AgentExecutor for EchoExecutor {
+        fn meta(&self) -> AgentMeta {
+            AgentMeta {
+                name: "Echo",
+                provider: "Test",
+                action: "schema:SearchAction",
+                object_types: &["schema:Thing"],
+                requires_disclosure: &[],
+                returns: &["schema:Thing"],
+            }
+        }
+
+        fn execute(&self, query: &str) -> Result<serde_json::Value, TransportError> {
+            Ok(serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "SearchResultsPage",
+                "query": query,
+                "mainEntity": {
+                    "@type": "ItemList",
+                    "itemListElement": [{"@type": "Thing", "name": query}]
+                }
+            }))
+        }
+    }
+
+    /// Agent handler flow: token → disclosure → execute → result.
+    /// Tests the exact code path that canvas_prompt uses, protocol mechanics only.
     #[tokio::test]
     async fn agent_handler_returns_real_results() {
         use pap_core::session::CapabilityToken;
 
-        let agents = pap_agents::build_agents(vec![]);
+        let echo_handler: Arc<dyn pap_transport::AgentHandler> =
+            Arc::new(pap_agents::SimpleAgent::new(EchoExecutor));
+        let meta = EchoExecutor.meta();
+
+        let agents = pap_agents::build_agents(vec![(
+            "Echo",
+            echo_handler,
+            meta,
+        )]);
         let handler = agents
             .handlers
-            .get("Hacker News")
-            .expect("Hacker News handler");
+            .get("Echo")
+            .expect("Echo handler");
         let ad = agents
             .registry
             .all_advertisements()
             .iter()
-            .find(|a| a.name == "Hacker News")
-            .expect("Hacker News advertisement");
+            .find(|a| a.name == "Echo")
+            .expect("Echo advertisement");
 
         let kp = PrincipalKeypair::generate();
         let ttl = chrono::Utc::now() + chrono::Duration::hours(1);
@@ -315,18 +355,18 @@ mod tests {
             .handle_did_exchange(&session_id, &session_kp.did())
             .expect("DID exchange");
 
-        // Phase 3: Disclosure (query goes here)
+        // Phase 3: Disclosure
         handler
             .handle_disclosure(
                 &session_id,
                 vec![serde_json::json!({
                     "@type": "schema:SearchAction",
-                    "query": "rust programming"
+                    "query": "protocol handshake test"
                 })],
             )
             .expect("disclosure accepted");
 
-        // Phase 4: Execute — the real HTTP call to hn.algolia.com
+        // Phase 4: Execute
         let result = tokio::task::spawn_blocking({
             let handler = handler.clone();
             let sid = session_id.clone();
@@ -336,16 +376,11 @@ mod tests {
         .expect("task didn't panic")
         .expect("execute succeeded");
 
-        // Verify real data came back (schema.org ItemList format)
+        // Verify protocol result shape
         assert_eq!(result["@type"].as_str(), Some("SearchResultsPage"));
         let list = result["mainEntity"]["itemListElement"].as_array();
         assert!(list.is_some(), "should have itemListElement");
         assert!(!list.unwrap().is_empty(), "results should not be empty");
-
-        let first = &list.unwrap()[0];
-        assert!(first["headline"].is_string(), "item should have headline");
-        assert!(first["url"].is_string(), "item should have url");
-        eprintln!("HN result: {} — {}", first["headline"], first["url"]);
 
         // Phase 6: Close
         handler.handle_close(&session_id).expect("close");

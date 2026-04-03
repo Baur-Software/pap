@@ -103,6 +103,7 @@ fn load_one(root: &Path, path: &Path) -> Option<DynamicAgentDef> {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn catalog_dir() -> PathBuf {

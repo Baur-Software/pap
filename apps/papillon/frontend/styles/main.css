@@ -998,7 +998,7 @@ body {
 .topbar-brand-icon {
     width: 28px;
     height: 28px;
-    color: var(--sys-green);
+    object-fit: contain;
 }
 
 .topbar-brand-name {
