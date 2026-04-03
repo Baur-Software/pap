@@ -244,30 +244,237 @@ pub async fn update_agent(
 /// Returns a preview — the agent is NOT yet saved.
 #[tauri::command]
 pub async fn generate_agent(
-    _state: tauri::State<'_, AppState>,
-    _prompt: String,
+    state: tauri::State<'_, AppState>,
+    prompt: String,
 ) -> Result<DynamicAgentDef, String> {
-    Err("LLM-based agent generation is not yet implemented".into())
+    // Read LLM provider from orchestrator config
+    let provider = state
+        .orchestrator_config
+        .read()
+        .map_err(|e| format!("orchestrator_config lock poisoned: {e}"))?
+        .clone()
+        .llm_provider;
+
+    // BuiltIn provider cannot issue HTTP chat completions
+    if matches!(provider, papillon_shared::LlmProvider::BuiltIn { .. }) {
+        return Err(
+            "BuiltIn provider cannot be used for agent generation — configure an HTTP LLM provider"
+                .into(),
+        );
+    }
+
+    const SYSTEM_PROMPT: &str = concat!(
+        "You are a PAP protocol agent definition generator. ",
+        "Produce a valid DynamicAgentDef JSON object from the user's description. ",
+        "Rules: ",
+        "1. Use schema.org action types for the action field (e.g. \"schema:SearchAction\"). ",
+        "2. Prefer zero-auth public HTTPS APIs for endpoint.url_template. ",
+        "3. endpoint.url_template MUST use https:// and MUST NOT reference RFC 1918 addresses or localhost. ",
+        "4. response_jsonpath MUST be valid RFC 9535 syntax. ",
+        "5. schema_version must be 1. ",
+        "6. Output only the JSON object — no markdown, no explanation."
+    );
+
+    let messages = vec![
+        crate::commands::llm::ChatMessage {
+            role: "system".into(),
+            content: SYSTEM_PROMPT.into(),
+        },
+        crate::commands::llm::ChatMessage {
+            role: "user".into(),
+            content: prompt.clone(),
+        },
+    ];
+
+    // First attempt
+    let raw_json = crate::commands::llm::chat(&provider, &messages)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut def: DynamicAgentDef = serde_json::from_str::<DynamicAgentDef>(&raw_json)
+        .map_err(|e| format!("LLM returned invalid JSON: {e}\nRaw: {raw_json}"))?;
+
+    // Validate schema.org action prefix — retry once if invalid
+    if !def.action.starts_with("schema:") {
+        let retry_prompt = format!(
+            "{}\n\nValidation error: action must start with \"schema:\", got {:?}. Use a valid schema.org action type.",
+            prompt, def.action
+        );
+
+        let retry_messages = vec![
+            crate::commands::llm::ChatMessage {
+                role: "system".into(),
+                content: SYSTEM_PROMPT.into(),
+            },
+            crate::commands::llm::ChatMessage {
+                role: "user".into(),
+                content: retry_prompt,
+            },
+        ];
+
+        let retry_json = crate::commands::llm::chat(&provider, &retry_messages)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        def = serde_json::from_str::<DynamicAgentDef>(&retry_json)
+            .map_err(|e| format!("LLM returned invalid JSON: {e}\nRaw: {retry_json}"))?;
+
+        if !def.action.starts_with("schema:") {
+            return Err(format!(
+                "Generated agent has invalid action {:?}",
+                def.action
+            ));
+        }
+    }
+
+    // Validate endpoint URL safety
+    if let Some(ref ep) = def.endpoint {
+        if !pap_agents::is_safe_url(&ep.url_template) {
+            return Err(format!(
+                "Generated endpoint URL failed safety check: {}",
+                ep.url_template
+            ));
+        }
+    }
+
+    // Strip sensitive fields before returning the preview
+    if let Some(ref mut ep) = def.endpoint {
+        ep.headers.clear();
+    }
+    def.operator_key_seed = None;
+    def.agent_did = None;
+    def.source = DynamicAgentSource::Generated;
+
+    Ok(def)
 }
 
 /// Publish an agent advertisement to a remote registry URL.
-/// Stub — not yet implemented (requires published_to DB tracking).
+/// POSTs the AgentAdvertisement JSON to `{registry_url}/api/agents` then
+/// records the URL in `published_to` in the local DB.
 #[tauri::command]
 pub async fn publish_agent(
-    _state: tauri::State<'_, AppState>,
-    _agent_did: String,
-    _registry_url: String,
+    state: tauri::State<'_, AppState>,
+    agent_did: String,
+    registry_url: String,
 ) -> Result<(), String> {
-    Err("publish_agent is not yet implemented".into())
+    // 1. Find the advertisement in the local registry.
+    let ad = {
+        let reg = state
+            .local_registry
+            .lock()
+            .map_err(|e| format!("Registry lock poisoned: {e}"))?;
+        reg.all_advertisements()
+            .iter()
+            .find(|a| a.provider.did == agent_did)
+            .cloned()
+            .ok_or_else(|| format!("No advertisement found for DID {agent_did}"))?
+    };
+
+    // 2. POST to {registry_url}/api/agents.
+    let base = registry_url.trim_end_matches('/');
+    let endpoint = format!("{base}/api/agents");
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&endpoint)
+        .json(&ad)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request to {endpoint} failed: {e}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<unreadable body>".into());
+        return Err(format!(
+            "Registry returned {status} for POST {endpoint}: {body}"
+        ));
+    }
+
+    // 3. Load the DynamicAgentDef from DB and update published_to.
+    let mut def = state
+        .db
+        .load_all_agents()
+        .map_err(|e| format!("Failed to load agents from DB: {e}"))?
+        .into_iter()
+        .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
+        .ok_or_else(|| format!("Agent {agent_did} not found in DB"))?;
+
+    if !def.published_to.contains(&registry_url) {
+        def.published_to.push(registry_url.clone());
+    }
+    def.updated_at = chrono::Utc::now().to_rfc3339();
+
+    state
+        .db
+        .update_agent(&def)
+        .map_err(|e| format!("Failed to persist published_to for {agent_did}: {e}"))?;
+
+    Ok(())
 }
 
 /// Remove an agent advertisement from a remote registry URL.
-/// Stub — not yet implemented.
+/// Sends DELETE to `{registry_url}/api/agents/{content_hash}` then removes
+/// the URL from `published_to` in the local DB.
 #[tauri::command]
 pub async fn unpublish_agent(
-    _state: tauri::State<'_, AppState>,
-    _agent_did: String,
-    _registry_url: String,
+    state: tauri::State<'_, AppState>,
+    agent_did: String,
+    registry_url: String,
 ) -> Result<(), String> {
-    Err("unpublish_agent is not yet implemented".into())
+    // 1. Resolve the content hash from the local registry.
+    let content_hash = {
+        let reg = state
+            .local_registry
+            .lock()
+            .map_err(|e| format!("Registry lock poisoned: {e}"))?;
+        reg.all_advertisements()
+            .iter()
+            .find(|a| a.provider.did == agent_did)
+            .map(|a| a.hash())
+            .ok_or_else(|| format!("No advertisement found for DID {agent_did}"))?
+    };
+
+    // 2. DELETE {registry_url}/api/agents/{content_hash}.
+    let base = registry_url.trim_end_matches('/');
+    let endpoint = format!("{base}/api/agents/{content_hash}");
+
+    let client = reqwest::Client::new();
+    let response = client
+        .delete(&endpoint)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request to {endpoint} failed: {e}"))?;
+
+    let status = response.status();
+    if !status.is_success() && status != reqwest::StatusCode::NOT_FOUND {
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<unreadable body>".into());
+        return Err(format!(
+            "Registry returned {status} for DELETE {endpoint}: {body}"
+        ));
+    }
+
+    // 3. Load the DynamicAgentDef from DB and remove this registry_url.
+    let mut def = state
+        .db
+        .load_all_agents()
+        .map_err(|e| format!("Failed to load agents from DB: {e}"))?
+        .into_iter()
+        .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
+        .ok_or_else(|| format!("Agent {agent_did} not found in DB"))?;
+
+    def.published_to.retain(|u| u != &registry_url);
+    def.updated_at = chrono::Utc::now().to_rfc3339();
+
+    state
+        .db
+        .update_agent(&def)
+        .map_err(|e| format!("Failed to persist published_to for {agent_did}: {e}"))?;
+
+    Ok(())
 }

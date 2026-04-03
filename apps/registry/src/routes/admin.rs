@@ -490,6 +490,7 @@ async fn sync_peer(
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn percent_decode(s: &str) -> Result<String, Response> {
     percent_encoding::percent_decode_str(s)
         .decode_utf8()
