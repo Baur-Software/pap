@@ -1,9 +1,94 @@
 use serde::{Deserialize, Serialize};
 
-// LLM provider types live in pap-agents to avoid a dependency cycle.
+// LLM provider types: on native, re-export from pap-agents (single source of truth).
+// On WASM, pap-agents pulls in reqwest::blocking → tokio → mio which does not compile
+// for wasm32-unknown-unknown, so we define the types inline here.
+#[cfg(feature = "native")]
 pub use pap_agents::{
     builtin_model_catalog, BuiltInModelInfo, LlmProvider, ModelAvailability, ModelDownloadProgress,
 };
+
+#[cfg(not(feature = "native"))]
+pub use llm_types::{
+    builtin_model_catalog, BuiltInModelInfo, LlmProvider, ModelAvailability, ModelDownloadProgress,
+};
+
+#[cfg(not(feature = "native"))]
+mod llm_types {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    pub struct BuiltInModelInfo {
+        pub id: String,
+        pub display_name: String,
+        pub repo: String,
+        pub filename: String,
+        pub size_hint: String,
+        pub download_url: String,
+        pub tokenizer_url: String,
+        pub web_compatible: bool,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ModelAvailability {
+        pub model_id: String,
+        pub model_present: bool,
+        pub tokenizer_present: bool,
+        pub ready: bool,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ModelDownloadProgress {
+        pub model_id: String,
+        pub file_type: String,
+        pub downloaded_bytes: u64,
+        pub total_bytes: u64,
+        pub progress_pct: u8,
+    }
+
+    pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
+        vec![BuiltInModelInfo {
+            id: "tinyllama-1.1b".into(),
+            display_name: "TinyLlama 1.1B Chat (Q4)".into(),
+            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+            size_hint: "~0.6 GB".into(),
+            download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+            tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
+            web_compatible: false,
+        }]
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    pub enum LlmProvider {
+        #[serde(alias = "BuiltIn")]
+        BuiltIn {
+            model_id: String,
+        },
+        Mistral {
+            api_key: String,
+            model: String,
+        },
+        Ollama {
+            endpoint: String,
+            model: String,
+        },
+        OpenAiCompatible {
+            endpoint: String,
+            api_key: String,
+            model: String,
+        },
+        None,
+    }
+
+    impl Default for LlmProvider {
+        fn default() -> Self {
+            LlmProvider::BuiltIn {
+                model_id: "tinyllama-1.1b".into(),
+            }
+        }
+    }
+}
 
 /// Principal identity information (never contains private keys).
 #[derive(Debug, Clone, Serialize, Deserialize)]

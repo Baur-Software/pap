@@ -197,11 +197,7 @@ pub fn extract_jsonpath(value: &Value, path: &str) -> Option<Value> {
     Some(current)
 }
 
-fn call_llm(
-    system: &str,
-    user: &str,
-    provider: &LlmProvider,
-) -> Result<String, TransportError> {
+fn call_llm(system: &str, user: &str, provider: &LlmProvider) -> Result<String, TransportError> {
     match provider {
         LlmProvider::None => Err(TransportError::ServerError(
             "LLM fallback unavailable: no provider configured".into(),
@@ -424,10 +420,7 @@ mod tests {
     #[test]
     fn extract_jsonpath_nested_field() {
         assert_eq!(
-            extract_jsonpath(
-                &json!({"outer": {"inner": "value"}}),
-                "$.outer.inner"
-            ),
+            extract_jsonpath(&json!({"outer": {"inner": "value"}}), "$.outer.inner"),
             Some(json!("value"))
         );
     }
@@ -457,7 +450,9 @@ mod tests {
     fn wrong_action_rejected() {
         let def = make_def_llm_only();
         let handler = DynamicAgentHandler::new(def, Arc::new(LlmProvider::None));
-        assert!(handler.handle_token(make_token("schema:PayAction")).is_err());
+        assert!(handler
+            .handle_token(make_token("schema:PayAction"))
+            .is_err());
     }
 
     #[test]

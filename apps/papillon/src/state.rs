@@ -128,7 +128,11 @@ impl AppState {
         }
     }
 
-    fn with_db(db: Arc<Database>, profiles_db: Arc<ProfilesDatabase>, catalog_dir: PathBuf) -> Self {
+    fn with_db(
+        db: Arc<Database>,
+        profiles_db: Arc<ProfilesDatabase>,
+        catalog_dir: PathBuf,
+    ) -> Self {
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
 
         // On-device AI needs the local model manager — register as an extra agent.
@@ -153,7 +157,9 @@ impl AppState {
                 .collect();
 
             for mut def in catalog_defs {
-                if def.catalog_path.as_deref()
+                if def
+                    .catalog_path
+                    .as_deref()
                     .map(|p| existing_catalog_paths.contains(p))
                     .unwrap_or(false)
                 {

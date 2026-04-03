@@ -1,9 +1,9 @@
 //! Catalog loader — reads all *.toml files from the catalog directory
 //! and converts them to DynamicAgentDef values ready for DB insertion.
 
-use std::path::Path;
+use crate::dynamic::{is_safe_url, DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig};
 use serde::Deserialize;
-use crate::dynamic::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig, is_safe_url};
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct CatalogEntry {
@@ -68,7 +68,11 @@ fn load_one(root: &Path, path: &Path) -> Option<DynamicAgentDef> {
     };
     if let Some(ref ep) = entry.endpoint {
         if !is_safe_url(&ep.url_template) {
-            eprintln!("[catalog] unsafe URL in {}: {}", path.display(), ep.url_template);
+            eprintln!(
+                "[catalog] unsafe URL in {}: {}",
+                path.display(),
+                ep.url_template
+            );
             return None;
         }
     }
@@ -114,13 +118,19 @@ mod tests {
     #[test]
     fn load_catalog_finds_all_entries() {
         let defs = load_catalog(&catalog_dir());
-        assert!(defs.len() >= 22, "expected at least 22 catalog entries, found {}", defs.len());
+        assert!(
+            defs.len() >= 22,
+            "expected at least 22 catalog entries, found {}",
+            defs.len()
+        );
     }
 
     #[test]
     fn catalog_path_is_relative_to_catalog_dir() {
         let defs = load_catalog(&catalog_dir());
-        let ddg = defs.iter().find(|d| d.name == "DuckDuckGo Search")
+        let ddg = defs
+            .iter()
+            .find(|d| d.name == "DuckDuckGo Search")
             .expect("DuckDuckGo entry missing");
         let cp = ddg.catalog_path.as_deref().expect("catalog_path is None");
         assert_eq!(cp, "search/duckduckgo.toml");
@@ -132,8 +142,12 @@ mod tests {
         let defs = load_catalog(&catalog_dir());
         for def in &defs {
             if let Some(ref ep) = def.endpoint {
-                assert!(is_safe_url(&ep.url_template),
-                    "unsafe URL in '{}': {}", def.name, ep.url_template);
+                assert!(
+                    is_safe_url(&ep.url_template),
+                    "unsafe URL in '{}': {}",
+                    def.name,
+                    ep.url_template
+                );
             }
         }
     }
@@ -142,8 +156,12 @@ mod tests {
     fn catalog_entries_have_schema_org_actions() {
         let defs = load_catalog(&catalog_dir());
         for def in &defs {
-            assert!(def.action.starts_with("schema:"),
-                "action '{}' in '{}' does not start with 'schema:'", def.action, def.name);
+            assert!(
+                def.action.starts_with("schema:"),
+                "action '{}' in '{}' does not start with 'schema:'",
+                def.action,
+                def.name
+            );
         }
     }
 
@@ -154,6 +172,10 @@ mod tests {
         let mut f = std::fs::File::create(&bad).unwrap();
         writeln!(f, "this is not valid toml = [[[").unwrap();
         let defs = load_catalog(tmp.path());
-        assert!(defs.is_empty(), "expected empty result for malformed TOML, got {} entries", defs.len());
+        assert!(
+            defs.is_empty(),
+            "expected empty result for malformed TOML, got {} entries",
+            defs.len()
+        );
     }
 }

@@ -162,7 +162,9 @@ impl AgentSet {
         def: &DynamicAgentDef,
         llm_provider: Arc<LlmProvider>,
     ) -> Result<String, RegistrationError> {
-        let seed = def.operator_key_seed.ok_or(RegistrationError::MissingKeySeed)?;
+        let seed = def
+            .operator_key_seed
+            .ok_or(RegistrationError::MissingKeySeed)?;
         let kp = PrincipalKeypair::from_bytes(&seed)
             .map_err(|e| RegistrationError::InvalidKeySeed(e.to_string()))?;
         let did = kp.did();
@@ -321,16 +323,24 @@ mod tests {
             None
         };
         DynamicAgentDef {
-            agent_did: None, schema_version: 1,
-            name: "Test Dynamic Agent".into(), provider: "Test Corp".into(),
+            agent_did: None,
+            schema_version: 1,
+            name: "Test Dynamic Agent".into(),
+            provider: "Test Corp".into(),
             description: "A test dynamic agent".into(),
             action: "schema:SearchAction".into(),
-            object_types: vec!["schema:Thing".into()], requires_disclosure: vec![],
-            returns: vec!["schema:SearchResult".into()], endpoint: None,
-            llm_instructions: "You are helpful.".into(), subagents: vec![],
+            object_types: vec!["schema:Thing".into()],
+            requires_disclosure: vec![],
+            returns: vec!["schema:SearchResult".into()],
+            endpoint: None,
+            llm_instructions: "You are helpful.".into(),
+            subagents: vec![],
             source: crate::dynamic::DynamicAgentSource::UserCreated,
-            operator_key_seed: seed, published_to: vec![], catalog_path: None,
-            created_at: "2026-04-01T00:00:00Z".into(), updated_at: "2026-04-01T00:00:00Z".into(),
+            operator_key_seed: seed,
+            published_to: vec![],
+            catalog_path: None,
+            created_at: "2026-04-01T00:00:00Z".into(),
+            updated_at: "2026-04-01T00:00:00Z".into(),
         }
     }
 
@@ -338,7 +348,9 @@ mod tests {
     fn register_dynamic_produces_queryable_agent() {
         let mut set = build_agents(vec![]);
         let def = make_dynamic_def(true);
-        let did = set.register_dynamic(&def, Arc::new(LlmProvider::None)).unwrap();
+        let did = set
+            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
         assert!(did.starts_with("did:key:z"), "got: {did}");
         let results = set.registry.query_local("schema:SearchAction");
         assert!(results.iter().any(|a| a.name == "Test Dynamic Agent"));
@@ -358,7 +370,8 @@ mod tests {
     fn register_dynamic_signed_advertisement() {
         let mut set = build_agents(vec![]);
         let def = make_dynamic_def(true);
-        set.register_dynamic(&def, Arc::new(LlmProvider::None)).unwrap();
+        set.register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
         let ads = set.registry.all_advertisements();
         let ad = ads.iter().find(|a| a.name == "Test Dynamic Agent").unwrap();
         assert!(ad.signature.is_some());
@@ -375,13 +388,16 @@ mod tests {
         def.operator_key_seed = Some(seed);
         def.name = "Stable DID Agent A".into();
         let mut set = build_agents(vec![]);
-        let did1 = set.register_dynamic(&def, Arc::new(LlmProvider::None)).unwrap();
+        let did1 = set
+            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
 
         let mut set2 = build_agents(vec![]);
         def.name = "Stable DID Agent B".into();
-        let did2 = set2.register_dynamic(&def, Arc::new(LlmProvider::None)).unwrap();
+        let did2 = set2
+            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
 
         assert_eq!(did1, did2, "same seed must produce same DID");
     }
-
 }

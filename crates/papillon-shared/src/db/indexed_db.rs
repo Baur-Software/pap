@@ -307,6 +307,10 @@ impl DatabaseOps for IndexedDbDatabase {
     fn has_enabled_template_for_schema_type(&self, schema_type: &str) -> Result<bool, DbError> {
         self.inner.has_enabled_template_for_schema_type(schema_type)
     }
+
+    fn apply_retention_policy(&self) -> Result<super::RetentionStats, DbError> {
+        self.inner.apply_retention_policy()
+    }
 }
 
 #[cfg(test)]

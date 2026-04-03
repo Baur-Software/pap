@@ -9,6 +9,7 @@
 //! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
 use crate::types::Template;
+#[cfg(feature = "native")]
 use pap_agents::DynamicAgentDef;
 use serde::{Deserialize, Serialize};
 
@@ -177,18 +178,24 @@ pub trait DatabaseOps: Send + Sync {
     /// Returns the number of episodes compressed and deleted.
     fn apply_retention_policy(&self) -> Result<RetentionStats, DbError>;
 
-    // ── Agent Management ─────────────────────────────────────────────────
+    // ── Agent Management (native only) ───────────────────────────────────
+    // pap-agents pulls in reqwest::blocking → tokio → mio which does not compile
+    // for wasm32-unknown-unknown. These methods are only available in the native build.
 
     /// Insert a new dynamic agent definition.
+    #[cfg(feature = "native")]
     fn insert_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError>;
 
     /// Load all non-removed agent definitions.
+    #[cfg(feature = "native")]
     fn load_all_agents(&self) -> Result<Vec<DynamicAgentDef>, DbError>;
 
     /// Update an existing agent definition in-place (same agent_did).
+    #[cfg(feature = "native")]
     fn update_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError>;
 
     /// Delete an agent by DID. Catalog agents should use removed_from_catalog instead.
+    #[cfg(feature = "native")]
     fn delete_agent(&self, agent_did: &str) -> Result<(), DbError>;
 }
 

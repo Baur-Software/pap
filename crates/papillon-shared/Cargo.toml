@@ -5,7 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-pap-agents = { workspace = true }
+# pap-agents is native-only: reqwest::blocking → tokio → mio does not compile for WASM
+pap-agents = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
@@ -30,5 +31,5 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 # Feature flags
 [features]
 default = ["native"]
-native = ["rusqlite"]
+native = ["rusqlite", "pap-agents"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "wasm-bindgen-futures", "uuid/js"]

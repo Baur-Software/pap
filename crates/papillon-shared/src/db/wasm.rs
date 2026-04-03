@@ -380,6 +380,11 @@ impl DatabaseOps for WasmDatabase {
             .iter()
             .any(|t| t.enabled && t.schema_type == schema_type))
     }
+
+    fn apply_retention_policy(&self) -> Result<super::RetentionStats, DbError> {
+        // In-memory WASM store: no persistence, nothing to compact.
+        Ok(super::RetentionStats::default())
+    }
 }
 
 #[cfg(test)]

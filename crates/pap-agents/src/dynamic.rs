@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicAgentDef {
@@ -37,7 +37,10 @@ pub struct HttpEndpointConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum HttpMethod { Get, Post }
+pub enum HttpMethod {
+    Get,
+    Post,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DynamicAgentSource {
@@ -212,7 +215,9 @@ mod tests {
             requires_disclosure: vec![],
             returns: vec!["schema:NutritionInformation".to_string()],
             endpoint: Some(HttpEndpointConfig {
-                url_template: "https://world.openfoodfacts.org/cgi/search.pl?search_terms={query}&json=1".to_string(),
+                url_template:
+                    "https://world.openfoodfacts.org/cgi/search.pl?search_terms={query}&json=1"
+                        .to_string(),
                 method: HttpMethod::Get,
                 headers: HashMap::new(),
                 body_template: None,
@@ -237,7 +242,10 @@ mod tests {
         assert_eq!(back.source, DynamicAgentSource::Catalog);
         assert_eq!(back.action, "schema:SearchAction");
         assert!(back.operator_key_seed.is_none());
-        assert_eq!(back.catalog_path, Some("food/open_food_facts.toml".to_string()));
+        assert_eq!(
+            back.catalog_path,
+            Some("food/open_food_facts.toml".to_string())
+        );
     }
 
     #[test]

@@ -31,9 +31,13 @@ pub mod session_store;
 mod simple;
 
 pub use catalog::load_catalog;
-pub use dynamic::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig, HttpMethod, is_safe_url};
+pub use dynamic::{
+    is_safe_url, DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig, HttpMethod,
+};
 pub use dynamic_handler::DynamicAgentHandler;
 pub use executor::{AgentExecutor, AgentMeta};
-pub use llm::{builtin_model_catalog, BuiltInModelInfo, LlmProvider, ModelAvailability, ModelDownloadProgress};
+pub use llm::{
+    builtin_model_catalog, BuiltInModelInfo, LlmProvider, ModelAvailability, ModelDownloadProgress,
+};
 pub use registry::{build_agents, AgentSet};
 pub use simple::SimpleAgent;

@@ -320,15 +320,8 @@ mod tests {
             Arc::new(pap_agents::SimpleAgent::new(EchoExecutor));
         let meta = EchoExecutor.meta();
 
-        let agents = pap_agents::build_agents(vec![(
-            "Echo",
-            echo_handler,
-            meta,
-        )]);
-        let handler = agents
-            .handlers
-            .get("Echo")
-            .expect("Echo handler");
+        let agents = pap_agents::build_agents(vec![("Echo", echo_handler, meta)]);
+        let handler = agents.handlers.get("Echo").expect("Echo handler");
         let ad = agents
             .registry
             .all_advertisements()

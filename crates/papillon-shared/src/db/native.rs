@@ -801,7 +801,9 @@ impl DatabaseOps for NativeDatabase {
             .map_err(|e| DbError(format!("serialize requires_disclosure: {e}")))?;
         let returns_json = serde_json::to_string(&def.returns)
             .map_err(|e| DbError(format!("serialize returns: {e}")))?;
-        let endpoint_json = def.endpoint.as_ref()
+        let endpoint_json = def
+            .endpoint
+            .as_ref()
             .map(serde_json::to_string)
             .transpose()
             .map_err(|e| DbError(format!("serialize endpoint: {e}")))?;
@@ -829,21 +831,35 @@ impl DatabaseOps for NativeDatabase {
                 ?17, ?18
             )",
             params![
-                agent_did, def.schema_version, def.name, def.provider,
-                def.description, def.action,
-                object_types_json, requires_disclosure_json, returns_json,
-                endpoint_json, def.llm_instructions, subagents_json, source_str,
-                seed.as_slice(), published_to_json, def.catalog_path,
-                def.created_at, def.updated_at,
+                agent_did,
+                def.schema_version,
+                def.name,
+                def.provider,
+                def.description,
+                def.action,
+                object_types_json,
+                requires_disclosure_json,
+                returns_json,
+                endpoint_json,
+                def.llm_instructions,
+                subagents_json,
+                source_str,
+                seed.as_slice(),
+                published_to_json,
+                def.catalog_path,
+                def.created_at,
+                def.updated_at,
             ],
-        ).map_err(|e| DbError(format!("db insert agent: {e}")))?;
+        )
+        .map_err(|e| DbError(format!("db insert agent: {e}")))?;
         Ok(())
     }
 
     fn load_all_agents(&self) -> Result<Vec<DynamicAgentDef>, DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
-        let mut stmt = conn.prepare(
-            "SELECT agent_did, schema_version, name, provider, description, action,
+        let mut stmt = conn
+            .prepare(
+                "SELECT agent_did, schema_version, name, provider, description, action,
                     object_types_json, requires_disclosure_json, returns_json,
                     endpoint_json, llm_instructions, subagents_json, source,
                     operator_key_seed, published_to_json, catalog_path,
@@ -851,60 +867,76 @@ impl DatabaseOps for NativeDatabase {
              FROM agents
              WHERE removed_from_catalog = 0
              ORDER BY name",
-        ).map_err(|e| DbError(format!("db prepare: {e}")))?;
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
 
-        let rows = stmt.query_map([], |row| {
-            let source_str: String = row.get(12)?;
-            let source = match source_str.as_str() {
-                "catalog" => DynamicAgentSource::Catalog,
-                "user_created" => DynamicAgentSource::UserCreated,
-                "generated" => DynamicAgentSource::Generated,
-                other => return Err(rusqlite::Error::FromSqlConversionFailure(
-                    12, rusqlite::types::Type::Text,
-                    format!("unknown source: {other}").into(),
-                )),
-            };
-            let seed_blob: Vec<u8> = row.get(13)?;
-            let seed_arr: [u8; 32] = seed_blob.try_into().map_err(|_| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    13, rusqlite::types::Type::Blob,
-                    "operator_key_seed must be 32 bytes".into(),
-                )
-            })?;
-            let endpoint_json: Option<String> = row.get(9)?;
-            let endpoint = endpoint_json.map(|j| {
-                serde_json::from_str::<HttpEndpointConfig>(&j).map_err(|e| {
+        let rows = stmt
+            .query_map([], |row| {
+                let source_str: String = row.get(12)?;
+                let source = match source_str.as_str() {
+                    "catalog" => DynamicAgentSource::Catalog,
+                    "user_created" => DynamicAgentSource::UserCreated,
+                    "generated" => DynamicAgentSource::Generated,
+                    other => {
+                        return Err(rusqlite::Error::FromSqlConversionFailure(
+                            12,
+                            rusqlite::types::Type::Text,
+                            format!("unknown source: {other}").into(),
+                        ))
+                    }
+                };
+                let seed_blob: Vec<u8> = row.get(13)?;
+                let seed_arr: [u8; 32] = seed_blob.try_into().map_err(|_| {
                     rusqlite::Error::FromSqlConversionFailure(
-                        9, rusqlite::types::Type::Text, Box::new(e),
+                        13,
+                        rusqlite::types::Type::Blob,
+                        "operator_key_seed must be 32 bytes".into(),
                     )
+                })?;
+                let endpoint_json: Option<String> = row.get(9)?;
+                let endpoint = endpoint_json
+                    .map(|j| {
+                        serde_json::from_str::<HttpEndpointConfig>(&j).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                9,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })
+                    })
+                    .transpose()?;
+                let parse_json_array =
+                    |idx: usize, raw: String| -> Result<Vec<String>, rusqlite::Error> {
+                        serde_json::from_str::<Vec<String>>(&raw).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                idx,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })
+                    };
+                Ok(DynamicAgentDef {
+                    agent_did: Some(row.get(0)?),
+                    schema_version: row.get::<_, i64>(1)? as u32,
+                    name: row.get(2)?,
+                    provider: row.get(3)?,
+                    description: row.get(4)?,
+                    action: row.get(5)?,
+                    object_types: parse_json_array(6, row.get(6)?)?,
+                    requires_disclosure: parse_json_array(7, row.get(7)?)?,
+                    returns: parse_json_array(8, row.get(8)?)?,
+                    endpoint,
+                    llm_instructions: row.get(10)?,
+                    subagents: parse_json_array(11, row.get(11)?)?,
+                    source,
+                    operator_key_seed: Some(seed_arr),
+                    published_to: parse_json_array(14, row.get(14)?)?,
+                    catalog_path: row.get(15)?,
+                    created_at: row.get(16)?,
+                    updated_at: row.get(17)?,
                 })
-            }).transpose()?;
-            let parse_json_array = |idx: usize, raw: String| -> Result<Vec<String>, rusqlite::Error> {
-                serde_json::from_str::<Vec<String>>(&raw).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e))
-                })
-            };
-            Ok(DynamicAgentDef {
-                agent_did: Some(row.get(0)?),
-                schema_version: row.get::<_, i64>(1)? as u32,
-                name: row.get(2)?,
-                provider: row.get(3)?,
-                description: row.get(4)?,
-                action: row.get(5)?,
-                object_types: parse_json_array(6, row.get(6)?)?,
-                requires_disclosure: parse_json_array(7, row.get(7)?)?,
-                returns: parse_json_array(8, row.get(8)?)?,
-                endpoint,
-                llm_instructions: row.get(10)?,
-                subagents: parse_json_array(11, row.get(11)?)?,
-                source,
-                operator_key_seed: Some(seed_arr),
-                published_to: parse_json_array(14, row.get(14)?)?,
-                catalog_path: row.get(15)?,
-                created_at: row.get(16)?,
-                updated_at: row.get(17)?,
             })
-        }).map_err(|e| DbError(format!("db query: {e}")))?;
+            .map_err(|e| DbError(format!("db query: {e}")))?;
 
         let mut agents = Vec::new();
         for row in rows {
@@ -915,16 +947,19 @@ impl DatabaseOps for NativeDatabase {
 
     fn update_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
-        let agent_did = def.agent_did.as_deref().ok_or_else(|| {
-            DbError("update_agent: agent_did must be set".to_string())
-        })?;
+        let agent_did = def
+            .agent_did
+            .as_deref()
+            .ok_or_else(|| DbError("update_agent: agent_did must be set".to_string()))?;
         let object_types_json = serde_json::to_string(&def.object_types)
             .map_err(|e| DbError(format!("serialize object_types: {e}")))?;
         let requires_disclosure_json = serde_json::to_string(&def.requires_disclosure)
             .map_err(|e| DbError(format!("serialize requires_disclosure: {e}")))?;
         let returns_json = serde_json::to_string(&def.returns)
             .map_err(|e| DbError(format!("serialize returns: {e}")))?;
-        let endpoint_json = def.endpoint.as_ref()
+        let endpoint_json = def
+            .endpoint
+            .as_ref()
             .map(serde_json::to_string)
             .transpose()
             .map_err(|e| DbError(format!("serialize endpoint: {e}")))?;
@@ -932,8 +967,9 @@ impl DatabaseOps for NativeDatabase {
             .map_err(|e| DbError(format!("serialize subagents: {e}")))?;
         let published_to_json = serde_json::to_string(&def.published_to)
             .map_err(|e| DbError(format!("serialize published_to: {e}")))?;
-        let rows_changed = conn.execute(
-            "UPDATE agents SET
+        let rows_changed = conn
+            .execute(
+                "UPDATE agents SET
                 schema_version = ?1, name = ?2, provider = ?3,
                 description = ?4, action = ?5,
                 object_types_json = ?6, requires_disclosure_json = ?7,
@@ -941,13 +977,24 @@ impl DatabaseOps for NativeDatabase {
                 llm_instructions = ?10, subagents_json = ?11,
                 published_to_json = ?12, updated_at = ?13
              WHERE agent_did = ?14",
-            params![
-                def.schema_version, def.name, def.provider, def.description, def.action,
-                object_types_json, requires_disclosure_json, returns_json, endpoint_json,
-                def.llm_instructions, subagents_json, published_to_json, def.updated_at,
-                agent_did,
-            ],
-        ).map_err(|e| DbError(format!("db update agent: {e}")))?;
+                params![
+                    def.schema_version,
+                    def.name,
+                    def.provider,
+                    def.description,
+                    def.action,
+                    object_types_json,
+                    requires_disclosure_json,
+                    returns_json,
+                    endpoint_json,
+                    def.llm_instructions,
+                    subagents_json,
+                    published_to_json,
+                    def.updated_at,
+                    agent_did,
+                ],
+            )
+            .map_err(|e| DbError(format!("db update agent: {e}")))?;
         if rows_changed == 0 {
             return Err(DbError(format!("Agent not found: {agent_did}")));
         }
@@ -956,10 +1003,12 @@ impl DatabaseOps for NativeDatabase {
 
     fn delete_agent(&self, agent_did: &str) -> Result<(), DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
-        let rows_changed = conn.execute(
-            "DELETE FROM agents WHERE agent_did = ?1",
-            params![agent_did],
-        ).map_err(|e| DbError(format!("db delete agent: {e}")))?;
+        let rows_changed = conn
+            .execute(
+                "DELETE FROM agents WHERE agent_did = ?1",
+                params![agent_did],
+            )
+            .map_err(|e| DbError(format!("db delete agent: {e}")))?;
         if rows_changed == 0 {
             return Err(DbError(format!("Agent not found: {agent_did}")));
         }
@@ -1174,9 +1223,15 @@ mod tests {
         let old = eps.iter().find(|e| e.id == "old").unwrap();
         let new = eps.iter().find(|e| e.id == "new").unwrap();
         assert_eq!(old.decay_state, "Compressed");
-        assert!(old.result_json.is_none(), "result_json must be nulled after compression");
+        assert!(
+            old.result_json.is_none(),
+            "result_json must be nulled after compression"
+        );
         assert_eq!(new.decay_state, "Active");
-        assert!(new.result_json.is_some(), "recent episode result_json must be preserved");
+        assert!(
+            new.result_json.is_some(),
+            "recent episode result_json must be preserved"
+        );
     }
 
     #[test]
@@ -1185,9 +1240,11 @@ mod tests {
         // Policy: full_retention_days=90, failure_retention_multiplier=2.0
         // So failures should not be compressed until 180 days.
         // Insert a failure at 100 days — should NOT be compressed yet.
-        db.insert_episode(&failure_episode("fail-100", 100)).unwrap();
+        db.insert_episode(&failure_episode("fail-100", 100))
+            .unwrap();
         // Insert a failure at 200 days — SHOULD be compressed.
-        db.insert_episode(&failure_episode("fail-200", 200)).unwrap();
+        db.insert_episode(&failure_episode("fail-200", 200))
+            .unwrap();
 
         let stats = db.apply_retention_policy().unwrap();
         assert_eq!(stats.compressed, 1);
@@ -1195,22 +1252,33 @@ mod tests {
         let eps = db.list_episodes(None, None, 10, None).unwrap();
         let fail100 = eps.iter().find(|e| e.id == "fail-100").unwrap();
         let fail200 = eps.iter().find(|e| e.id == "fail-200").unwrap();
-        assert_eq!(fail100.decay_state, "Active", "100-day failure should still be Active");
-        assert_eq!(fail200.decay_state, "Compressed", "200-day failure should be Compressed");
+        assert_eq!(
+            fail100.decay_state, "Active",
+            "100-day failure should still be Active"
+        );
+        assert_eq!(
+            fail200.decay_state, "Compressed",
+            "200-day failure should be Compressed"
+        );
     }
 
     #[test]
     fn retention_count_cap_compresses_oldest() {
         let db = test_db();
         // Set max_full_episodes = 2 so that with 4 episodes, 2 oldest get compressed.
-        db.conn.lock().unwrap().execute(
-            "UPDATE retention_policies SET max_full_episodes = 2 WHERE name = 'default'",
-            [],
-        ).unwrap();
+        db.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE retention_policies SET max_full_episodes = 2 WHERE name = 'default'",
+                [],
+            )
+            .unwrap();
 
         // Insert 4 episodes with staggered times (all within 90-day window).
         for i in 1..=4_i64 {
-            db.insert_episode(&old_episode(&format!("ep-{i}"), i)).unwrap();
+            db.insert_episode(&old_episode(&format!("ep-{i}"), i))
+                .unwrap();
         }
 
         let stats = db.apply_retention_policy().unwrap();
@@ -1218,7 +1286,10 @@ mod tests {
 
         let eps = db.list_episodes(None, None, 10, None).unwrap();
         let active: Vec<_> = eps.iter().filter(|e| e.decay_state == "Active").collect();
-        let compressed: Vec<_> = eps.iter().filter(|e| e.decay_state == "Compressed").collect();
+        let compressed: Vec<_> = eps
+            .iter()
+            .filter(|e| e.decay_state == "Compressed")
+            .collect();
         assert_eq!(active.len(), 2);
         assert_eq!(compressed.len(), 2);
         // The two oldest (ep-4, ep-3) should be compressed.
@@ -1592,10 +1663,15 @@ mod tests {
             conn.execute(
                 "UPDATE agents SET removed_from_catalog = 1 WHERE agent_did = ?1",
                 params!["did:key:zActive"],
-            ).unwrap();
+            )
+            .unwrap();
         }
         let agents = db.load_all_agents().unwrap();
-        assert_eq!(agents.len(), 0, "removed agents must be excluded from load_all_agents");
+        assert_eq!(
+            agents.len(),
+            0,
+            "removed agents must be excluded from load_all_agents"
+        );
     }
 
     #[test]
