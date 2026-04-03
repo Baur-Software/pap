@@ -2069,39 +2069,50 @@ regardless of whether the server is PAP-aware.
 ### 15.2. Syntax
 
 ```abnf
-pap-uri         = pap-scheme "://" authority path-and-action [ "?" query ]
+pap-uri         = pap-scheme "://" pap-authority pap-path [ "?" pap-query ]
 
 pap-scheme      = "pap" / "pap+https" / "pap+wss"
 
-authority       = registry-authority
-                / did-authority
-                / catalog-name
+pap-authority   = registry-host / did-authority / catalog-name
 
-registry-authority = host [ ":" port ] "/agents/" agent-slug
+registry-host   = host [ ":" port ]
+                  ; authority is the hostname only; agent slug appears in path
+
 did-authority   = "did:key:" base58-multicodec-key
+                  ; PAP parsers MUST treat "did:key:" as an atomic authority
+                  ; token. Standard RFC 3986 host parsing (which disallows
+                  ; colons) MUST NOT be applied to did-authority. A PAP URI
+                  ; parser identifies did-authority by the "did:key:" prefix
+                  ; before applying any other rule.
+
 catalog-name    = 1*( ALPHA / DIGIT / "-" / "_" )
+                  ; MUST NOT be a reserved word (receipt, canvas, settings)
                   ; resolved against local catalog before dispatch
 
-path-and-action = "/" schema-action-type
+pap-path        = registry-path / simple-path
+
+registry-path   = "/agents/" agent-slug "/" schema-action-type
+simple-path     = "/" schema-action-type
                   ; Schema.org action type, e.g. "SearchAction"
 
-query           = schema-param *( "&" schema-param )
-schema-param    = schema-property "=" value
-                  ; property names are Schema.org property names
+pap-query       = pap-param *( "&" pap-param )
+pap-param       = schema-property "=" pap-value
+                  ; values MUST be percent-encoded per RFC 3986 §2.1
+                  ; "+" MUST NOT be used as a space encoding in pap-query
 ```
 
 Examples:
 
 ```
 ; Networked agent via Chrysalis registry
-pap://chrysalis.example.com/agents/arxiv/SearchAction?query=quantum+computing
+pap://chrysalis.example.com/agents/arxiv/SearchAction?query=quantum%20computing
 
 ; Direct peer-to-peer via DID (no registry)
 pap://did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK/SearchAction
 
 ; Local catalog shorthand — resolved before dispatch
-pap://arxiv/SearchAction?query=quantum+computing
-pap://wikipedia/ReadAction?name=Rust+programming
+pap://arxiv/SearchAction?query=quantum%20computing
+pap://wikipedia/ReadAction?name=Rust%20programming
 
 ; Receipt deep-link
 pap://receipt/RCP_abc123
@@ -2116,9 +2127,13 @@ pap+wss://stream.example.com/agents/feed/ListenAction
 A conforming client MUST resolve a `pap://` URI using the following
 priority chain, in order:
 
-1. **`did:key:` authority** — resolve directly via DID Document endpoint
-   discovery (Section 14.4). No registry lookup. Initiates a PAP handshake
-   with the identified agent.
+0. **Special authority** — if the authority is one of the reserved words
+   (`receipt`, `canvas`, `settings`), resolve locally without any network
+   lookup. See §15.7. Do not proceed to subsequent steps.
+
+1. **`did:key:` authority** — if the authority begins with `did:key:`,
+   resolve directly via DID Document endpoint discovery (Section 14.4).
+   No registry lookup. Initiates a PAP handshake with the identified agent.
 
 2. **Catalog name** — if the authority contains no `.` character and does
    not begin with `did:`, the client MUST check its local agent catalog for
@@ -2126,25 +2141,33 @@ priority chain, in order:
    found, rewrite the URI to the agent's registered DID and resolve via
    step 1.
 
-3. **Registry hostname** — if the authority contains a `.` character, treat
-   it as a Chrysalis registry host. Resolve by querying the registry's
-   `/agents/{slug}/` routes (Section 14.1) and initiate a PAP handshake
-   with the returned agent endpoint.
+3. **Registry hostname** — if the authority contains a `.` character, or
+   matches `localhost`, or is a valid IPv4 address or IPv6 literal, treat it
+   as a Chrysalis registry host. Resolve by querying the registry's
+   `/agents/{slug}/` routes (Section 14.1) using the path-embedded agent
+   slug, and initiate a PAP handshake with the returned agent endpoint.
+   The `.` heuristic MUST NOT be applied to `localhost` or IP literals;
+   they are always treated as registry hosts.
 
-If resolution fails at all steps, the client MUST present an error to the
-principal. The client MUST NOT silently fall back to a raw HTTP request.
+If resolution fails at all steps, the client MUST render an inline error in
+place of the activated link, showing the unresolved URI and a human-readable
+explanation. The client MUST NOT navigate away from the current canvas or
+dismiss existing content. The client MUST NOT silently fall back to a raw
+HTTP request.
 
 ### 15.4. Action Type and Query Parameters
 
-The path segment after the authority MUST be a Schema.org action type
-(e.g. `SearchAction`, `BuyAction`, `ReadAction`). Clients SHOULD use this
-type to pre-filter agents during resolution — if a catalog agent does not
-advertise the requested action type in its `capability` array, it MUST NOT
-be selected.
+The action type path segment MUST be a Schema.org action type
+(e.g. `SearchAction`, `BuyAction`, `ReadAction`). For registry URIs the
+full path is `/agents/{slug}/{ActionType}`; for catalog and DID URIs the
+path is `/{ActionType}`. Clients SHOULD use the action type to pre-filter
+agents during resolution — if a catalog agent does not advertise the
+requested action type in its `capability` array, it MUST NOT be selected.
 
-Query parameters MUST use Schema.org property names as keys. Clients MAY
-pass query parameters directly to the agent as the intent payload. Agents
-MAY ignore unknown parameters.
+Query parameters MUST use Schema.org property names as keys. Values MUST
+be percent-encoded per RFC 3986 §2.1; `+` MUST NOT be used as a space
+encoding. Clients MAY pass query parameters directly to the agent as the
+intent payload. Agents MAY ignore unknown parameters.
 
 ### 15.5. Recapture Semantics (`pap+https://`, `pap+wss://`)
 
@@ -2162,8 +2185,21 @@ When a `pap+https://` or `pap+wss://` URI is resolved:
 4. The remote endpoint's response is treated as agent output and rendered
    via the standard block renderer pipeline.
 
+For `pap+wss://` URIs, the connection lifecycle (establishment, keepalive,
+and termination) follows the mandate-scoped session lifecycle defined in
+§5. Streaming-specific semantics (chunked responses, event framing) are
+deferred to v1.1.
+
 This allows principals to bring existing web services under PAP governance
 without requiring those services to be modified.
+
+**v1.0 scope note:** In v1.0, `pap+https://` and `pap+wss://` URIs are
+parsed and classified by conforming clients. Full mandate enforcement
+(steps 1–4 above) requires the mandate enforcement layer, which is deferred
+to a post-v1.0 milestone. v1.0 clients MUST NOT silently downgrade a
+`pap+https://` URI to an unscoped HTTPS request. They MUST either enforce
+the mandate or reject the request with a clear principal-visible error
+explaining that recapture enforcement is not yet available.
 
 ### 15.6. Link Rendering
 
@@ -2176,6 +2212,18 @@ navigation event.
 This enables agent-rendered content to form a navigable graph of
 intent-links without requiring any special page routing. Every link is a
 new PAP interaction.
+
+**Agent-rendered link security:** Clients MUST visually distinguish links
+originating from agent-rendered content from links typed directly by the
+principal. Before dispatching an agent-rendered `pap://` link, clients
+SHOULD display the full URI and the identity of the agent that produced it,
+and require explicit principal confirmation. This prevents injection attacks
+where a malicious or compromised agent response induces the client to
+execute unintended actions.
+
+Agent-rendered links MUST NOT activate the `settings`, `canvas`, or
+`receipt` special authorities (§15.7). Clients MUST silently reject
+such links and MAY log the attempt for principal review.
 
 ### 15.7. Special Authorities
 
@@ -2192,7 +2240,7 @@ client without registry or catalog lookup:
 
 ## 16. Security Considerations
 
-### 15.1. Cryptographic Algorithms
+### 16.1. Cryptographic Algorithms
 
 PAP v1.0 uses exclusively:
 
@@ -2206,7 +2254,7 @@ Implementations MUST use these algorithms. Algorithm agility (the
 ability to negotiate alternative algorithms) is deferred to future
 versions of the specification.
 
-### 15.2. Key Management
+### 16.2. Key Management
 
 - Principal private keys SHOULD be stored in hardware security
   modules or platform authenticators (WebAuthn). They MUST NOT be
@@ -2218,7 +2266,7 @@ versions of the specification.
   SHOULD be protected with access controls appropriate to the
   deployment environment.
 
-### 15.3. Nonce Management
+### 16.3. Nonce Management
 
 - Capability token nonces MUST be stored in a consumed-nonce set
   for at least the duration of the token's validity period.
@@ -2228,7 +2276,7 @@ versions of the specification.
   SHOULD reject all tokens issued before the restart by comparing
   `issued_at` against its restart timestamp.
 
-### 15.4. Replay Protection
+### 16.4. Replay Protection
 
 Multiple layers provide replay protection:
 
@@ -2243,7 +2291,7 @@ Multiple layers provide replay protection:
    A replayed session message cannot be verified against the
    original session keys.
 
-### 15.5. Denial of Service
+### 16.5. Denial of Service
 
 - Implementations SHOULD rate-limit token presentation requests
   to prevent resource exhaustion from session initiation floods.
@@ -2251,7 +2299,7 @@ Multiple layers provide replay protection:
 - Marketplace registries SHOULD limit the number of advertisements
   per operator DID.
 
-### 15.6. Man-in-the-Middle
+### 16.6. Man-in-the-Middle
 
 - After Phase 2 (DID exchange), all envelopes MUST be signed by
   the sender's session key. An attacker who intercepts envelopes
@@ -2263,7 +2311,7 @@ Multiple layers provide replay protection:
 - Implementations SHOULD use TLS for all HTTP transport to protect
   against passive eavesdropping.
 
-### 15.7. Context Leakage
+### 16.7. Context Leakage
 
 - The `DisclosureOffer` (Phase 3) MUST contain only SD-JWT
   disclosures permitted by the mandate's disclosure set.
@@ -2274,13 +2322,13 @@ Multiple layers provide replay protection:
   authorization.
 - Receipts MUST NOT contain personal data values (Section 11.5).
 
-### 15.8. Mandate Chain Depth
+### 16.8. Mandate Chain Depth
 
 Implementations SHOULD enforce a maximum mandate chain depth to
 prevent resource exhaustion during chain verification. A maximum
 depth of 10 is RECOMMENDED.
 
-### 15.9. Clock Skew
+### 16.9. Clock Skew
 
 - Implementations MUST use UTC for all timestamps.
 - Implementations SHOULD tolerate clock skew of up to 30 seconds
@@ -2288,7 +2336,7 @@ depth of 10 is RECOMMENDED.
 - Implementations MAY use NTP or similar time synchronization
   protocols to minimize skew.
 
-### 15.10. Canonical JSON Determinism
+### 16.10. Canonical JSON Determinism
 
 The security of mandate hashing and signature verification depends
 on deterministic JSON serialization. Implementations MUST ensure
@@ -2304,7 +2352,7 @@ If an implementation cannot guarantee deterministic JSON output,
 it MUST use an alternative canonical form (e.g., JCS [RFC 8785])
 and document the choice.
 
-### 15.11. Attack Surface Summary
+### 16.11. Attack Surface Summary
 
 | Attack Vector | Mitigation | Spec Section |
 |---|---|---|
@@ -2326,7 +2374,7 @@ and document the choice.
 
 ## 17. IANA and Vocabulary References
 
-### 16.1. Schema.org Vocabulary
+### 17.1. Schema.org Vocabulary
 
 PAP uses Schema.org (https://schema.org) as the vocabulary for
 action types, object types, and property references. The following
@@ -2362,7 +2410,7 @@ Implementations MAY define additional namespaced vocabularies using
 a prefix notation (e.g., `custom:MyAction`). Custom vocabularies
 SHOULD be documented.
 
-### 16.2. W3C Standards
+### 17.2. W3C Standards
 
 | Standard | URI | Usage |
 |---|---|---|
@@ -2370,7 +2418,7 @@ SHOULD be documented.
 | DID Key Method | https://w3c-ccg.github.io/did-method-key/ | `did:key` derivation |
 | VC Data Model 2.0 | https://www.w3.org/TR/vc-data-model-2.0/ | Credential envelope |
 
-### 16.3. IETF Standards
+### 17.3. IETF Standards
 
 | Standard | RFC/Draft | Usage |
 |---|---|---|
@@ -2383,18 +2431,18 @@ SHOULD be documented.
 | RFC 9458 | Oblivious HTTP | OHTTP transport binding (Section 14.8) |
 | draft-ietf-oauth-selective-disclosure-jwt-08 | SD-JWT | Selective disclosure |
 
-### 16.4. WebAuthn
+### 17.4. WebAuthn
 
 | Standard | URI | Usage |
 |---|---|---|
 | Web Authentication Level 2 | https://www.w3.org/TR/webauthn-2/ | Device-bound key generation |
 
-### 16.5. Multicodec
+### 17.5. Multicodec
 
 The Ed25519 public key multicodec prefix is `0xed01` as registered
 in the Multicodec table (https://github.com/multiformats/multicodec).
 
-### 16.6. Reserved Namespace Prefixes
+### 17.6. Reserved Namespace Prefixes
 
 | Prefix | Namespace | Authority |
 |---|---|---|
@@ -2406,7 +2454,7 @@ in the Multicodec table (https://github.com/multiformats/multicodec).
 
 ## 18. References
 
-### 17.1. Normative References
+### 18.1. Normative References
 
 [RFC 2119] Bradner, S., "Key words for use in RFCs to Indicate
 Requirement Levels", BCP 14, RFC 2119, March 1997.
@@ -2440,7 +2488,7 @@ Data Model v2.0", W3C Recommendation.
 [WEBAUTHN] Balfanz, D., et al., "Web Authentication: An API for
 accessing Public Key Credentials Level 2", W3C Recommendation.
 
-### 17.2. Informative References
+### 18.2. Informative References
 
 [RFC 8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON
 Canonicalization Scheme (JCS)", RFC 8785, June 2020.
