@@ -222,24 +222,15 @@ impl CanvasState {
             new_id
         });
 
-        // Resolve pap:// URIs before block reference expansion.
-        // Returns None if resolution failed — abort dispatch in that case.
-        // The block has not been added to the canvas yet, so we just return early.
-        let resolved_text = match resolve_prompt_text(&text) {
-            Some(t) => t,
-            None => return,
-        };
-
-        // Extract block references and expand them for the backend
-        let all_canvases = canvases.get();
-        let linked_block_ids = extract_block_ids(&resolved_text);
-        let expanded_text = expand_block_references(&resolved_text, &all_canvases);
+        // Extract block references. Resolution happens after block creation
+        // so a Failed state is visible if pap:// resolution fails.
+        let linked_block_ids = extract_block_ids(&text);
 
         // Create a resolving block immediately (optimistic UI)
         let block = CanvasBlock {
             id: generate_id(),
             prompt_id: prompt_id.clone(),
-            prompt_text: Some(text),
+            prompt_text: Some(text.clone()),
             state: BlockState::Resolving {
                 phase: 1,
                 phase_label: "Discovering agents...".into(),
@@ -259,6 +250,31 @@ impl CanvasState {
                 canvas.updated_at = now_iso();
             }
         });
+
+        // Resolve pap:// URIs before block reference expansion.
+        // Block is already in the canvas, so failures show as a Failed tile.
+        let resolved_text = match resolve_prompt_text(&text) {
+            Some(t) => t,
+            None => {
+                canvases.update(|cs| {
+                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                        if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id) {
+                            b.state = BlockState::Failed {
+                                phase: 1,
+                                reason: "PAP URI resolution failed — see console for details."
+                                    .into(),
+                            };
+                            b.updated_at = now_iso();
+                        }
+                    }
+                });
+                return;
+            }
+        };
+
+        // Expand block references in the resolved text for the backend
+        let all_canvases = canvases.get();
+        let expanded_text = expand_block_references(&resolved_text, &all_canvases);
 
         // Fire backend command with expanded text
         let cid = canvas_id.clone();
