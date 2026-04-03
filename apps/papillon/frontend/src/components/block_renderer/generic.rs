@@ -7,6 +7,7 @@ use super::field_classify::{
     scalar_to_string, schema_type_to_css, FieldKind,
 };
 use super::registry::RendererRegistry;
+use crate::state::canvas::CanvasState;
 
 /// Maximum items rendered per list before showing an overflow indicator.
 const LIST_CAP: usize = 50;
@@ -489,12 +490,48 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
             .into_any()
         }
         FieldKind::PapLink => {
-            // Full implementation in Task 6 — stub renders as plain text for now
-            let display = val.as_str().unwrap_or("-").to_string();
+            let url = val.as_str().unwrap_or("").to_string();
+            // Split scheme from body for visual treatment
+            let (scheme, body) = if let Some(rest) = url.strip_prefix("pap+https://") {
+                ("pap+https://", rest.to_string())
+            } else if let Some(rest) = url.strip_prefix("pap+wss://") {
+                ("pap+wss://", rest.to_string())
+            } else if let Some(rest) = url.strip_prefix("pap://") {
+                ("pap://", rest.to_string())
+            } else {
+                ("", url.clone())
+            };
+            let scheme = scheme.to_string();
+            let canvas_state = use_context::<CanvasState>();
+            let url_for_click = url.clone();
             view! {
-                <div class=format!("typed-field typed-field-pap-link-stub {}", css_field)>
+                <div class=format!("typed-field typed-field-pap-link {}", css_field)>
                     <span class="typed-key">{label}</span>
-                    <span class="typed-val typed-pap-link-stub">{display}</span>
+                    <button
+                        class="pap-link"
+                        title=url.clone()
+                        on:click=move |_| {
+                            // All block-renderer pap:// links are agent-rendered.
+                            // Require explicit principal confirmation before dispatch.
+                            let url_inner = url_for_click.clone();
+                            let confirmed = web_sys::window()
+                                .and_then(|w| {
+                                    w.confirm_with_message(
+                                        &format!("Activate PAP link?\n{}", url_inner),
+                                    )
+                                    .ok()
+                                })
+                                .unwrap_or(false);
+                            if confirmed {
+                                if let Some(cs) = canvas_state {
+                                    cs.submit_prompt(url_inner);
+                                }
+                            }
+                        }
+                    >
+                        <span class="pap-scheme">{scheme}</span>
+                        <span class="pap-body">{body}</span>
+                    </button>
                 </div>
             }
             .into_any()
