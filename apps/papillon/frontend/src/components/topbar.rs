@@ -95,10 +95,12 @@ pub fn TopBar() -> impl IntoView {
             </div>
             <div class="topbar-spacer" />
             <div class="topbar-meta">
-                <div class="topbar-session-badge">
+                <div class=move || format!("topbar-session-badge {}", status_class())>
                     <div class="topbar-session-dot" />
-                    {status_label}
+                    <span class="topbar-status">{status_label}</span>
                 </div>
+                <span class="topbar-meta-sep">"|"</span>
+                <span class="topbar-identity">{did_display}</span>
                 <span class="topbar-meta-sep">"|"</span>
                 <span>"BUILD_9.4.2"</span>
                 <span class="topbar-meta-sep">"|"</span>
