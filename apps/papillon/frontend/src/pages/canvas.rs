@@ -480,16 +480,22 @@ fn HitlGate() -> impl IntoView {
 
                             <div class="hitl-description">{req.description.clone()}</div>
 
-                            <Show when=move || !req.disclosure_props.is_empty()>
-                                <div class="hitl-disclosure">
-                                    <div class="hitl-disclosure-label">"DISCLOSURE_REQUIRED"</div>
-                                    <div class="hitl-disclosure-props">
-                                        {req.disclosure_props.iter().map(|p| {
-                                            view! { <span class="hitl-prop-tag">{p.clone()}</span> }
-                                        }).collect::<Vec<_>>()}
-                                    </div>
-                                </div>
-                            </Show>
+                            {
+                                let props_check = req.disclosure_props.clone();
+                                let props_render = req.disclosure_props.clone();
+                                view! {
+                                    <Show when=move || !props_check.is_empty()>
+                                        <div class="hitl-disclosure">
+                                            <div class="hitl-disclosure-label">"DISCLOSURE_REQUIRED"</div>
+                                            <div class="hitl-disclosure-props">
+                                                {props_render.iter().map(|p| {
+                                                    view! { <span class="hitl-prop-tag">{p.clone()}</span> }
+                                                }).collect::<Vec<_>>()}
+                                            </div>
+                                        </div>
+                                    </Show>
+                                }
+                            }
 
                             <div class="hitl-actions">
                                 <button class="hitl-reject-btn" on:click=reject>

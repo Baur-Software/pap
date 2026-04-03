@@ -76,7 +76,7 @@ pub fn TopBar() -> impl IntoView {
         _ => "topbar-status agents-only",
     };
 
-    let toggle_menu = move |_| {
+    let toggle_menu = move |_: leptos::ev::MouseEvent| {
         menu_open.update(|v| *v = !*v);
     };
 

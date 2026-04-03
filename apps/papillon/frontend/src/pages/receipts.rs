@@ -67,7 +67,10 @@ pub fn ReceiptsPage() -> impl IntoView {
                         }
                     >
                         <For
-                            each=move || runs.get().into_iter().enumerate().collect::<Vec<_>>()
+                            each=move || {
+                                let v: Vec<_> = runs.get().into_iter().enumerate().collect();
+                                v
+                            }
                             key=|(i, _)| *i
                             children=move |(i, run)| {
                                 let has_receipt = run.receipt.is_some();
