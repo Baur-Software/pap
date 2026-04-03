@@ -61,7 +61,7 @@ pub fn HomePage() -> impl IntoView {
                     <img src="/logo.png" alt="Papillon" width="40" height="40" />
                 </div>
                 <div class="readiness-title">"PAPILLON AGENTIC BROWSER"</div>
-                <div class="readiness-subtitle">"SOVEREIGN COMPUTING ENVIRONMENT v0.5.7"</div>
+                <div class="readiness-subtitle">"SOVEREIGN COMPUTING ENVIRONMENT v0.6.0"</div>
             </div>
 
             <div class="readiness-panel">

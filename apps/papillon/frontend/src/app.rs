@@ -287,7 +287,7 @@ pub fn App() -> impl IntoView {
                     <span class="status-bar-sep">"|"</span>
                     <span class="status-bar-item">"NO_TELEMETRY"</span>
                     <span class="status-bar-spacer" />
-                    <span class="status-bar-item">"PAPILLON_v0.5.7"</span>
+                    <span class="status-bar-item">"PAPILLON_v0.6.0"</span>
                     <span class="status-bar-sep">"|"</span>
                     <span class=move || format!("status-bar-item {}", status_class())>{status_label}</span>
                 </footer>

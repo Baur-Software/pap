@@ -1,5 +1,41 @@
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-02
+
+### Added
+
+- **pap-agents**: `DynamicAgentDef` data model — runtime agent definition with HTTP endpoint config, LLM instructions, subagent references, and operator key seed for self-sovereign DID derivation
+- **pap-agents**: `DynamicAgentHandler` — hybrid execution engine that routes requests to HTTP endpoints or LLM inference based on agent config, with schema.org JSON-LD normalization
+- **pap-agents**: `AgentSet::register_dynamic()` — runtime registration of dynamic agents with cryptographic signing and advertisement publication (spec §9.1)
+- **pap-agents**: Catalog loader — recursive TOML reader for `catalog/` directory with SSRF URL validation via `is_safe_url`
+- **pap-agents**: 22 TOML catalog entries across 8 domains (culture, finance, food, geo, government, health, knowledge, science, search, sports)
+- **papillon-shared**: `agents` table migration with CRUD operations for persistent user-created agent storage
+- **papillon**: Catalog seeding at startup — loads all TOML agents into the local registry on first launch
+- **papillon**: 7 agent lifecycle Tauri commands: `list_local_agents`, `save_agent`, `delete_agent`, `update_agent`, `generate_agent`, `publish_agent`, `unpublish_agent`
+- **papillon**: Extended `AgentInfo` struct with `source`, `catalog_path`, `operator_key_seed`, `agent_did`, `published_to` fields
+- **papillon-ui**: Terminal aesthetic shell — dot-grid background, 64px icon sidebar with SVG nav icons, `PAPILLON_SYS` topbar with DID display and session badge, bottom status bar
+- **papillon-ui**: System readiness dashboard — live diagnostics for identity, LLM, and federation status
+- **papillon-ui**: Agent fleet page — live agent roster with source badges (catalog/user/federation), action chips, and disclosure requirements
+- **papillon-ui**: Negotiation ledger — PAP handshake event log with trust levels, session IDs, and session stats
+- **papillon-ui**: Receipts page — co-signed transaction receipt browser with PRINCIPAL/AGENT signature verification cards
+- **papillon-ui**: Setup wizard restyle as terminal init sequence with boot header, 3-step progress strip, and provider selection cards
+- **papillon-ui**: Intent partitions timeline — episode browser with ALL/ACTIVE/DEGRADED/COMPRESSED filter, scope tags, and partition outcome indicators
+- **papillon-ui**: 3-panel canvas workspace — collapsible intent panel (left), main viewport (center), ledger panel (right)
+- **papillon-ui**: Mandate builder tab in system settings — visual JSON-LD preview with reactive form fields
+- **papillon-ui**: Human-in-the-loop gate modal — `HitlRequest` struct drives authorization overlay for critical agent actions
+- **pap-registry**: Per-principal advertisement rate limit (max 100 ads/principal) enforced in Chrysalis federation server
+
+### Changed
+
+- **pap-agents**: Deleted 13 compiled agent implementations in favor of TOML catalog entries (DuckDuckGo, Hacker News, Wikipedia, and 10 others now defined declaratively)
+- **papillon**: Topbar brand icon updated from shield SVG to `logo.png`
+- **papillon**: Home page hero updated from shield SVG to `logo.png`
+
+### Fixed
+
+- **pap-agents**: Add missing `PathBuf` import in `catalog.rs` test module
+- **papillon**: Handshake integration test updated from deleted Hacker News compiled agent to echo executor, testing protocol mechanics without network dependency
+
 ## [0.5.9] - 2026-04-01
 
 ### Fixed
