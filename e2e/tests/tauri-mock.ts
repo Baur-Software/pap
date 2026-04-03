@@ -90,6 +90,50 @@ window.__TAURI__ = {
     _completedRuns: [],
     _backedUp: false,
     _successors: [],
+    _localAgents: [
+      {
+        name: 'DuckDuckGo Search',
+        provider_name: 'DuckDuckGo',
+        provider_did: 'did:key:z6MkDDG111',
+        capabilities: ['schema:SearchAction'],
+        object_types: ['SearchAction'],
+        requires_disclosure: [],
+        returns: ['results'],
+        endpoint: null,
+        content_hash: 'ddg-local-hash',
+        agent_did: 'did:key:z6MkDDGAgent111',
+        source: 'catalog',
+        published_to: [],
+      },
+      {
+        name: 'Wikipedia Lookup',
+        provider_name: 'Wikimedia',
+        provider_did: 'did:key:z6MkWiki222',
+        capabilities: ['schema:SearchAction'],
+        object_types: ['SearchAction'],
+        requires_disclosure: [],
+        returns: ['article'],
+        endpoint: null,
+        content_hash: 'wiki-local-hash',
+        agent_did: 'did:key:z6MkWikiAgent222',
+        source: 'catalog',
+        published_to: [],
+      },
+      {
+        name: 'My Custom Agent',
+        provider_name: 'Local Operator',
+        provider_did: 'did:key:z6MkCustom333',
+        capabilities: ['schema:Action'],
+        object_types: ['Action'],
+        requires_disclosure: [],
+        returns: ['response'],
+        endpoint: null,
+        content_hash: 'custom-local-hash',
+        agent_did: 'did:key:z6MkCustomAgent333',
+        source: 'user_created',
+        published_to: ['https://chrysalis.example.com'],
+      },
+    ],
     _templates: [
       {
         id: 'tmpl-flight',
@@ -260,11 +304,106 @@ window.__TAURI__ = {
           };
 
         case 'list_agents':
+          // Registry browser — returns remote/federated agents
           return [
-            { name: 'DuckDuckGo Search', provider_name: 'DuckDuckGo', provider_did: 'did:key:z6MkDDG', capabilities: ['search.web'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['results'], endpoint: null, content_hash: 'ddg-hash' },
-            { name: 'Wikipedia', provider_name: 'Wikimedia', provider_did: 'did:key:z6MkWiki', capabilities: ['knowledge.lookup'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['article'], endpoint: null, content_hash: 'wiki-hash' },
-            { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['ai.inference'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash' },
+            { name: 'DuckDuckGo Search', provider_name: 'DuckDuckGo', provider_did: 'did:key:z6MkDDG', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['results'], endpoint: null, content_hash: 'ddg-hash', agent_did: 'did:key:z6MkDDGFed', source: 'catalog', published_to: [] },
+            { name: 'Wikipedia', provider_name: 'Wikimedia', provider_did: 'did:key:z6MkWiki', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['article'], endpoint: null, content_hash: 'wiki-hash', agent_did: 'did:key:z6MkWikiFed', source: 'catalog', published_to: [] },
+            { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['schema:CreateAction'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash', agent_did: 'did:key:z6MkMistralFed', source: 'catalog', published_to: [] },
           ];
+
+        case 'list_local_agents':
+          // Local agent fleet — returns managed agents with full AgentInfo
+          return window.__TAURI__.core._localAgents;
+
+        case 'save_agent': {
+          // Persist a new DynamicAgentDef, return AgentInfo with agent_did
+          const def = args?.def ?? {};
+          const agentDid = 'did:key:z6MkGen' + Math.random().toString(36).substr(2, 9);
+          const newAgent = {
+            name: def.name ?? 'Unnamed Agent',
+            provider_name: def.provider ?? 'Local Operator',
+            provider_did: agentDid,
+            capabilities: def.action ? [def.action] : ['schema:Action'],
+            object_types: def.object_types ?? [],
+            requires_disclosure: def.requires_disclosure ?? [],
+            returns: def.returns ?? [],
+            endpoint: null,
+            content_hash: 'saved-' + Math.random().toString(36).substr(2, 9),
+            agent_did: agentDid,
+            source: 'user_created',
+            published_to: [],
+          };
+          window.__TAURI__.core._localAgents.push(newAgent);
+          return newAgent;
+        }
+
+        case 'update_agent': {
+          const def = args?.def ?? {};
+          const did = def.agent_did;
+          const idx = window.__TAURI__.core._localAgents.findIndex(a => a.agent_did === did);
+          if (idx !== -1) {
+            window.__TAURI__.core._localAgents[idx] = {
+              ...window.__TAURI__.core._localAgents[idx],
+              name: def.name ?? window.__TAURI__.core._localAgents[idx].name,
+              capabilities: def.action ? [def.action] : window.__TAURI__.core._localAgents[idx].capabilities,
+              published_to: def.published_to ?? window.__TAURI__.core._localAgents[idx].published_to,
+            };
+            return window.__TAURI__.core._localAgents[idx];
+          }
+          return null;
+        }
+
+        case 'delete_agent': {
+          const did = args?.agent_did;
+          window.__TAURI__.core._localAgents = window.__TAURI__.core._localAgents.filter(a => a.agent_did !== did);
+          return null;
+        }
+
+        case 'generate_agent': {
+          // Returns a preview DynamicAgentDef (not yet saved — no agent_did)
+          const prompt = args?.prompt ?? 'search the web';
+          return {
+            name: 'Generated: ' + prompt.slice(0, 30),
+            provider: 'Generated',
+            action: 'schema:SearchAction',
+            object_types: ['SearchAction'],
+            requires_disclosure: [],
+            returns: ['results'],
+            endpoint: {
+              url_template: 'https://api.example.com/search?q={query}',
+              method: 'GET',
+              headers: {},
+              response_jsonpath: '$.results',
+            },
+            agent_did: null,
+            operator_key_seed: null,
+            source: 'generated',
+            published_to: [],
+            schema_version: 1,
+            catalog_path: null,
+            updated_at: new Date().toISOString(),
+          };
+        }
+
+        case 'publish_agent': {
+          const did = args?.agent_did;
+          const url = args?.registry_url ?? '';
+          const agent = window.__TAURI__.core._localAgents.find(a => a.agent_did === did);
+          if (agent && url && !agent.published_to.includes(url)) {
+            agent.published_to.push(url);
+          }
+          return null;
+        }
+
+        case 'unpublish_agent': {
+          const did = args?.agent_did;
+          const url = args?.registry_url ?? '';
+          const agent = window.__TAURI__.core._localAgents.find(a => a.agent_did === did);
+          if (agent) {
+            agent.published_to = agent.published_to.filter(u => u !== url);
+          }
+          return null;
+        }
 
         case 'sync_agents':
           return null;

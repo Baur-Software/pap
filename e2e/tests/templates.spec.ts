@@ -22,11 +22,16 @@ const VALID_CONFIG = JSON.stringify({
   fields: [{ path: "name", label: "Name", display: "title" }],
 });
 
-/** Navigate to Settings > Templates tab and wait for content. */
+/** Navigate to Settings > Templates tab and wait for content.
+ *
+ * Uses in-app SPA navigation (topbar link click) so the Leptos router handles
+ * the transition without a full page reload — this preserves in-memory mock
+ * state (e.g. created templates) across navigation in the same test.
+ */
 async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  await page.locator(".settings-gear").click();
-  await expect(page.locator(".settings-tab", { hasText: "Templates" })).toBeVisible();
-  await page.locator(".settings-tab", { hasText: "Templates" }).click();
+  await page.locator(".topbar-settings-btn").click();
+  await expect(page.locator(".settings-tab", { hasText: "TEMPLATES" })).toBeVisible();
+  await page.locator(".settings-tab", { hasText: "TEMPLATES" }).click();
   // Wait for the create form to appear (confirms tab content loaded)
   await expect(page.locator('input[placeholder*="Name"]')).toBeVisible();
 }
@@ -152,20 +157,21 @@ test.describe("Templates", () => {
   });
 
   test("settings tab navigation includes Templates", async ({ page }) => {
-    // Open Settings
-    await page.locator(".settings-gear").click();
+    // Navigate to Settings page
+    await page.goto("/settings", { waitUntil: "commit" });
+    await waitForApp(page);
 
     // Verify Templates tab exists and is clickable
-    const templatesTab = page.locator(".settings-tab", { hasText: "Templates" });
+    const templatesTab = page.locator(".settings-tab", { hasText: "TEMPLATES" });
     await expect(templatesTab).toBeVisible();
     await templatesTab.click();
 
     // Verify content loaded — the template name input should be visible
     await expect(page.locator('input[placeholder*="Name"]')).toBeVisible();
 
-    // Verify other tabs still present (General, Identity)
-    await expect(page.locator(".settings-tab", { hasText: "General" })).toBeVisible();
-    await expect(page.locator(".settings-tab", { hasText: "Identity" })).toBeVisible();
+    // Verify other tabs still present (GENERAL, IDENTITY)
+    await expect(page.locator(".settings-tab", { hasText: "GENERAL" })).toBeVisible();
+    await expect(page.locator(".settings-tab", { hasText: "IDENTITY" })).toBeVisible();
   });
 
   test("JSON validation: reject malformed JSON", async ({ page }) => {

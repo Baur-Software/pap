@@ -24,6 +24,6 @@ export default defineConfig({
       : "cd ../apps/papillon/frontend && trunk serve --port 1420",
     port: 1420,
     reuseExistingServer: !isCI,
-    timeout: isCI ? 30_000 : 120_000,
+    timeout: isCI ? 30_000 : 300_000,
   },
 });
