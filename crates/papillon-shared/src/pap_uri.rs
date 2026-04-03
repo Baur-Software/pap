@@ -80,7 +80,7 @@ pub fn resolve_pap_uri(
         if let Some(did) = catalog.get(authority_lower.as_str()) {
             // Reject path traversal before rewriting.
             // Check both literal ".." and common percent-encoded forms.
-            if path.split('/').any(|seg| is_dotdot(seg)) {
+            if path.split('/').any(is_dotdot) {
                 return Err(PapUriError::ParseError("path traversal not allowed".into()));
             }
             // Strip control characters from the path before constructing the
