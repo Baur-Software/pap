@@ -1,17 +1,19 @@
 use leptos::prelude::*;
+use papillon_shared::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
 use papillon_shared::{BlockState, Canvas, CanvasBlock};
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::service::PapillonService;
+use crate::state::catalog::CatalogState;
 use crate::state::registry::RegistryState;
 
 /// A pending Human-in-the-Loop gate request.
 #[derive(Clone, Debug)]
 pub struct HitlRequest {
     pub agent_name: String,
-    pub action_type: String,  // e.g. "schema:WriteAction"
-    pub risk_level: String,   // "HIGH" or "CRITICAL"
+    pub action_type: String, // e.g. "schema:WriteAction"
+    pub risk_level: String,  // "HIGH" or "CRITICAL"
     pub disclosure_props: Vec<String>,
     pub description: String,
 }
@@ -98,6 +100,40 @@ fn expand_block_references(text: &str, canvases: &[Canvas]) -> String {
     result
 }
 
+/// If `text` is a `pap://` URI, resolve it using the local catalog.
+/// Returns the resolved text to pass to the backend, or `None` if resolution
+/// failed and the caller should abort dispatch (error already logged).
+fn resolve_prompt_text(text: &str, origin: LinkOrigin) -> Option<String> {
+    let is_pap = text.starts_with("pap://")
+        || text.starts_with("pap+https://")
+        || text.starts_with("pap+wss://");
+
+    if !is_pap {
+        return Some(text.to_string());
+    }
+
+    let catalog_map = use_context::<CatalogState>()
+        .map(|c| c.snapshot())
+        .unwrap_or_default();
+
+    match resolve_pap_uri(text, &catalog_map, origin) {
+        Ok(ResolvedUri::LocalIntent(intent)) => Some(intent),
+        Ok(ResolvedUri::Did(uri)) => Some(uri),
+        Ok(ResolvedUri::Registry(uri)) => Some(uri),
+        Err(PapUriError::RecaptureDeferred) => {
+            leptos::logging::warn!(
+                "pap+https:// / pap+wss:// recapture enforcement not yet available: {}",
+                text
+            );
+            None
+        }
+        Err(e) => {
+            leptos::logging::warn!("PAP URI resolution failed for {}: {:?}", text, e);
+            None
+        }
+    }
+}
+
 impl CanvasState {
     /// Create a new blank canvas, set it active, and signal the prompt to focus.
     pub fn new_canvas(&self) -> String {
@@ -145,16 +181,39 @@ impl CanvasState {
 
     /// Submit a new prompt — creates blocks via the backend.
     pub fn submit_prompt(&self, text: String) {
-        let canvases = self.canvases;
-        let current_id = self.current_canvas_id;
         let recent = self.recent_prompts;
-
-        // Track recent prompts (max 10)
         recent.update(|r| {
             r.retain(|p| p != &text);
             r.insert(0, text.clone());
             r.truncate(10);
         });
+
+        let resolved = match resolve_prompt_text(&text, LinkOrigin::Principal) {
+            Some(t) => t,
+            None => return,
+        };
+        self.dispatch_prompt_inner(text, resolved);
+    }
+
+    /// Dispatch a pap:// link that originated from an agent-rendered block.
+    /// Resolves under `LinkOrigin::Agent` so special authorities
+    /// (receipt, canvas, settings) are blocked.  The resolved text is then
+    /// dispatched directly to the backend without a second Principal-origin
+    /// resolution pass.
+    pub fn submit_agent_link(&self, url: String) {
+        if let Some(resolved) = resolve_prompt_text(&url, LinkOrigin::Agent) {
+            self.dispatch_prompt_inner(url, resolved);
+        }
+        // On None: error already logged by resolve_prompt_text
+    }
+
+    /// Core dispatch: creates an optimistic block, then fires the backend
+    /// command with the pre-resolved text.  Never runs the URI resolver —
+    /// callers are responsible for resolving under the correct `LinkOrigin`
+    /// before calling this method.
+    fn dispatch_prompt_inner(&self, display_text: String, resolved_text: String) {
+        let canvases = self.canvases;
+        let current_id = self.current_canvas_id;
 
         let prompt_id = generate_id();
 
@@ -163,7 +222,7 @@ impl CanvasState {
             canvases.update(|cs| {
                 if let Some(c) = cs.iter_mut().find(|c| c.id == id) {
                     if c.name == "Untitled canvas" && c.blocks.is_empty() {
-                        c.name = auto_name_from_prompt(&text);
+                        c.name = auto_name_from_prompt(&display_text);
                     }
                 }
             });
@@ -172,7 +231,7 @@ impl CanvasState {
         let canvas_id = current_id.get().unwrap_or_else(|| {
             // Create a new canvas auto-named from the prompt
             let new_id = generate_id();
-            let name = auto_name_from_prompt(&text);
+            let name = auto_name_from_prompt(&display_text);
             let now = now_iso();
             let canvas = Canvas {
                 id: new_id.clone(),
@@ -186,16 +245,14 @@ impl CanvasState {
             new_id
         });
 
-        // Extract block references and expand them for the backend
-        let all_canvases = canvases.get();
-        let linked_block_ids = extract_block_ids(&text);
-        let expanded_text = expand_block_references(&text, &all_canvases);
+        // Extract block references from the display text (original form).
+        let linked_block_ids = extract_block_ids(&display_text);
 
         // Create a resolving block immediately (optimistic UI)
         let block = CanvasBlock {
             id: generate_id(),
             prompt_id: prompt_id.clone(),
-            prompt_text: Some(text),
+            prompt_text: Some(display_text),
             state: BlockState::Resolving {
                 phase: 1,
                 phase_label: "Discovering agents...".into(),
@@ -215,6 +272,10 @@ impl CanvasState {
                 canvas.updated_at = now_iso();
             }
         });
+
+        // Expand block references in the resolved text for the backend
+        let all_canvases = canvases.get();
+        let expanded_text = expand_block_references(&resolved_text, &all_canvases);
 
         // Fire backend command with expanded text
         let cid = canvas_id.clone();
@@ -347,13 +408,33 @@ impl CanvasState {
         };
 
         // Look up the original prompt text from the block
-        let original_text = canvases
+        let raw_text = canvases
             .get()
             .iter()
             .flat_map(|c| c.blocks.iter())
             .find(|b| b.id == block_id)
             .and_then(|b| b.prompt_text.clone())
             .unwrap_or_default();
+
+        // Resolve pap:// URIs on retry too
+        let original_text = match resolve_prompt_text(&raw_text, LinkOrigin::Principal) {
+            Some(t) => t,
+            None => {
+                canvases.update(|cs| {
+                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                        if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id) {
+                            b.state = BlockState::Failed {
+                                phase: 1,
+                                reason: "PAP URI resolution failed — see console for details."
+                                    .into(),
+                            };
+                            b.updated_at = now_iso();
+                        }
+                    }
+                });
+                return;
+            }
+        };
 
         canvases.update(|cs| {
             if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
@@ -379,7 +460,7 @@ impl CanvasState {
             let args = RetryArgs {
                 canvas_id: cid.clone(),
                 block_id: bid.clone(),
-                original_text,
+                original_text, // now resolved
             };
             let result = bridge::invoke::<_, serde_json::Value>("canvas_retry", &args).await;
             if let Err(e) = result {

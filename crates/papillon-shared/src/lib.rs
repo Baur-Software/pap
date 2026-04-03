@@ -1,5 +1,7 @@
 pub mod events;
 pub mod intent;
+pub mod pap_uri;
+pub use pap_uri::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
 pub mod template_gen;
 pub mod types;
 

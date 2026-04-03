@@ -10,8 +10,11 @@ pub enum FieldKind {
     DateTime,
     /// Monetary value (key contains "price", "cost", "amount").
     Price,
-    /// HTTP(S) URL string.
-    Url,
+    /// HTTP or HTTPS URL. Rendered as a plain external link.
+    ExternalUrl,
+    /// PAP-scheme link (pap://, pap+https://, pap+wss://).
+    /// Rendered as a clickable intent button, never a hyperlink.
+    PapLink,
     /// Decentralized identifier (did:key:..., did:web:..., etc.).
     Did,
     /// Nested object with an `@type` field — can be dispatched to a renderer.
@@ -53,12 +56,17 @@ fn classify_string(key: &str, s: &str) -> FieldKind {
     if s.is_empty() {
         return FieldKind::Empty;
     }
+    // PAP schemes MUST be checked before the DateTime key-name heuristic to
+    // prevent misclassifying pap:// URIs stored in date-keyed fields.
+    if s.starts_with("pap://") || s.starts_with("pap+https://") || s.starts_with("pap+wss://") {
+        return FieldKind::PapLink;
+    }
     let lower_key = key.to_lowercase();
     if lower_key.contains("date") || lower_key.contains("time") || looks_like_iso_date(s) {
         return FieldKind::DateTime;
     }
     if s.starts_with("http://") || s.starts_with("https://") {
-        return FieldKind::Url;
+        return FieldKind::ExternalUrl;
     }
     if s.starts_with("did:") {
         return FieldKind::Did;
@@ -208,10 +216,62 @@ mod tests {
     }
 
     #[test]
-    fn classify_url() {
+    fn classify_pap_link() {
+        assert_eq!(
+            classify_field("url", &json!("pap://arxiv/SearchAction")),
+            FieldKind::PapLink
+        );
+    }
+
+    #[test]
+    fn classify_pap_plus_https() {
+        assert_eq!(
+            classify_field("link", &json!("pap+https://api.example.com/agents/buy")),
+            FieldKind::PapLink
+        );
+    }
+
+    #[test]
+    fn classify_pap_plus_wss() {
+        assert_eq!(
+            classify_field("stream", &json!("pap+wss://stream.example.com/listen")),
+            FieldKind::PapLink
+        );
+    }
+
+    #[test]
+    fn classify_https_as_external_url() {
         assert_eq!(
             classify_field("website", &json!("https://example.com")),
-            FieldKind::Url
+            FieldKind::ExternalUrl
+        );
+    }
+
+    #[test]
+    fn classify_http_as_external_url() {
+        assert_eq!(
+            classify_field("link", &json!("http://example.com")),
+            FieldKind::ExternalUrl
+        );
+    }
+
+    #[test]
+    fn pap_link_in_date_keyed_field_is_still_pap_link() {
+        // pap:// check must fire BEFORE DateTime key-name check
+        assert_eq!(
+            classify_field("startDate", &json!("pap://arxiv/SearchAction")),
+            FieldKind::PapLink
+        );
+    }
+
+    #[test]
+    fn https_in_date_keyed_field_classifies_as_datetime() {
+        // Key-name heuristic wins over https:// prefix — this is intentional.
+        // ExternalUrl check comes after the DateTime heuristic unlike PapLink
+        // which is checked first. See classify_string ordering comment.
+        assert_eq!(
+            classify_field("startDate", &json!("https://example.com")),
+            FieldKind::DateTime
         );
     }
 

@@ -11,11 +11,11 @@ use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 
 mod templates_tab;
-use templates_tab::TemplatesTab;
 use papillon_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
     OrchestratorConfig, OrchestratorStatus, ProfileMetadata, SuccessorDesignation,
 };
+use templates_tab::TemplatesTab;
 
 #[component]
 pub fn SettingsPage() -> impl IntoView {
@@ -125,11 +125,13 @@ fn GeneralTab() -> impl IntoView {
 
     // Check model availability on mount
     Effect::new(move || {
-        if !bridge::tauri_available() { return; }
+        if !bridge::tauri_available() {
+            return;
+        }
         spawn_local(async move {
-            if let Ok(avail) = bridge::invoke_no_args::<Vec<ModelAvailability>>(
-                "check_model_availability"
-            ).await {
+            if let Ok(avail) =
+                bridge::invoke_no_args::<Vec<ModelAvailability>>("check_model_availability").await
+            {
                 model_availability.set(avail);
             }
         });
@@ -909,14 +911,13 @@ fn SavedRegistriesCard() -> impl IntoView {
 
     let handle_remove = move |url: String| {
         spawn_local(async move {
-            match bridge::invoke::<serde_json::Value, Vec<String>>(
+            if let Ok(updated) = bridge::invoke::<serde_json::Value, Vec<String>>(
                 "remove_bookmark",
                 &serde_json::json!({ "registryUrl": url }),
             )
             .await
             {
-                Ok(updated) => bookmarks.set(updated),
-                Err(_) => {}
+                bookmarks.set(updated);
             }
         });
     };
@@ -924,7 +925,9 @@ fn SavedRegistriesCard() -> impl IntoView {
     let handle_add = move |_| {
         let url = add_url.get().trim().to_string();
         if url.is_empty() {
-            add_error.set(Some("Enter a registry URL, e.g. pap://192.168.1.x:7890".into()));
+            add_error.set(Some(
+                "Enter a registry URL, e.g. pap://192.168.1.x:7890".into(),
+            ));
             return;
         }
         add_error.set(None);
@@ -1230,7 +1233,8 @@ fn MandateBuilderTab() -> impl IntoView {
     let principal_did = RwSignal::new(String::new());
 
     let preview_json = move || {
-        let scope: Vec<String> = scope_input.get()
+        let scope: Vec<String> = scope_input
+            .get()
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
@@ -1246,7 +1250,8 @@ fn MandateBuilderTab() -> impl IntoView {
             } else {
                 serde_json::Value::String(principal_did.get())
             }
-        })).unwrap_or_default()
+        }))
+        .unwrap_or_default()
     };
 
     view! {

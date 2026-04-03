@@ -7,6 +7,7 @@ use super::field_classify::{
     scalar_to_string, schema_type_to_css, FieldKind,
 };
 use super::registry::RendererRegistry;
+use crate::state::canvas::CanvasState;
 
 /// Maximum items rendered per list before showing an overflow indicator.
 const LIST_CAP: usize = 50;
@@ -281,7 +282,8 @@ pub fn flatten_to_entries(
                     FieldKind::Scalar
                     | FieldKind::DateTime
                     | FieldKind::Price
-                    | FieldKind::Url
+                    | FieldKind::ExternalUrl
+                    | FieldKind::PapLink
                     | FieldKind::Did => {
                         entries.push(StreamEntry {
                             path,
@@ -477,12 +479,67 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
             }
             .into_any()
         }
-        FieldKind::Url => {
+        FieldKind::ExternalUrl => {
             let display = val.as_str().unwrap_or("-").to_string();
             view! {
                 <div class=format!("typed-field typed-field-url {}", css_field)>
                     <span class="typed-key">{label}</span>
                     <span class="typed-val typed-url">{display}</span>
+                </div>
+            }
+            .into_any()
+        }
+        FieldKind::PapLink => {
+            let url = val.as_str().unwrap_or("").to_string();
+            // Split scheme from body for visual treatment
+            let (scheme, body) = if let Some(rest) = url.strip_prefix("pap+https://") {
+                ("pap+https://", rest.to_string())
+            } else if let Some(rest) = url.strip_prefix("pap+wss://") {
+                ("pap+wss://", rest.to_string())
+            } else if let Some(rest) = url.strip_prefix("pap://") {
+                ("pap://", rest.to_string())
+            } else {
+                ("", url.clone())
+            };
+            let scheme = scheme.to_string();
+            let canvas_state = use_context::<CanvasState>();
+            let url_for_click = url.clone();
+            view! {
+                <div class=format!("typed-field typed-field-pap-link {}", css_field)>
+                    <span class="typed-key">{label}</span>
+                    <button
+                        class="pap-link"
+                        title=url.clone()
+                        on:click=move |_| {
+                            // All block-renderer pap:// links are agent-rendered.
+                            // Require explicit principal confirmation before dispatch.
+                            // submit_agent_link enforces LinkOrigin::Agent so
+                            // special authorities (receipt/canvas/settings) are blocked.
+                            let url_inner = url_for_click.clone();
+                            // Strip control characters from the URL before embedding
+                            // it in the confirmation dialog. Without this, an agent
+                            // could inject newlines to rewrite the dialog text shown
+                            // to the principal.
+                            let safe_url: String =
+                                url_inner.chars().filter(|c| !c.is_control()).collect();
+                            let confirmed = web_sys::window()
+                                .and_then(|w| {
+                                    w.confirm_with_message(
+                                        &format!("Activate PAP link?\n{}", safe_url),
+                                    )
+                                    .ok()
+                                })
+                                .unwrap_or(false);
+                            if confirmed {
+                                if let Some(cs) = canvas_state {
+                                    cs.submit_agent_link(url_inner);
+                                }
+                            }
+                        }
+                    >
+                        <span class="pap-scheme">{scheme}</span>
+                        <span class="pap-body">{body}</span>
+                    </button>
                 </div>
             }
             .into_any()

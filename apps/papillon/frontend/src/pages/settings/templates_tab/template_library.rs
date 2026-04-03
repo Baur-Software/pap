@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use papillon_shared::types::{TemplateConfig, LayoutConfig, FieldMapping};
+use papillon_shared::types::{FieldMapping, LayoutConfig, TemplateConfig};
 
 /// Pre-built template example
 #[derive(Clone, Debug, PartialEq)]
@@ -249,7 +249,7 @@ pub fn TemplateLibrary(
                             each=move || library.get()
                             key=|t| t.name.clone()
                             children=move |template| {
-                                let on_select = on_select.clone();
+                                let on_select = on_select;
                                 let name = template.name.clone();
                                 let schema_type = template.schema_type.clone();
                                 let description = template.description.clone();

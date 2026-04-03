@@ -20,6 +20,7 @@ use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
 use crate::service::{PapillonService, TauriService, WebService};
 use crate::state::canvas::CanvasState;
+use crate::state::catalog::CatalogState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::registry::RegistryState;
@@ -33,11 +34,20 @@ pub fn App() -> impl IntoView {
     let orchestrator_state = OrchestratorState::default();
     let canvas_state = CanvasState::default();
     let templates_state = TemplatesState::default();
+    let catalog_state = CatalogState::default();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);
     provide_context(canvas_state);
     provide_context(templates_state);
+    provide_context(catalog_state);
+
+    // Keep catalog in sync with the registry agent list.
+    // Runs immediately and re-runs whenever registry_state.agents changes.
+    Effect::new(move || {
+        let agents = registry_state.agents.get();
+        catalog_state.refresh(&agents);
+    });
 
     // Provide PapillonService context — prevents panic in WASM handshake path.
     // Tauri mode: TauriService delegates to native backend via IPC.
@@ -144,7 +154,8 @@ pub fn App() -> impl IntoView {
             return;
         }
         spawn_local(async move {
-            if let Ok(templates) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+            if let Ok(templates) =
+                bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
             {
                 templates_state.global_templates.set(templates);
             }

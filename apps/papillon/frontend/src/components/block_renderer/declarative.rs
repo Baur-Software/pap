@@ -1,7 +1,7 @@
 use super::renderer::BlockRenderer;
 use leptos::prelude::*;
-use serde_json::Value;
 use papillon_shared::types::{Template, TemplateConfig};
+use serde_json::Value;
 
 /// A runtime-loaded declarative renderer that uses template configuration to render JSON-LD content.
 ///
@@ -77,10 +77,12 @@ impl DeclarativeRenderer {
             "title" => value.as_str().unwrap_or("-").to_string(),
             "text" => value.as_str().unwrap_or("-").to_string(),
             "price" => {
-                let price = value.as_f64().or_else(|| {
-                    value.as_str().and_then(|s| s.parse::<f64>().ok())
-                });
-                price.map(|p| format!("${:.2}", p)).unwrap_or_else(|| "\u{2014}".to_string())
+                let price = value
+                    .as_f64()
+                    .or_else(|| value.as_str().and_then(|s| s.parse::<f64>().ok()));
+                price
+                    .map(|p| format!("${:.2}", p))
+                    .unwrap_or_else(|| "\u{2014}".to_string())
             }
             "date" => value.as_str().unwrap_or("-").to_string(),
             "url" => value.as_str().unwrap_or("-").to_string(),
@@ -89,7 +91,13 @@ impl DeclarativeRenderer {
     }
 
     /// Render a single field with its value.
-    fn render_field(&self, label: Option<&str>, value: &Value, display_type: &str, style: Option<&str>) -> AnyView {
+    fn render_field(
+        &self,
+        label: Option<&str>,
+        value: &Value,
+        display_type: &str,
+        style: Option<&str>,
+    ) -> AnyView {
         let formatted = self.format_value(value, display_type);
         let class = if let Some(s) = style {
             format!("declarative-field {}", s)
@@ -134,7 +142,10 @@ impl BlockRenderer for DeclarativeRenderer {
 
             // Extract the value
             if let Some(value) = self.extract_value(content, &field_config.path) {
-                let style = field_config.style.as_ref().and_then(|s| s.class_name.as_deref());
+                let style = field_config
+                    .style
+                    .as_ref()
+                    .and_then(|s| s.class_name.as_deref());
                 let field_view = self.render_field(
                     field_config.label.as_deref(),
                     &value,
@@ -155,12 +166,7 @@ impl BlockRenderer for DeclarativeRenderer {
                 }
             }
             "flex" => {
-                let dir = self
-                    .config
-                    .layout
-                    .direction
-                    .as_deref()
-                    .unwrap_or("row");
+                let dir = self.config.layout.direction.as_deref().unwrap_or("row");
                 format!("declarative-flex flex-{}", dir)
             }
             _ => "declarative-container".to_string(),
@@ -227,8 +233,14 @@ mod tests {
             "price": 12.99
         });
 
-        assert_eq!(renderer.extract_value(&content, "name"), Some(serde_json::json!("Pasta")));
-        assert_eq!(renderer.extract_value(&content, "price"), Some(serde_json::json!(12.99)));
+        assert_eq!(
+            renderer.extract_value(&content, "name"),
+            Some(serde_json::json!("Pasta"))
+        );
+        assert_eq!(
+            renderer.extract_value(&content, "price"),
+            Some(serde_json::json!(12.99))
+        );
     }
 
     #[test]
@@ -274,7 +286,10 @@ mod tests {
     #[test]
     fn test_format_price() {
         let renderer = DeclarativeRenderer::new(sample_template_config(), "Recipe");
-        assert_eq!(renderer.format_value(&serde_json::json!(12.99), "price"), "$12.99");
+        assert_eq!(
+            renderer.format_value(&serde_json::json!(12.99), "price"),
+            "$12.99"
+        );
     }
 
     #[test]
@@ -305,24 +320,9 @@ mod tests {
             "description": "This is a delicious pasta recipe"
         });
 
-        assert!(renderer.eval_condition(
-            &content,
-            "description",
-            "contains",
-            Some("pasta")
-        ));
-        assert!(renderer.eval_condition(
-            &content,
-            "description",
-            "contains",
-            Some("delicious")
-        ));
-        assert!(!renderer.eval_condition(
-            &content,
-            "description",
-            "contains",
-            Some("pizza")
-        ));
+        assert!(renderer.eval_condition(&content, "description", "contains", Some("pasta")));
+        assert!(renderer.eval_condition(&content, "description", "contains", Some("delicious")));
+        assert!(!renderer.eval_condition(&content, "description", "contains", Some("pizza")));
     }
 
     #[test]
@@ -360,9 +360,6 @@ mod tests {
         assert!(missing.is_none());
 
         // Empty string
-        assert_eq!(
-            renderer.format_value(&serde_json::json!(""), "text"),
-            ""
-        );
+        assert_eq!(renderer.format_value(&serde_json::json!(""), "text"), "");
     }
 }

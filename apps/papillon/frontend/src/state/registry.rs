@@ -64,9 +64,7 @@ impl RegistryState {
                         }
                         if let Ok(agents) = bridge::invoke::<ListArgs, Vec<AgentInfo>>(
                             "list_agents",
-                            &ListArgs {
-                                registry_url: url,
-                            },
+                            &ListArgs { registry_url: url },
                         )
                         .await
                         {
@@ -120,7 +118,7 @@ async fn fetch_agents_from_registry(registry_url: &str) -> Result<Vec<AgentInfo>
     let base = base.trim_end_matches('/');
     let api_url = format!("{base}/api/browse");
 
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method("GET");
     opts.set_mode(RequestMode::Cors);
 
@@ -134,15 +132,15 @@ async fn fetch_agents_from_registry(registry_url: &str) -> Result<Vec<AgentInfo>
     let resp: Response = resp_value.dyn_into().map_err(|_| "Response cast failed")?;
 
     if !resp.ok() {
-        return Err(format!(
-            "Registry returned HTTP {}",
-            resp.status()
-        ));
+        return Err(format!("Registry returned HTTP {}", resp.status()));
     }
 
-    let json = JsFuture::from(resp.json().map_err(|e| format!("JSON parse error: {:?}", e))?)
-        .await
-        .map_err(|e| format!("JSON await failed: {:?}", e))?;
+    let json = JsFuture::from(
+        resp.json()
+            .map_err(|e| format!("JSON parse error: {:?}", e))?,
+    )
+    .await
+    .map_err(|e| format!("JSON await failed: {:?}", e))?;
 
     let agents: Vec<AgentInfo> =
         serde_wasm_bindgen::from_value(json).map_err(|e| format!("Deserialize failed: {e}"))?;

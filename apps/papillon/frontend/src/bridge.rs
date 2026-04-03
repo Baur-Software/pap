@@ -7,8 +7,10 @@ extern "C" {
     async fn tauri_invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 
     #[wasm_bindgen(catch, js_namespace = ["window", "__TAURI__", "event"], js_name = "listen")]
-    async fn tauri_listen(event: &str, handler: &Closure<dyn FnMut(JsValue)>)
-        -> Result<JsValue, JsValue>;
+    async fn tauri_listen(
+        event: &str,
+        handler: &Closure<dyn FnMut(JsValue)>,
+    ) -> Result<JsValue, JsValue>;
 }
 
 /// Returns true when running inside Tauri (IPC bridge available).

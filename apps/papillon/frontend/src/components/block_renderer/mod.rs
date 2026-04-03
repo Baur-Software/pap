@@ -36,13 +36,16 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     // Load user-defined templates from context
     let all_templates = templates_state.all_templates();
     if !all_templates.is_empty() {
-        let _ = registry.load_from_templates(all_templates);
+        registry.load_from_templates(all_templates);
     }
 
     let block_id = StoredValue::new(block.id.clone());
     let show_reprompt = RwSignal::new(false);
     let reprompt_value = RwSignal::new(String::new());
-    let is_resolved = matches!(block.state, BlockState::Resolved | BlockState::Outcome { .. });
+    let is_resolved = matches!(
+        block.state,
+        BlockState::Resolved | BlockState::Outcome { .. }
+    );
 
     let block_class = match &block.state {
         BlockState::Ghost { .. } => "canvas-block ghost",

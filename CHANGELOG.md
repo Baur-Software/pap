@@ -24,6 +24,11 @@
 - **papillon-ui**: Mandate builder tab in system settings — visual JSON-LD preview with reactive form fields
 - **papillon-ui**: Human-in-the-loop gate modal — `HitlRequest` struct drives authorization overlay for critical agent actions
 - **pap-registry**: Per-principal advertisement rate limit (max 100 ads/principal) enforced in Chrysalis federation server
+- **papillon-shared**: `resolve_pap_uri` — three-tier resolution chain for `pap://`, `pap+https://`, and `pap+wss://` URIs (DID passthrough, catalog name rewrite, registry hostname passthrough, special authority dispatch)
+- **papillon-shared**: `LinkOrigin` enum — `Principal` vs `Agent` origin enforced at resolver level; agent-rendered links cannot activate `receipt`, `canvas`, or `settings` special authorities
+- **papillon-ui**: `CatalogState` — reactive `name → DID` index rebuilt from registry agent list; keeps first entry on name collision to prevent silent intent redirection
+- **papillon-ui**: `FieldKind::PapLink` — pap:// links in block renderer render as confirmation-gated `<button>` with scheme/body visual split; `ExternalUrl` replaces prior `Url` variant for plain HTTP/HTTPS
+- **papillon-ui**: `pap+https://` and `pap+wss://` parse and classify in v1.0 but activation returns a clear "recapture enforcement not yet available" error — never silently downgraded to plain HTTPS
 
 ### Changed
 

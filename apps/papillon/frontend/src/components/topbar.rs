@@ -32,7 +32,7 @@ pub fn TopBar() -> impl IntoView {
             .unwrap_or_else(|| "No identity".to_string())
     };
 
-    let current_profile_name = move || {
+    let _current_profile_name = move || {
         identity
             .current_profile()
             .map(|p| p.name)
@@ -104,7 +104,7 @@ pub fn TopBar() -> impl IntoView {
             <div class="topbar-meta">
                 <div class="topbar-session-badge">
                     <div class="topbar-session-dot" />
-                    <span class=move || status_class()>{status_label}</span>
+                    <span class=status_class>{status_label}</span>
                 </div>
                 <span class="topbar-meta-sep">"|"</span>
                 <span class="topbar-identity">{did_display}</span>
