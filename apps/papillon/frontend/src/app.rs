@@ -154,7 +154,8 @@ pub fn App() -> impl IntoView {
             return;
         }
         spawn_local(async move {
-            if let Ok(templates) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+            if let Ok(templates) =
+                bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
             {
                 templates_state.global_templates.set(templates);
             }

@@ -1,6 +1,6 @@
 use leptos::prelude::*;
-use papillon_shared::{BlockState, Canvas, CanvasBlock};
 use papillon_shared::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
+use papillon_shared::{BlockState, Canvas, CanvasBlock};
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
@@ -12,8 +12,8 @@ use crate::state::registry::RegistryState;
 #[derive(Clone, Debug)]
 pub struct HitlRequest {
     pub agent_name: String,
-    pub action_type: String,  // e.g. "schema:WriteAction"
-    pub risk_level: String,   // "HIGH" or "CRITICAL"
+    pub action_type: String, // e.g. "schema:WriteAction"
+    pub risk_level: String,  // "HIGH" or "CRITICAL"
     pub disclosure_props: Vec<String>,
     pub description: String,
 }
@@ -460,7 +460,7 @@ impl CanvasState {
             let args = RetryArgs {
                 canvas_id: cid.clone(),
                 block_id: bid.clone(),
-                original_text,   // now resolved
+                original_text, // now resolved
             };
             let result = bridge::invoke::<_, serde_json::Value>("canvas_retry", &args).await;
             if let Err(e) = result {

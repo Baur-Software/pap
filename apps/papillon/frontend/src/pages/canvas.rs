@@ -5,7 +5,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
 use crate::components::block_renderer::BlockRenderer;
-use crate::state::canvas::{CanvasState, HitlRequest};
+use crate::state::canvas::CanvasState;
 use crate::state::orchestrator::OrchestratorState;
 use papillon_shared::OrchestratorStatus;
 
@@ -159,24 +159,24 @@ fn IntentPanel() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
 
     let session_id = move || {
-        canvas_state.current_canvas()
+        canvas_state
+            .current_canvas()
             .map(|c| c.id.chars().take(12).collect::<String>())
             .unwrap_or_else(|| "NO_SESSION".to_string())
     };
 
     let block_count = move || {
-        canvas_state.current_canvas()
+        canvas_state
+            .current_canvas()
             .map(|c| c.blocks.len())
             .unwrap_or(0)
     };
 
-    let llm_status = move || {
-        match orchestrator.status.get() {
-            OrchestratorStatus::Ready => "SUBSTRATE_READY",
-            OrchestratorStatus::Unconfigured => "NOT_CONFIGURED",
-            OrchestratorStatus::Disconnected => "DISCONNECTED",
-            _ => "UNKNOWN",
-        }
+    let llm_status = move || match orchestrator.status.get() {
+        OrchestratorStatus::Ready => "SUBSTRATE_READY",
+        OrchestratorStatus::Unconfigured => "NOT_CONFIGURED",
+        OrchestratorStatus::Disconnected => "DISCONNECTED",
+        _ => "UNKNOWN",
     };
 
     view! {
@@ -214,7 +214,8 @@ fn CanvasLedger() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
 
     let recent_blocks = move || {
-        canvas_state.current_canvas()
+        canvas_state
+            .current_canvas()
             .map(|c| {
                 let mut blocks = c.blocks;
                 blocks.reverse();

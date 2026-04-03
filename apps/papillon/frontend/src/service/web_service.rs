@@ -104,6 +104,9 @@ impl PapillonService for WebService {
         Ok(identity.list_profiles())
     }
 
+    // WASM is single-threaded; holding a std::sync::MutexGuard across an
+    // await point cannot cause a deadlock here.
+    #[allow(clippy::await_holding_lock)]
     async fn create_profile(&self, name: &str) -> Result<ProfileMetadata, String> {
         let mut identity = self
             .identity
@@ -112,6 +115,9 @@ impl PapillonService for WebService {
         identity.create_profile(name).await
     }
 
+    // WASM is single-threaded; holding a std::sync::MutexGuard across an
+    // await point cannot cause a deadlock here.
+    #[allow(clippy::await_holding_lock)]
     async fn switch_profile(&self, profile_id: &str) -> Result<IdentityInfo, String> {
         let mut identity = self
             .identity
@@ -187,6 +193,9 @@ impl PapillonService for WebService {
         Err("WebService: get_setup_state not yet implemented".into())
     }
 
+    // WASM is single-threaded; holding a std::sync::MutexGuard across an
+    // await point cannot cause a deadlock here.
+    #[allow(clippy::await_holding_lock)]
     async fn initialize(&self) -> Result<(), String> {
         let loaded = super::web_identity::WebIdentityService::load().await?;
         let mut identity = self

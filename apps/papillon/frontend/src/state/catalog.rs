@@ -41,7 +41,8 @@ pub fn build_catalog(agents: &[AgentInfo]) -> HashMap<String, String> {
         if let Some(did) = agent.agent_did.as_ref() {
             // Keep first entry on name collision — last-writer-wins would silently
             // redirect the principal's intent to the wrong agent.
-            map.entry(agent.name.to_lowercase()).or_insert_with(|| did.clone());
+            map.entry(agent.name.to_lowercase())
+                .or_insert_with(|| did.clone());
         }
     }
     map

@@ -262,13 +262,11 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
         let receipt_verifying_key = receipt_signer.verifying_key();
         // receipt_signer drops here (zeroized)
 
-        let mut session =
-            Session::initiate(&receipt_token, agent_did, &receipt_verifying_key).map_err(
-                |e| {
-                    on_fail(5, &e.to_string());
-                    FetchError(e.to_string())
-                },
-            )?;
+        let mut session = Session::initiate(&receipt_token, agent_did, &receipt_verifying_key)
+            .map_err(|e| {
+                on_fail(5, &e.to_string());
+                FetchError(e.to_string())
+            })?;
 
         session
             .open(
@@ -276,9 +274,7 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
                 auth.receiver_session_did.clone(),
             )
             .map_err(|e| FetchError(e.to_string()))?;
-        session
-            .execute()
-            .map_err(|e| FetchError(e.to_string()))?;
+        session.execute().map_err(|e| FetchError(e.to_string()))?;
 
         let mut receipt = TransactionReceipt::from_session(
             &session,
@@ -319,9 +315,7 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
             }
         };
 
-        session
-            .close()
-            .map_err(|e| FetchError(e.to_string()))?;
+        session.close().map_err(|e| FetchError(e.to_string()))?;
 
         (session.id.clone(), receipt.signatures.len())
     };
@@ -392,8 +386,7 @@ pub async fn run_prompt(
     let agent = agents
         .iter()
         .find(|a| {
-            a.capabilities.iter().any(|c| c == action_type)
-                && a.name.contains(preferred_agent)
+            a.capabilities.iter().any(|c| c == action_type) && a.name.contains(preferred_agent)
         })
         .or_else(|| {
             // Fallback: match by capability alone
@@ -420,7 +413,6 @@ pub async fn run_prompt(
 
     // 4. Build phase callbacks that update Leptos signals directly
     let on_phase = {
-        let canvases = canvases;
         let cid = canvas_id.clone();
         let bid = block_id.clone();
         Box::new(move |phase: u8, label: &str| {
@@ -445,7 +437,6 @@ pub async fn run_prompt(
     };
 
     let on_fail = {
-        let canvases = canvases;
         let cid = canvas_id.clone();
         let bid = block_id.clone();
         Box::new(move |phase: u8, reason: &str| {

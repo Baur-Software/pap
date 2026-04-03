@@ -4,8 +4,8 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::templates::TemplatesState;
-use papillon_shared::Template;
 use papillon_shared::types::TemplateConfig;
+use papillon_shared::Template;
 
 mod template_builder;
 mod template_library;
@@ -83,24 +83,32 @@ pub fn TemplatesTab() -> impl IntoView {
     };
 
     // Real-time JSON validation on input
-    let handle_config_input = move |ev: web_sys::Event, config_signal: RwSignal<String>, error_signal: RwSignal<Option<String>>| {
-        let text = event_target_value(&ev);
-        config_signal.set(text.clone());
+    let handle_config_input =
+        move |ev: web_sys::Event,
+              config_signal: RwSignal<String>,
+              error_signal: RwSignal<Option<String>>| {
+            let text = event_target_value(&ev);
+            config_signal.set(text.clone());
 
-        // Validate JSON
-        if text.trim().is_empty() {
-            error_signal.set(None);
-        } else {
-            match serde_json::from_str::<TemplateConfig>(&text) {
-                Ok(_) => error_signal.set(None),
-                Err(e) => {
-                    // Extract line/column info from error
-                    let error_msg = format!("Line {}, Column {}: {:?}", e.line(), e.column(), e.classify());
-                    error_signal.set(Some(error_msg));
+            // Validate JSON
+            if text.trim().is_empty() {
+                error_signal.set(None);
+            } else {
+                match serde_json::from_str::<TemplateConfig>(&text) {
+                    Ok(_) => error_signal.set(None),
+                    Err(e) => {
+                        // Extract line/column info from error
+                        let error_msg = format!(
+                            "Line {}, Column {}: {:?}",
+                            e.line(),
+                            e.column(),
+                            e.classify()
+                        );
+                        error_signal.set(Some(error_msg));
+                    }
                 }
             }
-        }
-    };
+        };
 
     // Create template handler
     let handle_create = move |_| {
@@ -158,7 +166,8 @@ pub fn TemplatesTab() -> impl IntoView {
                     new_config.set(String::new());
 
                     // Reload templates
-                    if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+                    if let Ok(global) =
+                        bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
                     {
                         templates_state.global_templates.set(global);
                     }
@@ -175,7 +184,8 @@ pub fn TemplatesTab() -> impl IntoView {
         edit_form_data.set(Some(template.clone()));
         edit_name.set(template.template_name);
         edit_schema_type.set(template.schema_type);
-        edit_config.set(serde_json::to_string_pretty(&template.template_config).unwrap_or_default());
+        edit_config
+            .set(serde_json::to_string_pretty(&template.template_config).unwrap_or_default());
         edit_template_id.set(Some(template.id));
     };
 
@@ -215,7 +225,8 @@ pub fn TemplatesTab() -> impl IntoView {
                         edit_form_data.set(None);
 
                         // Reload templates
-                        if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+                        if let Ok(global) =
+                            bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
                         {
                             templates_state.global_templates.set(global);
                         }
@@ -252,7 +263,8 @@ pub fn TemplatesTab() -> impl IntoView {
                     delete_confirm_id.set(None);
 
                     // Reload templates
-                    if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+                    if let Ok(global) =
+                        bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
                     {
                         templates_state.global_templates.set(global);
                     }
@@ -274,7 +286,9 @@ pub fn TemplatesTab() -> impl IntoView {
             .await;
 
             // Reload templates
-            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+            if let Ok(global) =
+                bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+            {
                 templates_state.global_templates.set(global);
             }
         });
@@ -337,7 +351,9 @@ pub fn TemplatesTab() -> impl IntoView {
             selected_templates.set(std::collections::HashSet::new());
 
             // Reload templates
-            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+            if let Ok(global) =
+                bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+            {
                 templates_state.global_templates.set(global);
             }
         });
@@ -355,7 +371,9 @@ pub fn TemplatesTab() -> impl IntoView {
                 .await;
             }
 
-            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+            if let Ok(global) =
+                bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+            {
                 templates_state.global_templates.set(global);
             }
         });
@@ -372,7 +390,9 @@ pub fn TemplatesTab() -> impl IntoView {
                 .await;
             }
 
-            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+            if let Ok(global) =
+                bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await
+            {
                 templates_state.global_templates.set(global);
             }
         });
@@ -391,7 +411,8 @@ pub fn TemplatesTab() -> impl IntoView {
                                     let arr = js_sys::Array::new();
                                     arr.push(&wasm_bindgen::JsValue::from_str(&json_str));
                                     let blob = web_sys::Blob::new_with_str_sequence(&arr).unwrap();
-                                    let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+                                    let url =
+                                        web_sys::Url::create_object_url_with_blob(&blob).unwrap();
                                     a.set_href(&url);
                                     a.set_download("papillon-templates.json");
                                     a.click();
@@ -410,7 +431,10 @@ pub fn TemplatesTab() -> impl IntoView {
 
     // Import templates (Phase 9f)
     let handle_import_file = move |ev: web_sys::Event| {
-        if let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+        if let Some(input) = ev
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+        {
             if let Some(files) = input.files() {
                 if let Some(file) = files.get(0) {
                     spawn_local(async move {
@@ -427,12 +451,19 @@ pub fn TemplatesTab() -> impl IntoView {
                                             import_success.set(true);
                                             import_error.set(None);
 
-                                            if let Ok(global) = bridge::invoke_no_args::<Vec<Template>>("get_global_templates").await {
+                                            if let Ok(global) =
+                                                bridge::invoke_no_args::<Vec<Template>>(
+                                                    "get_global_templates",
+                                                )
+                                                .await
+                                            {
                                                 templates_state.global_templates.set(global);
                                             }
 
                                             // Log import result
-                                            web_sys::console::log_1(&format!("Imported: {:?}", result).into());
+                                            web_sys::console::log_1(
+                                                &format!("Imported: {:?}", result).into(),
+                                            );
                                         }
                                         Err(e) => {
                                             import_error.set(Some(e));
