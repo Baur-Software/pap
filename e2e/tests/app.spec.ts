@@ -392,6 +392,11 @@ test.describe("Settings management and persistence", () => {
       return window.__TAURI__.core.invoke("configure_orchestrator", { config });
     }, newConfig);
     expect(updated.llm_provider).toBe("Mistral");
+    // Verify get_orchestrator_config now returns the persisted value
+    const persisted = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("get_orchestrator_config");
+    });
+    expect(persisted.llm_provider).toBe("Mistral");
   });
 
   test("mandate TTL configuration persists", async ({ page }) => {

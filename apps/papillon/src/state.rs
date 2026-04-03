@@ -178,9 +178,19 @@ impl AppState {
             }
         }
 
+        // ── Load persisted orchestrator config ───────────────────────────────────
+        // get_setting("orchestrator_config") stores the JSON-serialised OrchestratorConfig.
+        // On first launch the key is absent, so we fall back to the compiled default.
+        let saved_orchestrator_config: OrchestratorConfig = db
+            .get_setting("orchestrator_config")
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str::<OrchestratorConfig>(&json).ok())
+            .unwrap_or_default();
+
         // ── Register all DB agents (catalog + user_created + generated) ───────────
         {
-            let orchestrator_config = OrchestratorConfig::default();
+            let orchestrator_config = saved_orchestrator_config.clone();
             let llm_provider = Arc::new(orchestrator_config.llm_provider.clone());
             let db_agents = db.load_all_agents().unwrap_or_default();
             for def in db_agents {
@@ -360,7 +370,7 @@ impl AppState {
             registries: RwLock::new(HashMap::new()),
             local_registry,
             bookmarks: RwLock::new(bookmarks),
-            orchestrator_config: RwLock::new(OrchestratorConfig::default()),
+            orchestrator_config: RwLock::new(saved_orchestrator_config),
             model_manager,
             agent_keypairs: RwLock::new(keypairs),
             db,

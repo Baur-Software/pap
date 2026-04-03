@@ -90,6 +90,7 @@ window.__TAURI__ = {
     _completedRuns: [],
     _backedUp: false,
     _successors: [],
+    _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
         name: 'DuckDuckGo Search',
@@ -209,7 +210,7 @@ window.__TAURI__ = {
           return ${JSON.stringify(ORCHESTRATOR_STATUS)};
 
         case 'get_orchestrator_config':
-          return CONFIG;
+          return window.__TAURI__.core._orchestratorConfig;
 
         case 'get_setup_state':
           return ${JSON.stringify(SETUP_STATE)};
@@ -224,7 +225,10 @@ window.__TAURI__ = {
           return ${JSON.stringify(MODEL_AVAILABILITY[0])};
 
         case 'configure_orchestrator':
-          return args?.config ?? CONFIG;
+          if (args?.config) {
+            window.__TAURI__.core._orchestratorConfig = args.config;
+          }
+          return window.__TAURI__.core._orchestratorConfig;
 
         case 'run_scenario': {
           const sid = args?.scenarioId ?? 'weather';
