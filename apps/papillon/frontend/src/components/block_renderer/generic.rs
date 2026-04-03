@@ -281,7 +281,8 @@ pub fn flatten_to_entries(
                     FieldKind::Scalar
                     | FieldKind::DateTime
                     | FieldKind::Price
-                    | FieldKind::Url
+                    | FieldKind::ExternalUrl
+                    | FieldKind::PapLink
                     | FieldKind::Did => {
                         entries.push(StreamEntry {
                             path,
@@ -477,12 +478,23 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
             }
             .into_any()
         }
-        FieldKind::Url => {
+        FieldKind::ExternalUrl => {
             let display = val.as_str().unwrap_or("-").to_string();
             view! {
                 <div class=format!("typed-field typed-field-url {}", css_field)>
                     <span class="typed-key">{label}</span>
                     <span class="typed-val typed-url">{display}</span>
+                </div>
+            }
+            .into_any()
+        }
+        FieldKind::PapLink => {
+            // Full implementation in Task 6 — stub renders as plain text for now
+            let display = val.as_str().unwrap_or("-").to_string();
+            view! {
+                <div class=format!("typed-field typed-field-pap-link {}", css_field)>
+                    <span class="typed-key">{label}</span>
+                    <span class="typed-val typed-pap-link">{display}</span>
                 </div>
             }
             .into_any()
