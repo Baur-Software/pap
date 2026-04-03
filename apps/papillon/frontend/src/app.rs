@@ -44,7 +44,7 @@ pub fn App() -> impl IntoView {
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
-    Effect::new(move |_| {
+    Effect::new(move || {
         let agents = registry_state.agents.get();
         catalog_state.refresh(&agents);
     });
