@@ -112,6 +112,13 @@ impl RegistryStore {
         }
     }
 
+    pub async fn count_agents_by_principal(&self, provider_did: &str) -> Result<i64> {
+        match self {
+            RegistryStore::Sqlite(s) => s.count_agents_by_principal(provider_did).await,
+            RegistryStore::Postgres(p) => p.count_agents_by_principal(provider_did).await,
+        }
+    }
+
     // ── Peers ────────────────────────────────────────────────────────────────
 
     pub async fn load_all_peers(&self) -> Result<Vec<RegistryPeer>> {

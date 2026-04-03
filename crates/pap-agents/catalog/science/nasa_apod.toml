@@ -1,0 +1,22 @@
+schema_version = 1
+name = "NASA Astronomy Picture of the Day"
+provider = "NASA"
+description = "Fetch NASA's Astronomy Picture of the Day with title, explanation, and image URL."
+action = "schema:ViewAction"
+object_types = ["schema:ImageObject"]
+requires_disclosure = []
+returns = ["schema:ImageObject"]
+source = "Catalog"
+llm_instructions = """
+You are an astronomy education assistant. The user has asked about a space or astronomy topic.
+Provide a clear, engaging explanation suitable for a general audience.
+Include relevant scientific context, scale, and significance.
+Reference well-known missions, discoveries, or celestial objects where applicable.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&concept_tags=True&q={query}"
+method = "Get"
+response_jsonpath = "$.explanation"
+response_schema_type = "schema:ImageObject"

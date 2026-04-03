@@ -30,12 +30,23 @@ jobs:
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "wasm"
+          cache-on-failure: true
+          workspaces: "apps/papillon/frontend -> target"
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
 
+      - name: Cache trunk binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/trunk
+          key: trunk-${{ runner.os }}-${{ hashFiles('apps/papillon/frontend/Cargo.lock') }}
+          restore-keys: trunk-${{ runner.os }}-
+
       - name: Install trunk
-        run: cargo binstall trunk --no-confirm --force
+        run: cargo binstall trunk --no-confirm
 
       - name: Build web with trunk
         working-directory: apps/papillon/frontend
@@ -65,6 +76,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
+          restore-keys: playwright-${{ runner.os }}-
 
       - name: Install Playwright
         working-directory: e2e
@@ -102,6 +120,9 @@ jobs:
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "wasm"
+          cache-on-failure: true
 
       - name: Check WASM target
         run: cargo build --target wasm32-unknown-unknown -p papillon-shared --no-default-features --features wasm --lib
@@ -123,6 +144,9 @@ jobs:
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "wasm"
+          cache-on-failure: true
 
       - name: Clippy papillon-shared (WASM)
         run: cargo clippy --target wasm32-unknown-unknown -p papillon-shared --no-default-features --features wasm --lib -- -D warnings
@@ -170,6 +194,9 @@ jobs:
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "wasm-test"
+          cache-on-failure: true
 
       - name: Test papillon-shared with WASM feature
         run: cargo test -p papillon-shared --no-default-features --features wasm

@@ -17,7 +17,7 @@ use crate::db::{prelude::DatabaseOps, Database};
 use crate::error::PapillonError;
 use crate::inference::ModelManager;
 use crate::profiles_db::ProfilesDatabase;
-use pap_agents::{build_agents, AgentExecutor, SimpleAgent};
+use pap_agents::{build_agents, load_catalog, AgentExecutor, SimpleAgent};
 use papillon_shared::ProfileMetadata;
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
@@ -83,7 +83,7 @@ pub struct AppState {
 impl AppState {
     /// Create AppState with persistent databases at the given path.
     /// Sets up profiles registry and initializes with active profile.
-    pub fn new(db_path: &std::path::Path) -> Self {
+    pub fn new(db_path: &std::path::Path, catalog_dir: PathBuf) -> Self {
         let db = crate::db::open_db(db_path).expect("failed to open experience memory database");
 
         // Open profiles registry next to the main database
@@ -94,7 +94,7 @@ impl AppState {
         let profiles_db = ProfilesDatabase::open(&profiles_db_path)
             .expect("failed to open profiles registry database");
 
-        Self::with_db(Arc::new(db), Arc::new(profiles_db))
+        Self::with_db(Arc::new(db), Arc::new(profiles_db), catalog_dir)
     }
 
     /// Create a clone suitable for moving to a background thread.
@@ -128,7 +128,11 @@ impl AppState {
         }
     }
 
-    fn with_db(db: Arc<Database>, profiles_db: Arc<ProfilesDatabase>) -> Self {
+    fn with_db(
+        db: Arc<Database>,
+        profiles_db: Arc<ProfilesDatabase>,
+        catalog_dir: PathBuf,
+    ) -> Self {
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
 
         // On-device AI needs the local model manager — register as an extra agent.
@@ -140,7 +144,52 @@ impl AppState {
             ai_meta,
         )];
 
-        let agent_set = build_agents(extra);
+        let mut agent_set = build_agents(extra);
+
+        // ── Catalog seeding (first startup + upgrade detection) ──────────────────
+        if catalog_dir.exists() {
+            let catalog_defs = load_catalog(&catalog_dir);
+            let existing_agents = db.load_all_agents().unwrap_or_default();
+            let existing_catalog_paths: std::collections::HashSet<String> = existing_agents
+                .iter()
+                .filter_map(|a| a.catalog_path.as_deref())
+                .map(str::to_owned)
+                .collect();
+
+            for mut def in catalog_defs {
+                if def
+                    .catalog_path
+                    .as_deref()
+                    .map(|p| existing_catalog_paths.contains(p))
+                    .unwrap_or(false)
+                {
+                    continue; // already seeded
+                }
+                let kp = PrincipalKeypair::generate();
+                def.operator_key_seed = Some(kp.signing_key().to_bytes());
+                def.agent_did = Some(kp.did());
+                let now = chrono::Utc::now().to_rfc3339();
+                def.created_at = now.clone();
+                def.updated_at = now;
+                if let Err(e) = db.insert_agent(&def) {
+                    eprintln!("Failed to seed catalog agent '{}': {e}", def.name);
+                    continue;
+                }
+            }
+        }
+
+        // ── Register all DB agents (catalog + user_created + generated) ───────────
+        {
+            let orchestrator_config = OrchestratorConfig::default();
+            let llm_provider = Arc::new(orchestrator_config.llm_provider.clone());
+            let db_agents = db.load_all_agents().unwrap_or_default();
+            for def in db_agents {
+                if let Err(e) = agent_set.register_dynamic(&def, llm_provider.clone()) {
+                    eprintln!("Failed to register agent '{}': {e}", def.name);
+                }
+            }
+        }
+
         let local_registry = Arc::new(Mutex::new(agent_set.registry));
 
         // Load or create profiles
@@ -380,7 +429,7 @@ impl Default for AppState {
             crate::db::open_db(&PathBuf::from("papillon.db")).expect("failed to open fallback db");
         let profiles_db = ProfilesDatabase::open(&PathBuf::from("profiles.db"))
             .expect("failed to open fallback profiles db");
-        Self::with_db(Arc::new(db), Arc::new(profiles_db))
+        Self::with_db(Arc::new(db), Arc::new(profiles_db), PathBuf::new())
     }
 }
 
@@ -513,7 +562,7 @@ mod tests {
         let profiles_db = Arc::new(
             crate::profiles_db::ProfilesDatabase::open_memory().expect("in-memory profiles db"),
         );
-        AppState::with_db(db, profiles_db)
+        AppState::with_db(db, profiles_db, PathBuf::new())
     }
 
     #[test]
@@ -522,11 +571,11 @@ mod tests {
         let registry = state.local_registry.lock().unwrap();
         let ads = registry.all_advertisements();
 
-        // 13 standard + On-Device AI + Social Discovery + Trait Beacon = 16
-        assert_eq!(
-            ads.len(),
-            16,
-            "Expected 16 agents in local_registry, got {}. Names: {:?}",
+        // Minimum: 1 WebReader (compiled) + On-Device AI + Social Discovery + Trait Beacon = 4.
+        // Catalog grows, so assert a floor rather than an exact count.
+        assert!(
+            ads.len() >= 4,
+            "Expected at least 4 agents in local_registry, got {}. Names: {:?}",
             ads.len(),
             ads.iter().map(|a| &a.name).collect::<Vec<_>>()
         );

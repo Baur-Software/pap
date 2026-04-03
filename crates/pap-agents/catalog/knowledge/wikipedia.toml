@@ -1,0 +1,22 @@
+schema_version = 1
+name = "Wikipedia Knowledge"
+provider = "Wikimedia Foundation"
+description = "Search Wikipedia articles via the Wikimedia REST API v1. Returns article excerpts and URLs."
+action = "schema:SearchAction"
+object_types = ["schema:Article"]
+requires_disclosure = []
+returns = ["schema:Article"]
+source = "Catalog"
+llm_instructions = """
+You are a knowledge assistant drawing on encyclopedic information.
+The user has asked about a topic. Provide a concise, factual summary of the subject.
+Prioritize well-established facts. Note if the topic is disputed or evolving.
+Keep your response to 2-4 paragraphs.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://en.wikipedia.org/w/rest.php/v1/search/page?q={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.pages[0].excerpt"
+response_schema_type = "schema:Article"

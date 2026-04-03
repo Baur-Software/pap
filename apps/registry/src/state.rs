@@ -14,6 +14,7 @@ pub struct AppState {
     pub node_endpoint: String,
     pub cert_fingerprint: String,
     pub admin_token: Option<String>,
+    pub max_ads_per_principal: usize,
 }
 
 impl AppState {
@@ -31,6 +32,7 @@ impl AppState {
             node_endpoint: config.public_endpoint.clone(),
             cert_fingerprint,
             admin_token: config.admin_token.clone(),
+            max_ads_per_principal: config.max_ads_per_principal,
         }
     }
 
@@ -65,6 +67,7 @@ mod tests {
             node_endpoint: "http://localhost".into(),
             cert_fingerprint: "sha256:test".into(),
             admin_token: token.map(str::to_owned),
+            max_ads_per_principal: 100,
         }
     }
 

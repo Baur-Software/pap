@@ -1,0 +1,22 @@
+schema_version = 1
+name = "Nominatim Geocoding"
+provider = "OpenStreetMap"
+description = "Forward geocoding: convert place names and addresses to coordinates via Nominatim."
+action = "schema:SearchAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = """
+You are a geography and location assistant. The user has asked about a place or address.
+Provide factual information about the location including its country, region, notable
+landmarks, and geographic context. If it is a well-known location, describe what it is
+known for.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1"
+method = "Get"
+response_jsonpath = "$[0].display_name"
+response_schema_type = "schema:GeoCoordinates"

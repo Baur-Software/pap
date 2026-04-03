@@ -5,9 +5,10 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
+use pap_agents::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig};
 
 /// Persistent SQLite database for Papillon's experience memory.
 ///
@@ -118,6 +119,32 @@ impl NativeDatabase {
                 ON templates(principal_did);
             CREATE INDEX IF NOT EXISTS idx_templates_enabled
                 ON templates(enabled);
+
+            CREATE TABLE IF NOT EXISTS agents (
+                agent_did TEXT PRIMARY KEY,
+                schema_version INTEGER NOT NULL DEFAULT 1,
+                name TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                description TEXT NOT NULL,
+                action TEXT NOT NULL,
+                object_types_json TEXT NOT NULL DEFAULT '[]',
+                requires_disclosure_json TEXT NOT NULL DEFAULT '[]',
+                returns_json TEXT NOT NULL DEFAULT '[]',
+                endpoint_json TEXT,
+                llm_instructions TEXT NOT NULL DEFAULT '',
+                subagents_json TEXT NOT NULL DEFAULT '[]',
+                source TEXT NOT NULL CHECK(source IN ('catalog','user_created','generated')),
+                operator_key_seed BLOB NOT NULL,
+                published_to_json TEXT NOT NULL DEFAULT '[]',
+                catalog_path TEXT,
+                removed_from_catalog INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_catalog_path
+                ON agents(catalog_path) WHERE catalog_path IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_agents_action ON agents(action);
+            CREATE INDEX IF NOT EXISTS idx_agents_source ON agents(source);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -759,11 +786,351 @@ impl DatabaseOps for NativeDatabase {
             .map_err(|e| DbError(format!("db query: {e}")))?;
         Ok(count > 0)
     }
+
+    fn insert_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let agent_did = def.agent_did.as_deref().ok_or_else(|| {
+            DbError("insert_agent: agent_did must be set before insert".to_string())
+        })?;
+        let seed = def.operator_key_seed.ok_or_else(|| {
+            DbError("insert_agent: operator_key_seed must be set before insert".to_string())
+        })?;
+        let object_types_json = serde_json::to_string(&def.object_types)
+            .map_err(|e| DbError(format!("serialize object_types: {e}")))?;
+        let requires_disclosure_json = serde_json::to_string(&def.requires_disclosure)
+            .map_err(|e| DbError(format!("serialize requires_disclosure: {e}")))?;
+        let returns_json = serde_json::to_string(&def.returns)
+            .map_err(|e| DbError(format!("serialize returns: {e}")))?;
+        let endpoint_json = def
+            .endpoint
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| DbError(format!("serialize endpoint: {e}")))?;
+        let subagents_json = serde_json::to_string(&def.subagents)
+            .map_err(|e| DbError(format!("serialize subagents: {e}")))?;
+        let published_to_json = serde_json::to_string(&def.published_to)
+            .map_err(|e| DbError(format!("serialize published_to: {e}")))?;
+        let source_str = match def.source {
+            DynamicAgentSource::Catalog => "catalog",
+            DynamicAgentSource::UserCreated => "user_created",
+            DynamicAgentSource::Generated => "generated",
+        };
+        conn.execute(
+            "INSERT INTO agents (
+                agent_did, schema_version, name, provider, description, action,
+                object_types_json, requires_disclosure_json, returns_json,
+                endpoint_json, llm_instructions, subagents_json, source,
+                operator_key_seed, published_to_json, catalog_path,
+                created_at, updated_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6,
+                ?7, ?8, ?9,
+                ?10, ?11, ?12, ?13,
+                ?14, ?15, ?16,
+                ?17, ?18
+            )",
+            params![
+                agent_did,
+                def.schema_version,
+                def.name,
+                def.provider,
+                def.description,
+                def.action,
+                object_types_json,
+                requires_disclosure_json,
+                returns_json,
+                endpoint_json,
+                def.llm_instructions,
+                subagents_json,
+                source_str,
+                seed.as_slice(),
+                published_to_json,
+                def.catalog_path,
+                def.created_at,
+                def.updated_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db insert agent: {e}")))?;
+        Ok(())
+    }
+
+    fn load_all_agents(&self) -> Result<Vec<DynamicAgentDef>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT agent_did, schema_version, name, provider, description, action,
+                    object_types_json, requires_disclosure_json, returns_json,
+                    endpoint_json, llm_instructions, subagents_json, source,
+                    operator_key_seed, published_to_json, catalog_path,
+                    created_at, updated_at
+             FROM agents
+             WHERE removed_from_catalog = 0
+             ORDER BY name",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let source_str: String = row.get(12)?;
+                let source = match source_str.as_str() {
+                    "catalog" => DynamicAgentSource::Catalog,
+                    "user_created" => DynamicAgentSource::UserCreated,
+                    "generated" => DynamicAgentSource::Generated,
+                    other => {
+                        return Err(rusqlite::Error::FromSqlConversionFailure(
+                            12,
+                            rusqlite::types::Type::Text,
+                            format!("unknown source: {other}").into(),
+                        ))
+                    }
+                };
+                let seed_blob: Vec<u8> = row.get(13)?;
+                let seed_arr: [u8; 32] = seed_blob.try_into().map_err(|_| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        13,
+                        rusqlite::types::Type::Blob,
+                        "operator_key_seed must be 32 bytes".into(),
+                    )
+                })?;
+                let endpoint_json: Option<String> = row.get(9)?;
+                let endpoint = endpoint_json
+                    .map(|j| {
+                        serde_json::from_str::<HttpEndpointConfig>(&j).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                9,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })
+                    })
+                    .transpose()?;
+                let parse_json_array =
+                    |idx: usize, raw: String| -> Result<Vec<String>, rusqlite::Error> {
+                        serde_json::from_str::<Vec<String>>(&raw).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                idx,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })
+                    };
+                Ok(DynamicAgentDef {
+                    agent_did: Some(row.get(0)?),
+                    schema_version: row.get::<_, i64>(1)? as u32,
+                    name: row.get(2)?,
+                    provider: row.get(3)?,
+                    description: row.get(4)?,
+                    action: row.get(5)?,
+                    object_types: parse_json_array(6, row.get(6)?)?,
+                    requires_disclosure: parse_json_array(7, row.get(7)?)?,
+                    returns: parse_json_array(8, row.get(8)?)?,
+                    endpoint,
+                    llm_instructions: row.get(10)?,
+                    subagents: parse_json_array(11, row.get(11)?)?,
+                    source,
+                    operator_key_seed: Some(seed_arr),
+                    published_to: parse_json_array(14, row.get(14)?)?,
+                    catalog_path: row.get(15)?,
+                    created_at: row.get(16)?,
+                    updated_at: row.get(17)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query: {e}")))?;
+
+        let mut agents = Vec::new();
+        for row in rows {
+            agents.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(agents)
+    }
+
+    fn update_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let agent_did = def
+            .agent_did
+            .as_deref()
+            .ok_or_else(|| DbError("update_agent: agent_did must be set".to_string()))?;
+        let object_types_json = serde_json::to_string(&def.object_types)
+            .map_err(|e| DbError(format!("serialize object_types: {e}")))?;
+        let requires_disclosure_json = serde_json::to_string(&def.requires_disclosure)
+            .map_err(|e| DbError(format!("serialize requires_disclosure: {e}")))?;
+        let returns_json = serde_json::to_string(&def.returns)
+            .map_err(|e| DbError(format!("serialize returns: {e}")))?;
+        let endpoint_json = def
+            .endpoint
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| DbError(format!("serialize endpoint: {e}")))?;
+        let subagents_json = serde_json::to_string(&def.subagents)
+            .map_err(|e| DbError(format!("serialize subagents: {e}")))?;
+        let published_to_json = serde_json::to_string(&def.published_to)
+            .map_err(|e| DbError(format!("serialize published_to: {e}")))?;
+        let rows_changed = conn
+            .execute(
+                "UPDATE agents SET
+                schema_version = ?1, name = ?2, provider = ?3,
+                description = ?4, action = ?5,
+                object_types_json = ?6, requires_disclosure_json = ?7,
+                returns_json = ?8, endpoint_json = ?9,
+                llm_instructions = ?10, subagents_json = ?11,
+                published_to_json = ?12, updated_at = ?13
+             WHERE agent_did = ?14",
+                params![
+                    def.schema_version,
+                    def.name,
+                    def.provider,
+                    def.description,
+                    def.action,
+                    object_types_json,
+                    requires_disclosure_json,
+                    returns_json,
+                    endpoint_json,
+                    def.llm_instructions,
+                    subagents_json,
+                    published_to_json,
+                    def.updated_at,
+                    agent_did,
+                ],
+            )
+            .map_err(|e| DbError(format!("db update agent: {e}")))?;
+        if rows_changed == 0 {
+            return Err(DbError(format!("Agent not found: {agent_did}")));
+        }
+        Ok(())
+    }
+
+    fn delete_agent(&self, agent_did: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let rows_changed = conn
+            .execute(
+                "DELETE FROM agents WHERE agent_did = ?1",
+                params![agent_did],
+            )
+            .map_err(|e| DbError(format!("db delete agent: {e}")))?;
+        if rows_changed == 0 {
+            return Err(DbError(format!("Agent not found: {agent_did}")));
+        }
+        Ok(())
+    }
+
+    fn apply_retention_policy(&self) -> Result<super::RetentionStats, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        // Read the active retention policy.
+        let policy_row: Option<(i64, i64, i64, f64)> = conn
+            .query_row(
+                "SELECT max_full_episodes, full_retention_days, compressed_retention_days,
+                         failure_retention_multiplier
+                  FROM retention_policies WHERE name = 'default'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()
+            .map_err(|e| DbError(format!("db read policy: {e}")))?;
+
+        let (max_full, full_days, compressed_days, failure_mult) = match policy_row {
+            Some(r) => r,
+            None => return Ok(super::RetentionStats::default()), // no policy → no-op
+        };
+
+        let mut stats = super::RetentionStats::default();
+
+        // ── Phase 1: Age-based compression ────────────────────────────────
+        //
+        // Compress Active episodes older than `full_retention_days`.
+        // Failures use `failure_retention_multiplier × full_retention_days`.
+        //
+        // SQLite date arithmetic: julianday('now') - julianday(recorded_at) gives age in days.
+
+        let success_compress_threshold = full_days as f64;
+        let failure_compress_threshold = full_days as f64 * failure_mult;
+
+        let compressed_age = conn
+            .execute(
+                "UPDATE episodes
+                    SET decay_state = 'Compressed', result_json = NULL
+                  WHERE decay_state = 'Active'
+                    AND (
+                        (outcome != 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?1)
+                        OR
+                        (outcome = 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?2)
+                    )",
+                params![success_compress_threshold, failure_compress_threshold],
+            )
+            .map_err(|e| DbError(format!("db compress by age: {e}")))?;
+
+        stats.compressed += compressed_age;
+
+        // ── Phase 2: Count-based compression ──────────────────────────────
+        //
+        // If total Active episodes exceed max_full_episodes, compress the oldest
+        // ones (by recorded_at) beyond the cap. Only success/rejected are eligible —
+        // failures already get extra time via the age path above.
+
+        let active_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM episodes WHERE decay_state = 'Active' AND outcome != 'failure'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| DbError(format!("db count active: {e}")))?;
+
+        let excess = active_count - max_full;
+        if excess > 0 {
+            let compressed_count = conn
+                .execute(
+                    "UPDATE episodes
+                        SET decay_state = 'Compressed', result_json = NULL
+                      WHERE id IN (
+                          SELECT id FROM episodes
+                           WHERE decay_state = 'Active' AND outcome != 'failure'
+                           ORDER BY recorded_at ASC
+                           LIMIT ?1
+                      )",
+                    params![excess],
+                )
+                .map_err(|e| DbError(format!("db compress by count: {e}")))?;
+
+            stats.compressed += compressed_count;
+        }
+
+        // ── Phase 3: Delete expired compressed episodes ────────────────────
+        //
+        // Delete Compressed episodes older than `compressed_retention_days`.
+        // Failures again use the multiplier.
+
+        let success_delete_threshold = compressed_days as f64;
+        let failure_delete_threshold = compressed_days as f64 * failure_mult;
+
+        let deleted = conn
+            .execute(
+                "DELETE FROM episodes
+                  WHERE decay_state = 'Compressed'
+                    AND (
+                        (outcome != 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?1)
+                        OR
+                        (outcome = 'failure'
+                         AND julianday('now') - julianday(recorded_at) > ?2)
+                    )",
+                params![success_delete_threshold, failure_delete_threshold],
+            )
+            .map_err(|e| DbError(format!("db delete expired: {e}")))?;
+
+        stats.deleted += deleted;
+
+        Ok(stats)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pap_agents::HttpMethod;
 
     fn test_db() -> NativeDatabase {
         NativeDatabase::open_memory().expect("in-memory db")
@@ -800,6 +1167,172 @@ mod tests {
 
         let episodes = db.list_episodes(None, None, 100, None).unwrap();
         assert_eq!(episodes.len(), 2);
+    }
+
+    // ── Retention policy tests ───────────────────────────────────────────
+
+    /// Insert an episode with a manually overridden recorded_at timestamp.
+    fn old_episode(id: &str, days_ago: i64) -> Episode {
+        let ts = chrono::Utc::now() - chrono::Duration::days(days_ago);
+        Episode {
+            recorded_at: ts.to_rfc3339(),
+            ..sample_episode(id)
+        }
+    }
+
+    fn failure_episode(id: &str, days_ago: i64) -> Episode {
+        let ts = chrono::Utc::now() - chrono::Duration::days(days_ago);
+        Episode {
+            outcome: "failure".to_string(),
+            recorded_at: ts.to_rfc3339(),
+            ..sample_episode(id)
+        }
+    }
+
+    #[test]
+    fn retention_no_op_when_no_policy_row() {
+        // Delete the default policy row that migrate() inserts, then run reducer.
+        let db = test_db();
+        db.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM retention_policies WHERE name = 'default'", [])
+            .unwrap();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 0);
+        assert_eq!(stats.deleted, 0);
+        // episode is untouched
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        assert_eq!(eps[0].decay_state, "Active");
+    }
+
+    #[test]
+    fn retention_compresses_old_success_episodes() {
+        let db = test_db();
+        // Policy: full_retention_days=90
+        // Insert an episode 100 days old — should be compressed.
+        db.insert_episode(&old_episode("old", 100)).unwrap();
+        db.insert_episode(&sample_episode("new")).unwrap(); // recorded_at = now, stays Active
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 1);
+        assert_eq!(stats.deleted, 0);
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        let old = eps.iter().find(|e| e.id == "old").unwrap();
+        let new = eps.iter().find(|e| e.id == "new").unwrap();
+        assert_eq!(old.decay_state, "Compressed");
+        assert!(
+            old.result_json.is_none(),
+            "result_json must be nulled after compression"
+        );
+        assert_eq!(new.decay_state, "Active");
+        assert!(
+            new.result_json.is_some(),
+            "recent episode result_json must be preserved"
+        );
+    }
+
+    #[test]
+    fn retention_failure_episodes_live_longer() {
+        let db = test_db();
+        // Policy: full_retention_days=90, failure_retention_multiplier=2.0
+        // So failures should not be compressed until 180 days.
+        // Insert a failure at 100 days — should NOT be compressed yet.
+        db.insert_episode(&failure_episode("fail-100", 100))
+            .unwrap();
+        // Insert a failure at 200 days — SHOULD be compressed.
+        db.insert_episode(&failure_episode("fail-200", 200))
+            .unwrap();
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 1);
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        let fail100 = eps.iter().find(|e| e.id == "fail-100").unwrap();
+        let fail200 = eps.iter().find(|e| e.id == "fail-200").unwrap();
+        assert_eq!(
+            fail100.decay_state, "Active",
+            "100-day failure should still be Active"
+        );
+        assert_eq!(
+            fail200.decay_state, "Compressed",
+            "200-day failure should be Compressed"
+        );
+    }
+
+    #[test]
+    fn retention_count_cap_compresses_oldest() {
+        let db = test_db();
+        // Set max_full_episodes = 2 so that with 4 episodes, 2 oldest get compressed.
+        db.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE retention_policies SET max_full_episodes = 2 WHERE name = 'default'",
+                [],
+            )
+            .unwrap();
+
+        // Insert 4 episodes with staggered times (all within 90-day window).
+        for i in 1..=4_i64 {
+            db.insert_episode(&old_episode(&format!("ep-{i}"), i))
+                .unwrap();
+        }
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.compressed, 2); // 2 oldest compressed to get down to cap
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        let active: Vec<_> = eps.iter().filter(|e| e.decay_state == "Active").collect();
+        let compressed: Vec<_> = eps
+            .iter()
+            .filter(|e| e.decay_state == "Compressed")
+            .collect();
+        assert_eq!(active.len(), 2);
+        assert_eq!(compressed.len(), 2);
+        // The two oldest (ep-4, ep-3) should be compressed.
+        assert!(compressed.iter().any(|e| e.id == "ep-4"));
+        assert!(compressed.iter().any(|e| e.id == "ep-3"));
+    }
+
+    #[test]
+    fn retention_deletes_expired_compressed_episodes() {
+        let db = test_db();
+        // Policy: compressed_retention_days=365
+        // Insert a Compressed episode at 400 days — should be deleted.
+        let mut ep = old_episode("stale", 400);
+        ep.decay_state = "Compressed".to_string();
+        ep.result_json = None;
+        db.insert_episode(&ep).unwrap();
+
+        // Also insert a recently-compressed episode — should NOT be deleted.
+        let mut recent = old_episode("recent-compressed", 10);
+        recent.decay_state = "Compressed".to_string();
+        recent.result_json = None;
+        db.insert_episode(&recent).unwrap();
+
+        let stats = db.apply_retention_policy().unwrap();
+        assert_eq!(stats.deleted, 1);
+
+        let eps = db.list_episodes(None, None, 10, None).unwrap();
+        assert_eq!(eps.len(), 1);
+        assert_eq!(eps[0].id, "recent-compressed");
+    }
+
+    #[test]
+    fn retention_reducer_is_idempotent() {
+        let db = test_db();
+        db.insert_episode(&old_episode("ep-1", 100)).unwrap();
+
+        let stats1 = db.apply_retention_policy().unwrap();
+        let stats2 = db.apply_retention_policy().unwrap();
+
+        assert_eq!(stats1.compressed, 1);
+        // Second run: already Compressed, nothing left to compress.
+        assert_eq!(stats2.compressed, 0);
+        assert_eq!(stats2.deleted, 0);
     }
 
     fn sample_template(id: &str, name: &str) -> crate::types::Template {
@@ -1059,6 +1592,86 @@ mod tests {
         let all = db.query_templates(None).unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].template_name, "user_flight");
+    }
+
+    fn sample_agent_def(agent_did: &str, catalog_path: Option<&str>) -> DynamicAgentDef {
+        DynamicAgentDef {
+            agent_did: Some(agent_did.to_string()),
+            schema_version: 1,
+            name: format!("Test Agent {agent_did}"),
+            provider: "Test Provider".to_string(),
+            description: "A test agent".to_string(),
+            action: "schema:SearchAction".to_string(),
+            object_types: vec!["schema:WebPage".to_string()],
+            requires_disclosure: vec![],
+            returns: vec!["schema:SearchResult".to_string()],
+            endpoint: Some(HttpEndpointConfig {
+                url_template: "https://api.example.com/search?q={query}".to_string(),
+                method: HttpMethod::Get,
+                headers: std::collections::HashMap::new(),
+                body_template: None,
+                response_jsonpath: "$.results[*]".to_string(),
+                response_schema_type: "schema:SearchResult".to_string(),
+            }),
+            llm_instructions: "You are a search assistant.".to_string(),
+            subagents: vec![],
+            source: DynamicAgentSource::Catalog,
+            operator_key_seed: Some([42u8; 32]),
+            published_to: vec![],
+            catalog_path: catalog_path.map(|s| s.to_string()),
+            created_at: "2026-04-01T00:00:00Z".to_string(),
+            updated_at: "2026-04-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn insert_and_load_agent_round_trip() {
+        let db = test_db();
+        let def = sample_agent_def("did:key:zTestAgent1", Some("search/test.toml"));
+        db.insert_agent(&def).unwrap();
+        let agents = db.load_all_agents().unwrap();
+        assert_eq!(agents.len(), 1);
+        let loaded = &agents[0];
+        assert_eq!(loaded.agent_did, def.agent_did);
+        assert_eq!(loaded.name, def.name);
+        assert_eq!(loaded.source, DynamicAgentSource::Catalog);
+        assert_eq!(loaded.operator_key_seed, Some([42u8; 32]));
+        assert_eq!(loaded.catalog_path, Some("search/test.toml".to_string()));
+        assert!(loaded.endpoint.is_some());
+        let ep = loaded.endpoint.as_ref().unwrap();
+        assert_eq!(ep.url_template, "https://api.example.com/search?q={query}");
+        assert_eq!(ep.method, HttpMethod::Get);
+    }
+
+    #[test]
+    fn catalog_path_unique_constraint() {
+        let db = test_db();
+        let def1 = sample_agent_def("did:key:zAgent1", Some("search/test.toml"));
+        let def2 = sample_agent_def("did:key:zAgent2", Some("search/test.toml"));
+        db.insert_agent(&def1).unwrap();
+        let result = db.insert_agent(&def2);
+        assert!(result.is_err(), "duplicate catalog_path should be rejected");
+    }
+
+    #[test]
+    fn load_agents_excludes_removed() {
+        let db = test_db();
+        let active = sample_agent_def("did:key:zActive", Some("search/active.toml"));
+        db.insert_agent(&active).unwrap();
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE agents SET removed_from_catalog = 1 WHERE agent_did = ?1",
+                params!["did:key:zActive"],
+            )
+            .unwrap();
+        }
+        let agents = db.load_all_agents().unwrap();
+        assert_eq!(
+            agents.len(),
+            0,
+            "removed agents must be excluded from load_all_agents"
+        );
     }
 
     #[test]

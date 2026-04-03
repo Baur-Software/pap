@@ -1,0 +1,21 @@
+schema_version = 1
+name = "Brave Search"
+provider = "Brave Software"
+description = "Privacy-preserving web search via Brave's independent search index."
+action = "schema:SearchAction"
+object_types = ["schema:WebPage"]
+requires_disclosure = []
+returns = ["schema:SearchResultsPage"]
+source = "Catalog"
+llm_instructions = """
+You are a web search assistant helping with independent, privacy-preserving search.
+The user has searched for a topic. Provide accurate, factual information based on
+your knowledge. Avoid speculation. Keep your response focused and informative.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://search.brave.com/api/suggest?q={query}&rich=1"
+method = "Get"
+response_jsonpath = "$[1][0]"
+response_schema_type = "schema:SearchResultsPage"

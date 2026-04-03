@@ -22,6 +22,10 @@ pub struct Config {
     /// Disable TLS and serve over plain HTTP.
     /// Set `PAP_REGISTRY_NO_TLS=true` for local development.
     pub no_tls: bool,
+
+    /// Maximum advertisements accepted from a single principal DID.
+    /// Enforced at POST /api/agents. Default: 100.
+    pub max_ads_per_principal: usize,
 }
 
 impl Config {
@@ -43,12 +47,18 @@ impl Config {
 
         let admin_token = env::var("PAP_REGISTRY_ADMIN_TOKEN").ok();
 
+        let max_ads_per_principal: usize = env::var("PAP_REGISTRY_MAX_ADS_PER_PRINCIPAL")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(100);
+
         Self {
             port,
             host,
             admin_token,
             public_endpoint,
             no_tls,
+            max_ads_per_principal,
         }
     }
 }

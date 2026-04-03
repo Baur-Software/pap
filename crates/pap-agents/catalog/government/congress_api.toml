@@ -1,0 +1,22 @@
+schema_version = 1
+name = "Congress.gov Bill Search"
+provider = "Library of Congress"
+description = "Search U.S. Congressional bills and legislation via the Congress.gov API."
+action = "schema:SearchAction"
+object_types = ["schema:GovernmentPermit"]
+requires_disclosure = []
+returns = ["schema:GovernmentPermit"]
+source = "Catalog"
+llm_instructions = """
+You are a U.S. legislative research assistant. The user has asked about a bill,
+law, or Congressional topic. Provide factual information about the legislation
+including its purpose, sponsors, current status, and potential impact.
+Keep your response factual and nonpartisan.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.congress.gov/v3/bill?query={query}&format=json&limit=5&api_key=DEMO_KEY"
+method = "Get"
+response_jsonpath = "$.bills[0].title"
+response_schema_type = "schema:GovernmentPermit"

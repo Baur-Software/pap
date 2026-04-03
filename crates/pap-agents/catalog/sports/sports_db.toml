@@ -1,0 +1,21 @@
+schema_version = 1
+name = "TheSportsDB Team Search"
+provider = "TheSportsDB"
+description = "Search for sports teams, leagues, and events via TheSportsDB public API."
+action = "schema:SearchAction"
+object_types = ["schema:SportsTeam"]
+requires_disclosure = []
+returns = ["schema:SportsTeam"]
+source = "Catalog"
+llm_instructions = """
+You are a sports information assistant. The user has asked about a sports team, league,
+or event. Provide factual information including the sport, league, home city, founding
+year, notable achievements, and current standing if known.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t={query}"
+method = "Get"
+response_jsonpath = "$.teams[0].strTeam"
+response_schema_type = "schema:SportsTeam"

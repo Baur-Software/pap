@@ -76,7 +76,7 @@ pub fn TopBar() -> impl IntoView {
         _ => "topbar-status agents-only",
     };
 
-    let toggle_menu = move |_| {
+    let toggle_menu = move |_: leptos::ev::MouseEvent| {
         menu_open.update(|v| *v = !*v);
     };
 
@@ -88,28 +88,38 @@ pub fn TopBar() -> impl IntoView {
     let active_id = move || canvas_state.current_canvas_id.get();
 
     view! {
-        <div class="topbar">
-            <div class="topbar-left">
-                <button class="topbar-menu-btn" on:click=toggle_menu title="Menu">
-                    "\u{2630}"
-                </button>
-                <img src="/logo.png" alt="Papillon" class="topbar-logo" />
+        <header class="topbar app-topbar">
+            <button class="topbar-menu-btn" on:click=toggle_menu>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+            <div class="topbar-brand">
+                <img class="topbar-brand-icon" src="/logo.png" alt="Papillon" />
+                <span class="topbar-brand-name">"PAPILLON_SYS"</span>
+            </div>
+            <div class="topbar-spacer" />
+            <div class="topbar-meta">
+                <div class="topbar-session-badge">
+                    <div class="topbar-session-dot" />
+                    <span class=move || status_class()>{status_label}</span>
+                </div>
+                <span class="topbar-meta-sep">"|"</span>
                 <span class="topbar-identity">{did_display}</span>
+                <span class="topbar-meta-sep">"|"</span>
+                <span>"BUILD_9.4.2"</span>
+                <span class="topbar-meta-sep">"|"</span>
+                <span>"UTC 2026-04-02"</span>
             </div>
-            <div class="topbar-right">
-                <button
-                    class="topbar-profile-btn"
-                    on:click=move |_| profile_menu_open.update(|v| *v = !*v)
-                    title=current_profile_name
-                >
-                    <ProfileAvatar name=current_profile_name() />
-                </button>
-                <span class=status_class>{status_label}</span>
-                <A href="/settings" attr:class="topbar-settings-btn settings-gear" attr:title="Settings">
-                    "\u{2699}"
-                </A>
-            </div>
-        </div>
+            <A href="/settings" attr:class="topbar-settings-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+            </A>
+        </header>
         <Show when=move || menu_open.get()>
             <div class="menu-backdrop" on:click=close_menu></div>
             <div class="menu-dropdown">
@@ -190,7 +200,7 @@ pub fn TopBar() -> impl IntoView {
                 </div>
                 <div class="profile-menu-divider"></div>
                 <A href="/settings?tab=profiles" attr:class="profile-menu-link" on:click=move |_| profile_menu_open.set(false)>
-                    "⚙ Profiles Settings"
+                    "\u{2699} Profiles Settings"
                 </A>
             </div>
         </Show>

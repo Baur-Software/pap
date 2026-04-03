@@ -1,0 +1,21 @@
+schema_version = 1
+name = "DuckDuckGo Search"
+provider = "DuckDuckGo"
+description = "Web search via DuckDuckGo. Returns organic search results without tracking."
+action = "schema:SearchAction"
+object_types = ["schema:WebPage"]
+requires_disclosure = []
+returns = ["schema:SearchResultsPage"]
+source = "Catalog"
+llm_instructions = """
+You are a web search assistant. The user has searched for a topic.
+Provide factual, relevant information about their query based on your knowledge.
+Focus on accurate, up-to-date information. Keep your response concise and informative.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.duckduckgo.com/?q={query}&format=json&no_html=1&skip_disambig=1"
+method = "Get"
+response_jsonpath = "$.AbstractText"
+response_schema_type = "schema:SearchResultsPage"

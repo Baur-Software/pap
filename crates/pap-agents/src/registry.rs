@@ -12,8 +12,11 @@ use pap_federation::FederatedRegistry;
 use pap_marketplace::AgentAdvertisement;
 use pap_transport::AgentHandler;
 
-use crate::agents::*;
+use crate::agents::web_reader::WebReaderExecutor;
+use crate::dynamic::DynamicAgentDef;
+use crate::dynamic_handler::DynamicAgentHandler;
 use crate::executor::{AgentExecutor, AgentMeta};
+use crate::llm::LlmProvider;
 use crate::simple::SimpleAgent;
 
 /// Result of building the agent registry.
@@ -38,80 +41,7 @@ pub fn build_agents(extra: Vec<(&'static str, Arc<dyn AgentHandler>, AgentMeta)>
     let mut keypairs = HashMap::new();
     let mut handlers: HashMap<String, Arc<dyn AgentHandler>> = HashMap::new();
 
-    // Register all standard executors — Tier 0 (original)
-    register_executor(
-        DuckDuckGoExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        WikipediaExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        OpenMeteoExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        OpenLibraryExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        NominatimExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        FrankfurterExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        HackerNewsExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-
-    // Tier 1 — zero-auth public APIs
-    register_executor(
-        RestCountriesExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(
-        DictionaryExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-    register_executor(ArxivExecutor, &mut registry, &mut keypairs, &mut handlers);
-    register_executor(
-        GitHubReposExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-
-    // Tier 2 — disclosure-required
-    register_executor(
-        IpGeolocationExecutor,
-        &mut registry,
-        &mut keypairs,
-        &mut handlers,
-    );
-
-    // Tier 3 — bridge agent (zero-trust ↔ legacy web)
+    // Only compiled agent: HTML parsing requires custom Rust (not expressible as TOML).
     register_executor(
         WebReaderExecutor,
         &mut registry,
@@ -200,6 +130,72 @@ fn register_handler(
     keypairs.insert(name.to_string(), kp);
 }
 
+// ── Dynamic agent registration ────────────────────────────────────────────────
+
+#[derive(Debug, thiserror::Error)]
+pub enum RegistrationError {
+    #[error("operator_key_seed is required for registration")]
+    MissingKeySeed,
+    #[error("invalid operator key seed: {0}")]
+    InvalidKeySeed(String),
+    #[error("advertisement signature verification failed")]
+    SignatureInvalid,
+    #[error("agent already registered: {0}")]
+    AlreadyRegistered(String),
+}
+
+impl AgentSet {
+    /// Register a dynamic agent definition at runtime.
+    ///
+    /// Steps (spec §9.1):
+    /// 1. Require operator_key_seed
+    /// 2. Restore PrincipalKeypair from seed
+    /// 3. Build AgentAdvertisement from def fields
+    /// 4. Sign advertisement with operator signing key
+    /// 5. Verify signature is Some (spec §9.4)
+    /// 6. registry.register_local(ad)
+    /// 7. Insert handler into self.handlers
+    /// 8. Insert keypair into self.keypairs
+    /// 9. Return agent DID
+    pub fn register_dynamic(
+        &mut self,
+        def: &DynamicAgentDef,
+        llm_provider: Arc<LlmProvider>,
+    ) -> Result<String, RegistrationError> {
+        let seed = def
+            .operator_key_seed
+            .ok_or(RegistrationError::MissingKeySeed)?;
+        let kp = PrincipalKeypair::from_bytes(&seed)
+            .map_err(|e| RegistrationError::InvalidKeySeed(e.to_string()))?;
+        let did = kp.did();
+
+        let mut ad = AgentAdvertisement::new(
+            &def.name,
+            &def.provider,
+            &did,
+            vec![def.action.clone()],
+            def.object_types.clone(),
+            def.requires_disclosure.clone(),
+            def.returns.clone(),
+        );
+        ad.sign(kp.signing_key());
+
+        if ad.signature.is_none() {
+            return Err(RegistrationError::SignatureInvalid);
+        }
+
+        self.registry
+            .register_local(ad)
+            .map_err(|_| RegistrationError::AlreadyRegistered(def.name.clone()))?;
+
+        let handler = Arc::new(DynamicAgentHandler::new(def.clone(), llm_provider));
+        self.handlers.insert(def.name.clone(), handler);
+        self.keypairs.insert(def.name.clone(), kp);
+
+        Ok(did)
+    }
+}
+
 // ── AgentMeta helpers for creating Vec<String> from static slices ──
 
 impl AgentMeta {
@@ -230,28 +226,8 @@ mod tests {
     #[test]
     fn build_agents_registers_all_standard() {
         let set = build_agents(vec![]);
-        assert_eq!(set.handlers.len(), 13);
-        assert_eq!(set.keypairs.len(), 13);
-
-        // Tier 0 — original agents
-        assert!(set.handlers.contains_key("DuckDuckGo Search"));
-        assert!(set.handlers.contains_key("Wikipedia Knowledge"));
-        assert!(set.handlers.contains_key("Open-Meteo Weather"));
-        assert!(set.handlers.contains_key("Open Library Books"));
-        assert!(set.handlers.contains_key("Nominatim Geocoding"));
-        assert!(set.handlers.contains_key("Frankfurter Exchange"));
-        assert!(set.handlers.contains_key("Hacker News"));
-
-        // Tier 1 — zero-auth public APIs
-        assert!(set.handlers.contains_key("REST Countries"));
-        assert!(set.handlers.contains_key("Free Dictionary"));
-        assert!(set.handlers.contains_key("arXiv Papers"));
-        assert!(set.handlers.contains_key("GitHub Repos"));
-
-        // Tier 2 — disclosure-required
-        assert!(set.handlers.contains_key("IP Geolocation"));
-
-        // Tier 3 — bridge agent
+        assert_eq!(set.handlers.len(), 1);
+        assert_eq!(set.keypairs.len(), 1);
         assert!(set.handlers.contains_key("Web Page Reader"));
     }
 
@@ -336,35 +312,92 @@ mod tests {
         );
     }
 
-    #[test]
-    fn advertisements_queryable_by_action_type() {
-        let set = build_agents(vec![]);
-        let search_agents = set.registry.query_local("schema:SearchAction");
-        assert!(
-            !search_agents.is_empty(),
-            "Should have at least one SearchAction agent"
-        );
+    // ── register_dynamic ─────────────────────────────────────────────────────
 
-        // DuckDuckGo should be discoverable
-        assert!(
-            search_agents.iter().any(|a| a.name == "DuckDuckGo Search"),
-            "DuckDuckGo Search should be queryable by SearchAction"
-        );
+    fn make_dynamic_def(with_seed: bool) -> DynamicAgentDef {
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
+        let seed: Option<[u8; 32]> = if with_seed {
+            Some(SigningKey::generate(&mut OsRng).to_bytes())
+        } else {
+            None
+        };
+        DynamicAgentDef {
+            agent_did: None,
+            schema_version: 1,
+            name: "Test Dynamic Agent".into(),
+            provider: "Test Corp".into(),
+            description: "A test dynamic agent".into(),
+            action: "schema:SearchAction".into(),
+            object_types: vec!["schema:Thing".into()],
+            requires_disclosure: vec![],
+            returns: vec!["schema:SearchResult".into()],
+            endpoint: None,
+            llm_instructions: "You are helpful.".into(),
+            subagents: vec![],
+            source: crate::dynamic::DynamicAgentSource::UserCreated,
+            operator_key_seed: seed,
+            published_to: vec![],
+            catalog_path: None,
+            created_at: "2026-04-01T00:00:00Z".into(),
+            updated_at: "2026-04-01T00:00:00Z".into(),
+        }
     }
 
     #[test]
-    fn disclosure_required_agents_declare_properties() {
-        let set = build_agents(vec![]);
-        let ip_geo = set
-            .registry
-            .all_advertisements()
-            .iter()
-            .find(|a| a.name == "IP Geolocation")
-            .expect("IP Geolocation agent should exist");
+    fn register_dynamic_produces_queryable_agent() {
+        let mut set = build_agents(vec![]);
+        let def = make_dynamic_def(true);
+        let did = set
+            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
+        assert!(did.starts_with("did:key:z"), "got: {did}");
+        let results = set.registry.query_local("schema:SearchAction");
+        assert!(results.iter().any(|a| a.name == "Test Dynamic Agent"));
+        assert!(set.handlers.contains_key("Test Dynamic Agent"));
+        assert!(set.keypairs.contains_key("Test Dynamic Agent"));
+    }
 
-        assert!(
-            !ip_geo.requires_disclosure.is_empty(),
-            "IP Geolocation should require disclosure"
-        );
+    #[test]
+    fn register_dynamic_missing_seed_errors() {
+        let mut set = build_agents(vec![]);
+        let def = make_dynamic_def(false);
+        let result = set.register_dynamic(&def, Arc::new(LlmProvider::None));
+        assert!(matches!(result, Err(RegistrationError::MissingKeySeed)));
+    }
+
+    #[test]
+    fn register_dynamic_signed_advertisement() {
+        let mut set = build_agents(vec![]);
+        let def = make_dynamic_def(true);
+        set.register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
+        let ads = set.registry.all_advertisements();
+        let ad = ads.iter().find(|a| a.name == "Test Dynamic Agent").unwrap();
+        assert!(ad.signature.is_some());
+        assert!(ad.signed_by.starts_with("did:key:"));
+    }
+
+    #[test]
+    fn register_dynamic_did_is_stable_for_same_seed() {
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
+        let seed = SigningKey::generate(&mut OsRng).to_bytes();
+
+        let mut def = make_dynamic_def(false);
+        def.operator_key_seed = Some(seed);
+        def.name = "Stable DID Agent A".into();
+        let mut set = build_agents(vec![]);
+        let did1 = set
+            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
+
+        let mut set2 = build_agents(vec![]);
+        def.name = "Stable DID Agent B".into();
+        let did2 = set2
+            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .unwrap();
+
+        assert_eq!(did1, did2, "same seed must produce same DID");
     }
 }

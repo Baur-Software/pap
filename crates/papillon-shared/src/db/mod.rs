@@ -9,6 +9,8 @@
 //! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
 use crate::types::Template;
+#[cfg(feature = "native")]
+use pap_agents::DynamicAgentDef;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "native")]
@@ -160,4 +162,46 @@ pub trait DatabaseOps: Send + Sync {
 
     /// Check if any enabled template exists for the given schema type.
     fn has_enabled_template_for_schema_type(&self, schema_type: &str) -> Result<bool, DbError>;
+
+    /// Apply the active retention policy to the episode store.
+    ///
+    /// Two-phase reducer:
+    /// 1. **Compress** — episodes older than `full_retention_days` (or success episodes beyond
+    ///    `max_full_episodes`) have their `result_json` nulled and `decay_state` set to
+    ///    `"Compressed"`. Failure episodes use `failure_retention_multiplier × full_retention_days`.
+    /// 2. **Delete** — episodes already in `"Compressed"` state and older than
+    ///    `compressed_retention_days` are permanently removed. Again, failures use the multiplier.
+    ///
+    /// The policy values are read from the `retention_policies` table (`name = 'default'`).
+    /// If no policy row exists the call is a no-op.
+    ///
+    /// Returns the number of episodes compressed and deleted.
+    fn apply_retention_policy(&self) -> Result<RetentionStats, DbError>;
+
+    // ── Agent Management (native only) ───────────────────────────────────
+    // pap-agents pulls in reqwest::blocking → tokio → mio which does not compile
+    // for wasm32-unknown-unknown. These methods are only available in the native build.
+
+    /// Insert a new dynamic agent definition.
+    #[cfg(feature = "native")]
+    fn insert_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError>;
+
+    /// Load all non-removed agent definitions.
+    #[cfg(feature = "native")]
+    fn load_all_agents(&self) -> Result<Vec<DynamicAgentDef>, DbError>;
+
+    /// Update an existing agent definition in-place (same agent_did).
+    #[cfg(feature = "native")]
+    fn update_agent(&self, def: &DynamicAgentDef) -> Result<(), DbError>;
+
+    /// Delete an agent by DID. Catalog agents should use removed_from_catalog instead.
+    #[cfg(feature = "native")]
+    fn delete_agent(&self, agent_did: &str) -> Result<(), DbError>;
+}
+
+/// Summary of what the retention reducer did in a single pass.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RetentionStats {
+    pub compressed: usize,
+    pub deleted: usize,
 }
