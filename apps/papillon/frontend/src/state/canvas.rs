@@ -1,9 +1,11 @@
 use leptos::prelude::*;
 use papillon_shared::{BlockState, Canvas, CanvasBlock};
+use papillon_shared::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::service::PapillonService;
+use crate::state::catalog::CatalogState;
 use crate::state::registry::RegistryState;
 
 /// A pending Human-in-the-Loop gate request.
@@ -98,6 +100,40 @@ fn expand_block_references(text: &str, canvases: &[Canvas]) -> String {
     result
 }
 
+/// If `text` is a `pap://` URI, resolve it using the local catalog.
+/// Returns the resolved text to pass to the backend, or `None` if resolution
+/// failed and the caller should abort dispatch (error already logged).
+fn resolve_prompt_text(text: &str) -> Option<String> {
+    let is_pap = text.starts_with("pap://")
+        || text.starts_with("pap+https://")
+        || text.starts_with("pap+wss://");
+
+    if !is_pap {
+        return Some(text.to_string());
+    }
+
+    let catalog_map = use_context::<CatalogState>()
+        .map(|c| c.snapshot())
+        .unwrap_or_default();
+
+    match resolve_pap_uri(text, &catalog_map, LinkOrigin::Principal) {
+        Ok(ResolvedUri::LocalIntent(intent)) => Some(intent),
+        Ok(ResolvedUri::Did(uri)) => Some(uri),
+        Ok(ResolvedUri::Registry(uri)) => Some(uri),
+        Err(PapUriError::RecaptureDeferred) => {
+            leptos::logging::warn!(
+                "pap+https:// / pap+wss:// recapture enforcement not yet available: {}",
+                text
+            );
+            None
+        }
+        Err(e) => {
+            leptos::logging::warn!("PAP URI resolution failed for {}: {:?}", text, e);
+            None
+        }
+    }
+}
+
 impl CanvasState {
     /// Create a new blank canvas, set it active, and signal the prompt to focus.
     pub fn new_canvas(&self) -> String {
@@ -186,10 +222,18 @@ impl CanvasState {
             new_id
         });
 
+        // Resolve pap:// URIs before block reference expansion.
+        // Returns None if resolution failed — abort dispatch in that case.
+        // The block has not been added to the canvas yet, so we just return early.
+        let resolved_text = match resolve_prompt_text(&text) {
+            Some(t) => t,
+            None => return,
+        };
+
         // Extract block references and expand them for the backend
         let all_canvases = canvases.get();
-        let linked_block_ids = extract_block_ids(&text);
-        let expanded_text = expand_block_references(&text, &all_canvases);
+        let linked_block_ids = extract_block_ids(&resolved_text);
+        let expanded_text = expand_block_references(&resolved_text, &all_canvases);
 
         // Create a resolving block immediately (optimistic UI)
         let block = CanvasBlock {
@@ -347,13 +391,33 @@ impl CanvasState {
         };
 
         // Look up the original prompt text from the block
-        let original_text = canvases
+        let raw_text = canvases
             .get()
             .iter()
             .flat_map(|c| c.blocks.iter())
             .find(|b| b.id == block_id)
             .and_then(|b| b.prompt_text.clone())
             .unwrap_or_default();
+
+        // Resolve pap:// URIs on retry too
+        let original_text = match resolve_prompt_text(&raw_text) {
+            Some(t) => t,
+            None => {
+                canvases.update(|cs| {
+                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                        if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id) {
+                            b.state = BlockState::Failed {
+                                phase: 1,
+                                reason: "PAP URI resolution failed — see console for details."
+                                    .into(),
+                            };
+                            b.updated_at = now_iso();
+                        }
+                    }
+                });
+                return;
+            }
+        };
 
         canvases.update(|cs| {
             if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
@@ -379,7 +443,7 @@ impl CanvasState {
             let args = RetryArgs {
                 canvas_id: cid.clone(),
                 block_id: bid.clone(),
-                original_text,
+                original_text,   // now resolved
             };
             let result = bridge::invoke::<_, serde_json::Value>("canvas_retry", &args).await;
             if let Err(e) = result {
