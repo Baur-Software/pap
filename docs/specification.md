@@ -2042,7 +2042,155 @@ session's ephemeral key.
 
 ---
 
-## 15. Security Considerations
+## 15. PAP URI Scheme
+
+### 15.1. Overview
+
+The `pap` URI scheme identifies agents, capabilities, and resources within
+the Principal Agent Protocol. A `pap://` URI is always an expression of
+**intent** — resolving one initiates a PAP mandate-scoped interaction, not
+a raw network request.
+
+The scheme family consists of three variants:
+
+| Scheme | Meaning |
+|---|---|
+| `pap://` | PAP-native transport; client negotiates protocol |
+| `pap+https://` | PAP mandate scope applied over HTTPS transport |
+| `pap+wss://` | PAP mandate scope applied over WebSocket transport |
+
+`pap+https://` and `pap+wss://` are **recapture schemes**. They apply PAP
+semantics — mandate enforcement, selective disclosure, co-signed receipts —
+to existing transports. The remote endpoint does not need to implement PAP.
+The client enforces the protocol locally. A `pap+https://` URI is still an
+HTTPS request under the hood; the principal's mandate scope wraps it
+regardless of whether the server is PAP-aware.
+
+### 15.2. Syntax
+
+```abnf
+pap-uri         = pap-scheme "://" authority path-and-action [ "?" query ]
+
+pap-scheme      = "pap" / "pap+https" / "pap+wss"
+
+authority       = registry-authority
+                / did-authority
+                / catalog-name
+
+registry-authority = host [ ":" port ] "/agents/" agent-slug
+did-authority   = "did:key:" base58-multicodec-key
+catalog-name    = 1*( ALPHA / DIGIT / "-" / "_" )
+                  ; resolved against local catalog before dispatch
+
+path-and-action = "/" schema-action-type
+                  ; Schema.org action type, e.g. "SearchAction"
+
+query           = schema-param *( "&" schema-param )
+schema-param    = schema-property "=" value
+                  ; property names are Schema.org property names
+```
+
+Examples:
+
+```
+; Networked agent via Chrysalis registry
+pap://chrysalis.example.com/agents/arxiv/SearchAction?query=quantum+computing
+
+; Direct peer-to-peer via DID (no registry)
+pap://did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK/SearchAction
+
+; Local catalog shorthand — resolved before dispatch
+pap://arxiv/SearchAction?query=quantum+computing
+pap://wikipedia/ReadAction?name=Rust+programming
+
+; Receipt deep-link
+pap://receipt/RCP_abc123
+
+; Recapture schemes — PAP scope over existing transports
+pap+https://api.example.com/agents/bookings/BuyAction?offer=flight-abc
+pap+wss://stream.example.com/agents/feed/ListenAction
+```
+
+### 15.3. Resolution
+
+A conforming client MUST resolve a `pap://` URI using the following
+priority chain, in order:
+
+1. **`did:key:` authority** — resolve directly via DID Document endpoint
+   discovery (Section 14.4). No registry lookup. Initiates a PAP handshake
+   with the identified agent.
+
+2. **Catalog name** — if the authority contains no `.` character and does
+   not begin with `did:`, the client MUST check its local agent catalog for
+   an entry whose `name` field matches the authority (case-insensitive). If
+   found, rewrite the URI to the agent's registered DID and resolve via
+   step 1.
+
+3. **Registry hostname** — if the authority contains a `.` character, treat
+   it as a Chrysalis registry host. Resolve by querying the registry's
+   `/agents/{slug}/` routes (Section 14.1) and initiate a PAP handshake
+   with the returned agent endpoint.
+
+If resolution fails at all steps, the client MUST present an error to the
+principal. The client MUST NOT silently fall back to a raw HTTP request.
+
+### 15.4. Action Type and Query Parameters
+
+The path segment after the authority MUST be a Schema.org action type
+(e.g. `SearchAction`, `BuyAction`, `ReadAction`). Clients SHOULD use this
+type to pre-filter agents during resolution — if a catalog agent does not
+advertise the requested action type in its `capability` array, it MUST NOT
+be selected.
+
+Query parameters MUST use Schema.org property names as keys. Clients MAY
+pass query parameters directly to the agent as the intent payload. Agents
+MAY ignore unknown parameters.
+
+### 15.5. Recapture Semantics (`pap+https://`, `pap+wss://`)
+
+When a `pap+https://` or `pap+wss://` URI is resolved:
+
+1. The active mandate scope MUST be checked before the request is made. If
+   no mandate is in scope, the client MUST NOT proceed.
+
+2. The request is made over the underlying transport (HTTPS or WSS) with
+   the standard PAP session headers included where the server accepts them.
+
+3. The client MUST record what was disclosed and generate a receipt entry
+   regardless of whether the server participates in the PAP handshake.
+
+4. The remote endpoint's response is treated as agent output and rendered
+   via the standard block renderer pipeline.
+
+This allows principals to bring existing web services under PAP governance
+without requiring those services to be modified.
+
+### 15.6. Link Rendering
+
+Any string value in a JSON-LD agent response that begins with `pap://`,
+`pap+https://`, or `pap+wss://` MUST be rendered as a navigable link by
+conforming clients. Activating such a link MUST dispatch the URI as intent
+through the same pipeline as a principal-typed query — it is not a browser
+navigation event.
+
+This enables agent-rendered content to form a navigable graph of
+intent-links without requiring any special page routing. Every link is a
+new PAP interaction.
+
+### 15.7. Special Authorities
+
+The following authority values are reserved and MUST be handled by the
+client without registry or catalog lookup:
+
+| Authority | Meaning |
+|---|---|
+| `receipt` | Deep-link to a receipt by session ID. `pap://receipt/{session-id}` opens the receipt detail view. |
+| `canvas` | Deep-link to a canvas block. `pap://canvas/{canvas-id}/{block-id}` navigates to the referenced block. |
+| `settings` | Opens the settings panel. `pap://settings/{tab}` opens a specific tab. |
+
+---
+
+## 16. Security Considerations
 
 ### 15.1. Cryptographic Algorithms
 
@@ -2176,7 +2324,7 @@ and document the choice.
 
 ---
 
-## 16. IANA and Vocabulary References
+## 17. IANA and Vocabulary References
 
 ### 16.1. Schema.org Vocabulary
 
@@ -2256,7 +2404,7 @@ in the Multicodec table (https://github.com/multiformats/multicodec).
 
 ---
 
-## 17. References
+## 18. References
 
 ### 17.1. Normative References
 
@@ -2308,7 +2456,7 @@ RFC 6455, December 2011.
 
 ---
 
-## 18. Changelog
+## 19. Changelog
 
 ### v1.0 (2026-03-24)
 
