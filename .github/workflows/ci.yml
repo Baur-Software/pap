@@ -20,6 +20,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "native"
+          cache-on-failure: true
       - run: cargo check --workspace --all-targets
 
   test:
@@ -31,6 +34,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "native"
+          cache-on-failure: true
       - run: cargo test --workspace
 
   test-registry:
@@ -44,6 +50,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "registry-ssr"
+          cache-on-failure: true
       - run: cargo test -p pap-registry --features ssr
 
   clippy:
@@ -57,6 +66,9 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "native"
+          cache-on-failure: true
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   fmt:
@@ -87,6 +99,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
+          shared-key: "native"
           cache-on-failure: true
       - name: Run benchmarks
         run: cargo bench -p pap-bench
@@ -104,14 +117,30 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "smoke-wasm"
+          cache-on-failure: true
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
+      - name: Cache trunk binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/trunk
+          key: trunk-${{ runner.os }}-${{ hashFiles('apps/papillon/frontend/Cargo.lock') }}
+          restore-keys: trunk-${{ runner.os }}-
       - name: Install trunk
-        run: cargo binstall trunk --no-confirm --force
+        run: cargo binstall trunk --no-confirm
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
+          restore-keys: playwright-${{ runner.os }}-
       - name: Install Playwright
         working-directory: e2e
         run: |
