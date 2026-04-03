@@ -513,6 +513,8 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
                         on:click=move |_| {
                             // All block-renderer pap:// links are agent-rendered.
                             // Require explicit principal confirmation before dispatch.
+                            // submit_agent_link enforces LinkOrigin::Agent so
+                            // special authorities (receipt/canvas/settings) are blocked.
                             let url_inner = url_for_click.clone();
                             let confirmed = web_sys::window()
                                 .and_then(|w| {
@@ -524,7 +526,7 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
                                 .unwrap_or(false);
                             if confirmed {
                                 if let Some(cs) = canvas_state {
-                                    cs.submit_prompt(url_inner);
+                                    cs.submit_agent_link(url_inner);
                                 }
                             }
                         }

@@ -75,6 +75,10 @@ pub fn resolve_pap_uri(
     // Step 2: catalog name (no dot in authority, not a registry host)
     if !is_registry_host(authority) {
         if let Some(did) = catalog.get(authority_lower.as_str()) {
+            // Reject path traversal before rewriting
+            if path.split('/').any(|seg| seg == "..") {
+                return Err(PapUriError::ParseError("path traversal not allowed".into()));
+            }
             let rewritten = format!("pap://{}{}", did, path);
             return Ok(ResolvedUri::Did(rewritten));
         }
@@ -97,8 +101,13 @@ fn is_ipv4(s: &str) -> bool {
     parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok())
 }
 
+/// Strip control characters from a path segment before embedding in an intent string.
+fn sanitize_intent_path(path: &str) -> String {
+    path.chars().filter(|c| !c.is_control()).collect()
+}
+
 fn special_to_intent(authority: &str, path: &str) -> String {
-    let path = path.trim_start_matches('/');
+    let path = sanitize_intent_path(path.trim_start_matches('/'));
     match authority {
         "receipt" => {
             if path.is_empty() {
@@ -276,5 +285,28 @@ mod tests {
         let cat = catalog(&[("receipt", "did:key:z6MkTestKey")]);
         let r = resolve_pap_uri("pap://receipt/RCP_1", &cat, LinkOrigin::Principal).unwrap();
         assert_eq!(r, ResolvedUri::LocalIntent("show receipt RCP_1".into()));
+    }
+
+    #[test]
+    fn path_traversal_in_catalog_rewrite_is_rejected() {
+        let cat = catalog(&[("arxiv", "did:key:z6MkTestKey")]);
+        let err = resolve_pap_uri("pap://arxiv/../../etc/passwd", &cat, LinkOrigin::Principal)
+            .unwrap_err();
+        assert!(matches!(err, PapUriError::ParseError(_)));
+    }
+
+    #[test]
+    fn control_chars_stripped_from_intent_path() {
+        let r = resolve_pap_uri(
+            "pap://receipt/RCP_1\nDelete%20all",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        // The newline should be stripped; remaining text is kept
+        assert_eq!(
+            r,
+            ResolvedUri::LocalIntent("show receipt RCP_1Delete%20all".into())
+        );
     }
 }

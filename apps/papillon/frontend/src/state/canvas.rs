@@ -103,7 +103,7 @@ fn expand_block_references(text: &str, canvases: &[Canvas]) -> String {
 /// If `text` is a `pap://` URI, resolve it using the local catalog.
 /// Returns the resolved text to pass to the backend, or `None` if resolution
 /// failed and the caller should abort dispatch (error already logged).
-fn resolve_prompt_text(text: &str) -> Option<String> {
+fn resolve_prompt_text(text: &str, origin: LinkOrigin) -> Option<String> {
     let is_pap = text.starts_with("pap://")
         || text.starts_with("pap+https://")
         || text.starts_with("pap+wss://");
@@ -116,7 +116,7 @@ fn resolve_prompt_text(text: &str) -> Option<String> {
         .map(|c| c.snapshot())
         .unwrap_or_default();
 
-    match resolve_pap_uri(text, &catalog_map, LinkOrigin::Principal) {
+    match resolve_pap_uri(text, &catalog_map, origin) {
         Ok(ResolvedUri::LocalIntent(intent)) => Some(intent),
         Ok(ResolvedUri::Did(uri)) => Some(uri),
         Ok(ResolvedUri::Registry(uri)) => Some(uri),
@@ -253,7 +253,7 @@ impl CanvasState {
 
         // Resolve pap:// URIs before block reference expansion.
         // Block is already in the canvas, so failures show as a Failed tile.
-        let resolved_text = match resolve_prompt_text(&text) {
+        let resolved_text = match resolve_prompt_text(&text, LinkOrigin::Principal) {
             Some(t) => t,
             None => {
                 canvases.update(|cs| {
@@ -397,6 +397,16 @@ impl CanvasState {
         });
     }
 
+    /// Dispatch a `pap://` link that originated from an agent-rendered block.
+    /// Uses `LinkOrigin::Agent` so `resolve_pap_uri` blocks special authorities
+    /// (receipt, canvas, settings) that an agent must not be able to activate.
+    pub fn submit_agent_link(&self, url: String) {
+        if let Some(resolved) = resolve_prompt_text(&url, LinkOrigin::Agent) {
+            self.submit_prompt(resolved);
+        }
+        // On None: error already logged by resolve_prompt_text
+    }
+
     /// Retry a failed block by re-issuing the mandate with the original prompt text.
     pub fn retry_block(&self, block_id: String) {
         let canvases = self.canvases;
@@ -416,7 +426,7 @@ impl CanvasState {
             .unwrap_or_default();
 
         // Resolve pap:// URIs on retry too
-        let original_text = match resolve_prompt_text(&raw_text) {
+        let original_text = match resolve_prompt_text(&raw_text, LinkOrigin::Principal) {
             Some(t) => t,
             None => {
                 canvases.update(|cs| {
