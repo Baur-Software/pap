@@ -64,7 +64,10 @@ pub fn resolve_pap_uri(
         if origin == LinkOrigin::Agent {
             return Err(PapUriError::Reserved);
         }
-        return Ok(ResolvedUri::LocalIntent(special_to_intent(&authority_lower, path)));
+        return Ok(ResolvedUri::LocalIntent(special_to_intent(
+            &authority_lower,
+            path,
+        )));
     }
 
     // Step 1: did:key: authority
@@ -147,18 +150,26 @@ mod tests {
     }
 
     fn catalog(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     #[test]
     fn special_receipt_principal() {
-        let r = resolve_pap_uri("pap://receipt/RCP_abc123", &empty(), LinkOrigin::Principal).unwrap();
-        assert_eq!(r, ResolvedUri::LocalIntent("show receipt RCP_abc123".into()));
+        let r =
+            resolve_pap_uri("pap://receipt/RCP_abc123", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::LocalIntent("show receipt RCP_abc123".into())
+        );
     }
 
     #[test]
     fn special_receipt_agent_is_blocked() {
-        let err = resolve_pap_uri("pap://receipt/RCP_abc123", &empty(), LinkOrigin::Agent).unwrap_err();
+        let err =
+            resolve_pap_uri("pap://receipt/RCP_abc123", &empty(), LinkOrigin::Agent).unwrap_err();
         assert_eq!(err, PapUriError::Reserved);
     }
 
@@ -177,7 +188,10 @@ mod tests {
     #[test]
     fn special_canvas_with_block() {
         let r = resolve_pap_uri("pap://canvas/cid/blk", &empty(), LinkOrigin::Principal).unwrap();
-        assert_eq!(r, ResolvedUri::LocalIntent("show canvas cid block blk".into()));
+        assert_eq!(
+            r,
+            ResolvedUri::LocalIntent("show canvas cid block blk".into())
+        );
     }
 
     #[test]
@@ -198,14 +212,20 @@ mod tests {
         .unwrap();
         assert_eq!(
             r,
-            ResolvedUri::Did("pap://did:key:z6MkTestKey/SearchAction?query=quantum%20computing".into())
+            ResolvedUri::Did(
+                "pap://did:key:z6MkTestKey/SearchAction?query=quantum%20computing".into()
+            )
         );
     }
 
     #[test]
     fn catalog_miss_returns_not_found() {
-        let err = resolve_pap_uri("pap://unknown/SearchAction", &empty(), LinkOrigin::Principal)
-            .unwrap_err();
+        let err = resolve_pap_uri(
+            "pap://unknown/SearchAction",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap_err();
         assert_eq!(err, PapUriError::NotFound("unknown".into()));
     }
 
@@ -254,15 +274,15 @@ mod tests {
 
     #[test]
     fn non_pap_uri_parse_error() {
-        let err = resolve_pap_uri("https://example.com", &empty(), LinkOrigin::Principal)
-            .unwrap_err();
+        let err =
+            resolve_pap_uri("https://example.com", &empty(), LinkOrigin::Principal).unwrap_err();
         assert!(matches!(err, PapUriError::ParseError(_)));
     }
 
     #[test]
     fn empty_authority_parse_error() {
-        let err = resolve_pap_uri("pap:///SearchAction", &empty(), LinkOrigin::Principal)
-            .unwrap_err();
+        let err =
+            resolve_pap_uri("pap:///SearchAction", &empty(), LinkOrigin::Principal).unwrap_err();
         assert!(matches!(err, PapUriError::ParseError(_)));
     }
 
