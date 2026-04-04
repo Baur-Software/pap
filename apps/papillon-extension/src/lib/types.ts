@@ -189,7 +189,6 @@ export interface NativeResponse {
 /** Content script → Service worker: current site has a PAP manifest */
 export interface SiteHasPap {
   type: "SITE_HAS_PAP";
-  tabId: number;
   manifest: import("./discovery.js").PapManifest;
   source: "well-known" | "link-rel";
 }

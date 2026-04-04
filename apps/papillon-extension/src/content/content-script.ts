@@ -116,15 +116,18 @@ async function probeSameOrigin() {
   if (manifest) {
     chrome.runtime.sendMessage({
       type: "SITE_HAS_PAP",
-      tabId: 0, // service worker uses sender.tab.id
       manifest,
       source: linkRelHref ? "link-rel" : "well-known",
     });
   }
 }
 
-// Run discovery once after initial scan, non-blocking
-probeSameOrigin();
+// Run discovery once after initial scan, non-blocking.
+// Guard: only probe on HTTP(S) pages — skip chrome-extension://, about:blank, etc.
+const proto = window.location.protocol;
+if (proto === "https:" || proto === "http:") {
+  probeSameOrigin();
+}
 
 // ── Cleanup on page unload ─────────────────────────────────────────────
 

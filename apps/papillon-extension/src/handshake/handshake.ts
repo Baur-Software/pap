@@ -42,7 +42,8 @@ const queryInput = $("query-input") as HTMLInputElement;
 
 const params = new URLSearchParams(window.location.search);
 const uri = params.get("uri") || "";
-const fallbackUrl = params.get("fallback") || "";
+const rawFallback = params.get("fallback") || "";
+const fallbackUrl = rawFallback.startsWith("https://") ? rawFallback : "";
 let currentPhase = 0;
 let activeSessionId: string | null = null;
 
@@ -474,22 +475,24 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage) => {
       errorMessage.textContent = msg.error;
       errorSection.hidden = false;
 
-      // Show fallback option when this was an upgraded HTTPS link
+      // Show unprotected URL when this was an upgraded HTTPS link.
+      // No clickable link — the user must copy-paste. Friction is the point.
       if (fallbackUrl) {
+        // Clean up stale elements from a previous failure (retry scenario)
+        errorSection.querySelector(".hs-fallback-hint")?.remove();
+        errorSection.querySelector(".hs-fallback-url")?.remove();
+
         const hint = document.createElement("p");
         hint.className = "hs-fallback-hint";
         hint.textContent =
-          "The original site is still available without PAP protection.";
+          "Unprotected URL \u2014 this interaction will not be covered by PAP:";
 
-        const fallbackBtn = document.createElement("button");
-        fallbackBtn.className = "btn hs-fallback-btn";
-        fallbackBtn.textContent = "Continue without PAP";
-        fallbackBtn.addEventListener("click", () => {
-          window.location.href = fallbackUrl;
-        });
+        const urlDisplay = document.createElement("div");
+        urlDisplay.className = "hs-fallback-url";
+        urlDisplay.textContent = fallbackUrl;
 
         errorSection.appendChild(hint);
-        errorSection.appendChild(fallbackBtn);
+        errorSection.appendChild(urlDisplay);
       }
       break;
   }

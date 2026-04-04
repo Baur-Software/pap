@@ -269,9 +269,16 @@ main {
   margin-top: var(--sp-md);
 }
 
-.hs-fallback-btn {
+.hs-fallback-url {
   margin-top: var(--sp-sm);
-  background: var(--bg-2);
-  color: var(--text-1);
+  padding: var(--sp-sm) var(--sp-md);
+  background: var(--bg-0);
   border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-2);
+  word-break: break-all;
+  user-select: all;
+  cursor: text;
 }

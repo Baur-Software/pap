@@ -251,14 +251,13 @@ chrome.runtime.onMessage.addListener(
         const tabId = sender.tab?.id;
         if (!tabId) break;
         papSiteTabs.set(tabId, msg.manifest);
-        // Show purple PAP badge if no active sessions (gold takes priority)
-        if (activeSessions.size === 0) {
-          chrome.action.setBadgeText({ text: "PAP", tabId });
-          chrome.action.setBadgeBackgroundColor({
-            color: "#6c5ce7", // --purple
-            tabId,
-          });
-        }
+        // Per-tab badge — always set. Chrome's global badge (no tabId)
+        // overrides per-tab when set; when global clears, per-tab shows through.
+        chrome.action.setBadgeText({ text: "PAP", tabId });
+        chrome.action.setBadgeBackgroundColor({
+          color: "#6c5ce7", // --purple
+          tabId,
+        });
         break;
       }
 
@@ -349,12 +348,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 chrome.contextMenus?.onClicked.addListener((info) => {
   if (info.menuItemId === "pap-upgrade-link" && info.linkUrl) {
-    try {
-      const papUri = httpsUrlToPap(info.linkUrl);
-      openHandshakeTab(papUri, undefined, undefined, info.linkUrl);
-    } catch {
-      // Not upgradeable (non-HTTPS) — silently ignore
-    }
+    const papUri = httpsUrlToPap(info.linkUrl);
+    openHandshakeTab(papUri, undefined, undefined, info.linkUrl);
   }
 });
 
