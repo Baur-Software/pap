@@ -65,6 +65,17 @@ pub fn create_recovery_shards(
         })
         .collect();
 
+    // Persist the threshold and total so reconstruct_from_shards can verify them
+    // against the embedded shard metadata (prevents threshold-forgery attacks).
+    state
+        .db
+        .set_setting("recovery_threshold_m", &threshold.to_string())
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    state
+        .db
+        .set_setting("recovery_total_n", &total.to_string())
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+
     Ok(RecoverySetupResult {
         shards: shard_infos?,
         manifest_json,
@@ -91,6 +102,28 @@ pub fn reconstruct_from_shards(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    // Verify the shards' embedded threshold against the value stored when the
+    // ceremony was originally created. This prevents a threshold-forgery attack
+    // where an adversary presents honestly-committed threshold=1 shards to
+    // silently reconstruct with fewer shares than intended.
+    if let Some(first) = shards.first() {
+        let stored_threshold = state
+            .db
+            .get_setting("recovery_threshold_m")
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        if let Some(expected_str) = stored_threshold {
+            let expected: u8 = expected_str
+                .parse()
+                .map_err(|_| PapillonError::from("stored threshold is corrupt"))?;
+            if first.threshold != expected {
+                return Err(PapillonError::from(format!(
+                    "shard threshold ({}) does not match the ceremony threshold ({}) — shards may be from a different ceremony",
+                    first.threshold, expected
+                )));
+            }
+        }
+    }
+
     let shard_refs: Vec<&shamir::RecoveryShard> = shards.iter().collect();
     let seed = shamir::reconstruct(&shard_refs).map_err(|e| PapillonError::from(e.to_string()))?;
 
@@ -101,6 +134,25 @@ pub fn reconstruct_from_shards(
     let did = keypair.did();
     let pub_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .encode(keypair.verifying_key().to_bytes());
+
+    // Guard: if an identity is already loaded in AppState, only allow the overwrite
+    // if the reconstructed DID matches the current one (i.e., recovering the same identity).
+    // This prevents accidental or malicious replacement of an active identity.
+    {
+        let signer_lock = state
+            .signer
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        if let Some(current_signer) = signer_lock.as_ref() {
+            let current_did = current_signer.did();
+            if current_did != did {
+                return Err(PapillonError::from(format!(
+                    "reconstructed DID ({did}) does not match the current identity ({current_did}) — \
+                     use a different device or explicitly remove your identity before recovering"
+                )));
+            }
+        }
+    }
 
     // Persist the reconstructed seed as the new active identity.
     let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);

@@ -24,6 +24,9 @@ pub fn RecoverySetup() -> impl IntoView {
     let m_input = RwSignal::new(2u8);
     let n_input = RwSignal::new(3u8);
 
+    // -- Step 3: current shard index (0-based cursor through the shard list)
+    let shard_cursor = RwSignal::new(0usize);
+
     let generate = move |_| {
         let m = m_input.get();
         let n = n_input.get();
@@ -49,6 +52,7 @@ pub fn RecoverySetup() -> impl IntoView {
                     recovery.shards.set(result.shards);
                     recovery.manifest_json.set(result.manifest_json);
                     recovery.generating.set(false);
+                    shard_cursor.set(0);
                     step.set(3);
                 }
                 Err(e) => {
@@ -180,62 +184,75 @@ pub fn RecoverySetup() -> impl IntoView {
                         </div>
                     </Show>
 
-                    // ── Step 3: Distribute shards ─────────────────────────
+                    // ── Step 3: Distribute shards (one at a time) ────────
+                    // Show exactly one shard at a time so that all shard JSONs are never
+                    // simultaneously present in the DOM — prevents browser extensions or
+                    // devtools from reading all shards in a single sweep.
                     <Show when=move || step.get() == 3>
                         <div class="setup-inputs">
-                            <p style="margin: 0 0 1rem;">
-                                {move || format!(
-                                    "Generated {} shards. Send shard #{} to trustee #{} (keep indices secret).",
-                                    recovery.total.get(),
-                                    1,
-                                    1,
-                                )}
-                            </p>
-                            <p style="margin: 0 0 1rem; color: var(--gold);">
-                                "Save each shard to a separate file and deliver securely to each trustee. "
-                                "Once you close this dialog, shards cannot be regenerated without repeating setup."
-                            </p>
-                            <For
-                                each=move || recovery.shards.get()
-                                key=|s| s.index
-                                children=move |shard| {
-                                    let shard_json = shard.shard_json.clone();
-                                    let idx = shard.index;
-                                    let copy_json = shard.shard_json.clone();
-                                    view! {
-                                        <div style="margin-top: 0.75rem;">
-                                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                                                <span style="color: var(--teal);">{format!("SHARD_{idx}")}</span>
-                                                <button
-                                                    class="btn-ghost"
-                                                    style="padding: 0.1rem 0.5rem; font-size: 0.75rem;"
-                                                    on:click=move |_| {
-                                                        let json = copy_json.clone();
-                                                        spawn_local(async move {
-                                                            if let Some(window) = web_sys::window() {
-                                                                let _ = window.navigator().clipboard().write_text(&json);
-                                                            }
-                                                        });
-                                                    }
-                                                >
-                                                    "[ COPY ]"
-                                                </button>
-                                            </div>
-                                            <textarea
-                                                readonly=true
-                                                rows="4"
-                                                style="width: 100%; font-family: var(--mono); font-size: 0.7rem; resize: none; background: var(--surface); color: var(--text); border: 1px solid var(--border);"
-                                            >
-                                                {shard_json}
-                                            </textarea>
-                                        </div>
-                                    }
+                            {move || {
+                                let shards = recovery.shards.get();
+                                let cursor = shard_cursor.get();
+                                let total = shards.len();
+                                if total == 0 {
+                                    return view! { <p>"No shards generated."</p> }.into_any();
                                 }
-                            />
-                        </div>
-                        <div class="setup-actions">
-                            <button class="btn-ghost" on:click=move |_| step.set(2)>"[ REGENERATE ]"</button>
-                            <button class="btn-sys" on:click=move |_| step.set(4)>"[ ALL_DISTRIBUTED ]"</button>
+                                let shard = &shards[cursor];
+                                let idx = shard.index;
+                                let shard_json = shard.shard_json.clone();
+                                let copy_json = shard.shard_json.clone();
+                                let is_last = cursor + 1 >= total;
+                                view! {
+                                    <div>
+                                        <p style="margin: 0 0 0.5rem;">
+                                            {format!("SHARD {idx} of {total} — deliver to trustee {idx}")}
+                                        </p>
+                                        <p style="margin: 0 0 1rem; color: var(--gold); font-size: 0.85rem;">
+                                            "Save this shard securely before advancing. Previous shards are not shown again."
+                                        </p>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                            <span style="color: var(--teal);">{format!("SHARD_{idx}")}</span>
+                                            <button
+                                                class="btn-ghost"
+                                                style="padding: 0.1rem 0.5rem; font-size: 0.75rem;"
+                                                on:click=move |_| {
+                                                    let json = copy_json.clone();
+                                                    spawn_local(async move {
+                                                        if let Some(window) = web_sys::window() {
+                                                            let _ = window.navigator().clipboard().write_text(&json);
+                                                        }
+                                                    });
+                                                }
+                                            >
+                                                "[ COPY ]"
+                                            </button>
+                                        </div>
+                                        <textarea
+                                            readonly=true
+                                            rows="4"
+                                            style="width: 100%; font-family: var(--mono); font-size: 0.7rem; resize: none; background: var(--surface); color: var(--text); border: 1px solid var(--border);"
+                                        >
+                                            {shard_json}
+                                        </textarea>
+                                        <div class="setup-actions" style="margin-top: 1rem;">
+                                            <button class="btn-ghost" on:click=move |_| step.set(2)>"[ REGENERATE ]"</button>
+                                            {if is_last {
+                                                view! {
+                                                    <button class="btn-sys" on:click=move |_| step.set(4)>
+                                                        "[ ALL_DISTRIBUTED ]"
+                                                    </button>
+                                                }.into_any()
+                                            } else {
+                                                view! {
+                                                    <button class="btn-sys" on:click=move |_| shard_cursor.set(cursor + 1)>
+                                                        {format!("[ NEXT_SHARD ({}/{}) ]", cursor + 1, total)}
+                                                    </button>
+                                                }.into_any()
+                                            }}
+                                        </div>
+                                    </div>
+                                }.into_any()
+                            }}
                         </div>
                     </Show>
 
