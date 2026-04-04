@@ -260,3 +260,18 @@ main {
   margin-top: var(--sp-xs);
   word-break: break-word;
 }
+
+/* ── Fallback (upgrade flow) ─────────────────────────── */
+
+.hs-fallback-hint {
+  color: var(--text-3);
+  font-size: 13px;
+  margin-top: var(--sp-md);
+}
+
+.hs-fallback-btn {
+  margin-top: var(--sp-sm);
+  background: var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}

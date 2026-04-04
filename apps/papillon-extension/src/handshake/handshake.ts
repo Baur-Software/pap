@@ -42,6 +42,7 @@ const queryInput = $("query-input") as HTMLInputElement;
 
 const params = new URLSearchParams(window.location.search);
 const uri = params.get("uri") || "";
+const fallbackUrl = params.get("fallback") || "";
 let currentPhase = 0;
 let activeSessionId: string | null = null;
 
@@ -472,6 +473,24 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage) => {
       markPhaseFailed(msg.phase, msg.error);
       errorMessage.textContent = msg.error;
       errorSection.hidden = false;
+
+      // Show fallback option when this was an upgraded HTTPS link
+      if (fallbackUrl) {
+        const hint = document.createElement("p");
+        hint.className = "hs-fallback-hint";
+        hint.textContent =
+          "The original site is still available without PAP protection.";
+
+        const fallbackBtn = document.createElement("button");
+        fallbackBtn.className = "btn hs-fallback-btn";
+        fallbackBtn.textContent = "Continue without PAP";
+        fallbackBtn.addEventListener("click", () => {
+          window.location.href = fallbackUrl;
+        });
+
+        errorSection.appendChild(hint);
+        errorSection.appendChild(fallbackBtn);
+      }
       break;
   }
 });
