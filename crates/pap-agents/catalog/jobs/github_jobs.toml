@@ -1,0 +1,17 @@
+schema_version = 1
+name = "GitHub Job Postings"
+provider = "GitHub"
+description = "Search developer job postings shared on GitHub repositories."
+action = "schema:SearchAction"
+object_types = ["schema:JobPosting"]
+requires_disclosure = []
+returns = ["schema:JobPosting"]
+source = "Catalog"
+llm_instructions = "You are a career and job search assistant. Summarize job listings: role, company, location (remote/on-site), salary range, and requirements."
+subagents = []
+
+[endpoint]
+url_template = "https://api.github.com/search/repos?q={query}+jobs&sort=updated&per_page=5"
+method = "Get"
+response_jsonpath = "$.items[0].description"
+response_schema_type = "schema:JobPosting"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Near Earth Objects"
+provider = "NASA NeoWs"
+description = "Get near-Earth asteroid data from NASA Near Earth Object Web Service."
+action = "schema:FindAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are a scientific information assistant for Near Earth Objects. Provide accurate, well-contextualized scientific information."
+subagents = []
+
+[endpoint]
+url_template = "https://api.nasa.gov/neo/rest/v1/feed?api_key=DEMO_KEY&start_date={date}"
+method = "Get"
+response_jsonpath = "$.near_earth_objects"
+response_schema_type = "schema:Event"

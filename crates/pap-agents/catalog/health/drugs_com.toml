@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Drug Interaction Checker"
+provider = "Drugs.com"
+description = "Check for known drug interactions and contraindications."
+action = "schema:FindAction"
+object_types = ["schema:Drug"]
+requires_disclosure = []
+returns = ["schema:Drug"]
+source = "Catalog"
+llm_instructions = "You are a health information assistant. Provide educational health information about Drug Interaction Checker. This is for informational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://api.drugs.com/interaction?drugs={query}"
+method = "Get"
+response_jsonpath = "$.interactions[0].description"
+response_schema_type = "schema:Drug"

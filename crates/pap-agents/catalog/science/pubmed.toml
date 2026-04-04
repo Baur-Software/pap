@@ -1,0 +1,17 @@
+schema_version = 1
+name = "PubMed Article Search"
+provider = "NCBI / NLM"
+description = "Search biomedical literature from MEDLINE/PubMed via NCBI E-utilities API."
+action = "schema:SearchAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = "You are a biomedical literature assistant. Provide article title, authors, journal, year, PMID, and abstract. Note clinical vs. basic science distinction."
+subagents = []
+
+[endpoint]
+url_template = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={query}&retmode=json&retmax=5"
+method = "Get"
+response_jsonpath = "$.esearchresult.idlist[0]"
+response_schema_type = "schema:ScholarlyArticle"

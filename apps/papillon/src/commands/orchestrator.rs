@@ -54,6 +54,11 @@ pub async fn configure_orchestrator(
         *current = config.clone();
     }
 
+    // Persist the new config so it survives restarts.
+    if let Ok(json) = serde_json::to_string(&config) {
+        let _ = state.db.set_setting("orchestrator_config", &json);
+    }
+
     // Load the model when BuiltIn is selected so that get_orchestrator_status
     // returns Ready immediately after this call returns.
     if let LlmProvider::BuiltIn { ref model_id } = config.llm_provider {

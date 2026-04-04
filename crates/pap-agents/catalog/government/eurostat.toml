@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Eurostat European Statistics"
+provider = "European Commission / Eurostat"
+description = "Access European Union statistical data via the Eurostat data browser API."
+action = "schema:FindAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a European statistics assistant. Provide EU-level and country-level statistics on economy, population, trade, environment, and social indicators."
+subagents = []
+
+[endpoint]
+url_template = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{query}?format=JSON"
+method = "Get"
+response_jsonpath = "$.label"
+response_schema_type = "schema:Dataset"

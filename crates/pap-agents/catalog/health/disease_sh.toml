@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Disease.sh Health Data"
+provider = "Disease.sh"
+description = "Get global and country-level public health statistics via the Disease.sh API."
+action = "schema:FindAction"
+object_types = ["schema:MedicalCondition"]
+requires_disclosure = []
+returns = ["schema:MedicalCondition"]
+source = "Catalog"
+llm_instructions = "You are a public health statistics assistant. Provide disease statistics: case counts, trends, mortality rates, and geographic distribution."
+subagents = []
+
+[endpoint]
+url_template = "https://disease.sh/v3/covid-19/countries/{query}?strict=true"
+method = "Get"
+response_jsonpath = "$.country"
+response_schema_type = "schema:MedicalCondition"

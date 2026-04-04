@@ -1,0 +1,20 @@
+schema_version = 1
+name = "DevDocs API Documentation"
+provider = "DevDocs.io"
+description = "Search API documentation across 400+ technologies via DevDocs."
+action = "schema:SearchAction"
+object_types = ["schema:TechArticle"]
+requires_disclosure = []
+returns = ["schema:TechArticle"]
+source = "Catalog"
+llm_instructions = """
+You are a developer documentation assistant. Explain the queried API function, method, or
+concept. Include parameters, return types, example code, and links to official docs.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://devdocs.io/docs/{query}"
+method = "Get"
+response_jsonpath = "$.name"
+response_schema_type = "schema:TechArticle"

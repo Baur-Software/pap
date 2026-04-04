@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Radio Browser"
+provider = "Radio-Browser.info"
+description = "Search 30,000+ internet radio stations by name, language, genre, or country."
+action = "schema:SearchAction"
+object_types = ["schema:BroadcastService"]
+requires_disclosure = []
+returns = ["schema:BroadcastService"]
+source = "Catalog"
+llm_instructions = "You are a radio discovery assistant. Provide station name, country, language, genre, bitrate, and stream URL."
+subagents = []
+
+[endpoint]
+url_template = "https://de1.api.radio-browser.info/json/stations/search?name={query}&limit=5&hidebroken=true"
+method = "Get"
+response_jsonpath = "$[0].name"
+response_schema_type = "schema:BroadcastService"

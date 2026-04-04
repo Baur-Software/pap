@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Open Food Facts Product Search"
+provider = "Open Food Facts"
+description = "Search food product nutritional data by name or barcode via Open Food Facts."
+action = "schema:SearchAction"
+object_types = ["schema:Product"]
+requires_disclosure = []
+returns = ["schema:NutritionInformation"]
+source = "Catalog"
+llm_instructions = "You are a food product information assistant. Provide product name, brand, nutritional values per 100g, ingredients, allergens, and Nutri-Score grade."
+subagents = []
+
+[endpoint]
+url_template = "https://world.openfoodfacts.org/cgi/search.pl?search_terms={query}&action=process&json=1&page_size=5"
+method = "Get"
+response_jsonpath = "$.products[0].product_name"
+response_schema_type = "schema:NutritionInformation"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ATP Tennis Rankings"
+provider = "Tennis Live Data"
+description = "Get ATP and WTA tennis player rankings and match results."
+action = "schema:FindAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a sports information assistant. Provide game scores, standings, and player statistics for the requested sport."
+subagents = []
+
+[endpoint]
+url_template = "https://tennisapi1.p.rapidapi.com/api/tennis/rankings/atp?page=1"
+method = "Get"
+response_jsonpath = "$.rankings[0].player.name"
+response_schema_type = "schema:SportsEvent"

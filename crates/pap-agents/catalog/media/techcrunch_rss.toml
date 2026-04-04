@@ -1,0 +1,17 @@
+schema_version = 1
+name = "TechCrunch Articles"
+provider = "TechCrunch / Verizon Media"
+description = "Fetch latest technology and startup news from TechCrunch."
+action = "schema:FindAction"
+object_types = ["schema:NewsArticle"]
+requires_disclosure = []
+returns = ["schema:NewsArticle"]
+source = "Catalog"
+llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from TechCrunch / Verizon Media."
+subagents = []
+
+[endpoint]
+url_template = "https://techcrunch.com/wp-json/wp/v2/posts?per_page=5&context=embed"
+method = "Get"
+response_jsonpath = "0.title.rendered"
+response_schema_type = "schema:NewsArticle"

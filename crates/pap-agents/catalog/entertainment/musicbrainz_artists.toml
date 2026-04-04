@@ -1,0 +1,20 @@
+schema_version = 1
+name = "MusicBrainz Artist Search"
+provider = "MusicBrainz"
+description = "Search music artists, bands, and composers via MusicBrainz."
+action = "schema:SearchAction"
+object_types = ["schema:MusicGroup"]
+requires_disclosure = []
+returns = ["schema:MusicGroup"]
+source = "Catalog"
+llm_instructions = """
+You are a music artist information assistant. Provide artist name, type (person/group),
+country of origin, active years, genre, and notable works. Focus on factual biography.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://musicbrainz.org/ws/2/artist/?query={query}&fmt=json&limit=5"
+method = "Get"
+response_jsonpath = "$.artists[0].name"
+response_schema_type = "schema:MusicGroup"

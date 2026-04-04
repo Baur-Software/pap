@@ -1,0 +1,17 @@
+schema_version = 1
+name = "European Central Bank Rates"
+provider = "European Central Bank"
+description = "Get ECB official interest rates and Euro exchange rates from the ECB data portal."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a European monetary policy assistant. Provide ECB interest rates, Euro exchange rates against major currencies, and recent monetary policy context."
+subagents = []
+
+[endpoint]
+url_template = "https://data-api.ecb.europa.eu/service/data/EXR/D.{query}.EUR.SP00.A?format=jsondata&lastNObservations=1"
+method = "Get"
+response_jsonpath = "$.dataSets[0].series.0:0:0:0:0.observations.0[0]"
+response_schema_type = "schema:MonetaryAmount"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ICD-10 Code Lookup"
+provider = "WHO"
+description = "Look up ICD-10 medical diagnosis codes and descriptions."
+action = "schema:FindAction"
+object_types = ["schema:MedicalCondition"]
+requires_disclosure = []
+returns = ["schema:MedicalCondition"]
+source = "Catalog"
+llm_instructions = "You are a health information assistant. Provide educational health information about ICD-10 Code Lookup. This is for informational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search?sf=code,name&terms={query}&maxList=5"
+method = "Get"
+response_jsonpath = "3[0][1]"
+response_schema_type = "schema:MedicalCondition"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NFL Team Standings"
+provider = "ESPN / NFL"
+description = "Get current NFL team standings and season records."
+action = "schema:FindAction"
+object_types = ["schema:SportsTeam"]
+requires_disclosure = []
+returns = ["schema:SportsTeam"]
+source = "Catalog"
+llm_instructions = "You are a sports information assistant. Provide game scores, standings, and player statistics for the requested sport."
+subagents = []
+
+[endpoint]
+url_template = "https://site.api.espn.com/apis/v2/sports/football/nfl/standings"
+method = "Get"
+response_jsonpath = "$.standings.entries[0].team.name"
+response_schema_type = "schema:SportsTeam"

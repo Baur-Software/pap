@@ -1,0 +1,17 @@
+schema_version = 1
+name = "MIT OpenCourseWare"
+provider = "MIT"
+description = "Access free MIT course materials via OpenCourseWare API."
+action = "schema:SearchAction"
+object_types = ["schema:Course"]
+requires_disclosure = []
+returns = ["schema:Course"]
+source = "Catalog"
+llm_instructions = "You are an educational content assistant. Provide course details, learning objectives, and curriculum information for MIT OpenCourseWare."
+subagents = []
+
+[endpoint]
+url_template = "https://ocw.mit.edu/search/?q={query}&f=Courses&s=_score&ui_sortby=best&ui_from=0&ui_page=1"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:Course"

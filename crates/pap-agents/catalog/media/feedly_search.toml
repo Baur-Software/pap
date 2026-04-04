@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Feedly RSS Search"
+provider = "Feedly"
+description = "Search RSS feeds and publications via Feedly discovery API."
+action = "schema:SearchAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:WebSite"]
+source = "Catalog"
+llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from Feedly."
+subagents = []
+
+[endpoint]
+url_template = "https://cloud.feedly.com/v3/search/feeds?query={query}&count=5"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:WebSite"

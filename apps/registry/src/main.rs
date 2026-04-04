@@ -82,41 +82,53 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // ── Hydrate in-memory registry from DB ────────────────────────────────────
+    // Do all async DB work before acquiring the Mutex to avoid holding a
+    // MutexGuard across await points (clippy::await_holding_lock).
     let registry = Arc::new(Mutex::new(FederatedRegistry::new()));
     {
-        let mut reg = registry.lock().unwrap();
         let agents = store.load_all_agents().await?;
         let agent_count = agents.len();
+        let peers = store.load_all_peers().await?;
+        let peer_count = peers.len();
+
+        // Seed standard agents on first boot — async writes happen before the lock.
+        let seeded_ads: Vec<_> = if agent_count == 0 {
+            let seed_ads = agent_set.registry.all_advertisements().to_vec();
+            let seed_count = seed_ads.len();
+            let mut persisted = Vec::with_capacity(seed_count);
+            for ad in seed_ads {
+                let hash = ad.hash();
+                if let Err(e) = store.insert_agent(&hash, &ad).await {
+                    tracing::warn!("Failed to seed agent {}: {e}", ad.name);
+                } else {
+                    persisted.push(ad);
+                }
+            }
+            info!("Seeded registry with {} standard agents", persisted.len());
+            persisted
+        } else {
+            vec![]
+        };
+
+        // Now acquire the lock for synchronous in-memory registration only.
+        let mut reg = registry.lock().unwrap();
         for ad in agents {
             if let Err(e) = reg.register_local(ad.clone()) {
                 tracing::warn!("Skipping agent {} during hydration: {e}", ad.hash());
             }
         }
-        let peers = store.load_all_peers().await?;
-        let peer_count = peers.len();
         for peer in peers {
             reg.add_peer(peer);
+        }
+        for ad in seeded_ads {
+            if let Err(e) = reg.register_local(ad.clone()) {
+                tracing::warn!("Failed to register seeded agent {}: {e}", ad.name);
+            }
         }
         info!(
             "Hydrated registry: {} agents, {} peers",
             agent_count, peer_count
         );
-
-        // Seed standard agents on first boot so the registry is useful out of the box.
-        // Only runs when no agents exist in the DB (fresh install).
-        if agent_count == 0 {
-            let seed_ads = agent_set.registry.all_advertisements().to_vec();
-            let seed_count = seed_ads.len();
-            for ad in &seed_ads {
-                let hash = ad.hash();
-                if let Err(e) = store.insert_agent(&hash, ad).await {
-                    tracing::warn!("Failed to seed agent {}: {e}", ad.name);
-                } else if let Err(e) = reg.register_local(ad.clone()) {
-                    tracing::warn!("Failed to register seeded agent {}: {e}", ad.name);
-                }
-            }
-            info!("Seeded registry with {} standard agents", seed_count);
-        }
     }
 
     let app_state = AppState::new(

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Fixer.io Exchange Rates"
+provider = "Fixer.io"
+description = "Get real-time and historical forex exchange rates from Fixer.io."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about Fixer.io Exchange Rates. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://data.fixer.io/api/latest?access_key=demo&base={query}"
+method = "Get"
+response_jsonpath = "$.rates"
+response_schema_type = "schema:MonetaryAmount"

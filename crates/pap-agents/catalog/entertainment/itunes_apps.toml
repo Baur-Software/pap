@@ -1,0 +1,17 @@
+schema_version = 1
+name = "iTunes App Search"
+provider = "Apple"
+description = "Search iOS and macOS apps in the Apple App Store."
+action = "schema:SearchAction"
+object_types = ["schema:MobileApplication"]
+requires_disclosure = []
+returns = ["schema:MobileApplication"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested itunes_apps including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://itunes.apple.com/search?term={query}&media=software&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].trackName"
+response_schema_type = "schema:MobileApplication"

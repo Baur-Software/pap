@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Eventbrite Event Search"
+provider = "Eventbrite"
+description = "Search public events on Eventbrite by keyword, location, or category."
+action = "schema:SearchAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are an events assistant. Provide event name, organizer, date, location, price, and category. Note if online or in-person."
+subagents = []
+
+[endpoint]
+url_template = "https://www.eventbriteapi.com/v3/events/search/?q={query}&expand=venue&page_size=5"
+method = "Get"
+response_jsonpath = "$.events[0].name.text"
+response_schema_type = "schema:Event"

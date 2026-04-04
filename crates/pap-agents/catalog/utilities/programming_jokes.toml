@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Programming Jokes"
+provider = "JokeAPI"
+description = "Get software engineering and programming-themed jokes."
+action = "schema:FindAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Programming Jokes. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://v2.jokeapi.dev/joke/Programming?safe-mode"
+method = "Get"
+response_jsonpath = "$.setup"
+response_schema_type = "schema:CreativeWork"

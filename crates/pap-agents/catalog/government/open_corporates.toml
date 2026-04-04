@@ -1,0 +1,17 @@
+schema_version = 1
+name = "OpenCorporates Company Search"
+provider = "OpenCorporates"
+description = "Search the world's largest open database of companies and corporate relationships."
+action = "schema:SearchAction"
+object_types = ["schema:Organization"]
+requires_disclosure = []
+returns = ["schema:Organization"]
+source = "Catalog"
+llm_instructions = "You are a corporate research assistant. Provide company name, registration number, jurisdiction, status, directors, and filing history from public records."
+subagents = []
+
+[endpoint]
+url_template = "https://api.opencorporates.com/v0.4/companies/search?q={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.results.companies[0].company.name"
+response_schema_type = "schema:Organization"

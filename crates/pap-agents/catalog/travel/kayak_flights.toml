@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Flight Search"
+provider = "KAYAK / Flights API"
+description = "Search and compare flight prices across major airlines."
+action = "schema:SearchAction"
+object_types = ["schema:Flight"]
+requires_disclosure = []
+returns = ["schema:Flight"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Flight Search: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://sky-scanner3.p.rapidapi.com/flights/search-one-way?fromEntityId={from}&toEntityId={to}&departDate={date}&adults=1"
+method = "Get"
+response_jsonpath = "$.data.itineraries[0].price.formatted"
+response_schema_type = "schema:Flight"

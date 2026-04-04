@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Wikimedia News"
+provider = "Wikimedia Foundation"
+description = "Get recent Wikipedia featured articles and current events coverage."
+action = "schema:FindAction"
+object_types = ["schema:NewsArticle"]
+requires_disclosure = []
+returns = ["schema:NewsArticle"]
+source = "Catalog"
+llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from Wikimedia Foundation."
+subagents = []
+
+[endpoint]
+url_template = "https://api.wikimedia.org/feed/v1/wikipedia/en/featured/2026/04/03"
+method = "Get"
+response_jsonpath = "$.news[0].story"
+response_schema_type = "schema:NewsArticle"

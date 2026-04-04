@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Sunrise and Sunset Times"
+provider = "Sunrise-Sunset API"
+description = "Get precise sunrise and sunset times for any location and date."
+action = "schema:FindAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are a geographic information assistant. Provide location data, coordinates, and geographic context for the requested place."
+subagents = []
+
+[endpoint]
+url_template = "https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}&formatted=0"
+method = "Get"
+response_jsonpath = "$.results.sunrise"
+response_schema_type = "schema:Event"

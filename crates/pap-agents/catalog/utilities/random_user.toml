@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Random User Generator"
+provider = "RandomUser.me"
+description = "Generate realistic fake user profiles for testing and development."
+action = "schema:FindAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are a test data assistant. Generate realistic synthetic user profiles with name, email, address, and phone. Note these are fictional persons for testing only."
+subagents = []
+
+[endpoint]
+url_template = "https://randomuser.me/api/?nat={query}&results=5"
+method = "Get"
+response_jsonpath = "$.results[0].name.first"
+response_schema_type = "schema:Person"

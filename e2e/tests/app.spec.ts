@@ -113,7 +113,7 @@ test.describe("Activity page", () => {
     await page.goto("/activity", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(
-      page.locator("text=No recent activity")
+      page.locator("text=No protocol events yet.")
     ).toBeVisible();
   });
 });
@@ -121,15 +121,16 @@ test.describe("Activity page", () => {
 // ── Settings Page ────────────────────────────────────────────
 
 test.describe("Settings page", () => {
-  test("renders five tabs", async ({ page }) => {
+  test("renders six tabs", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".settings-tab")).toHaveCount(5);
-    await expect(page.locator(".settings-tab").nth(0)).toHaveText("General");
-    await expect(page.locator(".settings-tab").nth(1)).toHaveText("Profiles");
-    await expect(page.locator(".settings-tab").nth(2)).toHaveText("Templates");
-    await expect(page.locator(".settings-tab").nth(3)).toHaveText("Identity");
-    await expect(page.locator(".settings-tab").nth(4)).toHaveText("Advanced");
+    await expect(page.locator(".settings-tab")).toHaveCount(6);
+    await expect(page.locator(".settings-tab").nth(0)).toHaveText("GENERAL");
+    await expect(page.locator(".settings-tab").nth(1)).toHaveText("PROFILES");
+    await expect(page.locator(".settings-tab").nth(2)).toHaveText("TEMPLATES");
+    await expect(page.locator(".settings-tab").nth(3)).toHaveText("IDENTITY");
+    await expect(page.locator(".settings-tab").nth(4)).toHaveText("ADVANCED");
+    await expect(page.locator(".settings-tab").nth(5)).toHaveText("MANDATES");
   });
 
   test("General tab shows LLM Provider config", async ({ page }) => {
@@ -257,7 +258,7 @@ test.describe("Agent discovery workflow", () => {
     // Check agent card contains expected fields
     const firstCard = page.locator(".agent-card").first();
     await expect(firstCard).toContainText("DuckDuckGo Search");
-    await expect(firstCard).toContainText("search.web");
+    await expect(firstCard).toContainText("SearchAction");
   });
 
   test("clicking agent shows detail view", async ({ page }) => {
@@ -391,6 +392,11 @@ test.describe("Settings management and persistence", () => {
       return window.__TAURI__.core.invoke("configure_orchestrator", { config });
     }, newConfig);
     expect(updated.llm_provider).toBe("Mistral");
+    // Verify get_orchestrator_config now returns the persisted value
+    const persisted = await page.evaluate(() => {
+      return window.__TAURI__.core.invoke("get_orchestrator_config");
+    });
+    expect(persisted.llm_provider).toBe("Mistral");
   });
 
   test("mandate TTL configuration persists", async ({ page }) => {

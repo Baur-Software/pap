@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Yelp Business Search"
+provider = "Yelp"
+description = "Search local businesses, restaurants, and services with ratings via Yelp Fusion API."
+action = "schema:SearchAction"
+object_types = ["schema:LocalBusiness"]
+requires_disclosure = []
+returns = ["schema:LocalBusiness"]
+source = "Catalog"
+llm_instructions = "You are a local business discovery assistant. Provide business name, category, rating, review count, price range, hours, and address."
+subagents = []
+
+[endpoint]
+url_template = "https://api.yelp.com/v3/businesses/search?term={query}&location={location}&limit=5"
+method = "Get"
+response_jsonpath = "$.businesses[0].name"
+response_schema_type = "schema:LocalBusiness"

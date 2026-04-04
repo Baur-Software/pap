@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Travel Safety Advisory"
+provider = "IATA"
+description = "Get travel safety and advisory information for countries."
+action = "schema:FindAction"
+object_types = ["schema:Country"]
+requires_disclosure = []
+returns = ["schema:Country"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Travel Safety Advisory: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://www.travel-advisory.info/api?countrycode={query}"
+method = "Get"
+response_jsonpath = "$.data.{query}.advisory.message"
+response_schema_type = "schema:Country"

@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Bundlephobia Bundle Size"
+provider = "Bundlephobia"
+description = "Check the minified and gzipped bundle size of any npm package."
+action = "schema:FindAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a JavaScript performance assistant. Provide the package bundle size (minified, gzipped),
+tree-shaking support, and composition breakdown. Compare against similar packages for context.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://bundlephobia.com/api/size?package={query}"
+method = "Get"
+response_jsonpath = "$.name"
+response_schema_type = "schema:SoftwareApplication"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Wikipedia Summary"
+provider = "Wikimedia Foundation"
+description = "Get Wikipedia article summaries via the Wikipedia REST API."
+action = "schema:ReadAction"
+object_types = ["schema:WebPage"]
+requires_disclosure = []
+returns = ["schema:Article"]
+source = "Catalog"
+llm_instructions = "You are an encyclopedic knowledge assistant. Provide a clear factual summary with key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://en.wikipedia.org/api/rest_v1/page/summary/{query}"
+method = "Get"
+response_jsonpath = "$.extract"
+response_schema_type = "schema:Article"

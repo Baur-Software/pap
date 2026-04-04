@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Advice Slip"
+provider = "Advice Slip API"
+description = "Get random pieces of practical life advice via the Advice Slip API."
+action = "schema:FindAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a wisdom and practical guidance assistant. Provide thoughtful, actionable life advice. Expand on the advice with context and application."
+subagents = []
+
+[endpoint]
+url_template = "https://api.adviceslip.com/advice/search/{query}"
+method = "Get"
+response_jsonpath = "$.slips[0].advice"
+response_schema_type = "schema:CreativeWork"

@@ -1,0 +1,20 @@
+schema_version = 1
+name = "RAWG Video Game Search"
+provider = "RAWG"
+description = "Search video games across platforms with ratings, genres, and release info via RAWG."
+action = "schema:SearchAction"
+object_types = ["schema:VideoGame"]
+requires_disclosure = []
+returns = ["schema:VideoGame"]
+source = "Catalog"
+llm_instructions = """
+You are a video game information assistant. Provide game title, release date, platforms,
+genres, developer, publisher, and Metacritic score. Note ESRB/PEGI rating and multiplayer features.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.rawg.io/api/games?search={query}&page_size=5"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:VideoGame"

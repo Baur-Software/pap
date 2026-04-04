@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ESPN Scores"
+provider = "ESPN"
+description = "Get live scores and schedules from ESPN's public sports data API."
+action = "schema:FindAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a sports scores assistant. Provide current or recent game scores, quarter/period breakdowns, and top performers for the requested sport."
+subagents = []
+
+[endpoint]
+url_template = "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard"
+method = "Get"
+response_jsonpath = "$.events[0].name"
+response_schema_type = "schema:SportsEvent"

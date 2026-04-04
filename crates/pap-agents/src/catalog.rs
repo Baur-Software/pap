@@ -119,8 +119,8 @@ mod tests {
     fn load_catalog_finds_all_entries() {
         let defs = load_catalog(&catalog_dir());
         assert!(
-            defs.len() >= 22,
-            "expected at least 22 catalog entries, found {}",
+            defs.len() >= 300,
+            "expected at least 300 catalog entries, found {}",
             defs.len()
         );
     }

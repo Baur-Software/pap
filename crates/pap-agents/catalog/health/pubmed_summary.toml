@@ -1,0 +1,17 @@
+schema_version = 1
+name = "PubMed Article Summary"
+provider = "NCBI"
+description = "Fetch and summarize a PubMed article by PMID or title search."
+action = "schema:ReadAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = "You are a health information assistant. Provide educational health information about PubMed Article Summary. This is for informational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={query}&retmode=json&rettype=abstract"
+method = "Get"
+response_jsonpath = "$.PubmedArticle.MedlineCitation.Article.ArticleTitle"
+response_schema_type = "schema:ScholarlyArticle"

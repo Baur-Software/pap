@@ -1,0 +1,17 @@
+schema_version = 1
+name = "IMF Economic Data"
+provider = "International Monetary Fund"
+description = "Access IMF macroeconomic data and financial statistics via the IMF Data API."
+action = "schema:FindAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are an international macroeconomics assistant. Provide IMF economic indicators: GDP growth, inflation, current account balance, and debt ratios by country."
+subagents = []
+
+[endpoint]
+url_template = "https://www.imf.org/external/datamapper/api/v1/{query}"
+method = "Get"
+response_jsonpath = "$.values.{query}"
+response_schema_type = "schema:Dataset"

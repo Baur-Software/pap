@@ -1,0 +1,17 @@
+schema_version = 1
+name = "WHO Health Statistics"
+provider = "World Health Organization"
+description = "Access global health statistics from the WHO data observatory."
+action = "schema:FindAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a health information assistant. Provide educational health information about WHO Health Statistics. This is for informational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://ghoapi.azureedge.net/api/{query}"
+method = "Get"
+response_jsonpath = "$.value[0].NumericValue"
+response_schema_type = "schema:Dataset"

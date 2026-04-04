@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Chess Puzzles"
+provider = "Lichess API"
+description = "Get chess puzzles and analyze positions via Lichess open API."
+action = "schema:FindAction"
+object_types = ["schema:Game"]
+requires_disclosure = []
+returns = ["schema:Game"]
+source = "Catalog"
+llm_instructions = "You are a sports and athletics information assistant. Provide statistics, records, and context for the queried sport."
+subagents = []
+
+[endpoint]
+url_template = "https://lichess.org/api/puzzle/next"
+method = "Get"
+response_jsonpath = "$.puzzle.id"
+response_schema_type = "schema:Game"

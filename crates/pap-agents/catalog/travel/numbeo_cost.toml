@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Numbeo Cost of Living"
+provider = "Numbeo"
+description = "Compare cost of living data between cities worldwide."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Numbeo Cost of Living: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://www.numbeo.com/api/indices?api_key=demo&query={query}"
+method = "Get"
+response_jsonpath = "$.city"
+response_schema_type = "schema:MonetaryAmount"

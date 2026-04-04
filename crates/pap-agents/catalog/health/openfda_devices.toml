@@ -1,0 +1,17 @@
+schema_version = 1
+name = "FDA Medical Devices"
+provider = "FDA"
+description = "Search FDA-cleared and approved medical devices via openFDA device database."
+action = "schema:SearchAction"
+object_types = ["schema:MedicalDevice"]
+requires_disclosure = []
+returns = ["schema:MedicalDevice"]
+source = "Catalog"
+llm_instructions = "You are a medical device information assistant. Provide device name, manufacturer, device class, clearance type (510k/PMA), and intended use."
+subagents = []
+
+[endpoint]
+url_template = "https://api.fda.gov/device/510k.json?search={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].device_name"
+response_schema_type = "schema:MedicalDevice"

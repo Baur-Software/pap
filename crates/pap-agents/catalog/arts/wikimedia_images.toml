@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Wikimedia Commons Search"
+provider = "Wikimedia Foundation"
+description = "Search freely licensed images and media on Wikimedia Commons."
+action = "schema:SearchAction"
+object_types = ["schema:ImageObject"]
+requires_disclosure = []
+returns = ["schema:ImageObject"]
+source = "Catalog"
+llm_instructions = "You are an art history and cultural heritage assistant. Describe artworks, their creators, historical context, and artistic significance."
+subagents = []
+
+[endpoint]
+url_template = "https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch={query}&srnamespace=6&srlimit=5&format=json"
+method = "Get"
+response_jsonpath = "$.query.search[0].title"
+response_schema_type = "schema:ImageObject"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Khan Academy Exercises"
+provider = "Khan Academy"
+description = "Find learning exercises and lessons on Khan Academy by topic."
+action = "schema:SearchAction"
+object_types = ["schema:LearningResource"]
+requires_disclosure = []
+returns = ["schema:LearningResource"]
+source = "Catalog"
+llm_instructions = "You are an educational content assistant. Provide course details, learning objectives, and curriculum information for Khan Academy Exercises."
+subagents = []
+
+[endpoint]
+url_template = "https://www.khanacademy.org/api/v1/topic/{query}"
+method = "Get"
+response_jsonpath = "$.translated_title"
+response_schema_type = "schema:LearningResource"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NASA Image Search"
+provider = "NASA"
+description = "Search NASA's image and video library for space imagery."
+action = "schema:SearchAction"
+object_types = ["schema:ImageObject"]
+requires_disclosure = []
+returns = ["schema:ImageObject"]
+source = "Catalog"
+llm_instructions = "You are a scientific information assistant for NASA Image Search. Provide accurate, well-contextualized scientific information."
+subagents = []
+
+[endpoint]
+url_template = "https://images-api.nasa.gov/search?q={query}&media_type=image&page_size=5"
+method = "Get"
+response_jsonpath = "$.collection.items[0].data[0].title"
+response_schema_type = "schema:ImageObject"

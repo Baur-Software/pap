@@ -1,0 +1,17 @@
+schema_version = 1
+name = "UK Postcodes"
+provider = "Postcodes.io"
+description = "Look up UK postcode data: coordinates, administrative areas, and demographics."
+action = "schema:FindAction"
+object_types = ["schema:PostalAddress"]
+requires_disclosure = []
+returns = ["schema:Place"]
+source = "Catalog"
+llm_instructions = "You are a UK geography assistant. Provide postcode area, administrative region, constituency, ward, latitude/longitude, and nearest cities."
+subagents = []
+
+[endpoint]
+url_template = "https://api.postcodes.io/postcodes/{query}"
+method = "Get"
+response_jsonpath = "$.result.postcode"
+response_schema_type = "schema:Place"

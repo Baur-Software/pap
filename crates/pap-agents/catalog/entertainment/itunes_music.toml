@@ -1,0 +1,17 @@
+schema_version = 1
+name = "iTunes Music Search"
+provider = "Apple"
+description = "Search music tracks in Apple iTunes catalog."
+action = "schema:SearchAction"
+object_types = ["schema:MusicRecording"]
+requires_disclosure = []
+returns = ["schema:MusicRecording"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested itunes_music including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://itunes.apple.com/search?term={query}&media=music&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].trackName"
+response_schema_type = "schema:MusicRecording"

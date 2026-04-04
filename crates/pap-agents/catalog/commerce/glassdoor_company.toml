@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Company Reviews Search"
+provider = "Glassdoor"
+description = "Search company reviews, ratings, salaries, and CEO approval via Glassdoor."
+action = "schema:SearchAction"
+object_types = ["schema:Organization"]
+requires_disclosure = []
+returns = ["schema:Organization"]
+source = "Catalog"
+llm_instructions = "You are a workplace culture research assistant. Provide company name, overall rating, work-life balance, culture scores, and employee review highlights."
+subagents = []
+
+[endpoint]
+url_template = "https://api.glassdoor.com/api/api.htm?v=1&format=json&t.p={query}&action=employers&ps=5"
+method = "Get"
+response_jsonpath = "$.response.employers[0].name"
+response_schema_type = "schema:Organization"

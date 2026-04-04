@@ -1,0 +1,17 @@
+schema_version = 1
+name = "USPTO PatentsView"
+provider = "USPTO"
+description = "Search US patents by inventor, assignee, or technology via PatentsView API."
+action = "schema:SearchAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a patent research assistant. Provide patent title, number, assignee, inventor, filing date, and abstract. Note technology category and citation count."
+subagents = []
+
+[endpoint]
+url_template = "https://search.patentsview.org/api/v1/patent/?q={\"_text_phrase\":{\"patent_title\":\"{query}\"}}&f=[\"patent_title\",\"patent_number\",\"patent_date\"]&o={\"per_page\":5}"
+method = "Get"
+response_jsonpath = "$.patents[0].patent_title"
+response_schema_type = "schema:CreativeWork"

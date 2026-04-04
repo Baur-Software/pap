@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Tildes Technology Discussions"
+provider = "Tildes.net"
+description = "Browse technology and culture discussions on Tildes.net."
+action = "schema:SearchAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = "You are a social community assistant for Tildes Technology Discussions. Summarize community discussions, profiles, and contributions."
+subagents = []
+
+[endpoint]
+url_template = "https://tildes.net/api/web/search?q={query}"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:DiscussionForumPosting"

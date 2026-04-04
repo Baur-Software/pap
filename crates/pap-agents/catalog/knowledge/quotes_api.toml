@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Famous Quotes API"
+provider = "They Said So / Quotable"
+description = "Search famous quotes by author, topic, or keyword."
+action = "schema:SearchAction"
+object_types = ["schema:Quotation"]
+requires_disclosure = []
+returns = ["schema:Quotation"]
+source = "Catalog"
+llm_instructions = "You are a literary and philosophical quotes assistant. Provide quotes with author, source, year, and context. Suggest related quotes on similar themes."
+subagents = []
+
+[endpoint]
+url_template = "https://api.quotable.io/search/quotes?query={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].content"
+response_schema_type = "schema:Quotation"

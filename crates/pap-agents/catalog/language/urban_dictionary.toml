@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Urban Dictionary"
+provider = "Urban Dictionary"
+description = "Look up slang terms, internet expressions, and informal language definitions."
+action = "schema:FindAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = "You are a contemporary language assistant. Explain slang terms, internet memes, and colloquial expressions with context and usage examples."
+subagents = []
+
+[endpoint]
+url_template = "https://api.urbandictionary.com/v0/define?term={query}"
+method = "Get"
+response_jsonpath = "$.list[0].definition"
+response_schema_type = "schema:DefinedTerm"

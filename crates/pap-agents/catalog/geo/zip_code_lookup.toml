@@ -1,0 +1,17 @@
+schema_version = 1
+name = "US ZIP Code Lookup"
+provider = "USPS API"
+description = "Look up US ZIP code information: city, state, county, and coordinates."
+action = "schema:FindAction"
+object_types = ["schema:PostalAddress"]
+requires_disclosure = []
+returns = ["schema:Place"]
+source = "Catalog"
+llm_instructions = "You are a geographic information assistant. Provide location data, coordinates, and geographic context for the requested place."
+subagents = []
+
+[endpoint]
+url_template = "https://api.zippopotam.us/us/{query}"
+method = "Get"
+response_jsonpath = "$.places[0]."place name""
+response_schema_type = "schema:Place"

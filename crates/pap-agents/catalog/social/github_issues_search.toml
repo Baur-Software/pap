@@ -1,0 +1,17 @@
+schema_version = 1
+name = "GitHub Issues Search"
+provider = "GitHub"
+description = "Search issues and PRs across public GitHub repositories."
+action = "schema:SearchAction"
+object_types = ["schema:Comment"]
+requires_disclosure = []
+returns = ["schema:Comment"]
+source = "Catalog"
+llm_instructions = "You are a social community assistant for GitHub Issues Search. Summarize community discussions, profiles, and contributions."
+subagents = []
+
+[endpoint]
+url_template = "https://api.github.com/search/issues?q={query}+is:issue&per_page=5"
+method = "Get"
+response_jsonpath = "$.items[0].title"
+response_schema_type = "schema:Comment"

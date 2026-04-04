@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Transitland Transit Routes"
+provider = "Transitland / Interline"
+description = "Search public transit routes and schedules via Transitland API."
+action = "schema:SearchAction"
+object_types = ["schema:Trip"]
+requires_disclosure = []
+returns = ["schema:Trip"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Transitland Transit Routes: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://transit.land/api/v2/rest/routes?search={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.routes[0].long_name"
+response_schema_type = "schema:Trip"

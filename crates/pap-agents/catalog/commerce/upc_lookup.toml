@@ -1,0 +1,17 @@
+schema_version = 1
+name = "UPC Item Database"
+provider = "UPCitemdb"
+description = "Look up product information by UPC/EAN barcode via UPCitemdb API."
+action = "schema:FindAction"
+object_types = ["schema:Product"]
+requires_disclosure = []
+returns = ["schema:Product"]
+source = "Catalog"
+llm_instructions = "You are a product lookup assistant. Provide product name, brand, description, category, and price range for the barcode. Note if data is incomplete."
+subagents = []
+
+[endpoint]
+url_template = "https://api.upcitemdb.com/prod/trial/lookup?upc={query}"
+method = "Get"
+response_jsonpath = "$.items[0].title"
+response_schema_type = "schema:Product"

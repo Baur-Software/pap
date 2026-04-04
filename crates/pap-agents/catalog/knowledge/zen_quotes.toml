@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ZenQuotes Daily"
+provider = "ZenQuotes.io"
+description = "Get daily inspiring quotes from ZenQuotes for motivation and reflection."
+action = "schema:FindAction"
+object_types = ["schema:Quotation"]
+requires_disclosure = []
+returns = ["schema:Quotation"]
+source = "Catalog"
+llm_instructions = "You are a motivational and philosophical assistant. Provide inspiring quotes with author attribution and reflective commentary on their meaning."
+subagents = []
+
+[endpoint]
+url_template = "https://zenquotes.io/api/quotes"
+method = "Get"
+response_jsonpath = "$[0].q"
+response_schema_type = "schema:Quotation"

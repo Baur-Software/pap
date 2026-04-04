@@ -1,0 +1,17 @@
+schema_version = 1
+name = "MedlinePlus Health Info"
+provider = "NLM / MedlinePlus"
+description = "Get patient-friendly health information on diseases, conditions, and wellness."
+action = "schema:SearchAction"
+object_types = ["schema:MedicalCondition"]
+requires_disclosure = []
+returns = ["schema:MedicalWebPage"]
+source = "Catalog"
+llm_instructions = "You are a health education assistant. Provide plain-language explanations of medical conditions, symptoms, treatments, and when to see a doctor. Educational only."
+subagents = []
+
+[endpoint]
+url_template = "https://connect.medlineplus.gov/service?mainSearchCriteria.v.cs=2.16.840.1.113883.6.96&mainSearchCriteria.v.dn={query}&knowledgeResponseType=application/json"
+method = "Get"
+response_jsonpath = "$.feed.entry[0].title.$t"
+response_schema_type = "schema:MedicalWebPage"

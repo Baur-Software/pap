@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ISO Language Codes"
+provider = "RestCountries"
+description = "Look up ISO 639 language codes and native language names."
+action = "schema:FindAction"
+object_types = ["schema:Language"]
+requires_disclosure = []
+returns = ["schema:Language"]
+source = "Catalog"
+llm_instructions = "You are a language and linguistics assistant for ISO Language Codes. Provide accurate language information with cultural and historical context."
+subagents = []
+
+[endpoint]
+url_template = "https://restcountries.com/v3.1/lang/{query}?fields=name,languages"
+method = "Get"
+response_jsonpath = "0.languages"
+response_schema_type = "schema:Language"

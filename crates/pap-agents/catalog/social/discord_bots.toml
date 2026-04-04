@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Discord Bot Search"
+provider = "Discord Bot List"
+description = "Discover Discord bots with features, server count, and invite links via top.gg."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = "You are a Discord community assistant. Describe Discord bots: name, purpose, commands, server count, and notable features."
+subagents = []
+
+[endpoint]
+url_template = "https://top.gg/api/bots?search={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].username"
+response_schema_type = "schema:SoftwareApplication"

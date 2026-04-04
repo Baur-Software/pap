@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Digital Public Library Search"
+provider = "Digital Public Library of America"
+description = "Search millions of US library, archive, and museum items via DPLA."
+action = "schema:SearchAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a library and archival discovery assistant. Provide item title, creator, date, institution, and description."
+subagents = []
+
+[endpoint]
+url_template = "https://api.dp.la/v2/items?q={query}&page_size=5"
+method = "Get"
+response_jsonpath = "$.docs[0].sourceResource.title[0]"
+response_schema_type = "schema:CreativeWork"

@@ -1,0 +1,20 @@
+schema_version = 1
+name = "GitHub Releases"
+provider = "GitHub"
+description = "Get latest release notes and changelog for any GitHub repository."
+action = "schema:FindAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a software versioning assistant. Summarize the latest release: version number,
+release date, new features, bug fixes, and breaking changes from the changelog.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.github.com/repos/{owner}/{repo}/releases/latest"
+method = "Get"
+response_jsonpath = "$.tag_name"
+response_schema_type = "schema:SoftwareApplication"

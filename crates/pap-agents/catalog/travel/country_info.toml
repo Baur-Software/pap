@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Country Information"
+provider = "RestCountries"
+description = "Get comprehensive country data: capital, population, languages, currency, flag."
+action = "schema:FindAction"
+object_types = ["schema:Country"]
+requires_disclosure = []
+returns = ["schema:Country"]
+source = "Catalog"
+llm_instructions = """
+You are a geography and country information assistant. Provide capital city, population,
+area, official languages, currency, bordering countries, and cultural context.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://restcountries.com/v3.1/name/{query}?fields=name,capital,population,languages,currencies,flags,borders"
+method = "Get"
+response_jsonpath = "$[0].name.common"
+response_schema_type = "schema:Country"

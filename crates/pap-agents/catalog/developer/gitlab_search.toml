@@ -1,0 +1,17 @@
+schema_version = 1
+name = "GitLab Project Search"
+provider = "GitLab"
+description = "Search public projects on GitLab.com."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareSourceCode"]
+requires_disclosure = []
+returns = ["schema:SoftwareSourceCode"]
+source = "Catalog"
+llm_instructions = "You are a developer tools assistant. Provide relevant developer information about GitLab Project Search."
+subagents = []
+
+[endpoint]
+url_template = "https://gitlab.com/api/v4/projects?search={query}&per_page=5&order_by=stars"
+method = "Get"
+response_jsonpath = "0.name"
+response_schema_type = "schema:SoftwareSourceCode"

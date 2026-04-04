@@ -1,0 +1,17 @@
+schema_version = 1
+name = "IMDB Title Search"
+provider = "IMDB"
+description = "Search movies and shows via the IMDB public search."
+action = "schema:SearchAction"
+object_types = ["schema:Movie"]
+requires_disclosure = []
+returns = ["schema:Movie"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested imdb_title including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://imdb-api.com/en/API/SearchTitle/k_demo/{query}"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:Movie"

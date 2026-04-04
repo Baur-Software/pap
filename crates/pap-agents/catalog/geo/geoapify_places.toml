@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Geoapify Places API"
+provider = "Geoapify"
+description = "Search places and amenities near a location using Geoapify."
+action = "schema:SearchAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:LocalBusiness"]
+source = "Catalog"
+llm_instructions = "You are a geographic information assistant. Provide location data, coordinates, and geographic context for the requested place."
+subagents = []
+
+[endpoint]
+url_template = "https://api.geoapify.com/v2/places?categories=commercial.food_and_drink&filter=circle:{lon},{lat},1000&limit=5&apiKey=demo"
+method = "Get"
+response_jsonpath = "$.features[0].properties.name"
+response_schema_type = "schema:LocalBusiness"

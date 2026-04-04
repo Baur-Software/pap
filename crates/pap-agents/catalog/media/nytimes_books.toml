@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NYT Best Sellers"
+provider = "New York Times"
+description = "Get New York Times bestseller lists by category."
+action = "schema:FindAction"
+object_types = ["schema:Book"]
+requires_disclosure = []
+returns = ["schema:Book"]
+source = "Catalog"
+llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from New York Times."
+subagents = []
+
+[endpoint]
+url_template = "https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json?api-key=DEMO"
+method = "Get"
+response_jsonpath = "$.results.books[0].title"
+response_schema_type = "schema:Book"

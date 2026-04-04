@@ -1,0 +1,17 @@
+schema_version = 1
+name = "HN Top Stories"
+provider = "Hacker News / Algolia"
+description = "Get current top stories on Hacker News sorted by score."
+action = "schema:FindAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from Hacker News / Algolia."
+subagents = []
+
+[endpoint]
+url_template = "https://hacker-news.firebaseio.com/v0/topstories.json?limitToFirst=5"
+method = "Get"
+response_jsonpath = "0"
+response_schema_type = "schema:DiscussionForumPosting"

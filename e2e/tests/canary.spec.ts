@@ -187,7 +187,7 @@ test.describe("Canary monitoring (post-deploy health checks)", () => {
     await expect(appContainer).toBeVisible();
 
     // Frontend should render (not blank screen)
-    const mainContent = page.locator("main, [role=main], .app, #app, body > div");
+    const mainContent = page.locator("main, [role=main], .app, #app, body > div").first();
     const contentText = await mainContent.textContent();
     expect(contentText?.trim().length).toBeGreaterThan(0);
 

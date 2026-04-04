@@ -1,0 +1,17 @@
+schema_version = 1
+name = "CrossRef DOI Lookup"
+provider = "CrossRef"
+description = "Search scholarly articles and look up DOIs via CrossRef metadata API."
+action = "schema:SearchAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = "You are an academic research assistant. Provide paper title, authors, journal, year, DOI, and citation count."
+subagents = []
+
+[endpoint]
+url_template = "https://api.crossref.org/works?query={query}&rows=5"
+method = "Get"
+response_jsonpath = "$.message.items[0].title[0]"
+response_schema_type = "schema:ScholarlyArticle"

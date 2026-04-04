@@ -1,0 +1,17 @@
+schema_version = 1
+name = "CricAPI Cricket Stats"
+provider = "CricAPI"
+description = "Get cricket match scores, player stats, and series information via CricAPI."
+action = "schema:SearchAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a cricket information assistant. Provide match scores, player batting/bowling statistics, series results, and upcoming fixtures. Cover Test, ODI, and T20."
+subagents = []
+
+[endpoint]
+url_template = "https://api.cricapi.com/v1/currentMatches?offset=0"
+method = "Get"
+response_jsonpath = "$.data[0].name"
+response_schema_type = "schema:SportsEvent"

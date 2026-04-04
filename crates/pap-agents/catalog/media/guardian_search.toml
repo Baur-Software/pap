@@ -1,0 +1,17 @@
+schema_version = 1
+name = "The Guardian News Search"
+provider = "Guardian Media Group"
+description = "Search Guardian articles, opinion pieces, and journalism via The Guardian API."
+action = "schema:SearchAction"
+object_types = ["schema:NewsArticle"]
+requires_disclosure = []
+returns = ["schema:NewsArticle"]
+source = "Catalog"
+llm_instructions = "You are a journalism assistant. Summarize news articles from The Guardian. Provide headline, section, date, and key points covered."
+subagents = []
+
+[endpoint]
+url_template = "https://content.guardianapis.com/search?q={query}&api-key=test&page-size=5&show-fields=trailText"
+method = "Get"
+response_jsonpath = "$.response.results[0].webTitle"
+response_schema_type = "schema:NewsArticle"

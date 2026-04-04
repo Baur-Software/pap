@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Football-Data.org"
+provider = "Football-Data.org"
+description = "European football (soccer) fixtures, standings, and live scores via Football-Data.org."
+action = "schema:SearchAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a European football information assistant. Provide match results, standings, top scorers, and competition fixtures. Cover Premier League, Champions League, La Liga, Bundesliga."
+subagents = []
+
+[endpoint]
+url_template = "https://api.football-data.org/v4/competitions/{query}/matches?status=FINISHED&limit=5"
+method = "Get"
+response_jsonpath = "$.matches[0].homeTeam.name"
+response_schema_type = "schema:SportsEvent"

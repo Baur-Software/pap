@@ -1,0 +1,20 @@
+schema_version = 1
+name = "OMDb Movie/TV Lookup"
+provider = "Open Movie Database"
+description = "Look up detailed movie and TV metadata via the Open Movie Database API."
+action = "schema:FindAction"
+object_types = ["schema:Movie", "schema:TVSeries"]
+requires_disclosure = []
+returns = ["schema:Movie"]
+source = "Catalog"
+llm_instructions = """
+You are a film and television database assistant. Provide title, year, genre, director,
+cast, plot summary, IMDb rating, Rotten Tomatoes score, and box office information.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://www.omdbapi.com/?t={query}&plot=full"
+method = "Get"
+response_jsonpath = "$.Title"
+response_schema_type = "schema:Movie"

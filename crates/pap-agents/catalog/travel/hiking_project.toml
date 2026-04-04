@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Hiking Project Trails"
+provider = "REI / Hiking Project"
+description = "Find hiking trails with difficulty ratings, distance, elevation, and conditions."
+action = "schema:SearchAction"
+object_types = ["schema:SportsActivityLocation"]
+requires_disclosure = []
+returns = ["schema:SportsActivityLocation"]
+source = "Catalog"
+llm_instructions = """
+You are an outdoor recreation and hiking assistant. Provide trail name, length, difficulty,
+elevation gain, surface type, and seasonal conditions. Note dog-friendliness and permits required.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://www.hikingproject.com/data/get-trails?lat=47.6062&lon=-122.3321&maxDistance=50&key=200403465-15f40d55a1cde9db96a9f28af2d60bd7"
+method = "Get"
+response_jsonpath = "$.trails[0].name"
+response_schema_type = "schema:SportsActivityLocation"

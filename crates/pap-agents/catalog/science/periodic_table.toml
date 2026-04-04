@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Periodic Table Elements"
+provider = "Periodic Table API"
+description = "Look up element properties from the periodic table of elements."
+action = "schema:FindAction"
+object_types = ["schema:ChemicalSubstance"]
+requires_disclosure = []
+returns = ["schema:ChemicalSubstance"]
+source = "Catalog"
+llm_instructions = "You are a scientific information assistant for Periodic Table Elements. Provide accurate, well-contextualized scientific information."
+subagents = []
+
+[endpoint]
+url_template = "https://periodictable.p.rapidapi.com/{query}"
+method = "Get"
+response_jsonpath = "$.Name"
+response_schema_type = "schema:ChemicalSubstance"

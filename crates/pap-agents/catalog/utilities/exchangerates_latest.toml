@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Latest Exchange Rates"
+provider = "ExchangeRate-API"
+description = "Get the latest exchange rates relative to a base currency."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Latest Exchange Rates. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://open.er-api.com/v6/latest/USD"
+method = "Get"
+response_jsonpath = "$.rates"
+response_schema_type = "schema:MonetaryAmount"

@@ -18,10 +18,44 @@ use registry::RendererRegistry;
 /// Create and initialize the default renderer registry with shipped templates.
 fn create_default_registry() -> Arc<RendererRegistry> {
     let registry = Arc::new(RendererRegistry::new());
+    // Reservations
     registry.register(Arc::new(templates::FlightTemplate));
     registry.register(Arc::new(templates::HotelTemplate));
+    // Q&A
     registry.register(Arc::new(templates::SearchTemplate));
     registry.register(Arc::new(templates::AnswerTemplate));
+    // Entertainment
+    registry.register(Arc::new(templates::MovieTemplate));
+    registry.register(Arc::new(templates::TvSeriesTemplate));
+    registry.register(Arc::new(templates::VideoGameTemplate));
+    registry.register(Arc::new(templates::MusicRecordingTemplate));
+    registry.register(Arc::new(templates::MusicGroupTemplate));
+    registry.register(Arc::new(templates::BookTemplate));
+    // News & Research
+    registry.register(Arc::new(templates::NewsArticleTemplate));
+    registry.register(Arc::new(templates::ScholarlyArticleTemplate));
+    // People & Orgs
+    registry.register(Arc::new(templates::PersonTemplate));
+    registry.register(Arc::new(templates::OrganizationTemplate));
+    // Places & Weather
+    registry.register(Arc::new(templates::WeatherForecastTemplate));
+    registry.register(Arc::new(templates::GeoCoordinatesTemplate));
+    // Commerce
+    registry.register(Arc::new(templates::ProductTemplate));
+    // Events & Sports
+    registry.register(Arc::new(templates::EventTemplate));
+    registry.register(Arc::new(templates::SportsEventTemplate));
+    // Education
+    registry.register(Arc::new(templates::CourseTemplate));
+    // Health
+    registry.register(Arc::new(templates::NutritionTemplate));
+    // Jobs
+    registry.register(Arc::new(templates::JobPostingTemplate));
+    // Arts
+    registry.register(Arc::new(templates::VisualArtworkTemplate));
+    // Vocabulary
+    registry.register(Arc::new(templates::DefinedTermTemplate));
+    registry.register(Arc::new(templates::QuotationTemplate));
     registry
 }
 

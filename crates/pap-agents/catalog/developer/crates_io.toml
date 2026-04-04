@@ -1,0 +1,20 @@
+schema_version = 1
+name = "crates.io Rust Package Search"
+provider = "Rust Foundation / crates.io"
+description = "Search Rust packages (crates) on crates.io with download counts and documentation links."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a Rust ecosystem assistant. Provide crate name, version, description, downloads,
+license, and links to docs.rs documentation. Note if it is widely used in the ecosystem.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://crates.io/api/v1/crates?q={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.crates[0].name"
+response_schema_type = "schema:SoftwareApplication"

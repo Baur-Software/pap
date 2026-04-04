@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Airport Information"
+provider = "AviationStack"
+description = "Look up airport details including IATA code, city, country, and timezone."
+action = "schema:FindAction"
+object_types = ["schema:Airport"]
+requires_disclosure = []
+returns = ["schema:Airport"]
+source = "Catalog"
+llm_instructions = """
+You are an aviation and travel assistant. Provide airport name, IATA/ICAO codes, city,
+country, timezone, terminal count, and nearby transportation options.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.aviationstack.com/v1/airports?search={query}"
+method = "Get"
+response_jsonpath = "$.data[0].airport_name"
+response_schema_type = "schema:Airport"

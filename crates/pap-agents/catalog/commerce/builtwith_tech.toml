@@ -1,0 +1,17 @@
+schema_version = 1
+name = "BuiltWith Technology"
+provider = "BuiltWith"
+description = "Identify what technologies a website is built with."
+action = "schema:FindAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:WebSite"]
+source = "Catalog"
+llm_instructions = "You are a business and commerce research assistant. Provide relevant product, market, and company information."
+subagents = []
+
+[endpoint]
+url_template = "https://api.builtwith.com/v21/api.json?KEY=demo&LOOKUP={query}"
+method = "Get"
+response_jsonpath = "$.Results[0].Technologies[0].Name"
+response_schema_type = "schema:WebSite"

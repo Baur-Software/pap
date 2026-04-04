@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NOAA Climate Data"
+provider = "NOAA"
+description = "Access historical climate records and normals via NOAA Climate Data Online."
+action = "schema:FindAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a scientific information assistant for NOAA Climate Data. Provide accurate, well-contextualized scientific information."
+subagents = []
+
+[endpoint]
+url_template = "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&stationid=GHCND:USW00094728&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].value"
+response_schema_type = "schema:Dataset"

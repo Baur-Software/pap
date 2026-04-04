@@ -1,0 +1,17 @@
+schema_version = 1
+name = "npm Download Stats"
+provider = "npm"
+description = "Get weekly download statistics for npm packages."
+action = "schema:FindAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = "You are a developer tools assistant. Provide relevant developer information about npm Download Stats."
+subagents = []
+
+[endpoint]
+url_template = "https://api.npmjs.org/downloads/point/last-week/{query}"
+method = "Get"
+response_jsonpath = "$.downloads"
+response_schema_type = "schema:SoftwareApplication"

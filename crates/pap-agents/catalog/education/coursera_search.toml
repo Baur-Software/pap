@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Coursera Course Search"
+provider = "Coursera"
+description = "Search online courses, specializations, and degrees on Coursera."
+action = "schema:SearchAction"
+object_types = ["schema:Course"]
+requires_disclosure = []
+returns = ["schema:Course"]
+source = "Catalog"
+llm_instructions = "You are an educational content assistant. Provide course details, learning objectives, and curriculum information for Coursera Course Search."
+subagents = []
+
+[endpoint]
+url_template = "https://api.coursera.org/api/courses.v1?q=search&query={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.elements[0].name"
+response_schema_type = "schema:Course"

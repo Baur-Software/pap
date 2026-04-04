@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Citi Bike Station Status"
+provider = "Citi Bike / NYC"
+description = "Get real-time NYC Citi Bike station availability."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:Place"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Citi Bike Station Status: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://gbfs.citibikenyc.com/gbfs/en/station_status.json"
+method = "Get"
+response_jsonpath = "$.data.stations[0].num_bikes_available"
+response_schema_type = "schema:Place"

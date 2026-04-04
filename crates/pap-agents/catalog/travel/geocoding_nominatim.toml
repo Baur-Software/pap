@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Nominatim Geocoding"
+provider = "OpenStreetMap / Nominatim"
+description = "Convert addresses and place names to geographic coordinates via OpenStreetMap Nominatim."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = """
+You are a geocoding assistant. Provide the latitude, longitude, address components,
+and type of place. Note surrounding area and administrative boundaries.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=3&addressdetails=1"
+method = "Get"
+response_jsonpath = "$[0].display_name"
+response_schema_type = "schema:GeoCoordinates"

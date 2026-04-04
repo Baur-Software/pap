@@ -1,0 +1,17 @@
+schema_version = 1
+name = "FRED Economic Data"
+provider = "Federal Reserve Bank of St. Louis"
+description = "Access 800,000+ US and international economic time series from FRED database."
+action = "schema:SearchAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a macroeconomics assistant. Provide economic indicator name, latest value, period, units, and recent trend. Contextualize within broader economic conditions."
+subagents = []
+
+[endpoint]
+url_template = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={query}"
+method = "Get"
+response_jsonpath = "$"
+response_schema_type = "schema:Dataset"

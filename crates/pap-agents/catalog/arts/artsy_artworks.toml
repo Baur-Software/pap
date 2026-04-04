@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Artsy Artwork Search"
+provider = "Artsy"
+description = "Search contemporary and modern artworks via Artsy public API."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are an art history and cultural heritage assistant. Describe artworks, their creators, historical context, and artistic significance."
+subagents = []
+
+[endpoint]
+url_template = "https://api.artsy.net/api/artworks?q={query}&size=5"
+method = "Get"
+response_jsonpath = "$._embedded.artworks[0].title"
+response_schema_type = "schema:VisualArtwork"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Dog Breed API"
+provider = "Dog CEO API"
+description = "Get information about dog breeds and random dog images from Dog CEO."
+action = "schema:SearchAction"
+object_types = ["schema:AnimalShelter"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a canine information assistant. Provide breed characteristics, temperament, exercise needs, grooming requirements, and historical origin."
+subagents = []
+
+[endpoint]
+url_template = "https://dog.ceo/api/breed/{query}/images/random/3"
+method = "Get"
+response_jsonpath = "$.message[0]"
+response_schema_type = "schema:CreativeWork"

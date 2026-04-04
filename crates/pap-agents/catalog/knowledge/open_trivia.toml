@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Open Trivia Database"
+provider = "Open Trivia DB"
+description = "Get trivia questions across categories: science, history, geography, entertainment."
+action = "schema:FindAction"
+object_types = ["schema:Question"]
+requires_disclosure = []
+returns = ["schema:Question"]
+source = "Catalog"
+llm_instructions = "You are a trivia and quiz assistant. Provide trivia questions with correct answers and explanations. Cover the requested category with varying difficulty levels."
+subagents = []
+
+[endpoint]
+url_template = "https://opentdb.com/api.php?amount=5&category={query}&type=multiple"
+method = "Get"
+response_jsonpath = "$.results[0].question"
+response_schema_type = "schema:Question"

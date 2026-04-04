@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Last.fm Track Search"
+provider = "Last.fm"
+description = "Search music tracks and get play statistics, tags, and wiki summaries via Last.fm."
+action = "schema:SearchAction"
+object_types = ["schema:MusicRecording"]
+requires_disclosure = []
+returns = ["schema:MusicRecording"]
+source = "Catalog"
+llm_instructions = """
+You are a music discovery assistant. Provide track name, artist, play count, top tags, and
+a brief description. Last.fm aggregates listening data from millions of users.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://ws.audioscrobbler.com/2.0/?method=track.search&track={query}&format=json&limit=5"
+method = "Get"
+response_jsonpath = "$.results.trackmatches.track[0].name"
+response_schema_type = "schema:MusicRecording"

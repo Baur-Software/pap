@@ -1,0 +1,17 @@
+schema_version = 1
+name = "GBIF Biodiversity"
+provider = "Global Biodiversity Information Facility"
+description = "Search biodiversity occurrence records from GBIF open data."
+action = "schema:SearchAction"
+object_types = ["schema:Taxon"]
+requires_disclosure = []
+returns = ["schema:Taxon"]
+source = "Catalog"
+llm_instructions = "You are a scientific information assistant for GBIF Biodiversity. Provide accurate, well-contextualized scientific information."
+subagents = []
+
+[endpoint]
+url_template = "https://api.gbif.org/v1/species/search?q={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].scientificName"
+response_schema_type = "schema:Taxon"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Current UTC Time"
+provider = "Worldtime API"
+description = "Get the current UTC time and date."
+action = "schema:FindAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Current UTC Time. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://worldtimeapi.org/api/timezone/UTC"
+method = "Get"
+response_jsonpath = "$.utc_datetime"
+response_schema_type = "schema:Event"

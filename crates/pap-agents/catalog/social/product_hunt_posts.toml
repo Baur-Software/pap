@@ -1,0 +1,18 @@
+schema_version = 1
+name = "Product Hunt Launches"
+provider = "Product Hunt"
+description = "Discover new product launches and startup launches via Product Hunt API."
+action = "schema:SearchAction"
+object_types = ["schema:Product"]
+requires_disclosure = []
+returns = ["schema:Product"]
+source = "Catalog"
+llm_instructions = "You are a startup and product discovery assistant. Describe the product: name, tagline, vote count, maker, launch date, and category."
+subagents = []
+
+[endpoint]
+url_template = "https://api.producthunt.com/v2/api/graphql"
+method = "Post"
+body_template = "{\"query\": \"{ posts(first: 5, topic: \\\"{query}\\\") { edges { node { name tagline votesCount } } } }\"}"
+response_jsonpath = "$.data.posts.edges[0].node.name"
+response_schema_type = "schema:Product"

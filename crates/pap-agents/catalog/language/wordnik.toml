@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Wordnik Dictionary"
+provider = "Wordnik"
+description = "Rich English word data: definitions, examples, etymologies, and audio pronunciation."
+action = "schema:FindAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = "You are a comprehensive dictionary assistant. Provide definitions, etymology, usage examples, related words, and pronunciation notes."
+subagents = []
+
+[endpoint]
+url_template = "https://api.wordnik.com/v4/word.json/{query}/definitions?limit=5&sourceDictionaries=all"
+method = "Get"
+response_jsonpath = "$[0].text"
+response_schema_type = "schema:DefinedTerm"

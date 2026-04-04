@@ -1,0 +1,21 @@
+schema_version = 1
+name = "Teleport City Quality"
+provider = "Teleport"
+description = "Get quality of life scores for cities: safety, cost, salaries, culture, internet speed."
+action = "schema:FindAction"
+object_types = ["schema:City"]
+requires_disclosure = []
+returns = ["schema:Place"]
+source = "Catalog"
+llm_instructions = """
+You are a city comparison and relocation assistant. Provide quality-of-life scores for urban
+categories: housing, cost of living, startups, venture capital, travel connectivity, commute,
+business freedom, safety, healthcare, education, environmental quality, economy, taxation, internet.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.teleport.org/api/urban_areas/slug:{query}/scores/"
+method = "Get"
+response_jsonpath = "$.categories[0].name"
+response_schema_type = "schema:Place"

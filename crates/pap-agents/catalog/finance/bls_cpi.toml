@@ -1,0 +1,17 @@
+schema_version = 1
+name = "BLS Consumer Price Index"
+provider = "Bureau of Labor Statistics"
+description = "Get US inflation and CPI data from the Bureau of Labor Statistics."
+action = "schema:FindAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about BLS Consumer Price Index. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://api.bls.gov/publicAPI/v2/timeseries/data/CUUR0000SA0?startyear=2023&endyear=2026"
+method = "Get"
+response_jsonpath = "$.Results.series[0].data[0].value"
+response_schema_type = "schema:Dataset"

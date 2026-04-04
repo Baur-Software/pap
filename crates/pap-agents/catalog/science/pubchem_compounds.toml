@@ -1,0 +1,17 @@
+schema_version = 1
+name = "PubChem Compound Search"
+provider = "NCBI / PubChem"
+description = "Search chemical compounds in PubChem with molecular formula, structure, and properties."
+action = "schema:SearchAction"
+object_types = ["schema:ChemicalSubstance"]
+requires_disclosure = []
+returns = ["schema:ChemicalSubstance"]
+source = "Catalog"
+llm_instructions = "You are a chemistry information assistant. Provide compound name, molecular formula, CID, molecular weight, physical properties, and safety information."
+subagents = []
+
+[endpoint]
+url_template = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{query}/JSON?MaxRecords=5"
+method = "Get"
+response_jsonpath = "$.PC_Compounds[0].id.id.cid"
+response_schema_type = "schema:ChemicalSubstance"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NOAA Tidal Predictions"
+provider = "NOAA Tides"
+description = "Get tide predictions and water level data from NOAA tidal stations."
+action = "schema:FindAction"
+object_types = ["schema:WeatherForecast"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a scientific information assistant for NOAA Tidal Predictions. Provide accurate, well-contextualized scientific information."
+subagents = []
+
+[endpoint]
+url_template = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&datum=MLLW&format=json&station={query}&range=24"
+method = "Get"
+response_jsonpath = "$.predictions[0].v"
+response_schema_type = "schema:WeatherForecast"

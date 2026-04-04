@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Europeana Art Search"
+provider = "Europeana"
+description = "Search European art and cultural heritage via Europeana API."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are an art history and cultural heritage assistant. Describe artworks, their creators, historical context, and artistic significance."
+subagents = []
+
+[endpoint]
+url_template = "https://api.europeana.eu/record/v2/search.json?query={query}+TYPE:IMAGE&rows=5&wskey=api2demo"
+method = "Get"
+response_jsonpath = "$.items[0].title[0]"
+response_schema_type = "schema:VisualArtwork"

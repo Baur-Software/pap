@@ -1,0 +1,21 @@
+schema_version = 1
+name = "Open-Meteo Weather Forecast"
+provider = "Open-Meteo"
+description = "Get 7-day weather forecasts by coordinates using Open-Meteo's free forecast API."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = """
+You are a weather forecasting assistant. Provide temperature (high/low), precipitation,
+wind speed, humidity, and UV index. Use simple language and include practical advice
+about outdoor activities or travel for the forecast period.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max&timezone=auto&forecast_days=7"
+method = "Get"
+response_jsonpath = "$.daily.time[0]"
+response_schema_type = "schema:WeatherForecast"

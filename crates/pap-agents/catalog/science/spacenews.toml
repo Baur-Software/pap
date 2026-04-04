@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Space News Articles"
+provider = "Spaceflight News API"
+description = "Get latest space exploration and astronomy news from major space news sources."
+action = "schema:SearchAction"
+object_types = ["schema:NewsArticle"]
+requires_disclosure = []
+returns = ["schema:NewsArticle"]
+source = "Catalog"
+llm_instructions = "You are a space exploration and astronomy news assistant. Summarize space news stories: mission updates, scientific discoveries, and industry developments."
+subagents = []
+
+[endpoint]
+url_template = "https://api.spaceflightnewsapi.net/v4/articles?search={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:NewsArticle"

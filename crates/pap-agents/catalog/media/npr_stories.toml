@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NPR News Stories"
+provider = "National Public Radio"
+description = "Search NPR news stories, transcripts, and audio content."
+action = "schema:SearchAction"
+object_types = ["schema:NewsArticle"]
+requires_disclosure = []
+returns = ["schema:NewsArticle"]
+source = "Catalog"
+llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from National Public Radio."
+subagents = []
+
+[endpoint]
+url_template = "https://api.npr.org/query?apiKey=demo&id=1001&output=JSON&numResults=5&searchTerm={query}"
+method = "Get"
+response_jsonpath = "$.list.story[0].title."
+response_schema_type = "schema:NewsArticle"

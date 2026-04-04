@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NBA Stats"
+provider = "balldontlie API"
+description = "Get NBA player stats, team information, and game scores via balldontlie API."
+action = "schema:SearchAction"
+object_types = ["schema:SportsTeam"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are an NBA basketball information assistant. Provide player stats (points, rebounds, assists), team standings, and recent game scores."
+subagents = []
+
+[endpoint]
+url_template = "https://api.balldontlie.io/v1/players?search={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.data[0].last_name"
+response_schema_type = "schema:SportsEvent"

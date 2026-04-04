@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Name Nationality Predictor"
+provider = "Nationalize.io"
+description = "Predict the nationality of a first name using statistical analysis."
+action = "schema:FindAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Country"]
+source = "Catalog"
+llm_instructions = """
+You are a cultural and demographics assistant. Provide nationality probability estimates
+for a given name based on statistical analysis of name distributions across countries.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.nationalize.io/?name={query}"
+method = "Get"
+response_jsonpath = "$.country[0].country_id"
+response_schema_type = "schema:Country"

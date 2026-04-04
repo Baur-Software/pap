@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NASDAQ Market Data"
+provider = "NASDAQ"
+description = "Access NASDAQ market data including stock prices and corporate actions."
+action = "schema:SearchAction"
+object_types = ["schema:InvestmentFund"]
+requires_disclosure = []
+returns = ["schema:InvestmentFund"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about NASDAQ Market Data. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://data.nasdaq.com/api/v3/datasets/WIKI/{query}/data.json?rows=5"
+method = "Get"
+response_jsonpath = "$.dataset_data.data[0][0]"
+response_schema_type = "schema:InvestmentFund"

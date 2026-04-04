@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Packagist PHP Search"
+provider = "Packagist.org"
+description = "Search PHP Composer packages on the official PHP package registry."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a PHP ecosystem assistant. Provide package vendor/name, description, downloads,
+latest version, and Composer install command. Note Laravel/Symfony compatibility if relevant.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://packagist.org/search.json?q={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:SoftwareApplication"

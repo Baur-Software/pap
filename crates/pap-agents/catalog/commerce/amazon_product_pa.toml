@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Amazon Product Search"
+provider = "Amazon"
+description = "Search Amazon products by keyword with prices, ratings, and descriptions."
+action = "schema:SearchAction"
+object_types = ["schema:Product"]
+requires_disclosure = []
+returns = ["schema:Product"]
+source = "Catalog"
+llm_instructions = "You are a product research assistant. Provide product names, prices, ratings, and key features. Compare options and note value-for-money considerations."
+subagents = []
+
+[endpoint]
+url_template = "https://real-time-amazon-data.p.rapidapi.com/search?query={query}&country=US&category_id=aps"
+method = "Get"
+response_jsonpath = "$.data.products[0].product_title"
+response_schema_type = "schema:Product"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "DNS Lookup"
+provider = "Cloudflare DNS"
+description = "Resolve DNS records for any domain: A, AAAA, MX, TXT, NS, CNAME records."
+action = "schema:FindAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:WebSite"]
+source = "Catalog"
+llm_instructions = "You are a network and DNS assistant. Provide DNS records for the domain, explain each record type's purpose, and note interesting configuration choices."
+subagents = []
+
+[endpoint]
+url_template = "https://cloudflare-dns.com/dns-query?name={query}&type=A"
+method = "Get"
+response_jsonpath = "$.Answer[0].data"
+response_schema_type = "schema:WebSite"

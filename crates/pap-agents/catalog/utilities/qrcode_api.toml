@@ -1,0 +1,17 @@
+schema_version = 1
+name = "QR Code Generator"
+provider = "QR Code API"
+description = "Generate QR codes for URLs, text, contact info, and other data."
+action = "schema:CreateAction"
+object_types = ["schema:ImageObject"]
+requires_disclosure = []
+returns = ["schema:ImageObject"]
+source = "Catalog"
+llm_instructions = "You are a QR code and data encoding assistant. Explain the content encoded in QR format and describe use cases for QR codes in the requested context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={query}"
+method = "Get"
+response_jsonpath = "$"
+response_schema_type = "schema:ImageObject"

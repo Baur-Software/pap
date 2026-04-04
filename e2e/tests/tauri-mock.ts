@@ -90,6 +90,51 @@ window.__TAURI__ = {
     _completedRuns: [],
     _backedUp: false,
     _successors: [],
+    _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
+    _localAgents: [
+      {
+        name: 'DuckDuckGo Search',
+        provider_name: 'DuckDuckGo',
+        provider_did: 'did:key:z6MkDDG111',
+        capabilities: ['schema:SearchAction'],
+        object_types: ['SearchAction'],
+        requires_disclosure: [],
+        returns: ['results'],
+        endpoint: null,
+        content_hash: 'ddg-local-hash',
+        agent_did: 'did:key:z6MkDDGAgent111',
+        source: 'catalog',
+        published_to: [],
+      },
+      {
+        name: 'Wikipedia Lookup',
+        provider_name: 'Wikimedia',
+        provider_did: 'did:key:z6MkWiki222',
+        capabilities: ['schema:SearchAction'],
+        object_types: ['SearchAction'],
+        requires_disclosure: [],
+        returns: ['article'],
+        endpoint: null,
+        content_hash: 'wiki-local-hash',
+        agent_did: 'did:key:z6MkWikiAgent222',
+        source: 'catalog',
+        published_to: [],
+      },
+      {
+        name: 'My Custom Agent',
+        provider_name: 'Local Operator',
+        provider_did: 'did:key:z6MkCustom333',
+        capabilities: ['schema:Action'],
+        object_types: ['Action'],
+        requires_disclosure: [],
+        returns: ['response'],
+        endpoint: null,
+        content_hash: 'custom-local-hash',
+        agent_did: 'did:key:z6MkCustomAgent333',
+        source: 'user_created',
+        published_to: ['https://chrysalis.example.com'],
+      },
+    ],
     _templates: [
       {
         id: 'tmpl-flight',
@@ -165,7 +210,7 @@ window.__TAURI__ = {
           return ${JSON.stringify(ORCHESTRATOR_STATUS)};
 
         case 'get_orchestrator_config':
-          return CONFIG;
+          return window.__TAURI__.core._orchestratorConfig;
 
         case 'get_setup_state':
           return ${JSON.stringify(SETUP_STATE)};
@@ -180,7 +225,10 @@ window.__TAURI__ = {
           return ${JSON.stringify(MODEL_AVAILABILITY[0])};
 
         case 'configure_orchestrator':
-          return args?.config ?? CONFIG;
+          if (args?.config) {
+            window.__TAURI__.core._orchestratorConfig = args.config;
+          }
+          return window.__TAURI__.core._orchestratorConfig;
 
         case 'run_scenario': {
           const sid = args?.scenarioId ?? 'weather';
@@ -260,11 +308,106 @@ window.__TAURI__ = {
           };
 
         case 'list_agents':
+          // Registry browser — returns remote/federated agents
           return [
-            { name: 'DuckDuckGo Search', provider_name: 'DuckDuckGo', provider_did: 'did:key:z6MkDDG', capabilities: ['search.web'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['results'], endpoint: null, content_hash: 'ddg-hash' },
-            { name: 'Wikipedia', provider_name: 'Wikimedia', provider_did: 'did:key:z6MkWiki', capabilities: ['knowledge.lookup'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['article'], endpoint: null, content_hash: 'wiki-hash' },
-            { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['ai.inference'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash' },
+            { name: 'DuckDuckGo Search', provider_name: 'DuckDuckGo', provider_did: 'did:key:z6MkDDG', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['results'], endpoint: null, content_hash: 'ddg-hash', agent_did: 'did:key:z6MkDDGFed', source: 'catalog', published_to: [] },
+            { name: 'Wikipedia', provider_name: 'Wikimedia', provider_did: 'did:key:z6MkWiki', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['article'], endpoint: null, content_hash: 'wiki-hash', agent_did: 'did:key:z6MkWikiFed', source: 'catalog', published_to: [] },
+            { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['schema:CreateAction'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash', agent_did: 'did:key:z6MkMistralFed', source: 'catalog', published_to: [] },
           ];
+
+        case 'list_local_agents':
+          // Local agent fleet — returns managed agents with full AgentInfo
+          return window.__TAURI__.core._localAgents;
+
+        case 'save_agent': {
+          // Persist a new DynamicAgentDef, return AgentInfo with agent_did
+          const def = args?.def ?? {};
+          const agentDid = 'did:key:z6MkGen' + Math.random().toString(36).substr(2, 9);
+          const newAgent = {
+            name: def.name ?? 'Unnamed Agent',
+            provider_name: def.provider ?? 'Local Operator',
+            provider_did: agentDid,
+            capabilities: def.action ? [def.action] : ['schema:Action'],
+            object_types: def.object_types ?? [],
+            requires_disclosure: def.requires_disclosure ?? [],
+            returns: def.returns ?? [],
+            endpoint: null,
+            content_hash: 'saved-' + Math.random().toString(36).substr(2, 9),
+            agent_did: agentDid,
+            source: 'user_created',
+            published_to: [],
+          };
+          window.__TAURI__.core._localAgents.push(newAgent);
+          return newAgent;
+        }
+
+        case 'update_agent': {
+          const def = args?.def ?? {};
+          const did = def.agent_did;
+          const idx = window.__TAURI__.core._localAgents.findIndex(a => a.agent_did === did);
+          if (idx !== -1) {
+            window.__TAURI__.core._localAgents[idx] = {
+              ...window.__TAURI__.core._localAgents[idx],
+              name: def.name ?? window.__TAURI__.core._localAgents[idx].name,
+              capabilities: def.action ? [def.action] : window.__TAURI__.core._localAgents[idx].capabilities,
+              published_to: def.published_to ?? window.__TAURI__.core._localAgents[idx].published_to,
+            };
+            return window.__TAURI__.core._localAgents[idx];
+          }
+          return null;
+        }
+
+        case 'delete_agent': {
+          const did = args?.agent_did;
+          window.__TAURI__.core._localAgents = window.__TAURI__.core._localAgents.filter(a => a.agent_did !== did);
+          return null;
+        }
+
+        case 'generate_agent': {
+          // Returns a preview DynamicAgentDef (not yet saved — no agent_did)
+          const prompt = args?.prompt ?? 'search the web';
+          return {
+            name: 'Generated: ' + prompt.slice(0, 30),
+            provider: 'Generated',
+            action: 'schema:SearchAction',
+            object_types: ['SearchAction'],
+            requires_disclosure: [],
+            returns: ['results'],
+            endpoint: {
+              url_template: 'https://api.example.com/search?q={query}',
+              method: 'GET',
+              headers: {},
+              response_jsonpath: '$.results',
+            },
+            agent_did: null,
+            operator_key_seed: null,
+            source: 'generated',
+            published_to: [],
+            schema_version: 1,
+            catalog_path: null,
+            updated_at: new Date().toISOString(),
+          };
+        }
+
+        case 'publish_agent': {
+          const did = args?.agent_did;
+          const url = args?.registry_url ?? '';
+          const agent = window.__TAURI__.core._localAgents.find(a => a.agent_did === did);
+          if (agent && url && !agent.published_to.includes(url)) {
+            agent.published_to.push(url);
+          }
+          return null;
+        }
+
+        case 'unpublish_agent': {
+          const did = args?.agent_did;
+          const url = args?.registry_url ?? '';
+          const agent = window.__TAURI__.core._localAgents.find(a => a.agent_did === did);
+          if (agent) {
+            agent.published_to = agent.published_to.filter(u => u !== url);
+          }
+          return null;
+        }
 
         case 'sync_agents':
           return null;
@@ -276,31 +419,106 @@ window.__TAURI__ = {
         case 'list_bookmarks':
           return [];
 
-        case 'canvas_prompt':
-          return {
-            canvas_id: 'canvas-1',
-            blocks: [
-              {
-                id: 'block-1',
-                block_type: 'text',
-                title: 'Response',
-                content: 'Here is your answer.',
-                status: 'ready',
-                linked_block_ids: [],
-              },
-            ],
-          };
+        case 'canvas_prompt': {
+          // Emit a block_resolved event after a short delay so the Leptos
+          // reactive UI transitions from Resolving → Resolved with typed content.
+          const blockId = (args && (args.block_id || args.blockId)) || 'block-mock';
+          const promptText = ((args && args.text) || '').toLowerCase();
+          // Map prompt keywords to schema types and typed content payloads.
+          function typedBlock(schemaType, contentObj) {
+            return {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: schemaType,
+              content: { result: contentObj },
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+          }
+          var block = null;
+          if (promptText.includes('__movie') || promptText.includes('mock:movie')) {
+            block = typedBlock('Movie', { name: 'Inception', datePublished: '2010', director: { name: 'Christopher Nolan' }, genre: 'Sci-Fi', aggregateRating: { ratingValue: '8.8' }, description: 'A mind-bending thriller.' });
+          } else if (promptText.includes('__tvseries') || promptText.includes('mock:tvseries')) {
+            block = typedBlock('TVSeries', { name: 'Breaking Bad', startDate: '2008', broadcastChannel: 'AMC', numberOfSeasons: '5', description: 'A chemistry teacher turns drug lord.' });
+          } else if (promptText.includes('__videogame') || promptText.includes('mock:videogame')) {
+            block = typedBlock('VideoGame', { name: 'The Legend of Zelda', genre: 'Adventure', gamePlatform: 'Nintendo Switch', author: { name: 'Nintendo' }, description: 'An epic adventure game.' });
+          } else if (promptText.includes('__musicrecording') || promptText.includes('mock:musicrecording')) {
+            block = typedBlock('MusicRecording', { name: 'Bohemian Rhapsody', byArtist: { name: 'Queen' }, inAlbum: { name: 'A Night at the Opera' }, duration: 'PT5M55S' });
+          } else if (promptText.includes('__musicgroup') || promptText.includes('mock:musicgroup')) {
+            block = typedBlock('MusicGroup', { name: 'The Beatles', genre: 'Rock', foundingDate: '1960', description: 'Legendary British rock band.' });
+          } else if (promptText.includes('__book') || promptText.includes('mock:book')) {
+            block = typedBlock('Book', { name: 'The Rust Programming Language', author: { name: 'Steve Klabnik' }, publisher: { name: 'No Starch Press' }, datePublished: '2019', isbn: '978-1593278281', description: 'The official Rust book.' });
+          } else if (promptText.includes('__newsarticle') || promptText.includes('mock:newsarticle')) {
+            block = typedBlock('NewsArticle', { headline: 'Rust Tops Developer Survey for 9th Year', publisher: { name: 'Stack Overflow' }, datePublished: '2024-06-01', description: 'Rust remains the most loved language.', url: 'https://survey.stackoverflow.co/2024' });
+          } else if (promptText.includes('__scholarlyarticle') || promptText.includes('mock:scholarlyarticle')) {
+            block = typedBlock('ScholarlyArticle', { name: 'Attention Is All You Need', author: [{ name: 'Vaswani et al.' }], isPartOf: 'NeurIPS 2017', datePublished: '2017', identifier: '10.5555/3295222.3295349', abstract: 'We propose the Transformer architecture.' });
+          } else if (promptText.includes('__person') || promptText.includes('mock:person')) {
+            block = typedBlock('Person', { name: 'Grace Hopper', jobTitle: 'Rear Admiral', affiliation: { name: 'US Navy' }, description: 'Pioneer of computer programming.', url: 'https://en.wikipedia.org/wiki/Grace_Hopper' });
+          } else if (promptText.includes('__organization') || promptText.includes('mock:organization')) {
+            block = typedBlock('Organization', { name: 'Mozilla Foundation', '@type': 'Organization', address: { addressLocality: 'San Francisco', addressCountry: 'US' }, description: 'Champions of the open web.', url: 'https://mozilla.org' });
+          } else if (promptText.includes('__weather') || promptText.includes('mock:weather')) {
+            block = typedBlock('WeatherForecast', { name: 'San Francisco', temperature: '65°F', description: 'Foggy with partial clearing', humidity: '78%', windSpeed: '15 mph' });
+          } else if (promptText.includes('__geocoords') || promptText.includes('mock:geocoords')) {
+            block = typedBlock('GeoCoordinates', { name: 'Eiffel Tower', latitude: 48.8584, longitude: 2.2945, elevation: '330m', address: 'Champ de Mars, Paris, France' });
+          } else if (promptText.includes('__product') || promptText.includes('mock:product')) {
+            block = typedBlock('Product', { name: 'Framework Laptop 16', brand: { name: 'Framework' }, offers: { price: '1049.00' }, aggregateRating: { ratingValue: '4.7' }, description: 'A modular, repairable laptop.' });
+          } else if (promptText.includes('__event') || promptText.includes('mock:event')) {
+            block = typedBlock('Event', { name: 'RustConf 2024', startDate: '2024-09-10', endDate: '2024-09-11', location: { name: 'Montreal, Canada' }, organizer: { name: 'Rust Foundation' }, description: 'Annual Rust programming conference.' });
+          } else if (promptText.includes('__sportsteam') || promptText.includes('mock:sportsteam')) {
+            block = typedBlock('SportsTeam', { name: 'World Cup Final 2026', homeTeam: { name: 'Spain' }, awayTeam: { name: 'Brazil' }, startDate: '2026-07-19', location: { name: 'MetLife Stadium, NJ' } });
+          } else if (promptText.includes('__course') || promptText.includes('mock:course')) {
+            block = typedBlock('Course', { name: 'CS50: Introduction to Computer Science', provider: { name: 'Harvard / edX' }, description: 'A broad introduction to computer science.', url: 'https://cs50.harvard.edu' });
+          } else if (promptText.includes('__nutrition') || promptText.includes('mock:nutrition')) {
+            block = typedBlock('NutritionInformation', { name: 'Avocado', servingSize: '100g', calories: '160', proteinContent: '2g', carbohydrateContent: '9g', fatContent: '15g' });
+          } else if (promptText.includes('__jobposting') || promptText.includes('mock:jobposting')) {
+            block = typedBlock('JobPosting', { title: 'Senior Rust Engineer', hiringOrganization: { name: 'Fastly' }, jobLocation: { address: { addressLocality: 'Remote' } }, datePosted: '2024-05-01', baseSalary: { value: { minValue: 180000, maxValue: 250000 } }, description: 'Build high-performance networking software.' });
+          } else if (promptText.includes('__visualartwork') || promptText.includes('mock:visualartwork')) {
+            block = typedBlock('VisualArtwork', { name: 'Starry Night', creator: { name: 'Vincent van Gogh' }, artMedium: 'Oil on canvas', dateCreated: '1889', locationCreated: { name: 'MoMA, New York' }, description: 'A swirling night sky over a village.' });
+          } else if (promptText.includes('__definedterm') || promptText.includes('mock:definedterm')) {
+            block = typedBlock('DefinedTerm', { name: 'monad', inDefinedTermSet: 'noun', description: 'A design pattern in functional programming representing computations as chains.' });
+          } else if (promptText.includes('__quotation') || promptText.includes('mock:quotation')) {
+            block = typedBlock('Quotation', { text: 'Programs must be written for people to read, and only incidentally for machines to execute.', spokenByCharacter: { name: 'Harold Abelson' }, citation: { name: 'SICP' } });
+          } else {
+            // Generic answer block for non-typed prompts
+            block = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: null,
+              content: { result: 'Here is your answer.' },
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+          }
+          var resolvedBlock = block;
+          setTimeout(function() {
+            window.__TAURI__.event.emit('block_resolved', { block: resolvedBlock });
+          }, 200);
+          return null;
+        }
 
         case 'canvas_reshape':
-        case 'canvas_retry':
-          return {
-            id: args?.blockId ?? 'block-1',
-            block_type: 'text',
-            title: 'Reshaped',
-            content: 'Updated content.',
-            status: 'ready',
-            linked_block_ids: [],
-          };
+        case 'canvas_retry': {
+          const retryBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
+          setTimeout(function() {
+            window.__TAURI__.event.emit('block_resolved', {
+              block: {
+                id: retryBlockId,
+                prompt_id: 'p-retry',
+                state: 'Resolved',
+                schema_type: null,
+                content: { result: 'Updated content.' },
+                linked_block_ids: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }
+            });
+          }, 200);
+          return null;
+        }
 
         case 'load_builtin_model':
           return null;
@@ -477,11 +695,26 @@ window.__TAURI__ = {
     }
   },
   event: {
+    _handlers: {},
     listen: async function(event, handler) {
+      if (!window.__TAURI__.event._handlers[event]) {
+        window.__TAURI__.event._handlers[event] = [];
+      }
+      window.__TAURI__.event._handlers[event].push(handler);
       console.log('[tauri-mock] event.listen:', event);
-      return function() {};
-    }
-  }
+      return function() {
+        const arr = window.__TAURI__.event._handlers[event];
+        if (arr) {
+          const idx = arr.indexOf(handler);
+          if (idx !== -1) arr.splice(idx, 1);
+        }
+      };
+    },
+    emit: function(event, payload) {
+      var handlers = window.__TAURI__.event._handlers[event] || [];
+      handlers.forEach(function(h) { h({ event: event, id: 1, payload: payload }); });
+    },
+  },
 };
 `;
 

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Federal Register Search"
+provider = "US Government Publishing Office"
+description = "Search US Federal Register for rules, proposed rules, and government notices."
+action = "schema:SearchAction"
+object_types = ["schema:LegislationObject"]
+requires_disclosure = []
+returns = ["schema:LegislationObject"]
+source = "Catalog"
+llm_instructions = "You are a US regulatory affairs assistant. Summarize federal register documents: agency, type (rule/notice/proposal), effective date, and policy summary."
+subagents = []
+
+[endpoint]
+url_template = "https://www.federalregister.gov/api/v1/articles.json?conditions[term]={query}&per_page=5&order=relevance"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:LegislationObject"

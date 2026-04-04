@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Color Name API"
+provider = "Color Name API"
+description = "Get color names, hex codes, RGB values, and design-friendly color information."
+action = "schema:FindAction"
+object_types = ["schema:Thing"]
+requires_disclosure = []
+returns = ["schema:Thing"]
+source = "Catalog"
+llm_instructions = "You are a color and design assistant. Provide color name, hex code, RGB values, HSL values, and complementary colors. Note common design uses."
+subagents = []
+
+[endpoint]
+url_template = "https://www.thecolorapi.com/id?hex={query}"
+method = "Get"
+response_jsonpath = "$.name.value"
+response_schema_type = "schema:Thing"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Open Exchange Rates"
+provider = "Open Exchange Rates"
+description = "Access hourly updated exchange rates for 170 world currencies."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about Open Exchange Rates. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://openexchangerates.org/api/latest.json?app_id=demo&base={query}"
+method = "Get"
+response_jsonpath = "$.rates"
+response_schema_type = "schema:MonetaryAmount"

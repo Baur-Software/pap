@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Reddit Search"
+provider = "Reddit"
+description = "Search Reddit posts and discussions across all subreddits."
+action = "schema:SearchAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = "You are a community discussion assistant. Summarize Reddit discussions about the topic. Note community sentiment, key points, and highly-upvoted perspectives."
+subagents = []
+
+[endpoint]
+url_template = "https://www.reddit.com/search.json?q={query}&limit=5&sort=relevance&t=year"
+method = "Get"
+response_jsonpath = "$.data.children[0].data.title"
+response_schema_type = "schema:DiscussionForumPosting"

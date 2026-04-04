@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Domain WHOIS Lookup"
+provider = "Whois API"
+description = "Get domain registration information via WHOIS lookup."
+action = "schema:FindAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:WebSite"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Domain WHOIS Lookup. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=demo&domainName={query}&outputFormat=JSON"
+method = "Get"
+response_jsonpath = "$.WhoisRecord.domainName"
+response_schema_type = "schema:WebSite"

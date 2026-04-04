@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Art Institute of Chicago"
+provider = "Art Institute of Chicago"
+description = "Search the Art Institute of Chicago's public collection of 50,000+ artworks."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are an art history assistant. Describe artworks: title, artist, medium, date, style period, and cultural significance. Provide art historical context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.artic.edu/api/v1/artworks/search?q={query}&limit=5&fields=title,artist_title,date_display,medium_display,description"
+method = "Get"
+response_jsonpath = "$.data[0].title"
+response_schema_type = "schema:VisualArtwork"

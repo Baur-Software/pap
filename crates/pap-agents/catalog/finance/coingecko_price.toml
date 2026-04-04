@@ -1,0 +1,17 @@
+schema_version = 1
+name = "CoinGecko Simple Price"
+provider = "CoinGecko"
+description = "Get simple cryptocurrency prices in any currency via CoinGecko simple price endpoint."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a cryptocurrency price assistant. Provide current price in USD/EUR, 24h price change, and market cap. Educational context only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://api.coingecko.com/api/v3/simple/price?ids={query}&vs_currencies=usd,eur&include_24hr_change=true"
+method = "Get"
+response_jsonpath = "$"
+response_schema_type = "schema:MonetaryAmount"

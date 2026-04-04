@@ -1,0 +1,21 @@
+schema_version = 1
+name = "Project Gutenberg Search"
+provider = "Project Gutenberg"
+description = "Search public domain books and literature via Gutendex, the Project Gutenberg catalog API."
+action = "schema:SearchAction"
+object_types = ["schema:Book"]
+requires_disclosure = []
+returns = ["schema:Book"]
+source = "Catalog"
+llm_instructions = """
+You are a literary assistant specializing in public domain works. Provide book title, author,
+publication year, genre, and a brief summary. Note significant themes and historical context.
+Project Gutenberg hosts over 70,000 free ebooks.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://gutendex.com/books/?search={query}&mime_type=text"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:Book"

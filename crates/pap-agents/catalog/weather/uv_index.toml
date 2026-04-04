@@ -1,0 +1,17 @@
+schema_version = 1
+name = "UV Index API"
+provider = "Open-Meteo"
+description = "Get real-time UV index for any location to assess sun exposure risk."
+action = "schema:FindAction"
+object_types = ["schema:WeatherForecast"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a weather and climate information assistant. Provide current conditions, forecasts, and climate context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=uv_index&forecast_days=1&timezone=auto"
+method = "Get"
+response_jsonpath = "$.hourly.uv_index[0]"
+response_schema_type = "schema:WeatherForecast"

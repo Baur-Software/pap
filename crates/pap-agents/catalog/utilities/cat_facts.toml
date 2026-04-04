@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Cat Facts API"
+provider = "Cat Facts"
+description = "Get interesting and educational facts about cats."
+action = "schema:FindAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a feline biology and behavior assistant. Provide interesting cat facts with scientific context, evolutionary background, and behavioral explanations."
+subagents = []
+
+[endpoint]
+url_template = "https://catfact.ninja/facts?limit=5"
+method = "Get"
+response_jsonpath = "$.data[0].fact"
+response_schema_type = "schema:CreativeWork"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "GNews Search"
+provider = "GNews.io"
+description = "Search real-time news articles from thousands of sources via GNews API."
+action = "schema:SearchAction"
+object_types = ["schema:NewsArticle"]
+requires_disclosure = []
+returns = ["schema:NewsArticle"]
+source = "Catalog"
+llm_instructions = "You are a news aggregation assistant. Summarize recent news articles covering the queried topic. Note publication dates and source diversity."
+subagents = []
+
+[endpoint]
+url_template = "https://gnews.io/api/v4/search?q={query}&lang=en&max=5"
+method = "Get"
+response_jsonpath = "$.articles[0].title"
+response_schema_type = "schema:NewsArticle"

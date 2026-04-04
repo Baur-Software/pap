@@ -1,0 +1,17 @@
+schema_version = 1
+name = "OpenRouteService Geocoding"
+provider = "OpenRouteService / HeiGIT"
+description = "Forward and reverse geocoding using OpenStreetMap data via OpenRouteService."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = "You are a geocoding assistant. Convert addresses to coordinates or describe a location's administrative context, nearest landmarks, and geographic features."
+subagents = []
+
+[endpoint]
+url_template = "https://api.openrouteservice.org/geocode/search?text={query}&size=5"
+method = "Get"
+response_jsonpath = "$.features[0].properties.name"
+response_schema_type = "schema:GeoCoordinates"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Working Nomads Jobs"
+provider = "Working Nomads"
+description = "Find curated remote job listings for digital nomads."
+action = "schema:SearchAction"
+object_types = ["schema:JobPosting"]
+requires_disclosure = []
+returns = ["schema:JobPosting"]
+source = "Catalog"
+llm_instructions = "You are a career and job search assistant. Summarize job listings: role, company, location (remote/on-site), salary range, and requirements."
+subagents = []
+
+[endpoint]
+url_template = "https://www.workingnomads.co/api/exposed_jobs/?limit=5&tag={query}"
+method = "Get"
+response_jsonpath = "0.title"
+response_schema_type = "schema:JobPosting"

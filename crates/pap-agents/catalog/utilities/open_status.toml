@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Website Availability Check"
+provider = "UptimeRobot API"
+description = "Check if a website or API endpoint is currently online and responding."
+action = "schema:FindAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:WebSite"]
+source = "Catalog"
+llm_instructions = "You are a web reliability assistant. Report on website availability, response time, and status. Note any recent downtime patterns or status page information."
+subagents = []
+
+[endpoint]
+url_template = "https://api.uptimerobot.com/v2/getMonitors?api_key=ur{query}&format=json"
+method = "Get"
+response_jsonpath = "$.monitors[0].friendly_name"
+response_schema_type = "schema:WebSite"
