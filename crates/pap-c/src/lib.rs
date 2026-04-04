@@ -1651,3 +1651,240 @@ pub extern "C" fn pap_registry_len(r: *const PapMarketplaceRegistry) -> c_int {
         None => -1,
     }
 }
+
+// ---------------------------------------------------------------------------
+// M-of-N Shamir Secret Sharing recovery (spec §13.5)
+// ---------------------------------------------------------------------------
+
+use pap_core::shamir::{RecoveryShard as InnerRecoveryShard, ShardManifest};
+
+/// Opaque handle for a single Shamir recovery shard.
+pub struct PapRecoveryShard {
+    inner: InnerRecoveryShard,
+}
+
+/// Opaque handle for a set of N Shamir recovery shards from one ceremony.
+pub struct PapRecoveryShardSet {
+    /// Wrapped shard handles (one per trustee), in index order.
+    shards: Vec<PapRecoveryShard>,
+    manifest: ShardManifest,
+}
+
+/// Create M-of-N Shamir shards from a 32-byte Ed25519 seed.
+///
+/// `seed_bytes` must point to exactly 32 bytes.
+/// `threshold` is M (minimum shards required to reconstruct).
+/// `total_shares` is N (number of shards to produce).
+///
+/// Returns an opaque shard-set handle on success, NULL on error.
+/// The caller owns the set and must free it with `pap_recovery_shard_set_free`.
+///
+/// # Safety
+/// `seed_bytes` must be valid for 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_create_shards(
+    seed_bytes: *const u8,
+    threshold: u8,
+    total_shares: u8,
+) -> *mut PapRecoveryShardSet {
+    if seed_bytes.is_null() {
+        set_last_error("null seed_bytes pointer");
+        return std::ptr::null_mut();
+    }
+    let seed: [u8; 32] = match unsafe { std::slice::from_raw_parts(seed_bytes, 32) }.try_into() {
+        Ok(b) => b,
+        Err(_) => {
+            set_last_error("seed_bytes must be exactly 32 bytes");
+            return std::ptr::null_mut();
+        }
+    };
+    match pap_core::shamir::create_shards(&seed, threshold, total_shares) {
+        Ok((shards, manifest)) => {
+            let wrapped: Vec<PapRecoveryShard> = shards
+                .into_iter()
+                .map(|inner| PapRecoveryShard { inner })
+                .collect();
+            Box::into_raw(Box::new(PapRecoveryShardSet {
+                shards: wrapped,
+                manifest,
+            }))
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a shard set (and all shards within it). Passing NULL is a no-op.
+/// # Safety
+/// `set` must be a pointer previously returned by `pap_recovery_create_shards`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_shard_set_free(set: *mut PapRecoveryShardSet) {
+    if !set.is_null() {
+        drop(unsafe { Box::from_raw(set) });
+    }
+}
+
+/// Returns the number of shards in the set, or -1 on null input.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_count(set: *const PapRecoveryShardSet) -> c_int {
+    match unsafe { set.as_ref() } {
+        Some(s) => s.shards.len() as c_int,
+        None => {
+            set_last_error("null shard set");
+            -1
+        }
+    }
+}
+
+/// Borrow the shard at position `index` (0-based) from a shard set.
+///
+/// The returned pointer is **borrowed** — do NOT free it individually; free the entire
+/// set with `pap_recovery_shard_set_free`.  The pointer is valid until the set is freed.
+///
+/// Returns NULL if `index` is out of range or `set` is NULL.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_get(
+    set: *const PapRecoveryShardSet,
+    index: c_int,
+) -> *const PapRecoveryShard {
+    let set = match unsafe { set.as_ref() } {
+        Some(s) => s,
+        None => {
+            set_last_error("null shard set");
+            return std::ptr::null();
+        }
+    };
+    if index < 0 || index as usize >= set.shards.len() {
+        set_last_error(&format!(
+            "shard index {} out of range (0..{})",
+            index,
+            set.shards.len()
+        ));
+        return std::ptr::null();
+    }
+    // Return a pointer to the PapRecoveryShard inside the Vec storage.
+    // The Vec owns the element; its lifetime is tied to the PapRecoveryShardSet box.
+    &set.shards[index as usize] as *const PapRecoveryShard
+}
+
+/// Serialize the shard manifest (public commitment document) to JSON.
+///
+/// Returns a heap-allocated C string. Caller must free with `pap_string_free`.
+/// Returns NULL on error.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_set_manifest_json(
+    set: *const PapRecoveryShardSet,
+) -> *mut c_char {
+    let set = ref_or_null!(set);
+    match serde_json::to_string_pretty(&set.manifest) {
+        Ok(s) => cstring_or_null!(s),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Reconstruct a 32-byte seed from M or more Shamir shards.
+///
+/// `shards` is an array of `shard_count` pointers to `PapRecoveryShard`.
+/// These may be borrowed from a `PapRecoveryShardSet` or owned handles returned
+/// by `pap_recovery_shard_from_json`.
+///
+/// `seed_out` must point to a caller-allocated 32-byte buffer.
+///
+/// Returns 0 on success, -1 on error. On error, `seed_out` is zeroed.
+///
+/// # Safety
+/// `shards` must be a valid array of `shard_count` non-null `PapRecoveryShard` pointers.
+/// `seed_out` must point to at least 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_reconstruct(
+    shards: *const *const PapRecoveryShard,
+    shard_count: c_int,
+    seed_out: *mut u8,
+) -> c_int {
+    if shards.is_null() || shard_count <= 0 || seed_out.is_null() {
+        set_last_error("null or invalid argument to pap_recovery_reconstruct");
+        return -1;
+    }
+
+    let count = shard_count as usize;
+    let shard_ptrs = unsafe { std::slice::from_raw_parts(shards, count) };
+
+    // Collect references to the inner RecoveryShards.
+    let mut shard_refs: Vec<&InnerRecoveryShard> = Vec::with_capacity(count);
+    for &ptr in shard_ptrs {
+        if ptr.is_null() {
+            set_last_error("null shard pointer in array");
+            unsafe { std::ptr::write_bytes(seed_out, 0, 32) };
+            return -1;
+        }
+        // Safety: ptr is non-null and points to a valid PapRecoveryShard.
+        shard_refs.push(unsafe { &(*ptr).inner });
+    }
+
+    match pap_core::shamir::reconstruct(&shard_refs) {
+        Ok(seed) => {
+            unsafe { std::ptr::copy_nonoverlapping(seed.as_ptr(), seed_out, 32) };
+            0
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            unsafe { std::ptr::write_bytes(seed_out, 0, 32) };
+            -1
+        }
+    }
+}
+
+/// Serialize a single shard to a JSON string for distribution to a trustee.
+///
+/// Returns a heap-allocated C string. Caller must free with `pap_string_free`.
+/// Returns NULL on error.
+///
+/// # Safety
+/// `shard` must be a valid pointer (borrowed from a shard set or owned from
+/// `pap_recovery_shard_from_json`).
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_to_json(shard: *const PapRecoveryShard) -> *mut c_char {
+    let shard = ref_or_null!(shard);
+    match shard.inner.to_json() {
+        Ok(s) => cstring_or_null!(s),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Deserialize a shard from a JSON string received from a trustee.
+///
+/// Returns an owned `PapRecoveryShard` handle. The caller must free it with
+/// `pap_recovery_shard_free`. Returns NULL on parse error.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_from_json(json: *const c_char) -> *mut PapRecoveryShard {
+    let json_str = cstr_or_null!(json);
+    match InnerRecoveryShard::from_json(json_str) {
+        Ok(shard) => Box::into_raw(Box::new(PapRecoveryShard { inner: shard })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a standalone shard handle (one returned by `pap_recovery_shard_from_json`).
+///
+/// Do NOT use this on shards borrowed from a `PapRecoveryShardSet` — free the set instead.
+/// Passing NULL is a no-op.
+///
+/// # Safety
+/// `shard` must be a pointer previously returned by `pap_recovery_shard_from_json`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_shard_free(shard: *mut PapRecoveryShard) {
+    if !shard.is_null() {
+        drop(unsafe { Box::from_raw(shard) });
+    }
+}
