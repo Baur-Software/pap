@@ -6,6 +6,28 @@
 
 A principal-first, zero-trust agent negotiation protocol for the open web.
 
+## In Practice
+
+Meet the humans who need this.
+
+### The Journalist
+
+She's investigating a story on municipal contracts. She tells her PAP agent to find public records, cross-reference voting histories, and summarize conflicts of interest. Every data source the agent touched, every property it accessed, is in the co-signed receipt. If someone later asks "did your AI make this up?" — she can prove exactly what it read and when.
+
+### The Freelancer
+
+He's booking a client trip: flights, hotel, ground transport. Three different agents. Three different services. Each agent gets a scoped mandate: "search only, no purchasing authority." When the agents negotiate with each other over the federation layer, they don't give each other his full itinerary or payment methods. Each sees exactly what its task requires. One receipt. Zero surprise charges. He revokes all three mandates when the trip is booked.
+
+### The Parent
+
+Her kid uses an AI tutor. She configures one mandate: "access learning history, suggest exercises, nothing else." No contact info. No location. No payment data. The tutor can't see it because the protocol won't let it transmit. If the tutor service is compromised, the attacker gets learning history — not the keys to her entire digital life.
+
+### The Startup Founder
+
+An employee leaves. He revokes their PAP profile. Every agent mandate tied to that profile goes dark immediately, cryptographically. API keys across five dashboards don't matter because the agent can't perform any action — the mandate has expired. No caching layer to clear. No eventual consistency. Immediate.
+
+---
+
 ## The Problem
 
 Existing agent protocols were designed for a single operator orchestrating tools on one machine, not for agents transacting across trust boundaries on behalf of different principals.
