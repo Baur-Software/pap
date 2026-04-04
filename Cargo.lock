@@ -4549,6 +4549,7 @@ dependencies = [
  "pap-did",
  "pap-marketplace",
  "serde_json",
+ "zeroize",
 ]
 
 [[package]]
@@ -4564,6 +4565,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "subtle",
  "thiserror 2.0.18",
  "uuid",
  "zeroize",
