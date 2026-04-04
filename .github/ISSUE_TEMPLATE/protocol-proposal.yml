@@ -1,0 +1,100 @@
+name: Protocol Proposal
+description: Question, concern, or change proposal for the PAP protocol specification
+title: "[Protocol] "
+labels: ["protocol"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for **protocol-level** questions or proposals — mandate semantics, SD-JWT disclosure rules, federation invariants, session lifecycle, etc. For bugs in a specific implementation, use one of the pillar-specific bug forms instead.
+
+        > **Capture test:** Every proposal is evaluated against *"Does this reduce or expand the attack surface for incumbent platform capture?"* Platform capture includes central registries, token economies, runtime scope expansion, and anything that erodes the human principal's root of trust.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of feedback
+      options:
+        - Question — I want to understand how something works
+        - Concern — I think something may be wrong or risky
+        - Proposal — I want to change or extend the protocol
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Protocol area
+      description: Which part of the specification does this concern?
+      options:
+        - Mandate chain — scope, TTL, delegation bounds
+        - SD-JWT selective disclosure — structural minimization
+        - Session lifecycle — open, decay states, close
+        - Ephemeral session DIDs — generation, unlinkability
+        - Co-signed receipts — property references, co-signing ceremony
+        - Federation — peer discovery, announcement, sync
+        - DID resolution — did:key, Ed25519 derivation
+        - W3C Verifiable Credentials — mandate envelope
+        - Transport bindings — HTTP, WebSocket, OHTTP
+        - WebAuthn — device-bound identity, signer abstraction
+        - Schema.org vocabulary — capability descriptions
+        - Conformance — test vectors or compliance criteria
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: spec-section
+    attributes:
+      label: Specification section (if known)
+      description: Reference the relevant section of `docs/specification.md` or an RFC if applicable
+      placeholder: "e.g. §4.3 Mandate Chain Verification, or RFC 9458 §2"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the question, concern, or proposal
+      description: Be specific. For proposals, describe both what should change and why the current behaviour is insufficient.
+      placeholder: |
+        Currently, mandate TTL is evaluated at phase 4 (mandate exchange) only. If an agent holds a long-lived session open, the mandate may expire mid-execution with no observable signal to the principal. I propose adding a decay checkpoint at phase 5 entry that…
+    validations:
+      required: true
+
+  - type: textarea
+    id: capture-test
+    attributes:
+      label: Capture test evaluation
+      description: |
+        How does your proposal fare against the capture test? Does it reduce, expand, or leave neutral the attack surface for platform capture (central registries, token economies, runtime scope expansion, enclave-as-local equivalence, CA dependency)?
+      placeholder: "This proposal reduces capture surface because… / This is neutral because it only affects timing semantics… / I am uncertain — here is what I know…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: related-code
+    attributes:
+      label: Related code, examples, or test vectors
+      description: Reference specific files, example scenarios, or test cases if applicable. Prefer file paths and line numbers over inline code dumps.
+      placeholder: "e.g. crates/pap-core/src/mandate.rs:142, examples/delegation-chain/src/main.rs"
+
+  - type: checkboxes
+    id: non-goals
+    attributes:
+      label: Non-goals check
+      description: PAP has explicit non-goals. Confirm your proposal does not introduce any of the following.
+      options:
+        - label: I am not proposing a token economy or on-chain component
+        - label: I am not proposing a central registry or authority
+        - label: I am not proposing novel cryptographic primitives
+        - label: I am not proposing runtime scope expansion (agents granting themselves wider mandates)
+          required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and discussions — this has not been raised before
+          required: true
+        - label: If this is a simple question, I considered using GitHub Discussions instead
+          required: true
