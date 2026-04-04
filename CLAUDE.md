@@ -4,10 +4,12 @@ PAP is **not a SaaS app or demo**—it's a protocol specification with a referen
 
 ## Key Architecture
 
-- **Multi-crate Rust monorepo** under `crates/` (pap-core, pap-did, pap-credential, pap-transport, pap-federation, pap-marketplace, pap-proto, pap-webauthn)
+- **Multi-crate Rust monorepo** under `crates/` (pap-core, pap-did, pap-credential, pap-transport, pap-federation, pap-marketplace, pap-proto, pap-webauthn, pap-c)
 - **Papillon** (under `apps/papillon/`) is a desktop reference implementation, not marketing material
 - **Examples** in `examples/` demonstrate the full protocol surface (search, travel-booking, delegation-chain, payment, networked, federated, webauthn)
 - **Python bindings** via PyO3 (`crates/pap-python/`) for broader language support
+- **C FFI** (`crates/pap-c/`) — stable cdylib/staticlib layer; basis for C++, C#, and Java bindings
+- **M-of-N social recovery** (v0.8.0): `crates/pap-core/src/shamir.rs` (core SSS), `apps/papillon/src/commands/recovery.rs` (Tauri commands), `apps/papillon/frontend/src/components/recovery_setup.rs` (setup wizard)
 
 ## Development Standards
 

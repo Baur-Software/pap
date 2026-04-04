@@ -186,14 +186,14 @@ void pap_recovery_shard_free(PapRecoveryShard *shard);
 After the LLM setup wizard completes, Papillon shows a recovery setup prompt:
 
 ```
-RECOVERY_SETUP — OPTIONAL BUT RECOMMENDED
+RECOVERY_SETUP — INSTITUTIONAL KEY SPLITTING
 
 Split your identity key across 3 trusted contacts.
 Any 2 can reconstruct your identity if your device is lost.
 
-  [02] CONFIGURE  →  Set M and N
-  [03] GENERATE   →  Create N shard files
-  [04] CONFIRM    →  Mark as backed up
+  [02] CONFIGURE   →  Set M and N
+  [03] DISTRIBUTE  →  Review and export N shard files (one at a time)
+  [04] CONFIRM     →  Mark as backed up
 ```
 
 The flow is skippable and dismissible. A status indicator in the settings panel shows whether
@@ -201,16 +201,19 @@ recovery is configured.
 
 ### Tauri Commands
 
-| Command                    | Args                                       | Returns                     |
-|----------------------------|--------------------------------------------|-----------------------------|
+| Command                    | Args                                       | Returns                      |
+|----------------------------|--------------------------------------------|------------------------------|
 | `create_recovery_shards`   | `{ threshold: u8, total: u8 }`             | `RecoverySetupResult`        |
-| `reconstruct_from_shards`  | `{ shards_json: Vec<String> }`             | `IdentityInfo`               |
+| `reconstruct_from_shards`  | `{ shards_json: Vec<String> }`             | `RecoveryReconstructResult`  |
+| `mark_recovery_complete`   | _(none)_                                   | `()`                         |
+| `get_recovery_status`      | _(none)_                                   | `RecoveryStatus`             |
 
 ### State
 
 `RecoveryState` (Leptos context):
 - `show_setup: RwSignal<bool>` — whether the setup modal is open
-- `shards: RwSignal<Vec<RecoveryShardDisplay>>` — generated shards for export
+- `shards: RwSignal<Vec<RecoveryShardInfo>>` — generated shards for export
+- `manifest_json: RwSignal<String>` — public shard manifest JSON
 - `threshold: RwSignal<u8>` — user-selected M
 - `total: RwSignal<u8>` — user-selected N
 - `generating: RwSignal<bool>` — loading indicator
@@ -221,8 +224,11 @@ recovery is configured.
 
 ## Security Notes
 
-1. **Seed zeroization:** Shard bytes are wrapped in `Zeroize` and cleared from memory after use.
-   The polynomial coefficients are zeroized immediately after shard generation.
+1. **Seed zeroization:** `shamir::reconstruct()` returns `zeroize::Zeroizing<[u8; 32]>` so the
+   reconstructed seed is automatically zeroized when the caller drops it. Shard bytes (`RecoveryShard`
+   `Drop` impl) and polynomial coefficients (`ZeroizingCoeffs` wrapper) are zeroized immediately
+   after use. The `seed_b64` intermediate string in `reconstruct_from_shards` is explicitly zeroized
+   before the function returns.
 
 2. **No novel cryptography:** GF(256) Shamir is a textbook algorithm with decades of analysis.
    The commitment scheme uses standard SHA-256. No custom primitives.
@@ -238,3 +244,13 @@ recovery is configured.
 5. **The manifest is public:** The `ShardManifest` containing commitments and the `session_nonce`
    is safe to publish publicly. A `session_nonce` without shard values reveals nothing about the
    seed.
+
+6. **TOCTOU guard in `reconstruct_from_shards`:** The signer write-lock is acquired before the
+   DID-match check and held through the signer/seed installation. This prevents a concurrent
+   `switch_profile` call from racing between the check and the write, which would otherwise allow
+   a different identity to be silently overwritten.
+
+7. **DB correctness:** The reconstructed seed is persisted to `profiles_db` (the authoritative
+   profiles database) rather than the legacy key-value store. The legacy store is used only as a
+   fallback on first-run (pre-migration) devices where no active profile record exists. Seeds written
+   only to the legacy store would be silently reverted on the next restart.
