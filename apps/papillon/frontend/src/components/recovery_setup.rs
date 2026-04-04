@@ -235,7 +235,11 @@ pub fn RecoverySetup() -> impl IntoView {
                                             {shard_json}
                                         </textarea>
                                         <div class="setup-actions" style="margin-top: 1rem;">
-                                            <button class="btn-ghost" on:click=move |_| step.set(2)>"[ REGENERATE ]"</button>
+                                            <button class="btn-ghost" on:click=move |_| {
+                                                recovery.shards.set(Vec::new());
+                                                recovery.manifest_json.set(String::new());
+                                                step.set(2);
+                                            }>"[ REGENERATE ]"</button>
                                             {if is_last {
                                                 view! {
                                                     <button class="btn-sys" on:click=move |_| step.set(4)>

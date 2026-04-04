@@ -1691,14 +1691,17 @@ pub unsafe extern "C" fn pap_recovery_create_shards(
         set_last_error("null seed_bytes pointer");
         return std::ptr::null_mut();
     }
-    let seed: [u8; 32] = match unsafe { std::slice::from_raw_parts(seed_bytes, 32) }.try_into() {
+    let mut seed: [u8; 32] = match unsafe { std::slice::from_raw_parts(seed_bytes, 32) }.try_into() {
         Ok(b) => b,
         Err(_) => {
             set_last_error("seed_bytes must be exactly 32 bytes");
             return std::ptr::null_mut();
         }
     };
-    match pap_core::shamir::create_shards(&seed, threshold, total_shares) {
+    let result = pap_core::shamir::create_shards(&seed, threshold, total_shares);
+    use zeroize::Zeroize;
+    seed.zeroize();
+    match result {
         Ok((shards, manifest)) => {
             let wrapped: Vec<PapRecoveryShard> = shards
                 .into_iter()

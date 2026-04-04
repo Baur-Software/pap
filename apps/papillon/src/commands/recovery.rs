@@ -155,14 +155,16 @@ pub fn reconstruct_from_shards(
     }
 
     // Persist the reconstructed seed as the new active identity.
-    let seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed);
+    // seed is Zeroizing<[u8;32]> — encode via deref to avoid copying the raw bytes.
+    use pap_webauthn::SoftwareSigner;
+    use zeroize::Zeroize;
+
+    let mut seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&*seed);
     state
         .db
         .set_setting("principal_seed_b64", &seed_b64)
         .map_err(|e| PapillonError::from(e.to_string()))?;
-
-    use pap_webauthn::SoftwareSigner;
-    use zeroize::Zeroizing;
+    seed_b64.zeroize();
 
     let signer = SoftwareSigner::from_keypair(keypair);
 
@@ -176,7 +178,8 @@ pub fn reconstruct_from_shards(
         .principal_seed
         .write()
         .map_err(|e| PapillonError::from(e.to_string()))?;
-    *seed_lock = Some(Zeroizing::new(seed));
+    // seed is already Zeroizing<[u8;32]> — move it directly.
+    *seed_lock = Some(seed);
 
     if let Ok(mut backed_up) = state.key_backed_up.write() {
         *backed_up = true;

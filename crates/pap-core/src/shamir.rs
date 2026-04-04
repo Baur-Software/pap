@@ -382,7 +382,7 @@ pub fn create_shards(
 /// - `RecoveryError` if shards come from different ceremonies (session nonce mismatch).
 /// - `RecoveryError` if shard indices are not unique.
 /// - `ThresholdNotMet` if fewer than threshold shards are provided.
-pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<[u8; 32], PapError> {
+pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<zeroize::Zeroizing<[u8; 32]>, PapError> {
     if shards.is_empty() {
         return Err(PapError::ThresholdNotMet(1, 0));
     }
@@ -461,7 +461,7 @@ pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<[u8; 32], PapError> {
         buf.zeroize();
     }
 
-    Ok(*secret)
+    Ok(secret)
 }
 
 // ---------------------------------------------------------------------------
@@ -489,7 +489,7 @@ mod tests {
         let (shards, _manifest) = create_shards(&seed, 1, 1).unwrap();
         let refs: Vec<&RecoveryShard> = shards.iter().collect();
         let recovered = reconstruct(&refs).unwrap();
-        assert_eq!(seed, recovered);
+        assert_eq!(seed, *recovered);
     }
 
     #[test]
@@ -499,17 +499,17 @@ mod tests {
 
         // Any 2 of 3 shards reconstruct correctly.
         let r01: Vec<&RecoveryShard> = vec![&shards[0], &shards[1]];
-        assert_eq!(seed, reconstruct(&r01).unwrap());
+        assert_eq!(seed, *reconstruct(&r01).unwrap());
 
         let r02: Vec<&RecoveryShard> = vec![&shards[0], &shards[2]];
-        assert_eq!(seed, reconstruct(&r02).unwrap());
+        assert_eq!(seed, *reconstruct(&r02).unwrap());
 
         let r12: Vec<&RecoveryShard> = vec![&shards[1], &shards[2]];
-        assert_eq!(seed, reconstruct(&r12).unwrap());
+        assert_eq!(seed, *reconstruct(&r12).unwrap());
 
         // All 3 shards also reconstruct correctly.
         let r012: Vec<&RecoveryShard> = shards.iter().collect();
-        assert_eq!(seed, reconstruct(&r012).unwrap());
+        assert_eq!(seed, *reconstruct(&r012).unwrap());
     }
 
     #[test]
@@ -519,11 +519,11 @@ mod tests {
 
         // First 3 shards.
         let refs: Vec<&RecoveryShard> = shards[..3].iter().collect();
-        assert_eq!(seed, reconstruct(&refs).unwrap());
+        assert_eq!(seed, *reconstruct(&refs).unwrap());
 
         // Shards 1, 3, 5 (indices 1, 3, 5).
         let alt: Vec<&RecoveryShard> = vec![&shards[0], &shards[2], &shards[4]];
-        assert_eq!(seed, reconstruct(&alt).unwrap());
+        assert_eq!(seed, *reconstruct(&alt).unwrap());
     }
 
     #[test]
