@@ -164,19 +164,3 @@ export function httpsUrlToPap(
 
   return `${prefix}${hostport}${url.pathname}${url.search}`;
 }
-
-/**
- * Extract the domain (hostname) from an HTTPS or HTTP URL.
- * Returns null for non-HTTP(S) URLs or invalid input.
- */
-export function extractDomain(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return null;
-    }
-    return parsed.hostname;
-  } catch {
-    return null;
-  }
-}
