@@ -1806,7 +1806,7 @@ pub unsafe extern "C" fn pap_recovery_reconstruct(
     shard_count: c_int,
     seed_out: *mut u8,
 ) -> c_int {
-    if shards.is_null() || shard_count <= 0 || seed_out.is_null() {
+    if shards.is_null() || shard_count <= 0 || shard_count > 255 || seed_out.is_null() {
         set_last_error("null or invalid argument to pap_recovery_reconstruct");
         return -1;
     }
@@ -1827,8 +1827,11 @@ pub unsafe extern "C" fn pap_recovery_reconstruct(
     }
 
     match pap_core::shamir::reconstruct(&shard_refs) {
-        Ok(seed) => {
+        Ok(mut seed) => {
             unsafe { std::ptr::copy_nonoverlapping(seed.as_ptr(), seed_out, 32) };
+            // Zeroize the stack copy so the seed does not linger in memory.
+            use zeroize::Zeroize;
+            seed.zeroize();
             0
         }
         Err(e) => {

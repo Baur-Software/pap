@@ -22,6 +22,7 @@ use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 use crate::error::PapError;
@@ -189,7 +190,10 @@ impl RecoveryShard {
     }
 
     /// Verify this shard's commitment. Returns an error if the shard has been tampered with.
+    ///
+    /// Comparison is performed in constant time to avoid timing side-channels.
     pub fn verify_commitment(&self) -> Result<(), PapError> {
+        use base64::Engine;
         let shard_bytes = self.raw_shard_bytes()?;
         let session_nonce = self.raw_session_nonce()?;
         let expected = compute_commitment(
@@ -199,10 +203,16 @@ impl RecoveryShard {
             self.total,
             &shard_bytes,
         );
-        use base64::Engine;
-        let expected_b64 =
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(expected);
-        if expected_b64 != self.commitment {
+        // Decode the stored commitment to raw bytes and compare using constant-time eq.
+        let stored_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(&self.commitment)
+            .map_err(|e| PapError::RecoveryError(format!("invalid commitment encoding: {e}")))?;
+        let stored: [u8; 32] = stored_bytes
+            .as_slice()
+            .try_into()
+            .map_err(|_| PapError::RecoveryError("commitment must be 32 bytes".into()))?;
+        // subtle::ConstantTimeEq prevents timing side-channels.
+        if expected.ct_eq(&stored).unwrap_u8() == 0 {
             return Err(PapError::RecoveryError(format!(
                 "shard {} commitment verification failed — shard has been tampered with",
                 self.index
@@ -389,9 +399,12 @@ pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<[u8; 32], PapError> {
     }
 
     // 2. Verify consistent session nonce (no cross-ceremony mixing).
-    let expected_nonce = &shards[0].session_nonce;
+    // Decode to raw bytes and compare constant-time to avoid timing side-channels
+    // and to handle any base64 encoding normalisation inconsistencies.
+    let reference_nonce = shards[0].raw_session_nonce()?;
     for shard in shards.iter().skip(1) {
-        if &shard.session_nonce != expected_nonce {
+        let shard_nonce = shard.raw_session_nonce()?;
+        if reference_nonce.ct_eq(&shard_nonce).unwrap_u8() == 0 {
             return Err(PapError::RecoveryError(
                 "session nonce mismatch — shards are from different ceremonies".into(),
             ));
@@ -435,10 +448,12 @@ pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<[u8; 32], PapError> {
     }
 
     // 6. Lagrange interpolation at 0 for each byte.
-    let mut secret = [0u8; 32];
+    // Use Zeroizing so partial secret is cleared on early error exit.
+    let mut secret = zeroize::Zeroizing::new([0u8; 32]);
     for byte_idx in 0..32usize {
-        let y_coords: Vec<u8> = decoded.iter().map(|s| s[byte_idx]).collect();
+        let mut y_coords: Vec<u8> = decoded.iter().map(|s| s[byte_idx]).collect();
         secret[byte_idx] = lagrange_at_zero(&x_coords, &y_coords);
+        y_coords.zeroize();
     }
 
     // Zeroize decoded shard bytes.
@@ -446,7 +461,7 @@ pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<[u8; 32], PapError> {
         buf.zeroize();
     }
 
-    Ok(secret)
+    Ok(*secret)
 }
 
 // ---------------------------------------------------------------------------

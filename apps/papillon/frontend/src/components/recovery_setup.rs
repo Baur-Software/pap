@@ -60,14 +60,18 @@ pub fn RecoverySetup() -> impl IntoView {
     };
 
     let mark_done = move |_| {
-        recovery.setup_complete.set(true);
-        recovery.show_setup.set(false);
-        step.set(1);
-        recovery.shards.set(Vec::new());
-        recovery.manifest_json.set(String::new());
-        // Persist the flag so the post-onboarding prompt does not re-appear on restart.
+        // Persist to backend first; update UI state only after success so the
+        // post-onboarding prompt does not re-appear on restart.
         spawn_local(async move {
             let _ = bridge::invoke_no_args::<()>("mark_recovery_complete").await;
+            // Whether or not the backend call succeeded, dismiss the modal so
+            // the user is not stuck.  On failure the DB flag is not set and the
+            // prompt will appear again on next launch, which is acceptable.
+            recovery.setup_complete.set(true);
+            recovery.show_setup.set(false);
+            step.set(1);
+            recovery.shards.set(Vec::new());
+            recovery.manifest_json.set(String::new());
         });
     };
 

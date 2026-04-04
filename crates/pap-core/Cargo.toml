@@ -23,3 +23,4 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 zeroize = { workspace = true }
+subtle = "2"
