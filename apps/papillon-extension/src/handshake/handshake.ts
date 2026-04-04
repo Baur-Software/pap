@@ -43,7 +43,12 @@ const queryInput = $("query-input") as HTMLInputElement;
 const params = new URLSearchParams(window.location.search);
 const uri = params.get("uri") || "";
 const rawFallback = params.get("fallback") || "";
-const fallbackUrl = rawFallback.startsWith("https://") ? rawFallback : "";
+// Allow http(s) only — block javascript:, data:, blob:, vbscript:, etc.
+// Displayed as copyable text (never navigated), but no reason to show dangerous schemes.
+const fallbackUrl =
+  rawFallback.startsWith("https://") || rawFallback.startsWith("http://")
+    ? rawFallback
+    : "";
 let currentPhase = 0;
 let activeSessionId: string | null = null;
 
