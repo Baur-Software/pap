@@ -21,10 +21,26 @@ import type {
 // ── State ──────────────────────────────────────────────────────────────
 
 const activeSessions = new Map<string, ActiveSession>();
-const papSiteTabs = new Map<number, PapManifest>();
 let principalDid: string | null = null;
 let offscreenReady = false;
 let nativePort: chrome.runtime.Port | null = null;
+
+// PAP site badges persisted via chrome.storage.session to survive SW restart
+async function getPapSiteManifest(tabId: number): Promise<PapManifest | null> {
+  const data = await chrome.storage.session.get(`pap-tab-${tabId}`);
+  return data[`pap-tab-${tabId}`] ?? null;
+}
+
+async function setPapSiteManifest(
+  tabId: number,
+  manifest: PapManifest | null
+): Promise<void> {
+  if (manifest) {
+    await chrome.storage.session.set({ [`pap-tab-${tabId}`]: manifest });
+  } else {
+    await chrome.storage.session.remove(`pap-tab-${tabId}`);
+  }
+}
 
 // ── Offscreen Document Lifecycle ───────────────────────────────────────
 
@@ -250,7 +266,7 @@ chrome.runtime.onMessage.addListener(
       case "SITE_HAS_PAP": {
         const tabId = sender.tab?.id;
         if (!tabId) break;
-        papSiteTabs.set(tabId, msg.manifest);
+        setPapSiteManifest(tabId, msg.manifest);
         // Per-tab badge — always set. Chrome's global badge (no tabId)
         // overrides per-tab when set; when global clears, per-tab shows through.
         chrome.action.setBadgeText({ text: "PAP", tabId });
@@ -263,12 +279,13 @@ chrome.runtime.onMessage.addListener(
 
       // Popup: get PAP site info for a tab
       case "GET_PAP_SITE": {
-        const manifest = papSiteTabs.get(msg.tabId) ?? null;
-        sendResponse({
-          type: "PAP_SITE_RESPONSE",
-          manifest,
-        } satisfies PapSiteResponse);
-        return true;
+        getPapSiteManifest(msg.tabId).then((manifest) => {
+          sendResponse({
+            type: "PAP_SITE_RESPONSE",
+            manifest,
+          } satisfies PapSiteResponse);
+        });
+        return true; // async response
       }
     }
   }
@@ -334,24 +351,30 @@ chrome.omnibox.onInputEntered.addListener((text, disposition) => {
 // ── Tab Lifecycle (PAP site discovery cleanup) ────────────────────────
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  papSiteTabs.delete(tabId);
+  setPapSiteManifest(tabId, null);
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading") {
-    papSiteTabs.delete(tabId);
+    setPapSiteManifest(tabId, null);
     chrome.action.setBadgeText({ text: "", tabId });
   }
 });
 
 // ── Context Menu: "Open with PAP protection" ──────────────────────────
 
-chrome.contextMenus?.onClicked.addListener((info) => {
-  if (info.menuItemId === "pap-upgrade-link" && info.linkUrl) {
-    const papUri = httpsUrlToPap(info.linkUrl);
-    openHandshakeTab(papUri, undefined, undefined, info.linkUrl);
-  }
-});
+if (chrome.contextMenus) {
+  chrome.contextMenus.onClicked.addListener((info) => {
+    if (info.menuItemId === "pap-upgrade-link" && info.linkUrl) {
+      try {
+        const papUri = httpsUrlToPap(info.linkUrl);
+        openHandshakeTab(papUri, undefined, undefined, info.linkUrl);
+      } catch (err) {
+        console.error("[PAP] Context menu: failed to upgrade link", err);
+      }
+    }
+  });
+}
 
 // ── Startup ────────────────────────────────────────────────────────────
 
@@ -363,13 +386,15 @@ chrome.runtime.onInstalled.addListener(async () => {
   // Try to connect to native app
   nativePort = connectNative();
 
-  // Register context menu for HTTPS link upgrade
-  chrome.contextMenus?.create({
-    id: "pap-upgrade-link",
-    title: "Open with PAP protection",
-    contexts: ["link"],
-    targetUrlPatterns: ["https://*/*"],
-  });
+  // Register context menu for HTTPS link upgrade (if API available)
+  if (chrome.contextMenus) {
+    chrome.contextMenus.create({
+      id: "pap-upgrade-link",
+      title: "Open with PAP protection",
+      contexts: ["link"],
+      targetUrlPatterns: ["https://*/*"],
+    });
+  }
 });
 
 console.log("[PAP Service Worker] Ready");

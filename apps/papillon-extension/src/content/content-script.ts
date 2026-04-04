@@ -94,17 +94,37 @@ document.addEventListener("click", interceptClick, true);
 /**
  * Layer 0: Check <link rel="pap-manifest"> or equivalent in document head.
  * Zero network cost — reads existing DOM only.
+ * Returns null if the link points to a different origin (enforces same-origin).
  */
 function checkLinkRelPap(): string | null {
   const link = document.querySelector<HTMLLinkElement>(
     'link[rel="pap-manifest"], link[rel="alternate"][type="application/pap+json"]'
   );
-  return link?.href ?? null;
+  if (!link?.href) return null;
+
+  // Enforce same-origin: the manifest URL must be on the same host/port/scheme
+  try {
+    const manifestUrl = new URL(link.href);
+    const pageUrl = new URL(window.location.href);
+    if (
+      manifestUrl.origin !== pageUrl.origin
+    ) {
+      console.warn(
+        "[PAP] Cross-origin link-rel detected, rejecting:",
+        link.href
+      );
+      return null;
+    }
+    return link.href;
+  } catch {
+    // Invalid URL
+    return null;
+  }
 }
 
 /**
  * Layer 1: Same-origin probe for /.well-known/pap-manifest.
- * Uses link-rel href if present, else the well-known path.
+ * Uses link-rel href if present (must pass same-origin check), else the well-known path.
  * Reports result to service worker for icon badge.
  */
 async function probeSameOrigin() {
