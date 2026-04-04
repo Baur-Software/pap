@@ -9,6 +9,17 @@
 //! and shard bytes. Any modification to a shard invalidates the commitment, which is
 //! detected at reconstruction time before any Lagrange interpolation is attempted.
 //!
+//! **Limitation — accidental corruption only, not malicious forgery.** The `session_nonce`
+//! is included in the public `ShardManifest`, so any party who possesses the manifest can
+//! compute a commitment over arbitrary shard bytes (SHA-256 has no key). The commitment
+//! therefore protects against unintentional bit-flip / storage corruption, but a malicious
+//! trustee who holds the manifest can substitute their shard with a crafted fake that passes
+//! `verify_commitment()`. At reconstruction this causes Lagrange interpolation to produce
+//! a wrong seed with no error. The threat model assumes trustee honesty at the social
+//! layer — a malicious trustee can equally simply withhold their shard, which is equivalent.
+//! A future version will move to HMAC(key=KDF(seed), ...) to make commitments unforgeable;
+//! tracked as a P1 TODO in the project TODOS.md.
+//!
 //! ## Replay Attack Prevention
 //! A 32-byte `session_nonce` is generated from a CSPRNG once per ceremony and embedded
 //! in every shard. Reconstruction requires all shards to share the same nonce, preventing
