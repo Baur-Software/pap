@@ -4882,6 +4882,7 @@ dependencies = [
  "pap-credential",
  "pap-did",
  "pap-proto",
+ "papillon-shared",
  "rand 0.8.5",
  "reqwest 0.12.12",
  "rustls",
