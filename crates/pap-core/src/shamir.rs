@@ -143,6 +143,8 @@ fn compute_commitment(
 /// The shard is serializable to JSON for distribution to trustees.
 /// Trustees should store the JSON blob securely (e.g., in an HSM, sealed envelope,
 /// encrypted password manager entry, or bank safe).
+// NOTE: no Zeroize derive — DateTime<Utc> doesn't implement Zeroize.
+// Drop is implemented manually to zeroize the secret-carrying string fields.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecoveryShard {
     /// Format version (currently 1).
@@ -162,6 +164,17 @@ pub struct RecoveryShard {
     pub commitment: String,
     /// Creation timestamp (same for all shards in a ceremony).
     pub created_at: DateTime<Utc>,
+}
+
+impl Drop for RecoveryShard {
+    fn drop(&mut self) {
+        // shard_bytes and session_nonce carry secret material (GF polynomial
+        // evaluations of the seed bytes, and the ceremony nonce). Zeroize them
+        // before the heap allocation is released.
+        self.shard_bytes.zeroize();
+        self.session_nonce.zeroize();
+        self.commitment.zeroize();
+    }
 }
 
 impl RecoveryShard {

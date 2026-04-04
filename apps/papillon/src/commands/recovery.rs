@@ -111,15 +111,26 @@ pub fn reconstruct_from_shards(
             .db
             .get_setting("recovery_threshold_m")
             .map_err(|e| PapillonError::from(e.to_string()))?;
-        if let Some(expected_str) = stored_threshold {
-            let expected: u8 = expected_str
-                .parse()
-                .map_err(|_| PapillonError::from("stored threshold is corrupt"))?;
-            if first.threshold != expected {
-                return Err(PapillonError::from(format!(
-                    "shard threshold ({}) does not match the ceremony threshold ({}) — shards may be from a different ceremony",
-                    first.threshold, expected
-                )));
+        match stored_threshold {
+            Some(expected_str) => {
+                let expected: u8 = expected_str
+                    .parse()
+                    .map_err(|_| PapillonError::from("stored threshold is corrupt"))?;
+                if first.threshold != expected {
+                    return Err(PapillonError::from(format!(
+                        "shard threshold ({}) does not match the ceremony threshold ({}) — shards may be from a different ceremony",
+                        first.threshold, expected
+                    )));
+                }
+            }
+            None => {
+                // No ceremony record found — this device has no prior setup ceremony.
+                // The commitment scheme still validates shard integrity, but the
+                // belt-and-suspenders threshold check cannot run. Log a warning.
+                eprintln!(
+                    "[WARN] reconstruct_from_shards: no stored recovery_threshold_m — \
+                     threshold-forgery guard skipped (commitment check still active)"
+                );
             }
         }
     }
