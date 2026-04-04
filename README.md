@@ -10,52 +10,43 @@ A principal-first, zero-trust agent negotiation protocol for the open web.
 
 Meet the humans who need this.
 
-### The Journalist
+📰 **The Journalist**
+Investigates municipal contracts. Her agent finds public records, cross-references voting histories, summarizes conflicts. Every data source touched is in the co-signed receipt. Proof of what was read and when.
 
-She's investigating a story on municipal contracts. She tells her PAP agent to find public records, cross-reference voting histories, and summarize conflicts of interest. Every data source the agent touched, every property it accessed, is in the co-signed receipt. If someone later asks "did your AI make this up?" — she can prove exactly what it read and when.
+✈️ **The Freelancer**
+Booking a client trip: three agents (flights, hotel, transport), three services. Each gets a scoped mandate: "search only." They negotiate with each other without sharing his full itinerary or payment methods. One receipt. Zero surprise charges.
 
-### The Freelancer
+👨‍👧‍👦 **The Parent**
+Configures an AI tutor mandate: "learning history + exercises only." No contact info, location, or payment data. The protocol won't transmit what the mandate doesn't allow. Breach gets learning history, not his digital life.
 
-He's booking a client trip: flights, hotel, ground transport. Three different agents. Three different services. Each agent gets a scoped mandate: "search only, no purchasing authority." When the agents negotiate with each other over the federation layer, they don't give each other his full itinerary or payment methods. Each sees exactly what its task requires. One receipt. Zero surprise charges. He revokes all three mandates when the trip is booked.
-
-### The Parent
-
-Her kid uses an AI tutor. She configures one mandate: "access learning history, suggest exercises, nothing else." No contact info. No location. No payment data. The tutor can't see it because the protocol won't let it transmit. If the tutor service is compromised, the attacker gets learning history — not the keys to her entire digital life.
-
-### The Startup Founder
-
-An employee leaves. He revokes their PAP profile. Every agent mandate tied to that profile goes dark immediately, cryptographically. API keys across five dashboards don't matter because the agent can't perform any action — the mandate has expired. No caching layer to clear. No eventual consistency. Immediate.
+🏢 **The Startup Founder**
+Employee leaves. He revokes their PAP profile. Every mandate tied to it goes dark immediately, cryptographically. API keys across five dashboards don't matter—the mandate expired. No caching delays. Instant.
 
 ---
 
+**What ties them together:** instant mandate revocation, protocol-enforced scope, cryptographic proof of what happened.
+
 ## The Problem
 
-Existing agent protocols were designed for a single operator orchestrating tools on one machine, not for agents transacting across trust boundaries on behalf of different principals.
+Existing agent protocols fail here because they were designed for single-operator scenarios, not agents transacting across trust boundaries.
 
-- **A2A** authenticates agents as platform entities. Privacy is an "opacity principle" — aspirational, not enforced. No mechanism for partial disclosure. Session residue is undefined.
-- **MCP** connects models to tools. Its own spec states: "we cannot enforce these security principles at the protocol level." Designed for single-operator. Disclosure is monolithic.
-- **ACP** handles REST-based agent interop. Thin trust layer. No cryptographic identity. No session ephemerality.
-- **CrewAI, LangGraph, OpenAI Agents SDK** treat disclosure as an implementation detail. LangGraph's default is a shared scratchpad where every agent sees everything. No protocol mechanism to send less. When an API in the chain is compromised, the attacker gets full principal context.
+- **A2A, MCP, ACP** all treat disclosure as an application problem. Privacy is aspirational policy, never protocol.
+- **LangGraph, CrewAI, OpenAI SDK** default to monolithic context: every agent sees everything. No mechanism to send less.
+- **The structural failure:** When an API in the chain is compromised, the attacker gets the full principal context (credit cards, travel history, medical data, everything the orchestrator knew).
 
-**The unifying failure:** None enforce context minimization at the protocol layer. None define session ephemerality as a guarantee. Privacy is always an application problem, never a protocol problem.
+Sandboxing constrains *what an agent can do*. It does not constrain *what it can see*. You cannot solve a disclosure problem with execution controls.
 
 ## The Design
 
 PAP makes it the protocol's problem.
 
-The human principal is the root of trust. Every agent in a transaction carries a cryptographically verifiable mandate from that root. Sessions are ephemeral by design. Context disclosure is enforced by the protocol, not by policy. The cloud is a stateless utility invoked by agents, not a relationship that accumulates principal context.
+The human principal is the root of trust. Every agent carries a cryptographically verifiable mandate. Sessions are ephemeral by design. Context disclosure is enforced by protocol, not policy. The cloud is a stateless utility, not a relationship that accumulates principal context.
+
+**PAP's answer:** Protocol-enforced selective disclosure via SD-JWT. An agent receives only the properties its mandate permits—undisclosed claims don't exist on the wire. A compromised hotel API gets check-in, checkout, city. That's the blast radius. Not defense-in-depth. Protocol design.
+
+Every session is ephemeral and unlinked to principal identity. Both parties co-sign receipts recording *which properties were disclosed*, never their values. The agent forgets everything at session close.
 
 **No new cryptography. No token economy. No central registry.**
-
-## Why This Matters
-
-**The Problem:** A compromise in one agent's tool chain becomes a compromise of your principal context. In every major framework — LangGraph, CrewAI, OpenAI Agents SDK, AutoGen — disclosure is monolithic. The agent gets a blob of context. There is no protocol mechanism to send less. When an API gets breached, the attacker gets everything the orchestrator knew about the principal: credit cards, address, travel history, medical conditions, financial data.
-
-**The Structural Ceiling:** You cannot solve a disclosure problem with execution controls. Sandboxing constrains *what an agent can do*. It does not constrain *what it can see*. The protocol layer has no opinion on partial disclosure, so developers are left playing whack-a-mole: strip sensitive fields, the model rephrases them in responses; add output filters, the model finds new phrasings.
-
-**PAP's Answer:** Protocol-enforced selective disclosure. An agent receives only the specific properties its mandate permits. The SD-JWT mechanism ensures undisclosed claims do not exist on the wire — not because a filter removed them, but because they were never transmitted. A compromised hotel API gets your check-in date, checkout date, and city. That is the blast radius. Not through defense-in-depth. Through protocol design.
-
-Every session is ephemeral and unlinked to principal identity. Both parties sign receipts that record *which properties were disclosed*, never their values. The agent forgets everything at session close.
 
 ## Trust Model
 
