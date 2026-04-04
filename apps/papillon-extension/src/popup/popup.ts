@@ -2,11 +2,13 @@
  * Popup — identity status, active sessions, quick actions.
  */
 
-import type { StateResponse } from "../lib/types.js";
+import type { StateResponse, PapSiteResponse } from "../lib/types.js";
 
 const principalDidEl = document.getElementById("principal-did")!;
 const sessionCountEl = document.getElementById("session-count")!;
 const nativeStatusEl = document.getElementById("native-status")!;
+const papSiteSectionEl = document.getElementById("pap-site-section")!;
+const papSiteNameEl = document.getElementById("pap-site-name")!;
 const openHandshakeBtn = document.getElementById("open-handshake")!;
 const openSettingsBtn = document.getElementById("open-settings")!;
 
@@ -44,6 +46,20 @@ chrome.runtime.sendMessage({ type: "GET_STATE" }, (resp: StateResponse) => {
     dotEl.className = "pop-status-dot disconnected";
     textEl.textContent = "Not running";
   }
+});
+
+// ── PAP Site Discovery ────────────────────────────────────────────────
+
+chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+  if (!tab?.id) return;
+  chrome.runtime.sendMessage(
+    { type: "GET_PAP_SITE", tabId: tab.id },
+    (resp: PapSiteResponse) => {
+      if (chrome.runtime.lastError || !resp?.manifest) return;
+      papSiteSectionEl.hidden = false;
+      papSiteNameEl.textContent = resp.manifest.name;
+    }
+  );
 });
 
 // ── Actions ────────────────────────────────────────────────────────────
