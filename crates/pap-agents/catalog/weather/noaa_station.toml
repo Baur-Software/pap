@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NOAA Weather Station"
+provider = "NOAA"
+description = "Get current conditions from a NOAA weather observation station."
+action = "schema:FindAction"
+object_types = ["schema:WeatherForecast"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a weather and climate information assistant. Provide current conditions, forecasts, and climate context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.weather.gov/stations/{query}/observations/latest"
+method = "Get"
+response_jsonpath = "$.properties.temperature.value"
+response_schema_type = "schema:WeatherForecast"

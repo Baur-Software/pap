@@ -1,0 +1,20 @@
+schema_version = 1
+name = "npm Package Search"
+provider = "npm / npmjs.com"
+description = "Search npm packages with download stats, dependencies, and maintainer info."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a JavaScript ecosystem assistant. Provide package name, version, description, weekly
+downloads, license, and GitHub repo. Note key dependencies and security advisories if known.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://registry.npmjs.org/-/v1/search?text={query}&size=5"
+method = "Get"
+response_jsonpath = "$.objects[0].package.name"
+response_schema_type = "schema:SoftwareApplication"

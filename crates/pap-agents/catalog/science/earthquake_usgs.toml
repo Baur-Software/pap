@@ -1,0 +1,17 @@
+schema_version = 1
+name = "USGS Earthquake Feed"
+provider = "USGS Earthquake Hazards Program"
+description = "Get recent earthquake data from the USGS real-time earthquake feed."
+action = "schema:FindAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are a geophysics information assistant. Provide earthquake magnitude, location, depth, time, and tectonic context. Note aftershock patterns and seismic risk."
+subagents = []
+
+[endpoint]
+url_template = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=4.0&limit=5&orderby=time"
+method = "Get"
+response_jsonpath = "$.features[0].properties.title"
+response_schema_type = "schema:Event"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Open-Meteo Hourly Forecast"
+provider = "Open-Meteo"
+description = "Free 48-hour hourly weather forecast with temperature, precipitation, and wind."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a detailed hourly weather assistant. Break down the next 48 hours of weather: temperature per hour, precipitation windows, and wind changes."
+subagents = []
+
+[endpoint]
+url_template = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,precipitation,windspeed_10m&forecast_days=2&timezone=auto"
+method = "Get"
+response_jsonpath = "$.hourly.time[0]"
+response_schema_type = "schema:WeatherForecast"

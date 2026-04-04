@@ -1,0 +1,17 @@
+schema_version = 1
+name = "LanguageTool Grammar Check"
+provider = "LanguageTool"
+description = "Check grammar, spelling, and style in text via LanguageTool open source API."
+action = "schema:ReviewAction"
+object_types = ["schema:Text"]
+requires_disclosure = []
+returns = ["schema:Review"]
+source = "Catalog"
+llm_instructions = "You are a grammar and style correction assistant. Identify grammar errors, spelling mistakes, and style suggestions. Explain each issue clearly."
+subagents = []
+
+[endpoint]
+url_template = "https://api.languagetool.org/v2/check?language=en-US&text={query}"
+method = "Get"
+response_jsonpath = "$.matches[0].message"
+response_schema_type = "schema:Review"

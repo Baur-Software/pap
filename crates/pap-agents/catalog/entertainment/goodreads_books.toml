@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Goodreads Book Search"
+provider = "Amazon / Goodreads"
+description = "Search book reviews, ratings, and reading lists via Goodreads."
+action = "schema:SearchAction"
+object_types = ["schema:Book"]
+requires_disclosure = []
+returns = ["schema:Book"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested goodreads_books including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://www.goodreads.com/search/index.xml?q={query}&key=demo"
+method = "Get"
+response_jsonpath = "$.GoodreadsResponse.search.results.work[0].best_book.title"
+response_schema_type = "schema:Book"

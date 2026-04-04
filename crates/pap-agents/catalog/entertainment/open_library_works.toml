@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Open Library Works Search"
+provider = "Internet Archive / Open Library"
+description = "Search books and literary works via Open Library's works API."
+action = "schema:SearchAction"
+object_types = ["schema:Book"]
+requires_disclosure = []
+returns = ["schema:Book"]
+source = "Catalog"
+llm_instructions = """
+You are a book information assistant. Provide title, author, publication year, ISBN,
+publisher, subject, and a brief synopsis. Open Library aims to catalog every book ever published.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://openlibrary.org/search.json?q={query}&fields=title,author_name,first_publish_year,isbn&limit=5"
+method = "Get"
+response_jsonpath = "$.docs[0].title"
+response_schema_type = "schema:Book"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Calorie Information"
+provider = "CalorieKing"
+description = "Search calorie and nutritional data for foods and meals."
+action = "schema:SearchAction"
+object_types = ["schema:NutritionInformation"]
+requires_disclosure = []
+returns = ["schema:NutritionInformation"]
+source = "Catalog"
+llm_instructions = "You are a health information assistant. Provide educational health information about Calorie Information. This is for informational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://api.nal.usda.gov/fdc/v1/foods/search?query={query}&pageSize=5&dataType=Survey"
+method = "Get"
+response_jsonpath = "$.foods[0].description"
+response_schema_type = "schema:NutritionInformation"

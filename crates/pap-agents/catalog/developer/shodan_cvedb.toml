@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Shodan CVE Database"
+provider = "Shodan"
+description = "Look up CVE vulnerability details from Shodan's CVE database for security research."
+action = "schema:FindAction"
+object_types = ["schema:TechArticle"]
+requires_disclosure = []
+returns = ["schema:TechArticle"]
+source = "Catalog"
+llm_instructions = """
+You are a vulnerability research assistant. Provide CVE ID, severity score, affected systems,
+description, and remediation steps. This is for authorized security research and defense only.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://cvedb.shodan.io/cve/{query}"
+method = "Get"
+response_jsonpath = "$.cve_id"
+response_schema_type = "schema:TechArticle"

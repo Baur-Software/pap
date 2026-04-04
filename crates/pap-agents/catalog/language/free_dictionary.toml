@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Free Dictionary API"
+provider = "Free Dictionary API"
+description = "Get word definitions, phonetics, parts of speech, and example sentences."
+action = "schema:FindAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = "You are a dictionary assistant. Provide definitions, part of speech, phonetic pronunciation, and example sentences for the word."
+subagents = []
+
+[endpoint]
+url_template = "https://api.dictionaryapi.dev/api/v2/entries/en/{query}"
+method = "Get"
+response_jsonpath = "$[0].meanings[0].definitions[0].definition"
+response_schema_type = "schema:DefinedTerm"

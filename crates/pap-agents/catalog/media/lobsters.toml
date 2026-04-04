@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Lobsters Tech Community"
+provider = "Lobste.rs"
+description = "Browse technology stories and discussions on the Lobsters community platform."
+action = "schema:SearchAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = "You are a technology community assistant. Summarize technology discussions from Lobsters: key stories, technical perspectives, and community insights."
+subagents = []
+
+[endpoint]
+url_template = "https://lobste.rs/search.json?q={query}&what=stories&order=newest"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:DiscussionForumPosting"

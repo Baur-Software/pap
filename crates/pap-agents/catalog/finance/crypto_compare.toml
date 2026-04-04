@@ -1,0 +1,17 @@
+schema_version = 1
+name = "CryptoCompare Price"
+provider = "CryptoCompare"
+description = "Get cryptocurrency prices, volumes, and market cap via CryptoCompare."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about CryptoCompare Price. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://min-api.cryptocompare.com/data/price?fsym={query}&tsyms=USD,EUR,BTC"
+method = "Get"
+response_jsonpath = "$.USD"
+response_schema_type = "schema:MonetaryAmount"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "AngelList Startup Jobs"
+provider = "AngelList / Wellfound"
+description = "Search startup job listings on AngelList/Wellfound."
+action = "schema:SearchAction"
+object_types = ["schema:JobPosting"]
+requires_disclosure = []
+returns = ["schema:JobPosting"]
+source = "Catalog"
+llm_instructions = "You are a career and job search assistant. Summarize job listings: role, company, location (remote/on-site), salary range, and requirements."
+subagents = []
+
+[endpoint]
+url_template = "https://angel.co/api/1/jobs?{query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.jobs[0].title"
+response_schema_type = "schema:JobPosting"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "CodeSandbox Templates"
+provider = "CodeSandbox"
+description = "Find starter templates and sandboxes on CodeSandbox."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = "You are a developer tools assistant. Provide relevant developer information about CodeSandbox Templates."
+subagents = []
+
+[endpoint]
+url_template = "https://codesandbox.io/api/v1/sandboxes/search?query={query}&page=1"
+method = "Get"
+response_jsonpath = "$.sandboxes[0].title"
+response_schema_type = "schema:SoftwareApplication"

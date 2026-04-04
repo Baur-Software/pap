@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Language Detector"
+provider = "Lingua Robot / wttr"
+description = "Detect the language of any text using statistical analysis."
+action = "schema:FindAction"
+object_types = ["schema:Text"]
+requires_disclosure = []
+returns = ["schema:Language"]
+source = "Catalog"
+llm_instructions = "You are a linguistics assistant. Identify the language(s) in the provided text, with confidence scores if available. Note dialects and regional variants."
+subagents = []
+
+[endpoint]
+url_template = "https://api.detectlanguage.com/0.2/detect?q={query}"
+method = "Get"
+response_jsonpath = "$.data.detections[0].language"
+response_schema_type = "schema:Language"

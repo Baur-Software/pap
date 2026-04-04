@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Live Sports Scores"
+provider = "TheSportsDB"
+description = "Get live and recent sports scores across multiple leagues."
+action = "schema:FindAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a sports information assistant. Provide game scores, standings, and player statistics for the requested sport."
+subagents = []
+
+[endpoint]
+url_template = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={date}&s=Soccer"
+method = "Get"
+response_jsonpath = "$.events[0].strHomeTeam"
+response_schema_type = "schema:SportsEvent"

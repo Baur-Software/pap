@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ExchangeRate-API"
+provider = "ExchangeRate-API"
+description = "Get live and historical foreign exchange rates for 160+ currencies."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a foreign exchange assistant. Provide exchange rates, note recent volatility, and explain factors influencing the rate pair. Do not give financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://open.er-api.com/v6/latest/{query}"
+method = "Get"
+response_jsonpath = "$.base_code"
+response_schema_type = "schema:MonetaryAmount"

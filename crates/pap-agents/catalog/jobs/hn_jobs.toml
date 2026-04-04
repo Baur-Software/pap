@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Hacker News Jobs"
+provider = "Hacker News"
+description = "Find tech job listings from the monthly HN Who is hiring threads."
+action = "schema:SearchAction"
+object_types = ["schema:JobPosting"]
+requires_disclosure = []
+returns = ["schema:JobPosting"]
+source = "Catalog"
+llm_instructions = "You are a career and job search assistant. Summarize job listings: role, company, location (remote/on-site), salary range, and requirements."
+subagents = []
+
+[endpoint]
+url_template = "https://hacker-news.firebaseio.com/v0/jobstories.json?limitToFirst=5"
+method = "Get"
+response_jsonpath = "0"
+response_schema_type = "schema:JobPosting"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "what3words Address"
+provider = "what3words"
+description = "Convert what3words 3-word addresses to GPS coordinates."
+action = "schema:FindAction"
+object_types = ["schema:GeoCoordinates"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = "You are a geographic information assistant. Provide location data, coordinates, and geographic context for the requested place."
+subagents = []
+
+[endpoint]
+url_template = "https://api.what3words.com/v3/convert-to-coordinates?words={query}&key=demo"
+method = "Get"
+response_jsonpath = "$.coordinates.lat"
+response_schema_type = "schema:GeoCoordinates"

@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Foursquare Places"
+provider = "Foursquare"
+description = "Search restaurants, cafes, shops and local venues via Foursquare Places API."
+action = "schema:SearchAction"
+object_types = ["schema:LocalBusiness"]
+requires_disclosure = []
+returns = ["schema:LocalBusiness"]
+source = "Catalog"
+llm_instructions = """
+You are a local business discovery assistant. Provide business name, category, address,
+hours, ratings, and user tips. Foursquare has data on over 100 million places worldwide.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.foursquare.com/v3/places/search?query={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:LocalBusiness"

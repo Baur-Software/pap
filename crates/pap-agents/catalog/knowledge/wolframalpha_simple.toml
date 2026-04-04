@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Wolfram Alpha Simple Query"
+provider = "Wolfram Alpha"
+description = "Compute answers to factual questions via Wolfram Alpha's computational engine."
+action = "schema:FindAction"
+object_types = ["schema:Thing"]
+requires_disclosure = []
+returns = ["schema:Answer"]
+source = "Catalog"
+llm_instructions = "You are a computational knowledge assistant. Provide factual answers to math, science, geography, and general knowledge questions with supporting calculations."
+subagents = []
+
+[endpoint]
+url_template = "https://api.wolframalpha.com/v1/result?i={query}&appid=DEMO"
+method = "Get"
+response_jsonpath = "$"
+response_schema_type = "schema:Answer"

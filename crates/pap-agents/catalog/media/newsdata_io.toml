@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NewsData.io Headlines"
+provider = "NewsData.io"
+description = "Get latest news headlines from global sources via NewsData.io API."
+action = "schema:SearchAction"
+object_types = ["schema:NewsArticle"]
+requires_disclosure = []
+returns = ["schema:NewsArticle"]
+source = "Catalog"
+llm_instructions = "You are a global news assistant. Provide recent headlines, publication source, date, and brief summary of key news articles."
+subagents = []
+
+[endpoint]
+url_template = "https://newsdata.io/api/1/news?language=en&q={query}"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:NewsArticle"

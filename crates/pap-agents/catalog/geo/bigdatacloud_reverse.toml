@@ -1,0 +1,17 @@
+schema_version = 1
+name = "BigDataCloud Reverse Geocoding"
+provider = "BigDataCloud"
+description = "Reverse geocode coordinates to address, neighborhood, city, and country details."
+action = "schema:FindAction"
+object_types = ["schema:GeoCoordinates"]
+requires_disclosure = []
+returns = ["schema:PostalAddress"]
+source = "Catalog"
+llm_instructions = "You are a reverse geocoding assistant. Given coordinates, describe the location: street address, neighborhood, city, country, and administrative region."
+subagents = []
+
+[endpoint]
+url_template = "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat}&longitude={lon}&localityLanguage=en"
+method = "Get"
+response_jsonpath = "$.city"
+response_schema_type = "schema:PostalAddress"

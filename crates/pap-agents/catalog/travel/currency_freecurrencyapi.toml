@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Free Currency API"
+provider = "FreeCurrencyAPI"
+description = "Get live foreign exchange rates between currencies."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = """
+You are a currency conversion assistant. Provide current exchange rates, historical context,
+and note factors affecting currency values. Do not give financial advice.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.freecurrencyapi.com/v1/latest?base_currency={query}"
+method = "Get"
+response_jsonpath = "$.data"
+response_schema_type = "schema:MonetaryAmount"

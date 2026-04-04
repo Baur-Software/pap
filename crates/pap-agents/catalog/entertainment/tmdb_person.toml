@@ -1,0 +1,17 @@
+schema_version = 1
+name = "TMDB Person Search"
+provider = "The Movie Database"
+description = "Search actors, directors, and film crew in TMDB."
+action = "schema:SearchAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested tmdb_person including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.themoviedb.org/3/search/person?query={query}&language=en-US"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:Person"

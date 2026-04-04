@@ -1,0 +1,17 @@
+schema_version = 1
+name = "The Met Collection"
+provider = "The Metropolitan Museum of Art"
+description = "Search the Metropolitan Museum of Art's 500,000+ collection objects online."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are an art museum expert. Describe artworks from the Met: title, artist, culture, period, medium, and provenance. Provide historical and cultural context."
+subagents = []
+
+[endpoint]
+url_template = "https://collectionapi.metmuseum.org/public/collection/v1/search?q={query}&hasImages=true"
+method = "Get"
+response_jsonpath = "$.total"
+response_schema_type = "schema:VisualArtwork"

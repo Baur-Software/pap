@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Cycling Segments"
+provider = "Strava API"
+description = "Find cycling and running segments with leaderboard data via Strava."
+action = "schema:SearchAction"
+object_types = ["schema:SportsActivityLocation"]
+requires_disclosure = []
+returns = ["schema:SportsActivityLocation"]
+source = "Catalog"
+llm_instructions = "You are a sports and athletics information assistant. Provide statistics, records, and context for the queried sport."
+subagents = []
+
+[endpoint]
+url_template = "https://www.strava.com/api/v3/segments/explore?bounds={bounds}&activity_type=cycling"
+method = "Get"
+response_jsonpath = "$.segments[0].name"
+response_schema_type = "schema:SportsActivityLocation"

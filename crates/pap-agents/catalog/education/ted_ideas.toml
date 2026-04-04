@@ -1,0 +1,17 @@
+schema_version = 1
+name = "TED Ideas Articles"
+provider = "TED"
+description = "Explore TED Ideas written articles on science, technology, and culture."
+action = "schema:SearchAction"
+object_types = ["schema:Article"]
+requires_disclosure = []
+returns = ["schema:Article"]
+source = "Catalog"
+llm_instructions = "You are an educational content assistant. Provide course details, learning objectives, and curriculum information for TED Ideas Articles."
+subagents = []
+
+[endpoint]
+url_template = "https://ideas.ted.com/wp-json/wp/v2/posts?search={query}&per_page=5"
+method = "Get"
+response_jsonpath = "0.title.rendered"
+response_schema_type = "schema:Article"

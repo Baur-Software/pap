@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Semantic Scholar Paper Search"
+provider = "Allen Institute for AI"
+description = "Search academic papers with citation metrics via Semantic Scholar."
+action = "schema:SearchAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = "You are a scientific literature assistant. Provide paper title, authors, year, venue, abstract, and citation count."
+subagents = []
+
+[endpoint]
+url_template = "https://api.semanticscholar.org/graph/v1/paper/search?query={query}&fields=title,authors,year,abstract,citationCount&limit=5"
+method = "Get"
+response_jsonpath = "$.data[0].title"
+response_schema_type = "schema:ScholarlyArticle"

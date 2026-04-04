@@ -1,0 +1,17 @@
+schema_version = 1
+name = "US Treasury Rates"
+provider = "US Treasury"
+description = "Get official US Treasury yield rates and bond data."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about US Treasury Rates. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value={year}"
+method = "Get"
+response_jsonpath = "$"
+response_schema_type = "schema:MonetaryAmount"

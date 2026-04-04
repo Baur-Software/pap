@@ -1,0 +1,20 @@
+schema_version = 1
+name = "OpenTripMap Places"
+provider = "OpenTripMap"
+description = "Discover tourist attractions, landmarks, and places of interest near any location."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:TouristAttraction"]
+source = "Catalog"
+llm_instructions = """
+You are a travel and tourism assistant. Provide descriptions of tourist attractions, landmarks,
+and points of interest. Include opening hours, admission fees, historical context, and visitor tips.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.opentripmap.com/0.1/en/places/geoname?name={query}&country=US"
+method = "Get"
+response_jsonpath = "$.name"
+response_schema_type = "schema:TouristAttraction"

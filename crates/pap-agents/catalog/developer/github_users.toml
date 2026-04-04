@@ -1,0 +1,20 @@
+schema_version = 1
+name = "GitHub User Search"
+provider = "GitHub"
+description = "Search GitHub users and organizations, find profiles and repositories."
+action = "schema:SearchAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = """
+You are a developer community assistant. Provide GitHub username, bio, follower count,
+public repositories, and notable projects. Note primary programming language and contribution activity.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.github.com/search/users?q={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.items[0].login"
+response_schema_type = "schema:Person"

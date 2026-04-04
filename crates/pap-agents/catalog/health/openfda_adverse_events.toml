@@ -1,0 +1,17 @@
+schema_version = 1
+name = "FDA Drug Adverse Events"
+provider = "FDA"
+description = "Search adverse drug event reports from the FDA FAERS database."
+action = "schema:SearchAction"
+object_types = ["schema:MedicalCause"]
+requires_disclosure = []
+returns = ["schema:MedicalCause"]
+source = "Catalog"
+llm_instructions = "You are a drug safety information assistant. Provide adverse event summary: drug name, reported reactions, outcome, and frequency. Note this is for educational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://api.fda.gov/drug/event.json?search={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].patient.drug[0].medicinalproduct"
+response_schema_type = "schema:MedicalCause"

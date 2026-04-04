@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Agify Name Age Predictor"
+provider = "Agify.io"
+description = "Predict the likely age of a person based on their first name using statistical data."
+action = "schema:FindAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are a demographics and name statistics assistant. Provide age predictions with sample sizes and confidence. Note cultural and generational variations in naming."
+subagents = []
+
+[endpoint]
+url_template = "https://api.agify.io/?name={query}"
+method = "Get"
+response_jsonpath = "$.age"
+response_schema_type = "schema:Person"

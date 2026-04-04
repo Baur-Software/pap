@@ -1,0 +1,17 @@
+schema_version = 1
+name = "CORE Research Papers"
+provider = "CORE"
+description = "Search 200M+ open access research papers via the CORE academic aggregator."
+action = "schema:SearchAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = "You are a research discovery assistant. Provide title, authors, abstract, year, and download link."
+subagents = []
+
+[endpoint]
+url_template = "https://api.core.ac.uk/v3/search/works?q={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:ScholarlyArticle"

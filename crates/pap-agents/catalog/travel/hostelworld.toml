@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Hostel Search"
+provider = "Hostelworld"
+description = "Search budget hostels and backpacker accommodations worldwide."
+action = "schema:SearchAction"
+object_types = ["schema:LodgingBusiness"]
+requires_disclosure = []
+returns = ["schema:LodgingBusiness"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Hostel Search: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://api.hostelworld.com/v1/search?query={query}&page=1&limit=5"
+method = "Get"
+response_jsonpath = "$.properties[0].name"
+response_schema_type = "schema:LodgingBusiness"

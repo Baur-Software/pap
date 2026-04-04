@@ -1,0 +1,17 @@
+schema_version = 1
+name = "OpenStreetMap Points of Interest"
+provider = "OpenStreetMap / Overpass API"
+description = "Find amenities, shops, and points of interest near any location using Overpass API."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:LocalBusiness"]
+source = "Catalog"
+llm_instructions = "You are a local exploration assistant. Find nearby amenities, restaurants, parks, or services. Provide name, type, address, and opening hours from OSM data."
+subagents = []
+
+[endpoint]
+url_template = "https://overpass-api.de/api/interpreter?data=[out:json];node[amenity={query}](around:500,{lat},{lon});out%20body%205;"
+method = "Get"
+response_jsonpath = "$.elements[0].tags.name"
+response_schema_type = "schema:LocalBusiness"

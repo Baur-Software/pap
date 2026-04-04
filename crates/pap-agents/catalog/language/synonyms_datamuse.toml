@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Synonym Finder"
+provider = "Datamuse"
+description = "Find synonyms, antonyms, and related words via Datamuse word relationship API."
+action = "schema:SearchAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = "You are a vocabulary enrichment assistant. Provide synonyms sorted by relevance, with usage notes for each word."
+subagents = []
+
+[endpoint]
+url_template = "https://api.datamuse.com/words?rel_syn={query}&max=10"
+method = "Get"
+response_jsonpath = "$[0].word"
+response_schema_type = "schema:DefinedTerm"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Open Elevation API"
+provider = "Open-Elevation"
+description = "Get elevation above sea level for any GPS coordinates."
+action = "schema:FindAction"
+object_types = ["schema:GeoCoordinates"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = "You are a topography assistant. Provide elevation in meters, terrain type, and geographic context for the given coordinates."
+subagents = []
+
+[endpoint]
+url_template = "https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}"
+method = "Get"
+response_jsonpath = "$.results[0].elevation"
+response_schema_type = "schema:GeoCoordinates"

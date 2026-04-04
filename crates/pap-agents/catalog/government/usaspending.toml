@@ -1,0 +1,17 @@
+schema_version = 1
+name = "USASpending.gov"
+provider = "US Treasury / USASpending"
+description = "Search federal government spending awards and contracts."
+action = "schema:SearchAction"
+object_types = ["schema:Organization"]
+requires_disclosure = []
+returns = ["schema:Organization"]
+source = "Catalog"
+llm_instructions = "You are a government and public records assistant. Provide factual information about legislation, policy, and government data."
+subagents = []
+
+[endpoint]
+url_template = "https://api.usaspending.gov/api/v2/autocomplete/recipient/all/?searchText={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].recipient_name"
+response_schema_type = "schema:Organization"

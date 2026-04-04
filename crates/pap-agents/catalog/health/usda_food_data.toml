@@ -1,0 +1,17 @@
+schema_version = 1
+name = "USDA Food Data Central"
+provider = "USDA"
+description = "Look up nutritional content of foods in the USDA FoodData Central database."
+action = "schema:SearchAction"
+object_types = ["schema:NutritionInformation"]
+requires_disclosure = []
+returns = ["schema:NutritionInformation"]
+source = "Catalog"
+llm_instructions = "You are a nutrition information assistant. Provide calories, macronutrients (protein, carbs, fat), key micronutrients, and serving size for the queried food."
+subagents = []
+
+[endpoint]
+url_template = "https://api.nal.usda.gov/fdc/v1/foods/search?query={query}&pageSize=5"
+method = "Get"
+response_jsonpath = "$.foods[0].description"
+response_schema_type = "schema:NutritionInformation"

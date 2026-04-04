@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Vercel Deployment Templates"
+provider = "Vercel"
+description = "Discover Vercel deployment templates and framework starters."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = "You are a developer tools assistant. Provide relevant developer information about Vercel Deployment Templates."
+subagents = []
+
+[endpoint]
+url_template = "https://vercel.com/api/v1/templates"
+method = "Get"
+response_jsonpath = "$.templates[0].name"
+response_schema_type = "schema:SoftwareApplication"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "DEV.to Community Profile"
+provider = "DEV Community"
+description = "Look up developer profiles and articles on DEV.to community."
+action = "schema:SearchAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are a social community assistant for DEV.to Community Profile. Summarize community discussions, profiles, and contributions."
+subagents = []
+
+[endpoint]
+url_template = "https://dev.to/api/users/by_username?url={query}"
+method = "Get"
+response_jsonpath = "$.name"
+response_schema_type = "schema:Person"

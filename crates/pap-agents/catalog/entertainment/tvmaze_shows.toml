@@ -1,0 +1,20 @@
+schema_version = 1
+name = "TVmaze Show Search"
+provider = "TVmaze"
+description = "Search TV shows, get episode guides, cast bios, and schedule data via TVmaze."
+action = "schema:SearchAction"
+object_types = ["schema:TVSeries"]
+requires_disclosure = []
+returns = ["schema:TVSeries"]
+source = "Catalog"
+llm_instructions = """
+You are a TV scheduling and programming assistant. Provide show summaries, episode counts,
+air schedules, genres, and cast information. TVmaze covers both major network and streaming shows.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.tvmaze.com/search/shows?q={query}"
+method = "Get"
+response_jsonpath = "$.0.show.name"
+response_schema_type = "schema:TVSeries"

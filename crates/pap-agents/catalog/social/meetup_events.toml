@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Meetup Event Search"
+provider = "Meetup.com"
+description = "Find local and virtual events and professional meetups on Meetup.com."
+action = "schema:SearchAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are an event discovery assistant. Provide event name, date, location, organizer group, attendee count, and description."
+subagents = []
+
+[endpoint]
+url_template = "https://api.meetup.com/find/events?text={query}&page=5&order=time"
+method = "Get"
+response_jsonpath = "$[0].name"
+response_schema_type = "schema:Event"

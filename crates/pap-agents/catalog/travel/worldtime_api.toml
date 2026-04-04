@@ -1,0 +1,20 @@
+schema_version = 1
+name = "World Time API"
+provider = "WorldTimeAPI"
+description = "Get current time and UTC offset for any timezone or IP address."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = """
+You are a time zone assistant. Provide current time, UTC offset, daylight saving status,
+and time zone abbreviation for the requested location or timezone identifier.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://worldtimeapi.org/api/timezone/{query}"
+method = "Get"
+response_jsonpath = "$.datetime"
+response_schema_type = "schema:Event"

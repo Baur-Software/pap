@@ -1,0 +1,20 @@
+schema_version = 1
+name = "TMDB TV Search"
+provider = "The Movie Database"
+description = "Search TV shows, episodes, and series details via The Movie Database."
+action = "schema:SearchAction"
+object_types = ["schema:TVSeries"]
+requires_disclosure = []
+returns = ["schema:TVSeries"]
+source = "Catalog"
+llm_instructions = """
+You are a television information assistant. The user is looking for details about a TV series.
+Provide the title, network, premiere year, synopsis, number of seasons, and notable cast.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.themoviedb.org/3/search/tv?query={query}&language=en-US&page=1"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:TVSeries"

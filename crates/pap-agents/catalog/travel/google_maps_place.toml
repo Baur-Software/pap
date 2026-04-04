@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Google Places Search"
+provider = "Google"
+description = "Search places and businesses via Google Places API."
+action = "schema:SearchAction"
+object_types = ["schema:LocalBusiness"]
+requires_disclosure = []
+returns = ["schema:LocalBusiness"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Google Places Search: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://maps.googleapis.com/maps/api/place/textsearch/json?query={query}&key=demo"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:LocalBusiness"

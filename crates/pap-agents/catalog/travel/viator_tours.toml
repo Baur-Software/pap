@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Viator Tours and Activities"
+provider = "Viator / TripAdvisor"
+description = "Search tours, activities, and experiences worldwide via Viator."
+action = "schema:SearchAction"
+object_types = ["schema:TouristAttraction"]
+requires_disclosure = []
+returns = ["schema:TouristAttraction"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Viator Tours and Activities: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://api.viator.com/partner/v1/taxonomy/destinations?destId={query}"
+method = "Get"
+response_jsonpath = "$.data[0].destinationName"
+response_schema_type = "schema:TouristAttraction"

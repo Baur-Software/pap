@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Discogs Music Database"
+provider = "Discogs"
+description = "Search vinyl records, CDs, and music releases in the Discogs database."
+action = "schema:SearchAction"
+object_types = ["schema:MusicAlbum"]
+requires_disclosure = []
+returns = ["schema:MusicAlbum"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested discogs_search including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.discogs.com/database/search?q={query}&type=release&per_page=5"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:MusicAlbum"

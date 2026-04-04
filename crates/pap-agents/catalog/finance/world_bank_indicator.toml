@@ -1,0 +1,17 @@
+schema_version = 1
+name = "World Bank Economic Indicators"
+provider = "World Bank"
+description = "Query World Bank development indicators: GDP, poverty, health, education metrics."
+action = "schema:FindAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a development economics assistant. Provide World Bank indicator values with country comparison, trend data, and development context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.worldbank.org/v2/country/{country}/indicator/{query}?format=json&mrv=5"
+method = "Get"
+response_jsonpath = "$[1][0].value"
+response_schema_type = "schema:Dataset"

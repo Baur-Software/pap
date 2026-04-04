@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Vitamin and Nutrient Info"
+provider = "Open Food Facts"
+description = "Get nutritional information about vitamins, minerals, and supplements."
+action = "schema:FindAction"
+object_types = ["schema:NutritionInformation"]
+requires_disclosure = []
+returns = ["schema:NutritionInformation"]
+source = "Catalog"
+llm_instructions = "You are a health information assistant. Provide educational health information about Vitamin and Nutrient Info. This is for informational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://world.openfoodfacts.org/cgi/search.pl?search_terms={query}+supplement&action=process&json=1&page_size=5"
+method = "Get"
+response_jsonpath = "$.products[0].product_name"
+response_schema_type = "schema:NutritionInformation"

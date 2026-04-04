@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ISS Live Location"
+provider = "Open Notify"
+description = "Get the live current position of the International Space Station."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = "You are a space and orbital mechanics assistant. Provide the ISS current coordinates, ground track description, and what ocean/country it is over. Note its orbital speed and altitude."
+subagents = []
+
+[endpoint]
+url_template = "https://api.open-notify.org/iss-now.json"
+method = "Get"
+response_jsonpath = "$.iss_position.latitude"
+response_schema_type = "schema:GeoCoordinates"

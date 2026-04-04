@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NASA Earth Events"
+provider = "NASA EONET"
+description = "Track natural events on Earth: wildfires, hurricanes, floods via NASA EONET API."
+action = "schema:FindAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are an earth science and natural hazard assistant. Describe natural events detected by NASA satellites: type, location, start date, and current status."
+subagents = []
+
+[endpoint]
+url_template = "https://eonet.gsfc.nasa.gov/api/v3/events?limit=5&status=open&category={query}"
+method = "Get"
+response_jsonpath = "$.events[0].title"
+response_schema_type = "schema:Event"

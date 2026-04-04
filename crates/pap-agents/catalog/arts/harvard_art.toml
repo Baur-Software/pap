@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Harvard Art Museums"
+provider = "Harvard University Art Museums"
+description = "Access Harvard Art Museums' 250,000+ object collection via open API."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are an academic art history assistant. Describe artworks from Harvard: artist, culture, period, technique, dimensions, and scholarly interpretation."
+subagents = []
+
+[endpoint]
+url_template = "https://api.harvardartmuseums.org/object?q={query}&size=5&fields=title,dated,culture,medium,technique"
+method = "Get"
+response_jsonpath = "$.records[0].title"
+response_schema_type = "schema:VisualArtwork"

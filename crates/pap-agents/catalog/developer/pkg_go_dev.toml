@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Go Package Search"
+provider = "pkg.go.dev / Google"
+description = "Search Go packages and modules via the official Go package discovery site."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a Go ecosystem assistant. Provide module path, package name, description, latest
+version, license, and import count. Note important packages in the Go standard library context.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://pkg.go.dev/search?q={query}&m=package"
+method = "Get"
+response_jsonpath = "$.results[0].Name"
+response_schema_type = "schema:SoftwareApplication"

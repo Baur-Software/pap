@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Podcast Index Search"
+provider = "Podcast Index"
+description = "Search podcasts and episodes via the Podcast Index open podcast directory."
+action = "schema:SearchAction"
+object_types = ["schema:PodcastSeries"]
+requires_disclosure = []
+returns = ["schema:PodcastSeries"]
+source = "Catalog"
+llm_instructions = "You are a podcast discovery assistant. Provide podcast name, description, episode count, author, and latest episode info."
+subagents = []
+
+[endpoint]
+url_template = "https://api.podcastindex.org/api/1.0/search/byterm?q={query}&max=5"
+method = "Get"
+response_jsonpath = "$.feeds[0].title"
+response_schema_type = "schema:PodcastSeries"

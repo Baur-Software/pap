@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Bandcamp Music Search"
+provider = "Bandcamp"
+description = "Discover independent music artists and albums on Bandcamp."
+action = "schema:SearchAction"
+object_types = ["schema:MusicAlbum"]
+requires_disclosure = []
+returns = ["schema:MusicAlbum"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested bandcamp_search including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://bandcamp.com/search?q={query}&item_type=t"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:MusicAlbum"

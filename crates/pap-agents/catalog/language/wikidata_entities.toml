@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Wikidata Entity Search"
+provider = "Wikimedia Foundation"
+description = "Search Wikidata for structured knowledge graph entities by name or concept."
+action = "schema:SearchAction"
+object_types = ["schema:Thing"]
+requires_disclosure = []
+returns = ["schema:Thing"]
+source = "Catalog"
+llm_instructions = "You are a structured knowledge assistant. Provide entity label, description, entity type, and key properties from Wikidata."
+subagents = []
+
+[endpoint]
+url_template = "https://www.wikidata.org/w/api.php?action=wbsearchentities&search={query}&language=en&limit=5&format=json"
+method = "Get"
+response_jsonpath = "$.search[0].label"
+response_schema_type = "schema:Thing"

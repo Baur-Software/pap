@@ -1,0 +1,17 @@
+schema_version = 1
+name = "NHL Scores"
+provider = "NHL API"
+description = "Get NHL game scores and standings from the official NHL API."
+action = "schema:FindAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a sports information assistant. Provide game scores, standings, and player statistics for the requested sport."
+subagents = []
+
+[endpoint]
+url_template = "https://api-web.nhle.com/v1/score/now"
+method = "Get"
+response_jsonpath = "$.games[0].homeTeam.name"
+response_schema_type = "schema:SportsEvent"

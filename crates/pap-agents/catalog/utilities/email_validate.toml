@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Email Validation"
+provider = "Hunter.io"
+description = "Validate email address format and domain existence."
+action = "schema:FindAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:WebSite"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Email Validation. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://api.hunter.io/v2/email-verifier?email={query}&api_key=demo"
+method = "Get"
+response_jsonpath = "$.data.status"
+response_schema_type = "schema:WebSite"

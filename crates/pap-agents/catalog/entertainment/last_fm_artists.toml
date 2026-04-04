@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Last.fm Artist Search"
+provider = "Last.fm"
+description = "Search artists and get listener stats, tags, and biography via Last.fm."
+action = "schema:SearchAction"
+object_types = ["schema:MusicGroup"]
+requires_disclosure = []
+returns = ["schema:MusicGroup"]
+source = "Catalog"
+llm_instructions = """
+You are a music artist discovery assistant. Provide artist name, listener count, play count,
+top tags, and biography summary. Note similar artists and top tracks.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://ws.audioscrobbler.com/2.0/?method=artist.search&artist={query}&format=json&limit=5"
+method = "Get"
+response_jsonpath = "$.results.artistmatches.artist[0].name"
+response_schema_type = "schema:MusicGroup"

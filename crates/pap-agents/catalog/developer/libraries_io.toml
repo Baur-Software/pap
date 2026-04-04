@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Libraries.io Package Search"
+provider = "Libraries.io"
+description = "Search open source packages across all major package managers via Libraries.io."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a multi-ecosystem software dependency assistant. Provide package name, platform
+(npm/PyPI/Cargo/etc), latest version, dependent projects count, and repository URL.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://libraries.io/api/search?q={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$[0].name"
+response_schema_type = "schema:SoftwareApplication"

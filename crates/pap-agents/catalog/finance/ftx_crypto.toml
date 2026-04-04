@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Crypto Market Overview"
+provider = "CoinMarketCap"
+description = "Get cryptocurrency market overview with top coins by market cap."
+action = "schema:FindAction"
+object_types = ["schema:MonetaryAmount"]
+requires_disclosure = []
+returns = ["schema:MonetaryAmount"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about Crypto Market Overview. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest?limit=10"
+method = "Get"
+response_jsonpath = "$.data[0].name"
+response_schema_type = "schema:MonetaryAmount"

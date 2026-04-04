@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Restaurant Reservations"
+provider = "OpenTable"
+description = "Find available restaurant reservations and reviews via OpenTable."
+action = "schema:SearchAction"
+object_types = ["schema:FoodEstablishment"]
+requires_disclosure = []
+returns = ["schema:FoodEstablishment"]
+source = "Catalog"
+llm_instructions = "You are a travel assistant. Provide helpful travel information about Restaurant Reservations: relevant details, tips, and context for travelers."
+subagents = []
+
+[endpoint]
+url_template = "https://www.opentable.com/widget/reservation/search?otRestaurantId={query}&lang=en-US"
+method = "Get"
+response_jsonpath = "$.RestaurantDetails.name"
+response_schema_type = "schema:FoodEstablishment"

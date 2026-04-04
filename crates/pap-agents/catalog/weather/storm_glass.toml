@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Storm Glass Marine Weather"
+provider = "Storm Glass"
+description = "Marine and coastal weather data: wave height, sea temperature, and wind for boating."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a marine weather assistant. Provide coastal and offshore conditions: wave height, sea surface temperature, swell period, and wind advisory for mariners."
+subagents = []
+
+[endpoint]
+url_template = "https://api.stormglass.io/v2/weather/point?lat={lat}&lng={lon}&params=waveHeight,waterTemperature,windSpeed"
+method = "Get"
+response_jsonpath = "$.hours[0].waterTemperature[0].value"
+response_schema_type = "schema:WeatherForecast"

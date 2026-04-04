@@ -1,0 +1,20 @@
+schema_version = 1
+name = "PyPI Package Search"
+provider = "Python Software Foundation"
+description = "Search Python packages on the Python Package Index (PyPI)."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a Python ecosystem assistant. Provide package name, version, description,
+author, license, and classifiers. Note compatibility (Python 2/3) and installation command.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://pypi.org/pypi/{query}/json"
+method = "Get"
+response_jsonpath = "$.info.name"
+response_schema_type = "schema:SoftwareApplication"

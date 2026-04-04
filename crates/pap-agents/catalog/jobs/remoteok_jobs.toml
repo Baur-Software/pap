@@ -1,0 +1,17 @@
+schema_version = 1
+name = "RemoteOK Job Board"
+provider = "RemoteOK"
+description = "Search remote tech job listings across engineering, design, and marketing."
+action = "schema:SearchAction"
+object_types = ["schema:JobPosting"]
+requires_disclosure = []
+returns = ["schema:JobPosting"]
+source = "Catalog"
+llm_instructions = "You are a career and job search assistant. Summarize job listings: role, company, location (remote/on-site), salary range, and requirements."
+subagents = []
+
+[endpoint]
+url_template = "https://remoteok.com/api?tag={query}"
+method = "Get"
+response_jsonpath = "0.position"
+response_schema_type = "schema:JobPosting"

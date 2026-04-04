@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Public IP Address"
+provider = "ipify"
+description = "Get the current public IP address of the requesting client."
+action = "schema:FindAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:WebSite"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Public IP Address. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://api.ipify.org?format=json"
+method = "Get"
+response_jsonpath = "$.ip"
+response_schema_type = "schema:WebSite"

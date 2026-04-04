@@ -1,0 +1,20 @@
+schema_version = 1
+name = "NuGet Package Search"
+provider = "Microsoft / NuGet"
+description = "Search .NET packages on NuGet.org with version history and download stats."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a .NET ecosystem assistant. Provide package ID, latest version, description,
+target frameworks, and total downloads. Note the dotnet CLI install command.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://azuresearch-usnc.nuget.org/query?q={query}&take=5&prerelease=false"
+method = "Get"
+response_jsonpath = "$.data[0].id"
+response_schema_type = "schema:SoftwareApplication"

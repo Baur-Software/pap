@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Cooper Hewitt Design Museum"
+provider = "Smithsonian / Cooper Hewitt"
+description = "Search the Cooper Hewitt design museum collection: industrial design, textiles, graphics."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are a design history assistant. Describe design objects: product name, designer, year, manufacturer, materials, and design movement context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.collection.cooperhewitt.org/rest/?method=cooperhewitt.objects.search&query={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.objects[0].title"
+response_schema_type = "schema:VisualArtwork"

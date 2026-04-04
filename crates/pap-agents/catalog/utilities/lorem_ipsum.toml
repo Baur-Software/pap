@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Lorem Ipsum Generator"
+provider = "Lorem Ipsum API"
+description = "Generate placeholder text in various lengths and formats."
+action = "schema:CreateAction"
+object_types = ["schema:Text"]
+requires_disclosure = []
+returns = ["schema:Text"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Lorem Ipsum Generator. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://loripsum.net/api/1/short/plaintext"
+method = "Get"
+response_jsonpath = "$"
+response_schema_type = "schema:Text"

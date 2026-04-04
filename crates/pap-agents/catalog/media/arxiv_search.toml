@@ -1,0 +1,17 @@
+schema_version = 1
+name = "arXiv Preprint Search"
+provider = "arXiv / Cornell"
+description = "Search preprint papers in physics, CS, math, and biology on arXiv."
+action = "schema:SearchAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from arXiv / Cornell."
+subagents = []
+
+[endpoint]
+url_template = "https://export.arxiv.org/api/query?search_query=all:{query}&max_results=5"
+method = "Get"
+response_jsonpath = "$.feed.entry[0].title"
+response_schema_type = "schema:ScholarlyArticle"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Mastodon Status Search"
+provider = "Mastodon / ActivityPub"
+description = "Search public Mastodon posts and accounts on the Fediverse via the Mastodon API."
+action = "schema:SearchAction"
+object_types = ["schema:SocialMediaPosting"]
+requires_disclosure = []
+returns = ["schema:SocialMediaPosting"]
+source = "Catalog"
+llm_instructions = "You are a federated social media assistant. Summarize relevant Mastodon posts about the topic: key perspectives, community sentiment, and notable accounts."
+subagents = []
+
+[endpoint]
+url_template = "https://mastodon.social/api/v2/search?q={query}&type=statuses&limit=5"
+method = "Get"
+response_jsonpath = "$.statuses[0].content"
+response_schema_type = "schema:SocialMediaPosting"

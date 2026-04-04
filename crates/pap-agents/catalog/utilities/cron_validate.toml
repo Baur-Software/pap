@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Cron Expression Validator"
+provider = "Cron Validator"
+description = "Validate and describe cron expressions in human-readable terms."
+action = "schema:FindAction"
+object_types = ["schema:Thing"]
+requires_disclosure = []
+returns = ["schema:Thing"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for Cron Expression Validator. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://cron-validator.p.rapidapi.com/?expression={query}"
+method = "Get"
+response_jsonpath = "$.valid"
+response_schema_type = "schema:Thing"

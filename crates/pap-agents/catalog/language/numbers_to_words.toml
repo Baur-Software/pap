@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Numbers API Facts"
+provider = "NumbersAPI"
+description = "Get interesting facts about numbers: math properties, historical dates, and trivia."
+action = "schema:FindAction"
+object_types = ["schema:Number"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a numerology and mathematics trivia assistant. Provide interesting mathematical properties, historical significance, and fun facts about numbers."
+subagents = []
+
+[endpoint]
+url_template = "https://numbersapi.com/{query}/math?json"
+method = "Get"
+response_jsonpath = "$.text"
+response_schema_type = "schema:CreativeWork"

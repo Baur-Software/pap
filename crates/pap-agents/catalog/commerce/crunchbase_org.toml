@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Crunchbase Company Search"
+provider = "Crunchbase"
+description = "Search startup and company profiles with funding data via Crunchbase."
+action = "schema:SearchAction"
+object_types = ["schema:Organization"]
+requires_disclosure = []
+returns = ["schema:Organization"]
+source = "Catalog"
+llm_instructions = "You are a business and commerce research assistant. Provide relevant product, market, and company information."
+subagents = []
+
+[endpoint]
+url_template = "https://api.crunchbase.com/api/v4/entities/organizations/{query}?card_ids=fields&field_ids=short_description,founded_on,funding_total&user_key=demo"
+method = "Get"
+response_jsonpath = "$.properties.short_description"
+response_schema_type = "schema:Organization"

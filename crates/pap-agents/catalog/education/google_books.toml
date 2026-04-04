@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Google Books Search"
+provider = "Google"
+description = "Search books and preview excerpts via the Google Books API."
+action = "schema:SearchAction"
+object_types = ["schema:Book"]
+requires_disclosure = []
+returns = ["schema:Book"]
+source = "Catalog"
+llm_instructions = "You are a book discovery assistant. Provide title, authors, publisher, year, ISBN, genre, and a brief synopsis."
+subagents = []
+
+[endpoint]
+url_template = "https://www.googleapis.com/books/v1/volumes?q={query}&maxResults=5&projection=lite"
+method = "Get"
+response_jsonpath = "$.items[0].volumeInfo.title"
+response_schema_type = "schema:Book"

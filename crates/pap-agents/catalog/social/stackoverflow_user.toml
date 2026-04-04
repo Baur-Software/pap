@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Stack Overflow User Search"
+provider = "Stack Exchange"
+description = "Search Stack Overflow user profiles and contribution statistics."
+action = "schema:SearchAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are a social community assistant for Stack Overflow User Search. Summarize community discussions, profiles, and contributions."
+subagents = []
+
+[endpoint]
+url_template = "https://api.stackexchange.com/2.3/users?inname={query}&site=stackoverflow&pagesize=5&order=desc&sort=reputation"
+method = "Get"
+response_jsonpath = "$.items[0].display_name"
+response_schema_type = "schema:Person"

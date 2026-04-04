@@ -1,0 +1,17 @@
+schema_version = 1
+name = "MetaWeather Location Search"
+provider = "MetaWeather"
+description = "Look up weather location IDs for forecasting."
+action = "schema:SearchAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:Place"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for MetaWeather Location Search. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://www.metaweather.com/api/location/search/?query={query}"
+method = "Get"
+response_jsonpath = "0.title"
+response_schema_type = "schema:Place"

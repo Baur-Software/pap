@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Word Association Network"
+provider = "Word Association API"
+description = "Find word associations and semantic networks for any term."
+action = "schema:FindAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = "You are a language and linguistics assistant for Word Association Network. Provide accurate language information with cultural and historical context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.datamuse.com/words?rel_trg={query}&max=10"
+method = "Get"
+response_jsonpath = "0.word"
+response_schema_type = "schema:DefinedTerm"

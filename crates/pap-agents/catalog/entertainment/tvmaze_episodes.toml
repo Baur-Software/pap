@@ -1,0 +1,17 @@
+schema_version = 1
+name = "TVmaze Episodes"
+provider = "TVmaze"
+description = "Get episode details and guides for any TV show."
+action = "schema:SearchAction"
+object_types = ["schema:TVEpisode"]
+requires_disclosure = []
+returns = ["schema:TVEpisode"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested tvmaze_episodes including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.tvmaze.com/search/shows?q={query}"
+method = "Get"
+response_jsonpath = "$.0.show.name"
+response_schema_type = "schema:TVEpisode"

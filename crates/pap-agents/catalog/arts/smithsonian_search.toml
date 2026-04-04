@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Smithsonian Open Access"
+provider = "Smithsonian Institution"
+description = "Search the Smithsonian's 4.7 million open access digital records."
+action = "schema:SearchAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are an art history and cultural heritage assistant. Describe artworks, their creators, historical context, and artistic significance."
+subagents = []
+
+[endpoint]
+url_template = "https://api.si.edu/openaccess/api/v1.0/search?q={query}&rows=5"
+method = "Get"
+response_jsonpath = "$.response.rows[0].title"
+response_schema_type = "schema:CreativeWork"

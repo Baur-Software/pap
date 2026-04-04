@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Running Routes"
+provider = "RunKeeper API"
+description = "Discover running routes with distance, elevation, and community ratings."
+action = "schema:SearchAction"
+object_types = ["schema:SportsActivityLocation"]
+requires_disclosure = []
+returns = ["schema:SportsActivityLocation"]
+source = "Catalog"
+llm_instructions = "You are a sports and athletics information assistant. Provide statistics, records, and context for the queried sport."
+subagents = []
+
+[endpoint]
+url_template = "https://api.runkeeper.com/route?friends_only=0&q={query}"
+method = "Get"
+response_jsonpath = "$.items[0].name"
+response_schema_type = "schema:SportsActivityLocation"

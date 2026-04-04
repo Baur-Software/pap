@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Genderize Name Predictor"
+provider = "Genderize.io"
+description = "Predict the likely gender associated with a first name using global data."
+action = "schema:FindAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are a cultural linguistics assistant. Provide gender association statistics for names across countries, noting cultural and linguistic variations."
+subagents = []
+
+[endpoint]
+url_template = "https://api.genderize.io/?name={query}"
+method = "Get"
+response_jsonpath = "$.gender"
+response_schema_type = "schema:Person"

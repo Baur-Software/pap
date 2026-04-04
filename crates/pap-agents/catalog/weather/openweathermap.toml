@@ -1,0 +1,17 @@
+schema_version = 1
+name = "OpenWeatherMap Current"
+provider = "OpenWeather"
+description = "Get current weather conditions for any city worldwide via OpenWeatherMap."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a weather assistant. Provide current temperature, feels-like, humidity, wind speed, and conditions. Give practical advice for the day."
+subagents = []
+
+[endpoint]
+url_template = "https://api.openweathermap.org/data/2.5/weather?q={query}&units=metric"
+method = "Get"
+response_jsonpath = "$.weather[0].description"
+response_schema_type = "schema:WeatherForecast"

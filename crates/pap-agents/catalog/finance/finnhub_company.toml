@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Finnhub Company Search"
+provider = "Finnhub"
+description = "Search stock symbols, company profiles, and financial metrics via Finnhub API."
+action = "schema:SearchAction"
+object_types = ["schema:Organization"]
+requires_disclosure = []
+returns = ["schema:Organization"]
+source = "Catalog"
+llm_instructions = "You are a company financial profile assistant. Provide company name, ticker, exchange, industry, market cap, and brief business description. Educational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://finnhub.io/api/v1/search?q={query}"
+method = "Get"
+response_jsonpath = "$.result[0].description"
+response_schema_type = "schema:Organization"

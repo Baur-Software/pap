@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Docker Hub Image Search"
+provider = "Docker"
+description = "Search Docker Hub container images with pull counts and descriptions."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a containerization and DevOps assistant. Provide image name, description, pull count,
+tags, and usage examples. Note if it is an official Docker image and platform compatibility.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://hub.docker.com/v2/search/repositories/?query={query}&page_size=5"
+method = "Get"
+response_jsonpath = "$.results[0].repo_name"
+response_schema_type = "schema:SoftwareApplication"

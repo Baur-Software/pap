@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Maven Central Search"
+provider = "Sonatype / Apache Maven"
+description = "Search Java and JVM packages on Maven Central Repository."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are a Java ecosystem assistant. Provide artifact ID, group ID, latest version,
+and description. Note the build tool configuration snippet (Maven/Gradle) for adding the dependency.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://search.maven.org/solrsearch/select?q={query}&rows=5&wt=json"
+method = "Get"
+response_jsonpath = "$.response.docs[0].id"
+response_schema_type = "schema:SoftwareApplication"

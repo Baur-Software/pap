@@ -1,0 +1,17 @@
+schema_version = 1
+name = "LibreTranslate Translation"
+provider = "LibreTranslate"
+description = "Translate text between 30+ languages using the LibreTranslate open API."
+action = "schema:TranslateAction"
+object_types = ["schema:Text"]
+requires_disclosure = []
+returns = ["schema:Text"]
+source = "Catalog"
+llm_instructions = "You are a language and linguistics assistant for LibreTranslate Translation. Provide accurate language information with cultural and historical context."
+subagents = []
+
+[endpoint]
+url_template = "https://libretranslate.com/translate"
+method = "Get"
+response_jsonpath = "$.translatedText"
+response_schema_type = "schema:Text"

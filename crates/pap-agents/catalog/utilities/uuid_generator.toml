@@ -1,0 +1,17 @@
+schema_version = 1
+name = "UUID Generator"
+provider = "httpbin.org"
+description = "Generate universally unique identifiers (UUIDs) for development and data management."
+action = "schema:CreateAction"
+object_types = ["schema:Thing"]
+requires_disclosure = []
+returns = ["schema:Thing"]
+source = "Catalog"
+llm_instructions = "You are a unique identifier assistant. Generate UUIDs and explain their version differences (v1/v4/v7) and use cases in distributed systems and databases."
+subagents = []
+
+[endpoint]
+url_template = "https://httpbin.org/uuid"
+method = "Get"
+response_jsonpath = "$.uuid"
+response_schema_type = "schema:Thing"

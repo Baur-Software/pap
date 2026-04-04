@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Weather Alerts"
+provider = "NWS"
+description = "Get active weather watches, warnings, and advisories from NOAA NWS."
+action = "schema:FindAction"
+object_types = ["schema:WeatherForecast"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a weather and climate information assistant. Provide current conditions, forecasts, and climate context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.weather.gov/alerts/active?area={query}"
+method = "Get"
+response_jsonpath = "$.features[0].properties.headline"
+response_schema_type = "schema:WeatherForecast"

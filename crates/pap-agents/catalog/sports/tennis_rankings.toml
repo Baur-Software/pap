@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ATP/WTA Rankings"
+provider = "Tennis.com API"
+description = "Get current ATP and WTA tennis player world rankings."
+action = "schema:FindAction"
+object_types = ["schema:SportsTeam"]
+requires_disclosure = []
+returns = ["schema:SportsTeam"]
+source = "Catalog"
+llm_instructions = "You are a sports and athletics information assistant. Provide statistics, records, and context for the queried sport."
+subagents = []
+
+[endpoint]
+url_template = "https://api.sportsdata.io/v3/tennis/scores/json/Players?key=demo"
+method = "Get"
+response_jsonpath = "0.FullName"
+response_schema_type = "schema:SportsTeam"

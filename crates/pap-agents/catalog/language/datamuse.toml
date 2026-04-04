@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Datamuse Word Finder"
+provider = "Datamuse"
+description = "Find words by meaning, rhyme, spelling pattern, or semantic similarity."
+action = "schema:SearchAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = "You are a vocabulary and language assistant. Provide word meanings, synonyms, antonyms, and usage examples."
+subagents = []
+
+[endpoint]
+url_template = "https://api.datamuse.com/words?ml={query}&max=10"
+method = "Get"
+response_jsonpath = "$[0].word"
+response_schema_type = "schema:DefinedTerm"

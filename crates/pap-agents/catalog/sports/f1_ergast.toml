@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Formula 1 Data"
+provider = "Ergast Developer API"
+description = "Get Formula 1 race results, standings, and driver statistics via the Ergast API."
+action = "schema:SearchAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a Formula 1 motorsport assistant. Provide race results, championship standings, driver/constructor statistics, and circuit information."
+subagents = []
+
+[endpoint]
+url_template = "https://ergast.com/api/f1/current/results.json?limit=5"
+method = "Get"
+response_jsonpath = "$.MRData.RaceTable.Races[0].raceName"
+response_schema_type = "schema:SportsEvent"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Olympic Games Data"
+provider = "Olympics API"
+description = "Search Olympic Games results, athletes, and medal tables."
+action = "schema:SearchAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a sports information assistant. Provide game scores, standings, and player statistics for the requested sport."
+subagents = []
+
+[endpoint]
+url_template = "https://api.olympics.kevinsaysgo.com/sports"
+method = "Get"
+response_jsonpath = "0.description"
+response_schema_type = "schema:SportsEvent"

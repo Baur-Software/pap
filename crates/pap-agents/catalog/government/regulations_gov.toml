@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Regulations.gov Comments"
+provider = "Regulations.gov"
+description = "Search federal regulations and public comment records."
+action = "schema:SearchAction"
+object_types = ["schema:LegislationObject"]
+requires_disclosure = []
+returns = ["schema:LegislationObject"]
+source = "Catalog"
+llm_instructions = "You are a government and public records assistant. Provide factual information about legislation, policy, and government data."
+subagents = []
+
+[endpoint]
+url_template = "https://api.regulations.gov/v4/documents?filter[searchTerm]={query}&page[size]=5"
+method = "Get"
+response_jsonpath = "$.data[0].attributes.title"
+response_schema_type = "schema:LegislationObject"

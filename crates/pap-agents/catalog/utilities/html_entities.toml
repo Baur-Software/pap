@@ -1,0 +1,17 @@
+schema_version = 1
+name = "HTML Entities Converter"
+provider = "API Ninjas"
+description = "Convert text with special characters to HTML entities."
+action = "schema:ConvertAction"
+object_types = ["schema:Text"]
+requires_disclosure = []
+returns = ["schema:Text"]
+source = "Catalog"
+llm_instructions = "You are a utility assistant for HTML Entities Converter. Provide clear, helpful responses for the requested operation."
+subagents = []
+
+[endpoint]
+url_template = "https://api.api-ninjas.com/v1/urlencode?url={query}"
+method = "Get"
+response_jsonpath = "$.url"
+response_schema_type = "schema:Text"

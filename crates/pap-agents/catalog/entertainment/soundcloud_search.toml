@@ -1,0 +1,17 @@
+schema_version = 1
+name = "SoundCloud Track Search"
+provider = "SoundCloud"
+description = "Search music tracks and podcasts on SoundCloud."
+action = "schema:SearchAction"
+object_types = ["schema:MusicRecording"]
+requires_disclosure = []
+returns = ["schema:AudioObject"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested soundcloud_search including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://api-v2.soundcloud.com/search/tracks?q={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.collection[0].title"
+response_schema_type = "schema:AudioObject"

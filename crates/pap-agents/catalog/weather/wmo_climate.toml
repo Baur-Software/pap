@@ -1,0 +1,17 @@
+schema_version = 1
+name = "WMO Climate Monitoring"
+provider = "World Meteorological Organization"
+description = "Access WMO global climate monitoring reports and data."
+action = "schema:FindAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a weather and climate information assistant. Provide current conditions, forecasts, and climate context."
+subagents = []
+
+[endpoint]
+url_template = "https://climateknowledgeportal.worldbank.org/api/data/get-download-data/historical/tas/1991-2020/{query}/"
+method = "Get"
+response_jsonpath = "$"
+response_schema_type = "schema:Dataset"

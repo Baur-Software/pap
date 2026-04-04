@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Data.gov Dataset Search"
+provider = "US Federal Government / Data.gov"
+description = "Search US government open datasets across federal agencies via Data.gov."
+action = "schema:SearchAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = "You are a government data discovery assistant. Describe datasets: agency, update frequency, data format, geographic coverage, and key variables."
+subagents = []
+
+[endpoint]
+url_template = "https://catalog.data.gov/api/3/action/package_search?q={query}&rows=5"
+method = "Get"
+response_jsonpath = "$.result.results[0].title"
+response_schema_type = "schema:Dataset"

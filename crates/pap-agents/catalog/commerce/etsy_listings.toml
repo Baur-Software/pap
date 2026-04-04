@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Etsy Shop Search"
+provider = "Etsy"
+description = "Search handmade, vintage, and craft items on Etsy marketplace."
+action = "schema:SearchAction"
+object_types = ["schema:Product"]
+requires_disclosure = []
+returns = ["schema:Product"]
+source = "Catalog"
+llm_instructions = "You are a handmade goods discovery assistant. Describe Etsy listings: product name, maker, materials, price, and craftsmanship details."
+subagents = []
+
+[endpoint]
+url_template = "https://openapi.etsy.com/v3/application/listings/active?keywords={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:Product"

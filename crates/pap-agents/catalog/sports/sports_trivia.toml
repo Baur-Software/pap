@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Sports Trivia"
+provider = "OpenTrivia DB"
+description = "Get sports trivia questions covering multiple sports and eras."
+action = "schema:FindAction"
+object_types = ["schema:Question"]
+requires_disclosure = []
+returns = ["schema:Question"]
+source = "Catalog"
+llm_instructions = "You are a sports and athletics information assistant. Provide statistics, records, and context for the queried sport."
+subagents = []
+
+[endpoint]
+url_template = "https://opentdb.com/api.php?amount=5&category=21&type=multiple"
+method = "Get"
+response_jsonpath = "$.results[0].question"
+response_schema_type = "schema:Question"

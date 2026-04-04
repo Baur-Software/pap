@@ -1,0 +1,17 @@
+schema_version = 1
+name = "MoMA Collection"
+provider = "Museum of Modern Art"
+description = "Search MoMA modern and contemporary art collection online."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are an art history and cultural heritage assistant. Describe artworks, their creators, historical context, and artistic significance."
+subagents = []
+
+[endpoint]
+url_template = "https://api.moma.org/collections/search?query={query}&fields=title,artist&size=5"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:VisualArtwork"

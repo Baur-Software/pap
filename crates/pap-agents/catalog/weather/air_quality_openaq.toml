@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Air Quality Index"
+provider = "OpenAQ"
+description = "Get real-time air quality data and pollution measurements from OpenAQ network."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are an air quality and environmental health assistant. Provide AQI value, main pollutants (PM2.5, PM10, NO2, O3), health implications, and safety recommendations."
+subagents = []
+
+[endpoint]
+url_template = "https://api.openaq.org/v3/locations?city={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].name"
+response_schema_type = "schema:WeatherForecast"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Mastodon Account Search"
+provider = "Mastodon"
+description = "Search Mastodon user accounts and public profiles on the Fediverse."
+action = "schema:SearchAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are a social community assistant for Mastodon Account Search. Summarize community discussions, profiles, and contributions."
+subagents = []
+
+[endpoint]
+url_template = "https://mastodon.social/api/v2/search?q={query}&type=accounts&limit=5"
+method = "Get"
+response_jsonpath = "$.accounts[0].display_name"
+response_schema_type = "schema:Person"

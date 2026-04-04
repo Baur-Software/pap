@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Movie Quote Search"
+provider = "MovieQuotes API"
+description = "Search famous movie and TV quotes by film or character."
+action = "schema:SearchAction"
+object_types = ["schema:Quotation"]
+requires_disclosure = []
+returns = ["schema:Quotation"]
+source = "Catalog"
+llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested movie_quotes including key facts and context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.moviequotes.app/v1/quotes?search={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.quotes[0].content"
+response_schema_type = "schema:Quotation"

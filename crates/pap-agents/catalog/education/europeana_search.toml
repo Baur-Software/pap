@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Europeana Cultural Heritage"
+provider = "Europeana Foundation"
+description = "Search European cultural heritage: art, books, music, and historical documents."
+action = "schema:SearchAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a cultural heritage assistant. Describe the item, its origin, time period, medium, and holding institution."
+subagents = []
+
+[endpoint]
+url_template = "https://api.europeana.eu/record/v2/search.json?query={query}&rows=5&wskey=api2demo"
+method = "Get"
+response_jsonpath = "$.items[0].title[0]"
+response_schema_type = "schema:CreativeWork"

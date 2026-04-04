@@ -1,0 +1,17 @@
+schema_version = 1
+name = "World Bank Projects"
+provider = "World Bank"
+description = "Search World Bank development projects by country or sector."
+action = "schema:SearchAction"
+object_types = ["schema:Organization"]
+requires_disclosure = []
+returns = ["schema:Organization"]
+source = "Catalog"
+llm_instructions = "You are a government and public records assistant. Provide factual information about legislation, policy, and government data."
+subagents = []
+
+[endpoint]
+url_template = "https://search.worldbank.org/api/v2/projects?q={query}&fl=project_name,country,total_ibrd_ida_amt&rows=5&format=json"
+method = "Get"
+response_jsonpath = "$.project[0].project_name"
+response_schema_type = "schema:Organization"

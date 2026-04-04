@@ -1,0 +1,17 @@
+schema_version = 1
+name = "RxNorm Drug Information"
+provider = "NLM / RxNorm"
+description = "Look up drug information, brand/generic names, and NDC codes via RxNorm API."
+action = "schema:FindAction"
+object_types = ["schema:Drug"]
+requires_disclosure = []
+returns = ["schema:Drug"]
+source = "Catalog"
+llm_instructions = "You are a pharmaceutical information assistant. Provide drug name, active ingredients, drug class, brand names, and NLM drug category. Educational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://rxnav.nlm.nih.gov/REST/drugs.json?name={query}"
+method = "Get"
+response_jsonpath = "$.drugGroup.conceptGroup[0].conceptProperties[0].name"
+response_schema_type = "schema:Drug"

@@ -1,0 +1,17 @@
+schema_version = 1
+name = "ORCID Researcher Search"
+provider = "ORCID"
+description = "Look up academic researcher profiles via ORCID public API."
+action = "schema:SearchAction"
+object_types = ["schema:Person"]
+requires_disclosure = []
+returns = ["schema:Person"]
+source = "Catalog"
+llm_instructions = "You are an academic community assistant. Provide researcher name, institution, ORCID ID, and research field."
+subagents = []
+
+[endpoint]
+url_template = "https://pub.orcid.org/v3.0/search?q={query}&rows=5"
+method = "Get"
+response_jsonpath = "$.result[0].orcid-identifier.path"
+response_schema_type = "schema:Person"

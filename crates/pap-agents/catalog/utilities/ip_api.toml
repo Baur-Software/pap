@@ -1,0 +1,17 @@
+schema_version = 1
+name = "IP Address Geolocation"
+provider = "ip-api.com"
+description = "Look up geolocation, ISP, and network details for any IP address."
+action = "schema:FindAction"
+object_types = ["schema:WebSite"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = "You are a network and geolocation assistant. Provide IP address location (city, region, country), ISP name, timezone, and latitude/longitude coordinates."
+subagents = []
+
+[endpoint]
+url_template = "https://ip-api.com/json/{query}?fields=status,country,city,isp,timezone,lat,lon"
+method = "Get"
+response_jsonpath = "$.city"
+response_schema_type = "schema:GeoCoordinates"

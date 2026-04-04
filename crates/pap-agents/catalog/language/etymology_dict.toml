@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Etymology Dictionary"
+provider = "Etymonline"
+description = "Look up word origins and historical development of English words."
+action = "schema:FindAction"
+object_types = ["schema:DefinedTerm"]
+requires_disclosure = []
+returns = ["schema:DefinedTerm"]
+source = "Catalog"
+llm_instructions = "You are a language and linguistics assistant for Etymology Dictionary. Provide accurate language information with cultural and historical context."
+subagents = []
+
+[endpoint]
+url_template = "https://api.dictionaryapi.dev/api/v2/entries/en/{query}"
+method = "Get"
+response_jsonpath = "0.meanings[0].definitions[0].definition"
+response_schema_type = "schema:DefinedTerm"

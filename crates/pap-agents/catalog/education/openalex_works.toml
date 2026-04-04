@@ -1,0 +1,17 @@
+schema_version = 1
+name = "OpenAlex Research Works"
+provider = "OurResearch"
+description = "Search 200M+ research works in the OpenAlex open academic knowledge graph."
+action = "schema:SearchAction"
+object_types = ["schema:ScholarlyArticle"]
+requires_disclosure = []
+returns = ["schema:ScholarlyArticle"]
+source = "Catalog"
+llm_instructions = "You are an academic research assistant. Provide title, authors, year, citation count, and open access status."
+subagents = []
+
+[endpoint]
+url_template = "https://api.openalex.org/works?search={query}&per-page=5"
+method = "Get"
+response_jsonpath = "$.results[0].title"
+response_schema_type = "schema:ScholarlyArticle"

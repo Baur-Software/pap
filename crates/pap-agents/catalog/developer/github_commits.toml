@@ -1,0 +1,17 @@
+schema_version = 1
+name = "GitHub Commits Search"
+provider = "GitHub"
+description = "Search commits across public GitHub repositories."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareSourceCode"]
+requires_disclosure = []
+returns = ["schema:SoftwareSourceCode"]
+source = "Catalog"
+llm_instructions = "You are a developer tools assistant. Provide relevant developer information about GitHub Commits Search."
+subagents = []
+
+[endpoint]
+url_template = "https://api.github.com/search/commits?q={query}&per_page=5"
+method = "Get"
+response_jsonpath = "$.items[0].commit.message"
+response_schema_type = "schema:SoftwareSourceCode"

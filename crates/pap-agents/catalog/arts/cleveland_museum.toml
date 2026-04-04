@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Cleveland Museum of Art"
+provider = "Cleveland Museum of Art"
+description = "Search the Cleveland Museum of Art's open access collection of 61,000+ works."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are an art collection assistant. Describe artworks from the Cleveland Museum: title, creator, date, culture, medium, and display gallery."
+subagents = []
+
+[endpoint]
+url_template = "https://openaccess-api.clevelandart.org/api/artworks?q={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.data[0].title"
+response_schema_type = "schema:VisualArtwork"

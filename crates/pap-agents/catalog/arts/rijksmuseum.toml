@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Rijksmuseum Collection"
+provider = "Rijksmuseum Amsterdam"
+description = "Explore the Rijksmuseum Dutch and Flemish masters collection via open API."
+action = "schema:SearchAction"
+object_types = ["schema:VisualArtwork"]
+requires_disclosure = []
+returns = ["schema:VisualArtwork"]
+source = "Catalog"
+llm_instructions = "You are a Dutch and Flemish art expert. Describe paintings from the Rijksmuseum: Rembrandt, Vermeer, and contemporaries. Note artistic technique, symbolism, and provenance."
+subagents = []
+
+[endpoint]
+url_template = "https://www.rijksmuseum.nl/api/en/collection?q={query}&ps=5&key=0fiuZFh4"
+method = "Get"
+response_jsonpath = "$.artObjects[0].title"
+response_schema_type = "schema:VisualArtwork"

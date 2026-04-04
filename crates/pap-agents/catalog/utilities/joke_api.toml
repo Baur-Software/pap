@@ -1,0 +1,17 @@
+schema_version = 1
+name = "JokeAPI"
+provider = "JokeAPI"
+description = "Get programming, general, and pun jokes with category and content filters."
+action = "schema:FindAction"
+object_types = ["schema:CreativeWork"]
+requires_disclosure = []
+returns = ["schema:CreativeWork"]
+source = "Catalog"
+llm_instructions = "You are a humor and comedy assistant. Share jokes with explanations of their comedic structure and why they are funny. Keep content appropriate."
+subagents = []
+
+[endpoint]
+url_template = "https://v2.jokeapi.dev/joke/{query}?safe-mode"
+method = "Get"
+response_jsonpath = "$.setup"
+response_schema_type = "schema:CreativeWork"

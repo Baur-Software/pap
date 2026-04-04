@@ -1,0 +1,17 @@
+schema_version = 1
+name = "MLB Stats API"
+provider = "Major League Baseball"
+description = "Get MLB game scores, player statistics, and standings via the official MLB Stats API."
+action = "schema:SearchAction"
+object_types = ["schema:SportsEvent"]
+requires_disclosure = []
+returns = ["schema:SportsEvent"]
+source = "Catalog"
+llm_instructions = "You are a baseball statistics assistant. Provide game scores, player batting/pitching stats, team standings, and recent highlights."
+subagents = []
+
+[endpoint]
+url_template = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameType=R&date={query}"
+method = "Get"
+response_jsonpath = "$.dates[0].games[0].teams.home.team.name"
+response_schema_type = "schema:SportsEvent"

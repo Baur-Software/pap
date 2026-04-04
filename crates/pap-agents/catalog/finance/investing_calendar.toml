@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Economic Calendar"
+provider = "Investing.com"
+description = "Get upcoming economic events and earnings releases calendar."
+action = "schema:FindAction"
+object_types = ["schema:Event"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about Economic Calendar. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://api.investing.com/api/financialdata/calendar/get?country=us&categories=economic_calendar&limit=5"
+method = "Get"
+response_jsonpath = "$.data[0].event"
+response_schema_type = "schema:Event"

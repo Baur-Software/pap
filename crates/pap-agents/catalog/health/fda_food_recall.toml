@@ -1,0 +1,17 @@
+schema_version = 1
+name = "FDA Food Safety Recalls"
+provider = "FDA"
+description = "Search FDA food safety and recall alerts for consumer protection."
+action = "schema:SearchAction"
+object_types = ["schema:MedicalCause"]
+requires_disclosure = []
+returns = ["schema:MedicalCause"]
+source = "Catalog"
+llm_instructions = "You are a health information assistant. Provide educational health information about FDA Food Safety Recalls. This is for informational purposes only."
+subagents = []
+
+[endpoint]
+url_template = "https://api.fda.gov/food/recall.json?search={query}&limit=5"
+method = "Get"
+response_jsonpath = "$.results[0].product_description"
+response_schema_type = "schema:MedicalCause"

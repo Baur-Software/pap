@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Lemmy Community Search"
+provider = "Lemmy / Fediverse"
+description = "Search posts and communities on Lemmy federated discussion platform."
+action = "schema:SearchAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = "You are a federated community assistant. Summarize Lemmy discussions about the topic. Note community names, post counts, and popular perspectives."
+subagents = []
+
+[endpoint]
+url_template = "https://lemmy.world/api/v3/search?q={query}&type_=Posts&limit=5"
+method = "Get"
+response_jsonpath = "$.posts[0].post.name"
+response_schema_type = "schema:DiscussionForumPosting"

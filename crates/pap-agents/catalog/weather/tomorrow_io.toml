@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Tomorrow.io Weather"
+provider = "Tomorrow.io"
+description = "Hyperlocal weather intelligence: hourly and minute-by-minute forecasts."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a precision weather assistant. Provide hyperlocal hourly forecasts with precipitation probability, temperature, wind, and UV index."
+subagents = []
+
+[endpoint]
+url_template = "https://api.tomorrow.io/v4/weather/realtime?location={query}&units=metric"
+method = "Get"
+response_jsonpath = "$.data.values.temperature"
+response_schema_type = "schema:WeatherForecast"

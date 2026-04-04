@@ -1,0 +1,17 @@
+schema_version = 1
+name = "GovTrack US Legislation"
+provider = "GovTrack"
+description = "Search US Congress bills, legislation, and voting records."
+action = "schema:SearchAction"
+object_types = ["schema:LegislationObject"]
+requires_disclosure = []
+returns = ["schema:LegislationObject"]
+source = "Catalog"
+llm_instructions = "You are a government and public records assistant. Provide factual information about legislation, policy, and government data."
+subagents = []
+
+[endpoint]
+url_template = "https://www.govtrack.us/api/v2/bill?q={query}&limit=5&sort=-current_status_date"
+method = "Get"
+response_jsonpath = "$.objects[0].title_without_number"
+response_schema_type = "schema:LegislationObject"

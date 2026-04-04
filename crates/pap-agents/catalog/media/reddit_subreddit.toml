@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Reddit Subreddit Posts"
+provider = "Reddit"
+description = "Get hot or top posts from a specific subreddit."
+action = "schema:FindAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = "You are a community curator. Summarize trending posts from a subreddit: titles, vote counts, comment highlights, and community themes."
+subagents = []
+
+[endpoint]
+url_template = "https://www.reddit.com/r/{subreddit}/hot.json?limit=5"
+method = "Get"
+response_jsonpath = "$.data.children[0].data.title"
+response_schema_type = "schema:DiscussionForumPosting"

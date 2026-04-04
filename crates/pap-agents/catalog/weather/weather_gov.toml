@@ -1,0 +1,17 @@
+schema_version = 1
+name = "US National Weather Service"
+provider = "NOAA / NWS"
+description = "Get official US weather forecasts, alerts, and conditions from the National Weather Service."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:WeatherForecast"]
+source = "Catalog"
+llm_instructions = "You are a US weather forecast assistant. Provide official NWS forecast: temperatures, precipitation, wind, and any active watches or warnings."
+subagents = []
+
+[endpoint]
+url_template = "https://api.weather.gov/gridpoints/{office}/{gridX},{gridY}/forecast"
+method = "Get"
+response_jsonpath = "$.properties.periods[0].detailedForecast"
+response_schema_type = "schema:WeatherForecast"

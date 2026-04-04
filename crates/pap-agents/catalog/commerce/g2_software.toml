@@ -1,0 +1,17 @@
+schema_version = 1
+name = "G2 Software Reviews"
+provider = "G2.com"
+description = "Search software products and reviews on G2 business marketplace."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = "You are a business and commerce research assistant. Provide relevant product, market, and company information."
+subagents = []
+
+[endpoint]
+url_template = "https://data.g2.com/api/v1/products?filter[name]={query}&page[size]=5"
+method = "Get"
+response_jsonpath = "$.data[0].attributes.name"
+response_schema_type = "schema:SoftwareApplication"

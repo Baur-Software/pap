@@ -1,0 +1,20 @@
+schema_version = 1
+name = "TimezoneDB"
+provider = "TimezoneDB"
+description = "Look up timezone information for any city or country including UTC offset and DST."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:Event"]
+source = "Catalog"
+llm_instructions = """
+You are a time zone and scheduling assistant. Provide timezone name, UTC offset, daylight
+saving time dates, and the current local time for the requested city or region.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://api.timezonedb.com/v2.1/get-time-zone?key=DEMO&format=json&by=zone&zone={query}"
+method = "Get"
+response_jsonpath = "$.zoneName"
+response_schema_type = "schema:Event"

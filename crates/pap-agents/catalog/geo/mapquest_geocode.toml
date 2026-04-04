@@ -1,0 +1,17 @@
+schema_version = 1
+name = "MapQuest Geocoding"
+provider = "MapQuest"
+description = "Geocode addresses and find map routing via MapQuest API."
+action = "schema:FindAction"
+object_types = ["schema:Place"]
+requires_disclosure = []
+returns = ["schema:GeoCoordinates"]
+source = "Catalog"
+llm_instructions = "You are a geographic information assistant. Provide location data, coordinates, and geographic context for the requested place."
+subagents = []
+
+[endpoint]
+url_template = "https://www.mapquestapi.com/geocoding/v1/address?key=demo&location={query}"
+method = "Get"
+response_jsonpath = "$.results[0].locations[0].adminArea5"
+response_schema_type = "schema:GeoCoordinates"

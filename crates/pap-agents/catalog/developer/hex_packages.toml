@@ -1,0 +1,20 @@
+schema_version = 1
+name = "Hex.pm Package Search"
+provider = "Hex.pm"
+description = "Search Elixir and Erlang packages on Hex.pm package manager."
+action = "schema:SearchAction"
+object_types = ["schema:SoftwareApplication"]
+requires_disclosure = []
+returns = ["schema:SoftwareApplication"]
+source = "Catalog"
+llm_instructions = """
+You are an Elixir and Erlang ecosystem assistant. Provide package name, version, description,
+downloads, license, and hex.pm link. Note Phoenix/Ecto/OTP compatibility if relevant.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://hex.pm/api/packages?search={query}&sort=downloads&page=1"
+method = "Get"
+response_jsonpath = "$[0].name"
+response_schema_type = "schema:SoftwareApplication"

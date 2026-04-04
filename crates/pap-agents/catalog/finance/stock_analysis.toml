@@ -1,0 +1,17 @@
+schema_version = 1
+name = "Stock Financial Analysis"
+provider = "Financial Modeling Prep"
+description = "Get detailed financial statements and ratios for public companies."
+action = "schema:FindAction"
+object_types = ["schema:Organization"]
+requires_disclosure = []
+returns = ["schema:Organization"]
+source = "Catalog"
+llm_instructions = "You are a financial information assistant. Provide factual financial data about Stock Financial Analysis. This is for educational purposes only, not financial advice."
+subagents = []
+
+[endpoint]
+url_template = "https://financialmodelingprep.com/api/v3/profile/{query}?apikey=demo"
+method = "Get"
+response_jsonpath = "0.companyName"
+response_schema_type = "schema:Organization"
