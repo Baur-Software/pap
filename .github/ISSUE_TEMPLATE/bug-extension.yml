@@ -1,0 +1,111 @@
+name: "Bug: papillon-extension"
+description: Something is broken in the Papillon browser extension (Manifest V3)
+title: "[Extension] "
+labels: ["bug", "papillon-extension"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **papillon-extension** is the Manifest V3 browser extension that bridges web pages to the Papillon desktop app via native host messaging. Bugs here typically involve the handshake dialog, native host connection, popup UI, or WebSocket transport.
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      description: From the browser's extension management page (chrome://extensions or about:debugging)
+      placeholder: "e.g. 0.1.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome / Chromium (stable)
+        - Chrome / Chromium (canary or dev)
+        - Firefox (stable)
+        - Firefox (Developer Edition or Nightly)
+        - Microsoft Edge
+    validations:
+      required: true
+
+  - type: input
+    id: browser-version
+    attributes:
+      label: Browser version
+      placeholder: "e.g. 124.0.6367.91"
+    validations:
+      required: true
+
+  - type: input
+    id: papillon-version
+    attributes:
+      label: Papillon desktop version
+      description: The desktop app the extension connects to. Leave blank if the native host is not installed.
+      placeholder: "e.g. 0.4.2 or N/A"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Native host connection (startup, disconnect, messaging)
+        - Handshake dialog (pap:// invitation UI)
+        - Extension popup UI
+        - Content script injection or web page interaction
+        - WebSocket transport (offscreen document)
+        - Storage / persistence
+        - Permissions or CSP error
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you observe vs. what did you expect?
+      placeholder: "Clicking a pap:// link on a web page showed no handshake dialog. The extension icon badge turned red. I expected the PAP handshake dialog to appear and prompt me to approve the agent invitation…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the page URL (if public) and any relevant pap:// URI (mask credentials/tokens).
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: console-errors
+    attributes:
+      label: Browser console errors
+      description: |
+        Open DevTools on the extension's service worker (Inspect views → service worker), the popup, or the offscreen document and paste any relevant errors.
+      render: text
+
+  - type: textarea
+    id: native-host-logs
+    attributes:
+      label: Native host or Papillon logs
+      description: Relevant output from the native host process or Papillon's application log. Redact private keys and tokens.
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I am not reporting a security vulnerability (use the private advisory form)
+          required: true
