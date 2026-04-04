@@ -9,6 +9,7 @@ license.workspace = true
 pap-agents = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+zeroize = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 

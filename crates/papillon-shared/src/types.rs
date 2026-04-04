@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 // LLM provider types: on native, re-export from pap-agents (single source of truth).
 // On WASM, pap-agents pulls in reqwest::blocking → tokio → mio which does not compile
@@ -1364,6 +1365,14 @@ pub struct RecoveryShardInfo {
     pub shard_json: String,
     /// DID of the principal whose seed was split.
     pub principal_did: String,
+}
+
+impl Drop for RecoveryShardInfo {
+    fn drop(&mut self) {
+        // shard_json contains the full serialized RecoveryShard including partial
+        // secret material. Zeroize before the heap allocation is released.
+        self.shard_json.zeroize();
+    }
 }
 
 /// Result returned by `create_recovery_shards`.

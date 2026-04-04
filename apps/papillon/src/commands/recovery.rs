@@ -23,14 +23,20 @@ pub fn create_recovery_shards(
     threshold: u8,
     total: u8,
 ) -> Result<RecoverySetupResult, PapillonError> {
-    // Read the current principal seed.
-    let seed_lock = state
-        .principal_seed
-        .read()
-        .map_err(|e| PapillonError::from(e.to_string()))?;
-    let seed = seed_lock
-        .as_ref()
-        .ok_or_else(|| PapillonError::from("No identity — create an identity first"))?;
+    // Copy the seed bytes out of the read lock immediately — holding the lock
+    // across RNG, GF arithmetic, serialization, and DB writes blocks concurrent
+    // switch_profile calls for the entire ceremony.
+    use zeroize::Zeroizing;
+    let seed_copy: Zeroizing<[u8; 32]> = {
+        let seed_lock = state
+            .principal_seed
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        let seed = seed_lock
+            .as_ref()
+            .ok_or_else(|| PapillonError::from("No identity — create an identity first"))?;
+        Zeroizing::new(**seed)
+    };
 
     // Read the DID for embedding in shard metadata.
     let principal_did = {
@@ -44,7 +50,7 @@ pub fn create_recovery_shards(
             .did()
     };
 
-    let (shards, manifest) = shamir::create_shards(&**seed, threshold, total)
+    let (shards, manifest) = shamir::create_shards(&*seed_copy, threshold, total)
         .map_err(|e| PapillonError::from(e.to_string()))?;
 
     let manifest_json = serde_json::to_string_pretty(&manifest)
@@ -94,6 +100,26 @@ pub fn reconstruct_from_shards(
     state: State<'_, AppState>,
     shards_json: Vec<String>,
 ) -> Result<RecoveryReconstructResult, PapillonError> {
+    // Bound the input to the protocol maximum (u8::MAX shards) and reject
+    // empty inputs before any deserialization work.
+    if shards_json.is_empty() {
+        return Err(PapillonError::from("shards_json must not be empty"));
+    }
+    if shards_json.len() > 255 {
+        return Err(PapillonError::from(
+            "shards_json exceeds protocol maximum of 255 shards",
+        ));
+    }
+    // Reject individual shard strings that are implausibly large (> 8 KiB).
+    for (i, s) in shards_json.iter().enumerate() {
+        if s.len() > 8192 {
+            return Err(PapillonError::from(format!(
+                "shard {i} is too large ({} bytes, max 8192)",
+                s.len()
+            )));
+        }
+    }
+
     // Deserialize each shard.
     let shards: Vec<shamir::RecoveryShard> = shards_json
         .iter()
@@ -146,44 +172,61 @@ pub fn reconstruct_from_shards(
     let pub_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .encode(keypair.verifying_key().to_bytes());
 
-    // Guard: if an identity is already loaded in AppState, only allow the overwrite
-    // if the reconstructed DID matches the current one (i.e., recovering the same identity).
-    // This prevents accidental or malicious replacement of an active identity.
-    {
-        let signer_lock = state
-            .signer
-            .read()
-            .map_err(|e| PapillonError::from(e.to_string()))?;
-        if let Some(current_signer) = signer_lock.as_ref() {
-            let current_did = current_signer.did();
-            if current_did != did {
-                return Err(PapillonError::from(format!(
-                    "reconstructed DID ({did}) does not match the current identity ({current_did}) — \
-                     use a different device or explicitly remove your identity before recovering"
-                )));
-            }
-        }
-    }
-
-    // Persist the reconstructed seed as the new active identity.
-    // seed is Zeroizing<[u8;32]> — encode via deref to avoid copying the raw bytes.
+    // Acquire the signer write-lock for the entire check-and-update sequence.
+    // Holding a write lock prevents a concurrent switch_profile from racing between
+    // the DID-match check and the signer/seed installation (TOCTOU).
     use pap_webauthn::SoftwareSigner;
     use zeroize::Zeroize;
-
-    let mut seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&*seed);
-    state
-        .db
-        .set_setting("principal_seed_b64", &seed_b64)
-        .map_err(|e| PapillonError::from(e.to_string()))?;
-    seed_b64.zeroize();
-
-    let signer = SoftwareSigner::from_keypair(keypair);
 
     let mut signer_lock = state
         .signer
         .write()
         .map_err(|e| PapillonError::from(e.to_string()))?;
+
+    // Guard: if an identity is already loaded, only allow overwrite if the
+    // reconstructed DID matches (recovering the same identity, not a different one).
+    if let Some(current_signer) = signer_lock.as_ref() {
+        let current_did = current_signer.did();
+        if current_did != did {
+            return Err(PapillonError::from(format!(
+                "reconstructed DID ({did}) does not match the current identity ({current_did}) — \
+                 use a different device or explicitly remove your identity before recovering"
+            )));
+        }
+    }
+
+    // Persist the reconstructed seed to the authoritative profiles database.
+    // Using state.db (legacy key-value store) would be silently reverted on the
+    // next restart because AppState::with_db() reads the active seed from profiles_db.
+    let active_profile = state
+        .profiles_db
+        .get_active_profile()
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+
+    let mut seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&*seed);
+
+    match active_profile {
+        Some(profile) => {
+            state
+                .profiles_db
+                .update_profile_seed(&profile.id, &seed_b64)
+                .map_err(|e| PapillonError::from(e.to_string()))?;
+        }
+        None => {
+            // No active profile — fall back to legacy store so recovery can still
+            // proceed on a first-run (pre-migration) device.
+            state
+                .db
+                .set_setting("principal_seed_b64", &seed_b64)
+                .map_err(|e| PapillonError::from(e.to_string()))?;
+        }
+    }
+    seed_b64.zeroize();
+
+    // Install the new signer (write-lock already held).
+    let signer = SoftwareSigner::from_keypair(keypair);
     *signer_lock = Some(Box::new(signer));
+    drop(signer_lock);
 
     let mut seed_lock = state
         .principal_seed
@@ -191,6 +234,7 @@ pub fn reconstruct_from_shards(
         .map_err(|e| PapillonError::from(e.to_string()))?;
     // seed is already Zeroizing<[u8;32]> — move it directly.
     *seed_lock = Some(seed);
+    drop(seed_lock);
 
     if let Ok(mut backed_up) = state.key_backed_up.write() {
         *backed_up = true;

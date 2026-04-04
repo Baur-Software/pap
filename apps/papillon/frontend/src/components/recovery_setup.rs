@@ -80,6 +80,9 @@ pub fn RecoverySetup() -> impl IntoView {
     };
 
     let skip = move |_| {
+        // Clear any generated shard data from WASM heap before dismissing.
+        recovery.shards.set(Vec::new());
+        recovery.manifest_json.set(String::new());
         recovery.show_setup.set(false);
         step.set(1);
     };

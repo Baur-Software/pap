@@ -92,7 +92,9 @@ fn poly_eval(coeffs: &[u8], x: u8) -> u8 {
 /// # Panics
 /// `x_coords` must not contain duplicate values or the value 0.
 fn lagrange_at_zero(x_coords: &[u8], y_coords: &[u8]) -> u8 {
-    debug_assert_eq!(x_coords.len(), y_coords.len());
+    // This is a safety-critical invariant maintained by the caller (reconstruct).
+    // Use a hard assert — release builds must not silently interpolate misaligned coordinates.
+    assert_eq!(x_coords.len(), y_coords.len(), "lagrange_at_zero: coordinate slice lengths differ");
     let n = x_coords.len();
     let mut secret = 0u8;
     for i in 0..n {
@@ -145,7 +147,9 @@ fn compute_commitment(
 /// encrypted password manager entry, or bank safe).
 // NOTE: no Zeroize derive — DateTime<Utc> doesn't implement Zeroize.
 // Drop is implemented manually to zeroize the secret-carrying string fields.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// Debug is implemented manually to redact shard_bytes, session_nonce, and commitment —
+// logging a RecoveryShard via {:?} must never emit partial secret material.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RecoveryShard {
     /// Format version (currently 1).
     pub version: u8,
@@ -164,6 +168,21 @@ pub struct RecoveryShard {
     pub commitment: String,
     /// Creation timestamp (same for all shards in a ceremony).
     pub created_at: DateTime<Utc>,
+}
+
+impl std::fmt::Debug for RecoveryShard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecoveryShard")
+            .field("version", &self.version)
+            .field("index", &self.index)
+            .field("threshold", &self.threshold)
+            .field("total", &self.total)
+            .field("shard_bytes", &"<redacted>")
+            .field("session_nonce", &"<redacted>")
+            .field("commitment", &"<redacted>")
+            .field("created_at", &self.created_at)
+            .finish()
+    }
 }
 
 impl Drop for RecoveryShard {
@@ -289,7 +308,7 @@ impl Drop for ZeroizingCoeffs {
 /// # Errors
 /// Returns `InvalidRecoveryMandate` if:
 /// - `threshold == 0` or `threshold > total_shares`
-/// - `total_shares == 0` or `total_shares > 255`
+/// - `total_shares == 0` (both parameters are `u8`, so `> 255` is unreachable)
 pub fn create_shards(
     seed: &[u8; 32],
     threshold: u8,
@@ -378,6 +397,11 @@ pub fn create_shards(
         created_at: now,
     };
 
+    // Zeroize the raw session_nonce stack buffer before the frame is released.
+    // The base64-encoded copies inside each RecoveryShard and the manifest are
+    // zeroized via their respective Drop impls.
+    session_nonce.zeroize();
+
     Ok((shards, manifest))
 }
 
@@ -435,19 +459,25 @@ pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<zeroize::Zeroizing<[u8; 
         }
     }
 
-    // 4. Verify unique shard indices.
+    // 4. Verify unique shard indices and index-in-range invariant.
     let mut seen_indices = std::collections::HashSet::new();
     for shard in shards.iter() {
+        if shard.index == 0 {
+            return Err(PapError::RecoveryError(
+                "shard index 0 is reserved".into(),
+            ));
+        }
+        if shard.index > shard.total {
+            return Err(PapError::RecoveryError(format!(
+                "shard index {} exceeds total {}",
+                shard.index, shard.total
+            )));
+        }
         if !seen_indices.insert(shard.index) {
             return Err(PapError::RecoveryError(format!(
                 "duplicate shard index {}",
                 shard.index
             )));
-        }
-        if shard.index == 0 {
-            return Err(PapError::RecoveryError(
-                "shard index 0 is reserved".into(),
-            ));
         }
     }
 
