@@ -1,6 +1,17 @@
 ## [Unreleased]
 
-## [0.7.2] - 2026-04-04
+## [0.7.2] - 2026-04-05
+
+### Added
+
+- **papillon-extension**: SubtleCrypto Ed25519 signing — private keys are now non-extractable `CryptoKey` objects managed by the browser, never exposed in WASM memory or JS heap. Feature-detected at startup with automatic fallback to existing WASM path for browsers without Ed25519 SubtleCrypto support.
+- **papillon-extension**: IndexedDB-backed key storage — `CryptoKey` objects stored via structured clone (no serialization), replacing AES-256-GCM encrypted seeds in `chrome.storage.local` for SubtleCrypto-capable browsers.
+- **papillon-extension**: Automatic key migration — existing Ed25519 seeds are imported into SubtleCrypto and persisted in IndexedDB on first launch; legacy encrypted seeds are cleaned up after migration.
+- **pap-core**: `signable_bytes()` and `set_signature_bytes()` on `Mandate` and `CapabilityToken` — enables external signing (e.g., browser SubtleCrypto) without exposing internal struct fields.
+- **pap-wasm**: WASM bindings for `signableBytes()` and `setSignatureBytes()` on both `Mandate` and `CapabilityToken`.
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
 
 ### Changed
 
