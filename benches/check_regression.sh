@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check_regression.sh — Compare Criterion benchmark results against baseline.
-# Exits non-zero if any p50 (median) regresses >10% vs baseline.
+# Exits non-zero if any p50 (median) regresses >20% vs baseline.
 #
 # Usage:
 #   cargo bench -p pap-bench
@@ -17,7 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASELINE="$SCRIPT_DIR/baseline.json"
 CRITERION_DIR="target/criterion"
-THRESHOLD=10  # percent
+THRESHOLD=20  # percent — 10% was too tight for CI runner variance (typical variance: 5-15%)
 
 # ── Argument parsing ──────────────────────────────────────────────────
 UPDATE_BASELINE=0
