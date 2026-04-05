@@ -222,12 +222,16 @@ async fn main() {
             "QueryByAction",
             FederationMessage::QueryByAction {
                 action: "schema:SearchAction".into(),
+                cursor: None,
+                page_size: 20,
             },
         ),
         (
             "QueryResponse",
             FederationMessage::QueryResponse {
                 advertisements: vec![search_ad.clone()],
+                has_more: false,
+                next_cursor: None,
             },
         ),
         (
