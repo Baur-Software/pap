@@ -5,15 +5,20 @@
 ### Fixed
 
 - **pap-agents**: Hardened `is_safe_url` SSRF validation against userinfo bypass — URLs with `user:pass@host` syntax previously bypassed host extraction, allowing requests to private/internal IPs. Also validates expanded URLs after `{query}` template substitution (defense in depth), rejects empty hosts, and documents DNS rebinding as a known limitation requiring network-layer controls.
+- **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
+- **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
 
 ### Added
 
 - **pap-agents**: 10 new security-focused unit tests covering userinfo bypass, 0.0.0.0, file/data/javascript schemes, empty string, malformed URLs, IPv6 unique local, template variable safety, and octal IPv4 notation.
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
 
 ## [0.7.2.1] - 2026-04-05
 
 ### Changed
 
+- **docs**: Expanded CONTRIBUTING.md with comprehensive development environment setup guide — prerequisites (Rust, system libs, optional tooling), quick start commands, project structure tour, per-subsystem test instructions (Rust, Python, Java, E2E), example runner commands, browser extension build steps, CI pipeline table with local reproduction commands, branch naming and conventional commit conventions
 - **ci**: Hardened benchmark regression gate — tightened threshold from 20% to 10%, added artifact-based baseline storage with 90-day retention so PRs compare against the latest main baseline instead of a stale committed file, added benchmark summary PR comments via `actions/github-script`, and improved `check_regression.sh` with `--baseline`/`--output` flags and proper argument parsing
 - **ci**: Added zero-value guard in `check_regression.sh` — a Criterion parse failure that yields 0 now fails the gate instead of silently passing
 - **ci**: Baseline update on main push now runs even if the regression check fails, preventing a single noisy benchmark from permanently jamming the CI gate
