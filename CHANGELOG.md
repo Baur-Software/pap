@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Added
+
+- **pap-wasm**: Browser-native transport session (`TransportSession`) that drives the full 6-phase PAP handshake from JavaScript/TypeScript using the Fetch API. State-machine-enforced phase ordering prevents out-of-sequence calls. Auto-generates ephemeral session keypairs, co-signs receipts, and caches execution results. Wire-compatible with the native `AgentClient` (same REST endpoints, same `ProtocolMessage` JSON format).
+- **pap-wasm**: `runHandshake()` convenience method that executes all 6 phases in a single async call.
+- **pap-wasm**: Server-supplied session ID validation rejects path traversal characters before URL interpolation.
+- **pap-wasm**: 12 wasm-bindgen tests covering state machine construction, phase ordering enforcement, and keypair uniqueness.
+- **pap-wasm**: README with JS/TS usage examples, API reference, and build instructions.
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
