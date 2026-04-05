@@ -7,6 +7,7 @@
 - **pap-python**: You now get full IDE autocomplete and type checking out of the box — mypy, pyright, and Pylance discover the package's type stubs automatically via PEP 561 (`py.typed` marker)
 - **pap-python**: `__init__.pyi` re-exports all 22 public symbols so autocomplete works at the `pap` package level (not just `pap._pap`)
 - **pap-python**: Stub validation test suite (`test_stubs.py`) — verifies `.pyi` syntax, `py.typed` presence, and completeness against `__all__`
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
 - **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
 - **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
 
@@ -25,6 +26,11 @@
 - **ci**: Baseline update on main push now runs even if the regression check fails, preventing a single noisy benchmark from permanently jamming the CI gate
 
 ## [0.7.1] - 2026-04-04
+
+### Added
+
+- **pap-c**: C FFI marketplace query API — `PapMarketplaceClient` opaque handle wrapping `MarketplaceRegistry`, `PapAgentList` typed result set with index-based accessors (`pap_agent_list_get_did`, `pap_agent_list_get_name`), JSON-based `pap_marketplace_query` dispatching to `query_by_action` or `query_satisfiable` based on `available_properties` presence, and `pap_last_error` alias for error retrieval
+- **pap-c**: 11 unit tests covering client lifecycle, query dispatch, disclosure filtering, out-of-bounds safety, null-pointer guards, invalid JSON rejection, and unsigned advertisement rejection
 
 ### Changed
 
