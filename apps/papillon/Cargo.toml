@@ -40,5 +40,6 @@ sha2 = { workspace = true }
 rusqlite = { version = "0.32", features = ["bundled", "serde_json"] }
 
 ed25519-dalek = { workspace = true }
+rand = { workspace = true }
 zeroize = { workspace = true }
 if-addrs = "0.7"

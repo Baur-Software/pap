@@ -159,6 +159,10 @@ pub fn run() {
             commands::agents::generate_agent,
             commands::agents::publish_agent,
             commands::agents::unpublish_agent,
+            commands::webauthn::begin_registration,
+            commands::webauthn::complete_registration,
+            commands::webauthn::begin_authentication,
+            commands::webauthn::complete_authentication,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");
