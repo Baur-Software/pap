@@ -231,16 +231,24 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         <div class="provenance-footer">
                             <button
                                 class="provenance-toggle"
-                                on:click=move |_| show_provenance.update(|v| *v = !*v)
+                                on:click=move |e: leptos::ev::MouseEvent| {
+                                    e.stop_propagation();
+                                    show_provenance.update(|v| *v = !*v);
+                                }
                             >
-                                {format!("{} agent{} contributed", prov_count, if prov_count == 1 { "" } else { "s" })}
                                 <span class="provenance-chevron"
                                     class:expanded=move || show_provenance.get()
-                                >">"</span>
+                                >"▶"</span>
+                                {format!("{} agent{} contributed", prov_count, if prov_count == 1 { "" } else { "s" })}
+                                <span class="provenance-privacy-badge">"Guarded"</span>
                             </button>
-                            <Show when=move || show_provenance.get()>
+                            // Always rendered; CSS grid-template-rows animates open/close.
+                            <div
+                                class="provenance-panel-wrap"
+                                class:expanded=move || show_provenance.get()
+                            >
                                 <ProvenanceLayer block_ids=prov_ids.clone() />
-                            </Show>
+                            </div>
                         </div>
                         <Show when=move || show_reprompt.get()>
                             <div class="block-reprompt">
@@ -286,8 +294,9 @@ fn PhaseDots(current_phase: u8, #[prop(default = false)] failed: bool) -> impl I
 }
 
 /// Expandable provenance layer showing the individual agent blocks that
-/// contributed to an outcome block. Each entry shows the agent name,
-/// action type, and a scope badge summarizing what it saw/returned.
+/// contributed to an outcome block. Each entry is a full ProvenancePanel
+/// showing agent DID, mandate scope, actions taken, receipt hash, and
+/// decay state — the trust transparency feature.
 #[component]
 fn ProvenanceLayer(block_ids: Vec<String>) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
@@ -313,34 +322,210 @@ fn ProvenanceLayer(block_ids: Vec<String>) -> impl IntoView {
                 each=entries
                 key=|b| b.id.clone()
                 children=move |block| {
-                    let agent_name = block
-                        .content
-                        .as_ref()
-                        .and_then(|c| c.get("agent"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Unknown agent")
-                        .to_string();
-                    let action = block
-                        .schema_type
-                        .clone()
-                        .unwrap_or_else(|| "Action".into());
-                    let has_receipt = block
-                        .content
-                        .as_ref()
-                        .map(|c| c.get("receipt").is_some())
-                        .unwrap_or(false);
-
-                    view! {
-                        <div class="provenance-entry">
-                            <span class="provenance-agent">{agent_name}</span>
-                            <span class="provenance-action">{action}</span>
-                            <Show when=move || has_receipt>
-                                <span class="scope-badge receipt">"co-signed"</span>
-                            </Show>
-                        </div>
-                    }
+                    view! { <ProvenancePanel block=block /> }
                 }
             />
+        </div>
+    }
+}
+
+/// Full provenance panel for a single contributing agent block.
+/// Shows: agent name + DID, mandate scope granted, actions taken,
+/// receipt hash with link to Receipts page, and mandate decay state.
+#[component]
+fn ProvenancePanel(block: papillon_shared::CanvasBlock) -> impl IntoView {
+    let content = block.content.clone();
+
+    // ── Extract fields from content JSON ────────────────────
+    let agent_name = content
+        .as_ref()
+        .and_then(|c| c.get("agent"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown agent")
+        .to_string();
+
+    let action = content
+        .as_ref()
+        .and_then(|c| c.get("receipt"))
+        .and_then(|r| r.get("action"))
+        .and_then(|v| v.as_str())
+        .or_else(|| block.schema_type.as_deref())
+        .unwrap_or("Action")
+        .trim_start_matches("schema:")
+        .to_string();
+
+    // Provenance section (added by the handshake layer)
+    let prov = content.as_ref().and_then(|c| c.get("provenance")).cloned();
+
+    let agent_did = prov
+        .as_ref()
+        .and_then(|p| p.get("agent_did"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let issuer_did = prov
+        .as_ref()
+        .and_then(|p| p.get("issuer_did"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let decay_state = prov
+        .as_ref()
+        .and_then(|p| p.get("decay_state"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Active")
+        .to_string();
+
+    let disclosed: Vec<String> = prov
+        .as_ref()
+        .and_then(|p| p.get("disclosed"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let returns: Vec<String> = prov
+        .as_ref()
+        .and_then(|p| p.get("returns"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Receipt section
+    let receipt = content.as_ref().and_then(|c| c.get("receipt")).cloned();
+
+    let session_id = receipt
+        .as_ref()
+        .and_then(|r| r.get("session_id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let co_sigs = receipt
+        .as_ref()
+        .and_then(|r| r.get("co_signatures"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    // Truncate a DID for display: show first 20 + "…" + last 8 chars.
+    fn truncate_did(did: &str) -> String {
+        if did.len() > 32 {
+            format!("{}…{}", &did[..20], &did[did.len() - 8..])
+        } else {
+            did.to_string()
+        }
+    }
+
+    let agent_did_short = truncate_did(&agent_did);
+    let issuer_did_short = truncate_did(&issuer_did);
+    let session_id_short = truncate_did(&session_id);
+
+    let is_on_device = agent_did.is_empty();
+    let has_receipt = !session_id.is_empty();
+    let zero_disclosure = disclosed.is_empty();
+    // Precomputed booleans for Show `when=` closures — avoids moving the
+    // underlying String/Vec into the condition closure when children also need them.
+    let has_issuer_did = !issuer_did.is_empty();
+    let has_returns_data = !returns.is_empty();
+
+    let decay_class = match decay_state.as_str() {
+        "Active" => "decay-badge decay-active",
+        "Degraded" => "decay-badge decay-degraded",
+        "ReadOnly" => "decay-badge decay-readonly",
+        "Suspended" => "decay-badge decay-suspended",
+        _ => "decay-badge decay-active",
+    };
+
+    view! {
+        <div class="provenance-entry">
+            // Header row: agent name + action badge
+            <div class="prov-header">
+                <span class="provenance-agent">{agent_name}</span>
+                <span class="provenance-action">{action}</span>
+                <span class=decay_class>{decay_state.clone()}</span>
+            </div>
+
+            // Agent DID row (hidden for on-device synthesizer)
+            <Show when=move || !is_on_device>
+                <div class="prov-did-row">
+                    <span class="prov-label">"DID"</span>
+                    <span class="prov-did" title=agent_did.clone()>{agent_did_short.clone()}</span>
+                </div>
+            </Show>
+
+            // Issuer DID row
+            <Show when=move || has_issuer_did>
+                <div class="prov-did-row">
+                    <span class="prov-label">"PRINCIPAL"</span>
+                    <span class="prov-did" title=issuer_did.clone()>{issuer_did_short.clone()}</span>
+                </div>
+            </Show>
+
+            // Mandate scope: what the agent was permitted to see
+            <div class="prov-scope-row">
+                <span class="prov-label">"SAW"</span>
+                <div class="scope-badges">
+                    {if zero_disclosure {
+                        vec![view! { <span class="scope-badge zero-disclosure">"zero disclosure"</span> }.into_any()]
+                    } else {
+                        disclosed.iter().map(|d| {
+                            let d = d.trim_start_matches("schema:").to_string();
+                            view! { <span class="scope-badge disclosure">{d}</span> }.into_any()
+                        }).collect::<Vec<_>>()
+                    }}
+                </div>
+            </div>
+
+            // What the agent returned
+            <Show when=move || has_returns_data>
+                <div class="prov-scope-row">
+                    <span class="prov-label">"RETURNED"</span>
+                    <div class="scope-badges">
+                        {returns.iter().map(|r| {
+                            let r = r.trim_start_matches("schema:").to_string();
+                            view! { <span class="scope-badge returns">{r}</span> }
+                        }).collect::<Vec<_>>()}
+                    </div>
+                </div>
+            </Show>
+
+            // On-device synthesis note
+            <Show when=move || is_on_device>
+                <div class="prov-scope-row">
+                    <span class="prov-label">"LOCAL"</span>
+                    <span class="prov-ondevice">"Composed on-device — never left this machine"</span>
+                </div>
+            </Show>
+
+            // Receipt section with link to Receipts page
+            <Show when=move || has_receipt>
+                <div class="prov-receipt-row">
+                    <span class="prov-label">"RECEIPT"</span>
+                    <span class="scope-badge receipt">
+                        {format!("{} co-sig{}", co_sigs, if co_sigs == 1 { "" } else { "s" })}
+                    </span>
+                    <a
+                        class="prov-receipt-link"
+                        href="/receipts"
+                        title=session_id.clone()
+                        on:click=|e: leptos::ev::MouseEvent| e.stop_propagation()
+                    >
+                        {session_id_short.clone()}
+                        <span class="prov-receipt-arrow">" →"</span>
+                    </a>
+                </div>
+            </Show>
         </div>
     }
 }
