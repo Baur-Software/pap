@@ -45,10 +45,9 @@ const firefoxManifest = {
     },
   },
 
-  // Firefox MV3 CSP format
+  // Firefox MV3 CSP — derived from Chrome manifest to stay in sync.
   content_security_policy: {
-    extension_pages:
-      "script-src 'self' 'wasm-unsafe-eval'; object-src 'none';",
+    extension_pages: chromeManifest.content_security_policy.extension_pages,
   },
 };
 
