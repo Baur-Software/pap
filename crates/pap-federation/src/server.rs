@@ -45,6 +45,10 @@ struct ServerState {
 #[derive(Deserialize)]
 struct QueryParams {
     action: String,
+    #[serde(default)]
+    cursor: Option<String>,
+    #[serde(default)]
+    page_size: Option<u32>,
 }
 
 impl FederationServer {
@@ -138,14 +142,17 @@ async fn handle_query(
     Query(params): Query<QueryParams>,
 ) -> Json<FederationMessage> {
     let registry = state.registry.lock().unwrap();
-    let ads: Vec<_> = registry
-        .query_local(&params.action)
-        .into_iter()
-        .cloned()
-        .collect();
+    let page_size = params.page_size.unwrap_or(100) as usize;
+
+    let (ads, next_cursor, has_more) =
+        registry.query_local_paginated(&params.action, params.cursor.as_deref(), page_size);
+
+    let advertisements = ads.into_iter().cloned().collect();
 
     Json(FederationMessage::QueryResponse {
-        advertisements: ads,
+        advertisements,
+        next_cursor,
+        has_more,
     })
 }
 
@@ -279,7 +286,7 @@ mod tests {
         let body = resp.into_body().collect().await.unwrap().to_bytes();
         let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
         match msg {
-            FederationMessage::QueryResponse { advertisements } => {
+            FederationMessage::QueryResponse { advertisements, .. } => {
                 assert_eq!(advertisements.len(), 1);
                 assert_eq!(advertisements[0].name, "Test Agent");
             }
@@ -307,7 +314,7 @@ mod tests {
         let body = resp.into_body().collect().await.unwrap().to_bytes();
         let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
         match msg {
-            FederationMessage::QueryResponse { advertisements } => {
+            FederationMessage::QueryResponse { advertisements, .. } => {
                 assert!(advertisements.is_empty());
             }
             _ => panic!("expected QueryResponse"),
@@ -471,5 +478,128 @@ mod tests {
             .to_str()
             .unwrap();
         assert_eq!(allow_origin, "*");
+    }
+
+    fn make_server_with_n_ads(n: usize) -> FederationServer {
+        let mut reg = FederatedRegistry::new();
+
+        for i in 0..n {
+            let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+            let did = pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
+                .unwrap()
+                .did();
+            let mut ad = pap_marketplace::AgentAdvertisement::new(
+                &format!("Agent {i}"),
+                "TestCorp",
+                &did,
+                vec!["schema:SearchAction".into()],
+                vec![],
+                vec![],
+                vec!["schema:SearchResult".into()],
+            );
+            ad.sign(&key);
+            reg.register_local(ad).unwrap();
+        }
+
+        let registry = Arc::new(Mutex::new(reg));
+        FederationServer::new(
+            registry,
+            7890,
+            "did:key:zTestNode".into(),
+            "https://localhost:7890".into(),
+            "abc123fingerprint".into(),
+        )
+    }
+
+    #[tokio::test]
+    async fn query_endpoint_with_pagination() {
+        let server = make_server_with_n_ads(3);
+        let app = server.router();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/federation/query?action=schema:SearchAction&page_size=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
+        match msg {
+            FederationMessage::QueryResponse {
+                advertisements,
+                next_cursor,
+                has_more,
+            } => {
+                assert_eq!(advertisements.len(), 1);
+                assert!(has_more);
+                assert!(next_cursor.is_some());
+            }
+            _ => panic!("expected QueryResponse"),
+        }
+    }
+
+    #[tokio::test]
+    async fn query_endpoint_with_cursor() {
+        let server = make_server_with_n_ads(3);
+        let router = server.router();
+
+        // First request: get first page
+        let resp = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/federation/query?action=schema:SearchAction&page_size=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
+        let (first_ad_did, cursor) = match msg {
+            FederationMessage::QueryResponse {
+                advertisements,
+                next_cursor,
+                ..
+            } => {
+                assert_eq!(advertisements.len(), 1);
+                (advertisements[0].signed_by.clone(), next_cursor.unwrap())
+            }
+            _ => panic!("expected QueryResponse"),
+        };
+
+        // Second request: use cursor to get next page
+        let resp = router
+            .oneshot(
+                Request::builder()
+                    .uri(&format!(
+                        "/federation/query?action=schema:SearchAction&page_size=1&cursor={}",
+                        cursor
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
+        match msg {
+            FederationMessage::QueryResponse {
+                advertisements, ..
+            } => {
+                assert_eq!(advertisements.len(), 1);
+                // Should be a different agent than page 1
+                assert_ne!(advertisements[0].signed_by, first_ad_did);
+            }
+            _ => panic!("expected QueryResponse"),
+        }
     }
 }

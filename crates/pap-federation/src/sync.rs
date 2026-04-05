@@ -6,16 +6,35 @@ use serde::{Deserialize, Serialize};
 use crate::error::FederationError;
 use crate::peer::RegistryPeer;
 
+fn default_page_size() -> u32 {
+    100
+}
+
 /// Federation protocol messages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum FederationMessage {
     /// Query a peer for agents supporting a given action.
-    QueryByAction { action: String },
+    QueryByAction {
+        action: String,
+        /// Cursor for pagination — the DID of the last agent in the previous page.
+        /// If absent, starts from the beginning.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cursor: Option<String>,
+        /// Maximum number of advertisements per page. Defaults to 100.
+        #[serde(default = "default_page_size")]
+        page_size: u32,
+    },
 
     /// Response to a query — a list of matching advertisements.
     QueryResponse {
         advertisements: Vec<AgentAdvertisement>,
+        /// Cursor pointing to the next page. Present when more results exist.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        next_cursor: Option<String>,
+        /// Whether more results are available after this page.
+        #[serde(default)]
+        has_more: bool,
     },
 
     /// Announce a new local advertisement to a peer.
@@ -125,11 +144,69 @@ impl FederationClient {
             .map_err(|e| FederationError::SyncFailed(e.to_string()))?;
 
         match msg {
-            FederationMessage::QueryResponse { advertisements } => Ok(advertisements),
+            FederationMessage::QueryResponse { advertisements, .. } => Ok(advertisements),
             _ => Err(FederationError::SyncFailed(
                 "unexpected response type".into(),
             )),
         }
+    }
+
+    /// Pull all advertisements matching an action from a peer, page by page.
+    ///
+    /// Uses cursor-based pagination. Returns all ads collected across pages.
+    pub async fn sync_action_paginated(
+        &self,
+        peer: &RegistryPeer,
+        action: &str,
+        page_size: u32,
+    ) -> Result<Vec<AgentAdvertisement>, FederationError> {
+        let mut all_ads = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let mut url = format!(
+                "{}/federation/query?action={}&page_size={}",
+                peer.endpoint.trim_end_matches('/'),
+                action,
+                page_size,
+            );
+            if let Some(ref c) = cursor {
+                url.push_str(&format!("&cursor={}", c));
+            }
+
+            let resp = self
+                .client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| FederationError::PeerUnreachable(e.to_string()))?;
+
+            let msg: FederationMessage = resp
+                .json()
+                .await
+                .map_err(|e| FederationError::SyncFailed(e.to_string()))?;
+
+            match msg {
+                FederationMessage::QueryResponse {
+                    advertisements,
+                    next_cursor,
+                    has_more,
+                } => {
+                    all_ads.extend(advertisements);
+                    if !has_more {
+                        break;
+                    }
+                    cursor = next_cursor;
+                }
+                _ => {
+                    return Err(FederationError::SyncFailed(
+                        "unexpected response type".into(),
+                    ))
+                }
+            }
+        }
+
+        Ok(all_ads)
     }
 
     /// Announce a local advertisement to a peer.
