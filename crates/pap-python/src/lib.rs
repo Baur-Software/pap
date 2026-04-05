@@ -19,6 +19,7 @@ use once_cell::sync::Lazy;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Custom exception hierarchy
@@ -1440,11 +1441,12 @@ impl MarketplaceRegistry {
 /// HTTP client for an initiating PAP agent.
 ///
 /// Drives the six-phase handshake by posting protocol messages to a receiving
-/// agent's HTTP server. All methods are synchronous in Python (backed by
-/// a dedicated tokio runtime).
+/// agent's HTTP server. Each phase is available as both a synchronous method
+/// (e.g. `present_token`) and an async/awaitable method (e.g.
+/// `present_token_async`) for use with `asyncio`.
 #[pyclass(module = "pap._pap")]
 pub struct AgentClient {
-    inner: pap_transport::AgentClient,
+    inner: Arc<pap_transport::AgentClient>,
     /// Stored so `__repr__` can show the URL without needing access to the
     /// private field inside `pap_transport::AgentClient`.
     base_url: String,
@@ -1456,7 +1458,7 @@ impl AgentClient {
     #[new]
     fn new(base_url: &str) -> Self {
         Self {
-            inner: pap_transport::AgentClient::new(base_url),
+            inner: Arc::new(pap_transport::AgentClient::new(base_url)),
             base_url: base_url.to_string(),
         }
     }
@@ -1533,6 +1535,105 @@ impl AgentClient {
     fn close_session(&self, session_id: &str) -> PyResult<String> {
         let result = RT
             .block_on(self.inner.close_session(session_id))
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    // -----------------------------------------------------------------------
+    // Async variants (Python-awaitable via asyncio)
+    // -----------------------------------------------------------------------
+
+    /// Phase 1 — Present a capability token (async).
+    ///
+    /// Equivalent to `present_token`, for use with `asyncio`.
+    /// Usage: `result = await client.present_token_async(token)`
+    async fn present_token_async(&self, token: Py<CapabilityToken>) -> PyResult<String> {
+        let token_inner = Python::with_gil(|py| token.borrow(py).inner.clone());
+        let result = self
+            .inner
+            .present_token(token_inner)
+            .await
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    /// Phase 2 — Send the initiator's ephemeral session DID (async).
+    ///
+    /// Equivalent to `exchange_did`, for use with `asyncio`.
+    async fn exchange_did_async(
+        &self,
+        session_id: String,
+        initiator_session_did: String,
+    ) -> PyResult<String> {
+        let result = self
+            .inner
+            .exchange_did(&session_id, initiator_session_did)
+            .await
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    /// Phase 3 — Send selective disclosures (async).
+    ///
+    /// Equivalent to `send_disclosures`, for use with `asyncio`.
+    /// Pass an empty list (`[]`) for zero-disclosure sessions.
+    async fn send_disclosures_async(
+        &self,
+        session_id: String,
+        disclosures: Vec<Py<Disclosure>>,
+    ) -> PyResult<String> {
+        let values: Vec<serde_json::Value> = Python::with_gil(|py| {
+            disclosures
+                .iter()
+                .map(|d| serde_json::to_value(&d.borrow(py).inner))
+                .collect::<Result<_, _>>()
+        })
+        .map_err(|e: serde_json::Error| PyValueError::new_err(e.to_string()))?;
+        let result = self
+            .inner
+            .send_disclosures(&session_id, values)
+            .await
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    /// Phase 4 — Request execution (async).
+    ///
+    /// Equivalent to `request_execution`, for use with `asyncio`.
+    async fn request_execution_async(&self, session_id: String) -> PyResult<String> {
+        let result = self
+            .inner
+            .request_execution(&session_id)
+            .await
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    /// Phase 5 — Send receipt for co-signing (async).
+    ///
+    /// Equivalent to `exchange_receipt`, for use with `asyncio`.
+    async fn exchange_receipt_async(
+        &self,
+        session_id: String,
+        receipt: Py<TransactionReceipt>,
+    ) -> PyResult<String> {
+        let receipt_inner = Python::with_gil(|py| receipt.borrow(py).inner.clone());
+        let result = self
+            .inner
+            .exchange_receipt(&session_id, receipt_inner)
+            .await
+            .map_err(|e| PapTransportError::new_err(e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    /// Phase 6 — Close the session (async).
+    ///
+    /// Equivalent to `close_session`, for use with `asyncio`.
+    async fn close_session_async(&self, session_id: String) -> PyResult<String> {
+        let result = self
+            .inner
+            .close_session(&session_id)
+            .await
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }

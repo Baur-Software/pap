@@ -15,10 +15,10 @@
  *
  * Quick start:
  *   ./scripts/start-chrysalis-dev.sh          # terminal 1
- *   CHRYSALIS_URL=http://localhost:7890 \
+ *   CHRYSALIS_URL=http://localhost:${CHRYSALIS_PORT:-7890} \
  *     npx playwright test chrysalis-integration --reporter=line
  *
- * The default port is 7890; override with CHRYSALIS_URL.
+ * The default port is 7890 (override with CHRYSALIS_PORT env var); use CHRYSALIS_URL to set the full URL.
  */
 
 import { test, expect } from "@playwright/test";

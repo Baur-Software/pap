@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
+use crate::commands::webauthn::WebAuthnChallengeStore;
+
 use base64::Engine;
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
@@ -78,6 +80,9 @@ pub struct AppState {
     /// LAN-reachable `pap://` URLs for this node, computed at startup.
     /// Excludes loopback; populated by `start_federation_server_async`.
     pub local_pap_urls: RwLock<Vec<String>>,
+    /// Pending WebAuthn challenges awaiting completion.
+    /// Keyed by a UUID challenge_id; entries expire after `CHALLENGE_TTL_SECS`.
+    pub webauthn_challenges: WebAuthnChallengeStore,
 }
 
 impl AppState {
@@ -125,6 +130,9 @@ impl AppState {
             node_endpoint: RwLock::new(self.node_endpoint.read().unwrap().clone()),
             node_cert_fingerprint: RwLock::new(self.node_cert_fingerprint.read().unwrap().clone()),
             local_pap_urls: RwLock::new(self.local_pap_urls.read().unwrap().clone()),
+            // Each clone gets its own isolated challenge store — background
+            // threads never need to complete WebAuthn ceremonies.
+            webauthn_challenges: WebAuthnChallengeStore::new(),
         }
     }
 
@@ -388,6 +396,7 @@ impl AppState {
             node_endpoint: RwLock::new(String::new()),
             node_cert_fingerprint: RwLock::new(String::new()),
             local_pap_urls: RwLock::new(Vec::new()),
+            webauthn_challenges: WebAuthnChallengeStore::new(),
         }
     }
 

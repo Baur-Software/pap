@@ -251,6 +251,26 @@ impl Mandate {
         }
     }
 
+    /// Canonical bytes for external signing (e.g., SubtleCrypto in browsers).
+    /// Returns the exact byte array that `sign()` would sign internally.
+    pub fn signable_bytes(&self) -> Vec<u8> {
+        self.canonical_bytes()
+    }
+
+    /// Set the signature from externally-produced bytes (64-byte Ed25519 signature).
+    /// Used when signing is performed outside Rust (e.g., via SubtleCrypto).
+    pub fn set_signature_bytes(&mut self, sig_bytes: &[u8]) -> Result<(), PapError> {
+        if sig_bytes.len() != 64 {
+            return Err(PapError::MandateError(format!(
+                "signature must be 64 bytes, got {}",
+                sig_bytes.len()
+            )));
+        }
+        use base64::Engine;
+        self.signature = Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig_bytes));
+        Ok(())
+    }
+
     /// Canonical bytes for signing/hashing (excludes signature field).
     fn canonical_bytes(&self) -> Vec<u8> {
         let canonical = serde_json::json!({
@@ -549,6 +569,78 @@ mod tests {
         let h1 = mandate.hash();
         let h2 = mandate.hash();
         assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn signable_bytes_deterministic() {
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        let b1 = mandate.signable_bytes();
+        let b2 = mandate.signable_bytes();
+        assert_eq!(b1, b2);
+        assert!(!b1.is_empty());
+    }
+
+    #[test]
+    fn set_signature_bytes_roundtrip() {
+        let key = make_keypair();
+        let mut mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        // Sign externally using signable_bytes
+        let bytes = mandate.signable_bytes();
+        let sig = key.sign(&bytes);
+        mandate.set_signature_bytes(&sig.to_bytes()).unwrap();
+        // Verify should pass
+        assert!(mandate.verify(&key.verifying_key()).is_ok());
+    }
+
+    #[test]
+    fn set_signature_bytes_matches_sign() {
+        let key = make_keypair();
+        let principal_did = did_from_key(&key);
+
+        let mut m1 = Mandate::issue_root(
+            principal_did.clone(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        let mut m2 = m1.clone();
+
+        // Sign m1 via the internal method
+        m1.sign(&key);
+        // Sign m2 via the external method
+        let bytes = m2.signable_bytes();
+        let sig = key.sign(&bytes);
+        m2.set_signature_bytes(&sig.to_bytes()).unwrap();
+
+        // Both signatures should be identical (Ed25519 is deterministic)
+        assert_eq!(m1.signature, m2.signature);
+    }
+
+    #[test]
+    fn set_signature_bytes_wrong_length_rejected() {
+        let mut mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        assert!(mandate.set_signature_bytes(&[0u8; 63]).is_err());
+        assert!(mandate.set_signature_bytes(&[0u8; 65]).is_err());
+        assert!(mandate.set_signature_bytes(&[]).is_err());
     }
 
     #[test]
