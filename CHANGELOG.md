@@ -1,5 +1,29 @@
 ## [Unreleased]
 
+## [0.8.0] - 2026-04-04
+
+### Added
+
+- **social recovery**: M-of-N Shamir Secret Sharing for the principal keypair (spec §13.5). You can now split your identity's seed into N shards and distribute them to trusted contacts — any M of those contacts can reconstruct your identity if you lose access. The scheme operates over GF(2^8) with CSPRNG-generated polynomial coefficients; 18 tests cover round-trips, tamper detection, replay prevention, and all error paths.
+- **Papillon**: Four-step recovery setup wizard — accessible from the post-onboarding flow or on demand. Shows one shard at a time (previous shards removed from DOM before displaying the next), includes a copy button and a manifest download, and auto-advances after the identity loads if recovery is not yet configured.
+- **Papillon**: Recovery reconstruction command — accepts M or more shard JSON blobs, verifies commitments and session nonces, checks reconstructed DID matches the active identity (if any), and persists the recovered seed to the authoritative profiles database.
+- **pap-c**: C FFI bindings for social recovery — `pap_recovery_create_shards`, `pap_recovery_reconstruct`, and supporting helpers. Header in `crates/pap-c/include/pap.h`. Suitable for embedding in non-Rust runtimes (Python, Swift, Go).
+- **pap-python**: Python bindings surface the new recovery API via PyO3.
+
+### Changed
+
+- **shamir**: `reconstruct()` now returns `Zeroizing<[u8; 32]>` so the recovered seed is zeroed on drop throughout its entire lifetime in the caller.
+- **RecoveryShard**: `Drop` impl zeroizes `shard_bytes`, `session_nonce`, and `commitment` before heap release. `Debug` impl redacts those same fields — logging a shard via `{:?}` never emits partial secret material.
+- **Papillon**: Recovered seed is written to `profiles_db` (the authoritative per-profile store) rather than the legacy key-value database — ensures the identity survives app restarts.
+- **Papillon**: `create_recovery_shards` releases the seed read-lock before ceremony work begins, unblocking concurrent `switch_profile` calls.
+
+### Fixed
+
+- **shamir**: `lagrange_at_zero` precondition upgraded from `debug_assert` to `assert` — coordinate-length mismatch now panics in release builds rather than silently interpolating garbage.
+- **shamir**: Reconstruction now rejects shards whose `index > total`, preventing silent wrong-value output.
+- **Papillon**: TOCTOU race between DID identity check and signer installation eliminated by holding the write lock across the entire check-and-install sequence.
+- **Papillon**: Input bounds enforced on `reconstruct_from_shards` — rejects more than 255 shards or individual shard strings larger than 8 KiB before any deserialization.
+- **C FFI**: Stack seed buffer in `pap_recovery_create_shards` zeroized after ceremony; `pap_recovery_reconstruct` upper-bound guard added.
 ## [0.7.2] - 2026-04-05
 
 ### Added

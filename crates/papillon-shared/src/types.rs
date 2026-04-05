@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 // LLM provider types: on native, re-export from pap-agents (single source of truth).
 // On WASM, pap-agents pulls in reqwest::blocking → tokio → mio which does not compile
@@ -1344,4 +1345,59 @@ mod tests {
         let back: PipelineNodeInfo = serde_json::from_str(json).unwrap();
         assert!(back.action_type.is_empty());
     }
+}
+
+// ── Shamir Secret Sharing recovery types ────────────────────
+
+/// A single Shamir shard ready for distribution to a trustee.
+///
+/// `shard_json` is the JSON blob the trustee stores (a serialized `RecoveryShard`).
+/// The frontend should prompt the user to save this to a file or password manager.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveryShardInfo {
+    /// 1-based index, unique within the ceremony.
+    pub index: u8,
+    /// Minimum shards required to reconstruct (M).
+    pub threshold: u8,
+    /// Total shards produced (N).
+    pub total: u8,
+    /// Serialized shard JSON for distribution to the trustee at this index.
+    pub shard_json: String,
+    /// DID of the principal whose seed was split.
+    pub principal_did: String,
+}
+
+impl Drop for RecoveryShardInfo {
+    fn drop(&mut self) {
+        // shard_json contains the full serialized RecoveryShard including partial
+        // secret material. Zeroize before the heap allocation is released.
+        self.shard_json.zeroize();
+    }
+}
+
+/// Result returned by `create_recovery_shards`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoverySetupResult {
+    /// One entry per trustee (N entries total).
+    pub shards: Vec<RecoveryShardInfo>,
+    /// Public shard manifest JSON for publishing alongside the recovery mandate.
+    pub manifest_json: String,
+    /// DID of the principal whose seed was split.
+    pub principal_did: String,
+}
+
+/// Result returned by `reconstruct_from_shards`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveryReconstructResult {
+    /// The DID derived from the reconstructed seed.
+    pub did: String,
+    /// Base64url-encoded public key of the reconstructed identity.
+    pub public_key_b64: String,
+}
+
+/// Persistent recovery configuration status returned by `get_recovery_status`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveryStatus {
+    /// `true` once the user has completed the Shamir shard setup ceremony.
+    pub configured: bool,
 }
