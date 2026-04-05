@@ -598,7 +598,9 @@ pub async fn run_scenario(
         disclosure_set.clone(),
         ttl,
     );
-    mandate.sign(principal_kp.signing_key()).expect("Ed25519 is always supported");
+    mandate
+        .sign(principal_kp.signing_key())
+        .expect("Ed25519 is always supported");
     let mandate_hash = mandate.hash();
 
     steps.push(ScenarioStepResult {
@@ -619,7 +621,9 @@ pub async fn run_scenario(
         principal_did.clone(),
         ttl,
     );
-    token.sign(principal_kp.signing_key()).expect("Ed25519 is always supported");
+    token
+        .sign(principal_kp.signing_key())
+        .expect("Ed25519 is always supported");
 
     let mut session = Session::initiate(&token, &agent_did, &principal_kp.verifying_key())
         .map_err(|e| PapillonError::from(e.to_string()))?;

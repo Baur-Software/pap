@@ -61,7 +61,9 @@ fn main() {
         root_disclosure,
         root_ttl,
     );
-    root_mandate.sign(principal.signing_key()).expect("Ed25519 is always supported");
+    root_mandate
+        .sign(principal.signing_key())
+        .expect("Ed25519 is always supported");
 
     println!("  DID: {orchestrator_did}");
     println!("  Scope: [SearchAction, ReserveAction(Flight), ReserveAction(Lodging), PayAction]");
@@ -101,7 +103,9 @@ fn main() {
             planner_ttl,
         )
         .unwrap();
-    planner_mandate.sign(orchestrator.signing_key()).expect("Ed25519 is always supported");
+    planner_mandate
+        .sign(orchestrator.signing_key())
+        .expect("Ed25519 is always supported");
 
     println!("  DID: {planner_did}");
     println!("  Scope: [SearchAction, ReserveAction(Flight)] — no lodging, no pay");
@@ -145,7 +149,9 @@ fn main() {
             booking_ttl,
         )
         .unwrap();
-    booking_mandate.sign(planner.signing_key()).expect("Ed25519 is always supported");
+    booking_mandate
+        .sign(planner.signing_key())
+        .expect("Ed25519 is always supported");
 
     println!("  DID: {booking_agent_did}");
     println!("  Scope: [ReserveAction(Flight)] — no search capability");

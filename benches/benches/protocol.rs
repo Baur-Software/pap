@@ -60,7 +60,9 @@ fn bench_mandate_create_sign(c: &mut Criterion) {
                 DisclosureSet::empty(),
                 ttl,
             );
-            mandate.sign(&principal_key).expect("Ed25519 is always supported");
+            mandate
+                .sign(&principal_key)
+                .expect("Ed25519 is always supported");
             mandate
         });
     });
@@ -91,7 +93,8 @@ fn bench_mandate_chain_verify(c: &mut Criterion) {
         DisclosureSet::empty(),
         ttl,
     );
-    root.sign(&principal_key).expect("Ed25519 is always supported");
+    root.sign(&principal_key)
+        .expect("Ed25519 is always supported");
 
     // Depth 1: agent1 -> agent2
     let mut child1 = root
@@ -102,7 +105,9 @@ fn bench_mandate_chain_verify(c: &mut Criterion) {
             ttl - Duration::minutes(10),
         )
         .unwrap();
-    child1.sign(&agent1_key).expect("Ed25519 is always supported");
+    child1
+        .sign(&agent1_key)
+        .expect("Ed25519 is always supported");
 
     // Depth 2: agent2 -> leaf
     let mut child2 = child1
@@ -113,7 +118,9 @@ fn bench_mandate_chain_verify(c: &mut Criterion) {
             ttl - Duration::minutes(20),
         )
         .unwrap();
-    child2.sign(&agent2_key).expect("Ed25519 is always supported");
+    child2
+        .sign(&agent2_key)
+        .expect("Ed25519 is always supported");
 
     let chain = MandateChain {
         mandates: vec![root, child1, child2],
@@ -204,7 +211,9 @@ fn bench_session_open(c: &mut Criterion) {
                 issuer_did.clone(),
                 ttl,
             );
-            token.sign(&issuer_key).expect("Ed25519 is always supported");
+            token
+                .sign(&issuer_key)
+                .expect("Ed25519 is always supported");
 
             // Phase 2: Session initiation + token verification
             let mut session =
@@ -242,7 +251,9 @@ fn bench_receipt_cosign(c: &mut Criterion) {
         issuer_did,
         ttl,
     );
-    token.sign(&issuer_key).expect("Ed25519 is always supported");
+    token
+        .sign(&issuer_key)
+        .expect("Ed25519 is always supported");
 
     let mut session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
     session

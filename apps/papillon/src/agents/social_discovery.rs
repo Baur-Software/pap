@@ -219,7 +219,8 @@ mod tests {
             vec![],
             vec!["schema:Person".into()],
         );
-        ad.sign(kp.signing_key()).expect("Ed25519 is always supported");
+        ad.sign(kp.signing_key())
+            .expect("Ed25519 is always supported");
         registry.register_local(ad).unwrap();
 
         // A non-person agent — must be filtered out by object_types
@@ -234,7 +235,8 @@ mod tests {
             vec![],
             vec!["schema:WeatherForecast".into()],
         );
-        ad2.sign(kp2.signing_key()).expect("Ed25519 is always supported");
+        ad2.sign(kp2.signing_key())
+            .expect("Ed25519 is always supported");
         registry.register_local(ad2).unwrap();
 
         Arc::new(Mutex::new(registry))

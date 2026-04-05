@@ -338,7 +338,9 @@ impl AppState {
                 vec![],
                 vec!["schema:ItemList".into()],
             );
-            social_ad.sign(social_kp.signing_key()).expect("Ed25519 is always supported");
+            social_ad
+                .sign(social_kp.signing_key())
+                .expect("Ed25519 is always supported");
             reg.register_local(social_ad)
                 .expect("Social Discovery registration should not fail");
             keypairs.insert("Social Discovery".into(), social_kp);
@@ -355,7 +357,9 @@ impl AppState {
                 vec![],
                 vec!["schema:Person".into()],
             );
-            beacon_ad.sign(beacon_kp.signing_key()).expect("Ed25519 is always supported");
+            beacon_ad
+                .sign(beacon_kp.signing_key())
+                .expect("Ed25519 is always supported");
             reg.register_local(beacon_ad)
                 .expect("Trait Beacon registration should not fail");
             keypairs.insert("Trait Beacon".into(), beacon_kp);

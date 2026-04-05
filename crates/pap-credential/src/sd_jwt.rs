@@ -64,7 +64,10 @@ impl SelectiveDisclosureJwt {
     /// Sign the SD-JWT (signs over the hash commitments of all claims).
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), CredentialError> {
         if self.algorithm != SignatureAlgorithm::Ed25519 {
-            return Err(CredentialError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+            return Err(CredentialError::UnsupportedAlgorithm(format!(
+                "{:?}",
+                self.algorithm
+            )));
         }
         let bytes = self.commitment_bytes();
         let sig = signing_key.sign(&bytes);

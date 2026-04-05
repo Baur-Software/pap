@@ -97,7 +97,10 @@ impl RecoveryMandate {
     /// Sign this recovery mandate with the principal's key.
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
         if self.algorithm != SignatureAlgorithm::Ed25519 {
-            return Err(PapError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+            return Err(PapError::UnsupportedAlgorithm(format!(
+                "{:?}",
+                self.algorithm
+            )));
         }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
@@ -447,7 +450,10 @@ impl RevocationProof {
     /// Sign with the new principal's key (proves possession).
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
         if self.algorithm != SignatureAlgorithm::Ed25519 {
-            return Err(PapError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+            return Err(PapError::UnsupportedAlgorithm(format!(
+                "{:?}",
+                self.algorithm
+            )));
         }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);

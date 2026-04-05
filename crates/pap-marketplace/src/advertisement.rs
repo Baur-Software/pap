@@ -148,9 +148,15 @@ impl AgentAdvertisement {
     }
 
     /// Sign the advertisement with the operator's key.
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), MarketplaceError> {
+    pub fn sign(
+        &mut self,
+        signing_key: &ed25519_dalek::SigningKey,
+    ) -> Result<(), MarketplaceError> {
         if self.algorithm != SignatureAlgorithm::Ed25519 {
-            return Err(MarketplaceError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+            return Err(MarketplaceError::UnsupportedAlgorithm(format!(
+                "{:?}",
+                self.algorithm
+            )));
         }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
