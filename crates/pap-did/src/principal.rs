@@ -88,6 +88,12 @@ pub fn did_to_public_key_bytes(did: &str) -> Result<[u8; 32], DidError> {
 
 /// Extract a VerifyingKey from a `did:key` identifier.
 /// This is used to verify signatures on artifacts signed by the DID holder.
+///
+/// **Trust note:** This function performs curve decompression but does NOT
+/// check that the key is in the prime-order subgroup. The identity element
+/// and other small-order points will be accepted. Subgroup safety is enforced
+/// at verification time by `verify_strict()`, not at key parsing time.
+/// Do not treat a successful return as proof of safe key material.
 pub fn verify_key_from_did(did: &str) -> Result<VerifyingKey, DidError> {
     let bytes = did_to_public_key_bytes(did)?;
     VerifyingKey::from_bytes(&bytes)
