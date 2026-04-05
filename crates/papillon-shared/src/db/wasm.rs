@@ -243,29 +243,52 @@ impl DatabaseOps for WasmDatabase {
     }
 
     fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+        // Delegate to the in-memory FTS implementation.
+        self.search_episodes(query, limit)
+    }
+
+    fn search_episodes(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
         let episodes = self
             .episodes
             .lock()
             .map_err(|e| DbError(format!("db lock: {e}")))?;
 
+        // WASM has no FTS5 engine; perform a case-insensitive substring search
+        // across the same columns that the FTS5 index covers on native.
         let query_lower = query.to_lowercase();
         let mut filtered: Vec<Episode> = episodes
             .iter()
             .filter(|ep| {
                 let searchable = format!(
-                    "{} {} {} {} {}",
+                    "{} {} {} {}",
                     ep.action_type.to_lowercase(),
                     ep.agent_name.to_lowercase(),
                     ep.intent_summary.as_deref().unwrap_or("").to_lowercase(),
                     ep.query.as_deref().unwrap_or("").to_lowercase(),
-                    ep.result_json.as_deref().unwrap_or("").to_lowercase(),
                 );
                 searchable.contains(&query_lower)
             })
             .cloned()
             .collect();
 
-        // Sort by recorded_at descending and limit
+        filtered.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+        filtered.truncate(limit);
+
+        Ok(filtered)
+    }
+
+    fn query_by_action(&self, action: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+        let episodes = self
+            .episodes
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+
+        let mut filtered: Vec<Episode> = episodes
+            .iter()
+            .filter(|ep| ep.action_type == action)
+            .cloned()
+            .collect();
+
         filtered.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
         filtered.truncate(limit);
 
