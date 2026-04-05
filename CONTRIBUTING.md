@@ -228,6 +228,25 @@ cd ../apps/papillon/frontend && trunk build --release && cd ../../../e2e
 npx playwright test tests/smoke.spec.ts --workers=1
 ```
 
+### Running E2E Tier 2 Tests Locally
+
+Tier 2 functional tests require a running Chrysalis registry container:
+
+```bash
+# Build and start the registry
+docker build -t chrysalis-registry -f e2e/Dockerfile.ci-chrysalis .
+docker run -d -p 8080:8080 --name chrysalis-test chrysalis-registry
+
+# Wait for the registry to be healthy
+npx wait-on http://localhost:8080/federation/identity --timeout 60000
+
+# Run the tier-2 tests
+cd e2e && npx playwright test tests/tier2-functional.spec.ts
+
+# Clean up
+docker stop chrysalis-test && docker rm chrysalis-test
+```
+
 ## Running Examples
 
 Each example demonstrates a specific protocol feature. Run them with `cargo run -p <name>`:
