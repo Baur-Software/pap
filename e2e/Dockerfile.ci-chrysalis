@@ -1,0 +1,87 @@
+# Build context: repo root (pap/)
+#   docker build -f e2e/Dockerfile.ci-chrysalis -t chrysalis-ci .
+#
+# Lean single-binary image for Chrysalis CI integration tests.
+# Builds only the SSR server binary (no WASM / cargo-leptos needed)
+# so the image compiles significantly faster than the production image.
+# API endpoints (/federation/identity, /api/browse, /federation/peers)
+# all work without the WASM bundle; only the web UI pages are absent.
+
+# ── Stage 1: Build SSR server binary ─────────────────────────────────────────
+FROM rust:1.94-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates pkg-config libssl-dev libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Workspace root
+COPY Cargo.toml Cargo.lock ./
+COPY vendor-icu ./vendor-icu
+
+# Crates in pap-registry's transitive dependency graph (mirrors apps/registry/Dockerfile)
+COPY crates/pap-did              ./crates/pap-did
+COPY crates/pap-tee              ./crates/pap-tee
+COPY crates/pap-core             ./crates/pap-core
+COPY crates/pap-marketplace      ./crates/pap-marketplace
+COPY crates/pap-federation       ./crates/pap-federation
+COPY crates/pap-credential       ./crates/pap-credential
+COPY crates/pap-credential-store ./crates/pap-credential-store
+COPY crates/pap-webauthn         ./crates/pap-webauthn
+COPY crates/pap-proto            ./crates/pap-proto
+COPY crates/pap-transport        ./crates/pap-transport
+COPY crates/pap-agents           ./crates/pap-agents
+
+# Registry app
+COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
+COPY apps/registry/src        ./apps/registry/src
+COPY apps/registry/styles     ./apps/registry/styles
+COPY apps/registry/assets     ./apps/registry/assets
+
+# Strip workspace members that were not copied (same sed as apps/registry/Dockerfile)
+RUN sed -i \
+    -e '/^[[:space:]]*"crates\/pap-python"/d' \
+    -e '/^[[:space:]]*"crates\/pap-c"/d' \
+    -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
+    -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
+    -e '/^[[:space:]]*"apps\/papillon"/d' \
+    -e '/^[[:space:]]*"benches"/d' \
+    -e '/^[[:space:]]*"examples\//d' \
+    -e '/^papillon-shared[[:space:]]*=/d' \
+    Cargo.toml
+
+# Build server binary only — skip WASM (no wasm32 target, no cargo-leptos required)
+RUN cargo build --release -p pap-registry --features ssr
+
+# ── Stage 2: Minimal runtime image ───────────────────────────────────────────
+FROM debian:trixie-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /data /app/site /app/assets /app/styles
+
+WORKDIR /app
+
+COPY --from=builder /build/target/release/pap-registry ./pap-registry
+COPY --from=builder /build/apps/registry/assets        ./assets
+COPY --from=builder /build/apps/registry/styles/main.css ./styles/main.css
+
+# Plain HTTP on port 8080 — suitable for CI (no TLS certificates to manage)
+ENV PAP_REGISTRY_HOST=0.0.0.0
+ENV PAP_REGISTRY_PORT=8080
+ENV PAP_REGISTRY_NO_TLS=true
+ENV PAP_REGISTRY_ENDPOINT=http://localhost:8080
+ENV PAP_REGISTRY_DB=/data/registry.db
+ENV PAP_ASSETS_DIR=/app/assets
+ENV LEPTOS_SITE_ROOT=/app/site
+
+VOLUME ["/data"]
+EXPOSE 8080
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=6 \
+    CMD curl -sf http://localhost:8080/federation/identity > /dev/null
+
+ENTRYPOINT ["/app/pap-registry"]
