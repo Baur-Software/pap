@@ -8,9 +8,14 @@
 //! The resulting `pkg/` directory is a ready-to-publish npm package.
 //!
 //! # Transport
-//! `pap-transport` (reqwest-based) is excluded from WASM because reqwest
-//! requires a native runtime. The core protocol primitives — keys, mandates,
-//! scopes, sessions, and tokens — are fully available.
+//! [`TransportSession`] drives the 6-phase PAP handshake from any browser
+//! context using the Fetch API via `web-sys`. It speaks the same
+//! `ProtocolMessage` JSON wire format over the same REST endpoints as
+//! `pap_transport::AgentClient`, ensuring wire compatibility between
+//! native and WASM handshake paths.
+
+mod transport;
+pub use transport::TransportSession;
 
 use wasm_bindgen::prelude::*;
 
