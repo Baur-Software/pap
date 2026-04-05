@@ -51,7 +51,18 @@
   },
 
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none';"
+    "_csp_documentation": {
+      "default-src 'none'": "Deny-by-default baseline; every resource type must be explicitly allowed.",
+      "script-src 'self' 'wasm-unsafe-eval'": "'self' for extension-bundled JS modules. 'wasm-unsafe-eval' for WebAssembly.instantiate (pap-wasm). No 'unsafe-eval' — Function() replaced with import(@vite-ignore).",
+      "style-src": "'self' for bundled CSS. External origins for @import in design-system.css: Satoshi (Fontshare), DM Sans + JetBrains Mono (Google Fonts).",
+      "font-src": "'self' + CDNs serving .woff2 files: api.fontshare.com (Satoshi), fonts.gstatic.com (DM Sans, JetBrains Mono).",
+      "img-src 'self'": "Only extension-bundled icons (icons/icon-*.png). No external images.",
+      "connect-src": "'self' for chrome.runtime. http://localhost + 127.0.0.1 for local dev agents. https://* for production agents (gated by optional_host_permissions). wss://* for WebSocket transport.",
+      "object-src 'none'": "Block plugins (MV3 requirement).",
+      "base-uri 'none'": "Prevent <base> tag injection.",
+      "form-action 'none'": "No form submissions; all communication via fetch/WebSocket/chrome.runtime."
+    },
+    "extension_pages": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' https://api.fontshare.com https://fonts.googleapis.com; font-src 'self' https://api.fontshare.com https://fonts.gstatic.com; img-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* https://* wss://*; object-src 'none'; base-uri 'none'; form-action 'none';"
   },
 
   "web_accessible_resources": [

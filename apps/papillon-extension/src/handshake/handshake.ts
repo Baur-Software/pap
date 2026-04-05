@@ -62,7 +62,7 @@ renderPipeline();
 // ── Pipeline Rendering ─────────────────────────────────────────────────
 
 function renderPipeline() {
-  pipeline.innerHTML = "";
+  pipeline.replaceChildren();
   for (const phase of PHASES) {
     const el = document.createElement("div");
     el.className = "hs-phase pending";
@@ -388,7 +388,7 @@ function renderReceipt(receipt: {
   co_signatures: number;
   action: string;
 }) {
-  receiptContainer.innerHTML = "";
+  receiptContainer.replaceChildren();
 
   const fields: [string, string, string?][] = [
     ["Session", receipt.session_id],
@@ -456,7 +456,7 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage) => {
       markAllComplete();
 
       // Show result
-      resultContainer.innerHTML = "";
+      resultContainer.replaceChildren();
       const resultContent = document.createElement("div");
       resultContent.className = "result-content";
       renderSchemaOrg(msg.result, resultContent);
