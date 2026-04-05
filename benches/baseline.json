@@ -1,5 +1,5 @@
 {
-  "_comment": "p50 baseline (nanoseconds) from CI runner. CI fails if any benchmark regresses >20% vs these values.",
+  "_comment": "p50 baseline (nanoseconds) from CI runner. CI fails if any benchmark regresses >10% vs these values.",
   "ed25519_keypair_generation": {
     "p50_ns": 19900,
     "target": "< 1ms"

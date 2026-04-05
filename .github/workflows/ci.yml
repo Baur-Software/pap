@@ -92,6 +92,9 @@ jobs:
   bench:
     name: Benchmark (regression gate)
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -101,10 +104,96 @@ jobs:
         with:
           shared-key: "native"
           cache-on-failure: true
+
+      # On PRs: fetch baseline artifact from latest successful main CI run
+      - name: Download baseline from main
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID=$(gh run list \
+            --workflow=ci.yml \
+            --branch=main \
+            --status=success \
+            --limit=1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            echo "Downloading baseline from run $RUN_ID"
+            gh run download "$RUN_ID" --name bench-baseline --dir .bench-baseline || true
+          fi
+          if [ -f .bench-baseline/baseline.json ]; then
+            echo "BENCH_BASELINE=.bench-baseline/baseline.json" >> "$GITHUB_ENV"
+            echo "Using artifact baseline from main"
+          else
+            echo "BENCH_BASELINE=benches/baseline.json" >> "$GITHUB_ENV"
+            echo "No artifact baseline found; falling back to committed baseline.json"
+          fi
+
+      - name: Set baseline path (push)
+        if: github.event_name == 'push'
+        run: echo "BENCH_BASELINE=benches/baseline.json" >> "$GITHUB_ENV"
+
       - name: Run benchmarks
         run: cargo bench -p pap-bench
-      - name: Check for p50 regressions (>20% vs baseline)
-        run: bash benches/check_regression.sh
+
+      - name: Check for p50 regressions (>10% vs baseline)
+        run: bash benches/check_regression.sh --baseline "$BENCH_BASELINE" --output bench-results.txt
+
+      # On main push: update baseline and upload as artifact for future PRs
+      - name: Update baseline from current results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: bash benches/check_regression.sh --baseline benches/baseline.json --update-baseline
+
+      - name: Upload benchmark baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-baseline
+          path: benches/baseline.json
+          retention-days: 90
+
+      # On PRs: post benchmark summary as a comment
+      - name: Post benchmark summary on PR
+        if: github.event_name == 'pull_request' && (success() || failure())
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '### Benchmark Regression Report\n\n';
+            try {
+              const results = fs.readFileSync('bench-results.txt', 'utf8');
+              body += '```\n' + results + '\n```\n';
+            } catch (e) {
+              body += '_Benchmark results not available._\n';
+            }
+            body += '\n<sub>Threshold: 10% regression vs baseline from main</sub>';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const marker = '### Benchmark Regression Report';
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.startsWith(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
 
   smoke-test:
     name: Smoke Test (Papillon Desktop App)
