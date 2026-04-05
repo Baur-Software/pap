@@ -102,7 +102,6 @@ impl std::str::FromStr for JsonLdQuery {
 }
 
 impl JsonLdQuery {
-
     /// Return `true` if `json_value` satisfies all constraints in this query.
     ///
     /// An empty query (no `type_filter`, no `property_filters`) matches every value.
