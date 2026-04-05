@@ -17,7 +17,7 @@ pap-webauthn = { workspace = true }
 pap-proto = { workspace = true }
 pap-transport = { workspace = true }
 pap-agents = { workspace = true }
-pap-federation = { workspace = true }
+pap-federation = { workspace = true, features = ["native"] }
 
 tauri = { version = "2", features = [] }
 tauri-plugin-store = "2"
@@ -40,6 +40,10 @@ sha2 = { workspace = true }
 rusqlite = { version = "0.32", features = ["bundled", "serde_json"] }
 
 ed25519-dalek = { workspace = true }
+rand = { workspace = true }
 zeroize = { workspace = true }
 tracing = "0.1"
 if-addrs = "0.7"
+
+[dev-dependencies]
+tempfile = "3"

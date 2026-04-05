@@ -2,14 +2,18 @@ pub mod agents;
 pub mod commands;
 pub mod db;
 pub mod discovery;
+pub mod episode_store;
 pub mod error;
 pub mod handshake;
 pub mod inference;
+pub mod keypair_store;
 pub mod profiles_db;
 pub mod state;
 
 use std::net::SocketAddr;
 
+use episode_store::EpisodeStore;
+use keypair_store::KeypairStore;
 use pap_did::PrincipalKeypair;
 use pap_federation::{generate_node_identity, FederationServer};
 use pap_transport::AgentServer;
@@ -38,12 +42,21 @@ pub fn run() {
                 .expect("failed to resolve resource dir");
             let catalog_dir = resource_dir.join("catalog");
 
+            // Open (or create) the persistent principal keypair store.
+            // The 32-byte Ed25519 seed is stored as `principal.key` with mode
+            // 0600 and zeroized in memory on drop.
+            let keypair_store =
+                KeypairStore::open(&data_dir).expect("failed to open principal keypair store");
+
             // Create AppState with persistent database.
             // Identity is auto-loaded from SQLite or generated on first launch.
             let app_state = AppState::new(&db_path, catalog_dir);
 
             *app_state.resource_dir.write().unwrap() = resource_dir;
             *app_state.data_dir.write().unwrap() = data_dir.clone();
+
+            // Register the keypair store so Tauri commands can access it.
+            app.manage(keypair_store);
 
             // Clone state for the background federation server before manage() takes ownership.
             let state_clone = app_state.clone_for_background();
@@ -81,6 +94,11 @@ pub fn run() {
                 }
             });
 
+            // Build the episode store from the same Arc<Database> used by AppState
+            // so that both handles share the same rusqlite connection and schema.
+            let episode_store = EpisodeStore::from_db(app_state.db.clone());
+            app.manage(episode_store);
+
             app.manage(app_state);
 
             // Spawn federation server on a separate thread with its own tokio runtime.
@@ -101,6 +119,7 @@ pub fn run() {
             commands::health::get_health_status,
             commands::identity::create_identity,
             commands::identity::get_identity,
+            commands::identity::get_principal_did,
             commands::profiles::list_profiles,
             commands::profiles::create_profile,
             commands::profiles::switch_profile,
@@ -128,6 +147,9 @@ pub fn run() {
             commands::orchestrator::list_completed_runs,
             commands::orchestrator::list_episodes,
             commands::orchestrator::list_agent_profiles,
+            commands::episodes::record_episode,
+            commands::episodes::list_recent_episodes,
+            commands::episodes::get_episode,
             commands::llm::check_llm_connection,
             commands::orchestrator::list_builtin_models,
             commands::orchestrator::load_builtin_model,
@@ -163,6 +185,11 @@ pub fn run() {
             commands::agents::generate_agent,
             commands::agents::publish_agent,
             commands::agents::unpublish_agent,
+            commands::webauthn::begin_registration,
+            commands::webauthn::complete_registration,
+            commands::webauthn::begin_authentication,
+            commands::webauthn::complete_authentication,
+            commands::canvas::get_canvas_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");
