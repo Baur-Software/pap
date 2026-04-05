@@ -6,6 +6,7 @@ pub mod ohttp;
 pub mod ohttp_client;
 pub mod remote;
 pub mod server;
+pub mod uri;
 pub mod ws_client;
 pub mod ws_remote;
 pub mod ws_server;
@@ -22,6 +23,7 @@ pub use ohttp::{
 pub use ohttp_client::OhttpClient;
 pub use remote::RemoteAgentHandler;
 pub use server::AgentServer;
+pub use uri::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
 pub use ws_client::WsAgentClient;
 pub use ws_remote::WsRemoteAgentHandler;
 pub use ws_server::WsAgentServer;

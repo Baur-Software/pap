@@ -1,9 +1,10 @@
 pub mod events;
 pub mod intent;
-pub mod pap_uri;
-pub use pap_uri::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
 pub mod template_gen;
 pub mod types;
+
+// Re-export PAP URI resolution from pap-transport where it logically belongs.
+pub use pap_transport::uri::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
 
 #[cfg(any(feature = "native", feature = "wasm"))]
 pub mod db;
