@@ -555,6 +555,7 @@ impl TransportSession {
     /// `disclosures_json` — JSON array of disclosure values (or `"[]"`).
     /// `receipt_json` — JSON-serialized `TransactionReceipt`.
     ///
+    /// Runs all phases through session close (Phase 6).
     /// Returns the JSON-serialized `ReceiptCoSigned` response from Phase 5.
     #[wasm_bindgen(js_name = runHandshake)]
     pub async fn run_handshake(
