@@ -133,3 +133,34 @@ export function isPapUri(str: string): boolean {
     t.startsWith("pap+wss://")
   );
 }
+
+// ── HTTPS → PAP URL Upgrade ───────────────────────────────────────────
+
+/**
+ * Transform a regular HTTPS URL to a PAP URL with the specified transport.
+ *
+ *   https://example.com/book/123       → pap+https://example.com/book/123
+ *   https://example.com:8443/api?q=x   → pap+https://example.com:8443/api?q=x
+ *
+ * Preserves the full path and query string. Strips fragment.
+ * Throws on non-HTTPS input.
+ */
+export function httpsUrlToPap(
+  httpsUrl: string,
+  transport: "https" | "wss" = "https"
+): string {
+  const url = new URL(httpsUrl);
+  if (url.protocol !== "https:") {
+    throw new Error(`Cannot upgrade non-HTTPS URL: ${httpsUrl}`);
+  }
+
+  const prefix = transport === "wss" ? "pap+wss://" : "pap+https://";
+
+  // Include port only if non-default (443 for HTTPS)
+  const hostport =
+    url.port && url.port !== "443"
+      ? `${url.hostname}:${url.port}`
+      : url.hostname;
+
+  return `${prefix}${hostport}${url.pathname}${url.search}`;
+}

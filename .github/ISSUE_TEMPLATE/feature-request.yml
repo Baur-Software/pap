@@ -1,0 +1,81 @@
+name: Feature Request
+description: Propose a new capability for any PAP pillar
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are welcome. Note that PAP has strong design constraints — no novel cryptography, no central registries, no token economies, no runtime scope expansion. Proposals that pass the **capture test** ("does this reduce or stay neutral against platform capture?") are much more likely to be accepted.
+
+  - type: dropdown
+    id: pillar
+    attributes:
+      label: Which pillar does this request target?
+      options:
+        - Papillon — desktop canvas and session management
+        - Chrysalis — federated agent registry
+        - papillon-extension — browser extension
+        - pap:// URI scheme — deep-link and transport
+        - pap-core — core Rust library (mandates, credentials, sessions)
+        - Language bindings — Python, WASM/JS, C/C++, C#, Java
+        - Protocol specification — docs/specification.md
+        - Tooling / CI / developer experience
+        - Multiple pillars
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the gap or friction you've hit. Be concrete — who encounters this, in what workflow, and how often?
+      placeholder: |
+        When running Papillon in a headless server context (e.g. for CI-driven agent testing), there is no way to approve mandates non-interactively. This means integration tests must either skip mandate verification or mock the approval flow, which defeats the purpose of testing real protocol behaviour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: Describe what you want to exist. You don't need to have a complete implementation in mind — a clear description of the desired behaviour is sufficient.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: What workarounds have you tried? Why are they insufficient?
+
+  - type: textarea
+    id: capture-test
+    attributes:
+      label: Capture test
+      description: |
+        Does this feature reduce, expand, or leave neutral the attack surface for platform capture? Platform capture includes centralised control, mandatory token payment, scope creep, or anything that weakens the human principal's root of trust.
+      placeholder: "Neutral — this only adds a headless approval path for CI environments and does not change mandate semantics or introduce any central component."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope-check
+    attributes:
+      label: Scope check
+      description: Confirm your request is within PAP's design boundaries.
+      options:
+        - label: This does not require novel cryptography
+        - label: This does not require a central registry or authority
+        - label: This does not introduce a token economy
+        - label: This does not allow agents to expand their own mandate scope at runtime
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this feature has not been requested before
+          required: true
+        - label: I checked the specification (docs/specification.md) and this is not already defined
+          required: true
