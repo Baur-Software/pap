@@ -4,6 +4,9 @@
 
 ### Added
 
+- **pap-ts**: TypeScript reference implementation of PAP core (`@pap/core`). Pure TypeScript, works in Node.js 18+ and browsers. Covers identity (Ed25519 keypairs, `did:key` generation), mandates (issuance, delegation, chain verification, decay state machine), SD-JWT selective disclosure, session lifecycle (capability tokens, 6-phase handshake), transaction receipts (co-signing, attestations), and transport envelope signing. 103 tests via Vitest. Uses audited `@noble/ed25519` for all cryptography.
+- **pap-ts**: Receipt state guard — `TransactionReceipt.fromSession()` now enforces session must be in Executed or Closed state
+- **pap-ts**: HandshakeClient HTTP status checking — all 6 handshake phases now validate HTTP responses
 - **papillon-extension**: SubtleCrypto Ed25519 signing — private keys are now non-extractable `CryptoKey` objects managed by the browser, never exposed in WASM memory or JS heap. Feature-detected at startup with automatic fallback to existing WASM path for browsers without Ed25519 SubtleCrypto support.
 - **papillon-extension**: IndexedDB-backed key storage — `CryptoKey` objects stored via structured clone (no serialization), replacing AES-256-GCM encrypted seeds in `chrome.storage.local` for SubtleCrypto-capable browsers.
 - **papillon-extension**: Automatic key migration — existing Ed25519 seeds are imported into SubtleCrypto and persisted in IndexedDB on first launch; legacy encrypted seeds are cleaned up after migration.
