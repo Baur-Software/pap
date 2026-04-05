@@ -6,7 +6,7 @@ fn transport_session_generates_valid_did() {
     let did = session.session_did();
     assert!(
         did.starts_with("did:key:z"),
-        "session DID should be a did:key, got: {did}"
+        "session DID should start with did:key:z"
     );
 }
 
