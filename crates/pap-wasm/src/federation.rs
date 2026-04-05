@@ -140,7 +140,7 @@ impl WasmFederationClient {
                 .and_then(|c| c.parse::<usize>().ok())
                 .unwrap_or(0);
 
-            let page_size = (page_size as usize).min(200).max(1);
+            let page_size = (page_size as usize).clamp(1, 200);
             let slice = &all_ads[offset.min(all_ads.len())..];
             let page: Vec<_> = slice.iter().take(page_size).collect();
             let next_offset = offset + page.len();
