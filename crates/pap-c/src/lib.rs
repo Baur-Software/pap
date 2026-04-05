@@ -1755,32 +1755,31 @@ pub extern "C" fn pap_marketplace_query(
         }
     };
 
-    let results: Vec<&AgentAdvertisement> =
-        if let Some(props_val) = parsed.get("available_properties") {
-            match props_val.as_array() {
-                Some(arr) => {
-                    let mut props = Vec::with_capacity(arr.len());
-                    for (i, v) in arr.iter().enumerate() {
-                        match v.as_str() {
-                            Some(s) => props.push(String::from(s)),
-                            None => {
-                                set_last_error(&format!(
-                                    "available_properties[{i}] must be a string"
-                                ));
-                                return std::ptr::null_mut();
-                            }
+    let results: Vec<&AgentAdvertisement> = if let Some(props_val) =
+        parsed.get("available_properties")
+    {
+        match props_val.as_array() {
+            Some(arr) => {
+                let mut props = Vec::with_capacity(arr.len());
+                for (i, v) in arr.iter().enumerate() {
+                    match v.as_str() {
+                        Some(s) => props.push(String::from(s)),
+                        None => {
+                            set_last_error(&format!("available_properties[{i}] must be a string"));
+                            return std::ptr::null_mut();
                         }
                     }
-                    client.registry.query_satisfiable(action, &props)
                 }
-                None => {
-                    set_last_error("\"available_properties\" must be a JSON array");
-                    return std::ptr::null_mut();
-                }
+                client.registry.query_satisfiable(action, &props)
             }
-        } else {
-            client.registry.query_by_action(action)
-        };
+            None => {
+                set_last_error("\"available_properties\" must be a JSON array");
+                return std::ptr::null_mut();
+            }
+        }
+    } else {
+        client.registry.query_by_action(action)
+    };
 
     let len = results.len();
     let mut dids = Vec::with_capacity(len);
@@ -1823,10 +1822,7 @@ pub extern "C" fn pap_agent_list_len(list: *const PapAgentList) -> usize {
 /// Do NOT free this pointer with `pap_string_free`.
 /// Returns NULL if `list` is null or `index` is out of bounds.
 #[no_mangle]
-pub extern "C" fn pap_agent_list_get_did(
-    list: *const PapAgentList,
-    index: usize,
-) -> *const c_char {
+pub extern "C" fn pap_agent_list_get_did(list: *const PapAgentList, index: usize) -> *const c_char {
     let list = match unsafe { list.as_ref() } {
         Some(l) => l,
         None => {
