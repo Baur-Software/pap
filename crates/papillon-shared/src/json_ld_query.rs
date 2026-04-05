@@ -36,7 +36,7 @@ use serde_json::Value;
 
 /// A compiled JSON-LD semantic query.
 ///
-/// Build via [`JsonLdQuery::from_str`], then apply with [`JsonLdQuery::matches`].
+/// Build via [`str::parse::<JsonLdQuery>()`] (or `JsonLdQuery::from_str`), then apply with [`JsonLdQuery::matches`].
 #[derive(Debug, Clone, Default)]
 pub struct JsonLdQuery {
     /// Optional `@type` constraint.  When `Some`, the object must have a
@@ -49,7 +49,9 @@ pub struct JsonLdQuery {
     pub property_filters: Vec<(String, String)>,
 }
 
-impl JsonLdQuery {
+impl std::str::FromStr for JsonLdQuery {
+    type Err = String;
+
     /// Parse a simple query string into a [`JsonLdQuery`].
     ///
     /// See the [module-level documentation](self) for the syntax.
@@ -59,7 +61,7 @@ impl JsonLdQuery {
     /// Returns `Err` only if the input string is entirely unparseable (i.e. it
     /// contains no recognisable `key=value` tokens at all).  Individual
     /// malformed tokens are skipped.
-    pub fn from_str(query: &str) -> Result<Self, String> {
+    fn from_str(query: &str) -> Result<Self, Self::Err> {
         let mut result = JsonLdQuery::default();
         let mut parsed_any = false;
 
@@ -97,6 +99,9 @@ impl JsonLdQuery {
             ))
         }
     }
+}
+
+impl JsonLdQuery {
 
     /// Return `true` if `json_value` satisfies all constraints in this query.
     ///
@@ -155,6 +160,7 @@ impl JsonLdQuery {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::str::FromStr;
 
     // ── from_str ────────────────────────────────────────────────────────────
 
