@@ -9,11 +9,13 @@
  * - Native messaging bridge to Papillon desktop
  */
 
-import { parsePapUri } from "../lib/uri.js";
+import { parsePapUri, httpsUrlToPap } from "../lib/uri.js";
+import type { PapManifest } from "../lib/discovery.js";
 import type {
   ExtensionMessage,
   ActiveSession,
   StateResponse,
+  PapSiteResponse,
 } from "../lib/types.js";
 
 // ── State ──────────────────────────────────────────────────────────────
@@ -22,6 +24,23 @@ const activeSessions = new Map<string, ActiveSession>();
 let principalDid: string | null = null;
 let offscreenReady = false;
 let nativePort: chrome.runtime.Port | null = null;
+
+// PAP site badges persisted via chrome.storage.session to survive SW restart
+async function getPapSiteManifest(tabId: number): Promise<PapManifest | null> {
+  const data = await chrome.storage.session.get(`pap-tab-${tabId}`);
+  return data[`pap-tab-${tabId}`] ?? null;
+}
+
+async function setPapSiteManifest(
+  tabId: number,
+  manifest: PapManifest | null
+): Promise<void> {
+  if (manifest) {
+    await chrome.storage.session.set({ [`pap-tab-${tabId}`]: manifest });
+  } else {
+    await chrome.storage.session.remove(`pap-tab-${tabId}`);
+  }
+}
 
 // ── Offscreen Document Lifecycle ───────────────────────────────────────
 
@@ -76,10 +95,16 @@ async function ensureOffscreen(): Promise<void> {
 
 // ── Handshake Tab Management ───────────────────────────────────────────
 
-function openHandshakeTab(uri: string, action?: string, query?: string) {
+function openHandshakeTab(
+  uri: string,
+  action?: string,
+  query?: string,
+  fallbackUrl?: string
+) {
   const params = new URLSearchParams({ uri });
   if (action) params.set("action", action);
   if (query) params.set("query", query);
+  if (fallbackUrl) params.set("fallback", fallbackUrl);
 
   chrome.tabs.create({
     url: chrome.runtime.getURL(
@@ -234,6 +259,34 @@ chrome.runtime.onMessage.addListener(
       case "IDENTITY_READY":
         principalDid = msg.did;
         break;
+
+      // ── Link Upgrade: PAP site discovery ────────────────────────────
+
+      // Content script: current site has a PAP manifest
+      case "SITE_HAS_PAP": {
+        const tabId = sender.tab?.id;
+        if (!tabId) break;
+        setPapSiteManifest(tabId, msg.manifest);
+        // Per-tab badge — always set. Chrome's global badge (no tabId)
+        // overrides per-tab when set; when global clears, per-tab shows through.
+        chrome.action.setBadgeText({ text: "PAP", tabId });
+        chrome.action.setBadgeBackgroundColor({
+          color: "#6c5ce7", // --purple
+          tabId,
+        });
+        break;
+      }
+
+      // Popup: get PAP site info for a tab
+      case "GET_PAP_SITE": {
+        getPapSiteManifest(msg.tabId).then((manifest) => {
+          sendResponse({
+            type: "PAP_SITE_RESPONSE",
+            manifest,
+          } satisfies PapSiteResponse);
+        });
+        return true; // async response
+      }
     }
   }
 );
@@ -295,6 +348,34 @@ chrome.omnibox.onInputEntered.addListener((text, disposition) => {
   }
 });
 
+// ── Tab Lifecycle (PAP site discovery cleanup) ────────────────────────
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  setPapSiteManifest(tabId, null);
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === "loading") {
+    setPapSiteManifest(tabId, null);
+    chrome.action.setBadgeText({ text: "", tabId });
+  }
+});
+
+// ── Context Menu: "Open with PAP protection" ──────────────────────────
+
+if (chrome.contextMenus) {
+  chrome.contextMenus.onClicked.addListener((info) => {
+    if (info.menuItemId === "pap-upgrade-link" && info.linkUrl) {
+      try {
+        const papUri = httpsUrlToPap(info.linkUrl);
+        openHandshakeTab(papUri, undefined, undefined, info.linkUrl);
+      } catch (err) {
+        console.error("[PAP] Context menu: failed to upgrade link", err);
+      }
+    }
+  });
+}
+
 // ── Startup ────────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -304,6 +385,16 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   // Try to connect to native app
   nativePort = connectNative();
+
+  // Register context menu for HTTPS link upgrade (if API available)
+  if (chrome.contextMenus) {
+    chrome.contextMenus.create({
+      id: "pap-upgrade-link",
+      title: "Open with PAP protection",
+      contexts: ["link"],
+      targetUrlPatterns: ["https://*/*"],
+    });
+  }
 });
 
 console.log("[PAP Service Worker] Ready");
