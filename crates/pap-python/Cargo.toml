@@ -17,7 +17,7 @@ pap-credential = { workspace = true }
 pap-marketplace = { workspace = true }
 pap-transport = { workspace = true }
 
-pyo3 = { version = "0.24", features = ["extension-module", "abi3-py38"] }
+pyo3 = { version = "0.24", features = ["extension-module", "abi3-py38", "experimental-async"] }
 chrono = { workspace = true }
 serde_json = { workspace = true }
 ed25519-dalek = { workspace = true }

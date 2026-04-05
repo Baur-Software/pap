@@ -27,6 +27,7 @@ pub mod dynamic_handler;
 pub mod executor;
 pub mod llm;
 pub mod registry;
+pub mod selection;
 pub mod session_store;
 mod simple;
 
@@ -44,4 +45,7 @@ pub use llm::{
     LlmProvider, ModelAvailability, ModelDownloadProgress,
 };
 pub use registry::{build_agents, AgentSet};
+pub use selection::{
+    AgentSelector, AgentSelectorFactory, HistoricalProfile, MemoryInformedSelector, RandomSelector,
+};
 pub use simple::SimpleAgent;

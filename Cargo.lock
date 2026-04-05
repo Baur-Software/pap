@@ -4519,6 +4519,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokenizers",
  "toml 0.8.23",
+ "url",
  "uuid",
 ]
 
@@ -4882,7 +4883,6 @@ dependencies = [
  "pap-credential",
  "pap-did",
  "pap-proto",
- "papillon-shared",
  "rand 0.8.5",
  "reqwest 0.12.12",
  "rustls",
@@ -4998,6 +4998,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
