@@ -28,8 +28,6 @@ from pap import (
     Session,
 )
 
-from conftest import future_ttl, past_ttl
-
 
 def _make_session_at_closed():
     """Helper: create a session that has gone through full lifecycle to Closed."""

@@ -26,8 +26,6 @@ from pap import (
     Session,
 )
 
-from conftest import future_ttl, past_ttl
-
 
 # ===========================================================================
 # Tamper Detection

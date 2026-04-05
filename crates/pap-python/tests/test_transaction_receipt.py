@@ -23,8 +23,6 @@ from pap import (
     TransactionReceipt,
 )
 
-from conftest import future_ttl
-
 
 def _make_executed_session_with_keys():
     """Create an executed session with session keys. Returns (session, sk1, sk2, principal)."""
