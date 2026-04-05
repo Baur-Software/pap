@@ -218,7 +218,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad.sign(&key);
+        ad.sign(&key).unwrap();
         (ad, did)
     }
 
