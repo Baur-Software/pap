@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Added
+
+- **pap-python**: PEP 561 compliance — `py.typed` marker file so type checkers (mypy, pyright, Pylance) discover the package's type stubs automatically
+- **pap-python**: `__init__.pyi` stub re-exports all 22 public symbols with proper `as X` re-export syntax for IDE autocomplete at the `pap` package level
+- **pap-python**: Stub validation test suite (`test_stubs.py`) — verifies `.pyi` syntax, `py.typed` presence, and completeness against `__all__`
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
