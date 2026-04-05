@@ -489,7 +489,7 @@ mod tests {
                 .unwrap()
                 .did();
             let mut ad = pap_marketplace::AgentAdvertisement::new(
-                &format!("Agent {i}"),
+                format!("Agent {i}"),
                 "TestCorp",
                 &did,
                 vec!["schema:SearchAction".into()],
@@ -579,7 +579,7 @@ mod tests {
         let resp = router
             .oneshot(
                 Request::builder()
-                    .uri(&format!(
+                    .uri(format!(
                         "/federation/query?action=schema:SearchAction&page_size=1&cursor={}",
                         cursor
                     ))
@@ -592,9 +592,7 @@ mod tests {
         let body = resp.into_body().collect().await.unwrap().to_bytes();
         let msg: FederationMessage = serde_json::from_slice(&body).unwrap();
         match msg {
-            FederationMessage::QueryResponse {
-                advertisements, ..
-            } => {
+            FederationMessage::QueryResponse { advertisements, .. } => {
                 assert_eq!(advertisements.len(), 1);
                 // Should be a different agent than page 1
                 assert_ne!(advertisements[0].signed_by, first_ad_did);

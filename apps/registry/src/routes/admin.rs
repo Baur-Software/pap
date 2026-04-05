@@ -426,7 +426,7 @@ async fn sync_peer(
     };
 
     match msg {
-        pap_federation::sync::FederationMessage::QueryResponse { advertisements } => {
+        pap_federation::sync::FederationMessage::QueryResponse { advertisements, .. } => {
             // Identify new ads without touching the in-memory registry yet.
             let new_ads: Vec<_> = {
                 let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());

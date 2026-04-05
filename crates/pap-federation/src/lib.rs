@@ -892,8 +892,7 @@ mod tests {
         }
 
         // Get first page
-        let (page1, cursor1, _) =
-            registry.query_local_paginated("schema:SearchAction", None, 2);
+        let (page1, cursor1, _) = registry.query_local_paginated("schema:SearchAction", None, 2);
         assert_eq!(page1.len(), 2);
 
         // Get second page with cursor
@@ -938,15 +937,13 @@ mod tests {
         }
 
         // Without cursor, should get the first 2 (sorted by DID)
-        let (page, _, has_more) =
-            registry.query_local_paginated("schema:SearchAction", None, 2);
+        let (page, _, has_more) = registry.query_local_paginated("schema:SearchAction", None, 2);
         assert_eq!(page.len(), 2);
         assert!(has_more);
 
         // Verify these are the lexicographically smallest DIDs
         let all_dids: Vec<String> = {
-            let mut ads: Vec<&AgentAdvertisement> =
-                registry.query_local("schema:SearchAction");
+            let mut ads: Vec<&AgentAdvertisement> = registry.query_local("schema:SearchAction");
             ads.sort_by(|a, b| a.signed_by.cmp(&b.signed_by));
             ads.iter().map(|a| a.signed_by.clone()).collect()
         };

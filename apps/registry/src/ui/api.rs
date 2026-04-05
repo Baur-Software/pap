@@ -370,7 +370,7 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
             ServerFnError::new(format!("invalid response from peer: {e}"))
         })?;
 
-    if let pap_federation::sync::FederationMessage::QueryResponse { advertisements } = msg {
+    if let pap_federation::sync::FederationMessage::QueryResponse { advertisements, .. } = msg {
         // Identify new ads without touching the in-memory registry yet.
         let new_ads: Vec<_> = {
             let registry = state.registry.lock().unwrap();
