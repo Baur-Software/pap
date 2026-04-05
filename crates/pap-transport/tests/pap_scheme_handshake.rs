@@ -19,9 +19,9 @@ use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
 use pap_transport::{
-    resolve_pap_uri, AgentClient, AgentHandler, AgentServer, LinkOrigin, ResolvedUri,
-    TransportError, WsAgentClient, WsAgentServer,
+    AgentClient, AgentHandler, AgentServer, TransportError, WsAgentClient, WsAgentServer,
 };
+use papillon_shared::{resolve_pap_uri, LinkOrigin, ResolvedUri};
 
 // ── Shared test handler ──────────────────────────────────────────────────────
 

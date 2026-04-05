@@ -7,8 +7,6 @@ license.workspace = true
 [dependencies]
 # pap-agents is native-only: reqwest::blocking → tokio → mio does not compile for WASM
 pap-agents = { workspace = true, optional = true }
-# pap-transport provides pap:// URI scheme resolution
-pap-transport = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
