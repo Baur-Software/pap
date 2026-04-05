@@ -28,6 +28,9 @@ web-sys = { version = "0.3", optional = true, features = [
 ] }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 
+[dev-dependencies]
+tempfile = "3"
+
 # Feature flags
 [features]
 default = ["native"]
