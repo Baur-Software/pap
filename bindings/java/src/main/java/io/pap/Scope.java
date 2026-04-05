@@ -15,6 +15,27 @@ public final class Scope implements AutoCloseable {
     }
 
     /**
+     * Build a scope from a flat list of action names (no object constraints).
+     * This is the common case — each string is one permitted Schema.org action.
+     *
+     * <pre>{@code
+     * Scope s = Scope.from(new String[]{
+     *     "schema:SearchAction",
+     *     "schema:ReserveAction"
+     * });
+     * }</pre>
+     *
+     * An empty array creates a deny-all scope (nothing permitted).
+     */
+    public static Scope from(String[] actions) {
+        String[][] pairs = new String[actions.length][];
+        for (int i = 0; i < actions.length; i++) {
+            pairs[i] = new String[]{actions[i]};
+        }
+        return from(pairs);
+    }
+
+    /**
      * Build a scope from a list of (action, optional-object) pairs.
      * Use {@code null} for the object when there is no constraint.
      *

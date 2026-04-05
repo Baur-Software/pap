@@ -9,6 +9,7 @@
 - **pap-wasm**: Server-supplied session ID validation rejects path traversal characters before URL interpolation.
 - **pap-wasm**: 12 wasm-bindgen tests covering state machine construction, phase ordering enforcement, and keypair uniqueness.
 - **pap-wasm**: README with JS/TS usage examples, API reference, and build instructions.
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
 - **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
 - **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
 
@@ -27,6 +28,11 @@
 - **ci**: Baseline update on main push now runs even if the regression check fails, preventing a single noisy benchmark from permanently jamming the CI gate
 
 ## [0.7.1] - 2026-04-04
+
+### Added
+
+- **pap-c**: C FFI marketplace query API — `PapMarketplaceClient` opaque handle wrapping `MarketplaceRegistry`, `PapAgentList` typed result set with index-based accessors (`pap_agent_list_get_did`, `pap_agent_list_get_name`), JSON-based `pap_marketplace_query` dispatching to `query_by_action` or `query_satisfiable` based on `available_properties` presence, and `pap_last_error` alias for error retrieval
+- **pap-c**: 11 unit tests covering client lifecycle, query dispatch, disclosure filtering, out-of-bounds safety, null-pointer guards, invalid JSON rejection, and unsigned advertisement rejection
 
 ### Changed
 
