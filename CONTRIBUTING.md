@@ -279,6 +279,7 @@ All checks run on every push to `main` and on pull requests. Your PR must pass a
 | **Docker workspace** | Validates Dockerfile workspace consistency | `bash ci/check-docker-workspace.sh` |
 | **Benchmark** | Runs benchmarks + regression gate (>20% p50) | `cargo bench -p pap-bench && bash benches/check_regression.sh` |
 | **Smoke test** | Playwright E2E tests for Papillon desktop | See [E2E Smoke Tests](#e2e-smoke-tests-papillon-desktop) |
+| **Chrysalis E2E** | Integration tests for Chrysalis registry (Docker) | See [E2E Smoke Tests](#e2e-smoke-tests-papillon-desktop) |
 
 Before opening a PR, run at minimum:
 
