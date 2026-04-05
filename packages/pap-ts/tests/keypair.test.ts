@@ -36,6 +36,22 @@ describe('PrincipalKeypair', () => {
     expect(await kp.verify(msg, sig)).toBe(true);
   });
 
+  it('fromBytes rejects invalid length', async () => {
+    await expect(PrincipalKeypair.fromBytes(new Uint8Array(16))).rejects.toThrow(
+      'Secret key must be 32 bytes',
+    );
+  });
+
+  it('fromBytes roundtrips sign/verify', async () => {
+    // Generate random 32 bytes as a secret key
+    const secretKey = new Uint8Array(32);
+    crypto.getRandomValues(secretKey);
+    const kp = await PrincipalKeypair.fromBytes(secretKey);
+    const msg = new TextEncoder().encode('fromBytes test');
+    const sig = await kp.sign(msg);
+    expect(await kp.verify(msg, sig)).toBe(true);
+  });
+
   it('different keypairs produce different DIDs', async () => {
     const kp1 = await PrincipalKeypair.generate();
     const kp2 = await PrincipalKeypair.generate();

@@ -214,6 +214,67 @@ describe('Mandate', () => {
     expect(mandate.computeDecayState(3600)).toBe(DecayState.Active);
   });
 
+  it('computeDecayState returns Degraded within decay window', () => {
+    // TTL 30 seconds from now, decay window 60 seconds → within window → Degraded
+    const mandate = Mandate.issueRoot(
+      'did:key:zPrincipal',
+      'did:key:zAgent',
+      new Scope([searchAction]),
+      DisclosureSet.empty(),
+      new Date(Date.now() + 30_000).toISOString(),
+    );
+    expect(mandate.computeDecayState(60)).toBe(DecayState.Degraded);
+  });
+
+  it('computeDecayState returns ReadOnly after expiry', () => {
+    const mandate = Mandate.issueRoot(
+      'did:key:zPrincipal',
+      'did:key:zAgent',
+      new Scope([searchAction]),
+      DisclosureSet.empty(),
+      new Date(Date.now() - 1000).toISOString(), // expired 1 second ago
+    );
+    expect(mandate.computeDecayState(3600)).toBe(DecayState.ReadOnly);
+  });
+
+  it('isExpired returns true for past TTL', () => {
+    const mandate = Mandate.issueRoot(
+      'did:key:zPrincipal',
+      'did:key:zAgent',
+      new Scope([searchAction]),
+      DisclosureSet.empty(),
+      new Date(Date.now() - 1000).toISOString(),
+    );
+    expect(mandate.isExpired()).toBe(true);
+  });
+
+  it('withPaymentProof attaches proof', () => {
+    const mandate = Mandate.issueRoot(
+      'did:key:zPrincipal',
+      'did:key:zAgent',
+      new Scope([searchAction]),
+      DisclosureSet.empty(),
+      futureDate(1),
+    );
+    expect(mandate.payment_proof).toBeNull();
+
+    const result = mandate.withPaymentProof({ type: 'Lightning', hash: 'abc123' });
+    expect(result).toBe(mandate); // returns self
+    expect(mandate.payment_proof).toEqual({ type: 'Lightning', hash: 'abc123' });
+  });
+
+  it('verify returns false when unsigned', async () => {
+    const principal = await PrincipalKeypair.generate();
+    const mandate = Mandate.issueRoot(
+      principal.did(),
+      'did:key:zAgent',
+      new Scope([searchAction]),
+      DisclosureSet.empty(),
+      futureDate(1),
+    );
+    expect(await mandate.verify(principal.publicKeyBytes())).toBe(false);
+  });
+
   it('transitionDecay validates transitions', () => {
     const mandate = Mandate.issueRoot(
       'did:key:zPrincipal',

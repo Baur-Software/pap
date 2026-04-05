@@ -7,6 +7,7 @@ import {
   SessionAttestation,
   SessionOutcome,
 } from '../src/receipt.js';
+import { ReceiptError } from '../src/error.js';
 
 const searchAction = { action: 'schema:SearchAction', conditions: {} };
 
@@ -92,6 +93,40 @@ describe('TransactionReceipt', () => {
     await receipt.coSign(initKp);
     expect(await receipt.verifySignature(5, initKp.publicKeyBytes())).toBe(false);
     expect(await receipt.verifySignature(-1, initKp.publicKeyBytes())).toBe(false);
+  });
+
+  it('rejects session without session DIDs', async () => {
+    const issuer = await PrincipalKeypair.generate();
+    const scope = new Scope([searchAction]);
+    const token = CapabilityToken.mint(
+      'did:key:zReceiver',
+      'schema:SearchAction',
+      issuer.did(),
+      300,
+    );
+    await token.sign(issuer);
+
+    const session = await Session.initiate(
+      token,
+      'did:key:zReceiver',
+      issuer.publicKeyBytes(),
+      scope,
+    );
+    // Session is Initiated but not Open — no session DIDs set
+
+    expect(() =>
+      TransactionReceipt.fromSession(session, [], [], 'test', 'test'),
+    ).toThrow(ReceiptError);
+  });
+
+  it('withPaymentProofCommitment sets commitment', async () => {
+    const { session } = await createExecutedSession();
+    const receipt = TransactionReceipt.fromSession(session, [], [], 'test', 'test');
+    expect(receipt.payment_proof_commitment).toBeNull();
+
+    const result = receipt.withPaymentProofCommitment('sha256-abc');
+    expect(result).toBe(receipt);
+    expect(receipt.payment_proof_commitment).toBe('sha256-abc');
   });
 
   it('contains property references only (spec invariant)', async () => {

@@ -188,6 +188,46 @@ describe('Session', () => {
     expect(() => session.execute()).toThrow(InvalidSessionTransition);
   });
 
+  it('rejects expired token', async () => {
+    const issuer = await PrincipalKeypair.generate();
+    const token = CapabilityToken.mint(
+      'did:key:zReceiver',
+      'schema:SearchAction',
+      issuer.did(),
+      -1, // already expired
+    );
+    await token.sign(issuer);
+
+    await expect(
+      Session.initiate(
+        token,
+        'did:key:zReceiver',
+        issuer.publicKeyBytes(),
+        new Scope([searchAction]),
+      ),
+    ).rejects.toThrow('Token has expired');
+  });
+
+  it('rejects unsigned token', async () => {
+    const issuer = await PrincipalKeypair.generate();
+    const token = CapabilityToken.mint(
+      'did:key:zReceiver',
+      'schema:SearchAction',
+      issuer.did(),
+      300,
+    );
+    // Don't sign
+
+    await expect(
+      Session.initiate(
+        token,
+        'did:key:zReceiver',
+        issuer.publicKeyBytes(),
+        new Scope([searchAction]),
+      ),
+    ).rejects.toThrow('Token is unsigned');
+  });
+
   it('allows abort from Initiated', async () => {
     const issuer = await PrincipalKeypair.generate();
     const scope = new Scope([searchAction]);
