@@ -106,6 +106,33 @@ jobs:
       - name: Check for p50 regressions (>20% vs baseline)
         run: bash benches/check_regression.sh
 
+  test-java-bindings:
+    name: Test (Java JNA bindings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "java-bindings"
+          cache-on-failure: true
+      - name: Build native library (libpap_c.so)
+        run: cargo build --release -p pap-c
+      - name: Verify native library exists
+        run: ls -lh target/release/libpap_c.so
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
+      - name: Run Java integration tests
+        working-directory: bindings/java
+        run: gradle test
+
   smoke-test:
     name: Smoke Test (Papillon Desktop App)
     runs-on: ubuntu-latest
