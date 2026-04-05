@@ -77,8 +77,7 @@ async fn post_json(url: &str, body: &str) -> Result<ProtocolMessage, JsError> {
         .set("Content-Type", "application/json")
         .map_err(|e| JsError::new(&format!("header set failed: {e:?}")))?;
 
-    let window =
-        web_sys::window().ok_or_else(|| JsError::new("no global window object"))?;
+    let window = web_sys::window().ok_or_else(|| JsError::new("no global window object"))?;
 
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await
@@ -115,8 +114,7 @@ async fn post_empty(url: &str) -> Result<ProtocolMessage, JsError> {
     let request = web_sys::Request::new_with_str_and_init(url, &opts)
         .map_err(|e| JsError::new(&format!("request creation failed: {e:?}")))?;
 
-    let window =
-        web_sys::window().ok_or_else(|| JsError::new("no global window object"))?;
+    let window = web_sys::window().ok_or_else(|| JsError::new("no global window object"))?;
 
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await
@@ -356,10 +354,7 @@ impl TransportSession {
     ///
     /// Throws if called out of order (phase must be `DidExchanged`).
     #[wasm_bindgen(js_name = sendDisclosures)]
-    pub async fn send_disclosures(
-        &mut self,
-        disclosures_json: &str,
-    ) -> Result<String, JsError> {
+    pub async fn send_disclosures(&mut self, disclosures_json: &str) -> Result<String, JsError> {
         if !self.phase.can_advance_to(HandshakePhase::DisclosureSent) {
             return Err(JsError::new(&format!(
                 "cannot send disclosures: current phase is {}, expected DidExchanged",
@@ -372,10 +367,8 @@ impl TransportSession {
             .as_ref()
             .ok_or_else(|| JsError::new("no session_id"))?;
 
-        let disclosures: Vec<serde_json::Value> =
-            serde_json::from_str(disclosures_json).map_err(|e| {
-                JsError::new(&format!("invalid disclosures JSON: {e}"))
-            })?;
+        let disclosures: Vec<serde_json::Value> = serde_json::from_str(disclosures_json)
+            .map_err(|e| JsError::new(&format!("invalid disclosures JSON: {e}")))?;
 
         let msg = ProtocolMessage::DisclosureOffer { disclosures };
         let body = serde_json::to_string(&msg).map_err(to_js_err)?;
@@ -422,11 +415,7 @@ impl TransportSession {
             .as_ref()
             .ok_or_else(|| JsError::new("no session_id"))?;
 
-        let resp = post_empty(&format!(
-            "{}/session/{}/execute",
-            self.base_url, session_id
-        ))
-        .await?;
+        let resp = post_empty(&format!("{}/session/{}/execute", self.base_url, session_id)).await?;
 
         check_protocol_error(&resp)?;
 
@@ -456,10 +445,7 @@ impl TransportSession {
     ///
     /// Throws if called out of order (phase must be `Executed`).
     #[wasm_bindgen(js_name = exchangeReceipt)]
-    pub async fn exchange_receipt(
-        &mut self,
-        receipt_json: &str,
-    ) -> Result<String, JsError> {
+    pub async fn exchange_receipt(&mut self, receipt_json: &str) -> Result<String, JsError> {
         if !self.phase.can_advance_to(HandshakePhase::ReceiptSigned) {
             return Err(JsError::new(&format!(
                 "cannot exchange receipt: current phase is {}, expected Executed",
@@ -472,9 +458,8 @@ impl TransportSession {
             .as_ref()
             .ok_or_else(|| JsError::new("no session_id"))?;
 
-        let mut receipt: pap_core::receipt::TransactionReceipt =
-            serde_json::from_str(receipt_json)
-                .map_err(|e| JsError::new(&format!("invalid receipt JSON: {e}")))?;
+        let mut receipt: pap_core::receipt::TransactionReceipt = serde_json::from_str(receipt_json)
+            .map_err(|e| JsError::new(&format!("invalid receipt JSON: {e}")))?;
 
         receipt.co_sign(self.session_keypair.signing_key());
 

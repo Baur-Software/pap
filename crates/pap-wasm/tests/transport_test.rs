@@ -61,7 +61,10 @@ fn transport_session_unique_keypairs() {
 async fn exchange_did_before_present_token_fails() {
     let mut session = pap_wasm::TransportSession::new("https://example.com");
     let result: Result<String, _> = session.exchange_did().await;
-    assert!(result.is_err(), "exchange_did should fail before present_token");
+    assert!(
+        result.is_err(),
+        "exchange_did should fail before present_token"
+    );
 }
 
 #[wasm_bindgen_test]
