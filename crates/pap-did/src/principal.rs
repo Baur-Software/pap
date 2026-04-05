@@ -59,10 +59,7 @@ impl PrincipalKeypair {
 }
 
 /// Convert a public key to a `did:key` identifier using the specified algorithm.
-pub fn public_key_to_did_for_algorithm(
-    key_bytes: &[u8],
-    algorithm: SignatureAlgorithm,
-) -> String {
+pub fn public_key_to_did_for_algorithm(key_bytes: &[u8], algorithm: SignatureAlgorithm) -> String {
     let prefix = algorithm.multicodec_prefix();
     let mut prefixed = Vec::with_capacity(prefix.len() + key_bytes.len());
     prefixed.extend_from_slice(prefix);
@@ -172,10 +169,8 @@ mod tests {
     #[test]
     fn algorithm_aware_did_roundtrip() {
         let kp = PrincipalKeypair::generate();
-        let did = public_key_to_did_for_algorithm(
-            &kp.public_key_bytes(),
-            SignatureAlgorithm::Ed25519,
-        );
+        let did =
+            public_key_to_did_for_algorithm(&kp.public_key_bytes(), SignatureAlgorithm::Ed25519);
         assert_eq!(did, kp.did());
 
         let (bytes, alg) = did_to_public_key_bytes_with_algorithm(&did).unwrap();
