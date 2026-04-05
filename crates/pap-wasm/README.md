@@ -59,9 +59,16 @@ const result = await session.requestExecution();
 console.log('Result:', JSON.parse(result));
 
 // Phase 5: Exchange receipt (auto co-signs with session key)
+// Receipt contains property references only — never values (PAP spec §8.3)
 const receipt = JSON.stringify({
   session_id: session.sessionId(),
   action: "schema:SearchAction",
+  initiating_agent_did: session.sessionDid(),
+  receiving_agent_did: session.receiverSessionDid(),
+  disclosed_by_initiator: ["schema:query"],
+  disclosed_by_receiver: ["schema:result"],
+  executed: "schema:SearchAction",
+  returned: "schema:SearchResult",
   timestamp: new Date().toISOString(),
   signatures: []
 });
