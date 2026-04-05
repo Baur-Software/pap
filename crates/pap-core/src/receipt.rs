@@ -84,13 +84,16 @@ impl SessionAttestation {
     }
 
     /// Sign this attestation with the attester's session key.
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
-        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(PapError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+        }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify this attestation's signature.
@@ -547,7 +550,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
@@ -662,7 +665,7 @@ mod tests {
         );
         assert_eq!(att.algorithm, algorithm);
 
-        att.sign(&key);
+        att.sign(&key).unwrap();
         assert!(att.signature.is_some());
         assert!(att.verify(&key.verifying_key()).is_ok());
     }
@@ -684,7 +687,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        att.sign(&key);
+        att.sign(&key).unwrap();
 
         assert!(att.verify(&wrong_key.verifying_key()).is_err());
     }
@@ -714,7 +717,7 @@ mod tests {
             "schema:ReserveAction",
         );
         let key = make_keypair();
-        att.sign(&key);
+        att.sign(&key).unwrap();
 
         let json = serde_json::to_string(&att).unwrap();
         let att2: SessionAttestation = serde_json::from_str(&json).unwrap();
@@ -770,7 +773,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        att.sign(&init_key);
+        att.sign(&init_key).unwrap();
 
         receipt.add_attestation(att).unwrap();
         assert_eq!(
@@ -800,7 +803,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        init_att.sign(&init_key);
+        init_att.sign(&init_key).unwrap();
 
         let mut recv_att = SessionAttestation::new(
             &receipt.session_id,
@@ -808,7 +811,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        recv_att.sign(&recv_key);
+        recv_att.sign(&recv_key).unwrap();
 
         receipt.add_attestation(init_att).unwrap();
         receipt.add_attestation(recv_att).unwrap();
@@ -888,7 +891,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        att1.sign(&init_key);
+        att1.sign(&init_key).unwrap();
 
         let mut att2 = SessionAttestation::new(
             &receipt.session_id,
@@ -896,7 +899,7 @@ mod tests {
             SessionOutcome::Disputed,
             "schema:SearchAction",
         );
-        att2.sign(&init_key);
+        att2.sign(&init_key).unwrap();
 
         receipt.add_attestation(att1).unwrap();
         assert!(matches!(
@@ -926,7 +929,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        init_att.sign(&init_key);
+        init_att.sign(&init_key).unwrap();
 
         let mut recv_att = SessionAttestation::new(
             &receipt.session_id,
@@ -934,7 +937,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        recv_att.sign(&recv_key);
+        recv_att.sign(&recv_key).unwrap();
 
         receipt.add_attestation(init_att).unwrap();
         receipt.add_attestation(recv_att).unwrap();
@@ -973,7 +976,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        att.sign(&init_key);
+        att.sign(&init_key).unwrap();
 
         receipt.add_attestation(att).unwrap();
 
@@ -1034,7 +1037,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        att.sign(&init_key);
+        att.sign(&init_key).unwrap();
         receipt.add_attestation(att).unwrap();
 
         let json = receipt.to_json();
@@ -1093,7 +1096,7 @@ mod tests {
             issuer_did.clone(),
             Utc::now() + Duration::hours(1),
         );
-        search_token.sign(&issuer_key);
+        search_token.sign(&issuer_key).unwrap();
         let mut search_session =
             Session::initiate(&search_token, &target_did, &issuer_key.verifying_key()).unwrap();
         search_session
@@ -1117,7 +1120,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        reserve_token.sign(&issuer_key);
+        reserve_token.sign(&issuer_key).unwrap();
         let mut reserve_session =
             Session::initiate(&reserve_token, &target_did, &issuer_key.verifying_key()).unwrap();
         reserve_session
@@ -1173,14 +1176,14 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        init_att.sign(&init_key);
+        init_att.sign(&init_key).unwrap();
         let mut recv_att = SessionAttestation::new(
             &receipt.session_id,
             &receipt.receiving_agent_did,
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        recv_att.sign(&recv_key);
+        recv_att.sign(&recv_key).unwrap();
         receipt.add_attestation(init_att).unwrap();
         receipt.add_attestation(recv_att).unwrap();
 
@@ -1212,7 +1215,7 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
-        att.sign(&init_key);
+        att.sign(&init_key).unwrap();
         receipt.add_attestation(att).unwrap();
 
         let mut profile = ReputationProfile::new();
@@ -1236,7 +1239,7 @@ mod tests {
             issuer_did.clone(),
             Utc::now() + Duration::hours(1),
         );
-        token1.sign(&issuer_key);
+        token1.sign(&issuer_key).unwrap();
         let mut s1 = Session::initiate(&token1, &target_did, &issuer_key.verifying_key()).unwrap();
         s1.open("did:key:zinit_a".into(), "did:key:zrecv_a".into())
             .unwrap();
@@ -1248,7 +1251,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token2.sign(&issuer_key);
+        token2.sign(&issuer_key).unwrap();
         let mut s2 = Session::initiate(&token2, &target_did, &issuer_key.verifying_key()).unwrap();
         s2.open("did:key:zinit_b".into(), "did:key:zrecv_b".into())
             .unwrap();

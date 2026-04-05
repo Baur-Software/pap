@@ -443,7 +443,7 @@ pub async fn register_agent(
         requires_disclosure,
         returns,
     );
-    ad.sign(kp.signing_key());
+    ad.sign(kp.signing_key()).expect("Ed25519 is always supported");
 
     let info = ad_to_info(&ad);
 

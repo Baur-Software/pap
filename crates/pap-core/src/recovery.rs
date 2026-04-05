@@ -95,13 +95,16 @@ impl RecoveryMandate {
     }
 
     /// Sign this recovery mandate with the principal's key.
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
-        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(PapError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+        }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify this recovery mandate's signature against the principal's public key.
@@ -442,13 +445,16 @@ impl RevocationProof {
     }
 
     /// Sign with the new principal's key (proves possession).
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
-        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(PapError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+        }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify against the new principal's public key.
@@ -517,7 +523,7 @@ mod tests {
         .unwrap();
         assert_eq!(mandate.algorithm, algorithm);
 
-        mandate.sign(&principal_key);
+        mandate.sign(&principal_key).unwrap();
         assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
     }
 
@@ -573,7 +579,7 @@ mod tests {
 
         let mut mandate =
             RecoveryMandate::new(principal_did.clone(), 1, vec![notary1_did]).unwrap();
-        mandate.sign(&principal_key);
+        mandate.sign(&principal_key).unwrap();
 
         let request =
             RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
@@ -604,7 +610,7 @@ mod tests {
             vec![notary1_did.clone(), notary2_did, notary3_did],
         )
         .unwrap();
-        mandate.sign(&principal_key);
+        mandate.sign(&principal_key).unwrap();
 
         let request = RecoveryRequest::new(principal_did, new_principal_did, mandate.hash());
 
@@ -643,7 +649,7 @@ mod tests {
             vec![notary1_did.clone(), notary2_did],
         )
         .unwrap();
-        mandate.sign(&principal_key);
+        mandate.sign(&principal_key).unwrap();
 
         let request = RecoveryRequest::new(principal_did, new_principal_did, mandate.hash());
 
@@ -695,7 +701,7 @@ mod tests {
             ],
         )
         .unwrap();
-        mandate.sign(&principal_key);
+        mandate.sign(&principal_key).unwrap();
 
         // Recovery request (principal lost key, recovery coordinator creates this)
         let request =
@@ -744,7 +750,7 @@ mod tests {
 
         // Create and sign revocation proof
         let mut revocation = RevocationProof::from_recovery_proof(&proof);
-        revocation.sign(&new_principal_key);
+        revocation.sign(&new_principal_key).unwrap();
         assert!(revocation
             .verify(&new_principal_key.verifying_key())
             .is_ok());

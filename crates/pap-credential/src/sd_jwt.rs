@@ -62,13 +62,16 @@ impl SelectiveDisclosureJwt {
     }
 
     /// Sign the SD-JWT (signs over the hash commitments of all claims).
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
-        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), CredentialError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(CredentialError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+        }
         let bytes = self.commitment_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify the SD-JWT signature.
@@ -196,7 +199,7 @@ mod tests {
         claims.insert("schema:nationality".into(), serde_json::json!("Wonderland"));
 
         let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
-        sd_jwt.sign(&key);
+        sd_jwt.sign(&key).unwrap();
         (sd_jwt, key)
     }
 

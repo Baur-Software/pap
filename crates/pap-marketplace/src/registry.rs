@@ -153,7 +153,7 @@ mod tests {
             requires_disclosure,
             vec!["schema:SearchResult".into()],
         );
-        ad.sign(&key);
+        ad.sign(&key).unwrap();
         ad
     }
 
@@ -257,7 +257,7 @@ mod tests {
             requires_disclosure,
             vec!["schema:SearchResult".into()],
         );
-        ad.sign(&key);
+        ad.sign(&key).unwrap();
         ad.with_metrics(metrics)
     }
 

@@ -63,7 +63,7 @@ fn main() {
         b"cashu:blind:v1:mint=example.com:amount=50:token=ZGVtby1ibGluZC1zaWduZWQtdG9rZW4",
     );
     root_mandate.payment_proof = Some(proof);
-    root_mandate.sign(principal.signing_key());
+    root_mandate.sign(principal.signing_key()).expect("Ed25519 is always supported");
 
     println!("  Principal DID: {principal_did}");
     println!("  Orchestrator DID: {orchestrator_did}");
@@ -147,7 +147,7 @@ fn main() {
         vec![], // digital purchase — no personal disclosure required
         vec!["schema:Invoice".into(), "schema:DigitalDocument".into()],
     );
-    vendor_ad.sign(vendor_operator.signing_key());
+    vendor_ad.sign(vendor_operator.signing_key()).expect("Ed25519 is always supported");
 
     let mut registry = MarketplaceRegistry::new();
     registry.register(vendor_ad).unwrap();
@@ -168,7 +168,7 @@ fn main() {
         orchestrator_did.clone(),
         ttl,
     );
-    token.sign(orchestrator.signing_key());
+    token.sign(orchestrator.signing_key()).expect("Ed25519 is always supported");
 
     let mut session =
         Session::initiate(&token, &vendor_operator_did, &orchestrator.verifying_key())

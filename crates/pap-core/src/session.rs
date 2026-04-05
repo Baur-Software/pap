@@ -114,13 +114,16 @@ impl CapabilityToken {
     }
 
     /// Sign the token with the issuer's key.
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
-        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(PapError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+        }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify the token's signature.
@@ -360,7 +363,7 @@ mod tests {
         );
         assert_eq!(token.algorithm, algorithm);
 
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
         let consumed = HashSet::new();
         assert!(token
             .verify(&target_did, &issuer_key.verifying_key(), &consumed)
@@ -383,7 +386,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let consumed = HashSet::new();
         assert!(matches!(
@@ -408,7 +411,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut consumed = HashSet::new();
         consumed.insert(token.nonce.clone());
@@ -430,7 +433,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
@@ -460,7 +463,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let nonce = token.nonce.clone();
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
@@ -479,7 +482,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
@@ -499,7 +502,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let _session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -519,7 +522,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -547,7 +550,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -573,7 +576,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -605,7 +608,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -635,7 +638,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();

@@ -145,7 +145,7 @@ mod tests {
             kp.did(),
             chrono::Utc::now() + chrono::Duration::hours(1),
         );
-        token.sign(kp.signing_key());
+        token.sign(kp.signing_key()).unwrap();
         token
     }
 

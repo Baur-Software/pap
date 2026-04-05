@@ -178,7 +178,7 @@ fn main() {
         principal.did(),
         ttl,
     );
-    token.sign(principal.signing_key());
+    token.sign(principal.signing_key()).expect("Ed25519 is always supported");
 
     // Create a real session for receipt
     let mut session =

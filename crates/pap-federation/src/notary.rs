@@ -137,7 +137,7 @@ mod tests {
         let notary_did = did_from_key(&notary_key);
 
         let mut mandate = RecoveryMandate::new(did, 1, vec![notary_did]).unwrap();
-        mandate.sign(key);
+        mandate.sign(key).unwrap();
         mandate
     }
 
@@ -231,7 +231,7 @@ mod tests {
             algorithm: pap_did::SignatureAlgorithm::default(),
             signature: None,
         };
-        proof.sign(&new_key);
+        proof.sign(&new_key).unwrap();
 
         let revoked_did = notary_set.process_revocation(&proof).unwrap();
         assert_eq!(revoked_did, old_did);
@@ -276,7 +276,7 @@ mod tests {
             algorithm: pap_did::SignatureAlgorithm::default(),
             signature: None,
         };
-        proof.sign(&wrong_key); // sign with wrong key
+        proof.sign(&wrong_key).unwrap(); // sign with wrong key
 
         let result = notary_set.process_revocation(&proof);
         assert!(result.is_err());

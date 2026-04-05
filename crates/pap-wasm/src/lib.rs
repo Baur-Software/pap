@@ -343,8 +343,8 @@ impl Mandate {
     }
 
     /// Sign the mandate with the issuer's keypair.
-    pub fn sign(&mut self, keypair: &PrincipalKeypair) {
-        self.inner.sign(keypair.inner.signing_key());
+    pub fn sign(&mut self, keypair: &PrincipalKeypair) -> Result<(), JsError> {
+        self.inner.sign(keypair.inner.signing_key()).map_err(to_js_err)
     }
 
     /// Verify the mandate's signature against the given public key bytes (32 bytes).
@@ -506,8 +506,8 @@ impl CapabilityToken {
     }
 
     /// Sign the token with the issuer's keypair.
-    pub fn sign(&mut self, keypair: &PrincipalKeypair) {
-        self.inner.sign(keypair.inner.signing_key());
+    pub fn sign(&mut self, keypair: &PrincipalKeypair) -> Result<(), JsError> {
+        self.inner.sign(keypair.inner.signing_key()).map_err(to_js_err)
     }
 
     /// Serialize to a JSON string.

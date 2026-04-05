@@ -148,13 +148,16 @@ impl AgentAdvertisement {
     }
 
     /// Sign the advertisement with the operator's key.
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
-        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), MarketplaceError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(MarketplaceError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+        }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify the advertisement's signature.
@@ -251,7 +254,7 @@ mod tests {
             vec![], // search requires no personal disclosure
             vec!["schema:SearchResult".into()],
         );
-        ad.sign(&key);
+        ad.sign(&key).unwrap();
         (ad, key)
     }
 

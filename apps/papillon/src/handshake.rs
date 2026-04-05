@@ -93,7 +93,7 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             principal_did.clone(),
             ttl,
         );
-        token.sign(principal_kp.signing_key());
+        token.sign(principal_kp.signing_key()).expect("Ed25519 is always supported");
 
         let (agent_session_id, receiver_session_did) =
             handler.handle_token(token).map_err(|e| {
@@ -122,7 +122,7 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             disclosure_set.clone(),
             ttl,
         );
-        mandate.sign(principal_kp.signing_key());
+        mandate.sign(principal_kp.signing_key()).expect("Ed25519 is always supported");
 
         let initiator_kp = SessionKeypair::generate();
         let initiator_did = initiator_kp.did();
@@ -197,7 +197,7 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         // Session::initiate verifies the token signature, so we must pass the
         // key that signed it, not the principal key (dropped after Phase 2).
         let receipt_signer = SessionKeypair::generate();
-        receipt_token.sign(receipt_signer.signing_key());
+        receipt_token.sign(receipt_signer.signing_key()).expect("Ed25519 is always supported");
         let receipt_verifying_key = receipt_signer.verifying_key();
         // receipt_signer drops here (zeroized)
 
@@ -351,7 +351,7 @@ mod tests {
             kp.did(),
             ttl,
         );
-        token.sign(kp.signing_key());
+        token.sign(kp.signing_key()).expect("Ed25519 is always supported");
         let (session_id, _receiver_did) = handler.handle_token(token).expect("token accepted");
 
         // Phase 2: DID exchange

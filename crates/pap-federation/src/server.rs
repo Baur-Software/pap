@@ -220,7 +220,7 @@ mod tests {
             vec![],
             vec!["schema:SearchResult".into()],
         );
-        ad.sign(&key);
+        ad.sign(&key).unwrap();
         reg.register_local(ad).unwrap();
 
         let registry = Arc::new(Mutex::new(reg));
@@ -361,7 +361,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad.sign(&key);
+        ad.sign(&key).unwrap();
 
         let msg = FederationMessage::Announce {
             advertisement: Box::new(ad),

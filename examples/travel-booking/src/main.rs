@@ -61,7 +61,7 @@ fn main() {
         disclosure_set.clone(),
         ttl,
     );
-    root_mandate.sign(principal.signing_key());
+    root_mandate.sign(principal.signing_key()).expect("Ed25519 is always supported");
 
     println!("  Scope: [schema:ReserveAction (object: schema:Flight)]");
     println!("  Permitted disclosure: [schema:name, schema:nationality]");
@@ -108,7 +108,7 @@ fn main() {
         ],
         vec!["schema:Flight".into(), "schema:Ticket".into()],
     );
-    flight_ad.sign(flight_operator.signing_key());
+    flight_ad.sign(flight_operator.signing_key()).expect("Ed25519 is always supported");
     registry.register(flight_ad).unwrap();
 
     // Agent 2: Premium booking — requires name + nationality + email (NOT satisfiable)
@@ -127,7 +127,7 @@ fn main() {
         ],
         vec!["schema:Flight".into(), "schema:Ticket".into()],
     );
-    premium_ad.sign(premium_operator.signing_key());
+    premium_ad.sign(premium_operator.signing_key()).expect("Ed25519 is always supported");
     registry.register(premium_ad).unwrap();
 
     // Agent 3: Hotel booking — wrong action type
@@ -142,7 +142,7 @@ fn main() {
         vec!["schema:Person.name".into()],
         vec!["schema:LodgingReservation".into()],
     );
-    hotel_ad.sign(hotel_operator.signing_key());
+    hotel_ad.sign(hotel_operator.signing_key()).expect("Ed25519 is always supported");
     registry.register(hotel_ad).unwrap();
 
     // Available properties from the principal's permitted disclosure,
@@ -191,7 +191,7 @@ fn main() {
         orchestrator_did.clone(),
         ttl,
     );
-    token.sign(orchestrator.signing_key());
+    token.sign(orchestrator.signing_key()).expect("Ed25519 is always supported");
 
     let initiating_agent = PrincipalKeypair::generate();
     let initiating_agent_did = initiating_agent.did();
@@ -206,7 +206,7 @@ fn main() {
             ttl - Duration::minutes(30),
         )
         .unwrap();
-    task_mandate.sign(orchestrator.signing_key());
+    task_mandate.sign(orchestrator.signing_key()).expect("Ed25519 is always supported");
     println!("  Token target: {}", token.target_did);
     println!("  Initiating agent DID: {initiating_agent_did}");
     println!();
@@ -239,7 +239,7 @@ fn main() {
     claims.insert("schema:telephone".into(), serde_json::json!("+1-555-0100"));
 
     let mut sd_jwt = SelectiveDisclosureJwt::new(principal_did.clone(), claims);
-    sd_jwt.sign(principal.signing_key());
+    sd_jwt.sign(principal.signing_key()).expect("Ed25519 is always supported");
 
     // Disclose ONLY what the mandate permits — name and nationality
     let disclosures = sd_jwt

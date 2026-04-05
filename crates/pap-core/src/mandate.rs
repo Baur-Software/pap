@@ -157,13 +157,16 @@ impl Mandate {
     }
 
     /// Sign this mandate with the issuer's signing key.
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
-        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(PapError::UnsupportedAlgorithm(format!("{:?}", self.algorithm)));
+        }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify this mandate's signature against the issuer's public key.
@@ -376,7 +379,7 @@ mod tests {
         );
         assert_eq!(mandate.algorithm, algorithm);
 
-        mandate.sign(&principal_key);
+        mandate.sign(&principal_key).unwrap();
         assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
     }
 
@@ -472,7 +475,7 @@ mod tests {
             DisclosureSet::empty(),
             ttl,
         );
-        root.sign(&principal_key);
+        root.sign(&principal_key).unwrap();
 
         let mut child = root
             .delegate(
@@ -483,7 +486,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(child.algorithm, algorithm); // inherited from parent
-        child.sign(&orchestrator_key);
+        child.sign(&orchestrator_key).unwrap();
 
         let chain = MandateChain {
             mandates: vec![root, child],
