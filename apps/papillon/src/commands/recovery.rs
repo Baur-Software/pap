@@ -53,8 +53,8 @@ pub fn create_recovery_shards(
     let (shards, manifest) = shamir::create_shards(&*seed_copy, threshold, total)
         .map_err(|e| PapillonError::from(e.to_string()))?;
 
-    let manifest_json = serde_json::to_string_pretty(&manifest)
-        .map_err(|e| PapillonError::from(e.to_string()))?;
+    let manifest_json =
+        serde_json::to_string_pretty(&manifest).map_err(|e| PapillonError::from(e.to_string()))?;
 
     let shard_infos: Result<Vec<RecoveryShardInfo>, PapillonError> = shards
         .iter()
@@ -165,12 +165,12 @@ pub fn reconstruct_from_shards(
     let seed = shamir::reconstruct(&shard_refs).map_err(|e| PapillonError::from(e.to_string()))?;
 
     // Derive the keypair from the reconstructed seed.
-    let keypair = PrincipalKeypair::from_bytes(&seed)
-        .map_err(|e| PapillonError::from(e.to_string()))?;
+    let keypair =
+        PrincipalKeypair::from_bytes(&seed).map_err(|e| PapillonError::from(e.to_string()))?;
 
     let did = keypair.did();
-    let pub_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .encode(keypair.verifying_key().to_bytes());
+    let pub_key_b64 =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.verifying_key().to_bytes());
 
     // Acquire the signer write-lock for the entire check-and-update sequence.
     // Holding a write lock prevents a concurrent switch_profile from racing between

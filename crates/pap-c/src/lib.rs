@@ -1691,7 +1691,8 @@ pub unsafe extern "C" fn pap_recovery_create_shards(
         set_last_error("null seed_bytes pointer");
         return std::ptr::null_mut();
     }
-    let mut seed: [u8; 32] = match unsafe { std::slice::from_raw_parts(seed_bytes, 32) }.try_into() {
+    let mut seed: [u8; 32] = match unsafe { std::slice::from_raw_parts(seed_bytes, 32) }.try_into()
+    {
         Ok(b) => b,
         Err(_) => {
             set_last_error("seed_bytes must be exactly 32 bytes");

@@ -105,7 +105,11 @@ fn poly_eval(coeffs: &[u8], x: u8) -> u8 {
 fn lagrange_at_zero(x_coords: &[u8], y_coords: &[u8]) -> u8 {
     // This is a safety-critical invariant maintained by the caller (reconstruct).
     // Use a hard assert — release builds must not silently interpolate misaligned coordinates.
-    assert_eq!(x_coords.len(), y_coords.len(), "lagrange_at_zero: coordinate slice lengths differ");
+    assert_eq!(
+        x_coords.len(),
+        y_coords.len(),
+        "lagrange_at_zero: coordinate slice lengths differ"
+    );
     let n = x_coords.len();
     let mut secret = 0u8;
     for i in 0..n {
@@ -224,9 +228,7 @@ impl RecoveryShard {
         use base64::Engine;
         let v = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(&self.session_nonce)
-            .map_err(|e| {
-                PapError::RecoveryError(format!("invalid session_nonce encoding: {e}"))
-            })?;
+            .map_err(|e| PapError::RecoveryError(format!("invalid session_nonce encoding: {e}")))?;
         v.as_slice()
             .try_into()
             .map_err(|_| PapError::RecoveryError("session_nonce must be 32 bytes".into()))
@@ -266,8 +268,7 @@ impl RecoveryShard {
 
     /// Serialize to a JSON string for distribution to a trustee.
     pub fn to_json(&self) -> Result<String, PapError> {
-        serde_json::to_string_pretty(self)
-            .map_err(|e| PapError::Serialization(e.to_string()))
+        serde_json::to_string_pretty(self).map_err(|e| PapError::Serialization(e.to_string()))
     }
 
     /// Deserialize from a JSON string received from a trustee.
@@ -364,9 +365,9 @@ pub fn create_shards(
         }
 
         // Evaluate at each trustee's x-coordinate (1..=N).
-        for j in 0..(total_shares as usize) {
+        for (j, shard) in shard_data.iter_mut().enumerate() {
             let x = (j + 1) as u8; // x ∈ [1, 255], never 0
-            shard_data[j][byte_idx] = poly_eval(&coeffs.0, x);
+            shard[byte_idx] = poly_eval(&coeffs.0, x);
         }
         // coeffs is zeroized when it drops.
     }
@@ -375,10 +376,10 @@ pub fn create_shards(
     let mut shards = Vec::with_capacity(total_shares as usize);
     let mut commitments = Vec::with_capacity(total_shares as usize);
 
-    for j in 0..(total_shares as usize) {
+    for (j, shard) in shard_data.iter().enumerate() {
         let index = (j + 1) as u8;
         let commitment_bytes =
-            compute_commitment(&session_nonce, index, threshold, total_shares, &shard_data[j]);
+            compute_commitment(&session_nonce, index, threshold, total_shares, shard);
         let commitment = b64.encode(commitment_bytes);
 
         shards.push(RecoveryShard {
@@ -386,7 +387,7 @@ pub fn create_shards(
             index,
             threshold,
             total: total_shares,
-            shard_bytes: b64.encode(shard_data[j]),
+            shard_bytes: b64.encode(shard),
             session_nonce: b64.encode(session_nonce),
             commitment: commitment.clone(),
             created_at: now,
@@ -474,9 +475,7 @@ pub fn reconstruct(shards: &[&RecoveryShard]) -> Result<zeroize::Zeroizing<[u8; 
     let mut seen_indices = std::collections::HashSet::new();
     for shard in shards.iter() {
         if shard.index == 0 {
-            return Err(PapError::RecoveryError(
-                "shard index 0 is reserved".into(),
-            ));
+            return Err(PapError::RecoveryError("shard index 0 is reserved".into()));
         }
         if shard.index > shard.total {
             return Err(PapError::RecoveryError(format!(
@@ -744,11 +743,7 @@ mod tests {
     #[test]
     fn gf_inv_roundtrip() {
         for x in 1u8..=255 {
-            assert_eq!(
-                gf_mul(x, gf_inv(x)),
-                1,
-                "x * inv(x) should be 1 for x={x}"
-            );
+            assert_eq!(gf_mul(x, gf_inv(x)), 1, "x * inv(x) should be 1 for x={x}");
         }
     }
 }
