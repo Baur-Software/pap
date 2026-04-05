@@ -319,7 +319,9 @@ mod tests {
         // %40 is the percent-encoding for '@'.  A naive raw-string check for '@'
         // would miss this bypass (Fix 1 — critical review finding).
         assert!(!is_safe_url("https://user%40host@127.0.0.1/api"));
-        assert!(!is_safe_url("https://admin%40evil%3Apass@api.example.com/v1"));
+        assert!(!is_safe_url(
+            "https://admin%40evil%3Apass@api.example.com/v1"
+        ));
         // Plain encoded username without password should also be rejected
         assert!(!is_safe_url("https://user%40name@api.example.com/path"));
     }
