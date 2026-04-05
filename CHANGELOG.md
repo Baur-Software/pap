@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Added
+
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
+
+### Fixed
+
+- **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
+- **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
