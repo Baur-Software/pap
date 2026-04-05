@@ -1,5 +1,58 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Added
+
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
+
+### Fixed
+
+- **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
+- **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
+
+## [0.7.2.1] - 2026-04-05
+
+### Changed
+
+- **docs**: Expanded CONTRIBUTING.md with comprehensive development environment setup guide — prerequisites (Rust, system libs, optional tooling), quick start commands, project structure tour, per-subsystem test instructions (Rust, Python, Java, E2E), example runner commands, browser extension build steps, CI pipeline table with local reproduction commands, branch naming and conventional commit conventions
+- **ci**: Hardened benchmark regression gate — tightened threshold from 20% to 10%, added artifact-based baseline storage with 90-day retention so PRs compare against the latest main baseline instead of a stale committed file, added benchmark summary PR comments via `actions/github-script`, and improved `check_regression.sh` with `--baseline`/`--output` flags and proper argument parsing
+- **ci**: Added zero-value guard in `check_regression.sh` — a Criterion parse failure that yields 0 now fails the gate instead of silently passing
+- **ci**: Baseline update on main push now runs even if the regression check fails, preventing a single noisy benchmark from permanently jamming the CI gate
+
+## [0.7.1] - 2026-04-04
+
+### Added
+
+- **pap-c**: C FFI marketplace query API — `PapMarketplaceClient` opaque handle wrapping `MarketplaceRegistry`, `PapAgentList` typed result set with index-based accessors (`pap_agent_list_get_did`, `pap_agent_list_get_name`), JSON-based `pap_marketplace_query` dispatching to `query_by_action` or `query_satisfiable` based on `available_properties` presence, and `pap_last_error` alias for error retrieval
+- **pap-c**: 11 unit tests covering client lifecycle, query dispatch, disclosure filtering, out-of-bounds safety, null-pointer guards, invalid JSON rejection, and unsigned advertisement rejection
+
+### Changed
+
+- **github**: Replaced generic markdown issue templates with structured YAML Issue Forms for all four pillars (Papillon, Chrysalis, papillon-extension, pap:// URI). Each form now enforces required fields — blank issues are denied via `config.yml`. Forms cover pillar-specific fields: OS/area selector for Papillon, deployment type and federation peer count for Chrysalis, browser version and native host for the extension, and protocol phase (1–6) for pap:// URIs. Replaced the single protocol feedback template with a structured `protocol-proposal.yml` that requires a capture-test evaluation for every proposal. Added a cross-cutting `feature-request.yml` with capture-test and non-goals guardrails.
+
+## [0.7.0] - 2026-04-04
+
+### Added
+
+- **papillon-extension**: PAP site discovery — Layer 0+1 detection with DOM signal check and same-origin manifest probe; icon badge indicates when current site supports PAP
+- **papillon-extension**: Context menu upgrade — right-click HTTPS links to open via PAP-secured handshake; falls back to unprotected URL on failure with copyable link
+- **papillon-extension**: Popup site indicator — displays agent name and "PAP Agent Available" status for current page
+- **papillon-extension**: Persistent badge state via `chrome.storage.session` — survives service worker restart
+
+### Fixed
+
+- **papillon-extension**: Same-origin enforcement on `<link rel="pap-manifest">` — cross-origin manifest URIs are now rejected
+- **papillon-extension**: Manifest validation now bounds all strings and arrays — `agent_id`/`name` ≤1000 chars, `tools` ≤500 items, `categories` ≤100 items, `description`/`endpoint` ≤1000/500 chars
+- **papillon-extension**: Response body size bounded to 100KB to prevent DoS via oversized manifests
+- **papillon-extension**: Added Content-Type validation on manifest response (must be `application/json`)
+- **papillon-extension**: URL parsing heuristic fixed — now uses proper URL parsing instead of substring sniffing
+- **papillon-extension**: Timer resource leak fixed in manifest fetch error path (now uses try/finally)
+- **papillon-extension**: Firefox compatibility — removed optional chaining on `chrome.contextMenus` and `chrome.storage` APIs
+- **papillon-extension**: Fallback URL validation — only `http://` and `https://` schemes allowed (blocks javascript: injection)
+
 ## [0.6.0] - 2026-04-02
 
 ### Added

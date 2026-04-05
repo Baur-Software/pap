@@ -31,9 +31,18 @@ const CHRYSALIS_URL = process.env.CHRYSALIS_URL ?? "";
 const SKIP_MSG =
   "CHRYSALIS_URL not set — start Chrysalis (./scripts/start-chrysalis-dev.sh) and set CHRYSALIS_URL";
 
-// Helper: skip this test when no live server is available
+// In CI, CHRYSALIS_URL must always be provided (the chrysalis-e2e job sets it).
+// A missing URL in CI means the job was misconfigured — fail loudly so the
+// regression is caught rather than silently skipped past.
+// Outside CI (local dev), skip gracefully so developers can run `playwright test`
+// without starting Chrysalis first.
 function requireChrysalis() {
-  if (!CHRYSALIS_URL) test.skip(true, SKIP_MSG);
+  if (!CHRYSALIS_URL) {
+    if (process.env.CI) {
+      throw new Error(`CI misconfiguration: ${SKIP_MSG}`);
+    }
+    test.skip(true, SKIP_MSG);
+  }
 }
 
 // ── 1. Federation identity ────────────────────────────────────
