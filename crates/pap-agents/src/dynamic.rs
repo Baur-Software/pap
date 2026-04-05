@@ -54,12 +54,25 @@ pub enum DynamicAgentSource {
 /// Returns `false` for any of:
 /// - Non-https scheme
 /// - `localhost` host
+/// - URLs containing userinfo (`user:pass@host`) — RFC 3986 §3.2.1, including
+///   percent-encoded variants such as `%40` (encoded `@`)
 /// - IPv4 RFC 1918 ranges: 127.x, 10.x, 172.16–31.x, 192.168.x
 /// - Link-local: 169.254.x
 /// - Bare IPv4 or IPv6 address literals (any address, not just private ones)
+/// - Decimal or hex integer IP notation (e.g. `2130706433`, `0x7f000001`)
 ///
 /// Defense-in-depth: this check is enforced both at save time and at execution time
 /// (see spec §4.1).
+///
+/// **Known limitation — DNS rebinding:** This function performs static string
+/// validation and does not resolve hostnames. A name like `127.0.0.1.nip.io`
+/// (which resolves to a private IP via DNS) will pass validation. Mitigate at
+/// the network layer with egress firewall rules blocking RFC 1918 destinations.
+///
+/// **Known limitation — numeric IP notation:** Decimal and hex integer formats
+/// are blocked on a best-effort basis (see check below), but full DNS resolution
+/// is not performed. Rely on network-layer egress filtering as an additional
+/// defence.
 pub fn is_safe_url(url: &str) -> bool {
     // Must be https://
     let rest = match url.strip_prefix("https://") {
@@ -67,18 +80,38 @@ pub fn is_safe_url(url: &str) -> bool {
         None => return false,
     };
 
-    // Extract host (everything before the first '/', '?', '#', or end of string)
-    let host = rest
+    // Parse via the `url` crate so that percent-encoding is decoded before any
+    // checks.  This prevents `%40`-encoded `@` from bypassing the userinfo check
+    // (Fix 1 — review finding: critical).
+    let parsed = match url::Url::parse(url) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Reject URLs with userinfo (user:pass@host) — these can bypass host checks
+    // and have no legitimate use in agent endpoint URLs.  Checking via the parsed
+    // representation catches both literal `@` and the `%40` percent-encoded form.
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return false;
+    }
+
+    // Extract authority (everything before the first '/', '?', '#', or end of string)
+    let authority = rest
         .split(['/', '?', '#'])
         .next()
         .unwrap_or(rest)
         .to_ascii_lowercase();
 
     // Remove port if present
-    let host = match host.rfind(':') {
-        Some(i) => host[..i].to_string(),
-        None => host,
+    let host = match authority.rfind(':') {
+        Some(i) => authority[..i].to_string(),
+        None => authority,
     };
+
+    // Reject empty host
+    if host.is_empty() {
+        return false;
+    }
 
     // Reject localhost
     if host == "localhost" {
@@ -87,6 +120,14 @@ pub fn is_safe_url(url: &str) -> bool {
 
     // Reject bare IPv6 literals (wrapped in brackets: [::1], [fe80::1], etc.)
     if host.starts_with('[') {
+        return false;
+    }
+
+    // Block decimal and hex integer IP notation (e.g. 2130706433 → 127.0.0.1,
+    // 0x7f000001 → 127.0.0.1).  This is best-effort static analysis — full DNS
+    // resolution is not performed here (see known limitation in doc-comment above).
+    // Fix 2 — review finding: informational.
+    if host.starts_with("0x") || host.parse::<u32>().is_ok() {
         return false;
     }
 
@@ -200,6 +241,105 @@ mod tests {
     fn bare_ipv4_public_rejected() {
         assert!(!is_safe_url("https://1.1.1.1/dns-query"));
         assert!(!is_safe_url("https://8.8.8.8/"));
+    }
+
+    // ── ISS-842 hardening tests ──────────────────────────────────────
+
+    #[test]
+    fn userinfo_bypass_rejected() {
+        // CVE-pattern: userinfo before private IP bypasses naive host extraction
+        assert!(!is_safe_url("https://user:pass@127.0.0.1/api"));
+        assert!(!is_safe_url("https://x@169.254.169.254/latest/meta-data/"));
+        assert!(!is_safe_url("https://admin:secret@10.0.0.1/"));
+        assert!(!is_safe_url("https://a@192.168.1.1:443/api"));
+        // Userinfo with public host is also rejected — no legitimate use case
+        assert!(!is_safe_url("https://admin:password@api.example.com/v1"));
+    }
+
+    #[test]
+    fn zero_addr_rejected() {
+        assert!(!is_safe_url("https://0.0.0.0/api"));
+        assert!(!is_safe_url("https://0.0.0.0:443/"));
+    }
+
+    #[test]
+    fn file_scheme_rejected() {
+        assert!(!is_safe_url("file:///etc/passwd"));
+        assert!(!is_safe_url("file://localhost/etc/hosts"));
+    }
+
+    #[test]
+    fn data_scheme_rejected() {
+        assert!(!is_safe_url("data:text/html,<h1>hi</h1>"));
+    }
+
+    #[test]
+    fn javascript_scheme_rejected() {
+        assert!(!is_safe_url("javascript:alert(1)"));
+    }
+
+    #[test]
+    fn empty_string_rejected() {
+        assert!(!is_safe_url(""));
+    }
+
+    #[test]
+    fn malformed_url_rejected() {
+        assert!(!is_safe_url("not-a-url"));
+        assert!(!is_safe_url("://missing-scheme"));
+        assert!(!is_safe_url("https://"));
+    }
+
+    #[test]
+    fn ipv6_unique_local_rejected() {
+        // fc00::/7 — IPv6 unique local addresses (bracket notation)
+        assert!(!is_safe_url("https://[fd00::1]/api"));
+        assert!(!is_safe_url("https://[fc00::1]/api"));
+    }
+
+    #[test]
+    fn template_variable_not_in_url_is_safe() {
+        // Templates with {query} in query-string position are fine
+        assert!(is_safe_url(
+            "https://api.example.com/search?q={query}&format=json"
+        ));
+        assert!(is_safe_url(
+            "https://world.openfoodfacts.org/cgi/search.pl?search_terms={query}&json=1"
+        ));
+    }
+
+    #[test]
+    fn octal_ipv4_rejected() {
+        // Non-standard dotted forms caught by Ipv4Addr::parse fallback
+        assert!(!is_safe_url("https://0177.0.0.1/api"));
+    }
+
+    #[test]
+    fn percent_encoded_at_sign_userinfo_rejected() {
+        // %40 is the percent-encoding for '@'.  A naive raw-string check for '@'
+        // would miss this bypass (Fix 1 — critical review finding).
+        assert!(!is_safe_url("https://user%40host@127.0.0.1/api"));
+        assert!(!is_safe_url(
+            "https://admin%40evil%3Apass@api.example.com/v1"
+        ));
+        // Plain encoded username without password should also be rejected
+        assert!(!is_safe_url("https://user%40name@api.example.com/path"));
+    }
+
+    #[test]
+    fn decimal_integer_ip_rejected() {
+        // 2130706433 == 0x7f000001 == 127.0.0.1 (loopback)
+        assert!(!is_safe_url("https://2130706433/api"));
+        // 167772161 == 0x0a000001 == 10.0.0.1 (RFC 1918)
+        assert!(!is_safe_url("https://167772161/api"));
+    }
+
+    #[test]
+    fn hex_integer_ip_rejected() {
+        // 0x7f000001 == 127.0.0.1 (loopback)
+        assert!(!is_safe_url("https://0x7f000001/api"));
+        // 0xc0a80101 == 192.168.1.1 (RFC 1918)
+        assert!(!is_safe_url("https://0xc0a80101/api"));
     }
 
     #[test]

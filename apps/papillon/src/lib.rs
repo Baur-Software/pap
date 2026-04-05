@@ -163,6 +163,7 @@ pub fn run() {
             commands::webauthn::complete_registration,
             commands::webauthn::begin_authentication,
             commands::webauthn::complete_authentication,
+            commands::canvas::get_canvas_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");

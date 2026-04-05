@@ -10,7 +10,7 @@ pap-did = { workspace = true }
 pap-core = { workspace = true }
 pap-credential = { workspace = true }
 pap-marketplace = { workspace = true }
-pap-federation = { workspace = true }
+pap-federation = { workspace = true, features = ["native"] }
 pap-proto = { workspace = true }
 ed25519-dalek = { workspace = true }
 rand = { workspace = true }

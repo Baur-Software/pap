@@ -279,7 +279,9 @@ class TestMandate:
         agent2 = SessionKeypair.generate()
         scope = Scope([ScopeAction("schema:SearchAction")])
         ds = DisclosureSet.empty()
-        child = m.delegate(agent2.did(), scope, ds, future_ttl(1))
+        # Child TTL must not exceed parent TTL; use a shorter TTL
+        # to avoid race where future_ttl(1) recomputed is a few ms later
+        child = m.delegate(agent2.did(), scope, ds, m.ttl)
         child.sign_with_session_key(agent2)
         assert child.parent_mandate_hash == m.hash()
 
@@ -294,7 +296,9 @@ class TestMandate:
 
     def test_decay_state(self):
         m, _ = self._make_root_mandate()
-        state = m.compute_decay_state(3600)
+        # Decay window must be smaller than remaining TTL (1h = 3600s)
+        # to get Active state; 60s window is well within TTL
+        state = m.compute_decay_state(60)
         assert state == DecayState.Active
 
 
