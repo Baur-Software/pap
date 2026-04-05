@@ -11,9 +11,7 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write
-  id-token: write
+permissions: read-all
 
 env:
   CARGO_TERM_COLOR: always
@@ -95,7 +93,7 @@ jobs:
           platforms: arm64
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad  # v1
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
@@ -120,7 +118,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build sdist
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad  # v1
         with:
           command: sdist
           args: >-
@@ -209,6 +207,6 @@ jobs:
         run: ls -lh dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
         with:
           packages-dir: dist/
