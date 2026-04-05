@@ -142,7 +142,7 @@ async fn handle_query(
     Query(params): Query<QueryParams>,
 ) -> Json<FederationMessage> {
     let registry = state.registry.lock().unwrap();
-    let page_size = params.page_size.unwrap_or(100) as usize;
+    let page_size = params.page_size.unwrap_or(50).min(1000) as usize;
 
     let (ads, next_cursor, has_more) =
         registry.query_local_paginated(&params.action, params.cursor.as_deref(), page_size);

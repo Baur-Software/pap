@@ -171,7 +171,7 @@ impl FederationClient {
                 page_size,
             );
             if let Some(ref c) = cursor {
-                url.push_str(&format!("&cursor={}", c));
+                url.push_str(&format!("&cursor={}", urlencoding::encode(c)));
             }
 
             let resp = self
@@ -193,10 +193,14 @@ impl FederationClient {
                     has_more,
                 } => {
                     all_ads.extend(advertisements);
-                    if !has_more {
+                    if has_more {
+                        match next_cursor {
+                            Some(c) => cursor = Some(c),
+                            None => break, // defensive: peer lied about has_more
+                        }
+                    } else {
                         break;
                     }
-                    cursor = next_cursor;
                 }
                 _ => {
                     return Err(FederationError::SyncFailed(
