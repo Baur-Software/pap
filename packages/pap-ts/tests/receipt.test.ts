@@ -95,8 +95,10 @@ describe('TransactionReceipt', () => {
     expect(await receipt.verifySignature(-1, initKp.publicKeyBytes())).toBe(false);
   });
 
-  it('rejects session without session DIDs', async () => {
+  it('rejects session not in Executed state', async () => {
     const issuer = await PrincipalKeypair.generate();
+    const initKp = await SessionKeypair.generate();
+    const recvKp = await SessionKeypair.generate();
     const scope = new Scope([searchAction]);
     const token = CapabilityToken.mint(
       'did:key:zReceiver',
@@ -112,7 +114,8 @@ describe('TransactionReceipt', () => {
       issuer.publicKeyBytes(),
       scope,
     );
-    // Session is Initiated but not Open — no session DIDs set
+    session.open(initKp.did(), recvKp.did());
+    // Session is Open, not Executed
 
     expect(() =>
       TransactionReceipt.fromSession(session, [], [], 'test', 'test'),

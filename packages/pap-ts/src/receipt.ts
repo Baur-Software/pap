@@ -107,6 +107,9 @@ export class TransactionReceipt {
     executed: string,
     returned: string,
   ): TransactionReceipt {
+    if (session.state !== SessionState.Executed && session.state !== SessionState.Closed) {
+      throw new ReceiptError('Session must be in Executed or Closed state');
+    }
     if (!session.initiatorSessionDid || !session.receiverSessionDid) {
       throw new ReceiptError('Session must have both session DIDs set');
     }

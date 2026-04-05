@@ -121,12 +121,20 @@ export class HandshakeClient {
   ): Promise<{ receipt: TransactionReceipt; result: unknown }> {
     const base = this.baseUrl.replace(/\/$/, '');
 
+    const post = async (url: string, body?: unknown): Promise<Response> => {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        ...(body != null ? { body: JSON.stringify(body) } : {}),
+      });
+      if (!resp.ok) {
+        throw new Error(`PAP handshake failed at ${url}: HTTP ${resp.status}`);
+      }
+      return resp;
+    };
+
     // Phase 1: Token Presentation
-    const phase1 = await fetch(`${base}/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'TokenPresentation', token }),
-    });
+    const phase1 = await post(`${base}/session`, { type: 'TokenPresentation', token });
     const phase1Body = await phase1.json();
     if (phase1Body.type === 'TokenRejected') {
       throw new Error(`Token rejected: ${phase1Body.reason}`);
@@ -134,46 +142,33 @@ export class HandshakeClient {
     const { session_id, receiver_session_did } = phase1Body;
 
     // Phase 2: Ephemeral DID Exchange
-    await fetch(`${base}/session/${session_id}/did`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'SessionDidExchange',
-        initiator_session_did: sessionKeypair.did(),
-      }),
+    await post(`${base}/session/${session_id}/did`, {
+      type: 'SessionDidExchange',
+      initiator_session_did: sessionKeypair.did(),
     });
 
     // Phase 3: Disclosure
-    await fetch(`${base}/session/${session_id}/disclosure`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'DisclosureOffer', disclosures }),
+    await post(`${base}/session/${session_id}/disclosure`, {
+      type: 'DisclosureOffer',
+      disclosures,
     });
 
     // Phase 4: Execution
-    const phase4 = await fetch(`${base}/session/${session_id}/execute`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const phase4 = await post(`${base}/session/${session_id}/execute`);
     const executionResult = await phase4.json();
 
-    // Phase 5: Receipt Co-Signing (construct receipt client-side for now)
-    const phase5 = await fetch(`${base}/session/${session_id}/receipt`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'ReceiptForCoSign',
-        receipt: executionResult.receipt,
-      }),
+    // Phase 5: Receipt Co-Signing
+    const phase5 = await post(`${base}/session/${session_id}/receipt`, {
+      type: 'ReceiptForCoSign',
+      receipt: executionResult.receipt,
     });
     const phase5Body = await phase5.json();
     const receipt = phase5Body.receipt as TransactionReceipt;
 
     // Phase 6: Session Close
-    await fetch(`${base}/session/${session_id}/close`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'SessionClose', session_id }),
+    await post(`${base}/session/${session_id}/close`, {
+      type: 'SessionClose',
+      session_id,
     });
 
     return { receipt, result: executionResult.result };
