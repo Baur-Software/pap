@@ -177,10 +177,14 @@ struct PapScope *pap_scope_deny_all(void);
 void pap_scope_free(struct PapScope *s);
 
 // Returns 1 if the scope permits `action`, 0 otherwise (including on null input).
+// # Safety
+// `action` must be a valid non-null pointer to a null-terminated string when `scope` is non-null.
 int pap_scope_permits(const struct PapScope *scope, const char *action);
 
 // Returns 1 if every action in `child` is also in `parent` (child ⊆ parent).
 // Returns 0 on any error or if the check fails.
+// # Safety
+// Both `parent` and `child` must be valid non-null pointers when used for a positive check.
 int pap_scope_contains(const struct PapScope *parent, const struct PapScope *child);
 
 // Create a disclosure entry describing what context an agent may share.
@@ -482,6 +486,8 @@ int pap_advertisement_verify(const struct PapAdvertisement *a,
                              uintptr_t pubkey_len);
 
 // Returns 1 if the advertisement supports `action`, 0 otherwise.
+// # Safety
+// `action` must be a valid non-null pointer to a null-terminated string when `a` is non-null.
 int pap_advertisement_supports_action(const struct PapAdvertisement *a, const char *action);
 
 // Serialize the advertisement to a JSON C string. Caller frees with `pap_string_free`.
@@ -509,7 +515,9 @@ int pap_registry_register(struct PapMarketplaceRegistry *r, const struct PapAdve
 
 // Query for advertisements matching `action`. Returns results as a JSON array
 // C string. Caller frees with `pap_string_free`.
-// Returns NULL on error.
+// Returns NULL on error (check `pap_last_error()`).
+// # Safety
+// `r` and `action` must be valid non-null pointers. Passing NULL is undefined behavior.
 char *pap_registry_query_by_action(const struct PapMarketplaceRegistry *r, const char *action);
 
 // Returns the number of advertisements in the registry. -1 on null input.
@@ -544,7 +552,12 @@ int pap_marketplace_client_register(struct PapMarketplaceClient *client,
 // otherwise matches by action alone.
 //
 // Returns a `PapAgentList` handle that the caller must free with
-// `pap_agent_list_free`. Returns NULL on error.
+// `pap_agent_list_free`. Returns NULL on error (check `pap_last_error()`).
+//
+// # Safety
+// `client` must be a valid non-null pointer returned by `pap_marketplace_client_new`.
+// `capability_json` must be a valid non-null pointer to a null-terminated UTF-8 string.
+// Passing NULL for any pointer parameter is undefined behavior.
 struct PapAgentList *pap_marketplace_query(const struct PapMarketplaceClient *client,
                                            const char *capability_json);
 
