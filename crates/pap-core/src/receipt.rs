@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -55,7 +56,10 @@ pub struct SessionAttestation {
     pub action_type: String,
     /// When this attestation was created
     pub timestamp: DateTime<Utc>,
-    /// Ed25519 signature over the canonical bytes (base64url-no-pad)
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
+    /// Signature over the canonical bytes (base64url-no-pad)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
 }
@@ -74,12 +78,14 @@ impl SessionAttestation {
             outcome,
             action_type: action_type.into(),
             timestamp: Utc::now(),
+            algorithm: SignatureAlgorithm::default(),
             signature: None,
         }
     }
 
     /// Sign this attestation with the attester's session key.
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
@@ -642,8 +648,9 @@ mod tests {
 
     // ─── SessionAttestation Tests ───────────────────────────────────
 
-    #[test]
-    fn attestation_sign_and_verify() {
+    /// Parameterized attestation sign/verify test body.
+    fn attestation_sign_verify_for_algorithm(algorithm: SignatureAlgorithm) {
+        assert_eq!(algorithm, SignatureAlgorithm::Ed25519);
         let key = make_keypair();
         let did = did_from_key(&key);
 
@@ -653,10 +660,16 @@ mod tests {
             SessionOutcome::Fulfilled,
             "schema:SearchAction",
         );
+        assert_eq!(att.algorithm, algorithm);
 
         att.sign(&key);
         assert!(att.signature.is_some());
         assert!(att.verify(&key.verifying_key()).is_ok());
+    }
+
+    #[test]
+    fn attestation_sign_and_verify() {
+        attestation_sign_verify_for_algorithm(SignatureAlgorithm::Ed25519);
     }
 
     #[test]

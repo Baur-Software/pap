@@ -1,4 +1,5 @@
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -79,7 +80,11 @@ pub struct AgentAdvertisement {
     /// DID that signed this advertisement
     pub signed_by: String,
 
-    /// Ed25519 signature (base64-encoded)
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
+
+    /// Signature (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
 
@@ -127,6 +132,7 @@ impl AgentAdvertisement {
             returns,
             ttl_min: 300,
             signed_by: did,
+            algorithm: SignatureAlgorithm::default(),
             signature: None,
             metrics: None,
         }
@@ -143,6 +149,7 @@ impl AgentAdvertisement {
 
     /// Sign the advertisement with the operator's key.
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
@@ -248,10 +255,17 @@ mod tests {
         (ad, key)
     }
 
+    /// Parameterized advertisement sign/verify test body.
+    fn advertisement_sign_verify_for_algorithm(algorithm: SignatureAlgorithm) {
+        assert_eq!(algorithm, SignatureAlgorithm::Ed25519);
+        let (ad, key) = make_search_ad();
+        assert_eq!(ad.algorithm, algorithm);
+        assert!(ad.verify(&key.verifying_key()).is_ok());
+    }
+
     #[test]
     fn advertisement_sign_verify() {
-        let (ad, key) = make_search_ad();
-        assert!(ad.verify(&key.verifying_key()).is_ok());
+        advertisement_sign_verify_for_algorithm(SignatureAlgorithm::Ed25519);
     }
 
     #[test]

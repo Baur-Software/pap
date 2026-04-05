@@ -367,6 +367,7 @@ mod tests {
             new_principal_did: "did:key:zNew".into(),
             recovery_proof_hash: "hash123".into(),
             revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
             signature: None,
         };
 

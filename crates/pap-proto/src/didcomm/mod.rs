@@ -59,7 +59,7 @@ impl PapToDIDComm {
         signing_key: &SigningKey,
     ) -> Result<DIDCommSigned, ProtoError> {
         let plaintext = Self::to_plaintext(envelope)?;
-        jws::sign_plaintext(&plaintext, signing_key)
+        jws::sign_plaintext(&plaintext, signing_key, pap_did::SignatureAlgorithm::Ed25519)
     }
 
     /// Encrypt a PAP envelope as a DIDComm v2 encrypted message (ECDH-ES + A256GCM).

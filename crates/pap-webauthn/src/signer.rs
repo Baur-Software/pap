@@ -1,4 +1,5 @@
 use ed25519_dalek::VerifyingKey;
+use pap_did::SignatureAlgorithm;
 
 use crate::error::WebAuthnError;
 
@@ -12,9 +13,15 @@ pub trait PrincipalSigner: Send + Sync {
     /// The did:key identifier derived from this signer's public key.
     fn did(&self) -> String;
 
-    /// Sign arbitrary bytes. Returns a 64-byte Ed25519 signature.
+    /// Sign arbitrary bytes. Returns the signature for this signer's algorithm.
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, WebAuthnError>;
 
-    /// The Ed25519 verifying (public) key for signature verification.
+    /// The verifying (public) key for signature verification.
     fn verifying_key(&self) -> VerifyingKey;
+
+    /// The signature algorithm used by this signer.
+    /// Defaults to Ed25519 for all existing implementations.
+    fn algorithm(&self) -> SignatureAlgorithm {
+        SignatureAlgorithm::Ed25519
+    }
 }

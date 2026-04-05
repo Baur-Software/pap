@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -83,6 +84,9 @@ pub struct CapabilityToken {
     pub issued_at: DateTime<Utc>,
     /// Expiry timestamp
     pub expires_at: DateTime<Utc>,
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
     /// Signature by the issuer (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -104,12 +108,14 @@ impl CapabilityToken {
             issuer_did,
             issued_at: Utc::now(),
             expires_at: ttl,
+            algorithm: SignatureAlgorithm::default(),
             signature: None,
         }
     }
 
     /// Sign the token with the issuer's key.
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
@@ -339,8 +345,9 @@ mod tests {
             .did()
     }
 
-    #[test]
-    fn capability_token_mint_sign_verify() {
+    /// Parameterized token sign/verify test body.
+    fn token_sign_verify_for_algorithm(algorithm: SignatureAlgorithm) {
+        assert_eq!(algorithm, SignatureAlgorithm::Ed25519);
         let issuer_key = make_keypair();
         let issuer_did = did_from_key(&issuer_key);
         let target_did = "did:key:ztarget".to_string();
@@ -351,12 +358,18 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
+        assert_eq!(token.algorithm, algorithm);
 
         token.sign(&issuer_key);
         let consumed = HashSet::new();
         assert!(token
             .verify(&target_did, &issuer_key.verifying_key(), &consumed)
             .is_ok());
+    }
+
+    #[test]
+    fn capability_token_mint_sign_verify() {
+        token_sign_verify_for_algorithm(SignatureAlgorithm::Ed25519);
     }
 
     #[test]

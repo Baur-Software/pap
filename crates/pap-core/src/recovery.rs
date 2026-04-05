@@ -12,6 +12,7 @@
 
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -33,7 +34,10 @@ pub struct RecoveryMandate {
     pub notary_dids: Vec<String>,
     /// When this recovery mandate was created
     pub created_at: DateTime<Utc>,
-    /// Ed25519 signature by the principal (base64-encoded)
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
+    /// Signature by the principal (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
 }
@@ -72,6 +76,7 @@ impl RecoveryMandate {
             threshold,
             notary_dids,
             created_at: Utc::now(),
+            algorithm: SignatureAlgorithm::default(),
             signature: None,
         })
     }
@@ -91,6 +96,7 @@ impl RecoveryMandate {
 
     /// Sign this recovery mandate with the principal's key.
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
@@ -190,10 +196,13 @@ impl RecoveryRequest {
 pub struct PartialRecoverySignature {
     /// DID of the notary who produced this signature
     pub notary_did: String,
-    /// Ed25519 signature over the RecoveryRequest canonical bytes (base64-encoded)
+    /// Signature over the RecoveryRequest canonical bytes (base64-encoded)
     pub signature: String,
     /// When the notary signed
     pub signed_at: DateTime<Utc>,
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
 }
 
 impl PartialRecoverySignature {
@@ -240,6 +249,7 @@ impl PartialRecoverySignature {
             notary_did: notary_did.to_string(),
             signature: sig_b64,
             signed_at: Utc::now(),
+            algorithm: recovery_mandate.algorithm,
         })
     }
 
@@ -410,6 +420,9 @@ pub struct RevocationProof {
     pub recovery_proof_hash: String,
     /// When the revocation was issued
     pub revoked_at: DateTime<Utc>,
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
     /// Signature by the new principal key (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -423,12 +436,14 @@ impl RevocationProof {
             new_principal_did: proof.request.new_principal_did.clone(),
             recovery_proof_hash: proof.hash(),
             revoked_at: Utc::now(),
+            algorithm: proof.recovery_mandate.algorithm,
             signature: None,
         }
     }
 
     /// Sign with the new principal's key (proves possession).
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+        assert_eq!(self.algorithm, SignatureAlgorithm::Ed25519);
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
@@ -485,8 +500,9 @@ mod tests {
             .did()
     }
 
-    #[test]
-    fn recovery_mandate_creation_and_signing() {
+    /// Parameterized recovery mandate sign/verify test body.
+    fn recovery_sign_verify_for_algorithm(algorithm: SignatureAlgorithm) {
+        assert_eq!(algorithm, SignatureAlgorithm::Ed25519);
         let principal_key = make_keypair();
         let principal_did = did_from_key(&principal_key);
         let notary1_did = did_from_key(&make_keypair());
@@ -499,9 +515,15 @@ mod tests {
             vec![notary1_did, notary2_did, notary3_did],
         )
         .unwrap();
+        assert_eq!(mandate.algorithm, algorithm);
 
         mandate.sign(&principal_key);
         assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
+    }
+
+    #[test]
+    fn recovery_mandate_creation_and_signing() {
+        recovery_sign_verify_for_algorithm(SignatureAlgorithm::Ed25519);
     }
 
     #[test]
@@ -754,6 +776,7 @@ mod tests {
             new_principal_did: "did:key:znew".into(),
             recovery_proof_hash: "hash".into(),
             revoked_at: Utc::now(),
+            algorithm: SignatureAlgorithm::default(),
             signature: None,
         };
         assert!(revocation.verify(&key.verifying_key()).is_err());

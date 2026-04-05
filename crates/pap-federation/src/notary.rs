@@ -228,6 +228,7 @@ mod tests {
             new_principal_did: new_did,
             recovery_proof_hash: "test_hash".into(),
             revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
             signature: None,
         };
         proof.sign(&new_key);
@@ -252,6 +253,7 @@ mod tests {
             new_principal_did: new_did,
             recovery_proof_hash: "hash".into(),
             revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
             signature: None,
         };
 
@@ -271,6 +273,7 @@ mod tests {
             new_principal_did: new_did,
             recovery_proof_hash: "hash".into(),
             revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
             signature: None,
         };
         proof.sign(&wrong_key); // sign with wrong key

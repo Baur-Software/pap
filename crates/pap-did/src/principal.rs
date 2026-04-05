@@ -1,6 +1,7 @@
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 
+use crate::algorithm::SignatureAlgorithm;
 use crate::DidError;
 
 /// Root keypair bound to the human principal's device.
@@ -57,31 +58,70 @@ impl PrincipalKeypair {
     }
 }
 
-/// Convert an Ed25519 public key to a `did:key` identifier.
-/// Multicodec prefix for Ed25519 public key: 0xed01
-pub fn public_key_to_did(key: &VerifyingKey) -> String {
-    let mut prefixed = Vec::with_capacity(34);
-    prefixed.push(0xed);
-    prefixed.push(0x01);
-    prefixed.extend_from_slice(&key.to_bytes());
+/// Convert a public key to a `did:key` identifier using the specified algorithm.
+pub fn public_key_to_did_for_algorithm(
+    key_bytes: &[u8],
+    algorithm: SignatureAlgorithm,
+) -> String {
+    let prefix = algorithm.multicodec_prefix();
+    let mut prefixed = Vec::with_capacity(prefix.len() + key_bytes.len());
+    prefixed.extend_from_slice(prefix);
+    prefixed.extend_from_slice(key_bytes);
     let encoded = bs58::encode(&prefixed).into_string();
     format!("did:key:z{encoded}")
 }
 
-/// Extract public key bytes from a `did:key` identifier.
-pub fn did_to_public_key_bytes(did: &str) -> Result<[u8; 32], DidError> {
+/// Convert an Ed25519 public key to a `did:key` identifier.
+/// Multicodec prefix for Ed25519 public key: 0xed01
+pub fn public_key_to_did(key: &VerifyingKey) -> String {
+    public_key_to_did_for_algorithm(&key.to_bytes(), SignatureAlgorithm::Ed25519)
+}
+
+/// Extract public key bytes and detected algorithm from a `did:key` identifier.
+pub fn did_to_public_key_bytes_with_algorithm(
+    did: &str,
+) -> Result<(Vec<u8>, SignatureAlgorithm), DidError> {
     let z_part = did
         .strip_prefix("did:key:z")
         .ok_or_else(|| DidError::InvalidDid(did.to_string()))?;
     let decoded = bs58::decode(z_part)
         .into_vec()
         .map_err(|e| DidError::InvalidDid(e.to_string()))?;
-    if decoded.len() != 34 || decoded[0] != 0xed || decoded[1] != 0x01 {
-        return Err(DidError::InvalidDid("invalid multicodec prefix".into()));
+    if decoded.len() < 2 {
+        return Err(DidError::InvalidDid(
+            "too short for multicodec prefix".into(),
+        ));
     }
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&decoded[2..]);
-    Ok(bytes)
+    let algorithm = SignatureAlgorithm::from_multicodec_prefix(&decoded[..2]).ok_or_else(|| {
+        DidError::UnsupportedAlgorithm(format!(
+            "unrecognized multicodec prefix: 0x{:02x}{:02x}",
+            decoded[0], decoded[1]
+        ))
+    })?;
+    let expected_len = 2 + algorithm.public_key_size();
+    if decoded.len() != expected_len {
+        return Err(DidError::InvalidDid(format!(
+            "expected {} bytes for {}, got {}",
+            expected_len,
+            algorithm,
+            decoded.len()
+        )));
+    }
+    Ok((decoded[2..].to_vec(), algorithm))
+}
+
+/// Extract public key bytes from a `did:key` identifier (Ed25519 only).
+pub fn did_to_public_key_bytes(did: &str) -> Result<[u8; 32], DidError> {
+    let (bytes, alg) = did_to_public_key_bytes_with_algorithm(did)?;
+    if alg != SignatureAlgorithm::Ed25519 {
+        return Err(DidError::UnsupportedAlgorithm(format!(
+            "expected Ed25519, got {}",
+            alg
+        )));
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
 }
 
 /// Extract a VerifyingKey from a `did:key` identifier.
@@ -127,5 +167,31 @@ mod tests {
         let kp = PrincipalKeypair::generate();
         let sig = kp.sign(b"correct message");
         assert!(kp.verify(b"wrong message", &sig).is_err());
+    }
+
+    #[test]
+    fn algorithm_aware_did_roundtrip() {
+        let kp = PrincipalKeypair::generate();
+        let did = public_key_to_did_for_algorithm(
+            &kp.public_key_bytes(),
+            SignatureAlgorithm::Ed25519,
+        );
+        assert_eq!(did, kp.did());
+
+        let (bytes, alg) = did_to_public_key_bytes_with_algorithm(&did).unwrap();
+        assert_eq!(alg, SignatureAlgorithm::Ed25519);
+        assert_eq!(bytes.as_slice(), &kp.public_key_bytes());
+    }
+
+    #[test]
+    fn unrecognized_multicodec_prefix_rejected() {
+        // Fabricate a did:key with an unknown multicodec prefix
+        let mut prefixed = vec![0x12, 0x00]; // not Ed25519
+        prefixed.extend_from_slice(&[0u8; 32]);
+        let encoded = bs58::encode(&prefixed).into_string();
+        let did = format!("did:key:z{encoded}");
+
+        let result = did_to_public_key_bytes_with_algorithm(&did);
+        assert!(matches!(result, Err(DidError::UnsupportedAlgorithm(_))));
     }
 }
