@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Added
+
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
