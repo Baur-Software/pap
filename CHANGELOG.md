@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Changed
+
+- **ci**: Hardened benchmark regression gate — tightened threshold from 20% to 10%, added artifact-based baseline storage with 90-day retention so PRs compare against the latest main baseline instead of a stale committed file, added benchmark summary PR comments via `actions/github-script`, and improved `check_regression.sh` with `--baseline`/`--output` flags and proper argument parsing
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
