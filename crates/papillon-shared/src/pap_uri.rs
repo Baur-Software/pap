@@ -18,6 +18,16 @@ pub enum ResolvedUri {
     Registry(String),
     /// Natural-language intent derived from a special authority.
     LocalIntent(String),
+    /// `pap+https://` translated to its underlying `https://` endpoint.
+    ///
+    /// The caller must connect via `AgentClient` (or `RemoteAgentHandler`)
+    /// and run the full 6-phase PAP handshake before proceeding.
+    HttpsEndpoint(String),
+    /// `pap+wss://` translated to its underlying `wss://` endpoint.
+    ///
+    /// The caller must connect via `WsAgentClient` (or `WsRemoteAgentHandler`)
+    /// and run the full 6-phase PAP handshake before proceeding.
+    WssEndpoint(String),
 }
 
 /// Resolution failure.
@@ -25,8 +35,6 @@ pub enum ResolvedUri {
 pub enum PapUriError {
     /// Agent-rendered link tried to activate a special authority.
     Reserved,
-    /// `pap+https://` or `pap+wss://` enforcement is not built in v1.0.
-    RecaptureDeferred,
     /// Catalog miss — no agent with this name in the local catalog.
     NotFound(String),
     /// URI could not be parsed.
@@ -40,8 +48,14 @@ pub fn resolve_pap_uri(
     catalog: &HashMap<String, String>,
     origin: LinkOrigin,
 ) -> Result<ResolvedUri, PapUriError> {
-    if uri.starts_with("pap+https://") || uri.starts_with("pap+wss://") {
-        return Err(PapUriError::RecaptureDeferred);
+    // pap+https:// — inject PAP handshake before the underlying HTTPS request.
+    if let Some(rest) = uri.strip_prefix("pap+https://") {
+        return Ok(ResolvedUri::HttpsEndpoint(format!("https://{}", rest)));
+    }
+
+    // pap+wss:// — wrap WebSocket upgrade with PAP negotiation.
+    if let Some(rest) = uri.strip_prefix("pap+wss://") {
+        return Ok(ResolvedUri::WssEndpoint(format!("wss://{}", rest)));
     }
 
     let rest = uri
@@ -297,25 +311,72 @@ mod tests {
     }
 
     #[test]
-    fn recapture_https_deferred() {
-        let err = resolve_pap_uri(
+    fn pap_https_activates_to_https_endpoint() {
+        let r = resolve_pap_uri(
             "pap+https://api.example.com/agents/flights/BuyAction",
             &empty(),
             LinkOrigin::Principal,
         )
-        .unwrap_err();
-        assert_eq!(err, PapUriError::RecaptureDeferred);
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::HttpsEndpoint("https://api.example.com/agents/flights/BuyAction".into())
+        );
     }
 
     #[test]
-    fn recapture_wss_deferred() {
-        let err = resolve_pap_uri(
+    fn pap_wss_activates_to_wss_endpoint() {
+        let r = resolve_pap_uri(
             "pap+wss://stream.example.com/agents/feed/ListenAction",
             &empty(),
             LinkOrigin::Principal,
         )
-        .unwrap_err();
-        assert_eq!(err, PapUriError::RecaptureDeferred);
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::WssEndpoint("wss://stream.example.com/agents/feed/ListenAction".into())
+        );
+    }
+
+    #[test]
+    fn pap_https_preserves_port_and_path() {
+        let r = resolve_pap_uri(
+            "pap+https://127.0.0.1:8443/session",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::HttpsEndpoint("https://127.0.0.1:8443/session".into())
+        );
+    }
+
+    #[test]
+    fn pap_wss_preserves_port_and_path() {
+        let r = resolve_pap_uri(
+            "pap+wss://127.0.0.1:9443/ws",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::WssEndpoint("wss://127.0.0.1:9443/ws".into())
+        );
+    }
+
+    #[test]
+    fn pap_https_agent_origin_also_activates() {
+        // pap+https:// from an agent-rendered link activates the same way;
+        // the PAP handshake enforces scope at the protocol level.
+        let r = resolve_pap_uri(
+            "pap+https://api.example.com/agents/search/SearchAction",
+            &empty(),
+            LinkOrigin::Agent,
+        )
+        .unwrap();
+        assert!(matches!(r, ResolvedUri::HttpsEndpoint(_)));
     }
 
     #[test]

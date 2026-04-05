@@ -1,0 +1,110 @@
+name: "Bug: Papillon"
+description: Something is broken in the Papillon desktop reference implementation
+title: "[Papillon] "
+labels: ["bug", "papillon"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Papillon** is the desktop reference implementation — a Tauri/Leptos canvas for composing and executing agents under mandate-scoped sessions. Before filing, check that your issue isn't a protocol question (use Discussions) or a security vulnerability (use the private advisory form).
+
+  - type: input
+    id: version
+    attributes:
+      label: Papillon version
+      description: From the About screen or `git rev-parse --short HEAD` if building from source
+      placeholder: "e.g. 0.4.2 or abc1234"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (x86_64)
+        - Linux (aarch64)
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of Papillon is misbehaving?
+      options:
+        - Canvas — agent node composition or wiring
+        - Session lifecycle — open, decay, or close
+        - Mandate delegation — scope, TTL, or chain verification
+        - WebAuthn ceremony — device-bound identity or signing
+        - LLM execution — model loading, inference, or streaming
+        - pap:// / pap+https:// / pap+wss:// deep-link handling
+        - Receipt co-signing or verification
+        - UI / rendering
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug. What did you see vs. what did you expect?
+      placeholder: "The canvas froze after the mandate TTL expired. I expected the session to transition to ReadOnly decay state, but instead…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, reproducible steps. Include the exact agent configuration if relevant.
+      placeholder: |
+        1. Open Papillon and create a new canvas
+        2. Add a DuckDuckGo search agent node
+        3. Issue a mandate with TTL = 10 seconds
+        4. Wait for TTL expiry
+        5. Observe…
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error output or logs
+      description: Paste relevant output from the Papillon console, `~/.local/share/papillon/logs/`, or the Tauri dev console. Redact any sensitive values.
+      render: text
+
+  - type: checkboxes
+    id: protocol-invariant
+    attributes:
+      label: Protocol invariant check
+      description: Does this bug violate a PAP protocol invariant?
+      options:
+        - label: Mandate scope was exceeded (agent did something outside the granted mandate)
+        - label: Session DID was linked to principal identity
+        - label: Receipt contained a property value instead of a reference
+        - label: Delegation exceeded parent scope or TTL
+        - label: Decay state did not progress correctly (Active → Degraded → ReadOnly → Suspended)
+        - label: Not a protocol invariant — this is a UI / UX / performance issue
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I am not reporting a security vulnerability (use the private advisory form)
+          required: true
