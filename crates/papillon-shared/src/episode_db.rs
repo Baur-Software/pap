@@ -135,7 +135,7 @@ impl EpisodeDb {
     ///
     /// The parent directory must already exist.
     pub fn open(path: &Path) -> Result<Self> {
-        let conn = Connection::open(path).map_err(|e| EpisodeDbError::Sqlite(e))?;
+        let conn = Connection::open(path).map_err(EpisodeDbError::Sqlite)?;
         let db = Self {
             conn: Mutex::new(conn),
         };
