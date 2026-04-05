@@ -9,3 +9,4 @@ pub mod pipeline;
 pub mod profiles;
 pub mod registry;
 pub mod templates;
+pub mod webauthn;

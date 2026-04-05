@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
@@ -15,6 +17,119 @@ use crate::state::AppState;
 use papillon_shared::{BlockEvent, BlockState, CanvasBlock};
 
 use super::orchestrator::hash_agent_did;
+
+// ── Canvas State Types ─────────────────────────────────────────────────────
+
+/// A synthesized summary of a single completed agent interaction episode.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpisodeSummary {
+    /// Ephemeral session DID (first 16 chars of receipt_session_id for display).
+    pub session_did: String,
+    /// Agent DID hash (privacy-safe — never raw DID).
+    pub agent_did: String,
+    /// Human-readable agent name.
+    pub agent_name: String,
+    /// Schema.org action type exercised, e.g. "schema:SearchAction".
+    pub action: String,
+    /// Episode outcome: "success", "failure", or "rejected".
+    pub outcome: String,
+    /// ISO-8601 timestamp of when the episode was recorded.
+    pub timestamp: String,
+    /// SHA-256 hash of the receipt session ID — used as a stable identity.
+    pub receipt_hash: String,
+    /// Optional human-readable summary of the agent's intent.
+    pub intent_summary: Option<String>,
+}
+
+/// Synthesized canvas state returned to the frontend for outcome rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasSummaryState {
+    /// Principal DID — the root of trust for this session.
+    pub principal_did: String,
+    /// All completed episode summaries, most recent first.
+    pub episodes: Vec<EpisodeSummary>,
+    /// Count of episodes in "success" outcome.
+    pub success_count: u32,
+    /// Count of episodes in "failure" or "rejected" outcome.
+    pub failure_count: u32,
+    /// Count of distinct session IDs currently active (episodes with no result yet).
+    /// In the in-memory model this is always 0; future SQLite integration will populate it.
+    pub active_sessions: u32,
+}
+
+/// Retrieve the current canvas outcome state.
+///
+/// Reads completed episodes from the persistent episode store and synthesises
+/// a `CanvasSummaryState` for the frontend outcome timeline.  All data is
+/// derived from the encrypted-at-rest SQLite DB — no in-memory session state
+/// is required.
+#[tauri::command]
+pub fn get_canvas_state(state: State<'_, AppState>) -> Result<CanvasSummaryState, PapillonError> {
+    // Get principal DID from the current signer
+    let principal_did = {
+        let signer = state
+            .signer
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        match signer.as_ref() {
+            Some(s) => s.did(),
+            None => "did:key:unknown".to_string(),
+        }
+    };
+
+    // Load up to 100 most recent episodes from the persistent store
+    let raw_episodes = state
+        .db
+        .list_episodes(None, None, 100, Some(0))
+        .map_err(|e| PapillonError::from(e.0))?;
+
+    let mut success_count: u32 = 0;
+    let mut failure_count: u32 = 0;
+
+    let episodes: Vec<EpisodeSummary> = raw_episodes
+        .iter()
+        .map(|ep| {
+            // Derive a display-safe session identifier (first 16 chars)
+            let session_did = if ep.receipt_session_id.len() > 16 {
+                ep.receipt_session_id[..16].to_string()
+            } else {
+                ep.receipt_session_id.clone()
+            };
+
+            // Compute a stable receipt hash from the session ID
+            let mut hasher = Sha256::new();
+            hasher.update(ep.receipt_session_id.as_bytes());
+            let receipt_hash = format!("{:x}", hasher.finalize());
+            // Truncate to first 16 hex chars for display
+            let receipt_hash = receipt_hash[..16].to_string();
+
+            if ep.outcome == "success" {
+                success_count += 1;
+            } else {
+                failure_count += 1;
+            }
+
+            EpisodeSummary {
+                session_did,
+                agent_did: ep.agent_did_hash.clone(),
+                agent_name: ep.agent_name.clone(),
+                action: ep.action_type.clone(),
+                outcome: ep.outcome.clone(),
+                timestamp: ep.recorded_at.clone(),
+                receipt_hash,
+                intent_summary: ep.intent_summary.clone(),
+            }
+        })
+        .collect();
+
+    Ok(CanvasSummaryState {
+        principal_did,
+        episodes,
+        success_count,
+        failure_count,
+        active_sessions: 0,
+    })
+}
 
 /// Detect intent from a user prompt.
 /// Returns (action_type, preferred_agent_name, cleaned_query).
