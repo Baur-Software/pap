@@ -1,6 +1,51 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Changed
+
+- **papillon-extension**: Hardened Content Security Policy from 2 directives to 9 — added `default-src 'none'` deny-by-default baseline, explicit `style-src`, `font-src`, `img-src`, `connect-src`, `base-uri`, and `form-action` directives. Extension pages can no longer load unauthorized resource types.
+- **papillon-extension**: Replaced `Function()` constructor (eval-equivalent) in WASM loader with CSP-compliant `import(/* @vite-ignore */)` dynamic import. No `unsafe-eval` needed.
+- **papillon-extension**: Firefox manifest CSP now derived from Chrome manifest instead of hardcoded duplicate, keeping both in sync automatically.
+
+### Fixed
+
+- **papillon-extension**: Replaced `innerHTML = ""` with `replaceChildren()` at three call sites in handshake UI, aligning with the codebase's "never innerHTML" security policy.
+
+### Added
+
+- **pap-python**: Native `async/await` support for all 6 `AgentClient` transport methods — `present_token_async`, `exchange_did_async`, `send_disclosures_async`, `request_execution_async`, `exchange_receipt_async`, `close_session_async`. Python users can now `await` PAP protocol calls without blocking the asyncio event loop
+- **pap-python**: PyO3 `experimental-async` feature enabled for direct Python coroutine compilation from Rust `async fn`
+- **pap-python**: 23-test async test suite covering method existence, awaitable verification, connection error handling, `asyncio.gather` concurrency, and sync backward compatibility
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
+
+### Fixed
+
+- **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
+- **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
+
+### Changed
+
+- **pap-python**: `AgentClient.inner` wrapped in `Arc` for safe sharing across async task boundaries — sync methods unchanged (auto-deref)
+- **pap-python**: Added `pytest-asyncio>=0.23` to test dependencies
+
+## [0.7.2.1] - 2026-04-05
+
+### Changed
+
+- **docs**: Expanded CONTRIBUTING.md with comprehensive development environment setup guide — prerequisites (Rust, system libs, optional tooling), quick start commands, project structure tour, per-subsystem test instructions (Rust, Python, Java, E2E), example runner commands, browser extension build steps, CI pipeline table with local reproduction commands, branch naming and conventional commit conventions
+- **ci**: Hardened benchmark regression gate — tightened threshold from 20% to 10%, added artifact-based baseline storage with 90-day retention so PRs compare against the latest main baseline instead of a stale committed file, added benchmark summary PR comments via `actions/github-script`, and improved `check_regression.sh` with `--baseline`/`--output` flags and proper argument parsing
+- **ci**: Added zero-value guard in `check_regression.sh` — a Criterion parse failure that yields 0 now fails the gate instead of silently passing
+- **ci**: Baseline update on main push now runs even if the regression check fails, preventing a single noisy benchmark from permanently jamming the CI gate
+
 ## [0.7.1] - 2026-04-04
+
+### Added
+
+- **pap-c**: C FFI marketplace query API — `PapMarketplaceClient` opaque handle wrapping `MarketplaceRegistry`, `PapAgentList` typed result set with index-based accessors (`pap_agent_list_get_did`, `pap_agent_list_get_name`), JSON-based `pap_marketplace_query` dispatching to `query_by_action` or `query_satisfiable` based on `available_properties` presence, and `pap_last_error` alias for error retrieval
+- **pap-c**: 11 unit tests covering client lifecycle, query dispatch, disclosure filtering, out-of-bounds safety, null-pointer guards, invalid JSON rejection, and unsigned advertisement rejection
 
 ### Changed
 

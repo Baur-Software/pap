@@ -30,7 +30,7 @@ async function loadWasm(): Promise<PapWasm> {
   // Dynamic import with a runtime URL bypasses TS module resolution —
   // the type safety comes from src/wasm.d.ts.
   const wasmJsUrl = chrome.runtime.getURL("wasm/pap_wasm.js");
-  const mod = await (Function("url", "return import(url)")(wasmJsUrl) as Promise<PapWasm>);
+  const mod = await (import(/* @vite-ignore */ wasmJsUrl) as Promise<PapWasm>);
   await mod.default(chrome.runtime.getURL("wasm/pap_wasm_bg.wasm"));
   wasm = mod;
   return mod;
