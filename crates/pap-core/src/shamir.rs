@@ -630,7 +630,7 @@ mod tests {
     #[test]
     fn tampered_shard_bytes_detected() {
         let seed = make_seed();
-        let (mut shards, _) = create_shards(&seed, 2, 3).unwrap();
+        let (shards, _) = create_shards(&seed, 2, 3).unwrap();
 
         // Tamper with the shard_bytes field of the first shard.
         let mut bad = shards[0].clone();
