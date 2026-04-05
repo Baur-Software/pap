@@ -1043,12 +1043,21 @@ class AgentClient:
     """HTTP client for an initiating PAP agent.
 
     Drives the six-phase handshake by posting protocol messages to a
-    receiving agent's HTTP server. All methods are synchronous in Python.
+    receiving agent's HTTP server. Each phase is available as both a
+    synchronous method (e.g. ``present_token``) and an async/awaitable
+    method (e.g. ``present_token_async``) for use with ``asyncio``.
 
-    Example::
+    Example (sync)::
 
         client = AgentClient("http://localhost:8080")
         response = client.present_token(token)  # returns JSON string
+        data = json.loads(response)
+        session_id = data["session_id"]
+
+    Example (async)::
+
+        client = AgentClient("http://localhost:8080")
+        response = await client.present_token_async(token)
         data = json.loads(response)
         session_id = data["session_id"]
     """
@@ -1130,6 +1139,95 @@ class AgentClient:
 
     def close_session(self, session_id: str) -> str:
         """Phase 6 — Close the session.
+
+        Returns:
+            JSON string confirmation.
+
+        Raises:
+            PapTransportError: on connection failure or invalid response.
+        """
+        ...
+
+    async def present_token_async(self, token: CapabilityToken) -> str:
+        """Phase 1 — Present a capability token (async).
+
+        Equivalent to ``present_token``, for use with ``asyncio``.
+
+        Returns:
+            JSON string. On success: ``{"type": "TokenAccepted",
+            "session_id": "...", "receiver_session_did": "..."}``
+
+        Raises:
+            PapTransportError: on connection failure or invalid response.
+        """
+        ...
+
+    async def exchange_did_async(
+        self, session_id: str, initiator_session_did: str
+    ) -> str:
+        """Phase 2 — Send the initiator's ephemeral session DID (async).
+
+        Equivalent to ``exchange_did``, for use with ``asyncio``.
+
+        Returns:
+            JSON string acknowledgement.
+
+        Raises:
+            PapTransportError: on connection failure or invalid response.
+        """
+        ...
+
+    async def send_disclosures_async(
+        self, session_id: str, disclosures: list[Disclosure]
+    ) -> str:
+        """Phase 3 — Send selective disclosures (async).
+
+        Equivalent to ``send_disclosures``, for use with ``asyncio``.
+
+        Args:
+            session_id: session identifier from phase 1
+            disclosures: list of ``Disclosure`` objects, or ``[]`` for zero-disclosure
+
+        Returns:
+            JSON string acknowledgement.
+
+        Raises:
+            PapTransportError: on connection failure or invalid response.
+        """
+        ...
+
+    async def request_execution_async(self, session_id: str) -> str:
+        """Phase 4 — Request execution (async).
+
+        Equivalent to ``request_execution``, for use with ``asyncio``.
+
+        Returns:
+            JSON string with execution result.
+
+        Raises:
+            PapTransportError: on connection failure or invalid response.
+        """
+        ...
+
+    async def exchange_receipt_async(
+        self, session_id: str, receipt: TransactionReceipt
+    ) -> str:
+        """Phase 5 — Send receipt for co-signing (async).
+
+        Equivalent to ``exchange_receipt``, for use with ``asyncio``.
+
+        Returns:
+            JSON string with co-signed receipt.
+
+        Raises:
+            PapTransportError: on connection failure or invalid response.
+        """
+        ...
+
+    async def close_session_async(self, session_id: str) -> str:
+        """Phase 6 — Close the session (async).
+
+        Equivalent to ``close_session``, for use with ``asyncio``.
 
         Returns:
             JSON string confirmation.

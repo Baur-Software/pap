@@ -2,7 +2,7 @@
 
 ## [0.7.2] - 2026-04-04
 
-### Added
+### Changed
 
 - **pap-python**: You now get full IDE autocomplete and type checking out of the box — mypy, pyright, and Pylance discover the package's type stubs automatically via PEP 561 (`py.typed` marker)
 - **pap-python**: `__init__.pyi` re-exports all 22 public symbols so autocomplete works at the `pap` package level (not just `pap._pap`)
@@ -10,12 +10,28 @@
 - **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
 - **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
 - **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
+- **papillon-extension**: Hardened Content Security Policy from 2 directives to 9 — added `default-src 'none'` deny-by-default baseline, explicit `style-src`, `font-src`, `img-src`, `connect-src`, `base-uri`, and `form-action` directives. Extension pages can no longer load unauthorized resource types.
+- **papillon-extension**: Replaced `Function()` constructor (eval-equivalent) in WASM loader with CSP-compliant `import(/* @vite-ignore */)` dynamic import. No `unsafe-eval` needed.
+- **papillon-extension**: Firefox manifest CSP now derived from Chrome manifest instead of hardcoded duplicate, keeping both in sync automatically.
+- **pap-python**: `AgentClient.inner` wrapped in `Arc` for safe sharing across async task boundaries — sync methods unchanged (auto-deref)
+- **pap-python**: Added `pytest-asyncio>=0.23` to test dependencies
 
 ### Fixed
 
+- **pap-agents**: Hardened `is_safe_url` SSRF validation against userinfo bypass — URLs with `user:pass@host` syntax previously bypassed host extraction, allowing requests to private/internal IPs. Also validates expanded URLs after `{query}` template substitution (defense in depth), rejects empty hosts, and documents DNS rebinding as a known limitation requiring network-layer controls.
+- **papillon-extension**: Replaced `innerHTML = ""` with `replaceChildren()` at three call sites in handshake UI, aligning with the codebase's "never innerHTML" security policy.
 - **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
 - **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
 
+### Added
+
+- **pap-agents**: 10 new security-focused unit tests covering userinfo bypass, 0.0.0.0, file/data/javascript schemes, empty string, malformed URLs, IPv6 unique local, template variable safety, and octal IPv4 notation.
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
+- **pap-python**: Native `async/await` support for all 6 `AgentClient` transport methods — `present_token_async`, `exchange_did_async`, `send_disclosures_async`, `request_execution_async`, `exchange_receipt_async`, `close_session_async`. Python users can now `await` PAP protocol calls without blocking the asyncio event loop
+- **pap-python**: PyO3 `experimental-async` feature enabled for direct Python coroutine compilation from Rust `async fn`
+- **pap-python**: 23-test async test suite covering method existence, awaitable verification, connection error handling, `asyncio.gather` concurrency, and sync backward compatibility
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
 ## [0.7.2.1] - 2026-04-05
 
 ### Changed
