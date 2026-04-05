@@ -1,17 +1,12 @@
-//! E2E tests: `pap+https://` and `pap+wss://` URI scheme handshakes.
+//! E2E tests: PAP handshakes over HTTP and WebSocket transports.
 //!
-//! Verifies the full activation path:
-//!   1. `resolve_pap_uri` now activates these schemes instead of deferring.
-//!   2. The resolved endpoint URL drives a complete 6-phase PAP handshake.
+//! Tests the full 6-phase PAP protocol handshake using plain loopback
+//! connections (no TLS). In production, `reqwest`/`tokio-tungstenite`
+//! perform a TLS handshake first, but the PAP protocol phases are identical.
 //!
-//! **TLS note**: TLS termination is the platform's responsibility (Tauri
-//! secure context, reverse proxy, etc.). These tests use loopback plaintext
-//! connections so they are self-contained and fast, while still proving the
-//! protocol behavior is identical to the production HTTPS/WSS path.
-//! The only difference in production is that `reqwest`/`tokio-tungstenite`
-//! perform a TLS handshake before the PAP phases begin.
+//! pap+https:// and pap+wss:// URI resolution is tested in papillon-shared's
+//! own test suite (crates/papillon-shared/src/pap_uri.rs).
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
@@ -21,7 +16,6 @@ use pap_proto::ProtocolMessage;
 use pap_transport::{
     AgentClient, AgentHandler, AgentServer, TransportError, WsAgentClient, WsAgentServer,
 };
-use papillon_shared::{resolve_pap_uri, LinkOrigin, ResolvedUri};
 
 // ── Shared test handler ──────────────────────────────────────────────────────
 
@@ -66,80 +60,13 @@ impl AgentHandler for TestHandler {
     }
 }
 
-// ── URI resolution tests ─────────────────────────────────────────────────────
-
-#[test]
-fn pap_https_uri_resolves_to_https_endpoint() {
-    let uri = "pap+https://api.example.com/agents/flights/BuyAction";
-    let result = resolve_pap_uri(uri, &HashMap::new(), LinkOrigin::Principal).unwrap();
-    assert_eq!(
-        result,
-        ResolvedUri::HttpsEndpoint("https://api.example.com/agents/flights/BuyAction".into())
-    );
-}
-
-#[test]
-fn pap_wss_uri_resolves_to_wss_endpoint() {
-    let uri = "pap+wss://stream.example.com/agents/feed/ListenAction";
-    let result = resolve_pap_uri(uri, &HashMap::new(), LinkOrigin::Principal).unwrap();
-    assert_eq!(
-        result,
-        ResolvedUri::WssEndpoint("wss://stream.example.com/agents/feed/ListenAction".into())
-    );
-}
-
-#[test]
-fn pap_https_preserves_port_query_fragment() {
-    let uri = "pap+https://agent.example.com:8443/v1/session?hint=search";
-    let result = resolve_pap_uri(uri, &HashMap::new(), LinkOrigin::Principal).unwrap();
-    assert_eq!(
-        result,
-        ResolvedUri::HttpsEndpoint("https://agent.example.com:8443/v1/session?hint=search".into())
-    );
-}
-
-#[test]
-fn pap_wss_preserves_port_and_path() {
-    let uri = "pap+wss://127.0.0.1:9443/ws/agent";
-    let result = resolve_pap_uri(uri, &HashMap::new(), LinkOrigin::Principal).unwrap();
-    assert_eq!(
-        result,
-        ResolvedUri::WssEndpoint("wss://127.0.0.1:9443/ws/agent".into())
-    );
-}
-
-#[test]
-fn pap_https_activates_from_agent_origin() {
-    // Agent-origin pap+https:// links activate; the PAP handshake enforces
-    // scope at the protocol level — there is no reserved-authority gate.
-    let result = resolve_pap_uri(
-        "pap+https://api.example.com/agents/search",
-        &HashMap::new(),
-        LinkOrigin::Agent,
-    )
-    .unwrap();
-    assert!(
-        matches!(result, ResolvedUri::HttpsEndpoint(_)),
-        "Expected HttpsEndpoint, got: {result:?}"
-    );
-}
-
 // ── E2E handshake tests ──────────────────────────────────────────────────────
+// URI scheme resolution (pap+https:// → https://, pap+wss:// → wss://)
+// is tested in crates/papillon-shared/src/pap_uri.rs.
 
-/// Strip the scheme prefix for loopback tests.
-///
-/// `resolve_pap_uri` correctly returns `https://` / `wss://`; for loopback
-/// test servers that run without TLS we swap to `http://` / `ws://`.  The
-/// protocol behavior (all 6 phases) is identical in both cases.
-fn loopback_url(resolved: ResolvedUri) -> String {
-    match resolved {
-        ResolvedUri::HttpsEndpoint(url) => url.replacen("https://", "http://", 1),
-        ResolvedUri::WssEndpoint(url) => url.replacen("wss://", "ws://", 1),
-        other => panic!("Expected recapture endpoint, got: {other:?}"),
-    }
-}
-
-/// `pap+https://` — full 6-phase handshake via HTTP transport.
+/// Full 6-phase PAP handshake via HTTP transport.
+/// Simulates what happens after pap+https:// is resolved to an https:// endpoint
+/// and the loopback URL is derived from it (without TLS for test speed).
 #[tokio::test]
 async fn pap_https_scheme_full_six_phase_handshake() {
     // ── 1. Bind server on an OS-assigned port ────────────────────────────
@@ -154,17 +81,9 @@ async fn pap_https_scheme_full_six_phase_handshake() {
         let _ = axum::serve(listener, router).await;
     });
 
-    // ── 2. Resolve pap+https:// URI — must succeed (not deferred) ───────
-    let pap_uri = format!("pap+https://127.0.0.1:{}", port);
-    let resolved = resolve_pap_uri(&pap_uri, &HashMap::new(), LinkOrigin::Principal).unwrap();
-
-    assert!(
-        matches!(resolved, ResolvedUri::HttpsEndpoint(_)),
-        "Expected HttpsEndpoint, got: {resolved:?}"
-    );
-
-    // ── 3. Connect via AgentClient using the loopback-adjusted URL ───────
-    let endpoint = loopback_url(resolved);
+    // ── 2. Build loopback endpoint (pap+https:// resolves to https://,
+    //        which for loopback testing uses http:// to avoid TLS setup) ────
+    let endpoint = format!("http://127.0.0.1:{}", port);
     let client = AgentClient::new(&endpoint);
 
     // ── Phase 1: Token presentation ──────────────────────────────────────
@@ -263,17 +182,9 @@ async fn pap_wss_scheme_full_six_phase_handshake() {
         let _ = server.serve(listener).await;
     });
 
-    // ── 2. Resolve pap+wss:// URI — must succeed (not deferred) ─────────
-    let pap_uri = format!("pap+wss://127.0.0.1:{}", port);
-    let resolved = resolve_pap_uri(&pap_uri, &HashMap::new(), LinkOrigin::Principal).unwrap();
-
-    assert!(
-        matches!(resolved, ResolvedUri::WssEndpoint(_)),
-        "Expected WssEndpoint, got: {resolved:?}"
-    );
-
-    // ── 3. Connect via WsAgentClient using the loopback-adjusted URL ─────
-    let endpoint = loopback_url(resolved);
+    // ── 2. Build loopback endpoint (pap+wss:// resolves to wss://,
+    //        which for loopback testing uses ws:// to avoid TLS setup) ──────
+    let endpoint = format!("ws://127.0.0.1:{}", port);
     let mut client = WsAgentClient::connect_plain(&endpoint).await.unwrap();
 
     // ── Phase 1: Token presentation ──────────────────────────────────────
