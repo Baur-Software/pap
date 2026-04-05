@@ -159,6 +159,7 @@ pub fn run() {
             commands::agents::generate_agent,
             commands::agents::publish_agent,
             commands::agents::unpublish_agent,
+            commands::canvas::get_canvas_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");
