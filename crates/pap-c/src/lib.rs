@@ -790,7 +790,10 @@ pub unsafe extern "C" fn pap_mandate_sign(
 ) -> c_int {
     let m = mut_or_err!(m);
     let kp = ref_or_err!(kp);
-    m.inner.sign(kp.inner.signing_key());
+    if let Err(e) = m.inner.sign(kp.inner.signing_key()) {
+        set_last_error(&e.to_string());
+        return -1;
+    }
     0
 }
 
@@ -1089,7 +1092,10 @@ pub unsafe extern "C" fn pap_token_sign(
 ) -> c_int {
     let t = mut_or_err!(t);
     let kp = ref_or_err!(kp);
-    t.inner.sign(kp.inner.signing_key());
+    if let Err(e) = t.inner.sign(kp.inner.signing_key()) {
+        set_last_error(&e.to_string());
+        return -1;
+    }
     0
 }
 
@@ -1512,7 +1518,10 @@ pub unsafe extern "C" fn pap_advertisement_sign(
 ) -> c_int {
     let a = mut_or_err!(a);
     let kp = ref_or_err!(kp);
-    a.inner.sign(kp.inner.signing_key());
+    if let Err(e) = a.inner.sign(kp.inner.signing_key()) {
+        set_last_error(&e.to_string());
+        return -1;
+    }
     0
 }
 

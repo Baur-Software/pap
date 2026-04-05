@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -71,11 +72,12 @@ impl VerifiableCredential {
 
     /// Sign the credential with the issuer's key.
     pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey, verification_method: &str) {
+        let algorithm = SignatureAlgorithm::Ed25519;
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.proof = Some(CredentialProof {
-            proof_type: "Ed25519Signature2020".into(),
+            proof_type: algorithm.proof_type().into(),
             created: Utc::now(),
             verification_method: verification_method.to_string(),
             proof_purpose: "assertionMethod".into(),
@@ -146,8 +148,9 @@ mod tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    #[test]
-    fn vc_sign_verify() {
+    /// Parameterized VC sign/verify test body.
+    fn vc_sign_verify_for_algorithm(algorithm: SignatureAlgorithm) {
+        assert_eq!(algorithm, SignatureAlgorithm::Ed25519);
         let key = SigningKey::generate(&mut OsRng);
         let did = pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
             .unwrap()
@@ -166,7 +169,13 @@ mod tests {
         );
 
         vc.sign(&key, &key_id);
+        assert!(vc.proof.as_ref().unwrap().proof_type == algorithm.proof_type());
         assert!(vc.verify(&key.verifying_key()).is_ok());
+    }
+
+    #[test]
+    fn vc_sign_verify() {
+        vc_sign_verify_for_algorithm(SignatureAlgorithm::Ed25519);
     }
 
     #[test]

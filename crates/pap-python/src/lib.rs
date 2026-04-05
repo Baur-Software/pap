@@ -557,13 +557,17 @@ impl Mandate {
     }
 
     /// Sign this mandate with the issuer's keypair.
-    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) {
-        self.inner.sign(keypair.inner.signing_key());
+    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) -> PyResult<()> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Sign this mandate with an ephemeral session keypair (for delegated mandates).
-    fn sign_with_session_key(&mut self, keypair: PyRef<SessionKeypair>) {
-        self.inner.sign(keypair.inner.signing_key());
+    fn sign_with_session_key(&mut self, keypair: PyRef<SessionKeypair>) -> PyResult<()> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Verify this mandate's signature using the issuer's public key bytes.
@@ -789,13 +793,17 @@ impl CapabilityToken {
     }
 
     /// Sign the token with the issuer's keypair.
-    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) {
-        self.inner.sign(keypair.inner.signing_key());
+    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) -> PyResult<()> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Sign the token with an ephemeral session keypair.
-    fn sign_with_session_key(&mut self, keypair: PyRef<SessionKeypair>) {
-        self.inner.sign(keypair.inner.signing_key());
+    fn sign_with_session_key(&mut self, keypair: PyRef<SessionKeypair>) -> PyResult<()> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Verify the token's signature using the issuer's public key bytes.
@@ -1176,8 +1184,10 @@ impl SelectiveDisclosureJwt {
     }
 
     /// Sign the SD-JWT with the issuer's keypair.
-    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) {
-        self.inner.sign(keypair.inner.signing_key());
+    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) -> PyResult<()> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Verify the SD-JWT signature using the issuer's public key bytes.
@@ -1284,8 +1294,10 @@ impl AgentAdvertisement {
     }
 
     /// Sign the advertisement with the operator's keypair.
-    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) {
-        self.inner.sign(keypair.inner.signing_key());
+    fn sign(&mut self, keypair: PyRef<PrincipalKeypair>) -> PyResult<()> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(|e| PapSignatureError::new_err(e.to_string()))
     }
 
     /// Verify the advertisement's signature using the operator's public key bytes.

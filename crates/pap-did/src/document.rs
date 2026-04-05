@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::algorithm::SignatureAlgorithm;
 use crate::PrincipalKeypair;
 
 /// W3C DID Document (DID Core 1.0) for a `did:key` identifier.
@@ -23,6 +24,10 @@ pub struct VerificationMethod {
     pub controller: String,
     #[serde(rename = "publicKeyMultibase")]
     pub public_key_multibase: String,
+    /// The signature algorithm for this verification method.
+    /// Defaults to Ed25519 for backward compatibility with PAP v1.0 documents.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
 }
 
 impl DidDocument {
@@ -44,9 +49,10 @@ impl DidDocument {
             id: did.clone(),
             verification_method: vec![VerificationMethod {
                 id: key_id.clone(),
-                key_type: "Ed25519VerificationKey2020".into(),
+                key_type: SignatureAlgorithm::Ed25519.verification_key_type().into(),
                 controller: did,
                 public_key_multibase: multibase,
+                algorithm: SignatureAlgorithm::Ed25519,
             }],
             authentication: vec![key_id],
         }
@@ -102,6 +108,37 @@ mod tests {
         let json = DidDocument::from_keypair(&kp).to_json();
         assert!(!json.contains("\"name\""));
         assert!(!json.contains("\"email\""));
+    }
+
+    #[test]
+    fn verification_method_algorithm_field() {
+        let kp = PrincipalKeypair::generate();
+        let doc = DidDocument::from_keypair(&kp);
+        assert_eq!(
+            doc.verification_method[0].algorithm,
+            SignatureAlgorithm::Ed25519
+        );
+    }
+
+    #[test]
+    fn did_document_without_algorithm_field_deserializes() {
+        // Simulate a v1.0 document that lacks the algorithm field
+        let json = r#"{
+            "@context": "https://www.w3.org/ns/did/v1",
+            "id": "did:key:ztest",
+            "verificationMethod": [{
+                "id": "did:key:ztest#key-1",
+                "type": "Ed25519VerificationKey2020",
+                "controller": "did:key:ztest",
+                "publicKeyMultibase": "z1234"
+            }],
+            "authentication": ["did:key:ztest#key-1"]
+        }"#;
+        let doc = DidDocument::from_json(json).unwrap();
+        assert_eq!(
+            doc.verification_method[0].algorithm,
+            SignatureAlgorithm::Ed25519
+        );
     }
 
     #[test]

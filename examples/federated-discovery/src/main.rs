@@ -40,7 +40,7 @@ fn make_signed_ad(
         requires_disclosure,
         vec!["schema:SearchResult".into()],
     );
-    ad.sign(&key);
+    ad.sign(&key).expect("Ed25519 is always supported");
     (ad, key)
 }
 

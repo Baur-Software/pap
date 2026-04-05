@@ -43,7 +43,7 @@ fn end_to_end_session_flow_with_receipt() {
         DisclosureSet::empty(),
         Utc::now() + Duration::hours(24),
     );
-    root_mandate.sign(&principal_key);
+    root_mandate.sign(&principal_key).unwrap();
     assert!(root_mandate.verify(&principal_key.verifying_key()).is_ok());
 
     // Delegate to agent
@@ -55,7 +55,7 @@ fn end_to_end_session_flow_with_receipt() {
             Utc::now() + Duration::hours(12),
         )
         .unwrap();
-    agent_mandate.sign(&principal_key);
+    agent_mandate.sign(&principal_key).unwrap();
 
     // Capability token
     let mut token = CapabilityToken::mint(
@@ -64,7 +64,7 @@ fn end_to_end_session_flow_with_receipt() {
         orchestrator_did.clone(),
         Utc::now() + Duration::hours(1),
     );
-    token.sign(&orchestrator_key);
+    token.sign(&orchestrator_key).unwrap();
 
     // Session: initiate -> open -> execute -> close
     let mut session =
@@ -129,7 +129,7 @@ fn mandate_chain_three_levels() {
         DisclosureSet::empty(),
         Utc::now() + Duration::hours(48),
     );
-    root.sign(&principal_key);
+    root.sign(&principal_key).unwrap();
 
     // Level 1: delegate to agent1
     let agent1_scope = Scope::new(vec![ScopeAction::new("schema:SearchAction")]);
@@ -141,7 +141,7 @@ fn mandate_chain_three_levels() {
             Utc::now() + Duration::hours(24),
         )
         .unwrap();
-    level1.sign(&orchestrator_key);
+    level1.sign(&orchestrator_key).unwrap();
 
     // Level 2: agent1 delegates to agent2
     let mut level2 = level1
@@ -152,7 +152,7 @@ fn mandate_chain_three_levels() {
             Utc::now() + Duration::hours(12),
         )
         .unwrap();
-    level2.sign(&agent1_key);
+    level2.sign(&agent1_key).unwrap();
 
     // Verify chain
     use pap_core::mandate::MandateChain;
@@ -259,7 +259,7 @@ fn session_nonce_replay_prevention() {
         issuer_did,
         Utc::now() + Duration::hours(1),
     );
-    token.sign(&issuer_key);
+    token.sign(&issuer_key).unwrap();
 
     // First use: succeeds
     let session1 = Session::initiate(&token, &target_did, &issuer_key.verifying_key());
@@ -341,7 +341,7 @@ fn receipt_zero_disclosure_transaction() {
         issuer_did,
         Utc::now() + Duration::hours(1),
     );
-    token.sign(&issuer_key);
+    token.sign(&issuer_key).unwrap();
 
     let mut session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -387,7 +387,7 @@ fn mandate_payment_proof_attachment() {
 
     // Attach typed payment proof (ecash commitment)
     mandate.payment_proof = Some(PaymentProof::ecash(b"blind-signed-token-XYZ123"));
-    mandate.sign(&principal_key);
+    mandate.sign(&principal_key).unwrap();
 
     assert!(mandate.payment_proof.is_some());
     assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
@@ -415,7 +415,7 @@ fn lightning_payment_proof_end_to_end() {
     .with_payment_proof(proof);
 
     assert!(root_mandate.validate_payment_proof().is_ok());
-    root_mandate.sign(&principal_key);
+    root_mandate.sign(&principal_key).unwrap();
     assert!(root_mandate.verify(&principal_key.verifying_key()).is_ok());
 
     // Capability token for payment action
@@ -425,7 +425,7 @@ fn lightning_payment_proof_end_to_end() {
         orchestrator_did.clone(),
         Utc::now() + Duration::hours(1),
     );
-    token.sign(&orchestrator_key);
+    token.sign(&orchestrator_key).unwrap();
 
     // Session: initiate -> open -> execute
     let mut session =
@@ -487,7 +487,7 @@ fn ecash_payment_proof_end_to_end() {
     .with_payment_proof(proof);
 
     assert!(mandate.validate_payment_proof().is_ok());
-    mandate.sign(&principal_key);
+    mandate.sign(&principal_key).unwrap();
     assert!(mandate.verify(&principal_key.verifying_key()).is_ok());
 
     // Verify the commitment
@@ -542,7 +542,7 @@ fn receipt_missing_commitment_for_pay_action_rejected() {
         Utc::now() + Duration::hours(24),
     )
     .with_payment_proof(PaymentProof::lightning(b"payment-hash"));
-    mandate.sign(&principal_key);
+    mandate.sign(&principal_key).unwrap();
 
     let mut token = CapabilityToken::mint(
         agent_did.clone(),
@@ -550,7 +550,7 @@ fn receipt_missing_commitment_for_pay_action_rejected() {
         orchestrator_did,
         Utc::now() + Duration::hours(1),
     );
-    token.sign(&orchestrator_key);
+    token.sign(&orchestrator_key).unwrap();
 
     let mut session =
         Session::initiate(&token, &agent_did, &orchestrator_key.verifying_key()).unwrap();
@@ -607,7 +607,7 @@ fn payment_proof_serialization_in_mandate() {
         Utc::now() + Duration::hours(24),
     )
     .with_payment_proof(proof);
-    mandate.sign(&principal_key);
+    mandate.sign(&principal_key).unwrap();
 
     let json = serde_json::to_string(&mandate).unwrap();
     let mandate2: Mandate = serde_json::from_str(&json).unwrap();
@@ -646,7 +646,7 @@ fn social_recovery_2_of_3_simulation() {
         ],
     )
     .unwrap();
-    recovery_mandate.sign(&principal_key);
+    recovery_mandate.sign(&principal_key).unwrap();
 
     // Verify the recovery mandate is valid
     assert!(recovery_mandate
@@ -729,7 +729,7 @@ fn social_recovery_2_of_3_simulation() {
     assert_eq!(revocation.new_principal_did, new_principal_did);
 
     // New principal signs the revocation (proves possession of new key)
-    revocation.sign(&new_principal_key);
+    revocation.sign(&new_principal_key).unwrap();
     assert!(revocation
         .verify(&new_principal_key.verifying_key())
         .is_ok());
@@ -758,7 +758,7 @@ fn social_recovery_below_threshold_rejected() {
         ],
     )
     .unwrap();
-    mandate.sign(&principal_key);
+    mandate.sign(&principal_key).unwrap();
 
     let request =
         RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
@@ -798,7 +798,7 @@ fn social_recovery_outsider_notary_rejected() {
     let outsider_did = did_from_key(&outsider_key);
 
     let mut mandate = RecoveryMandate::new(principal_did.clone(), 1, vec![notary1_did]).unwrap();
-    mandate.sign(&principal_key);
+    mandate.sign(&principal_key).unwrap();
 
     let request =
         RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());

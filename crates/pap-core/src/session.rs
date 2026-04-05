@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -83,6 +84,9 @@ pub struct CapabilityToken {
     pub issued_at: DateTime<Utc>,
     /// Expiry timestamp
     pub expires_at: DateTime<Utc>,
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
     /// Signature by the issuer (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -104,17 +108,25 @@ impl CapabilityToken {
             issuer_did,
             issued_at: Utc::now(),
             expires_at: ttl,
+            algorithm: SignatureAlgorithm::default(),
             signature: None,
         }
     }
 
     /// Sign the token with the issuer's key.
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), PapError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(PapError::UnsupportedAlgorithm(format!(
+                "{:?}",
+                self.algorithm
+            )));
+        }
         let bytes = self.canonical_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify the token's signature.
@@ -359,8 +371,9 @@ mod tests {
             .did()
     }
 
-    #[test]
-    fn capability_token_mint_sign_verify() {
+    /// Parameterized token sign/verify test body.
+    fn token_sign_verify_for_algorithm(algorithm: SignatureAlgorithm) {
+        assert_eq!(algorithm, SignatureAlgorithm::Ed25519);
         let issuer_key = make_keypair();
         let issuer_did = did_from_key(&issuer_key);
         let target_did = "did:key:ztarget".to_string();
@@ -371,12 +384,18 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
+        assert_eq!(token.algorithm, algorithm);
 
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
         let consumed = HashSet::new();
         assert!(token
             .verify(&target_did, &issuer_key.verifying_key(), &consumed)
             .is_ok());
+    }
+
+    #[test]
+    fn capability_token_mint_sign_verify() {
+        token_sign_verify_for_algorithm(SignatureAlgorithm::Ed25519);
     }
 
     #[test]
@@ -431,7 +450,7 @@ mod tests {
         let mut t2 = t1.clone();
 
         // Sign t1 via internal method
-        t1.sign(&issuer_key);
+        t1.sign(&issuer_key).unwrap();
         // Sign t2 via external method
         let bytes = t2.signable_bytes();
         let sig = issuer_key.sign(&bytes);
@@ -465,7 +484,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let consumed = HashSet::new();
         assert!(matches!(
@@ -490,7 +509,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut consumed = HashSet::new();
         consumed.insert(token.nonce.clone());
@@ -512,7 +531,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
@@ -542,7 +561,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let nonce = token.nonce.clone();
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
@@ -561,7 +580,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
@@ -581,7 +600,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let _session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -601,7 +620,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -629,7 +648,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -655,7 +674,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -687,7 +706,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let session = Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();
 
@@ -717,7 +736,7 @@ mod tests {
             issuer_did,
             Utc::now() + Duration::hours(1),
         );
-        token.sign(&issuer_key);
+        token.sign(&issuer_key).unwrap();
 
         let mut session =
             Session::initiate(&token, &target_did, &issuer_key.verifying_key()).unwrap();

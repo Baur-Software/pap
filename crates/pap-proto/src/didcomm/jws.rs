@@ -6,6 +6,7 @@
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 
 use crate::error::ProtoError;
 
@@ -18,10 +19,11 @@ use super::types::{DIDCommPlaintext, DIDCommSigned, JwsProtectedHeader, JwsSigna
 pub fn sign_plaintext(
     plaintext: &DIDCommPlaintext,
     signing_key: &SigningKey,
+    algorithm: SignatureAlgorithm,
 ) -> Result<DIDCommSigned, ProtoError> {
     let header = JwsProtectedHeader {
         typ: "application/didcomm-signed+json".into(),
-        alg: "EdDSA".into(),
+        alg: algorithm.jws_alg().into(),
     };
 
     let header_json =
@@ -59,18 +61,21 @@ pub fn verify_signed(
         .first()
         .ok_or_else(|| ProtoError::DIDCommError("no signatures present".into()))?;
 
-    // Verify the protected header declares EdDSA
+    // Verify the protected header declares a supported algorithm
     let header_bytes = URL_SAFE_NO_PAD
         .decode(&sig_entry.protected_header)
         .map_err(|e| ProtoError::DIDCommError(format!("invalid header encoding: {e}")))?;
     let header: JwsProtectedHeader = serde_json::from_slice(&header_bytes)
         .map_err(|e| ProtoError::DIDCommError(format!("invalid header JSON: {e}")))?;
-    if header.alg != "EdDSA" {
-        return Err(ProtoError::DIDCommError(format!(
-            "unsupported JWS algorithm: {}",
-            header.alg
-        )));
-    }
+    // TODO: dispatch verification on algorithm when multi-alg lands
+    let _algorithm = match header.alg.as_str() {
+        "EdDSA" => SignatureAlgorithm::Ed25519,
+        other => {
+            return Err(ProtoError::DIDCommError(format!(
+                "unsupported JWS algorithm: {other}"
+            )))
+        }
+    };
 
     // Reconstruct signing input and verify
     let signing_input = format!("{}.{}", sig_entry.protected_header, signed.payload);

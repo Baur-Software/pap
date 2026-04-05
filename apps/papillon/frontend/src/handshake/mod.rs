@@ -98,7 +98,7 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
             principal_did.clone(),
             ttl,
         );
-        token.sign(principal_kp.signing_key());
+        token.sign(principal_kp.signing_key()).expect("Ed25519 is always supported");
 
         let resp = client.present_token(token).await.map_err(|e| {
             on_fail(1, &e.to_string());
@@ -148,7 +148,7 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
             disclosure_set.clone(),
             ttl,
         );
-        mandate.sign(principal_kp.signing_key());
+        mandate.sign(principal_kp.signing_key()).expect("Ed25519 is always supported");
 
         let initiator_kp = SessionKeypair::generate();
         let initiator_did = initiator_kp.did();
@@ -254,7 +254,7 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
         // Receipt token is signed with a fresh ephemeral signer for session
         // bookkeeping, not a fresh delegation.
         let receipt_signer = SessionKeypair::generate();
-        receipt_token.sign(receipt_signer.signing_key());
+        receipt_token.sign(receipt_signer.signing_key()).expect("Ed25519 is always supported");
         // Session::initiate verifies the token signature, so we must pass the
         // key that signed it (receipt_signer), not the principal key (which was
         // dropped after Phase 2 for security). The receipt token is for session

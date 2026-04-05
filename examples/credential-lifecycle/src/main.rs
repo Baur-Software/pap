@@ -111,7 +111,9 @@ fn main() {
     claims.insert("schema:telephone".into(), serde_json::json!("+1-555-0199"));
 
     let mut sd_jwt = SelectiveDisclosureJwt::new(holder_did.clone(), claims);
-    sd_jwt.sign(&holder_key);
+    sd_jwt
+        .sign(&holder_key)
+        .expect("Ed25519 is always supported");
 
     let mut claim_keys = sd_jwt.claim_keys();
     claim_keys.sort();
@@ -236,7 +238,9 @@ fn main() {
     vc_claims.insert("agent_did".into(), serde_json::json!(agent_did));
 
     let mut vc_sd_jwt = SelectiveDisclosureJwt::new(issuer_did.clone(), vc_claims);
-    vc_sd_jwt.sign(&issuer_key);
+    vc_sd_jwt
+        .sign(&issuer_key)
+        .expect("Ed25519 is always supported");
 
     // Agent only needs scope — budget and agent DID stay hidden
     let scope_only = vc_sd_jwt.disclose(&["scope"]).unwrap();

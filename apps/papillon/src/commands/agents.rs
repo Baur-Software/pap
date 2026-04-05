@@ -145,7 +145,8 @@ pub async fn save_agent(
             def.requires_disclosure.clone(),
             def.returns.clone(),
         );
-        ad.sign(kp_sign.signing_key());
+        ad.sign(kp_sign.signing_key())
+            .expect("Ed25519 is always supported");
 
         let mut reg = state
             .local_registry

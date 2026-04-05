@@ -16,4 +16,7 @@ pub enum MarketplaceError {
 
     #[error("serialization error: {0}")]
     Serialization(String),
+
+    #[error("unsupported signature algorithm: {0}")]
+    UnsupportedAlgorithm(String),
 }

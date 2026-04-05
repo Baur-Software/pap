@@ -360,8 +360,10 @@ impl Mandate {
     }
 
     /// Sign the mandate with the issuer's keypair.
-    pub fn sign(&mut self, keypair: &PrincipalKeypair) {
-        self.inner.sign(keypair.inner.signing_key());
+    pub fn sign(&mut self, keypair: &PrincipalKeypair) -> Result<(), JsError> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(to_js_err)
     }
 
     /// Get the canonical bytes to be signed externally (e.g., by SubtleCrypto).
@@ -537,8 +539,10 @@ impl CapabilityToken {
     }
 
     /// Sign the token with the issuer's keypair.
-    pub fn sign(&mut self, keypair: &PrincipalKeypair) {
-        self.inner.sign(keypair.inner.signing_key());
+    pub fn sign(&mut self, keypair: &PrincipalKeypair) -> Result<(), JsError> {
+        self.inner
+            .sign(keypair.inner.signing_key())
+            .map_err(to_js_err)
     }
 
     /// Get the canonical bytes to be signed externally (e.g., by SubtleCrypto).

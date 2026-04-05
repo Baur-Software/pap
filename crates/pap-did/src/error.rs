@@ -13,4 +13,7 @@ pub enum DidError {
 
     #[error("serialization error: {0}")]
     Serialization(String),
+
+    #[error("unsupported algorithm: {0}")]
+    UnsupportedAlgorithm(String),
 }
