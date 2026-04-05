@@ -7,6 +7,13 @@ registry.db
 .playwright-mcp/
 test-results/
 
+# Local planning and tracking (not for upstream)
+docs/plans/follow-up-issues.md
+findings.md
+
+# Fuzz artifacts — corpus/seed/ exclusion is managed by fuzz/.gitignore
+fuzz/artifacts/
+
 # Bundled model weights (too large for git — download during setup)
 *.gguf
 apps/papillon/models/tokenizer.json
