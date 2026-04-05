@@ -237,26 +237,32 @@ impl EpisodeDb {
     pub fn list_episodes(&self, limit: usize) -> Result<Vec<Episode>> {
         let conn = self.lock()?;
 
-        let sql = if limit == 0 {
-            "SELECT id, session_did, agent_did, action, scope_summary,
-                    started_at, completed_at, outcome, receipt_hash, principal_did
-             FROM episodes
-             ORDER BY started_at DESC"
-                .to_string()
+        let mut stmt = if limit == 0 {
+            conn.prepare(
+                "SELECT id, session_did, agent_did, action, scope_summary,
+                        started_at, completed_at, outcome, receipt_hash, principal_did
+                 FROM episodes
+                 ORDER BY started_at DESC",
+            )
+            .map_err(EpisodeDbError::Sqlite)?
         } else {
-            format!(
+            conn.prepare(
                 "SELECT id, session_did, agent_did, action, scope_summary,
                         started_at, completed_at, outcome, receipt_hash, principal_did
                  FROM episodes
                  ORDER BY started_at DESC
-                 LIMIT {limit}"
+                 LIMIT ?1",
             )
+            .map_err(EpisodeDbError::Sqlite)?
         };
 
-        let mut stmt = conn.prepare(&sql).map_err(EpisodeDbError::Sqlite)?;
-        let rows = stmt
-            .query_map([], row_to_episode)
-            .map_err(EpisodeDbError::Sqlite)?;
+        let rows = if limit == 0 {
+            stmt.query_map([], row_to_episode)
+                .map_err(EpisodeDbError::Sqlite)?
+        } else {
+            stmt.query_map(params![limit as i64], row_to_episode)
+                .map_err(EpisodeDbError::Sqlite)?
+        };
 
         rows.collect::<SqlResult<Vec<_>>>()
             .map_err(EpisodeDbError::Sqlite)
