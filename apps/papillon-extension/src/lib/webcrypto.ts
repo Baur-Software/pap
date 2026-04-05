@@ -60,46 +60,50 @@ export async function generateKeypair(): Promise<CryptoKeyPair> {
  *
  * The seed is wrapped in a PKCS#8 DER envelope for import.
  * After import, the raw seed can be discarded — the CryptoKey is opaque.
+ *
+ * @param seed           - 32-byte Ed25519 seed (private scalar input).
+ * @param publicKeyBytes - 32-byte Ed25519 public key corresponding to the seed.
+ *                         Must be derived by the caller (e.g. via WASM) before
+ *                         calling this function so the private key is never
+ *                         imported as extractable.
  */
 export async function importSeed(
-  seed: Uint8Array
+  seed: Uint8Array,
+  publicKeyBytes: Uint8Array
 ): Promise<CryptoKeyPair> {
   if (seed.length !== 32) {
     throw new Error(`Ed25519 seed must be 32 bytes, got ${seed.length}`);
   }
+  if (publicKeyBytes.length !== 32) {
+    throw new Error(
+      `Ed25519 public key must be 32 bytes, got ${publicKeyBytes.length}`
+    );
+  }
 
-  // Build PKCS#8 DER encoding
+  // Build PKCS#8 DER encoding and import private key as NON-extractable.
+  // Private key material must not re-enter the JS heap after this point.
   const pkcs8 = new Uint8Array(ED25519_PKCS8_PREFIX.length + 32);
   pkcs8.set(ED25519_PKCS8_PREFIX);
   pkcs8.set(seed, ED25519_PKCS8_PREFIX.length);
 
-  // Import as extractable temporarily to derive the public key
-  const extractablePrivate = await crypto.subtle.importKey(
-    "pkcs8",
-    pkcs8,
-    "Ed25519",
-    true,
-    ["sign"]
-  );
-
-  // Export as JWK to extract the public component
-  const jwk = await crypto.subtle.exportKey("jwk", extractablePrivate);
-
-  // Re-import private key as non-extractable
   const privateKey = await crypto.subtle.importKey(
     "pkcs8",
     pkcs8,
     "Ed25519",
-    false,
+    false, // NOT extractable — private key material stays opaque
     ["sign"]
   );
 
-  // Import public key from JWK (without private component)
-  const { d: _d, ...publicJwk } = jwk;
-  publicJwk.key_ops = ["verify"];
+  // Build SPKI DER encoding and import the public key from the caller-supplied bytes.
+  // The public key is derived externally (e.g. via WASM ed25519-dalek) so we
+  // never need to export the private key to obtain it.
+  const spki = new Uint8Array(ED25519_SPKI_PREFIX.length + 32);
+  spki.set(ED25519_SPKI_PREFIX);
+  spki.set(publicKeyBytes, ED25519_SPKI_PREFIX.length);
+
   const publicKey = await crypto.subtle.importKey(
-    "jwk",
-    publicJwk,
+    "spki",
+    spki,
     "Ed25519",
     true,
     ["verify"]

@@ -61,10 +61,18 @@ async function maybeMigrateLegacyKey(): Promise<void> {
   const legacySeed = await loadPrincipalKey();
   if (!legacySeed) return;
 
-  // Import into SubtleCrypto
-  const keypair = await importSeed(legacySeed);
+  // Derive the public key bytes from the seed via WASM *before* importing into
+  // SubtleCrypto. This avoids importing the private key as extractable and
+  // exporting it as JWK — which would materialise private key material in the
+  // JS heap. The WASM keypair is freed immediately after public key extraction.
   const sdk = await loadWasm();
-  const rawPub = await exportPublicKeyRaw(keypair.publicKey);
+  const wasmKp = sdk.PrincipalKeypair.fromSecretBytes(legacySeed);
+  const rawPub = wasmKp.publicKeyBytes();
+  wasmKp.free();
+
+  // Import into SubtleCrypto: private key is non-extractable, public key is
+  // constructed from the raw bytes derived above — no JWK round-trip needed.
+  const keypair = await importSeed(legacySeed, rawPub);
   const did = sdk.publicKeyBytesToDid(rawPub);
 
   // Store in IndexedDB
