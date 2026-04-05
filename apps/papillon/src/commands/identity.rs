@@ -4,6 +4,7 @@ use zeroize::Zeroizing;
 
 use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
+use crate::keypair_store::KeypairStore;
 use crate::state::AppState;
 use papillon_shared::{ExportedKey, IdentityInfo, KeyBackupStatus, SuccessorDesignation};
 
@@ -229,4 +230,13 @@ pub fn remove_successor(
         .map_err(|e| PapillonError::from(e.to_string()))?;
     successors.retain(|s| s.successor_did != successor_did);
     Ok(successors.clone())
+}
+
+/// Return the `did:key` DID of the persisted principal keypair.
+///
+/// This DID is stable across app restarts — it is derived from the
+/// Ed25519 seed stored in `{app_data_dir}/principal.key`.
+#[tauri::command]
+pub fn get_principal_did(keypair_store: State<'_, KeypairStore>) -> Result<String, String> {
+    Ok(keypair_store.principal_did())
 }
