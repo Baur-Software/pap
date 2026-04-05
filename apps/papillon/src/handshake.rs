@@ -177,6 +177,11 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             PapillonError::from(e.to_string())
         })?;
 
+    // Capture provenance data before phase 5 partially moves auth fields.
+    // receiver_session_did is the agent's ephemeral session DID for this handshake.
+    let prov_agent_did = auth.receiver_session_did.clone();
+    let prov_issuer_did = auth.principal_did.clone();
+
     // ── Phase 5: Co-sign receipt (session key signs here, then dropped) ──
     on_phase(5, "Co-signing receipt...");
 
@@ -264,6 +269,13 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
             "session_id": session_id_out,
             "co_signatures": sig_count,
             "action": action_type
+        },
+        "provenance": {
+            "agent_did": prov_agent_did,
+            "issuer_did": prov_issuer_did,
+            "disclosed": requires_disclosure,
+            "returns": returns,
+            "decay_state": "Active"
         }
     });
 
