@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-05
+
+### Changed
+
+- **docs**: Expanded CONTRIBUTING.md with comprehensive development environment setup guide — prerequisites (Rust, system libs, optional tooling), quick start commands, project structure tour, per-subsystem test instructions (Rust, Python, Java, E2E), example runner commands, browser extension build steps, CI pipeline table with local reproduction commands, branch naming and conventional commit conventions
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
