@@ -497,7 +497,7 @@ mod tests {
                 vec![],
                 vec!["schema:SearchResult".into()],
             );
-            ad.sign(&key);
+            let _ = ad.sign(&key);
             reg.register_local(ad).unwrap();
         }
 
