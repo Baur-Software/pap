@@ -40,3 +40,6 @@ python-source = "python"
 features = ["pyo3/extension-module"]
 # Stable ABI — one wheel works across CPython 3.8+
 bindings = "pyo3"
+
+[project.optional-dependencies]
+test = ["pytest>=7", "pytest-asyncio>=0.23"]

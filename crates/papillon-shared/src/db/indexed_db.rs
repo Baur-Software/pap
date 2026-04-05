@@ -268,6 +268,14 @@ impl DatabaseOps for IndexedDbDatabase {
         self.inner.search_text(query, limit)
     }
 
+    fn search_episodes(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+        self.inner.search_episodes(query, limit)
+    }
+
+    fn query_by_action(&self, action: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+        self.inner.query_by_action(action, limit)
+    }
+
     fn query_templates(&self, principal_did: Option<&str>) -> Result<Vec<Template>, DbError> {
         self.inner.query_templates(principal_did)
     }

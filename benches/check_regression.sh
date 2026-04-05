@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # check_regression.sh — Compare Criterion benchmark results against baseline.
-# Exits non-zero if any p50 (median) regresses >20% vs baseline.json.
+# Exits non-zero if any p50 (median) regresses >20% vs baseline.
 #
 # Usage:
 #   cargo bench -p pap-bench
-#   bash benches/check_regression.sh [--update-baseline]
+#   bash benches/check_regression.sh [--baseline <path>] [--update-baseline] [--output <path>]
 #
-# With --update-baseline, writes current results back to baseline.json.
+# --baseline <path>     Use an alternative baseline.json (default: benches/baseline.json)
+# --update-baseline     Write current results back to baseline.json
+# --output <path>       Write human-readable results table to a file (for CI PR comments)
+#
 # Requires only bash + awk + sed (no Python, no grep -P).
 
 set -euo pipefail
@@ -14,8 +17,43 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASELINE="$SCRIPT_DIR/baseline.json"
 CRITERION_DIR="target/criterion"
-THRESHOLD=20  # percent
+THRESHOLD=20  # percent — 10% was too tight for CI runner variance (typical variance: 5-15%)
 
+# ── Argument parsing ──────────────────────────────────────────────────
+UPDATE_BASELINE=0
+OUTPUT_FILE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --update-baseline)
+            UPDATE_BASELINE=1
+            shift
+            ;;
+        --baseline)
+            if [ -z "${2:-}" ]; then
+                echo "ERROR: --baseline requires a path argument"
+                exit 1
+            fi
+            BASELINE="$2"
+            shift 2
+            ;;
+        --output)
+            if [ -z "${2:-}" ]; then
+                echo "ERROR: --output requires a path argument"
+                exit 1
+            fi
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        *)
+            echo "ERROR: Unknown argument: $1"
+            echo "Usage: $0 [--baseline <path>] [--update-baseline] [--output <path>]"
+            exit 1
+            ;;
+    esac
+done
+
+# ── Validate inputs ──────────────────────────────────────────────────
 if [ ! -f "$BASELINE" ]; then
     echo "ERROR: baseline.json not found at $BASELINE"
     exit 1
@@ -27,10 +65,30 @@ if [ ! -d "$CRITERION_DIR" ]; then
     exit 1
 fi
 
-UPDATE_BASELINE=0
-if [ "${1:-}" = "--update-baseline" ]; then
-    UPDATE_BASELINE=1
+# ── Output helpers ────────────────────────────────────────────────────
+# Truncate output file if specified
+if [ -n "$OUTPUT_FILE" ]; then
+    : > "$OUTPUT_FILE"
 fi
+
+# Print to stdout and optionally to the output file
+emit() {
+    if [ -n "$OUTPUT_FILE" ]; then
+        printf '%s\n' "$1" | tee -a "$OUTPUT_FILE"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
+emitf() {
+    local formatted
+    formatted=$(printf "$@")
+    if [ -n "$OUTPUT_FILE" ]; then
+        printf '%s\n' "$formatted" | tee -a "$OUTPUT_FILE"
+    else
+        printf '%s\n' "$formatted"
+    fi
+}
 
 FAILED=0
 
@@ -51,14 +109,17 @@ extract_median() {
         | awk -F',' '{printf "%d\n", $1}'
 }
 
-echo "PAP Protocol Benchmark Regression Check"
-echo "========================================"
-echo ""
+# ── Main comparison loop ─────────────────────────────────────────────
+emit "PAP Protocol Benchmark Regression Check"
+emit "========================================"
+emit "Baseline: $BASELINE"
+emit "Threshold: ${THRESHOLD}%"
+emit ""
 
 for NAME in $BENCH_NAMES; do
     ESTIMATES="$CRITERION_DIR/$NAME/new/estimates.json"
     if [ ! -f "$ESTIMATES" ]; then
-        echo "  WARNING: No results for '$NAME' — skipping"
+        emit "  WARNING: No results for '$NAME' — skipping"
         continue
     fi
 
@@ -76,7 +137,14 @@ for NAME in $BENCH_NAMES; do
     ' "$BASELINE")
 
     if [ -z "$CURRENT_NS" ] || [ -z "$BASELINE_NS" ]; then
-        echo "  WARNING: Could not parse values for '$NAME' — skipping"
+        emit "  WARNING: Could not parse values for '$NAME' — skipping"
+        continue
+    fi
+
+    # Guard against parse failures that produce 0 (would silently pass the gate)
+    if [ "$CURRENT_NS" -le 0 ] || [ "$BASELINE_NS" -le 0 ]; then
+        emit "  ERROR: Invalid values for '$NAME' (current=${CURRENT_NS}, baseline=${BASELINE_NS}) — failing"
+        FAILED=1
         continue
     fi
 
@@ -97,10 +165,10 @@ for NAME in $BENCH_NAMES; do
         REGRESSION_DISPLAY="${SIGN}${REG_INT}.${REG_FRAC}"
     fi
 
-    CUR_US=$(awk "BEGIN { printf \"%.1f\", $CURRENT_NS / 1000 }")
-    BASE_US=$(awk "BEGIN { printf \"%.1f\", $BASELINE_NS / 1000 }")
+    CUR_US=$(awk -v ns="$CURRENT_NS" 'BEGIN { printf "%.1f", ns / 1000 }')
+    BASE_US=$(awk -v ns="$BASELINE_NS" 'BEGIN { printf "%.1f", ns / 1000 }')
 
-    # Regression gate: fail if current > baseline * 1.20
+    # Regression gate: fail if current > baseline * (1 + threshold/100)
     LIMIT=$(( BASELINE_NS + BASELINE_NS * THRESHOLD / 100 ))
     if [ "$CURRENT_NS" -gt "$LIMIT" ]; then
         STATUS="FAIL"
@@ -109,12 +177,13 @@ for NAME in $BENCH_NAMES; do
         STATUS="ok"
     fi
 
-    printf "  %-35s %10s µs  (baseline: %s µs, %s%%)  [%s]\n" \
+    emitf "  %-35s %10s µs  (baseline: %s µs, %s%%)  [%s]" \
         "$NAME" "$CUR_US" "$BASE_US" "$REGRESSION_DISPLAY" "$STATUS"
 done
 
-echo ""
+emit ""
 
+# ── Update baseline if requested ─────────────────────────────────────
 if [ "$UPDATE_BASELINE" -eq 1 ]; then
     echo "Updating baseline.json with current results..."
     for NAME in $BENCH_NAMES; do
@@ -137,10 +206,11 @@ if [ "$UPDATE_BASELINE" -eq 1 ]; then
     echo "Baseline updated."
 fi
 
+# ── Exit status ───────────────────────────────────────────────────────
 if [ "$FAILED" -ne 0 ]; then
-    echo "REGRESSION DETECTED: One or more benchmarks regressed >${THRESHOLD}% vs baseline."
+    emit "REGRESSION DETECTED: One or more benchmarks regressed >${THRESHOLD}% vs baseline."
     exit 1
 else
-    echo "All benchmarks within ${THRESHOLD}% of baseline."
+    emit "All benchmarks within ${THRESHOLD}% of baseline."
     exit 0
 fi

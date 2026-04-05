@@ -156,6 +156,51 @@ impl NativeDatabase {
         )
         .map_err(|e| DbError(format!("db default policy: {e}")))?;
 
+        // FTS5 virtual table for full-text search over episode fields.
+        // Uses content= so the FTS index mirrors the episodes table without
+        // duplicating storage.  The trigger pair keeps the index in sync.
+        conn.execute_batch(
+            "
+            CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts
+                USING fts5(
+                    action_type,
+                    intent_summary,
+                    query,
+                    agent_name,
+                    content='episodes',
+                    content_rowid='rowid',
+                    tokenize='unicode61 remove_diacritics 1'
+                );
+
+            -- Populate FTS for any rows that exist before this migration ran.
+            INSERT OR IGNORE INTO episodes_fts(rowid, action_type, intent_summary, query, agent_name)
+                SELECT rowid, action_type, intent_summary, query, agent_name
+                FROM episodes
+                WHERE rowid NOT IN (SELECT rowid FROM episodes_fts);
+
+            CREATE TRIGGER IF NOT EXISTS episodes_fts_ai
+                AFTER INSERT ON episodes BEGIN
+                    INSERT INTO episodes_fts(rowid, action_type, intent_summary, query, agent_name)
+                        VALUES (new.rowid, new.action_type, new.intent_summary, new.query, new.agent_name);
+                END;
+
+            CREATE TRIGGER IF NOT EXISTS episodes_fts_ad
+                AFTER DELETE ON episodes BEGIN
+                    INSERT INTO episodes_fts(episodes_fts, rowid, action_type, intent_summary, query, agent_name)
+                        VALUES ('delete', old.rowid, old.action_type, old.intent_summary, old.query, old.agent_name);
+                END;
+
+            CREATE TRIGGER IF NOT EXISTS episodes_fts_au
+                AFTER UPDATE ON episodes BEGIN
+                    INSERT INTO episodes_fts(episodes_fts, rowid, action_type, intent_summary, query, agent_name)
+                        VALUES ('delete', old.rowid, old.action_type, old.intent_summary, old.query, old.agent_name);
+                    INSERT INTO episodes_fts(rowid, action_type, intent_summary, query, agent_name)
+                        VALUES (new.rowid, new.action_type, new.intent_summary, new.query, new.agent_name);
+                END;
+            ",
+        )
+        .map_err(|e| DbError(format!("db migrate fts5: {e}")))?;
+
         Ok(())
     }
 }
@@ -492,24 +537,39 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+        // Delegate to the FTS5-backed search_episodes for full-text search.
+        self.search_episodes(query, limit)
+    }
+
+    fn search_episodes(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+        // Guard: queries shorter than 3 characters would match nothing useful
+        // (or far too broadly).  Return early to avoid a round-trip.
+        if query.trim().len() < 3 {
+            return Ok(vec![]);
+        }
+
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
 
-        let escaped_query = query.replace('%', "\\%").replace('_', "\\_");
-        let pattern = format!("%{escaped_query}%");
+        // Sanitize the FTS5 query string: strip double-quotes so callers do not
+        // need to worry about FTS5 query syntax injection.
+        let fts_query = query.replace('"', "");
+
         let mut stmt = conn
             .prepare(
-                "SELECT id, receipt_session_id, scenario_id, action_type,
-                    agent_did_hash, agent_name, outcome, outcome_detail,
-                    scope_exercised, disclosure_refs, duration_ms,
-                    decay_state, intent_summary, result_json, query, recorded_at
-             FROM episodes
-             WHERE intent_summary LIKE ?1 ESCAPE '\\' OR query LIKE ?1 ESCAPE '\\'
-             ORDER BY recorded_at DESC LIMIT ?2",
+                "SELECT e.id, e.receipt_session_id, e.scenario_id, e.action_type,
+                        e.agent_did_hash, e.agent_name, e.outcome, e.outcome_detail,
+                        e.scope_exercised, e.disclosure_refs, e.duration_ms,
+                        e.decay_state, e.intent_summary, e.result_json, e.query, e.recorded_at
+                 FROM episodes_fts
+                 JOIN episodes e ON e.rowid = episodes_fts.rowid
+                 WHERE episodes_fts MATCH ?1
+                 ORDER BY rank
+                 LIMIT ?2",
             )
-            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+            .map_err(|e| DbError(format!("db prepare fts: {e}")))?;
 
         let rows = stmt
-            .query_map(params![pattern, limit as i64], |row| {
+            .query_map(params![fts_query, limit as i64], |row| {
                 Ok(Episode {
                     id: row.get(0)?,
                     receipt_session_id: row.get(1)?,
@@ -529,11 +589,57 @@ impl DatabaseOps for NativeDatabase {
                     recorded_at: row.get(15)?,
                 })
             })
-            .map_err(|e| DbError(format!("db query: {e}")))?;
+            .map_err(|e| DbError(format!("db fts query: {e}")))?;
 
         let mut episodes = Vec::new();
         for row in rows {
-            episodes.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+            episodes.push(row.map_err(|e| DbError(format!("db fts row: {e}")))?);
+        }
+        Ok(episodes)
+    }
+
+    fn query_by_action(&self, action: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, receipt_session_id, scenario_id, action_type,
+                        agent_did_hash, agent_name, outcome, outcome_detail,
+                        scope_exercised, disclosure_refs, duration_ms,
+                        decay_state, intent_summary, result_json, query, recorded_at
+                 FROM episodes
+                 WHERE action_type = ?1
+                 ORDER BY recorded_at DESC
+                 LIMIT ?2",
+            )
+            .map_err(|e| DbError(format!("db prepare action: {e}")))?;
+
+        let rows = stmt
+            .query_map(params![action, limit as i64], |row| {
+                Ok(Episode {
+                    id: row.get(0)?,
+                    receipt_session_id: row.get(1)?,
+                    scenario_id: row.get(2)?,
+                    action_type: row.get(3)?,
+                    agent_did_hash: row.get(4)?,
+                    agent_name: row.get(5)?,
+                    outcome: row.get(6)?,
+                    outcome_detail: row.get(7)?,
+                    scope_exercised: row.get(8)?,
+                    disclosure_refs: row.get(9)?,
+                    duration_ms: row.get(10)?,
+                    decay_state: row.get(11)?,
+                    intent_summary: row.get(12)?,
+                    result_json: row.get(13)?,
+                    query: row.get(14)?,
+                    recorded_at: row.get(15)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db action query: {e}")))?;
+
+        let mut episodes = Vec::new();
+        for row in rows {
+            episodes.push(row.map_err(|e| DbError(format!("db action row: {e}")))?);
         }
         Ok(episodes)
     }
@@ -1698,5 +1804,125 @@ mod tests {
             loaded[0].template_config.fields.len(),
             template.template_config.fields.len()
         );
+    }
+
+    // ── FTS5 search_episodes ──────────────────────────────────────────────
+
+    #[test]
+    fn fts5_search_finds_by_query_field() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        // The sample episode has query = "rust sqlite"
+        let results = db.search_episodes("sqlite", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "ep-1");
+    }
+
+    #[test]
+    fn fts5_search_finds_by_intent_summary() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        // The sample episode has intent_summary = "Search for rust sqlite"
+        let results = db.search_episodes("rust", 10).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn fts5_search_finds_by_agent_name() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        // The sample episode has agent_name = "DuckDuckGo Search"
+        let results = db.search_episodes("DuckDuckGo", 10).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn fts5_search_no_match_returns_empty() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        let results = db.search_episodes("nonexistentterm12345", 10).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn fts5_search_limit_respected() {
+        let db = test_db();
+        for i in 0..5 {
+            db.insert_episode(&sample_episode(&format!("ep-{i}")))
+                .unwrap();
+        }
+
+        let results = db.search_episodes("sqlite", 3).unwrap();
+        assert!(results.len() <= 3);
+    }
+
+    #[test]
+    fn fts5_search_text_delegates_to_fts() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        // search_text should produce the same results as search_episodes
+        let via_text = db.search_text("sqlite", 10).unwrap();
+        let via_fts = db.search_episodes("sqlite", 10).unwrap();
+        assert_eq!(via_text.len(), via_fts.len());
+    }
+
+    // ── query_by_action ───────────────────────────────────────────────────
+
+    #[test]
+    fn query_by_action_exact_match() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        // Sample episodes use action_type = "schema:SearchAction"
+        let results = db.query_by_action("schema:SearchAction", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "ep-1");
+    }
+
+    #[test]
+    fn query_by_action_no_match_for_different_action() {
+        let db = test_db();
+        db.insert_episode(&sample_episode("ep-1")).unwrap();
+
+        let results = db.query_by_action("schema:BookAction", 10).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn query_by_action_limit_respected() {
+        let db = test_db();
+        for i in 0..5 {
+            db.insert_episode(&sample_episode(&format!("ep-{i}")))
+                .unwrap();
+        }
+
+        let results = db.query_by_action("schema:SearchAction", 3).unwrap();
+        assert!(results.len() <= 3);
+    }
+
+    #[test]
+    fn query_by_action_ordered_by_recorded_at_desc() {
+        let db = test_db();
+
+        let ep_old = Episode {
+            recorded_at: "2026-01-01T00:00:00Z".to_string(),
+            ..sample_episode("ep-old")
+        };
+        let ep_new = Episode {
+            recorded_at: "2026-06-01T00:00:00Z".to_string(),
+            ..sample_episode("ep-new")
+        };
+        db.insert_episode(&ep_old).unwrap();
+        db.insert_episode(&ep_new).unwrap();
+
+        let results = db.query_by_action("schema:SearchAction", 10).unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, "ep-new");
+        assert_eq!(results[1].id, "ep-old");
     }
 }
