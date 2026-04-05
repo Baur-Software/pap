@@ -15,6 +15,12 @@
 
 ### Changed
 
+- **pap-python**: You now get full IDE autocomplete and type checking out of the box — mypy, pyright, and Pylance discover the package's type stubs automatically via PEP 561 (`py.typed` marker)
+- **pap-python**: `__init__.pyi` re-exports all 22 public symbols so autocomplete works at the `pap` package level (not just `pap._pap`)
+- **pap-python**: Stub validation test suite (`test_stubs.py`) — verifies `.pyi` syntax, `py.typed` presence, and completeness against `__all__`
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
 - **papillon-extension**: Hardened Content Security Policy from 2 directives to 9 — added `default-src 'none'` deny-by-default baseline, explicit `style-src`, `font-src`, `img-src`, `connect-src`, `base-uri`, and `form-action` directives. Extension pages can no longer load unauthorized resource types.
 - **papillon-extension**: Replaced `Function()` constructor (eval-equivalent) in WASM loader with CSP-compliant `import(/* @vite-ignore */)` dynamic import. No `unsafe-eval` needed.
 - **papillon-extension**: Firefox manifest CSP now derived from Chrome manifest instead of hardcoded duplicate, keeping both in sync automatically.

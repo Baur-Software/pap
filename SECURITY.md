@@ -145,7 +145,7 @@ Please include:
 | chrono | 0.4 | ✅ No known CVEs |
 | axum | 0.8 | ✅ Memory-safe HTTP framework |
 | reqwest | 0.12.12 | ✅ Pinned, secure version |
-| **pyo3** | **0.22.6** | **🔴 UPGRADE TO 0.24.1** |
+| pyo3 | 0.24 | ✅ Fixed (upgraded from 0.22.6) |
 | rustls-pemfile | 2.2.0 | ⚠️ Unmaintained (low risk) |
 
 ---
