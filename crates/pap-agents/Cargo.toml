@@ -5,6 +5,12 @@ edition.workspace = true
 license.workspace = true
 description = "Shared PAP agent implementations — reusable across Papillon, Chrysalis, and any PAP node"
 
+[features]
+# Enable on-device inference via Candle (default on for native builds).
+# Disable for WASM targets where candle-core does not compile.
+default = ["candle"]
+candle = ["dep:candle-core", "dep:candle-transformers", "dep:tokenizers"]
+
 [dependencies]
 pap-did = { workspace = true }
 pap-core = { workspace = true }
@@ -21,6 +27,11 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
 thiserror = { workspace = true }
+
+# On-device inference (feature-gated so WASM builds can opt out)
+candle-core = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
 
 [dev-dependencies]
 pap-credential-store = { workspace = true, features = ["testing"] }
