@@ -1536,12 +1536,11 @@ impl AgentClient {
     /// Equivalent to `present_token`, for use with `asyncio`.
     /// Usage: `result = await client.present_token_async(token)`
     async fn present_token_async(&self, token: Py<CapabilityToken>) -> PyResult<String> {
-        let client = Arc::clone(&self.inner);
         let token_inner = Python::with_gil(|py| token.borrow(py).inner.clone());
-        let result = RT
-            .spawn(async move { client.present_token(token_inner).await })
+        let result = self
+            .inner
+            .present_token(token_inner)
             .await
-            .map_err(|e| PapTransportError::new_err(format!("task join error: {e}")))?
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1554,15 +1553,10 @@ impl AgentClient {
         session_id: String,
         initiator_session_did: String,
     ) -> PyResult<String> {
-        let client = Arc::clone(&self.inner);
-        let result = RT
-            .spawn(async move {
-                client
-                    .exchange_did(&session_id, initiator_session_did)
-                    .await
-            })
+        let result = self
+            .inner
+            .exchange_did(&session_id, initiator_session_did)
             .await
-            .map_err(|e| PapTransportError::new_err(format!("task join error: {e}")))?
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1576,7 +1570,6 @@ impl AgentClient {
         session_id: String,
         disclosures: Vec<Py<Disclosure>>,
     ) -> PyResult<String> {
-        let client = Arc::clone(&self.inner);
         let values: Vec<serde_json::Value> = Python::with_gil(|py| {
             disclosures
                 .iter()
@@ -1584,10 +1577,10 @@ impl AgentClient {
                 .collect::<Result<_, _>>()
         })
         .map_err(|e: serde_json::Error| PyValueError::new_err(e.to_string()))?;
-        let result = RT
-            .spawn(async move { client.send_disclosures(&session_id, values).await })
+        let result = self
+            .inner
+            .send_disclosures(&session_id, values)
             .await
-            .map_err(|e| PapTransportError::new_err(format!("task join error: {e}")))?
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1596,11 +1589,10 @@ impl AgentClient {
     ///
     /// Equivalent to `request_execution`, for use with `asyncio`.
     async fn request_execution_async(&self, session_id: String) -> PyResult<String> {
-        let client = Arc::clone(&self.inner);
-        let result = RT
-            .spawn(async move { client.request_execution(&session_id).await })
+        let result = self
+            .inner
+            .request_execution(&session_id)
             .await
-            .map_err(|e| PapTransportError::new_err(format!("task join error: {e}")))?
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1613,12 +1605,11 @@ impl AgentClient {
         session_id: String,
         receipt: Py<TransactionReceipt>,
     ) -> PyResult<String> {
-        let client = Arc::clone(&self.inner);
         let receipt_inner = Python::with_gil(|py| receipt.borrow(py).inner.clone());
-        let result = RT
-            .spawn(async move { client.exchange_receipt(&session_id, receipt_inner).await })
+        let result = self
+            .inner
+            .exchange_receipt(&session_id, receipt_inner)
             .await
-            .map_err(|e| PapTransportError::new_err(format!("task join error: {e}")))?
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1627,11 +1618,10 @@ impl AgentClient {
     ///
     /// Equivalent to `close_session`, for use with `asyncio`.
     async fn close_session_async(&self, session_id: String) -> PyResult<String> {
-        let client = Arc::clone(&self.inner);
-        let result = RT
-            .spawn(async move { client.close_session(&session_id).await })
+        let result = self
+            .inner
+            .close_session(&session_id)
             .await
-            .map_err(|e| PapTransportError::new_err(format!("task join error: {e}")))?
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
