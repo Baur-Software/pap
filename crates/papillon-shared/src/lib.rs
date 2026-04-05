@@ -11,6 +11,9 @@ pub mod db;
 /// Agent profile aggregation from the episode store (native only).
 pub mod agent_profile;
 
+#[cfg(feature = "native")]
+pub mod episode_db;
+
 pub use events::*;
 pub use template_gen::generate_template_from_json_ld;
 pub use types::*;
