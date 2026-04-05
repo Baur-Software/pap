@@ -4912,10 +4912,12 @@ dependencies = [
  "js-sys",
  "pap-core",
  "pap-did",
+ "pap-federation",
  "serde_json",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

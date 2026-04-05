@@ -11,6 +11,13 @@
 //! `pap-transport` (reqwest-based) is excluded from WASM because reqwest
 //! requires a native runtime. The core protocol primitives — keys, mandates,
 //! scopes, sessions, and tokens — are fully available.
+//!
+//! # Federation
+//! `WasmFederationClient` wraps the browser-native `FetchFederationClient`
+//! and lets JavaScript code discover agents via the PAP federation protocol.
+
+pub mod federation;
+pub use federation::*;
 
 use wasm_bindgen::prelude::*;
 
