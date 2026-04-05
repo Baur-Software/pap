@@ -18,7 +18,7 @@ use pap_transport::{AgentHandler, TransportError};
 use serde_json::Value;
 
 use crate::dynamic::{DynamicAgentDef, HttpMethod};
-use crate::llm::LlmProvider;
+use crate::llm::{LlmClient, LlmProvider};
 use crate::session_store::SessionStore;
 
 struct DynamicSession {
@@ -38,6 +38,13 @@ impl DynamicAgentHandler {
             llm_provider,
             sessions: SessionStore::new(),
         }
+    }
+
+    /// Build an [`LlmClient`] from the stored provider for a single
+    /// LLM call.  Cloning `Arc<LlmProvider>` is cheap; the client itself
+    /// is short-lived (used for one inference, then dropped).
+    fn make_llm_client(&self) -> Box<dyn LlmClient> {
+        (*self.llm_provider).clone().into_client()
     }
 }
 
@@ -148,7 +155,10 @@ impl AgentHandler for DynamicAgentHandler {
             }
         }
 
-        let text = call_llm(&self.def.llm_instructions, &query, &self.llm_provider)?;
+        let client = self.make_llm_client();
+        let text = client
+            .complete(&self.def.llm_instructions, &query)
+            .map_err(|e| TransportError::ServerError(format!("llm: {e}")))?;
         Ok(serde_json::json!({
             "@context": "https://schema.org",
             "@type": "Answer",
@@ -203,96 +213,6 @@ pub fn extract_jsonpath(value: &Value, path: &str) -> Option<Value> {
         }
     }
     Some(current)
-}
-
-fn call_llm(system: &str, user: &str, provider: &LlmProvider) -> Result<String, TransportError> {
-    match provider {
-        LlmProvider::None => Err(TransportError::ServerError(
-            "LLM fallback unavailable: no provider configured".into(),
-        )),
-        LlmProvider::BuiltIn { .. } => Err(TransportError::ServerError(
-            "LLM fallback unavailable: BuiltIn provider requires app-layer injection".into(),
-        )),
-        LlmProvider::Ollama { endpoint, model } => {
-            let client = reqwest::blocking::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .map_err(|e| TransportError::ServerError(format!("http client: {e}")))?;
-            let payload = serde_json::json!({
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user}
-                ],
-                "stream": false,
-            });
-            let resp: Value = client
-                .post(format!("{endpoint}/api/chat"))
-                .json(&payload)
-                .send()
-                .map_err(|e| TransportError::ServerError(format!("ollama request: {e}")))?
-                .json()
-                .map_err(|e| TransportError::ServerError(format!("ollama response: {e}")))?;
-            resp["message"]["content"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| {
-                    TransportError::ServerError("ollama: missing message.content".into())
-                })
-        }
-        LlmProvider::Mistral { api_key, model } => call_openai_compatible(
-            "https://api.mistral.ai/v1/chat/completions",
-            api_key,
-            model,
-            system,
-            user,
-        ),
-        LlmProvider::OpenAiCompatible {
-            endpoint,
-            api_key,
-            model,
-        } => call_openai_compatible(
-            &format!("{endpoint}/chat/completions"),
-            api_key,
-            model,
-            system,
-            user,
-        ),
-    }
-}
-
-fn call_openai_compatible(
-    url: &str,
-    api_key: &str,
-    model: &str,
-    system: &str,
-    user: &str,
-) -> Result<String, TransportError> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| TransportError::ServerError(format!("http client: {e}")))?;
-    let payload = serde_json::json!({
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user}
-        ],
-    });
-    let resp: Value = client
-        .post(url)
-        .bearer_auth(api_key)
-        .json(&payload)
-        .send()
-        .map_err(|e| TransportError::ServerError(format!("llm request: {e}")))?
-        .json()
-        .map_err(|e| TransportError::ServerError(format!("llm response: {e}")))?;
-    resp["choices"][0]["message"]["content"]
-        .as_str()
-        .map(String::from)
-        .ok_or_else(|| {
-            TransportError::ServerError("llm: missing choices[0].message.content".into())
-        })
 }
 
 #[cfg(test)]
