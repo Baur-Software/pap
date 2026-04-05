@@ -128,4 +128,79 @@ mod tests {
         let sig = kp.sign(b"correct message");
         assert!(kp.verify(b"wrong message", &sig).is_err());
     }
+
+    #[test]
+    fn all_zero_seed_valid_keypair() {
+        // Ed25519 accepts any 32 bytes as a valid seed (validity by construction).
+        // Verifies PAP's wrapper does not add unnecessary rejection.
+        let kp = PrincipalKeypair::from_bytes(&[0u8; 32]).unwrap();
+        let sig = kp.sign(b"test");
+        assert!(kp.verify(b"test", &sig).is_ok());
+    }
+
+    #[test]
+    fn all_ones_seed_valid_keypair() {
+        // Edge of scalar space — same rationale.
+        let kp = PrincipalKeypair::from_bytes(&[0xff; 32]).unwrap();
+        let sig = kp.sign(b"test");
+        assert!(kp.verify(b"test", &sig).is_ok());
+    }
+
+    #[test]
+    fn deterministic_signatures() {
+        let kp = PrincipalKeypair::from_bytes(&[42u8; 32]).unwrap();
+        let sig1 = kp.sign(b"determinism");
+        let sig2 = kp.sign(b"determinism");
+        assert_eq!(
+            sig1.to_bytes(),
+            sig2.to_bytes(),
+            "Ed25519 is deterministic — same seed + message must produce identical signatures"
+        );
+    }
+
+    #[test]
+    fn did_key_empty_string() {
+        assert!(did_to_public_key_bytes("").is_err());
+    }
+
+    #[test]
+    fn did_key_wrong_prefix() {
+        assert!(did_to_public_key_bytes("did:key:Q123").is_err());
+    }
+
+    #[test]
+    fn did_key_short_payload() {
+        assert!(did_to_public_key_bytes("did:key:z11").is_err());
+    }
+
+    #[test]
+    fn did_key_wrong_multicodec() {
+        let kp = PrincipalKeypair::generate();
+        let mut wrong_prefix = Vec::with_capacity(34);
+        wrong_prefix.push(0xec); // wrong!
+        wrong_prefix.push(0x01);
+        wrong_prefix.extend_from_slice(&kp.public_key_bytes());
+        let encoded = bs58::encode(&wrong_prefix).into_string();
+        let did = format!("did:key:z{encoded}");
+        assert!(did_to_public_key_bytes(&did).is_err());
+    }
+
+    #[test]
+    fn did_key_not_on_curve() {
+        // y=2 in little-endian ([2, 0, ..., 0]) is not on the Ed25519 curve:
+        // x^2 = (4-1)/(4d+1) is a non-residue mod p. VerifyingKey::from_bytes
+        // performs curve membership checks, so verify_key_from_did must reject.
+        let mut not_on_curve = Vec::with_capacity(34);
+        not_on_curve.push(0xed);
+        not_on_curve.push(0x01);
+        let mut bad_point = [0u8; 32];
+        bad_point[0] = 2; // y=2 in little-endian, not on curve
+        not_on_curve.extend_from_slice(&bad_point);
+        let encoded = bs58::encode(&not_on_curve).into_string();
+        let did = format!("did:key:z{encoded}");
+        assert!(
+            verify_key_from_did(&did).is_err(),
+            "DID encoding a point not on the curve must be rejected by verify_key_from_did"
+        );
+    }
 }
