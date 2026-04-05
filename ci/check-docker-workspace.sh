@@ -25,6 +25,7 @@ mapfile -t MEMBERS < <(
 DOCKERFILES=(
     "apps/registry/Dockerfile"
     "apps/papillon/Dockerfile"
+    "e2e/Dockerfile.ci-chrysalis"
 )
 
 errors=0
