@@ -175,9 +175,13 @@ mod tests {
         let messages = vec![
             FederationMessage::QueryByAction {
                 action: "schema:SearchAction".into(),
+                cursor: None,
+                page_size: 100,
             },
             FederationMessage::QueryResponse {
                 advertisements: vec![ad.clone()],
+                next_cursor: None,
+                has_more: false,
             },
             FederationMessage::Announce {
                 advertisement: Box::new(ad),
@@ -829,5 +833,204 @@ mod tests {
 
         let err = FederationError::PeerProbationary("did:key:z1".into());
         assert!(err.to_string().contains("probationary"));
+    }
+
+    // =========================================================================
+    // Pagination tests
+    // =========================================================================
+
+    #[test]
+    fn paginated_query_exact_page_size() {
+        let mut registry = FederatedRegistry::new();
+        for i in 0..3 {
+            let ad = make_signed_ad(&format!("Agent {i}"), "schema:SearchAction");
+            registry.register_local(ad).unwrap();
+        }
+
+        let (ads, next_cursor, has_more) =
+            registry.query_local_paginated("schema:SearchAction", None, 3);
+        assert_eq!(ads.len(), 3);
+        assert!(!has_more);
+        assert!(next_cursor.is_none());
+    }
+
+    #[test]
+    fn paginated_query_multiple_pages() {
+        let mut registry = FederatedRegistry::new();
+        for i in 0..5 {
+            let ad = make_signed_ad(&format!("Agent {i}"), "schema:SearchAction");
+            registry.register_local(ad).unwrap();
+        }
+
+        // First page
+        let (page1, cursor1, has_more1) =
+            registry.query_local_paginated("schema:SearchAction", None, 2);
+        assert_eq!(page1.len(), 2);
+        assert!(has_more1);
+        assert!(cursor1.is_some());
+
+        // Second page
+        let (page2, cursor2, has_more2) =
+            registry.query_local_paginated("schema:SearchAction", cursor1.as_deref(), 2);
+        assert_eq!(page2.len(), 2);
+        assert!(has_more2);
+        assert!(cursor2.is_some());
+
+        // Third page (last)
+        let (page3, cursor3, has_more3) =
+            registry.query_local_paginated("schema:SearchAction", cursor2.as_deref(), 2);
+        assert_eq!(page3.len(), 1);
+        assert!(!has_more3);
+        assert!(cursor3.is_none());
+    }
+
+    #[test]
+    fn paginated_query_cursor_resumes_correctly() {
+        let mut registry = FederatedRegistry::new();
+        for i in 0..4 {
+            let ad = make_signed_ad(&format!("Agent {i}"), "schema:SearchAction");
+            registry.register_local(ad).unwrap();
+        }
+
+        // Get first page
+        let (page1, cursor1, _) = registry.query_local_paginated("schema:SearchAction", None, 2);
+        assert_eq!(page1.len(), 2);
+
+        // Get second page with cursor
+        let (page2, _, _) =
+            registry.query_local_paginated("schema:SearchAction", cursor1.as_deref(), 2);
+        assert_eq!(page2.len(), 2);
+
+        // Verify no overlap: page1 DIDs and page2 DIDs should be disjoint
+        let page1_dids: Vec<&str> = page1.iter().map(|a| a.signed_by.as_str()).collect();
+        let page2_dids: Vec<&str> = page2.iter().map(|a| a.signed_by.as_str()).collect();
+        for did in &page1_dids {
+            assert!(
+                !page2_dids.contains(did),
+                "overlap detected: {did} in both pages"
+            );
+        }
+
+        // Verify ordering: all page1 DIDs < all page2 DIDs
+        for d1 in &page1_dids {
+            for d2 in &page2_dids {
+                assert!(d1 < d2, "expected {d1} < {d2}");
+            }
+        }
+    }
+
+    #[test]
+    fn paginated_query_empty_result() {
+        let registry = FederatedRegistry::new();
+        let (ads, next_cursor, has_more) =
+            registry.query_local_paginated("schema:SearchAction", None, 10);
+        assert!(ads.is_empty());
+        assert!(!has_more);
+        assert!(next_cursor.is_none());
+    }
+
+    #[test]
+    fn paginated_query_no_cursor_returns_first_page() {
+        let mut registry = FederatedRegistry::new();
+        for i in 0..5 {
+            let ad = make_signed_ad(&format!("Agent {i}"), "schema:SearchAction");
+            registry.register_local(ad).unwrap();
+        }
+
+        // Without cursor, should get the first 2 (sorted by DID)
+        let (page, _, has_more) = registry.query_local_paginated("schema:SearchAction", None, 2);
+        assert_eq!(page.len(), 2);
+        assert!(has_more);
+
+        // Verify these are the lexicographically smallest DIDs
+        let all_dids: Vec<String> = {
+            let mut ads: Vec<&AgentAdvertisement> = registry.query_local("schema:SearchAction");
+            ads.sort_by(|a, b| a.signed_by.cmp(&b.signed_by));
+            ads.iter().map(|a| a.signed_by.clone()).collect()
+        };
+        assert_eq!(page[0].signed_by, all_dids[0]);
+        assert_eq!(page[1].signed_by, all_dids[1]);
+    }
+
+    #[test]
+    fn paginated_query_serialization_roundtrip() {
+        let ad = make_signed_ad("Test", "schema:SearchAction");
+
+        // QueryByAction with pagination fields
+        let msg = FederationMessage::QueryByAction {
+            action: "schema:SearchAction".into(),
+            cursor: Some("did:key:zCursor".into()),
+            page_size: 50,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let restored: FederationMessage = serde_json::from_str(&json).unwrap();
+        match restored {
+            FederationMessage::QueryByAction {
+                action,
+                cursor,
+                page_size,
+            } => {
+                assert_eq!(action, "schema:SearchAction");
+                assert_eq!(cursor, Some("did:key:zCursor".into()));
+                assert_eq!(page_size, 50);
+            }
+            _ => panic!("wrong variant"),
+        }
+
+        // QueryResponse with pagination fields
+        let msg = FederationMessage::QueryResponse {
+            advertisements: vec![ad],
+            next_cursor: Some("did:key:zNext".into()),
+            has_more: true,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let restored: FederationMessage = serde_json::from_str(&json).unwrap();
+        match restored {
+            FederationMessage::QueryResponse {
+                advertisements,
+                next_cursor,
+                has_more,
+            } => {
+                assert_eq!(advertisements.len(), 1);
+                assert_eq!(next_cursor, Some("did:key:zNext".into()));
+                assert!(has_more);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn paginated_query_backward_compat_deserialize() {
+        // Old-format QueryByAction (no cursor/page_size) should deserialize
+        let json = r#"{"type":"QueryByAction","action":"schema:SearchAction"}"#;
+        let msg: FederationMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            FederationMessage::QueryByAction {
+                action,
+                cursor,
+                page_size,
+            } => {
+                assert_eq!(action, "schema:SearchAction");
+                assert!(cursor.is_none());
+                assert_eq!(page_size, 100); // default
+            }
+            _ => panic!("wrong variant"),
+        }
+
+        // Old-format QueryResponse (no next_cursor/has_more) should deserialize
+        let json = r#"{"type":"QueryResponse","advertisements":[]}"#;
+        let msg: FederationMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            FederationMessage::QueryResponse {
+                advertisements,
+                next_cursor,
+                has_more,
+            } => {
+                assert!(advertisements.is_empty());
+                assert!(next_cursor.is_none());
+                assert!(!has_more); // default
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 }

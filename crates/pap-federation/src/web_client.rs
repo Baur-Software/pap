@@ -47,11 +47,58 @@ impl FetchFederationClient {
         let msg = fetch_get(&url).await?;
 
         match msg {
-            FederationMessage::QueryResponse { advertisements } => Ok(advertisements),
+            FederationMessage::QueryResponse { advertisements, .. } => Ok(advertisements),
             _ => Err(FederationError::SyncFailed(
                 "unexpected response type".into(),
             )),
         }
+    }
+
+    /// Query a federation endpoint for agents supporting a given action, page by page.
+    ///
+    /// Uses cursor-based pagination. Returns all ads collected across pages.
+    pub async fn sync_action_paginated(
+        endpoint: &str,
+        action: &str,
+        page_size: u32,
+    ) -> Result<Vec<AgentAdvertisement>, FederationError> {
+        let mut all_ads = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let mut url = format!(
+                "{}/federation/query?action={}&page_size={}",
+                endpoint.trim_end_matches('/'),
+                action,
+                page_size,
+            );
+            if let Some(ref c) = cursor {
+                url.push_str(&format!("&cursor={}", c));
+            }
+
+            let msg = fetch_get(&url).await?;
+
+            match msg {
+                FederationMessage::QueryResponse {
+                    advertisements,
+                    next_cursor,
+                    has_more,
+                } => {
+                    all_ads.extend(advertisements);
+                    if !has_more {
+                        break;
+                    }
+                    cursor = next_cursor;
+                }
+                _ => {
+                    return Err(FederationError::SyncFailed(
+                        "unexpected response type".into(),
+                    ))
+                }
+            }
+        }
+
+        Ok(all_ads)
     }
 
     /// Announce a local advertisement to a federation endpoint.

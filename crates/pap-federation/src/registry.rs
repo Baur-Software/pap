@@ -194,6 +194,40 @@ impl FederatedRegistry {
         self.local.query_by_action(action)
     }
 
+    /// Query local registry by action with cursor-based pagination.
+    ///
+    /// Returns (matching_ads, next_cursor, has_more).
+    /// Ads are sorted lexicographically by `signed_by` DID.
+    /// If `cursor` is Some, only ads with DID > cursor are returned.
+    pub fn query_local_paginated(
+        &self,
+        action: &str,
+        cursor: Option<&str>,
+        page_size: usize,
+    ) -> (Vec<&AgentAdvertisement>, Option<String>, bool) {
+        let mut ads: Vec<&AgentAdvertisement> = self.query_local(action);
+
+        // Sort by signed_by DID for stable cursor ordering
+        ads.sort_by(|a, b| a.signed_by.cmp(&b.signed_by));
+
+        // Apply cursor filter: skip ads with DID <= cursor
+        if let Some(cursor) = cursor {
+            ads.retain(|ad| ad.signed_by.as_str() > cursor);
+        }
+
+        // Check if there are more results beyond this page
+        let has_more = ads.len() > page_size;
+        ads.truncate(page_size);
+
+        let next_cursor = if has_more {
+            ads.last().map(|ad| ad.signed_by.clone())
+        } else {
+            None
+        };
+
+        (ads, next_cursor, has_more)
+    }
+
     /// Query local registry by action type + disclosure satisfiability.
     pub fn query_local_satisfiable(
         &self,
