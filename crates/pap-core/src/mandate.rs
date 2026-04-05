@@ -619,7 +619,7 @@ mod tests {
         let mut m2 = m1.clone();
 
         // Sign m1 via the internal method
-        m1.sign(&key);
+        m1.sign(&key).unwrap();
         // Sign m2 via the external method
         let bytes = m2.signable_bytes();
         let sig = key.sign(&bytes);
