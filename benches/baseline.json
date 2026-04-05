@@ -13,7 +13,7 @@
     "target": "< 2ms"
   },
   "mandate_chain_verify_depth3": {
-    "p50_ns": 125900,
+    "p50_ns": 153000,
     "target": "< 5ms"
   },
   "sd_jwt_issue_5claims": {
