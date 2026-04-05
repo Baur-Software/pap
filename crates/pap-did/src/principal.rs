@@ -1,4 +1,4 @@
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 
 use crate::DidError;
@@ -50,9 +50,11 @@ impl PrincipalKeypair {
     }
 
     /// Verify a signature against this keypair's public key.
+    /// Uses strict verification: rejects small-order public keys and R
+    /// components, preventing signature malleability and weak-key forgery.
     pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), DidError> {
         self.verifying_key()
-            .verify(message, signature)
+            .verify_strict(message, signature)
             .map_err(|_| DidError::VerificationFailed)
     }
 }
