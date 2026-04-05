@@ -4995,6 +4995,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
