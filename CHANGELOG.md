@@ -2,6 +2,16 @@
 
 ## [0.7.2] - 2026-04-04
 
+### Changed
+
+- **papillon-extension**: Hardened Content Security Policy from 2 directives to 9 — added `default-src 'none'` deny-by-default baseline, explicit `style-src`, `font-src`, `img-src`, `connect-src`, `base-uri`, and `form-action` directives. Extension pages can no longer load unauthorized resource types.
+- **papillon-extension**: Replaced `Function()` constructor (eval-equivalent) in WASM loader with CSP-compliant `import(/* @vite-ignore */)` dynamic import. No `unsafe-eval` needed.
+- **papillon-extension**: Firefox manifest CSP now derived from Chrome manifest instead of hardcoded duplicate, keeping both in sync automatically.
+
+### Fixed
+
+- **papillon-extension**: Replaced `innerHTML = ""` with `replaceChildren()` at three call sites in handshake UI, aligning with the codebase's "never innerHTML" security policy.
+
 ### Added
 
 - **pap-wasm**: Browser-native transport session (`TransportSession`) that drives the full 6-phase PAP handshake from JavaScript/TypeScript using the Fetch API. State-machine-enforced phase ordering prevents out-of-sequence calls. Auto-generates ephemeral session keypairs, co-signs receipts, and caches execution results. Wire-compatible with the native `AgentClient` (same REST endpoints, same `ProtocolMessage` JSON format).
@@ -9,6 +19,9 @@
 - **pap-wasm**: Server-supplied session ID validation rejects path traversal characters before URL interpolation.
 - **pap-wasm**: 12 wasm-bindgen tests covering state machine construction, phase ordering enforcement, and keypair uniqueness.
 - **pap-wasm**: README with JS/TS usage examples, API reference, and build instructions.
+- **pap-python**: Native `async/await` support for all 6 `AgentClient` transport methods — `present_token_async`, `exchange_did_async`, `send_disclosures_async`, `request_execution_async`, `exchange_receipt_async`, `close_session_async`. Python users can now `await` PAP protocol calls without blocking the asyncio event loop
+- **pap-python**: PyO3 `experimental-async` feature enabled for direct Python coroutine compilation from Rust `async fn`
+- **pap-python**: 23-test async test suite covering method existence, awaitable verification, connection error handling, `asyncio.gather` concurrency, and sync backward compatibility
 - **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
 - **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
 - **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
@@ -17,6 +30,11 @@
 
 - **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
 - **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
+
+### Changed
+
+- **pap-python**: `AgentClient.inner` wrapped in `Arc` for safe sharing across async task boundaries — sync methods unchanged (auto-deref)
+- **pap-python**: Added `pytest-asyncio>=0.23` to test dependencies
 
 ## [0.7.2.1] - 2026-04-05
 
