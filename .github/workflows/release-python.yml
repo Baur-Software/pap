@@ -1,0 +1,214 @@
+name: Release Python SDK
+
+on:
+  push:
+    tags:
+      - "python-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build wheels without publishing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PACKAGE_NAME: pap-protocol
+
+jobs:
+  # ── 1. Validate version ────────────────────────────────────────────────────
+  validate:
+    name: Validate version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract and validate version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#python-v}"
+          else
+            TAG_VERSION="0.0.0-dev"
+          fi
+
+          TOML_VERSION=$(python3 -c "
+          import re
+          with open('crates/pap-python/pyproject.toml') as f:
+              content = f.read()
+          match = re.search(r'^version\s*=\s*\"(.+?)\"', content, re.MULTILINE)
+          print(match.group(1))
+          ")
+
+          echo "Tag version:  ${TAG_VERSION}"
+          echo "TOML version: ${TOML_VERSION}"
+
+          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${TOML_VERSION}" ]]; then
+            echo "::error::Tag version (${TAG_VERSION}) does not match pyproject.toml (${TOML_VERSION})"
+            exit 1
+          fi
+
+          echo "version=${TOML_VERSION}" >> "$GITHUB_OUTPUT"
+
+  # ── 2. Build wheels ────────────────────────────────────────────────────────
+  build-wheels:
+    name: Build wheels (${{ matrix.artifact }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64
+            manylinux: "2_28"
+            artifact: wheels-linux-x86_64
+          - os: ubuntu-latest
+            target: x86_64
+            manylinux: musllinux_1_2
+            artifact: wheels-linux-x86_64-musl
+          - os: ubuntu-latest
+            target: aarch64
+            manylinux: "2_28"
+            artifact: wheels-linux-aarch64
+          - os: macos-latest
+            target: universal2-apple-darwin
+            artifact: wheels-macos-universal2
+          - os: windows-latest
+            target: x64
+            artifact: wheels-windows-x86_64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (Linux aarch64 cross-compile)
+        if: matrix.target == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux || 'auto' }}
+          args: >-
+            --release
+            --out dist
+            --manifest-path crates/pap-python/Cargo.toml
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.whl
+          retention-days: 5
+
+  # ── 3. Build source distribution ───────────────────────────────────────────
+  build-sdist:
+    name: Build sdist
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: >-
+            --out dist
+            --manifest-path crates/pap-python/Cargo.toml
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          retention-days: 5
+
+  # ── 4. Create GitHub Release ───────────────────────────────────────────────
+  create-release:
+    name: GitHub Release
+    needs: [validate, build-wheels, build-sdist]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" crates/pap-python/CHANGELOG.md)
+          echo "${NOTES}" > /tmp/release-notes.md
+
+      - name: Create release
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const notes = fs.readFileSync('/tmp/release-notes.md', 'utf8').trim();
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `python-v${process.env.VERSION}`,
+              name: `Python SDK v${process.env.VERSION}`,
+              body: notes || `See [CHANGELOG](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/crates/pap-python/CHANGELOG.md) for details.`,
+              draft: false,
+              prerelease: false
+            });
+
+      - name: Upload release assets
+        run: |
+          for file in dist/*; do
+            gh release upload "python-v${{ needs.validate.outputs.version }}" "$file" --clobber
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 5. Publish to PyPI ─────────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [validate, build-wheels, build-sdist]
+    if: github.ref_type == 'tag' && !inputs.dry_run
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pap-protocol/${{ needs.validate.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: List artifacts for publishing
+        run: ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
