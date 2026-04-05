@@ -150,6 +150,8 @@ pap/
     pap-wasm/             # WebAssembly bindings (@pap/sdk npm package)
     pap-python/           # Python PyO3 bindings
     papillon-shared/      # Shared models between Papillon frontend and backend
+  packages/
+    pap-ts/               # Pure TypeScript implementation (@pap/core)
   apps/
     registry/             # Hostable federated PAP registry (Axum + Leptos SSR, SQLite/Postgres)
     papillon/             # Desktop reference implementation (Tauri)
@@ -232,6 +234,14 @@ pap/
 
 - PyO3-based Python bindings for all PAP primitives.
 - Full access to DID generation, mandate delegation, and session lifecycle.
+- PEP 561 type stubs (`py.typed` + `__init__.pyi`) for IDE autocomplete and static type checking (mypy, pyright, Pylance).
+
+### @pap/core (packages/pap-ts)
+
+- Pure TypeScript reference implementation — no WASM, no native dependencies.
+- Full PAP core: keypairs, DIDs, mandates, scopes, sessions, receipts, SD-JWT, transport.
+- 103 tests covering cryptographic operations, state machines, and protocol invariants.
+- Works in Node.js (≥18) and browsers via `@noble/ed25519`.
 
 ## Language Bindings
 
@@ -240,13 +250,14 @@ PAP exposes stable FFI layers for multiple languages:
 | Language | Package | Transport | Notes |
 |----------|---------|-----------|-------|
 | Rust | `pap-*` crates | ✓ Built-in | Native async support |
-| Python | `pap-python` | PyO3 | Available via PyPI |
+| TypeScript/JavaScript | `@pap/core` | ✓ HTTP client | Pure TS, Node.js ≥18 + browsers |
+| Python | `pap-python` | PyO3 | PEP 561 type stubs, available via PyPI |
 | JavaScript/TypeScript | `@pap/sdk` | wasm-bindgen | WASM-based, no transport |
 | C/C++ | `libpap` + `pap.hpp` | cdylib/staticlib | Header-only wrapper, RAII semantics |
 | C# | `pap-dotnet` | P/Invoke | .NET 8+, SafeHandle RAII |
 | Java | `pap-java` | JNA | AutoCloseable handles, full enum support |
 
-For language bindings, see `crates/pap-c`, `crates/pap-wasm`, `crates/pap-python`, and `bindings/`.
+For language bindings, see `packages/pap-ts/` (pure TypeScript), `crates/pap-c`, `crates/pap-wasm`, `crates/pap-python`, and `bindings/`.
 
 ## Why a Federated Registry?
 

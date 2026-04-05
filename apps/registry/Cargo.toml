@@ -67,7 +67,7 @@ serde_json    = { workspace = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 
 # Server-only (ssr feature)
-pap-federation     = { workspace = true, optional = true }
+pap-federation     = { workspace = true, features = ["native"], optional = true }
 pap-marketplace    = { workspace = true, optional = true }
 pap-did            = { workspace = true, optional = true }
 pap-agents         = { workspace = true, optional = true }

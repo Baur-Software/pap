@@ -7,14 +7,17 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pap-did  = { workspace = true, features = ["wasm"] }
-pap-core = { workspace = true }
+pap-did        = { workspace = true, features = ["wasm"] }
+pap-core       = { workspace = true }
+pap-federation = { workspace = true, features = ["wasm"] }
+pap-proto      = { workspace = true, features = ["wasm"] }
 
 # chrono needs the wasmbind feature so Utc::now() works in WASM via js_sys::Date
 chrono        = { workspace = true, features = ["wasmbind"] }
+serde         = { workspace = true }
 serde_json    = { workspace = true }
 ed25519-dalek = { workspace = true }
 
@@ -24,3 +27,17 @@ uuid          = { workspace = true, features = ["js"] }
 wasm-bindgen         = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys               = "0.3"
+
+# web-sys is needed transitively by pap-federation's wasm feature, but we
+# also expose it here so the federation module can call js_sys APIs directly.
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Headers",
+    "Response",
+] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

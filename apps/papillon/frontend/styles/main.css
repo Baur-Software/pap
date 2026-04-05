@@ -3695,6 +3695,240 @@ body {
     color: rgba(255,255,255,0.25);
 }
 
+/* ── Outcome Synthesis Panel ── */
+
+/* Container — sits below the ledger entries in the right panel */
+.outcome-summary {
+    margin-top: var(--sp-md);
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--sp-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.outcome-summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.outcome-summary-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: var(--ls-label);
+    color: var(--purple);
+    text-transform: uppercase;
+}
+
+.outcome-loading-indicator {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--gold);
+    animation: outcome-blink 1s step-start infinite;
+}
+
+@keyframes outcome-blink {
+    50% { opacity: 0; }
+}
+
+/* Principal DID row */
+.outcome-principal {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 5px;
+    background: var(--purple-muted);
+    border-radius: var(--r-sm);
+}
+
+.outcome-key {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--purple);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.outcome-did {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.55);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Stats row: success / failure / active */
+.outcome-stats {
+    display: flex;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.outcome-stat {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: var(--r-sm);
+}
+
+.outcome-stat-icon {
+    display: flex;
+    align-items: center;
+}
+
+.outcome-stat-success {
+    color: var(--teal);
+    background: rgba(46, 196, 160, 0.1);
+}
+
+.outcome-stat-failure {
+    color: var(--coral);
+    background: rgba(232, 112, 106, 0.1);
+}
+
+.outcome-stat-active {
+    color: var(--gold);
+    background: rgba(240, 160, 48, 0.1);
+}
+
+.outcome-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
+}
+
+/* Timeline of completed episodes */
+.outcome-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+/* Individual episode entry */
+.outcome-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 5px 6px;
+    border-radius: var(--r-sm);
+    border-left: 2px solid transparent;
+    background: rgba(255, 255, 255, 0.02);
+    transition: background 0.1s;
+}
+
+.outcome-entry:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.outcome-entry-success {
+    border-left-color: var(--teal);
+}
+
+.outcome-entry-failure {
+    border-left-color: var(--coral);
+}
+
+.outcome-entry-pending {
+    border-left-color: var(--gold);
+}
+
+.outcome-entry-icon {
+    display: flex;
+    align-items: center;
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+
+.outcome-entry-success .outcome-entry-icon { color: var(--teal); }
+.outcome-entry-failure .outcome-entry-icon { color: var(--coral); }
+.outcome-entry-pending .outcome-entry-icon { color: var(--gold); }
+
+.outcome-entry-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.outcome-entry-top {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.outcome-entry-agent {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.outcome-entry-action {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    white-space: nowrap;
+}
+
+.outcome-entry-intent {
+    font-family: var(--font-body);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.outcome-entry-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.outcome-entry-ts {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.22);
+}
+
+.outcome-entry-hash {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: rgba(108, 92, 231, 0.4);
+    letter-spacing: 0.02em;
+}
+
+.outcome-error {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--coral);
+    padding: 4px 5px;
+    background: rgba(232, 112, 106, 0.08);
+    border-radius: var(--r-sm);
+}
+
+.outcome-empty {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.18);
+    text-align: center;
+    padding: 8px 0;
+}
+
 /* ── Mandate Builder ── */
 .mandate-builder {
     display: grid;
