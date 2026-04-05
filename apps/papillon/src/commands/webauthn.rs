@@ -327,11 +327,7 @@ pub fn begin_authentication(
         .db
         .get_setting(&store_key)
         .map_err(|e| PapillonError::from(format!("db read error: {e}")))?
-        .ok_or_else(|| {
-            PapillonError::from(format!(
-                "no registered credential found for rp_id={rp_id} credential_id={credential_id_b64}"
-            ))
-        })?;
+        .ok_or_else(|| PapillonError::from("authentication failed"))?;
 
     // Decode credential_id for storage in pending challenge.
     let credential_id = b64_decode(&credential_id_b64)?;
@@ -394,12 +390,7 @@ pub fn complete_authentication(
         .db
         .get_setting(&store_key)
         .map_err(|e| PapillonError::from(format!("db read error: {e}")))?
-        .ok_or_else(|| {
-            PapillonError::from(format!(
-                "no registered credential found for this assertion (rp_id={}, credential_id={})",
-                pending.rp_id, credential_id_b64
-            ))
-        })?;
+        .ok_or_else(|| PapillonError::from("authentication failed"))?;
 
     let credential: WebAuthnCredential = serde_json::from_str(&credential_json)
         .map_err(|e| PapillonError::from(format!("stored credential is corrupt: {e}")))?;
