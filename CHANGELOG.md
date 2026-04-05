@@ -12,6 +12,14 @@
 - **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
 - **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
 
+## [0.7.2.1] - 2026-04-05
+
+### Changed
+
+- **ci**: Hardened benchmark regression gate — tightened threshold from 20% to 10%, added artifact-based baseline storage with 90-day retention so PRs compare against the latest main baseline instead of a stale committed file, added benchmark summary PR comments via `actions/github-script`, and improved `check_regression.sh` with `--baseline`/`--output` flags and proper argument parsing
+- **ci**: Added zero-value guard in `check_regression.sh` — a Criterion parse failure that yields 0 now fails the gate instead of silently passing
+- **ci**: Baseline update on main push now runs even if the regression check fails, preventing a single noisy benchmark from permanently jamming the CI gate
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
