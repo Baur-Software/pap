@@ -50,7 +50,7 @@ pub fn create_recovery_shards(
             .did()
     };
 
-    let (shards, manifest) = shamir::create_shards(&*seed_copy, threshold, total)
+    let (shards, manifest) = shamir::create_shards(&seed_copy, threshold, total)
         .map_err(|e| PapillonError::from(e.to_string()))?;
 
     let manifest_json =
@@ -203,7 +203,7 @@ pub fn reconstruct_from_shards(
         .get_active_profile()
         .map_err(|e| PapillonError::from(e.to_string()))?;
 
-    let mut seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&*seed);
+    let mut seed_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(*seed);
 
     match active_profile {
         Some(profile) => {
