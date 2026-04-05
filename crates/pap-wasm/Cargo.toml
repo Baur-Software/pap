@@ -7,15 +7,17 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pap-did        = { workspace = true, features = ["wasm"] }
 pap-core       = { workspace = true }
 pap-federation = { workspace = true, features = ["wasm"] }
+pap-proto      = { workspace = true, features = ["wasm"] }
 
 # chrono needs the wasmbind feature so Utc::now() works in WASM via js_sys::Date
 chrono        = { workspace = true, features = ["wasmbind"] }
+serde         = { workspace = true }
 serde_json    = { workspace = true }
 ed25519-dalek = { workspace = true }
 
@@ -36,3 +38,6 @@ web-sys = { version = "0.3", features = [
     "Headers",
     "Response",
 ] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

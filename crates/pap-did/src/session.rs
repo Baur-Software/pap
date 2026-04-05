@@ -1,4 +1,4 @@
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 
 use crate::principal::public_key_to_did;
@@ -43,9 +43,10 @@ impl SessionKeypair {
     }
 
     /// Verify a signature against this session key.
+    /// Uses strict verification: rejects small-order keys and R components.
     pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), DidError> {
         self.verifying_key()
-            .verify(message, signature)
+            .verify_strict(message, signature)
             .map_err(|_| DidError::VerificationFailed)
     }
 }
