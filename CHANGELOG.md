@@ -2,6 +2,11 @@
 
 ## [0.7.1] - 2026-04-04
 
+### Added
+
+- **pap-c**: C FFI marketplace query API — `PapMarketplaceClient` opaque handle wrapping `MarketplaceRegistry`, `PapAgentList` typed result set with index-based accessors (`pap_agent_list_get_did`, `pap_agent_list_get_name`), JSON-based `pap_marketplace_query` dispatching to `query_by_action` or `query_satisfiable` based on `available_properties` presence, and `pap_last_error` alias for error retrieval
+- **pap-c**: 11 unit tests covering client lifecycle, query dispatch, disclosure filtering, out-of-bounds safety, null-pointer guards, invalid JSON rejection, and unsigned advertisement rejection
+
 ### Changed
 
 - **github**: Replaced generic markdown issue templates with structured YAML Issue Forms for all four pillars (Papillon, Chrysalis, papillon-extension, pap:// URI). Each form now enforces required fields — blank issues are denied via `config.yml`. Forms cover pillar-specific fields: OS/area selector for Papillon, deployment type and federation peer count for Chrysalis, browser version and native host for the extension, and protocol phase (1–6) for pap:// URIs. Replaced the single protocol feedback template with a structured `protocol-proposal.yml` that requires a capture-test evaluation for every proposal. Added a cross-cutting `feature-request.yml` with capture-test and non-goals guardrails.
