@@ -141,6 +141,13 @@ for NAME in $BENCH_NAMES; do
         continue
     fi
 
+    # Guard against parse failures that produce 0 (would silently pass the gate)
+    if [ "$CURRENT_NS" -le 0 ] || [ "$BASELINE_NS" -le 0 ]; then
+        emit "  ERROR: Invalid values for '$NAME' (current=${CURRENT_NS}, baseline=${BASELINE_NS}) — failing"
+        FAILED=1
+        continue
+    fi
+
     # Regression percentage (x10 for one decimal place)
     if [ "$BASELINE_NS" -eq 0 ]; then
         REGRESSION_DISPLAY="+0.0"
