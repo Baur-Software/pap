@@ -134,8 +134,20 @@ pub trait DatabaseOps: Send + Sync {
         limit: usize,
     ) -> Result<Vec<Episode>, DbError>;
 
-    /// Full-text search over episode fields
+    /// Full-text search over episode fields (delegates to FTS5 on native)
     fn search_text(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError>;
+
+    /// FTS5 full-text search over action_type, intent_summary, query, agent_name columns.
+    ///
+    /// Results are ranked by FTS5 relevance (best match first).  Returns at most
+    /// `limit` episodes.  The `query` string uses standard FTS5 match syntax; any
+    /// double-quotes are stripped before execution to prevent syntax errors.
+    fn search_episodes(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError>;
+
+    /// Exact action-type match using the `idx_episodes_action_type` index.
+    ///
+    /// Returns at most `limit` episodes ordered by `recorded_at DESC`.
+    fn query_by_action(&self, action: &str, limit: usize) -> Result<Vec<Episode>, DbError>;
 
     // ── Template Management ───────────────────────────────────────────────
 

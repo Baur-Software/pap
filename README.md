@@ -234,6 +234,7 @@ pap/
 
 - PyO3-based Python bindings for all PAP primitives.
 - Full access to DID generation, mandate delegation, and session lifecycle.
+- PEP 561 type stubs (`py.typed` + `__init__.pyi`) for IDE autocomplete and static type checking (mypy, pyright, Pylance).
 
 ### @pap/core (packages/pap-ts)
 
@@ -250,7 +251,7 @@ PAP exposes stable FFI layers for multiple languages:
 |----------|---------|-----------|-------|
 | Rust | `pap-*` crates | ✓ Built-in | Native async support |
 | TypeScript/JavaScript | `@pap/core` | ✓ HTTP client | Pure TS, Node.js ≥18 + browsers |
-| Python | `pap-python` | PyO3 | Available via PyPI |
+| Python | `pap-python` | PyO3 | PEP 561 type stubs, available via PyPI |
 | JavaScript/TypeScript | `@pap/sdk` | wasm-bindgen | WASM-based, no transport |
 | C/C++ | `libpap` + `pap.hpp` | cdylib/staticlib | Header-only wrapper, RAII semantics |
 | C# | `pap-dotnet` | P/Invoke | .NET 8+, SafeHandle RAII |
