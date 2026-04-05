@@ -343,3 +343,24 @@ fn rfc8032_test_1024_principal_chain() {
     assert_eq!(sig.to_bytes(), RFC8032_1024_SIGNATURE);
     assert!(kp.verify(&RFC8032_1024_MESSAGE, &sig).is_ok());
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Layer 2 negative paths — wrapper must reject wrong message / wrong key
+// ════════════════════════════════════════════════════════════════════
+
+#[test]
+fn rfc8032_wrong_message_rejected() {
+    // RFC 8032 vector 1: valid signature, wrong message must fail.
+    let kp = PrincipalKeypair::from_bytes(&RFC8032_1_SECRET).unwrap();
+    let sig = kp.sign(RFC8032_1_MESSAGE);
+    assert!(kp.verify(b"not the empty message", &sig).is_err());
+}
+
+#[test]
+fn rfc8032_cross_key_rejected() {
+    // RFC 8032 vector 1 signature must not verify under vector 2's key.
+    let kp_signer = PrincipalKeypair::from_bytes(&RFC8032_1_SECRET).unwrap();
+    let kp_other = PrincipalKeypair::from_bytes(&RFC8032_2_SECRET).unwrap();
+    let sig = kp_signer.sign(RFC8032_1_MESSAGE);
+    assert!(kp_other.verify(RFC8032_1_MESSAGE, &sig).is_err());
+}

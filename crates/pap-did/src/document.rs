@@ -119,4 +119,14 @@ mod tests {
         assert_eq!(decoded[1], 0x01, "multicodec prefix byte 1");
         assert_eq!(&decoded[2..], &kp.public_key_bytes(), "public key bytes");
     }
+
+    #[test]
+    fn from_json_rejects_empty_string() {
+        assert!(DidDocument::from_json("").is_err());
+    }
+
+    #[test]
+    fn from_json_rejects_invalid_json() {
+        assert!(DidDocument::from_json("not json {{{").is_err());
+    }
 }

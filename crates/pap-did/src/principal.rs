@@ -187,20 +187,43 @@ mod tests {
 
     #[test]
     fn did_key_not_on_curve() {
-        // y=2 in little-endian ([2, 0, ..., 0]) is not on the Ed25519 curve:
-        // x^2 = (4-1)/(4d+1) is a non-residue mod p. VerifyingKey::from_bytes
-        // performs curve membership checks, so verify_key_from_did must reject.
+        // y=2 is not on the Ed25519 curve. VerifyingKey::from_bytes performs
+        // curve decompression which rejects points not on the curve.
         let mut not_on_curve = Vec::with_capacity(34);
         not_on_curve.push(0xed);
         not_on_curve.push(0x01);
         let mut bad_point = [0u8; 32];
-        bad_point[0] = 2; // y=2 in little-endian, not on curve
+        bad_point[0] = 2; // y=2 in little-endian
         not_on_curve.extend_from_slice(&bad_point);
         let encoded = bs58::encode(&not_on_curve).into_string();
         let did = format!("did:key:z{encoded}");
         assert!(
             verify_key_from_did(&did).is_err(),
-            "DID encoding a point not on the curve must be rejected by verify_key_from_did"
+            "DID encoding a point not on the curve must be rejected"
+        );
+    }
+
+    #[test]
+    fn did_key_identity_point_accepted() {
+        // The identity element (0, 1) IS on the Ed25519 curve and passes
+        // VerifyingKey::from_bytes — ed25519-dalek 2.x does NOT perform a
+        // prime-order subgroup check at construction time. The subgroup check
+        // only happens in verify_strict(), not verify() or from_bytes.
+        // This test documents current behavior. See follow-up: verify() vs
+        // verify_strict() evaluation for PAP's security boundary.
+        let mut identity = Vec::with_capacity(34);
+        identity.push(0xed);
+        identity.push(0x01);
+        let mut identity_y = [0u8; 32];
+        identity_y[0] = 0x01; // y = 1 in little-endian (identity element)
+        identity.extend_from_slice(&identity_y);
+        let encoded = bs58::encode(&identity).into_string();
+        let did = format!("did:key:z{encoded}");
+        // Documents that verify_key_from_did ACCEPTS the identity element.
+        // This is the verify() vs verify_strict() gap — tracked as follow-up.
+        assert!(
+            verify_key_from_did(&did).is_ok(),
+            "identity element is accepted by from_bytes (no subgroup check)"
         );
     }
 }

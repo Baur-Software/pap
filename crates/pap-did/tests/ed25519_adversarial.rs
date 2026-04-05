@@ -81,6 +81,10 @@ fn malleability_scalar_deserialization_rejected() {
         malleable[i] = sum as u8;
         carry = sum >> 8;
     }
+    debug_assert_eq!(
+        carry, 0,
+        "S + L overflowed 32 bytes — loop bounds or L constant wrong"
+    );
 
     // ed25519-dalek may defer scalar canonicality checks to verification time.
     match Signature::from_slice(&malleable) {
@@ -93,6 +97,12 @@ fn malleability_scalar_deserialization_rejected() {
                     .verify(b"malleability test", &malleable_sig)
                     .is_err(),
                 "S + L must be rejected at verification if not caught at deserialization"
+            );
+            // Also verify through the PrincipalKeypair wrapper layer.
+            let kp = PrincipalKeypair::from_bytes(&[42u8; 32]).unwrap();
+            assert!(
+                kp.verify(b"malleability test", &malleable_sig).is_err(),
+                "wrapper must also reject S + L malleable signature"
             );
         }
     }
