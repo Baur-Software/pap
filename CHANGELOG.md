@@ -1,5 +1,26 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-05
+
+### Added
+
+- **pap-did**: `SignatureAlgorithm` enum (`#[non_exhaustive]`) with Ed25519 as the sole variant, providing metadata methods (multicodec prefix, JWS alg, verification key type, proof type) so adding a future algorithm is a mechanical, non-breaking change
+- **pap-did**: Algorithm-aware DID resolution — `did_to_public_key_bytes_with_algorithm()` detects the algorithm from the multicodec prefix, `public_key_to_did_for_algorithm()` encodes keys for any supported algorithm
+- **pap-did**: `UnsupportedAlgorithm` error variant for rejecting unknown multicodec prefixes
+- **docs**: `algorithm-agility.md` documenting the migration path for adding post-quantum algorithms
+
+### Changed
+
+- **pap-core**: All signable types (`Mandate`, `CapabilityToken`, `SessionAttestation`, `RecoveryMandate`, `PartialRecoverySignature`, `RevocationProof`) carry an `algorithm` field with `#[serde(default)]` for backward-compatible deserialization
+- **pap-credential**: `VerifiableCredential::sign()` derives `proof_type` from `SignatureAlgorithm` instead of a hardcoded string; `SelectiveDisclosureJwt` carries an `algorithm` field
+- **pap-proto**: JWS `sign_plaintext()` accepts `SignatureAlgorithm` and derives `alg` header from the enum; `verify_signed()` rejects unknown algorithms
+- **pap-marketplace**: `AgentAdvertisement` carries an `algorithm` field with `#[serde(default)]`
+- **pap-federation**: `PeerVouch` carries an `algorithm` field; `NotarySet` processes revocations with algorithm-aware `RevocationProof`
+- **pap-webauthn**: `PrincipalSigner` trait gains an `algorithm()` default method returning Ed25519
+- **pap-did**: `VerificationMethod` derives its key type from `SignatureAlgorithm` instead of a hardcoded string
+- **docs/specification.md**: Section 16.1 updated from "algorithm agility is deferred" to documenting the `SignatureAlgorithm` field and forward-compatible negotiation
+- All sign/verify tests parameterized by algorithm for future multi-algorithm expansion
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
