@@ -11,7 +11,7 @@ verifiable scope, TTL, and selective-disclosure policy.
 ## Prerequisites
 
 ```bash
-pip install pap langchain langchain-openai crewai mcp
+pip install pap langchain langchain-core langchain-openai crewai mcp
 ```
 
 PAP requires Python 3.8+. If you are building the Rust extension from source:
@@ -116,7 +116,7 @@ any global mutable state.
 import datetime
 from typing import Optional, Type
 
-from langchain.tools import BaseTool
+from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from pap import (
