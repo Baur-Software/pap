@@ -48,6 +48,7 @@ RUN sed -i \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
     -e '/^[[:space:]]*"benches"/d' \
     -e '/^[[:space:]]*"examples\//d' \
+    -e '/^papillon-shared[[:space:]]*=/d' \
     Cargo.toml
 
 # Build server binary only — skip WASM (no wasm32 target, no cargo-leptos required)
