@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Added
+
+- **pap-federation**: Cursor-based pagination for federation peer sync queries. `QueryByAction` now accepts optional `cursor` and `page_size` fields; `QueryResponse` includes `next_cursor` and `has_more`. Server handler paginates by agent DID (lexicographic ordering, default 100 per page). Both native (`FederationClient`) and WASM (`FetchFederationClient`) clients gain `sync_action_paginated()` that loops until all pages are collected. Fully backward compatible — old clients/servers work unchanged via serde defaults.
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
