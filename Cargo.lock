@@ -4926,6 +4926,7 @@ dependencies = [
  "js-sys",
  "pap-core",
  "pap-did",
+ "pap-federation",
  "pap-proto",
  "serde",
  "serde_json",

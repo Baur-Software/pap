@@ -17,7 +17,7 @@ pap-core = { workspace = true }
 pap-credential-store = { workspace = true }
 pap-transport = { workspace = true }
 pap-marketplace = { workspace = true }
-pap-federation = { workspace = true }
+pap-federation = { workspace = true, features = ["native"] }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
