@@ -174,8 +174,7 @@ impl CapabilityToken {
             )));
         }
         use base64::Engine;
-        self.signature =
-            Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig_bytes));
+        self.signature = Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig_bytes));
         Ok(())
     }
 
