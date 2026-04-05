@@ -1,0 +1,72 @@
+[package]
+name = "pap-did-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.pap-did]
+path = "../crates/pap-did"
+
+[dependencies.ed25519-dalek]
+version = "2"
+features = ["rand_core"]
+
+[workspace]
+members = []
+
+[[bin]]
+name = "fuzz_sign_verify"
+path = "fuzz_targets/fuzz_sign_verify.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_session_sign_verify"
+path = "fuzz_targets/fuzz_session_sign_verify.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_cross_key_verify"
+path = "fuzz_targets/fuzz_cross_key_verify.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_signature_mutation"
+path = "fuzz_targets/fuzz_signature_mutation.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_did_key_roundtrip"
+path = "fuzz_targets/fuzz_did_key_roundtrip.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_did_parse"
+path = "fuzz_targets/fuzz_did_parse.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_did_document_json"
+path = "fuzz_targets/fuzz_did_document_json.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_verify_arbitrary"
+path = "fuzz_targets/fuzz_verify_arbitrary.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_full_roundtrip"
+path = "fuzz_targets/fuzz_full_roundtrip.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_garbage"
+path = "fuzz_targets/fuzz_garbage.rs"
+doc = false
