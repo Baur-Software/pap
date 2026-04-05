@@ -254,7 +254,7 @@ contain:
     "id": "did:key:z...#key-1",
     "type": "Ed25519VerificationKey2020",
     "controller": "did:key:z...",
-    "publicKeyMultibase": "z<base58btc(public_key_bytes)>"
+    "publicKeyMultibase": "z<base58btc(0xed01 ++ public_key_bytes)>"
   }],
   "authentication": ["did:key:z...#key-1"]
 }

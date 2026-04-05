@@ -27,6 +27,7 @@ pub mod dynamic_handler;
 pub mod executor;
 pub mod llm;
 pub mod registry;
+pub mod selection;
 pub mod session_store;
 mod simple;
 
@@ -36,8 +37,15 @@ pub use dynamic::{
 };
 pub use dynamic_handler::DynamicAgentHandler;
 pub use executor::{AgentExecutor, AgentMeta};
+#[cfg(feature = "candle")]
+pub use llm::BuiltInLlmClient;
+pub use llm::ExternalLlmClient;
 pub use llm::{
-    builtin_model_catalog, BuiltInModelInfo, LlmProvider, ModelAvailability, ModelDownloadProgress,
+    builtin_model_catalog, default_model_dir, BuiltInModelInfo, LlmClient, LlmClientError,
+    LlmProvider, ModelAvailability, ModelDownloadProgress,
 };
 pub use registry::{build_agents, AgentSet};
+pub use selection::{
+    AgentSelector, AgentSelectorFactory, HistoricalProfile, MemoryInformedSelector, RandomSelector,
+};
 pub use simple::SimpleAgent;

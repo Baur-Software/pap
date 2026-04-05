@@ -4511,6 +4511,8 @@ dependencies = [
 name = "pap-agents"
 version = "0.6.0"
 dependencies = [
+ "candle-core",
+ "candle-transformers",
  "chrono",
  "ed25519-dalek",
  "pap-core",
@@ -4525,7 +4527,9 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+ "tokenizers",
  "toml 0.8.23",
+ "url",
  "uuid",
 ]
 

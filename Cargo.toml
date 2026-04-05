@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-exclude = ["apps/papillon/frontend", "apps/registry/frontend"]
+exclude = ["apps/papillon/frontend", "apps/registry/frontend", "fuzz"]
 members = [
     "crates/pap-did",
     "crates/pap-core",

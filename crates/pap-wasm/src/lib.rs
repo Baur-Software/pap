@@ -352,6 +352,20 @@ impl Mandate {
         self.inner.sign(keypair.inner.signing_key());
     }
 
+    /// Get the canonical bytes to be signed externally (e.g., by SubtleCrypto).
+    /// Returns the exact byte array that `sign()` would sign internally.
+    #[wasm_bindgen(js_name = signableBytes)]
+    pub fn signable_bytes(&self) -> Vec<u8> {
+        self.inner.signable_bytes()
+    }
+
+    /// Set the signature from externally-computed bytes (64 bytes).
+    /// Use after signing `signableBytes()` with SubtleCrypto Ed25519.
+    #[wasm_bindgen(js_name = setSignatureBytes)]
+    pub fn set_signature_bytes(&mut self, sig: &[u8]) -> Result<(), JsError> {
+        self.inner.set_signature_bytes(sig).map_err(to_js_err)
+    }
+
     /// Verify the mandate's signature against the given public key bytes (32 bytes).
     pub fn verify(&self, public_key_bytes: &[u8]) -> Result<(), JsError> {
         let arr: [u8; 32] = public_key_bytes
@@ -513,6 +527,18 @@ impl CapabilityToken {
     /// Sign the token with the issuer's keypair.
     pub fn sign(&mut self, keypair: &PrincipalKeypair) {
         self.inner.sign(keypair.inner.signing_key());
+    }
+
+    /// Get the canonical bytes to be signed externally (e.g., by SubtleCrypto).
+    #[wasm_bindgen(js_name = signableBytes)]
+    pub fn signable_bytes(&self) -> Vec<u8> {
+        self.inner.signable_bytes()
+    }
+
+    /// Set the signature from externally-computed bytes (64 bytes).
+    #[wasm_bindgen(js_name = setSignatureBytes)]
+    pub fn set_signature_bytes(&mut self, sig: &[u8]) -> Result<(), JsError> {
+        self.inner.set_signature_bytes(sig).map_err(to_js_err)
     }
 
     /// Serialize to a JSON string.

@@ -9,15 +9,85 @@
  * - Principal key only signs in phases 1-2, then reference is dropped
  * - Session key only signs in phase 5, then dropped
  * - All agent communication goes through the protocol REST surface
+ *
+ * ISS-840: When SubtleCrypto Ed25519 is available, signing uses browser-native
+ * crypto with non-exportable keys. Falls back to WASM (ed25519-dalek) on older
+ * browsers. Key material never enters JS or WASM memory in the SubtleCrypto path.
  */
 
 import { parsePapUri, toEndpoint } from "../lib/uri.js";
-import { loadPrincipalKey, storePrincipalKey } from "../lib/storage.js";
+import { loadPrincipalKey, storePrincipalKey, deletePrincipalKey } from "../lib/storage.js";
+import {
+  supportsEd25519,
+  generateKeypair,
+  importSeed,
+  exportPublicKeyRaw,
+  sign as subtleCryptoSign,
+} from "../lib/webcrypto.js";
+import {
+  storePrincipalKeypair,
+  loadPrincipalKeypair,
+} from "../lib/idb-storage.js";
 import type {
   ExtensionMessage,
   TokenAccepted,
   ProtocolMessage,
 } from "../lib/types.js";
+
+// ── Crypto Backend Selection ──────────────────────────────────────────
+
+let useSubtleCrypto = false;
+
+async function initCryptoBackend(): Promise<void> {
+  useSubtleCrypto = await supportsEd25519();
+  if (useSubtleCrypto) {
+    await maybeMigrateLegacyKey();
+  }
+}
+
+/**
+ * Migrate a legacy AES-256-GCM encrypted seed from chrome.storage.local
+ * into a SubtleCrypto CryptoKey stored in IndexedDB.
+ *
+ * After migration the raw seed is zeroed out in memory (best-effort)
+ * and the legacy entry is deleted from chrome.storage.local.
+ */
+async function maybeMigrateLegacyKey(): Promise<void> {
+  // Already migrated?
+  const existing = await loadPrincipalKeypair();
+  if (existing) return;
+
+  // Legacy key present?
+  const legacySeed = await loadPrincipalKey();
+  if (!legacySeed) return;
+
+  // Derive the public key bytes from the seed via WASM *before* importing into
+  // SubtleCrypto. This avoids importing the private key as extractable and
+  // exporting it as JWK — which would materialise private key material in the
+  // JS heap. The WASM keypair is freed immediately after public key extraction.
+  const sdk = await loadWasm();
+  const wasmKp = sdk.PrincipalKeypair.fromSecretBytes(legacySeed);
+  const rawPub = wasmKp.publicKeyBytes();
+  wasmKp.free();
+
+  // Import into SubtleCrypto: private key is non-extractable, public key is
+  // constructed from the raw bytes derived above — no JWK round-trip needed.
+  const keypair = await importSeed(legacySeed, rawPub);
+  const did = sdk.publicKeyBytesToDid(rawPub);
+
+  // Store in IndexedDB
+  await storePrincipalKeypair(
+    keypair.privateKey,
+    keypair.publicKey,
+    rawPub,
+    did,
+    "aes-gcm"
+  );
+
+  // Clean up legacy storage
+  await deletePrincipalKey();
+  legacySeed.fill(0); // best-effort zeroing
+}
 
 // ── WASM Module Loading ────────────────────────────────────────────────
 
@@ -39,6 +109,29 @@ async function loadWasm(): Promise<PapWasm> {
 // ── Identity Management ────────────────────────────────────────────────
 
 async function ensureIdentity(): Promise<string> {
+  if (useSubtleCrypto) {
+    return ensureIdentitySubtleCrypto();
+  }
+  return ensureIdentityWasm();
+}
+
+/** SubtleCrypto path: keys stored as opaque CryptoKey objects in IndexedDB. */
+async function ensureIdentitySubtleCrypto(): Promise<string> {
+  const stored = await loadPrincipalKeypair();
+  if (stored) return stored.did;
+
+  // First run: generate new keypair
+  const keypair = await generateKeypair();
+  const sdk = await loadWasm();
+  const rawPub = await exportPublicKeyRaw(keypair.publicKey);
+  const did = sdk.publicKeyBytesToDid(rawPub);
+
+  await storePrincipalKeypair(keypair.privateKey, keypair.publicKey, rawPub, did);
+  return did;
+}
+
+/** WASM fallback: keys stored as AES-256-GCM encrypted seeds. */
+async function ensureIdentityWasm(): Promise<string> {
   const sdk = await loadWasm();
   const stored = await loadPrincipalKey();
 
@@ -49,10 +142,6 @@ async function ensureIdentity(): Promise<string> {
     return did;
   }
 
-  // First run: generate from a random 32-byte seed.
-  // PrincipalKeypair.generate() uses internal entropy we can't extract,
-  // so we generate our own seed and use fromSecretBytes() to ensure
-  // the same seed can reconstruct the keypair from storage.
   const seed = crypto.getRandomValues(new Uint8Array(32));
   const kp = sdk.PrincipalKeypair.fromSecretBytes(seed);
   const did = kp.did();
@@ -61,12 +150,28 @@ async function ensureIdentity(): Promise<string> {
   return did;
 }
 
-/** Load the principal keypair from storage. Caller must free(). */
-async function loadKeypair() {
+/** Load the WASM principal keypair from legacy storage. Caller must free(). */
+async function loadKeypairWasm() {
   const sdk = await loadWasm();
   const secret = await loadPrincipalKey();
   if (!secret) throw new Error("No principal key stored");
   return sdk.PrincipalKeypair.fromSecretBytes(secret);
+}
+
+// ── SubtleCrypto Signing Helper ────────────────────────────────────────
+
+/**
+ * Sign a WASM object's canonical bytes with SubtleCrypto and embed the
+ * signature back into the object. The "sign externally" pattern:
+ * WASM exposes signableBytes(), JS signs, JS calls setSignatureBytes().
+ */
+async function signWithSubtleCrypto(
+  signable: { signableBytes(): Uint8Array; setSignatureBytes(sig: Uint8Array): void },
+  privateKey: CryptoKey
+): Promise<void> {
+  const bytes = signable.signableBytes();
+  const sig = await subtleCryptoSign(privateKey, bytes);
+  signable.setSignatureBytes(sig);
 }
 
 // ── Protocol Transport (fetch-based) ───────────────────────────────────
@@ -121,24 +226,36 @@ async function executeHandshake(params: HandshakeParams): Promise<void> {
     // ── Phase 1: Token Presentation ──────────────────────────
     sendPhase(sessionId, 1, "Presenting capability token...");
 
-    const principalKp = await loadKeypair();
-    const principalDid = principalKp.did();
+    // Resolve principal identity and signing material
+    const principalDid = await ensureIdentity();
 
     // We need the agent's DID. For now, use a well-known discovery endpoint.
-    // In production, this comes from the registry or .well-known/pap-configuration.
-    // For direct connections, the agent advertises its DID at GET /did.
     let agentDid: string;
     try {
       const didResp = await fetch(`${endpoint}/did`);
       const didData = await didResp.json();
       agentDid = didData.did || didData.id;
     } catch {
-      // Fallback: generate a placeholder for agent DID (agent will reject if wrong)
       agentDid = `did:key:z6Mk${papUrl.host}`;
     }
 
     const token = sdk.CapabilityToken.mint(agentDid, action, principalDid, ttl);
-    token.sign(principalKp);
+
+    // Sign the token: SubtleCrypto or WASM
+    let principalKp: InstanceType<typeof sdk.PrincipalKeypair> | null = null;
+    let principalPublicKey: Uint8Array;
+
+    if (useSubtleCrypto) {
+      const stored = await loadPrincipalKeypair();
+      if (!stored) throw new Error("No principal key in IndexedDB");
+      await signWithSubtleCrypto(token, stored.privateKey);
+      principalPublicKey = stored.publicKeyRaw;
+    } else {
+      principalKp = await loadKeypairWasm();
+      token.sign(principalKp);
+      principalPublicKey = principalKp.publicKeyBytes();
+    }
+
     const tokenJson = JSON.parse(token.toJson());
 
     const phase1Resp = await protocolPost(endpoint, "/session", {
@@ -162,8 +279,18 @@ async function executeHandshake(params: HandshakeParams): Promise<void> {
     // ── Phase 2: Ephemeral DID Exchange ──────────────────────
     sendPhase(sessionId, 2, "Exchanging session DIDs...");
 
-    const sessionKp = sdk.SessionKeypair.generate();
-    const initiatorDid = sessionKp.did();
+    // Generate ephemeral session keypair
+    let initiatorDid: string;
+    let sessionKp: InstanceType<typeof sdk.SessionKeypair> | null = null;
+
+    if (useSubtleCrypto) {
+      const ephemeralKp = await generateKeypair();
+      const ephemeralPub = await exportPublicKeyRaw(ephemeralKp.publicKey);
+      initiatorDid = sdk.publicKeyBytesToDid(ephemeralPub);
+    } else {
+      sessionKp = sdk.SessionKeypair.generate();
+      initiatorDid = sessionKp.did();
+    }
 
     // Issue mandate
     const scopeAction = sdk.ScopeAction.new(action);
@@ -176,7 +303,15 @@ async function executeHandshake(params: HandshakeParams): Promise<void> {
       disclosure,
       ttl
     );
-    mandate.sign(principalKp);
+
+    // Sign the mandate: SubtleCrypto or WASM
+    if (useSubtleCrypto) {
+      const stored = await loadPrincipalKeypair();
+      if (!stored) throw new Error("No principal key in IndexedDB");
+      await signWithSubtleCrypto(mandate, stored.privateKey);
+    } else {
+      mandate.sign(principalKp!);
+    }
 
     // DID exchange
     await protocolPost(endpoint, `/session/${agentSessionId}/did`, {
@@ -185,8 +320,10 @@ async function executeHandshake(params: HandshakeParams): Promise<void> {
     });
 
     // Principal keypair is no longer needed after phase 2.
-    const principalPublicKey = principalKp.publicKeyBytes();
-    principalKp.free();
+    if (principalKp) {
+      principalKp.free();
+      principalKp = null;
+    }
 
     // ── Phase 3: Selective Disclosure ────────────────────────
     sendPhase(sessionId, 3, "Sending disclosures...");
@@ -219,23 +356,28 @@ async function executeHandshake(params: HandshakeParams): Promise<void> {
     sendPhase(sessionId, 5, "Co-signing receipt...");
 
     // Build receipt token for session bookkeeping
-    const receiptSigner = sdk.SessionKeypair.generate();
     const receiptToken = sdk.CapabilityToken.mint(
       agentDid,
       action,
       principalDid,
       ttl
     );
-    receiptToken.sign(receiptSigner);
-    receiptSigner.free();
+
+    // Sign receipt with an ephemeral key
+    if (useSubtleCrypto) {
+      const ephemeralReceipt = await generateKeypair();
+      await signWithSubtleCrypto(receiptToken, ephemeralReceipt.privateKey);
+      // ephemeralReceipt goes out of scope — GC'd, key material never in JS
+    } else {
+      const receiptSigner = sdk.SessionKeypair.generate();
+      receiptToken.sign(receiptSigner);
+      receiptSigner.free();
+    }
 
     const session = sdk.Session.initiate(receiptToken, agentDid, principalPublicKey);
     session.open(initiatorDid, receiverSessionDid);
     session.execute();
 
-    // In the extension, we send a simplified receipt for co-signing.
-    // The full TransactionReceipt requires pap-core types not in WASM.
-    // Instead, we send a receipt structure the agent can co-sign.
     const receipt = {
       session_id: session.id(),
       initiator_did: initiatorDid,
@@ -261,7 +403,7 @@ async function executeHandshake(params: HandshakeParams): Promise<void> {
     }
 
     session.close();
-    sessionKp.free();
+    if (sessionKp) sessionKp.free();
     session.free();
 
     // ── Phase 6: Close Session ───────────────────────────────
@@ -350,6 +492,10 @@ async function handleWasmRequest(msg: {
 
   switch (msg.method) {
     case "generateKeypair": {
+      if (useSubtleCrypto) {
+        const did = await ensureIdentitySubtleCrypto();
+        return { did };
+      }
       const seed = crypto.getRandomValues(new Uint8Array(32));
       const kp = sdk.PrincipalKeypair.fromSecretBytes(seed);
       const did = kp.did();
@@ -359,6 +505,10 @@ async function handleWasmRequest(msg: {
     }
 
     case "getDid": {
+      if (useSubtleCrypto) {
+        const stored = await loadPrincipalKeypair();
+        return { did: stored?.did ?? null };
+      }
       const secret = await loadPrincipalKey();
       if (!secret) return { did: null };
       const kp = sdk.PrincipalKeypair.fromSecretBytes(secret);
@@ -384,4 +534,10 @@ async function handleWasmRequest(msg: {
   }
 }
 
-console.log("[PAP Offscreen] Ready");
+// ── Init ──────────────────────────────────────────────────────────────
+
+initCryptoBackend().then(() => {
+  console.log(
+    `[PAP Offscreen] Ready (crypto: ${useSubtleCrypto ? "SubtleCrypto Ed25519" : "WASM ed25519-dalek"})`
+  );
+});
