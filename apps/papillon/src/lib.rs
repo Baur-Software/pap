@@ -2,6 +2,7 @@ pub mod agents;
 pub mod commands;
 pub mod db;
 pub mod discovery;
+pub mod episode_store;
 pub mod error;
 pub mod handshake;
 pub mod inference;
@@ -10,6 +11,7 @@ pub mod state;
 
 use std::net::SocketAddr;
 
+use episode_store::EpisodeStore;
 use pap_did::PrincipalKeypair;
 use pap_federation::{generate_node_identity, FederationServer};
 use pap_transport::AgentServer;
@@ -81,6 +83,11 @@ pub fn run() {
                 }
             });
 
+            // Build the episode store from the same Arc<Database> used by AppState
+            // so that both handles share the same rusqlite connection and schema.
+            let episode_store = EpisodeStore::from_db(app_state.db.clone());
+            app.manage(episode_store);
+
             app.manage(app_state);
 
             // Spawn federation server on a separate thread with its own tokio runtime.
@@ -128,6 +135,9 @@ pub fn run() {
             commands::orchestrator::list_completed_runs,
             commands::orchestrator::list_episodes,
             commands::orchestrator::list_agent_profiles,
+            commands::episodes::record_episode,
+            commands::episodes::list_recent_episodes,
+            commands::episodes::get_episode,
             commands::llm::check_llm_connection,
             commands::orchestrator::list_builtin_models,
             commands::orchestrator::load_builtin_model,
