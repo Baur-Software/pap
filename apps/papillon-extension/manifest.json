@@ -58,7 +58,7 @@
       "style-src": "'self' for bundled CSS. External origins for @import in design-system.css: Satoshi (Fontshare), DM Sans + JetBrains Mono (Google Fonts).",
       "font-src": "'self' + CDNs serving .woff2 files: api.fontshare.com (Satoshi), fonts.gstatic.com (DM Sans, JetBrains Mono).",
       "img-src 'self'": "Only extension-bundled icons (icons/icon-*.png). No external images.",
-      "connect-src": "'self' for chrome.runtime. http://localhost + 127.0.0.1 for local dev agents. https://* for production agents (gated by optional_host_permissions). wss://* for WebSocket transport.",
+      "connect-src": "'self' for chrome.runtime. http://localhost + 127.0.0.1 for local dev agents. https://* for production agents (broad — CSP is the primary gate for extension pages; host_permissions additionally gate service worker fetch). wss://* for WebSocket transport.",
       "object-src 'none'": "Block plugins (MV3 requirement).",
       "base-uri 'none'": "Prevent <base> tag injection.",
       "form-action 'none'": "No form submissions; all communication via fetch/WebSocket/chrome.runtime."
