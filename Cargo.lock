@@ -4998,6 +4998,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-store",
+ "tempfile",
  "tokenizers",
  "tokio",
  "uuid",
