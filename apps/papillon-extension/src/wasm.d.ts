@@ -73,6 +73,8 @@ declare module "pap-wasm" {
       ttlRfc3339: string
     ): Mandate;
     sign(keypair: PrincipalKeypair): void;
+    signableBytes(): Uint8Array;
+    setSignatureBytes(sig: Uint8Array): void;
     verify(publicKeyBytes: Uint8Array): void;
     toJson(): string;
     static fromJson(json: string): Mandate;
@@ -97,6 +99,8 @@ declare module "pap-wasm" {
       expiresAtRfc3339: string
     ): CapabilityToken;
     sign(keypair: PrincipalKeypair | SessionKeypair | unknown): void;
+    signableBytes(): Uint8Array;
+    setSignatureBytes(sig: Uint8Array): void;
     toJson(): string;
     static fromJson(json: string): CapabilityToken;
     free(): void;
