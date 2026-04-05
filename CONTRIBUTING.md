@@ -5,7 +5,7 @@ PAP is published at draft stage specifically to invite feedback, objections, and
 ## What We Want
 
 - **Protocol-level feedback**: Does the trust model hold? Are there attack vectors we've missed? Can the capture test be tightened?
-- **Competing implementations**: A Python or TypeScript implementation would prove the protocol is language-independent. If the spec is only readable in Rust, the spec is incomplete.
+- **Competing implementations**: Python (PyO3) and TypeScript (`@pap/core`) implementations exist alongside the Rust reference. More languages welcome — if the spec is only readable in one language, the spec is incomplete.
 - **Integration patterns**: How to add PAP compliance to an existing LangChain agent, CrewAI workflow, or MCP tool provider.
 - **Formal specification review**: The protocol currently lives in code. An RFC-style document needs adversarial review.
 - **Real-world testing**: Run the examples against actual services. Where does the protocol break? What's missing?
@@ -26,10 +26,11 @@ File an issue for:
 1. Fork the repo
 2. Create a feature branch from `main`
 3. Write tests for new functionality
-4. Ensure `cargo test --workspace` passes
-5. Ensure `cargo clippy --workspace` has no warnings
-6. Ensure `cargo fmt --all` is clean
-7. Open a PR with a clear description of what changed and why
+4. Ensure `cargo test --workspace` passes (Rust)
+5. Ensure `cargo clippy --workspace` has no warnings (Rust)
+6. Ensure `cargo fmt --all` is clean (Rust)
+7. For TypeScript changes: `cd packages/pap-ts && npm test && npm run typecheck`
+8. Open a PR with a clear description of what changed and why
 
 ### The Capture Test
 
