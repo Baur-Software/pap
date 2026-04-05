@@ -1918,6 +1918,7 @@ body {
     align-items: center;
     gap: var(--sp-xs);
     transition: color 0.15s ease;
+    width: 100%;
 }
 
 .provenance-toggle:hover {
@@ -1926,36 +1927,76 @@ body {
 
 .provenance-chevron {
     font-family: var(--font-mono);
-    font-size: 11px;
-    transition: transform 0.15s ease;
+    font-size: 9px;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: inline-block;
+    color: var(--text-3);
+    flex-shrink: 0;
 }
 
 .provenance-chevron.expanded {
     transform: rotate(90deg);
 }
 
+.provenance-privacy-badge {
+    margin-left: auto;
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--teal);
+    background: rgba(46, 196, 160, 0.08);
+    border: 1px solid rgba(46, 196, 160, 0.2);
+    border-radius: var(--r-sm);
+    padding: 1px var(--sp-xs);
+}
+
+/* ── Smooth expand animation via CSS grid trick ── */
+.provenance-panel-wrap {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.provenance-panel-wrap.expanded {
+    grid-template-rows: 1fr;
+}
+
 .provenance-layer {
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     gap: var(--sp-xs);
+    padding: 0;
+}
+
+.provenance-panel-wrap.expanded .provenance-layer {
     padding: var(--sp-sm) 0 var(--sp-2xs);
 }
 
+/* ── Provenance entry card ── */
 .provenance-entry {
     display: flex;
-    align-items: center;
-    gap: var(--sp-sm);
-    padding: var(--sp-xs) var(--sp-sm);
-    background: var(--bg-2);
-    border-radius: var(--r-sm);
+    flex-direction: column;
+    gap: var(--sp-xs);
+    padding: var(--sp-sm);
+    background: var(--bg-1);
+    border-radius: var(--r-md);
     border: 1px solid var(--border-subtle);
 }
 
+/* Header row: name + action badge + decay state */
+.prov-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    flex-wrap: wrap;
+}
+
 .provenance-agent {
-    font: var(--text-small);
+    font-size: 13px;
     font-family: var(--font-body);
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-1);
 }
 
@@ -1964,7 +2005,126 @@ body {
     font-family: var(--font-mono);
     letter-spacing: var(--ls-label);
     text-transform: uppercase;
+    color: var(--purple);
+    background: var(--purple-muted);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    border-radius: var(--r-sm);
+    padding: 1px var(--sp-xs);
+}
+
+/* DID display rows */
+.prov-did-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+}
+
+.prov-label {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
     color: var(--text-3);
+    flex-shrink: 0;
+    min-width: 64px;
+}
+
+.prov-did {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-2);
+    cursor: default;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 260px;
+}
+
+/* Scope rows */
+.prov-scope-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-sm);
+    flex-wrap: wrap;
+}
+
+.prov-ondevice {
+    font-size: 12px;
+    font-family: var(--font-body);
+    color: var(--text-3);
+    font-style: italic;
+}
+
+/* Zero-disclosure badge variant */
+.scope-badge.zero-disclosure {
+    border-color: rgba(46, 196, 160, 0.3);
+    color: var(--teal);
+    background: rgba(46, 196, 160, 0.08);
+    font-style: italic;
+}
+
+/* Receipt row */
+.prov-receipt-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    flex-wrap: wrap;
+}
+
+.prov-receipt-link {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    transition: color 0.15s ease;
+    cursor: pointer;
+}
+
+.prov-receipt-link:hover {
+    color: var(--purple);
+}
+
+.prov-receipt-arrow {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* ── Mandate decay state badges ── */
+.decay-badge {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    padding: 1px var(--sp-xs);
+    border-radius: var(--r-sm);
+    border: 1px solid;
+}
+
+.decay-active {
+    color: var(--teal);
+    background: rgba(46, 196, 160, 0.08);
+    border-color: rgba(46, 196, 160, 0.25);
+}
+
+.decay-degraded {
+    color: var(--gold);
+    background: rgba(240, 160, 48, 0.08);
+    border-color: rgba(240, 160, 48, 0.25);
+}
+
+.decay-readonly {
+    color: var(--blue);
+    background: rgba(80, 152, 224, 0.08);
+    border-color: rgba(80, 152, 224, 0.25);
+}
+
+.decay-suspended {
+    color: var(--coral);
+    background: rgba(232, 112, 106, 0.08);
+    border-color: rgba(232, 112, 106, 0.25);
 }
 
 /* ═══════════════════════════════════════════════════════════

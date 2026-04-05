@@ -42,6 +42,13 @@ const queryInput = $("query-input") as HTMLInputElement;
 
 const params = new URLSearchParams(window.location.search);
 const uri = params.get("uri") || "";
+const rawFallback = params.get("fallback") || "";
+// Allow http(s) only — block javascript:, data:, blob:, vbscript:, etc.
+// Displayed as copyable text (never navigated), but no reason to show dangerous schemes.
+const fallbackUrl =
+  rawFallback.startsWith("https://") || rawFallback.startsWith("http://")
+    ? rawFallback
+    : "";
 let currentPhase = 0;
 let activeSessionId: string | null = null;
 
@@ -472,6 +479,26 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage) => {
       markPhaseFailed(msg.phase, msg.error);
       errorMessage.textContent = msg.error;
       errorSection.hidden = false;
+
+      // Show unprotected URL when this was an upgraded HTTPS link.
+      // No clickable link — the user must copy-paste. Friction is the point.
+      if (fallbackUrl) {
+        // Clean up stale elements from a previous failure (retry scenario)
+        errorSection.querySelector(".hs-fallback-hint")?.remove();
+        errorSection.querySelector(".hs-fallback-url")?.remove();
+
+        const hint = document.createElement("p");
+        hint.className = "hs-fallback-hint";
+        hint.textContent =
+          "Unprotected URL \u2014 this interaction will not be covered by PAP:";
+
+        const urlDisplay = document.createElement("div");
+        urlDisplay.className = "hs-fallback-url";
+        urlDisplay.textContent = fallbackUrl;
+
+        errorSection.appendChild(hint);
+        errorSection.appendChild(urlDisplay);
+      }
       break;
   }
 });
