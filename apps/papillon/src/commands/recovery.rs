@@ -153,8 +153,8 @@ pub fn reconstruct_from_shards(
                 // No ceremony record found — this device has no prior setup ceremony.
                 // The commitment scheme still validates shard integrity, but the
                 // belt-and-suspenders threshold check cannot run. Log a warning.
-                eprintln!(
-                    "[WARN] reconstruct_from_shards: no stored recovery_threshold_m — \
+                tracing::warn!(
+                    "reconstruct_from_shards: no stored recovery_threshold_m — \
                      threshold-forgery guard skipped (commitment check still active)"
                 );
             }
@@ -188,10 +188,10 @@ pub fn reconstruct_from_shards(
     if let Some(current_signer) = signer_lock.as_ref() {
         let current_did = current_signer.did();
         if current_did != did {
-            return Err(PapillonError::from(format!(
-                "reconstructed DID ({did}) does not match the current identity ({current_did}) — \
-                 use a different device or explicitly remove your identity before recovering"
-            )));
+            return Err(PapillonError::from(
+                "reconstructed identity does not match the current identity — \
+                 use a different device or explicitly remove your identity before recovering",
+            ));
         }
     }
 

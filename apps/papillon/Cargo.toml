@@ -41,4 +41,5 @@ rusqlite = { version = "0.32", features = ["bundled", "serde_json"] }
 
 ed25519-dalek = { workspace = true }
 zeroize = { workspace = true }
+tracing = "0.1"
 if-addrs = "0.7"
