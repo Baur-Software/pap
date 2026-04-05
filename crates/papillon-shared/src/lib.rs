@@ -8,6 +8,9 @@ pub mod types;
 #[cfg(any(feature = "native", feature = "wasm"))]
 pub mod db;
 
+/// Agent profile aggregation from the episode store (native only).
+pub mod agent_profile;
+
 pub use events::*;
 pub use template_gen::generate_template_from_json_ld;
 pub use types::*;
