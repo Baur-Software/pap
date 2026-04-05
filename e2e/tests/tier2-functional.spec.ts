@@ -12,7 +12,7 @@
  *
  * Quick start (local):
  *   ./scripts/start-chrysalis-dev.sh          # terminal 1
- *   BASE_URL=http://localhost:7890 \
+ *   BASE_URL=http://localhost:${CHRYSALIS_PORT:-7890} \
  *     npx playwright test tests/tier2-functional --reporter=line
  *
  * In CI, BASE_URL is injected by the chrysalis-e2e-tier2 job.
@@ -34,8 +34,9 @@ import { test, expect } from "@playwright/test";
 const BASE_URL =
   process.env.BASE_URL ?? process.env.CHRYSALIS_URL ?? "";
 
+const CHRYSALIS_PORT = process.env.CHRYSALIS_PORT ?? "7890";
 const SKIP_MSG =
-  "BASE_URL not set — start Chrysalis (./scripts/start-chrysalis-dev.sh) and set BASE_URL=http://localhost:7890";
+  `BASE_URL not set — start Chrysalis (./scripts/start-chrysalis-dev.sh) and set BASE_URL=http://localhost:${CHRYSALIS_PORT}`;
 
 function requireServer() {
   if (!BASE_URL) test.skip(true, SKIP_MSG);

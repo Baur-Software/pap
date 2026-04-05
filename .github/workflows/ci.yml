@@ -177,6 +177,8 @@ jobs:
     runs-on: ubuntu-latest
     # Run after the existing smoke test so the Docker layer cache is warm.
     needs: [smoke-test]
+    env:
+      CHRYSALIS_PORT: "7890"
     steps:
       - uses: actions/checkout@v4
 
@@ -198,18 +200,18 @@ jobs:
         run: |
           docker run -d \
             --name chrysalis-tier2 \
-            -p 7890:7890 \
+            -p $CHRYSALIS_PORT:$CHRYSALIS_PORT \
             -e PAP_REGISTRY_NO_TLS=true \
-            -e PAP_REGISTRY_PORT=7890 \
+            -e PAP_REGISTRY_PORT=$CHRYSALIS_PORT \
             -e PAP_REGISTRY_HOST=0.0.0.0 \
-            -e PAP_REGISTRY_ENDPOINT=http://localhost:7890 \
+            -e PAP_REGISTRY_ENDPOINT=http://localhost:$CHRYSALIS_PORT \
             pap-registry:ci
 
       - name: Wait for Chrysalis to be ready
         run: |
           echo "Waiting for registry to become healthy..."
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:7890/federation/identity > /dev/null 2>&1; then
+            if curl -sf http://localhost:$CHRYSALIS_PORT/federation/identity > /dev/null 2>&1; then
               echo "Registry is ready (attempt $i)"
               break
             fi
@@ -217,7 +219,7 @@ jobs:
             sleep 2
           done
           # Final check — fail fast if still not up
-          curl -sf http://localhost:7890/federation/identity | head -c 200
+          curl -sf http://localhost:$CHRYSALIS_PORT/federation/identity | head -c 200
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -241,7 +243,7 @@ jobs:
       - name: Run Tier 2 functional tests
         working-directory: e2e
         env:
-          BASE_URL: http://localhost:7890
+          BASE_URL: http://localhost:${{ env.CHRYSALIS_PORT }}
         run: npx playwright test tests/tier2-functional.spec.ts --workers=1 --reporter=line
 
       - name: Dump Chrysalis logs on failure
