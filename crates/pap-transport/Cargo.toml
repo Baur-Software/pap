@@ -29,4 +29,3 @@ hpke = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
-papillon-shared = { path = "../papillon-shared", default-features = false }
