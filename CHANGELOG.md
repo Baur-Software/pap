@@ -6,7 +6,7 @@
 
 - **pap-python**: Native `async/await` support for all 6 `AgentClient` transport methods — `present_token_async`, `exchange_did_async`, `send_disclosures_async`, `request_execution_async`, `exchange_receipt_async`, `close_session_async`. Python users can now `await` PAP protocol calls without blocking the asyncio event loop
 - **pap-python**: PyO3 `experimental-async` feature enabled for direct Python coroutine compilation from Rust `async fn`
-- **pap-python**: 21-test async test suite covering method existence, awaitable verification, connection error handling, `asyncio.gather` concurrency, and sync backward compatibility
+- **pap-python**: 23-test async test suite covering method existence, awaitable verification, connection error handling, `asyncio.gather` concurrency, and sync backward compatibility
 
 ### Changed
 
