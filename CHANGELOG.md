@@ -4,6 +4,14 @@
 
 ### Added
 
+- **pap-wasm**: Browser-native transport session (`TransportSession`) that drives the full 6-phase PAP handshake from JavaScript/TypeScript using the Fetch API. State-machine-enforced phase ordering prevents out-of-sequence calls. Auto-generates ephemeral session keypairs, co-signs receipts, and caches execution results. Wire-compatible with the native `AgentClient` (same REST endpoints, same `ProtocolMessage` JSON format).
+- **pap-wasm**: `runHandshake()` convenience method that executes all 6 phases in a single async call.
+- **pap-wasm**: Server-supplied session ID validation rejects path traversal characters before URL interpolation.
+- **pap-wasm**: 12 wasm-bindgen tests covering state machine construction, phase ordering enforcement, and keypair uniqueness.
+- **pap-wasm**: README with JS/TS usage examples, API reference, and build instructions.
+- **pap-python**: Native `async/await` support for all 6 `AgentClient` transport methods — `present_token_async`, `exchange_did_async`, `send_disclosures_async`, `request_execution_async`, `exchange_receipt_async`, `close_session_async`. Python users can now `await` PAP protocol calls without blocking the asyncio event loop
+- **pap-python**: PyO3 `experimental-async` feature enabled for direct Python coroutine compilation from Rust `async fn`
+- **pap-python**: 23-test async test suite covering method existence, awaitable verification, connection error handling, `asyncio.gather` concurrency, and sync backward compatibility
 - **pap-ts**: TypeScript reference implementation of PAP core (`@pap/core`). Pure TypeScript, works in Node.js 18+ and browsers. Covers identity (Ed25519 keypairs, `did:key` generation), mandates (issuance, delegation, chain verification, decay state machine), SD-JWT selective disclosure, session lifecycle (capability tokens, 6-phase handshake), transaction receipts (co-signing, attestations), and transport envelope signing. 103 tests via Vitest. Uses audited `@noble/ed25519` for all cryptography.
 - **pap-ts**: Receipt state guard — `TransactionReceipt.fromSession()` now enforces session must be in Executed or Closed state
 - **pap-ts**: HandshakeClient HTTP status checking — all 6 handshake phases now validate HTTP responses
