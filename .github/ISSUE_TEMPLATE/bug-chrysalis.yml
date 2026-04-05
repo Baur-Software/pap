@@ -1,0 +1,120 @@
+name: "Bug: Chrysalis"
+description: Something is broken in the Chrysalis federated agent registry
+title: "[Chrysalis] "
+labels: ["bug", "chrysalis"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Chrysalis** is the self-hostable federated agent registry. It has no central authority — nodes peer-sync via the federation protocol. Bugs here typically involve federation sync, agent advertisement/discovery, the admin REST API, or DID-based node identity.
+
+  - type: input
+    id: version
+    attributes:
+      label: Chrysalis version
+      description: From the `/health` endpoint, Docker image tag, or `git rev-parse --short HEAD`
+      placeholder: "e.g. 0.2.1, sha-abc1234, or ghcr.io/baur-software/chrysalis:0.2.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment method
+      options:
+        - Docker (single container)
+        - docker-compose (full stack)
+        - Native binary
+        - Kubernetes / other orchestrator
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database backend
+      options:
+        - SQLite (default)
+        - PostgreSQL
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected subsystem
+      options:
+        - Federation sync — announce or peer exchange
+        - Agent registration — POST /agents or admin API
+        - Agent discovery — full-text search or capability filter
+        - DID verification — Ed25519 signature or did:key resolution
+        - TLS / fingerprint pinning
+        - Schema.org vocabulary or JSON-LD rendering
+        - Node identity or keypair management
+        - Admin REST API (auth, CRUD)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: peer-count
+    attributes:
+      label: Number of federation peers
+      description: How many Chrysalis nodes are in your federation? Write "0" if standalone.
+      placeholder: "e.g. 0, 3, 12"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you observe vs. what did you expect?
+      placeholder: "After peering with a second node, newly registered agents from node-2 do not appear in node-1's search results. I expected federation sync to propagate the advertisement within 60 seconds…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include `curl` commands, docker-compose snippets, or config fragments. Redact secrets.
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error output or logs
+      description: Paste relevant container logs or HTTP response bodies. Redact auth tokens and private keys.
+      render: text
+
+  - type: checkboxes
+    id: trust-properties
+    attributes:
+      label: Trust properties affected
+      description: Check any that apply.
+      options:
+        - label: Agent advertisement signature was not verified before acceptance
+        - label: Peer node was accepted without DID-based identity verification
+        - label: TLS fingerprint was not pinned correctly
+        - label: Admin API was accessible without authentication
+        - label: None — this is a functional or performance issue only
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I am not reporting a security vulnerability (use the private advisory form)
+          required: true
