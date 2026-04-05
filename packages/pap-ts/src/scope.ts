@@ -1,7 +1,8 @@
 export interface ScopeAction {
   action: string;
   object?: string;
-  conditions: Record<string, unknown>;
+  /** Optional: when empty or absent, omitted from canonical JSON to match Rust serialisation. */
+  conditions?: Record<string, unknown>;
 }
 
 /** Scope defines permitted actions (deny-by-default). */
@@ -34,8 +35,21 @@ export class Scope {
     );
   }
 
-  toJSON(): { actions: ScopeAction[] } {
-    return { actions: this.actions };
+  toJSON(): { actions: Record<string, unknown>[] } {
+    return {
+      actions: this.actions.map((a) => {
+        const entry: Record<string, unknown> = { action: a.action };
+        if (a.object != null) {
+          entry.object = a.object;
+        }
+        // Omit conditions when absent or empty — matches Rust's
+        // #[serde(skip_serializing_if = "…")] so cross-impl signatures agree.
+        if (a.conditions != null && Object.keys(a.conditions).length > 0) {
+          entry.conditions = a.conditions;
+        }
+        return entry;
+      }),
+    };
   }
 }
 
