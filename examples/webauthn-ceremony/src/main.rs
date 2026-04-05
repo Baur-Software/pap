@@ -107,14 +107,16 @@ fn main() {
 
         // Sign using the keypair extracted from the trait
         // (In production, mandate.sign() would accept &dyn PrincipalSigner directly)
-        mandate.sign(&ed25519_dalek::SigningKey::from_bytes(
-            &signer
-                .verifying_key()
-                .to_bytes()
-                .to_vec()
-                .try_into()
-                .unwrap_or([0u8; 32]),
-        ));
+        mandate
+            .sign(&ed25519_dalek::SigningKey::from_bytes(
+                &signer
+                    .verifying_key()
+                    .to_bytes()
+                    .to_vec()
+                    .try_into()
+                    .unwrap_or([0u8; 32]),
+            ))
+            .expect("Ed25519 is always supported");
 
         // For this PoC we demonstrate the signing path works — in production,
         // mandate.sign() would accept the PrincipalSigner trait directly

@@ -58,7 +58,7 @@ mod tests {
             vec![],
             vec!["schema:SearchResult".into()],
         );
-        ad.sign(&key);
+        ad.sign(&key).unwrap();
         ad
     }
 
@@ -152,7 +152,7 @@ mod tests {
             vec!["schema:Person.name".into()],
             vec!["schema:SearchResult".into()],
         );
-        restricted_ad.sign(&key);
+        restricted_ad.sign(&key).unwrap();
 
         registry.register_local(open_ad).unwrap();
         registry.register_local(restricted_ad).unwrap();
@@ -335,7 +335,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad.sign(&key); // sign with wrong key
+        ad.sign(&key).unwrap(); // sign with wrong key
         assert!(!registry.verify_advertisement(&ad));
     }
 
@@ -371,6 +371,7 @@ mod tests {
             new_principal_did: "did:key:zNew".into(),
             recovery_proof_hash: "hash123".into(),
             revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
             signature: None,
         };
 

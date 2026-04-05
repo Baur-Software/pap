@@ -14,6 +14,6 @@ fn main() {
         vec!["schema:Person.name".into()],
         vec!["schema:Flight".into()],
     );
-    ad.sign(&key);
+    ad.sign(&key).expect("Ed25519 is always supported");
     println!("{}", ad.to_json());
 }

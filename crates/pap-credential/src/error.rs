@@ -16,4 +16,7 @@ pub enum CredentialError {
 
     #[error("expired credential")]
     Expired,
+
+    #[error("unsupported signature algorithm: {0}")]
+    UnsupportedAlgorithm(String),
 }

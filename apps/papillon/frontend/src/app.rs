@@ -7,6 +7,7 @@ use wasm_bindgen_futures::spawn_local;
 use std::sync::Arc;
 
 use crate::bridge;
+use crate::components::recovery_setup::RecoverySetup;
 use crate::components::setup_wizard::SetupWizard;
 use crate::components::sidebar::Sidebar;
 use crate::components::topbar::TopBar;
@@ -23,9 +24,12 @@ use crate::state::canvas::CanvasState;
 use crate::state::catalog::CatalogState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
+use crate::state::recovery::RecoveryState;
 use crate::state::registry::RegistryState;
 use crate::state::templates::TemplatesState;
-use papillon_shared::{BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template};
+use papillon_shared::{
+    BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, RecoveryStatus, Template,
+};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -35,12 +39,14 @@ pub fn App() -> impl IntoView {
     let canvas_state = CanvasState::default();
     let templates_state = TemplatesState::default();
     let catalog_state = CatalogState::default();
+    let recovery_state = RecoveryState::default();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);
     provide_context(canvas_state);
     provide_context(templates_state);
     provide_context(catalog_state);
+    provide_context(recovery_state);
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
@@ -234,6 +240,35 @@ pub fn App() -> impl IntoView {
         }
     });
 
+    // Post-onboarding recovery prompt.
+    // After identity loads, check if the principal has already completed the Shamir
+    // ceremony (persisted in the DB). If not, surface the recovery setup modal once.
+    // The modal is skippable; it will re-appear on the next launch until the user
+    // clicks [ DONE ] which calls mark_recovery_complete.
+    Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
+        // Only trigger once identity has actually loaded.
+        let has_identity = identity_state.info.get().is_some();
+        if !has_identity {
+            return;
+        }
+        // Don't show if already done this session.
+        if recovery_state.setup_complete.get() {
+            return;
+        }
+        spawn_local(async move {
+            if let Ok(status) =
+                bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await
+            {
+                if !status.configured {
+                    recovery_state.show_setup.set(true);
+                }
+            }
+        });
+    });
+
     // Global keyboard listener for ⌘K — creates a new canvas and navigates home.
     // Uses History pushState + popstate so the Leptos router picks up the change
     // without a full page reload (which would tear down WASM).
@@ -304,6 +339,7 @@ pub fn App() -> impl IntoView {
                 </footer>
             </div>
             <SetupWizard />
+            <RecoverySetup />
         </Router>
     }
 }

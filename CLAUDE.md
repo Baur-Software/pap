@@ -4,10 +4,12 @@ PAP is **not a SaaS app or demo**—it's a protocol specification with a referen
 
 ## Key Architecture
 
-- **Multi-crate Rust monorepo** under `crates/` (pap-core, pap-did, pap-credential, pap-transport, pap-federation, pap-marketplace, pap-proto, pap-webauthn)
+- **Multi-crate Rust monorepo** under `crates/` (pap-core, pap-did, pap-credential, pap-transport, pap-federation, pap-marketplace, pap-proto, pap-webauthn, pap-c)
 - **Papillon** (under `apps/papillon/`) is a desktop reference implementation, not marketing material
 - **Examples** in `examples/` demonstrate the full protocol surface (search, travel-booking, delegation-chain, payment, networked, federated, webauthn)
 - **Python bindings** via PyO3 (`crates/pap-python/`) for broader language support
+- **C FFI** (`crates/pap-c/`) — stable cdylib/staticlib layer; basis for C++, C#, and Java bindings
+- **M-of-N social recovery** (v0.8.0): `crates/pap-core/src/shamir.rs` (core SSS), `apps/papillon/src/commands/recovery.rs` (Tauri commands), `apps/papillon/frontend/src/components/recovery_setup.rs` (setup wizard)
 
 ## Development Standards
 
@@ -39,3 +41,23 @@ Key rules:
 ## gstack
 
 For all web browsing tasks, use the `/browse` skill from gstack. NEVER use `mcp__claude-in-chrome__*` tools.
+
+## Skill routing
+
+When the user's request matches an available skill, ALWAYS invoke it using the Skill
+tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
+The skill has specialized workflows that produce better results than ad-hoc answers.
+
+Key routing rules:
+- Product ideas, "is this worth building", brainstorming → invoke office-hours
+- Bugs, errors, "why is this broken", 500 errors → invoke investigate
+- Ship, deploy, push, create PR → invoke ship
+- QA, test the site, find bugs → invoke qa
+- Code review, check my diff → invoke review
+- Update docs after shipping → invoke document-release
+- Weekly retro → invoke retro
+- Design system, brand → invoke design-consultation
+- Visual audit, design polish → invoke design-review
+- Architecture review → invoke plan-eng-review
+- Save progress, checkpoint, resume → invoke checkpoint
+- Code quality, health check → invoke health

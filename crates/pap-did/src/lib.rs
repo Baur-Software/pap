@@ -18,13 +18,18 @@
 //! Ed25519 seed material after use. See `docs/WASM_SECURITY.md` for details
 //! and recommended mitigations.
 
+mod algorithm;
 mod document;
 mod error;
 mod principal;
 mod session;
 
+pub use algorithm::SignatureAlgorithm;
 pub use document::DidDocument;
 pub use error::DidError;
 pub use principal::PrincipalKeypair;
-pub use principal::{did_to_public_key_bytes, public_key_to_did, verify_key_from_did};
+pub use principal::{
+    did_to_public_key_bytes, did_to_public_key_bytes_with_algorithm, public_key_to_did,
+    public_key_to_did_for_algorithm, verify_key_from_did,
+};
 pub use session::SessionKeypair;

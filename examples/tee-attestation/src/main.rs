@@ -39,7 +39,9 @@ fn main() {
         DisclosureSet::empty(),
         ttl,
     );
-    root_mandate.sign(principal.signing_key());
+    root_mandate
+        .sign(principal.signing_key())
+        .expect("Ed25519 is always supported");
 
     println!("  Principal DID: {principal_did}");
     println!("  Orchestrator DID: {orchestrator_did}");
@@ -74,7 +76,9 @@ fn main() {
         vec![],
         vec!["schema:SearchResultsPage".into()],
     );
-    agent_ad.sign(agent_operator.signing_key());
+    agent_ad
+        .sign(agent_operator.signing_key())
+        .expect("Ed25519 is always supported");
 
     let mut registry = MarketplaceRegistry::new();
     registry.register(agent_ad).unwrap();
@@ -93,7 +97,9 @@ fn main() {
         orchestrator_did.clone(),
         ttl,
     );
-    token.sign(orchestrator.signing_key());
+    token
+        .sign(orchestrator.signing_key())
+        .expect("Ed25519 is always supported");
 
     let mut session = Session::initiate(&token, &agent_operator_did, &orchestrator.verifying_key())
         .expect("session initiation failed");

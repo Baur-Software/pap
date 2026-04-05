@@ -51,6 +51,14 @@ pub extern "C" fn pap_last_error_message() -> *mut c_char {
     })
 }
 
+/// Alias for `pap_last_error_message`.
+/// Returns the most recent error message as a heap-allocated C string,
+/// or NULL if no error has occurred. Caller must free with `pap_string_free`.
+#[no_mangle]
+pub extern "C" fn pap_last_error() -> *mut c_char {
+    pap_last_error_message()
+}
+
 /// Free a string returned by any `pap_*` function.
 /// # Safety
 /// `s` must be a pointer previously returned by a PAP function, or NULL.
@@ -243,6 +251,16 @@ pub struct PapAdvertisement {
 }
 pub struct PapMarketplaceRegistry {
     inner: MarketplaceRegistry,
+}
+pub struct PapMarketplaceClient {
+    registry: MarketplaceRegistry,
+    #[allow(dead_code)]
+    registry_url: String,
+}
+pub struct PapAgentList {
+    dids: Vec<CString>,
+    names: Vec<CString>,
+    len: usize,
 }
 
 // ---------------------------------------------------------------------------
@@ -772,7 +790,10 @@ pub unsafe extern "C" fn pap_mandate_sign(
 ) -> c_int {
     let m = mut_or_err!(m);
     let kp = ref_or_err!(kp);
-    m.inner.sign(kp.inner.signing_key());
+    if let Err(e) = m.inner.sign(kp.inner.signing_key()) {
+        set_last_error(&e.to_string());
+        return -1;
+    }
     0
 }
 
@@ -1071,7 +1092,10 @@ pub unsafe extern "C" fn pap_token_sign(
 ) -> c_int {
     let t = mut_or_err!(t);
     let kp = ref_or_err!(kp);
-    t.inner.sign(kp.inner.signing_key());
+    if let Err(e) = t.inner.sign(kp.inner.signing_key()) {
+        set_last_error(&e.to_string());
+        return -1;
+    }
     0
 }
 
@@ -1494,7 +1518,10 @@ pub unsafe extern "C" fn pap_advertisement_sign(
 ) -> c_int {
     let a = mut_or_err!(a);
     let kp = ref_or_err!(kp);
-    a.inner.sign(kp.inner.signing_key());
+    if let Err(e) = a.inner.sign(kp.inner.signing_key()) {
+        set_last_error(&e.to_string());
+        return -1;
+    }
     0
 }
 
@@ -1649,5 +1676,789 @@ pub extern "C" fn pap_registry_len(r: *const PapMarketplaceRegistry) -> c_int {
     match unsafe { r.as_ref() } {
         Some(r) => r.inner.len() as c_int,
         None => -1,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// M-of-N Shamir Secret Sharing recovery (spec §13.5)
+// ---------------------------------------------------------------------------
+
+use pap_core::shamir::{RecoveryShard as InnerRecoveryShard, ShardManifest};
+
+/// Opaque handle for a single Shamir recovery shard.
+pub struct PapRecoveryShard {
+    inner: InnerRecoveryShard,
+}
+
+/// Opaque handle for a set of N Shamir recovery shards from one ceremony.
+pub struct PapRecoveryShardSet {
+    /// Wrapped shard handles (one per trustee), in index order.
+    shards: Vec<PapRecoveryShard>,
+    manifest: ShardManifest,
+}
+
+/// Create M-of-N Shamir shards from a 32-byte Ed25519 seed.
+///
+/// `seed_bytes` must point to exactly 32 bytes.
+/// `threshold` is M (minimum shards required to reconstruct).
+/// `total_shares` is N (number of shards to produce).
+///
+/// Returns an opaque shard-set handle on success, NULL on error.
+/// The caller owns the set and must free it with `pap_recovery_shard_set_free`.
+///
+/// # Safety
+/// `seed_bytes` must be valid for 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_create_shards(
+    seed_bytes: *const u8,
+    threshold: u8,
+    total_shares: u8,
+) -> *mut PapRecoveryShardSet {
+    if seed_bytes.is_null() {
+        set_last_error("null seed_bytes pointer");
+        return std::ptr::null_mut();
+    }
+    let mut seed: [u8; 32] = match unsafe { std::slice::from_raw_parts(seed_bytes, 32) }.try_into()
+    {
+        Ok(b) => b,
+        Err(_) => {
+            set_last_error("seed_bytes must be exactly 32 bytes");
+            return std::ptr::null_mut();
+        }
+    };
+    let result = pap_core::shamir::create_shards(&seed, threshold, total_shares);
+    use zeroize::Zeroize;
+    seed.zeroize();
+    match result {
+        Ok((shards, manifest)) => {
+            let wrapped: Vec<PapRecoveryShard> = shards
+                .into_iter()
+                .map(|inner| PapRecoveryShard { inner })
+                .collect();
+            Box::into_raw(Box::new(PapRecoveryShardSet {
+                shards: wrapped,
+                manifest,
+            }))
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a shard set (and all shards within it). Passing NULL is a no-op.
+/// # Safety
+/// `set` must be a pointer previously returned by `pap_recovery_create_shards`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_shard_set_free(set: *mut PapRecoveryShardSet) {
+    if !set.is_null() {
+        drop(unsafe { Box::from_raw(set) });
+    }
+}
+
+/// Returns the number of shards in the set, or -1 on null input.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_count(set: *const PapRecoveryShardSet) -> c_int {
+    match unsafe { set.as_ref() } {
+        Some(s) => s.shards.len() as c_int,
+        None => {
+            set_last_error("null shard set");
+            -1
+        }
+    }
+}
+
+/// Borrow the shard at position `index` (0-based) from a shard set.
+///
+/// The returned pointer is **borrowed** — do NOT free it individually; free the entire
+/// set with `pap_recovery_shard_set_free`.  The pointer is valid until the set is freed.
+///
+/// Returns NULL if `index` is out of range or `set` is NULL.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_get(
+    set: *const PapRecoveryShardSet,
+    index: c_int,
+) -> *const PapRecoveryShard {
+    let set = match unsafe { set.as_ref() } {
+        Some(s) => s,
+        None => {
+            set_last_error("null shard set");
+            return std::ptr::null();
+        }
+    };
+    if index < 0 || index as usize >= set.shards.len() {
+        set_last_error(&format!(
+            "shard index {} out of range (0..{})",
+            index,
+            set.shards.len()
+        ));
+        return std::ptr::null();
+    }
+    // Return a pointer to the PapRecoveryShard inside the Vec storage.
+    // The Vec owns the element; its lifetime is tied to the PapRecoveryShardSet box.
+    &set.shards[index as usize] as *const PapRecoveryShard
+}
+
+/// Serialize the shard manifest (public commitment document) to JSON.
+///
+/// Returns a heap-allocated C string. Caller must free with `pap_string_free`.
+/// Returns NULL on error.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_set_manifest_json(
+    set: *const PapRecoveryShardSet,
+) -> *mut c_char {
+    let set = ref_or_null!(set);
+    match serde_json::to_string_pretty(&set.manifest) {
+        Ok(s) => cstring_or_null!(s),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Reconstruct a 32-byte seed from M or more Shamir shards.
+///
+/// `shards` is an array of `shard_count` pointers to `PapRecoveryShard`.
+/// These may be borrowed from a `PapRecoveryShardSet` or owned handles returned
+/// by `pap_recovery_shard_from_json`.
+///
+/// `seed_out` must point to a caller-allocated 32-byte buffer.
+///
+/// Returns 0 on success, -1 on error. On error, `seed_out` is zeroed.
+///
+/// # Safety
+/// `shards` must be a valid array of `shard_count` non-null `PapRecoveryShard` pointers.
+/// `seed_out` must point to at least 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_reconstruct(
+    shards: *const *const PapRecoveryShard,
+    shard_count: c_int,
+    seed_out: *mut u8,
+) -> c_int {
+    if shards.is_null() || shard_count <= 0 || shard_count > 255 || seed_out.is_null() {
+        set_last_error("null or invalid argument to pap_recovery_reconstruct");
+        return -1;
+    }
+
+    let count = shard_count as usize;
+    let shard_ptrs = unsafe { std::slice::from_raw_parts(shards, count) };
+
+    // Collect references to the inner RecoveryShards.
+    let mut shard_refs: Vec<&InnerRecoveryShard> = Vec::with_capacity(count);
+    for &ptr in shard_ptrs {
+        if ptr.is_null() {
+            set_last_error("null shard pointer in array");
+            unsafe { std::ptr::write_bytes(seed_out, 0, 32) };
+            return -1;
+        }
+        // Safety: ptr is non-null and points to a valid PapRecoveryShard.
+        shard_refs.push(unsafe { &(*ptr).inner });
+    }
+
+    match pap_core::shamir::reconstruct(&shard_refs) {
+        Ok(mut seed) => {
+            unsafe { std::ptr::copy_nonoverlapping(seed.as_ptr(), seed_out, 32) };
+            // Zeroize the stack copy so the seed does not linger in memory.
+            use zeroize::Zeroize;
+            seed.zeroize();
+            0
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            unsafe { std::ptr::write_bytes(seed_out, 0, 32) };
+            -1
+        }
+    }
+}
+
+/// Serialize a single shard to a JSON string for distribution to a trustee.
+///
+/// Returns a heap-allocated C string. Caller must free with `pap_string_free`.
+/// Returns NULL on error.
+///
+/// # Safety
+/// `shard` must be a valid pointer (borrowed from a shard set or owned from
+/// `pap_recovery_shard_from_json`).
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_to_json(shard: *const PapRecoveryShard) -> *mut c_char {
+    let shard = ref_or_null!(shard);
+    match shard.inner.to_json() {
+        Ok(s) => cstring_or_null!(s),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Deserialize a shard from a JSON string received from a trustee.
+///
+/// Returns an owned `PapRecoveryShard` handle. The caller must free it with
+/// `pap_recovery_shard_free`. Returns NULL on parse error.
+#[no_mangle]
+pub extern "C" fn pap_recovery_shard_from_json(json: *const c_char) -> *mut PapRecoveryShard {
+    let json_str = cstr_or_null!(json);
+    match InnerRecoveryShard::from_json(json_str) {
+        Ok(shard) => Box::into_raw(Box::new(PapRecoveryShard { inner: shard })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a standalone shard handle (one returned by `pap_recovery_shard_from_json`).
+///
+/// Do NOT use this on shards borrowed from a `PapRecoveryShardSet` — free the set instead.
+/// Passing NULL is a no-op.
+///
+/// # Safety
+/// `shard` must be a pointer previously returned by `pap_recovery_shard_from_json`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_recovery_shard_free(shard: *mut PapRecoveryShard) {
+    if !shard.is_null() {
+        drop(unsafe { Box::from_raw(shard) });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MarketplaceClient — high-level query API (ISS-825)
+// ---------------------------------------------------------------------------
+
+/// Create a marketplace client wrapping a local registry.
+///
+/// `registry_url` is stored for forward compatibility with networked
+/// federation but has no runtime effect in this PoC.
+/// Returns NULL on null or invalid UTF-8 input.
+#[no_mangle]
+pub extern "C" fn pap_marketplace_client_new(
+    registry_url: *const c_char,
+) -> *mut PapMarketplaceClient {
+    let url_str = cstr_or_null!(registry_url);
+    Box::into_raw(Box::new(PapMarketplaceClient {
+        registry: MarketplaceRegistry::new(),
+        registry_url: url_str.to_string(),
+    }))
+}
+
+/// Free a PapMarketplaceClient. Passing NULL is a no-op.
+/// # Safety
+/// `client` must be a pointer previously returned by `pap_marketplace_client_new`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_marketplace_client_free(client: *mut PapMarketplaceClient) {
+    if !client.is_null() {
+        drop(unsafe { Box::from_raw(client) });
+    }
+}
+
+/// Register an advertisement with the client's internal registry.
+/// The advertisement is cloned. Returns 0 on success, -1 if unsigned.
+/// # Safety
+/// Both `client` and `a` must be valid non-null handles.
+#[no_mangle]
+pub unsafe extern "C" fn pap_marketplace_client_register(
+    client: *mut PapMarketplaceClient,
+    a: *const PapAdvertisement,
+) -> c_int {
+    let client = mut_or_err!(client);
+    let a = ref_or_err!(a);
+    match client.registry.register(a.inner.clone()) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Query the client's registry for agents matching a capability.
+///
+/// `capability_json` is a JSON object with:
+///   - `"action"` (required): Schema.org action type string
+///   - `"available_properties"` (optional): JSON array of property strings
+///
+/// If `available_properties` is present, uses disclosure-filtered matching;
+/// otherwise matches by action alone.
+///
+/// Returns a `PapAgentList` handle that the caller must free with
+/// `pap_agent_list_free`. Returns NULL on error.
+#[no_mangle]
+pub extern "C" fn pap_marketplace_query(
+    client: *const PapMarketplaceClient,
+    capability_json: *const c_char,
+) -> *mut PapAgentList {
+    let client = ref_or_null!(client);
+    let json_str = cstr_or_null!(capability_json);
+
+    let parsed: serde_json::Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(&format!("invalid capability JSON: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+
+    let action = match parsed.get("action").and_then(|v| v.as_str()) {
+        Some(a) => a,
+        None => {
+            set_last_error("capability JSON must contain an \"action\" string field");
+            return std::ptr::null_mut();
+        }
+    };
+
+    let results: Vec<&AgentAdvertisement> = if let Some(props_val) =
+        parsed.get("available_properties")
+    {
+        match props_val.as_array() {
+            Some(arr) => {
+                let mut props = Vec::with_capacity(arr.len());
+                for (i, v) in arr.iter().enumerate() {
+                    match v.as_str() {
+                        Some(s) => props.push(String::from(s)),
+                        None => {
+                            set_last_error(&format!("available_properties[{i}] must be a string"));
+                            return std::ptr::null_mut();
+                        }
+                    }
+                }
+                client.registry.query_satisfiable(action, &props)
+            }
+            None => {
+                set_last_error("\"available_properties\" must be a JSON array");
+                return std::ptr::null_mut();
+            }
+        }
+    } else {
+        client.registry.query_by_action(action)
+    };
+
+    let len = results.len();
+    let mut dids = Vec::with_capacity(len);
+    let mut names = Vec::with_capacity(len);
+
+    for ad in &results {
+        let did_cs = match CString::new(ad.provider.did.clone()) {
+            Ok(cs) => cs,
+            Err(e) => {
+                set_last_error(&format!("DID contains null byte: {e}"));
+                return std::ptr::null_mut();
+            }
+        };
+        let name_cs = match CString::new(ad.name.clone()) {
+            Ok(cs) => cs,
+            Err(e) => {
+                set_last_error(&format!("name contains null byte: {e}"));
+                return std::ptr::null_mut();
+            }
+        };
+        dids.push(did_cs);
+        names.push(name_cs);
+    }
+
+    Box::into_raw(Box::new(PapAgentList { dids, names, len }))
+}
+
+/// Returns the number of agents in the result list. Returns 0 on null input.
+#[no_mangle]
+pub extern "C" fn pap_agent_list_len(list: *const PapAgentList) -> usize {
+    match unsafe { list.as_ref() } {
+        Some(l) => l.len,
+        None => 0,
+    }
+}
+
+/// Returns the DID of the agent at `index` as a borrowed C string.
+///
+/// The returned pointer is valid until `pap_agent_list_free` is called.
+/// Do NOT free this pointer with `pap_string_free`.
+/// Returns NULL if `list` is null or `index` is out of bounds.
+#[no_mangle]
+pub extern "C" fn pap_agent_list_get_did(list: *const PapAgentList, index: usize) -> *const c_char {
+    let list = match unsafe { list.as_ref() } {
+        Some(l) => l,
+        None => {
+            set_last_error("null list pointer");
+            return std::ptr::null();
+        }
+    };
+    if index >= list.len {
+        set_last_error(&format!(
+            "index {index} out of bounds for list of length {}",
+            list.len
+        ));
+        return std::ptr::null();
+    }
+    list.dids[index].as_ptr()
+}
+
+/// Returns the name of the agent at `index` as a borrowed C string.
+///
+/// The returned pointer is valid until `pap_agent_list_free` is called.
+/// Do NOT free this pointer with `pap_string_free`.
+/// Returns NULL if `list` is null or `index` is out of bounds.
+#[no_mangle]
+pub extern "C" fn pap_agent_list_get_name(
+    list: *const PapAgentList,
+    index: usize,
+) -> *const c_char {
+    let list = match unsafe { list.as_ref() } {
+        Some(l) => l,
+        None => {
+            set_last_error("null list pointer");
+            return std::ptr::null();
+        }
+    };
+    if index >= list.len {
+        set_last_error(&format!(
+            "index {index} out of bounds for list of length {}",
+            list.len
+        ));
+        return std::ptr::null();
+    }
+    list.names[index].as_ptr()
+}
+
+/// Free a PapAgentList and all its owned strings. Passing NULL is a no-op.
+///
+/// After this call, all pointers previously returned by
+/// `pap_agent_list_get_did` and `pap_agent_list_get_name` for this
+/// list are invalidated.
+/// # Safety
+/// `list` must be a pointer previously returned by `pap_marketplace_query`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_agent_list_free(list: *mut PapAgentList) {
+    if !list.is_null() {
+        drop(unsafe { Box::from_raw(list) });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    /// Helper: create a CString and return its pointer. The CString is returned
+    /// so the caller can keep it alive for the duration of the FFI call.
+    fn c(s: &str) -> CString {
+        CString::new(s).unwrap()
+    }
+
+    /// Helper: create a signed PapAdvertisement via FFI functions.
+    /// Returns (ad, keypair) — caller must free both.
+    unsafe fn make_signed_ad_ffi(
+        name: &str,
+        capabilities: &[&str],
+        requires_disclosure: &[&str],
+    ) -> (*mut PapAdvertisement, *mut PapPrincipalKeypair) {
+        let kp = pap_keypair_generate();
+        assert!(!kp.is_null());
+
+        let name_c = c(name);
+        let provider_c = c("TestCorp");
+        let did_ptr = pap_keypair_did(kp);
+        assert!(!did_ptr.is_null());
+
+        let cap_cstrings: Vec<CString> = capabilities.iter().map(|s| c(s)).collect();
+        let cap_ptrs: Vec<*const c_char> = cap_cstrings.iter().map(|s| s.as_ptr()).collect();
+
+        let disc_cstrings: Vec<CString> = requires_disclosure.iter().map(|s| c(s)).collect();
+        let disc_ptrs: Vec<*const c_char> = disc_cstrings.iter().map(|s| s.as_ptr()).collect();
+
+        let empty: Vec<*const c_char> = vec![];
+
+        let ad = unsafe {
+            pap_advertisement_new(
+                name_c.as_ptr(),
+                provider_c.as_ptr(),
+                did_ptr,
+                cap_ptrs.as_ptr(),
+                cap_ptrs.len(),
+                empty.as_ptr(),
+                0,
+                disc_ptrs.as_ptr(),
+                disc_ptrs.len(),
+                empty.as_ptr(),
+                0,
+            )
+        };
+        assert!(!ad.is_null());
+
+        // Free the DID string we borrowed for construction
+        unsafe { pap_string_free(did_ptr) };
+
+        let rc = unsafe { pap_advertisement_sign(ad, kp) };
+        assert_eq!(rc, 0);
+
+        (ad, kp)
+    }
+
+    #[test]
+    fn client_new_and_free() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+        assert!(!client.is_null());
+        unsafe { pap_marketplace_client_free(client) };
+        // Null free is a no-op
+        unsafe { pap_marketplace_client_free(std::ptr::null_mut()) };
+    }
+
+    #[test]
+    fn client_new_null_url_returns_null() {
+        let client = pap_marketplace_client_new(std::ptr::null());
+        assert!(client.is_null());
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("null"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+    }
+
+    #[test]
+    fn query_empty_registry_returns_empty_list() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+        assert!(!client.is_null());
+
+        let query = c(r#"{"action": "schema:SearchAction"}"#);
+        let list = pap_marketplace_query(client, query.as_ptr());
+        assert!(!list.is_null());
+        assert_eq!(pap_agent_list_len(list), 0);
+
+        unsafe { pap_agent_list_free(list) };
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn register_and_query_by_action() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let (ad, kp) = unsafe { make_signed_ad_ffi("Search Agent", &["schema:SearchAction"], &[]) };
+
+        let rc = unsafe { pap_marketplace_client_register(client, ad) };
+        assert_eq!(rc, 0);
+
+        let query = c(r#"{"action": "schema:SearchAction"}"#);
+        let list = pap_marketplace_query(client, query.as_ptr());
+        assert!(!list.is_null());
+        assert_eq!(pap_agent_list_len(list), 1);
+
+        // Check DID
+        let did = pap_agent_list_get_did(list, 0);
+        assert!(!did.is_null());
+        let did_str = unsafe { CStr::from_ptr(did) }.to_str().unwrap();
+        assert!(did_str.starts_with("did:key:z"), "DID: {did_str}");
+
+        // Check name
+        let name = pap_agent_list_get_name(list, 0);
+        assert!(!name.is_null());
+        let name_str = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
+        assert_eq!(name_str, "Search Agent");
+
+        unsafe { pap_agent_list_free(list) };
+        unsafe { pap_advertisement_free(ad) };
+        unsafe { pap_keypair_free(kp) };
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn query_satisfiable_filters_by_disclosure() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let (ad1, kp1) =
+            unsafe { make_signed_ad_ffi("Open Search", &["schema:SearchAction"], &[]) };
+        let (ad2, kp2) = unsafe {
+            make_signed_ad_ffi(
+                "Restricted Search",
+                &["schema:SearchAction"],
+                &["schema:Person.name"],
+            )
+        };
+
+        unsafe {
+            assert_eq!(pap_marketplace_client_register(client, ad1), 0);
+            assert_eq!(pap_marketplace_client_register(client, ad2), 0);
+        }
+
+        // Without available_properties key → query_by_action → both match
+        let q1 = c(r#"{"action": "schema:SearchAction"}"#);
+        let list1 = pap_marketplace_query(client, q1.as_ptr());
+        assert_eq!(pap_agent_list_len(list1), 2);
+        unsafe { pap_agent_list_free(list1) };
+
+        // With empty available_properties → query_satisfiable → only open matches
+        let q2 = c(r#"{"action": "schema:SearchAction", "available_properties": []}"#);
+        let list2 = pap_marketplace_query(client, q2.as_ptr());
+        assert_eq!(pap_agent_list_len(list2), 1);
+        let name = pap_agent_list_get_name(list2, 0);
+        let name_str = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
+        assert_eq!(name_str, "Open Search");
+        unsafe { pap_agent_list_free(list2) };
+
+        // With required property → both match
+        let q3 = c(
+            r#"{"action": "schema:SearchAction", "available_properties": ["schema:Person.name"]}"#,
+        );
+        let list3 = pap_marketplace_query(client, q3.as_ptr());
+        assert_eq!(pap_agent_list_len(list3), 2);
+        unsafe { pap_agent_list_free(list3) };
+
+        unsafe {
+            pap_advertisement_free(ad1);
+            pap_advertisement_free(ad2);
+            pap_keypair_free(kp1);
+            pap_keypair_free(kp2);
+            pap_marketplace_client_free(client);
+        }
+    }
+
+    #[test]
+    fn agent_list_out_of_bounds_returns_null() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let (ad, kp) = unsafe { make_signed_ad_ffi("Agent", &["schema:SearchAction"], &[]) };
+        unsafe { pap_marketplace_client_register(client, ad) };
+
+        let query = c(r#"{"action": "schema:SearchAction"}"#);
+        let list = pap_marketplace_query(client, query.as_ptr());
+        assert_eq!(pap_agent_list_len(list), 1);
+
+        // Index 0 works
+        assert!(!pap_agent_list_get_did(list, 0).is_null());
+        assert!(!pap_agent_list_get_name(list, 0).is_null());
+
+        // Index 1 is out of bounds
+        assert!(pap_agent_list_get_did(list, 1).is_null());
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("out of bounds"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        assert!(pap_agent_list_get_name(list, 1).is_null());
+
+        unsafe {
+            pap_agent_list_free(list);
+            pap_advertisement_free(ad);
+            pap_keypair_free(kp);
+            pap_marketplace_client_free(client);
+        }
+    }
+
+    #[test]
+    fn agent_list_null_returns_safely() {
+        assert_eq!(pap_agent_list_len(std::ptr::null()), 0);
+        assert!(pap_agent_list_get_did(std::ptr::null(), 0).is_null());
+        assert!(pap_agent_list_get_name(std::ptr::null(), 0).is_null());
+    }
+
+    #[test]
+    fn query_invalid_json_returns_null() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let bad = c("not json");
+        let list = pap_marketplace_query(client, bad.as_ptr());
+        assert!(list.is_null());
+
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("invalid capability JSON"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn query_missing_action_field_returns_null() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let bad = c("{}");
+        let list = pap_marketplace_query(client, bad.as_ptr());
+        assert!(list.is_null());
+
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("action"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn pap_last_error_alias_works() {
+        // Trigger an error
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+        let bad = c("not json");
+        let list = pap_marketplace_query(client, bad.as_ptr());
+        assert!(list.is_null());
+
+        // pap_last_error() returns the message
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        unsafe { pap_string_free(err) };
+
+        // Second call returns null (consumed)
+        let err2 = pap_last_error();
+        assert!(err2.is_null());
+
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn register_unsigned_ad_fails() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let name = c("Unsigned Agent");
+        let provider = c("Corp");
+        let did = c("did:key:zunsigned");
+        let cap_str = c("schema:SearchAction");
+        let caps: Vec<*const c_char> = vec![cap_str.as_ptr()];
+        let empty: Vec<*const c_char> = vec![];
+
+        let ad = unsafe {
+            pap_advertisement_new(
+                name.as_ptr(),
+                provider.as_ptr(),
+                did.as_ptr(),
+                caps.as_ptr(),
+                1,
+                empty.as_ptr(),
+                0,
+                empty.as_ptr(),
+                0,
+                empty.as_ptr(),
+                0,
+            )
+        };
+        assert!(!ad.is_null());
+
+        // Don't sign — register should fail
+        let rc = unsafe { pap_marketplace_client_register(client, ad) };
+        assert_eq!(rc, -1);
+
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("signed"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        unsafe {
+            pap_advertisement_free(ad);
+            pap_marketplace_client_free(client);
+        }
     }
 }

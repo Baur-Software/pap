@@ -555,7 +555,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad.sign(&key);
+        ad.sign(&key).expect("Ed25519 is always supported");
         ad
     }
 
@@ -934,7 +934,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad1.sign(&key);
+        ad1.sign(&key).expect("Ed25519 is always supported");
         let status1 = post_ad(app.clone(), &ad1).await;
         assert_eq!(status1, StatusCode::CREATED, "first ad should be accepted");
 
@@ -948,7 +948,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad2.sign(&key);
+        ad2.sign(&key).expect("Ed25519 is always supported");
         let status2 = post_ad(app.clone(), &ad2).await;
         assert_eq!(status2, StatusCode::CREATED, "second ad should be accepted");
 
@@ -962,7 +962,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad3.sign(&key);
+        ad3.sign(&key).expect("Ed25519 is always supported");
         let status3 = post_ad(app.clone(), &ad3).await;
         assert_eq!(
             status3,
@@ -1009,7 +1009,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad_a1.sign(&key_a);
+        ad_a1.sign(&key_a).expect("Ed25519 is always supported");
         assert_eq!(
             post_ad(app.clone(), &ad_a1).await,
             StatusCode::CREATED,
@@ -1026,7 +1026,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad_b1.sign(&key_b);
+        ad_b1.sign(&key_b).expect("Ed25519 is always supported");
         assert_eq!(
             post_ad(app.clone(), &ad_b1).await,
             StatusCode::CREATED,
@@ -1043,7 +1043,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad_a2.sign(&key_a);
+        ad_a2.sign(&key_a).expect("Ed25519 is always supported");
         assert_eq!(
             post_ad(app.clone(), &ad_a2).await,
             StatusCode::TOO_MANY_REQUESTS,

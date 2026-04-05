@@ -190,7 +190,7 @@ pub async fn sign_advertisement(
         .map_err(|e| ServerFnError::new(format!("Invalid advertisement JSON: {}", e)))?;
 
     // Sign it
-    ad.sign(&signing_key);
+    ad.sign(&signing_key).expect("Ed25519 is always supported");
 
     // Return signed JSON
     serde_json::to_string(&ad)

@@ -57,6 +57,8 @@
 
 typedef struct PapAdvertisement PapAdvertisement;
 
+typedef struct PapAgentList PapAgentList;
+
 typedef struct PapCapabilityToken PapCapabilityToken;
 
 typedef struct PapDisclosureEntry PapDisclosureEntry;
@@ -65,11 +67,19 @@ typedef struct PapDisclosureSet PapDisclosureSet;
 
 typedef struct PapMandate PapMandate;
 
+typedef struct PapMarketplaceClient PapMarketplaceClient;
+
 typedef struct PapMarketplaceRegistry PapMarketplaceRegistry;
 
 typedef struct PapPrincipalKeypair PapPrincipalKeypair;
 
 typedef struct PapReceipt PapReceipt;
+
+// Opaque handle for a single Shamir recovery shard.
+typedef struct PapRecoveryShard PapRecoveryShard;
+
+// Opaque handle for a set of N Shamir recovery shards from one ceremony.
+typedef struct PapRecoveryShardSet PapRecoveryShardSet;
 
 typedef struct PapScope PapScope;
 
@@ -82,6 +92,11 @@ typedef struct PapSessionKeypair PapSessionKeypair;
 // Returns the most recent error message as a heap-allocated C string,
 // or NULL if no error has occurred. Caller must free with `pap_string_free`.
 char *pap_last_error_message(void);
+
+// Alias for `pap_last_error_message`.
+// Returns the most recent error message as a heap-allocated C string,
+// or NULL if no error has occurred. Caller must free with `pap_string_free`.
+char *pap_last_error(void);
 
 // Free a string returned by any `pap_*` function.
 // # Safety
@@ -168,10 +183,14 @@ struct PapScope *pap_scope_deny_all(void);
 void pap_scope_free(struct PapScope *s);
 
 // Returns 1 if the scope permits `action`, 0 otherwise (including on null input).
+// # Safety
+// `action` must be a valid non-null pointer to a null-terminated string when `scope` is non-null.
 int pap_scope_permits(const struct PapScope *scope, const char *action);
 
 // Returns 1 if every action in `child` is also in `parent` (child ⊆ parent).
 // Returns 0 on any error or if the check fails.
+// # Safety
+// Both `parent` and `child` must be valid non-null pointers when used for a positive check.
 int pap_scope_contains(const struct PapScope *parent, const struct PapScope *child);
 
 // Create a disclosure entry describing what context an agent may share.
@@ -473,6 +492,8 @@ int pap_advertisement_verify(const struct PapAdvertisement *a,
                              uintptr_t pubkey_len);
 
 // Returns 1 if the advertisement supports `action`, 0 otherwise.
+// # Safety
+// `action` must be a valid non-null pointer to a null-terminated string when `a` is non-null.
 int pap_advertisement_supports_action(const struct PapAdvertisement *a, const char *action);
 
 // Serialize the advertisement to a JSON C string. Caller frees with `pap_string_free`.
@@ -500,10 +521,156 @@ int pap_registry_register(struct PapMarketplaceRegistry *r, const struct PapAdve
 
 // Query for advertisements matching `action`. Returns results as a JSON array
 // C string. Caller frees with `pap_string_free`.
-// Returns NULL on error.
+// Returns NULL on error (check `pap_last_error()`).
+// # Safety
+// `r` and `action` must be valid non-null pointers. Passing NULL is undefined behavior.
 char *pap_registry_query_by_action(const struct PapMarketplaceRegistry *r, const char *action);
 
 // Returns the number of advertisements in the registry. -1 on null input.
 int pap_registry_len(const struct PapMarketplaceRegistry *r);
+
+// Create M-of-N Shamir shards from a 32-byte Ed25519 seed.
+//
+// `seed_bytes` must point to exactly 32 bytes.
+// `threshold` is M (minimum shards required to reconstruct).
+// `total_shares` is N (number of shards to produce).
+//
+// Returns an opaque shard-set handle on success, NULL on error.
+// The caller owns the set and must free it with `pap_recovery_shard_set_free`.
+//
+// # Safety
+// `seed_bytes` must be valid for 32 bytes.
+struct PapRecoveryShardSet *pap_recovery_create_shards(const uint8_t *seed_bytes,
+                                                       uint8_t threshold,
+                                                       uint8_t total_shares);
+
+// Free a shard set (and all shards within it). Passing NULL is a no-op.
+// # Safety
+// `set` must be a pointer previously returned by `pap_recovery_create_shards`, or NULL.
+void pap_recovery_shard_set_free(struct PapRecoveryShardSet *set);
+
+// Returns the number of shards in the set, or -1 on null input.
+int pap_recovery_shard_count(const struct PapRecoveryShardSet *set);
+
+// Borrow the shard at position `index` (0-based) from a shard set.
+//
+// The returned pointer is **borrowed** — do NOT free it individually; free the entire
+// set with `pap_recovery_shard_set_free`.  The pointer is valid until the set is freed.
+//
+// Returns NULL if `index` is out of range or `set` is NULL.
+const struct PapRecoveryShard *pap_recovery_shard_get(const struct PapRecoveryShardSet *set,
+                                                      int index);
+
+// Serialize the shard manifest (public commitment document) to JSON.
+//
+// Returns a heap-allocated C string. Caller must free with `pap_string_free`.
+// Returns NULL on error.
+char *pap_recovery_shard_set_manifest_json(const struct PapRecoveryShardSet *set);
+
+// Reconstruct a 32-byte seed from M or more Shamir shards.
+//
+// `shards` is an array of `shard_count` pointers to `PapRecoveryShard`.
+// These may be borrowed from a `PapRecoveryShardSet` or owned handles returned
+// by `pap_recovery_shard_from_json`.
+//
+// `seed_out` must point to a caller-allocated 32-byte buffer.
+//
+// Returns 0 on success, -1 on error. On error, `seed_out` is zeroed.
+//
+// # Safety
+// `shards` must be a valid array of `shard_count` non-null `PapRecoveryShard` pointers.
+// `seed_out` must point to at least 32 bytes.
+int pap_recovery_reconstruct(const struct PapRecoveryShard *const *shards,
+                             int shard_count,
+                             uint8_t *seed_out);
+
+// Serialize a single shard to a JSON string for distribution to a trustee.
+//
+// Returns a heap-allocated C string. Caller must free with `pap_string_free`.
+// Returns NULL on error.
+//
+// # Safety
+// `shard` must be a valid pointer (borrowed from a shard set or owned from
+// `pap_recovery_shard_from_json`).
+char *pap_recovery_shard_to_json(const struct PapRecoveryShard *shard);
+
+// Deserialize a shard from a JSON string received from a trustee.
+//
+// Returns an owned `PapRecoveryShard` handle. The caller must free it with
+// `pap_recovery_shard_free`. Returns NULL on parse error.
+struct PapRecoveryShard *pap_recovery_shard_from_json(const char *json);
+
+// Free a standalone shard handle (one returned by `pap_recovery_shard_from_json`).
+//
+// Do NOT use this on shards borrowed from a `PapRecoveryShardSet` — free the set instead.
+// Passing NULL is a no-op.
+//
+// # Safety
+// `shard` must be a pointer previously returned by `pap_recovery_shard_from_json`, or NULL.
+void pap_recovery_shard_free(struct PapRecoveryShard *shard);
+
+// Create a marketplace client wrapping a local registry.
+//
+// `registry_url` is stored for forward compatibility with networked
+// federation but has no runtime effect in this PoC.
+// Returns NULL on null or invalid UTF-8 input.
+struct PapMarketplaceClient *pap_marketplace_client_new(const char *registry_url);
+
+// Free a PapMarketplaceClient. Passing NULL is a no-op.
+// # Safety
+// `client` must be a pointer previously returned by `pap_marketplace_client_new`.
+void pap_marketplace_client_free(struct PapMarketplaceClient *client);
+
+// Register an advertisement with the client's internal registry.
+// The advertisement is cloned. Returns 0 on success, -1 if unsigned.
+// # Safety
+// Both `client` and `a` must be valid non-null handles.
+int pap_marketplace_client_register(struct PapMarketplaceClient *client,
+                                    const struct PapAdvertisement *a);
+
+// Query the client's registry for agents matching a capability.
+//
+// `capability_json` is a JSON object with:
+//   - `"action"` (required): Schema.org action type string
+//   - `"available_properties"` (optional): JSON array of property strings
+//
+// If `available_properties` is present, uses disclosure-filtered matching;
+// otherwise matches by action alone.
+//
+// Returns a `PapAgentList` handle that the caller must free with
+// `pap_agent_list_free`. Returns NULL on error (check `pap_last_error()`).
+//
+// # Safety
+// `client` must be a valid non-null pointer returned by `pap_marketplace_client_new`.
+// `capability_json` must be a valid non-null pointer to a null-terminated UTF-8 string.
+// Passing NULL for any pointer parameter is undefined behavior.
+struct PapAgentList *pap_marketplace_query(const struct PapMarketplaceClient *client,
+                                           const char *capability_json);
+
+// Returns the number of agents in the result list. Returns 0 on null input.
+uintptr_t pap_agent_list_len(const struct PapAgentList *list);
+
+// Returns the DID of the agent at `index` as a borrowed C string.
+//
+// The returned pointer is valid until `pap_agent_list_free` is called.
+// Do NOT free this pointer with `pap_string_free`.
+// Returns NULL if `list` is null or `index` is out of bounds.
+const char *pap_agent_list_get_did(const struct PapAgentList *list, uintptr_t index);
+
+// Returns the name of the agent at `index` as a borrowed C string.
+//
+// The returned pointer is valid until `pap_agent_list_free` is called.
+// Do NOT free this pointer with `pap_string_free`.
+// Returns NULL if `list` is null or `index` is out of bounds.
+const char *pap_agent_list_get_name(const struct PapAgentList *list, uintptr_t index);
+
+// Free a PapAgentList and all its owned strings. Passing NULL is a no-op.
+//
+// After this call, all pointers previously returned by
+// `pap_agent_list_get_did` and `pap_agent_list_get_name` for this
+// list are invalidated.
+// # Safety
+// `list` must be a pointer previously returned by `pap_marketplace_query`.
+void pap_agent_list_free(struct PapAgentList *list);
 
 #endif  /* PAP_H */

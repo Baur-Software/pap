@@ -254,7 +254,7 @@ contain:
     "id": "did:key:z...#key-1",
     "type": "Ed25519VerificationKey2020",
     "controller": "did:key:z...",
-    "publicKeyMultibase": "z<base58btc(public_key_bytes)>"
+    "publicKeyMultibase": "z<base58btc(0xed01 ++ public_key_bytes)>"
   }],
   "authentication": ["did:key:z...#key-1"]
 }
@@ -2250,9 +2250,16 @@ PAP v1.0 uses exclusively:
   binary-to-text encoding.
 - **Base58btc** for DID key encoding.
 
-Implementations MUST use these algorithms. Algorithm agility (the
-ability to negotiate alternative algorithms) is deferred to future
-versions of the specification.
+Implementations MUST use these algorithms for PAP v1.0. All signable
+structures carry a `SignatureAlgorithm` field (serialized as the JWS
+`alg` string, e.g. `"EdDSA"`) to enable forward-compatible algorithm
+negotiation. The field defaults to Ed25519 when absent. Implementations
+MUST reject algorithms they do not support. The `did:key` multicodec
+prefix encodes the algorithm of the public key.
+
+Future versions of this specification MAY introduce additional algorithms
+(e.g., ML-DSA-65 for post-quantum resistance). See
+`docs/algorithm-agility.md` for the migration path.
 
 ### 16.2. Key Management
 

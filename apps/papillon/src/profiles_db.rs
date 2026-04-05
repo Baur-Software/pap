@@ -262,6 +262,27 @@ impl ProfilesDatabase {
         Ok(())
     }
 
+    /// Update the seed for an existing profile. Used by social recovery to persist
+    /// a reconstructed seed back to the authoritative profiles store.
+    pub fn update_profile_seed(&self, id: &str, seed_b64: &str) -> Result<(), PapillonError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+
+        let rows = conn
+            .execute(
+                "UPDATE profiles SET principal_seed_b64 = ?1 WHERE id = ?2",
+                params![seed_b64, id],
+            )
+            .map_err(|e| PapillonError::from(format!("profiles_db update_seed: {e}")))?;
+
+        if rows == 0 {
+            return Err(PapillonError::from(format!("Profile {id} not found")));
+        }
+        Ok(())
+    }
+
     /// Rename a profile.
     pub fn rename_profile(&self, id: &str, new_name: &str) -> Result<(), PapillonError> {
         let conn = self

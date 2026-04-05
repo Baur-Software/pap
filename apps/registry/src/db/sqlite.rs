@@ -278,7 +278,7 @@ mod tests {
             vec![],
             vec![],
         );
-        ad.sign(&key);
+        ad.sign(&key).expect("Ed25519 is always supported");
         ad
     }
 

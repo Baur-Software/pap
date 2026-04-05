@@ -76,4 +76,7 @@ pub enum PapError {
 
     #[error("attestation error: {0}")]
     AttestationError(String),
+
+    #[error("unsupported signature algorithm: {0}")]
+    UnsupportedAlgorithm(String),
 }

@@ -1,4 +1,5 @@
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -18,6 +19,9 @@ pub struct SelectiveDisclosureJwt {
     claims: HashMap<String, serde_json::Value>,
     /// Salt for each claim (key -> random salt)
     salts: HashMap<String, String>,
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
     /// The signed hash of all claims+salts
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -52,17 +56,25 @@ impl SelectiveDisclosureJwt {
             issuer,
             claims,
             salts,
+            algorithm: SignatureAlgorithm::default(),
             signature: None,
         }
     }
 
     /// Sign the SD-JWT (signs over the hash commitments of all claims).
-    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) {
+    pub fn sign(&mut self, signing_key: &ed25519_dalek::SigningKey) -> Result<(), CredentialError> {
+        if self.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(CredentialError::UnsupportedAlgorithm(format!(
+                "{:?}",
+                self.algorithm
+            )));
+        }
         let bytes = self.commitment_bytes();
         let sig = signing_key.sign(&bytes);
         use base64::Engine;
         self.signature =
             Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()));
+        Ok(())
     }
 
     /// Verify the SD-JWT signature.
@@ -190,24 +202,29 @@ mod tests {
         claims.insert("schema:nationality".into(), serde_json::json!("Wonderland"));
 
         let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
-        sd_jwt.sign(&key);
+        sd_jwt.sign(&key).unwrap();
         (sd_jwt, key)
     }
 
-    #[test]
-    fn selective_disclosure_name_only() {
+    /// Parameterized SD-JWT sign/verify/disclose test body.
+    fn sd_jwt_sign_verify_for_algorithm(algorithm: SignatureAlgorithm) {
+        assert_eq!(algorithm, SignatureAlgorithm::Ed25519);
         let (sd_jwt, key) = make_sd_jwt();
+        assert_eq!(sd_jwt.algorithm, algorithm);
 
-        // Disclose only name — email and nationality stay hidden
         let disclosures = sd_jwt.disclose(&["schema:name"]).unwrap();
         assert_eq!(disclosures.len(), 1);
         assert_eq!(disclosures[0].key, "schema:name");
         assert_eq!(disclosures[0].value, serde_json::json!("Alice"));
 
-        // Verify the disclosure matches the commitment
         assert!(sd_jwt
             .verify_disclosures(&disclosures, &key.verifying_key())
             .is_ok());
+    }
+
+    #[test]
+    fn selective_disclosure_name_only() {
+        sd_jwt_sign_verify_for_algorithm(SignatureAlgorithm::Ed25519);
     }
 
     #[test]

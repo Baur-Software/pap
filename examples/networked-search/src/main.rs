@@ -189,7 +189,9 @@ async fn main() {
         orchestrator_did.clone(),
         ttl,
     );
-    token.sign(orchestrator.signing_key());
+    token
+        .sign(orchestrator.signing_key())
+        .expect("Ed25519 is always supported");
     println!("  Action: schema:SearchAction");
     println!("  Target: {}...", &search_operator_did[..30]);
     println!();
@@ -273,7 +275,9 @@ async fn main() {
         orchestrator_did.clone(),
         ttl,
     );
-    in_mem_token.sign(orchestrator.signing_key());
+    in_mem_token
+        .sign(orchestrator.signing_key())
+        .expect("Ed25519 is always supported");
 
     let mut in_mem_session = pap_core::session::Session::initiate(
         &in_mem_token,

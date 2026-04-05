@@ -1,6 +1,7 @@
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 
+use crate::algorithm::SignatureAlgorithm;
 use crate::DidError;
 
 /// Root keypair bound to the human principal's device.
@@ -50,42 +51,86 @@ impl PrincipalKeypair {
     }
 
     /// Verify a signature against this keypair's public key.
+    /// Uses strict verification: rejects small-order public keys and R
+    /// components, preventing signature malleability and weak-key forgery.
     pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), DidError> {
         self.verifying_key()
-            .verify(message, signature)
+            .verify_strict(message, signature)
             .map_err(|_| DidError::VerificationFailed)
     }
+}
+
+/// Convert a public key to a `did:key` identifier using the specified algorithm.
+pub fn public_key_to_did_for_algorithm(key_bytes: &[u8], algorithm: SignatureAlgorithm) -> String {
+    let prefix = algorithm.multicodec_prefix();
+    let mut prefixed = Vec::with_capacity(prefix.len() + key_bytes.len());
+    prefixed.extend_from_slice(prefix);
+    prefixed.extend_from_slice(key_bytes);
+    let encoded = bs58::encode(&prefixed).into_string();
+    format!("did:key:z{encoded}")
 }
 
 /// Convert an Ed25519 public key to a `did:key` identifier.
 /// Multicodec prefix for Ed25519 public key: 0xed01
 pub fn public_key_to_did(key: &VerifyingKey) -> String {
-    let mut prefixed = Vec::with_capacity(34);
-    prefixed.push(0xed);
-    prefixed.push(0x01);
-    prefixed.extend_from_slice(&key.to_bytes());
-    let encoded = bs58::encode(&prefixed).into_string();
-    format!("did:key:z{encoded}")
+    public_key_to_did_for_algorithm(&key.to_bytes(), SignatureAlgorithm::Ed25519)
 }
 
-/// Extract public key bytes from a `did:key` identifier.
-pub fn did_to_public_key_bytes(did: &str) -> Result<[u8; 32], DidError> {
+/// Extract public key bytes and detected algorithm from a `did:key` identifier.
+pub fn did_to_public_key_bytes_with_algorithm(
+    did: &str,
+) -> Result<(Vec<u8>, SignatureAlgorithm), DidError> {
     let z_part = did
         .strip_prefix("did:key:z")
         .ok_or_else(|| DidError::InvalidDid(did.to_string()))?;
     let decoded = bs58::decode(z_part)
         .into_vec()
         .map_err(|e| DidError::InvalidDid(e.to_string()))?;
-    if decoded.len() != 34 || decoded[0] != 0xed || decoded[1] != 0x01 {
-        return Err(DidError::InvalidDid("invalid multicodec prefix".into()));
+    if decoded.len() < 2 {
+        return Err(DidError::InvalidDid(
+            "too short for multicodec prefix".into(),
+        ));
     }
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&decoded[2..]);
-    Ok(bytes)
+    let algorithm = SignatureAlgorithm::from_multicodec_prefix(&decoded[..2]).ok_or_else(|| {
+        DidError::UnsupportedAlgorithm(format!(
+            "unrecognized multicodec prefix: 0x{:02x}{:02x}",
+            decoded[0], decoded[1]
+        ))
+    })?;
+    let expected_len = 2 + algorithm.public_key_size();
+    if decoded.len() != expected_len {
+        return Err(DidError::InvalidDid(format!(
+            "expected {} bytes for {}, got {}",
+            expected_len,
+            algorithm,
+            decoded.len()
+        )));
+    }
+    Ok((decoded[2..].to_vec(), algorithm))
+}
+
+/// Extract public key bytes from a `did:key` identifier (Ed25519 only).
+pub fn did_to_public_key_bytes(did: &str) -> Result<[u8; 32], DidError> {
+    let (bytes, alg) = did_to_public_key_bytes_with_algorithm(did)?;
+    if alg != SignatureAlgorithm::Ed25519 {
+        return Err(DidError::UnsupportedAlgorithm(format!(
+            "expected Ed25519, got {}",
+            alg
+        )));
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
 }
 
 /// Extract a VerifyingKey from a `did:key` identifier.
 /// This is used to verify signatures on artifacts signed by the DID holder.
+///
+/// **Trust note:** This function performs curve decompression but does NOT
+/// check that the key is in the prime-order subgroup. The identity element
+/// and other small-order points will be accepted. Subgroup safety is enforced
+/// at verification time by `verify_strict()`, not at key parsing time.
+/// Do not treat a successful return as proof of safe key material.
 pub fn verify_key_from_did(did: &str) -> Result<VerifyingKey, DidError> {
     let bytes = did_to_public_key_bytes(did)?;
     VerifyingKey::from_bytes(&bytes)
@@ -127,5 +172,127 @@ mod tests {
         let kp = PrincipalKeypair::generate();
         let sig = kp.sign(b"correct message");
         assert!(kp.verify(b"wrong message", &sig).is_err());
+    }
+
+    #[test]
+    fn algorithm_aware_did_roundtrip() {
+        let kp = PrincipalKeypair::generate();
+        let did =
+            public_key_to_did_for_algorithm(&kp.public_key_bytes(), SignatureAlgorithm::Ed25519);
+        assert_eq!(did, kp.did());
+
+        let (bytes, alg) = did_to_public_key_bytes_with_algorithm(&did).unwrap();
+        assert_eq!(alg, SignatureAlgorithm::Ed25519);
+        assert_eq!(bytes.as_slice(), &kp.public_key_bytes());
+    }
+
+    #[test]
+    fn unrecognized_multicodec_prefix_rejected() {
+        // Fabricate a did:key with an unknown multicodec prefix
+        let mut prefixed = vec![0x12, 0x00]; // not Ed25519
+        prefixed.extend_from_slice(&[0u8; 32]);
+        let encoded = bs58::encode(&prefixed).into_string();
+        let did = format!("did:key:z{encoded}");
+
+        let result = did_to_public_key_bytes_with_algorithm(&did);
+        assert!(matches!(result, Err(DidError::UnsupportedAlgorithm(_))));
+    }
+
+    #[test]
+    fn all_zero_seed_valid_keypair() {
+        // Ed25519 accepts any 32 bytes as a valid seed (validity by construction).
+        // Verifies PAP's wrapper does not add unnecessary rejection.
+        let kp = PrincipalKeypair::from_bytes(&[0u8; 32]).unwrap();
+        let sig = kp.sign(b"test");
+        assert!(kp.verify(b"test", &sig).is_ok());
+    }
+
+    #[test]
+    fn all_ones_seed_valid_keypair() {
+        // Edge of scalar space — same rationale.
+        let kp = PrincipalKeypair::from_bytes(&[0xff; 32]).unwrap();
+        let sig = kp.sign(b"test");
+        assert!(kp.verify(b"test", &sig).is_ok());
+    }
+
+    #[test]
+    fn deterministic_signatures() {
+        let kp = PrincipalKeypair::from_bytes(&[42u8; 32]).unwrap();
+        let sig1 = kp.sign(b"determinism");
+        let sig2 = kp.sign(b"determinism");
+        assert_eq!(
+            sig1.to_bytes(),
+            sig2.to_bytes(),
+            "Ed25519 is deterministic — same seed + message must produce identical signatures"
+        );
+    }
+
+    #[test]
+    fn did_key_empty_string() {
+        assert!(did_to_public_key_bytes("").is_err());
+    }
+
+    #[test]
+    fn did_key_wrong_prefix() {
+        assert!(did_to_public_key_bytes("did:key:Q123").is_err());
+    }
+
+    #[test]
+    fn did_key_short_payload() {
+        assert!(did_to_public_key_bytes("did:key:z11").is_err());
+    }
+
+    #[test]
+    fn did_key_wrong_multicodec() {
+        let kp = PrincipalKeypair::generate();
+        let mut wrong_prefix = Vec::with_capacity(34);
+        wrong_prefix.push(0xec); // wrong!
+        wrong_prefix.push(0x01);
+        wrong_prefix.extend_from_slice(&kp.public_key_bytes());
+        let encoded = bs58::encode(&wrong_prefix).into_string();
+        let did = format!("did:key:z{encoded}");
+        assert!(did_to_public_key_bytes(&did).is_err());
+    }
+
+    #[test]
+    fn did_key_not_on_curve() {
+        // y=2 is not on the Ed25519 curve. VerifyingKey::from_bytes performs
+        // curve decompression which rejects points not on the curve.
+        let mut not_on_curve = Vec::with_capacity(34);
+        not_on_curve.push(0xed);
+        not_on_curve.push(0x01);
+        let mut bad_point = [0u8; 32];
+        bad_point[0] = 2; // y=2 in little-endian
+        not_on_curve.extend_from_slice(&bad_point);
+        let encoded = bs58::encode(&not_on_curve).into_string();
+        let did = format!("did:key:z{encoded}");
+        assert!(
+            verify_key_from_did(&did).is_err(),
+            "DID encoding a point not on the curve must be rejected"
+        );
+    }
+
+    #[test]
+    fn did_key_identity_point_accepted() {
+        // The identity element (0, 1) IS on the Ed25519 curve and passes
+        // VerifyingKey::from_bytes — ed25519-dalek 2.x does NOT perform a
+        // prime-order subgroup check at construction time. The subgroup check
+        // only happens in verify_strict(), not verify() or from_bytes.
+        // This test documents current behavior. See follow-up: verify() vs
+        // verify_strict() evaluation for PAP's security boundary.
+        let mut identity = Vec::with_capacity(34);
+        identity.push(0xed);
+        identity.push(0x01);
+        let mut identity_y = [0u8; 32];
+        identity_y[0] = 0x01; // y = 1 in little-endian (identity element)
+        identity.extend_from_slice(&identity_y);
+        let encoded = bs58::encode(&identity).into_string();
+        let did = format!("did:key:z{encoded}");
+        // Documents that verify_key_from_did ACCEPTS the identity element.
+        // This is the verify() vs verify_strict() gap — tracked as follow-up.
+        assert!(
+            verify_key_from_did(&did).is_ok(),
+            "identity element is accepted by from_bytes (no subgroup check)"
+        );
     }
 }

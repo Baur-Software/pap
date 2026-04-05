@@ -6,7 +6,102 @@
 
 - **pap-federation**: Cursor-based pagination for federation peer sync queries. `QueryByAction` now accepts optional `cursor` and `page_size` fields; `QueryResponse` includes `next_cursor` and `has_more`. Server handler paginates by agent DID (lexicographic ordering, default 100 per page). Both native (`FederationClient`) and WASM (`FetchFederationClient`) clients gain `sync_action_paginated()` that loops until all pages are collected. Fully backward compatible — old clients/servers work unchanged via serde defaults.
 
+## [0.8.0] - 2026-04-04
+
+### Added
+
+- **social recovery**: M-of-N Shamir Secret Sharing for the principal keypair (spec §13.5). You can now split your identity's seed into N shards and distribute them to trusted contacts — any M of those contacts can reconstruct your identity if you lose access. The scheme operates over GF(2^8) with CSPRNG-generated polynomial coefficients; 18 tests cover round-trips, tamper detection, replay prevention, and all error paths.
+- **Papillon**: Four-step recovery setup wizard — accessible from the post-onboarding flow or on demand. Shows one shard at a time (previous shards removed from DOM before displaying the next), includes a copy button and a manifest download, and auto-advances after the identity loads if recovery is not yet configured.
+- **Papillon**: Recovery reconstruction command — accepts M or more shard JSON blobs, verifies commitments and session nonces, checks reconstructed DID matches the active identity (if any), and persists the recovered seed to the authoritative profiles database.
+- **pap-c**: C FFI bindings for social recovery — `pap_recovery_create_shards`, `pap_recovery_reconstruct`, and supporting helpers. Header in `crates/pap-c/include/pap.h`. Suitable for embedding in non-Rust runtimes (Python, Swift, Go).
+- **pap-python**: Python bindings surface the new recovery API via PyO3.
+
+### Changed
+
+- **shamir**: `reconstruct()` now returns `Zeroizing<[u8; 32]>` so the recovered seed is zeroed on drop throughout its entire lifetime in the caller.
+- **RecoveryShard**: `Drop` impl zeroizes `shard_bytes`, `session_nonce`, and `commitment` before heap release. `Debug` impl redacts those same fields — logging a shard via `{:?}` never emits partial secret material.
+- **Papillon**: Recovered seed is written to `profiles_db` (the authoritative per-profile store) rather than the legacy key-value database — ensures the identity survives app restarts.
+- **Papillon**: `create_recovery_shards` releases the seed read-lock before ceremony work begins, unblocking concurrent `switch_profile` calls.
+
+### Fixed
+
+- **shamir**: `lagrange_at_zero` precondition upgraded from `debug_assert` to `assert` — coordinate-length mismatch now panics in release builds rather than silently interpolating garbage.
+- **shamir**: Reconstruction now rejects shards whose `index > total`, preventing silent wrong-value output.
+- **Papillon**: TOCTOU race between DID identity check and signer installation eliminated by holding the write lock across the entire check-and-install sequence.
+- **Papillon**: Input bounds enforced on `reconstruct_from_shards` — rejects more than 255 shards or individual shard strings larger than 8 KiB before any deserialization.
+- **C FFI**: Stack seed buffer in `pap_recovery_create_shards` zeroized after ceremony; `pap_recovery_reconstruct` upper-bound guard added.
+
+## [0.7.2] - 2026-04-05
+
+### Added
+
+- **pap-did**: `SignatureAlgorithm` enum (`#[non_exhaustive]`) with Ed25519 as the sole variant, providing metadata methods (multicodec prefix, JWS alg, verification key type, proof type) so adding a future algorithm is a mechanical, non-breaking change
+- **pap-did**: Algorithm-aware DID resolution — `did_to_public_key_bytes_with_algorithm()` detects the algorithm from the multicodec prefix, `public_key_to_did_for_algorithm()` encodes keys for any supported algorithm
+- **pap-did**: `UnsupportedAlgorithm` error variant for rejecting unknown multicodec prefixes
+- **docs**: `algorithm-agility.md` documenting the migration path for adding post-quantum algorithms
+- **pap-wasm**: Browser-native transport session (`TransportSession`) that drives the full 6-phase PAP handshake from JavaScript/TypeScript using the Fetch API. State-machine-enforced phase ordering prevents out-of-sequence calls. Auto-generates ephemeral session keypairs, co-signs receipts, and caches execution results. Wire-compatible with the native `AgentClient` (same REST endpoints, same `ProtocolMessage` JSON format).
+- **pap-wasm**: `runHandshake()` convenience method that executes all 6 phases in a single async call.
+- **pap-wasm**: Server-supplied session ID validation rejects path traversal characters before URL interpolation.
+- **pap-wasm**: 12 wasm-bindgen tests covering state machine construction, phase ordering enforcement, and keypair uniqueness.
+- **pap-wasm**: README with JS/TS usage examples, API reference, and build instructions.
+- **pap-python**: Native `async/await` support for all 6 `AgentClient` transport methods — `present_token_async`, `exchange_did_async`, `send_disclosures_async`, `request_execution_async`, `exchange_receipt_async`, `close_session_async`. Python users can now `await` PAP protocol calls without blocking the asyncio event loop
+- **pap-python**: PyO3 `experimental-async` feature enabled for direct Python coroutine compilation from Rust `async fn`
+- **pap-python**: 23-test async test suite covering method existence, awaitable verification, connection error handling, `asyncio.gather` concurrency, and sync backward compatibility
+- **pap-ts**: TypeScript reference implementation of PAP core (`@pap/core`). Pure TypeScript, works in Node.js 18+ and browsers. Covers identity (Ed25519 keypairs, `did:key` generation), mandates (issuance, delegation, chain verification, decay state machine), SD-JWT selective disclosure, session lifecycle (capability tokens, 6-phase handshake), transaction receipts (co-signing, attestations), and transport envelope signing. 103 tests via Vitest. Uses audited `@noble/ed25519` for all cryptography.
+- **pap-ts**: Receipt state guard — `TransactionReceipt.fromSession()` now enforces session must be in Executed or Closed state
+- **pap-ts**: HandshakeClient HTTP status checking — all 6 handshake phases now validate HTTP responses
+- **papillon-extension**: SubtleCrypto Ed25519 signing — private keys are now non-extractable `CryptoKey` objects managed by the browser, never exposed in WASM memory or JS heap. Feature-detected at startup with automatic fallback to existing WASM path for browsers without Ed25519 SubtleCrypto support.
+- **papillon-extension**: IndexedDB-backed key storage — `CryptoKey` objects stored via structured clone (no serialization), replacing AES-256-GCM encrypted seeds in `chrome.storage.local` for SubtleCrypto-capable browsers.
+- **papillon-extension**: Automatic key migration — existing Ed25519 seeds are imported into SubtleCrypto and persisted in IndexedDB on first launch; legacy encrypted seeds are cleaned up after migration.
+- **pap-core**: `signable_bytes()` and `set_signature_bytes()` on `Mandate` and `CapabilityToken` — enables external signing (e.g., browser SubtleCrypto) without exposing internal struct fields.
+- **pap-wasm**: WASM bindings for `signableBytes()` and `setSignatureBytes()` on both `Mandate` and `CapabilityToken`.
+- **ci**: Java JNA binding integration tests now run in CI — builds `libpap_c.so` and executes 85+ JUnit tests covering keypairs, mandates, scopes, decay states, sessions, and capability tokens via Gradle on every push and PR
+- **pap-python**: 48 new negative-path and security-invariant tests for Session, CapabilityToken, and TransactionReceipt — covers invalid state transitions, tamper detection, expiry enforcement, insufficient signatures, ephemeral DID unlinkability, Mandate decay state progression, and delegation scope/TTL constraints
+- **pap-python**: Shared conftest.py with pytest fixtures for keypairs, tokens, sessions, and mandates
+- **pap-agents**: 10 new security-focused unit tests covering userinfo bypass, 0.0.0.0, file/data/javascript schemes, empty string, malformed URLs, IPv6 unique local, template variable safety, and octal IPv4 notation.
+
+### Changed
+
+- **pap-core**: All signable types (`Mandate`, `CapabilityToken`, `SessionAttestation`, `RecoveryMandate`, `PartialRecoverySignature`, `RevocationProof`) carry an `algorithm` field with `#[serde(default)]` for backward-compatible deserialization
+- **pap-credential**: `VerifiableCredential::sign()` derives `proof_type` from `SignatureAlgorithm` instead of a hardcoded string; `SelectiveDisclosureJwt` carries an `algorithm` field
+- **pap-proto**: JWS `sign_plaintext()` accepts `SignatureAlgorithm` and derives `alg` header from the enum; `verify_signed()` rejects unknown algorithms
+- **pap-marketplace**: `AgentAdvertisement` carries an `algorithm` field with `#[serde(default)]`
+- **pap-federation**: `PeerVouch` carries an `algorithm` field; `NotarySet` processes revocations with algorithm-aware `RevocationProof`
+- **pap-webauthn**: `PrincipalSigner` trait gains an `algorithm()` default method returning Ed25519
+- **pap-did**: `VerificationMethod` derives its key type from `SignatureAlgorithm` instead of a hardcoded string
+- **docs/specification.md**: Section 16.1 updated from "algorithm agility is deferred" to documenting the `SignatureAlgorithm` field and forward-compatible negotiation
+- All sign/verify tests parameterized by algorithm for future multi-algorithm expansion
+- **pap-python**: You now get full IDE autocomplete and type checking out of the box — mypy, pyright, and Pylance discover the package's type stubs automatically via PEP 561 (`py.typed` marker)
+- **pap-python**: `__init__.pyi` re-exports all 22 public symbols so autocomplete works at the `pap` package level (not just `pap._pap`)
+- **pap-python**: Stub validation test suite (`test_stubs.py`) — verifies `.pyi` syntax, `py.typed` presence, and completeness against `__all__`
+- **papillon-extension**: Hardened Content Security Policy from 2 directives to 9 — added `default-src 'none'` deny-by-default baseline, explicit `style-src`, `font-src`, `img-src`, `connect-src`, `base-uri`, and `form-action` directives. Extension pages can no longer load unauthorized resource types.
+- **papillon-extension**: Replaced `Function()` constructor (eval-equivalent) in WASM loader with CSP-compliant `import(/* @vite-ignore */)` dynamic import. No `unsafe-eval` needed.
+- **papillon-extension**: Firefox manifest CSP now derived from Chrome manifest instead of hardcoded duplicate, keeping both in sync automatically.
+- **pap-python**: `AgentClient.inner` wrapped in `Arc` for safe sharing across async task boundaries — sync methods unchanged (auto-deref)
+- **pap-python**: Added `pytest-asyncio>=0.23` to test dependencies
+
+### Fixed
+
+- **pap-agents**: Hardened `is_safe_url` SSRF validation against userinfo bypass — URLs with `user:pass@host` syntax previously bypassed host extraction, allowing requests to private/internal IPs. Also validates expanded URLs after `{query}` template substitution (defense in depth), rejects empty hosts, and documents DNS rebinding as a known limitation requiring network-layer controls.
+- **papillon-extension**: Replaced `innerHTML = ""` with `replaceChildren()` at three call sites in handshake UI, aligning with the codebase's "never innerHTML" security policy.
+- **pap-python**: Corrected receiver_did/target_did mismatches in existing test suite (enforced by Rust core's CapabilityToken.verify)
+- **pap-python**: Fixed test_delegate race condition and test_decay_state window calculation in test_basic.py
+
+## [0.7.2.1] - 2026-04-05
+
+### Changed
+
+- **docs**: Expanded CONTRIBUTING.md with comprehensive development environment setup guide — prerequisites (Rust, system libs, optional tooling), quick start commands, project structure tour, per-subsystem test instructions (Rust, Python, Java, E2E), example runner commands, browser extension build steps, CI pipeline table with local reproduction commands, branch naming and conventional commit conventions
+- **ci**: Hardened benchmark regression gate — tightened threshold from 20% to 10%, added artifact-based baseline storage with 90-day retention so PRs compare against the latest main baseline instead of a stale committed file, added benchmark summary PR comments via `actions/github-script`, and improved `check_regression.sh` with `--baseline`/`--output` flags and proper argument parsing
+- **ci**: Added zero-value guard in `check_regression.sh` — a Criterion parse failure that yields 0 now fails the gate instead of silently passing
+- **ci**: Baseline update on main push now runs even if the regression check fails, preventing a single noisy benchmark from permanently jamming the CI gate
+
 ## [0.7.1] - 2026-04-04
+
+### Added
+
+- **pap-c**: C FFI marketplace query API — `PapMarketplaceClient` opaque handle wrapping `MarketplaceRegistry`, `PapAgentList` typed result set with index-based accessors (`pap_agent_list_get_did`, `pap_agent_list_get_name`), JSON-based `pap_marketplace_query` dispatching to `query_by_action` or `query_satisfiable` based on `available_properties` presence, and `pap_last_error` alias for error retrieval
+- **pap-c**: 11 unit tests covering client lifecycle, query dispatch, disclosure filtering, out-of-bounds safety, null-pointer guards, invalid JSON rejection, and unsigned advertisement rejection
 
 ### Changed
 
@@ -237,226 +332,3 @@
 - Rebrand registry as "Chrysalis" with butterfly motif (🦋)
 - Update sidebar branding and dashboard titles
 - Simplify registry subtitle from "Federation Node" to "Agent Registry"
-
-
-All notable changes to PAP will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [0.4.2] - 2026-03-24
-
-### Added
-
-- **qa**: Tier 1 smoke tests for Papillon desktop app — Playwright-based E2E smoke tests verifying app launches, renders, and loads without WASM errors. Runs in CI on every PR.
-- **qa**: Tier 2 functional tests for Papillon workflows — 11 E2E tests covering agent discovery, scenario selection, PAP handshake (6-step protocol), and settings management. Mock command infrastructure validates state transitions and error scenarios.
-- **qa**: Tier 3 canary monitoring for post-deploy health checks — 6 post-deployment health checks (backend health endpoint, frontend load time, scenario execution latency, orchestrator config, identity access, console errors). Runs automatically after release publish.
-- **papillon**: Health endpoint (`get_health_status` Tauri command) — returns application health status, uptime (calculated from Instant, not UNIX_EPOCH), timestamp, and version. Enables post-deploy canary verification without rolling back broken releases.
-- **ci**: CodeQL workflow with path-based filtering — runs static analysis only when changes include target languages (Rust, Python, JavaScript/TypeScript), reducing unnecessary CI runs on documentation-only or configuration-only commits
-- **docs**: New `pap.html` dedicated page for the PAP protocol targeting developers — covers all six protocol invariants (failure-mode-first framing), protocol stack table, crate grid, Quick Start Rust snippet, examples, and comparison table
-- **docs**: New `chrysalis.html` page for the Chrysalis self-hostable federated registry product
-- **docs**: Papillon canvas rendering demo on `index.html` — macOS-style mockup showing flight booking result with privacy disclosure strip
-- **docs**: Six PAP constraint cards on `pap.html`, each leading with the failure mode it prevents; includes new card 06 "Discovery without a standard becomes a silo" covering the federated registry and Papillon visual composer
-- **docs**: Registry and visual composer card explaining signed JSON-LD capability advertisements, federated discovery, and Papillon's drag-and-drop workflow composer
-
-### Fixed
-
-- **health**: Fix uptime metric calculation — changed from seconds since UNIX_EPOCH (corrupted metric) to actual application uptime using `std::time::Instant`. Prevents silent data corruption in monitoring dashboards.
-- **ci**: Fix CodeQL workflow build-mode compatibility — changed `build-mode: none` to `build-mode: autobuild` for Go language support in multi-language analysis.
-- **ci**: Add Tauri CLI installation to smoke test job — explicitly installs `tauri-cli` in CI environment before running `cargo tauri build`.
-- **ci**: Increase canary verification timeout from 5 to 15 minutes — accommodates cold-start WASM compilation and Playwright browser download on CI machines.
-- **qa**: Adjust frontend load time SLA from 3 seconds to 10 seconds — realistic timeout for CI ubuntu-latest cold-start (WASM + bundle = 5-15s).
-- **qa**: Improve console error filtering in canary tests — use regex patterns instead of string includes, properly detects critical errors vs. benign warnings.
-- **papillon**: Use `.map()` instead of `.and_then()` for `Navigator::clipboard()` after `web_sys` return type change from `Option<Clipboard>` to `Clipboard` — fixes WASM compilation failure blocking Tauri desktop builds on all platforms
-
-### Changed
-
-- **docs**: `index.html` reframed around Papillon product (canvas rendering engine, use cases, how-it-works); PAP protocol content moved to dedicated `pap.html`
-- **docs**: PAP invariants rewritten to lead with failure modes rather than mechanism names — "Sessions that never die drain the internet" instead of "Hard TTL enforcement"
-- **docs**: Nav updated across all pages: `index.html`, `chrysalis.html`, and `pap.html` link to each other cohesively
-
-## [0.4.1] - 2026-03-23
-
-### Added
-
-- **registry**: Hostable federated PAP registry — standalone Axum web service that other agents and Papillon instances can discover and query; supports both SQLite (single-node) and Postgres (clustered) backends
-- **registry**: Leptos 0.8 SSR frontend — server-side-rendered agent search UI with live FTS5 results, DID display, capability badges, and pagination; single-crate architecture (no separate WASM build step)
-- **registry**: Federation protocol — push/pull peer sync, `/api/peers` management endpoints, and configurable sync intervals for multi-node mesh
-- **registry**: Admin REST API — token-authenticated endpoints for agent CRUD, peer management, and status; all mutations require `Authorization: Bearer <token>`
-- **registry**: Ed25519 signature verification on agent registration — rejects unsigned or tampered `AgentAdvertisement` payloads at ingest
-- **registry**: Docker-based test execution — `docker buildx build --target test` stage runs the full test suite at build time; CI `test-registry` job added to GitHub Actions
-- **registry**: Comprehensive test suite — 34 tests covering SQLite CRUD layer, auth middleware, and all admin route handlers via `tower::ServiceExt::oneshot()`
-- **papillon**: Local federated registry settings — configure endpoint and sync interval for the Papillon-embedded registry directly in the Settings panel
-
-### Fixed
-
-- **registry**: SQL injection hardened — FTS5 `MATCH` queries escape special characters (`"`, `*`, `^`) before interpolation (I8 regression test included)
-- **registry**: Cert fingerprint exposed in `/api/status` — removed from public response; available only to authenticated admin callers
-- **registry**: Docker workspace sedding anchored — regex now anchors to member path strings to avoid stripping `workspace.dependencies` lines
-
-## [0.4.0] - 2026-03-22
-
-### Added
-
-- **pap-c**: New `crates/pap-c` crate — stable C FFI layer (cdylib + staticlib) exposing all PAP primitives via opaque handles, thread-local last-error storage, and a `pap_mandate_sync_decay_state` helper that automatically handles the Active→ReadOnly TTL-expiry jump
-- **pap-wasm**: New `crates/pap-wasm` crate — wasm-bindgen WebAssembly bindings (`@pap/sdk` npm package) for JavaScript/TypeScript consumers; transport excluded (no reqwest in WASM)
-- **bindings/cpp**: Header-only C++ RAII wrapper (`pap.hpp`) with move semantics, non-copyable handles, and CMake integration
-- **bindings/csharp**: .NET 8 C# bindings via P/Invoke (`[LibraryImport]`), `SafeHandle`-based RAII wrappers, and `PapException` with `DecayState` enum matching the ABI constants
-- **bindings/java**: JNA-based Java bindings (`io.pap.*`) with `AutoCloseable` handles, `DecayState`/`SessionState` enums, and 14 JUnit 5 tests covering all decay-state correctness scenarios
-- **pap-c**: `pap_disclosure_entry_new` now validates null array pointers with non-zero counts (defensive hardening matching sibling functions)
-- **Dockerfile.test**: Docker test harness using `docker buildx` with cargo registry cache mounts for fast iterative CI
-
-### Fixed
-
-- **bindings/java**: `Session.id()` was incorrectly calling `pap_session_free` on the string pointer; corrected to `pap_string_free`
-- **bindings/java**: `Session.close()` now calls `pap_session_close` before `pap_session_free` — ensures proper protocol teardown before memory is released
-- **bindings/csharp**: `DecayState` and `SessionState` properties now guard against `-1` sentinel before casting the FFI integer to an enum value — prevents invalid casts from garbage return values
-- **bindings/cpp**: `decay_state()`, `compute_decay_state()`, and `state()` now validate the upper bound (`> PAP_DECAY_SUSPENDED` / `> PAP_SESSION_CLOSED`) as well as the lower bound — catches out-of-range enum values from future ABI versions
-- **pap-core**: `compute_decay_state` now short-circuits immediately for the `Suspended` terminal state — previously, a decayed-but-suspended mandate could incorrectly re-enter `ReadOnly` after a TTL check
-- **pap-c**: `pap_scope_permits` now guards the null check before calling `CStr::from_ptr`, eliminating a potential undefined-behaviour window where a null-dereference could occur inside the match arm
-- **pap-c**: `pap_disclosure_entry_new` validates per-element null pointers in the permitted/required/excluded arrays before dereferencing — previously only the array pointer itself was checked
-- **pap-wasm**: Removed conflicting `use` imports that shadowed local `#[wasm_bindgen]` struct definitions, fixing an `E0255` compiler error that broke WASM builds when compiled without the Docker `--exclude pap-wasm` flag
-
-## [0.3.5] - 2026-03-21
-
-### Added
-
-- **docs**: Papillon marketing site (`docs/papillon/`) — consumer-facing landing page with interactive 6-step purchase demo showing AI operating within user-defined rules (budget, vendor preferences, approval thresholds)
-- **docs**: Dual GitHub Pages architecture — root landing page (`docs/index.html`) routes to Papillon (consumer) and PAP (developer) sub-sites
-- **docs**: PAP technical spec site relocated to `docs/pap/` with cross-links to Papillon for non-developer visitors
-- **docs**: Multi-language SDK roadmap section on PAP site — Rust (shipping), Python/TypeScript/Go/Swift/Kotlin planned
-
-### Changed
-
-- **docs**: PAP site language aligned with Papillon framing — leads with "why" (control, visibility, safety) before "how" (cryptographic protocol), adds "Not a developer?" CTA linking to Papillon
-- **docs**: README simplified — removed example binary references (examples deleted in 0.2.0), added Papillon link for interactive demos
-- **ci**: Release workflow model download switched to HuggingFace hub for reliability
-
-### Removed
-
-- **docs**: Direct API call examples removed from PAP site — Papillon now covers those use cases through its interactive demo
-
-## [0.3.0] - 2026-03-21
-
-### Added
-
-- **papillon**: Multi-profile identity support — switch between multiple profiles (like browser profiles), each with its own DID and workspace
-- **papillon**: Profile avatars with deterministic colors — visual distinction between profiles with semantic color palette (purple/teal/gold/coral/blue/rose)
-- **papillon**: Profile manager in Settings — create, rename, delete, and switch profiles with last-used timestamps
-- **papillon**: Profile dropdown in TopBar — quick access to all profiles with active profile indicator
-- **papillon**: Complete state isolation per profile — profile switch resets canvas, registries, and orchestrator config for true workspace separation
-- **papillon-ui**: Schema-driven JSON-LD rendering engine — trait-based registry pattern for custom block renderers; replaces hard-coded dispatch with runtime-registrable templates that handle arbitrary schema.org types by classifying field shapes (dates, prices, URLs, DIDs, nested objects, lists)
-- **papillon-ui**: SOLID-compliant renderer architecture — enables custom templates via registry registration without modifying core code (Open/Closed Principle)
-- **papillon-ui**: Handshake envelope unwrap — extracts agent payload from the PAP handshake wrapper and renders receipt metadata footer (session ID, co-signatures, action)
-- **papillon-ui**: Answer renderer for on-device AI responses displayed as clean paragraph text
-- **papillon-ui**: CSS class sanitization and list item cap (50) to prevent malicious agent payloads from injecting CSS classes or flooding the DOM
-- **docs**: Built-in LLM setup guide — quick reference for downloading TinyLLaMA and testing locally
-- **docs**: Tauri resource directory quirk — comprehensive guide explaining platform-specific model bundling behavior (macOS/Windows/Linux)
-- **docs**: Manual QA test plan — 20 comprehensive test cases covering profile creation, switching, isolation, persistence, and edge cases
-
-### Changed
-
-- **papillon**: Profile data now persisted in separate `profiles.db` registry alongside main database
-- **papillon**: Seed zeroization hardened — `Zeroizing<[u8; 32]>` prevents sensitive material from lingering in memory
-- **papillon-ui**: Block renderer converted from single file to module directory with trait-based plugin architecture (mod, field_classify, generic, templates, registry, renderer, receipt)
-
-## [0.2.3] - 2026-03-21
-
-### Fixed
-
-- **papillon**: Prevent silent identity loss on corrupt seed — now returns error instead of silently generating ephemeral keypair
-- **papillon**: DB persist failures no longer swallowed — seed persistence errors propagated to frontend so users know identity creation failed
-- **papillon**: Raw seed material now zeroized on drop to prevent lingering in memory after use (cryptographic hardening)
-
-## [0.2.2] - 2026-03-21
-
-### Added
-
-- **papillon**: Papillon now remembers your agent interactions across restarts — episodes, agent profiles, and settings persist in a local SQLite database
-- **papillon**: Smarter agent selection — the app learns from past interactions to calibrate mandate TTL and minimize disclosure based on agent track records
-- **papillon**: Agent performance tracking with rolling averages — success rate, quality, duration, and co-sign refusals tracked per agent
-- **papillon**: Your identity persists across restarts — Ed25519 principal keypair auto-saved on first launch, auto-loaded on subsequent starts
-- **papillon**: Semantic queries over stored interactions — search by Schema.org type or free text across your interaction history
-- **papillon**: Agent profiles now accessible from the frontend via `list_agent_profiles` command
-- **docs**: Memex(RL) architectural comparison — maps PAP's trust-bounded experience memory against Memex(RL) indexed retrieval patterns
-
-### Changed
-
-- **papillon**: Scenario history now persists across app restarts (previously in-memory only)
-
-### Fixed
-
-- **papillon**: Fixed potential panic on short DID/hash strings in step display (`agent_did[..20]`, `mandate_hash[..16]`, `session.id[..8]`) — now use safe `.get()` fallbacks
-- **papillon**: Fixed protocol violation risk where stale disclosure refs from agent profiles could be used in new mandates — now validates refs are a valid subset of current scenario's allowed disclosures
-
-### Changed
-
-- **papillon**: Orchestrator now de-duplicates SHA-256 hash computation for agent DIDs — extracted to `hash_agent_did()` helper function (DRY)
-- **papillon**: `list_completed_runs` now supports pagination with optional `offset` and `limit` parameters — prevents returning massive JSON payloads (default: 50, capped at 100)
-
-## [Unreleased]
-
-### Added
-
-- **CI**: GitHub Actions release workflow — auto-tags version bumps on merge to main, builds Tauri desktop app for macOS (universal), Linux, and Windows, creates GitHub Release with platform binaries
-
-## [0.2.1] - 2026-03-21
-
-### Fixed
-
-- **papillon**: Fixed macOS app crash on startup — federation server initialization now runs on dedicated background thread with its own tokio runtime, preventing panic when `tokio::spawn()` is called before runtime initialization
-
-## [0.2.0] - 2026-03-21
-
-### Added
-
-- **pap-federation**: Fingerprint-pinned TLS verifier (`FingerprintVerifier`) using SHA-256 cert pinning for zero-trust peer verification. No CA dependency — DIDs are the trust root
-- **pap-federation**: DNS/TOFU bootstrap flow — `FederationClient::tofu()` for initial peer discovery (transitional until DNS-based bootstrap), `FederationClient::pinned()` for verified peer connections
-- **pap-federation**: Ed25519 signature verification on agent advertisements via `verify_key_from_did()` — cryptographically validates each ad's authenticity
-- **pap-transport**: `RemoteAgentHandler::with_client()` for custom TLS clients, session_id tracking for PAP phase 5 receipt co-signing
-- **pap-federation**: Peer fingerprint pinning throughout discovery loop and registry operations — only adds gossiped peers with cert fingerprints
-
-### Changed
-
-- **pap-federation**: `FederationClient` constructor API — `new()` now calls `tofu()` (bootstrap); use `pinned(peers)` for verified connections
-- **pap-transport**: `AgentClient::new()` uses standard CA-validated TLS instead of `danger_accept_invalid_certs(true)` — PAP federation uses `with_client()` with pinned clients
-- **papillon**: Registry navigation via explicit TOFU → fingerprint pinning flow instead of blind `resolve_pap_url()` — all peer communication requires known fingerprints
-- **papillon**: Discovery loop only contacts peers with cert fingerprints; rejects gossiped peers without fingerprints
-
-### Fixed
-
-- **SECURITY**: Replace blind certificate acceptance with fingerprint pinning. TLS handshake verifies cert SHA-256 against trusted set. Only `build_tofu_client()` accepts any cert (bootstrap phase, clearly labeled, to be replaced by DNS)
-- **SECURITY**: Agent advertisement signatures now cryptographically verified via Ed25519, not just presence-checked. Prevents malicious peer gossip poisoning
-- **SECURITY**: Peer gossip validation — only peers with cert fingerprints are added to registry or contacted for sync. Discovery loop uses fingerprint-pinned TLS for all connections
-
-### Removed
-
-- **Examples**: Deleted all example binaries (delegation-chain, federated-discovery, local-ai-assistant, networked-search, payment, search, travel-booking, webauthn-ceremony) — PAP is real protocol only, no toy demos
-- **resolve.rs**: Removed `resolve_pap_url()` and `ResolvedPeer` — replaced by inline TOFU/pinning flow in registry commands
-
-## [0.1.0] - 2026-03-14
-
-### Added
-
-- **pap-did**: Ed25519 keypair generation, `did:key` derivation, DID documents, ephemeral session keys
-- **pap-core**: Mandate issuance, hierarchical delegation with chain verification, scope enforcement (deny-by-default), capability tokens (single-use, nonce-bound), session state machine (Initiated → Open → Executed → Closed), transaction receipts (co-signed, property refs only), decay states (Active → Degraded → ReadOnly → Suspended), continuity tokens, auto-approval policies, payment proof field
-- **pap-credential**: W3C Verifiable Credential envelope, SD-JWT selective disclosure
-- **pap-marketplace**: Signed JSON-LD agent advertisements, marketplace registry, disclosure-based filtering
-- **pap-proto**: Protocol message types, typed envelope serialization
-- **pap-transport**: HTTP client/server for 6-phase session handshake (Axum-based)
-- **pap-federation**: Federated registry with cross-registry sync, announce, peer discovery
-- **pap-webauthn**: WebAuthn signer abstraction with software fallback and mock authenticator
-- **Examples**: search (zero-disclosure), travel-booking (SD-JWT), delegation-chain (4-level hierarchy), payment (ecash + auto-approval + continuity), networked-search (HTTP transport), federated-discovery (cross-registry), webauthn-ceremony (device-bound keys)
-- **Docker**: local-ai-assistant example with Ollama + SearXNG + PAP marketplace + providers + orchestrator + receipt viewer
-- **CI**: GitHub Actions (test, clippy, fmt, example runner)
-- **Docs**: README with competitive comparison table, CONTRIBUTING.md, issue templates
-
-### Protocol Constraints (v0.1)
-
-1. Deny by default — agents can only act within explicit mandate scope
-2. Delegation cannot exceed parent — scope and TTL bounded, verified cryptographically
-3. Session DIDs are ephemeral — unlinked to principal identity, discarded at close
-4. Receipts contain property references only — never values
-5. Non-renewal is revocation — progressive degradation, no surprise cutoff
-
-[0.1.0]: https://github.com/Baur-Software/pap/releases/tag/v0.1.0

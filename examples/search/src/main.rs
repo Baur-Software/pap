@@ -46,7 +46,9 @@ fn main() {
         DisclosureSet::empty(), // search needs no personal context
         ttl,
     );
-    root_mandate.sign(principal.signing_key());
+    root_mandate
+        .sign(principal.signing_key())
+        .expect("Ed25519 is always supported");
     println!("  Orchestrator DID: {orchestrator_did}");
     println!("  Scope: [schema:SearchAction]");
     println!("  TTL: {ttl}");
@@ -71,7 +73,9 @@ fn main() {
         vec![], // requires no personal disclosure
         vec!["schema:SearchResult".into()],
     );
-    search_ad.sign(search_operator.signing_key());
+    search_ad
+        .sign(search_operator.signing_key())
+        .expect("Ed25519 is always supported");
 
     let mut registry = MarketplaceRegistry::new();
     registry.register(search_ad).unwrap();
@@ -96,7 +100,9 @@ fn main() {
         orchestrator_did.clone(),
         ttl,
     );
-    token.sign(orchestrator.signing_key());
+    token
+        .sign(orchestrator.signing_key())
+        .expect("Ed25519 is always supported");
     println!("  Token ID: {}", token.id);
     println!("  Target: {}", token.target_did);
     println!("  Action: {}", token.action);
@@ -116,7 +122,9 @@ fn main() {
             ttl - Duration::minutes(10),
         )
         .unwrap();
-    task_mandate.sign(orchestrator.signing_key());
+    task_mandate
+        .sign(orchestrator.signing_key())
+        .expect("Ed25519 is always supported");
     println!("  Initiating agent DID: {initiating_agent_did}");
     println!("  Scope: [schema:SearchAction]");
     println!(

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -34,7 +35,10 @@ pub struct PeerVouch {
     pub timestamp: String,
     /// Structured reason for the vouch (e.g., "operational-history", "direct-interaction").
     pub justification: String,
-    /// Ed25519 signature by the voucher over the canonical vouch bytes (base64url-encoded).
+    /// Signature algorithm used. Defaults to Ed25519 for backward compatibility.
+    #[serde(default)]
+    pub algorithm: SignatureAlgorithm,
+    /// Signature by the voucher over the canonical vouch bytes (base64url-encoded).
     pub signature: String,
 }
 
@@ -67,6 +71,7 @@ impl PeerVouch {
             vouchee_did,
             timestamp,
             justification,
+            algorithm: SignatureAlgorithm::default(),
             signature,
         }
     }
@@ -380,8 +385,9 @@ mod tests {
 
     // --- PeerVouch sign/verify ---
 
-    #[test]
-    fn vouch_sign_and_verify() {
+    /// Parameterized vouch sign/verify test body.
+    fn vouch_sign_verify_for_algorithm(algorithm: pap_did::SignatureAlgorithm) {
+        assert_eq!(algorithm, pap_did::SignatureAlgorithm::Ed25519);
         let voucher_key = make_keypair();
         let voucher_did = did_from_key(&voucher_key);
         let vouchee_did = "did:key:zVouchee";
@@ -396,10 +402,15 @@ mod tests {
 
         assert_eq!(vouch.voucher_did, voucher_did);
         assert_eq!(vouch.vouchee_did, vouchee_did);
+        assert_eq!(vouch.algorithm, algorithm);
 
-        // Verify with correct key
         let verifying_key = pap_did::verify_key_from_did(&voucher_did).unwrap();
         assert!(vouch.verify(&verifying_key).is_ok());
+    }
+
+    #[test]
+    fn vouch_sign_and_verify() {
+        vouch_sign_verify_for_algorithm(pap_did::SignatureAlgorithm::Ed25519);
     }
 
     #[test]

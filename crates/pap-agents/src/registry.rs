@@ -90,7 +90,8 @@ fn register_executor<E: AgentExecutor + 'static>(
         meta.requires_disclosure_vec(),
         meta.returns_vec(),
     );
-    ad.sign(kp.signing_key());
+    ad.sign(kp.signing_key())
+        .expect("Ed25519 is always supported");
     registry
         .register_local(ad)
         .expect("agent registration should not fail");
@@ -121,7 +122,8 @@ fn register_handler(
         meta.requires_disclosure_vec(),
         meta.returns_vec(),
     );
-    ad.sign(kp.signing_key());
+    ad.sign(kp.signing_key())
+        .expect("Ed25519 is always supported");
     registry
         .register_local(ad)
         .expect("agent registration should not fail");
@@ -178,11 +180,8 @@ impl AgentSet {
             def.requires_disclosure.clone(),
             def.returns.clone(),
         );
-        ad.sign(kp.signing_key());
-
-        if ad.signature.is_none() {
-            return Err(RegistrationError::SignatureInvalid);
-        }
+        ad.sign(kp.signing_key())
+            .map_err(|_| RegistrationError::SignatureInvalid)?;
 
         self.registry
             .register_local(ad)

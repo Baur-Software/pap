@@ -1,10 +1,13 @@
 pub mod agents;
 pub mod canvas;
+pub mod episodes;
 pub mod health;
 pub mod identity;
 pub mod llm;
 pub mod orchestrator;
 pub mod pipeline;
 pub mod profiles;
+pub mod recovery;
 pub mod registry;
 pub mod templates;
+pub mod webauthn;

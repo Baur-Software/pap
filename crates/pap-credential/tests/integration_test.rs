@@ -119,7 +119,7 @@ fn sd_jwt_full_disclosure_flow() {
     claims.insert("schema:address".into(), serde_json::json!("123 Main St"));
 
     let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
-    sd_jwt.sign(&key);
+    sd_jwt.sign(&key).unwrap();
 
     // Disclose all claims
     let disclosures = sd_jwt
@@ -144,7 +144,7 @@ fn sd_jwt_partial_disclosure_subset() {
     claims.insert("schema:ssn".into(), serde_json::json!("123-45-6789"));
 
     let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
-    sd_jwt.sign(&key);
+    sd_jwt.sign(&key).unwrap();
 
     // Disclose only name, keep email and SSN private
     let disclosures = sd_jwt.disclose(&["schema:name"]).unwrap();
@@ -183,7 +183,7 @@ fn sd_jwt_disclosure_hash_uniqueness() {
     claims.insert("claim2".into(), serde_json::json!("value2"));
 
     let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
-    sd_jwt.sign(&key);
+    sd_jwt.sign(&key).unwrap();
 
     let d1 = sd_jwt.disclose(&["claim1"]).unwrap();
     let d2 = sd_jwt.disclose(&["claim2"]).unwrap();
@@ -218,7 +218,7 @@ fn sd_jwt_empty_claims() {
 
     let claims = HashMap::new();
     let mut sd_jwt = SelectiveDisclosureJwt::new(did, claims);
-    sd_jwt.sign(&key);
+    sd_jwt.sign(&key).unwrap();
 
     let disclosures = sd_jwt.disclose(&[]).unwrap();
     assert!(disclosures.is_empty());
