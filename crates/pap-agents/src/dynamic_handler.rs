@@ -107,6 +107,14 @@ impl AgentHandler for DynamicAgentHandler {
 
             let url = endpoint.url_template.replace("{query}", &query);
 
+            // Defense in depth: also validate after template expansion in case
+            // {query} substitution changes the host (e.g. injection via fragment).
+            if !crate::dynamic::is_safe_url(&url) {
+                return Err(TransportError::ServerError(
+                    "ssrf blocked: expanded URL failed safety check".into(),
+                ));
+            }
+
             let response = match endpoint.method {
                 HttpMethod::Get => client.get(&url).send(),
                 HttpMethod::Post => {
