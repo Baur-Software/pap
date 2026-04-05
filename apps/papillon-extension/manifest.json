@@ -9,7 +9,8 @@
     "storage",
     "offscreen",
     "activeTab",
-    "nativeMessaging"
+    "nativeMessaging",
+    "contextMenus"
   ],
   "host_permissions": [
     "http://localhost:*/*",

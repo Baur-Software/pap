@@ -1,0 +1,108 @@
+name: "Bug: pap:// URI scheme"
+description: Something is broken in pap://, pap+https://, or pap+wss:// URI handling
+title: "[pap://] "
+labels: ["bug", "pap-uri"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The **pap:// URI scheme** enables "click to invoke an agent" workflows. It covers three transports: `pap://` (direct), `pap+https://` (HTTPS tunnelled through PAP), and `pap+wss://` (WebSocket Secure). Bugs here can be in Papillon's deep-link handler, the browser extension's URI parser, or the transport negotiation layer.
+
+  - type: dropdown
+    id: uri-scheme
+    attributes:
+      label: URI scheme
+      options:
+        - "pap://"
+        - "pap+https://"
+        - "pap+wss://"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: invocation-context
+    attributes:
+      label: Where was the URI invoked?
+      options:
+        - Browser link (via papillon-extension)
+        - Papillon desktop deep-link (OS-registered handler)
+        - CLI / command line
+        - Programmatic (SDK or bindings)
+        - Other application
+    validations:
+      required: true
+
+  - type: dropdown
+    id: protocol-phase
+    attributes:
+      label: At which protocol phase does the failure occur?
+      description: The PAP handshake has six phases. Select where things break down.
+      options:
+        - Phase 1 — Invitation (URI parsing and initial dispatch)
+        - Phase 2 — Discovery (agent capability lookup)
+        - Phase 3 — Negotiation (mandate scope agreement)
+        - Phase 4 — Mandate exchange (VC issuance and signing)
+        - Phase 5 — Execution (agent task running)
+        - Phase 6 — Receipt (co-signed transaction receipt)
+        - Unknown / not reached a phase boundary
+    validations:
+      required: true
+
+  - type: textarea
+    id: uri-example
+    attributes:
+      label: Example URI
+      description: |
+        Provide a minimal URI that triggers the issue. **Mask any tokens, DIDs, or private data** — replace with `<REDACTED>` or a placeholder like `did:key:z6Mk…`.
+      placeholder: "pap+https://example.com/agents/search?mandate=<REDACTED>"
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you observe vs. what did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error output or logs
+      description: Paste transport errors, handshake failure messages, or relevant console output.
+      render: text
+
+  - type: checkboxes
+    id: session-properties
+    attributes:
+      label: Session properties affected
+      description: Check any that apply based on what you observed.
+      options:
+        - label: Ephemeral session DID was not generated (reused an existing DID)
+        - label: Mandate scope was not validated against the URI parameters
+        - label: Transport fell back to an unencrypted channel
+        - label: Deep-link was handled by a different application than Papillon
+        - label: None of the above — this is a functional or parsing bug
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I am not reporting a security vulnerability (use the private advisory form)
+          required: true
