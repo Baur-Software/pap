@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-04
+
+### Fixed
+
+- **pap-agents**: Hardened `is_safe_url` SSRF validation against userinfo bypass — URLs with `user:pass@host` syntax previously bypassed host extraction, allowing requests to private/internal IPs. Also validates expanded URLs after `{query}` template substitution (defense in depth), rejects empty hosts, and documents DNS rebinding as a known limitation requiring network-layer controls.
+
+### Added
+
+- **pap-agents**: 10 new security-focused unit tests covering userinfo bypass, 0.0.0.0, file/data/javascript schemes, empty string, malformed URLs, IPv6 unique local, template variable safety, and octal IPv4 notation.
+
 ## [0.7.1] - 2026-04-04
 
 ### Changed
