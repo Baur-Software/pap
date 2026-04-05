@@ -16,11 +16,17 @@ fuzz_target!(|input: Input| {
     if input.xor_mask == 0 {
         return;
     }
-    let kp = PrincipalKeypair::from_bytes(&input.seed).unwrap();
+    let kp = PrincipalKeypair::from_bytes(&input.seed).expect("Ed25519 accepts all 32-byte seeds");
     let sig = kp.sign(&input.message);
+    // Pre-mutation sanity: original signature must verify
+    assert!(
+        kp.verify(&input.message, &sig).is_ok(),
+        "original signature must verify before mutation test"
+    );
     let mut sig_bytes = sig.to_bytes();
     let idx = input.byte_index as usize % 64;
     sig_bytes[idx] ^= input.xor_mask;
+    // Mutated signature must be rejected (at construction or verification)
     if let Ok(mutated_sig) = Signature::from_slice(&sig_bytes) {
         assert!(kp.verify(&input.message, &mutated_sig).is_err());
     }

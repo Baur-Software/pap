@@ -11,7 +11,7 @@ struct Input {
 }
 
 fuzz_target!(|input: Input| {
-    let kp = PrincipalKeypair::from_bytes(&input.seed).unwrap();
+    let kp = PrincipalKeypair::from_bytes(&input.seed).expect("Ed25519 accepts all 32-byte seeds");
     let pubkey_bytes = kp.public_key_bytes();
     let did = kp.did();
     let recovered_bytes = did_to_public_key_bytes(&did).unwrap();

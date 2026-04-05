@@ -12,7 +12,7 @@ struct Input {
 }
 
 fuzz_target!(|input: Input| {
-    let kp = PrincipalKeypair::from_bytes(&input.seed).unwrap();
+    let kp = PrincipalKeypair::from_bytes(&input.seed).expect("Ed25519 accepts all 32-byte seeds");
     if let Ok(sig) = Signature::from_slice(&input.sig_bytes) {
         let _ = kp.verify(&input.message, &sig);
     }

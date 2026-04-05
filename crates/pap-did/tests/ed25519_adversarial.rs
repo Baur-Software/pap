@@ -46,18 +46,23 @@ fn bit_flip_signature_rejected() {
 #[test]
 fn bit_flip_message_rejected() {
     let key = SigningKey::from_bytes(&[42u8; 32]);
-    let sig = key.sign(b"test message");
+    let original = b"test message";
+    let sig = key.sign(original);
 
-    // First byte flipped: 't' (0x74) ^ 1 = 'u' (0x75) -> "uest message"
+    // Compute the flipped message programmatically
+    let mut flipped = original.to_vec();
+    flipped[0] ^= 1; // flip bit 0 of byte 0
     assert!(
-        key.verifying_key().verify(b"uest message", &sig).is_err(),
-        "signature must not verify against altered message"
+        key.verifying_key().verify(&flipped, &sig).is_err(),
+        "signature must not verify against bit-flipped message"
     );
 }
 
 #[test]
 fn malleability_scalar_deserialization_rejected() {
-    // Ed25519 curve order L in little-endian.
+    // Ed25519 curve order L = 2^252 + 27742317777372353535851937790883648493
+    // Little-endian bytes per RFC 8032 Section 5.1.
+    // https://www.rfc-editor.org/rfc/rfc8032#section-5.1
     const CURVE_ORDER_L: [u8; 32] = [
         0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde,
         0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
