@@ -169,7 +169,7 @@ impl NativeDatabase {
                     agent_name,
                     content='episodes',
                     content_rowid='rowid',
-                    tokenize='unicode61 remove_diacritics 1 minTokenLen 3'
+                    tokenize='unicode61 remove_diacritics 1'
                 );
 
             -- Populate FTS for any rows that exist before this migration ran.
@@ -542,9 +542,8 @@ impl DatabaseOps for NativeDatabase {
     }
 
     fn search_episodes(&self, query: &str, limit: usize) -> Result<Vec<Episode>, DbError> {
-        // Guard: FTS5 is configured with minTokenLen=3 — queries shorter than
-        // 3 characters would match nothing (or far too broadly on older SQLite
-        // builds without that option).  Return early to avoid a round-trip.
+        // Guard: queries shorter than 3 characters would match nothing useful
+        // (or far too broadly).  Return early to avoid a round-trip.
         if query.trim().len() < 3 {
             return Ok(vec![]);
         }
