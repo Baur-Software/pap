@@ -171,3 +171,93 @@ jobs:
             e2e/test-results/
             e2e/playwright-report/
           retention-days: 7
+
+  chrysalis-e2e-tier2:
+    name: E2E Tier 2 (Chrysalis functional tests)
+    runs-on: ubuntu-latest
+    # Run after the existing smoke test so the Docker layer cache is warm.
+    needs: [smoke-test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev curl
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Chrysalis registry image
+        run: |
+          docker build \
+            -f apps/registry/Dockerfile \
+            --target runtime \
+            -t pap-registry:ci \
+            .
+
+      - name: Start Chrysalis registry (no-TLS, plain HTTP)
+        run: |
+          docker run -d \
+            --name chrysalis-tier2 \
+            -p 7890:7890 \
+            -e PAP_REGISTRY_NO_TLS=true \
+            -e PAP_REGISTRY_PORT=7890 \
+            -e PAP_REGISTRY_HOST=0.0.0.0 \
+            -e PAP_REGISTRY_ENDPOINT=http://localhost:7890 \
+            pap-registry:ci
+
+      - name: Wait for Chrysalis to be ready
+        run: |
+          echo "Waiting for registry to become healthy..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:7890/federation/identity > /dev/null 2>&1; then
+              echo "Registry is ready (attempt $i)"
+              break
+            fi
+            echo "Attempt $i/30: not ready yet, sleeping 2s..."
+            sleep 2
+          done
+          # Final check — fail fast if still not up
+          curl -sf http://localhost:7890/federation/identity | head -c 200
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache-tier2
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm install
+          npx playwright install chromium --with-deps
+
+      - name: Run Tier 2 functional tests
+        working-directory: e2e
+        env:
+          BASE_URL: http://localhost:7890
+        run: npx playwright test tests/tier2-functional.spec.ts --workers=1 --reporter=line
+
+      - name: Dump Chrysalis logs on failure
+        if: failure()
+        run: docker logs chrysalis-tier2
+
+      - name: Stop Chrysalis container
+        if: always()
+        run: docker rm -f chrysalis-tier2 || true
+
+      - name: Upload Tier 2 test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrysalis-tier2-results
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          retention-days: 7
