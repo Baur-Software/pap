@@ -184,6 +184,27 @@ export interface NativeResponse {
   error?: string;
 }
 
+// ── Link Upgrade Messages ─────────────────────────────────────────────
+
+/** Content script → Service worker: current site has a PAP manifest */
+export interface SiteHasPap {
+  type: "SITE_HAS_PAP";
+  manifest: import("./discovery.js").PapManifest;
+  source: "well-known" | "link-rel";
+}
+
+/** Popup → Service worker: get PAP site info for a tab */
+export interface GetPapSite {
+  type: "GET_PAP_SITE";
+  tabId: number;
+}
+
+/** Service worker → Popup: PAP site info response */
+export interface PapSiteResponse {
+  type: "PAP_SITE_RESPONSE";
+  manifest: import("./discovery.js").PapManifest | null;
+}
+
 export type ExtensionMessage =
   | PapLinkClicked
   | StartHandshake
@@ -197,7 +218,10 @@ export type ExtensionMessage =
   | EnsureIdentity
   | IdentityReady
   | NativeRequest
-  | NativeResponse;
+  | NativeResponse
+  | SiteHasPap
+  | GetPapSite
+  | PapSiteResponse;
 
 // ── Session tracking ───────────────────────────────────────────────────
 

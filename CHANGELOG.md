@@ -1,5 +1,31 @@
 ## [Unreleased]
 
+## [0.7.1] - 2026-04-04
+
+### Changed
+
+- **github**: Replaced generic markdown issue templates with structured YAML Issue Forms for all four pillars (Papillon, Chrysalis, papillon-extension, pap:// URI). Each form now enforces required fields — blank issues are denied via `config.yml`. Forms cover pillar-specific fields: OS/area selector for Papillon, deployment type and federation peer count for Chrysalis, browser version and native host for the extension, and protocol phase (1–6) for pap:// URIs. Replaced the single protocol feedback template with a structured `protocol-proposal.yml` that requires a capture-test evaluation for every proposal. Added a cross-cutting `feature-request.yml` with capture-test and non-goals guardrails.
+
+## [0.7.0] - 2026-04-04
+
+### Added
+
+- **papillon-extension**: PAP site discovery — Layer 0+1 detection with DOM signal check and same-origin manifest probe; icon badge indicates when current site supports PAP
+- **papillon-extension**: Context menu upgrade — right-click HTTPS links to open via PAP-secured handshake; falls back to unprotected URL on failure with copyable link
+- **papillon-extension**: Popup site indicator — displays agent name and "PAP Agent Available" status for current page
+- **papillon-extension**: Persistent badge state via `chrome.storage.session` — survives service worker restart
+
+### Fixed
+
+- **papillon-extension**: Same-origin enforcement on `<link rel="pap-manifest">` — cross-origin manifest URIs are now rejected
+- **papillon-extension**: Manifest validation now bounds all strings and arrays — `agent_id`/`name` ≤1000 chars, `tools` ≤500 items, `categories` ≤100 items, `description`/`endpoint` ≤1000/500 chars
+- **papillon-extension**: Response body size bounded to 100KB to prevent DoS via oversized manifests
+- **papillon-extension**: Added Content-Type validation on manifest response (must be `application/json`)
+- **papillon-extension**: URL parsing heuristic fixed — now uses proper URL parsing instead of substring sniffing
+- **papillon-extension**: Timer resource leak fixed in manifest fetch error path (now uses try/finally)
+- **papillon-extension**: Firefox compatibility — removed optional chaining on `chrome.contextMenus` and `chrome.storage` APIs
+- **papillon-extension**: Fallback URL validation — only `http://` and `https://` schemes allowed (blocks javascript: injection)
+
 ## [0.6.0] - 2026-04-02
 
 ### Added

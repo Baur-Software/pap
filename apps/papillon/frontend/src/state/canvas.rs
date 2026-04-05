@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use papillon_shared::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
+use papillon_shared::{resolve_pap_uri, LinkOrigin, ResolvedUri};
 use papillon_shared::{BlockState, Canvas, CanvasBlock};
 use wasm_bindgen_futures::spawn_local;
 
@@ -120,13 +120,8 @@ fn resolve_prompt_text(text: &str, origin: LinkOrigin) -> Option<String> {
         Ok(ResolvedUri::LocalIntent(intent)) => Some(intent),
         Ok(ResolvedUri::Did(uri)) => Some(uri),
         Ok(ResolvedUri::Registry(uri)) => Some(uri),
-        Err(PapUriError::RecaptureDeferred) => {
-            leptos::logging::warn!(
-                "pap+https:// / pap+wss:// recapture enforcement not yet available: {}",
-                text
-            );
-            None
-        }
+        Ok(ResolvedUri::HttpsEndpoint(url)) => Some(url),
+        Ok(ResolvedUri::WssEndpoint(url)) => Some(url),
         Err(e) => {
             leptos::logging::warn!("PAP URI resolution failed for {}: {:?}", text, e);
             None
