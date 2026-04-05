@@ -1616,9 +1616,7 @@ impl AgentClient {
         let client = Arc::clone(&self.inner);
         let receipt_inner = Python::with_gil(|py| receipt.borrow(py).inner.clone());
         let result = RT
-            .spawn(async move {
-                client.exchange_receipt(&session_id, receipt_inner).await
-            })
+            .spawn(async move { client.exchange_receipt(&session_id, receipt_inner).await })
             .await
             .map_err(|e| PapTransportError::new_err(format!("task join error: {e}")))?
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
