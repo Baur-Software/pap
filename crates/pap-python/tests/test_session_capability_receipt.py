@@ -241,11 +241,10 @@ class TestSessionLifecycle:
     def test_session_initiate_from_valid_token(self):
         """Session.initiate should create a session from a valid token."""
         token, principal = self._make_capability_token()
-        receiver_did = "did:key:zreceiver"
 
         session = Session.initiate(
             token=token,
-            receiver_did=receiver_did,
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         assert session.state == SessionState.Initiated
@@ -256,11 +255,10 @@ class TestSessionLifecycle:
         """Session.initiate should consume the token's nonce."""
         token, principal = self._make_capability_token()
         nonce = token.nonce
-        receiver_did = "did:key:zreceiver"
 
         session = Session.initiate(
             token=token,
-            receiver_did=receiver_did,
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         assert session.is_nonce_consumed(nonce)
@@ -269,22 +267,20 @@ class TestSessionLifecycle:
         """Session.initiate should reject a token signed with wrong key."""
         token, _ = self._make_capability_token()
         other_principal = PrincipalKeypair.generate()
-        receiver_did = "did:key:zreceiver"
 
         with pytest.raises(PapSessionError):
             Session.initiate(
                 token=token,
-                receiver_did=receiver_did,
+                receiver_did="did:key:zagent",  # must match token.target_did
                 issuer_public_key_bytes=other_principal.public_key_bytes(),
             )
 
     def test_session_open_sets_session_dids(self):
         """Session.open should record both parties' ephemeral DIDs."""
         token, principal = self._make_capability_token()
-        receiver_did = "did:key:zreceiver"
         session = Session.initiate(
             token=token,
-            receiver_did=receiver_did,
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
 
@@ -307,7 +303,7 @@ class TestSessionLifecycle:
         token, principal = self._make_capability_token()
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         session.open("did:key:zinitiator_session", "did:key:zreceiver_session")
@@ -321,7 +317,7 @@ class TestSessionLifecycle:
         token, principal = self._make_capability_token()
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         session.open("did:key:zinitiator_session", "did:key:zreceiver_session")
@@ -336,7 +332,7 @@ class TestSessionLifecycle:
         token, principal = self._make_capability_token()
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
 
@@ -357,7 +353,7 @@ class TestSessionLifecycle:
         nonce1 = token.nonce
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
 
@@ -371,12 +367,12 @@ class TestSessionLifecycle:
 
         session1 = Session.initiate(
             token=token1,
-            receiver_did="did:key:zreceiver1",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal1.public_key_bytes(),
         )
         session2 = Session.initiate(
             token=token2,
-            receiver_did="did:key:zreceiver2",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal2.public_key_bytes(),
         )
 
@@ -387,7 +383,7 @@ class TestSessionLifecycle:
         token, principal = self._make_capability_token()
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
 
@@ -401,7 +397,7 @@ class TestSessionLifecycle:
         token, principal = self._make_capability_token()
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         assert session.action == token.action
@@ -427,7 +423,7 @@ class TestTransactionReceipt:
 
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         session.open("did:key:zinitiator_session", "did:key:zreceiver_session")
@@ -653,10 +649,10 @@ class TestSessionCapabilityReceiptIntegration:
         )
         token.sign(principal)
 
-        # 2. Initiate session
+        # 2. Initiate session (receiver_did must match token.target_did)
         session = Session.initiate(
             token=token,
-            receiver_did=session_key2.did(),
+            receiver_did=session_key1.did(),
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         assert session.state == SessionState.Initiated
@@ -712,15 +708,15 @@ class TestSessionCapabilityReceiptIntegration:
         )
         token2.sign(principal2)
 
-        # Create two sessions
+        # Create two sessions (receiver_did must match token.target_did)
         session1 = Session.initiate(
             token=token1,
-            receiver_did="did:key:zreceiver1",
+            receiver_did="did:key:zagent1",
             issuer_public_key_bytes=principal1.public_key_bytes(),
         )
         session2 = Session.initiate(
             token=token2,
-            receiver_did="did:key:zreceiver2",
+            receiver_did="did:key:zagent2",
             issuer_public_key_bytes=principal2.public_key_bytes(),
         )
 
@@ -745,7 +741,7 @@ class TestSessionCapabilityReceiptIntegration:
 
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         session.open("did:key:zinitiator_session", "did:key:zreceiver_session")
@@ -804,7 +800,7 @@ class TestEdgeCases:
         with pytest.raises(Exception):
             Session.initiate(
                 token=token,
-                receiver_did="did:key:zreceiver",
+                receiver_did="did:key:zagent",  # must match token.target_did
                 issuer_public_key_bytes=b"not-32-bytes",
             )
 
@@ -821,7 +817,7 @@ class TestEdgeCases:
 
         session = Session.initiate(
             token=token,
-            receiver_did="did:key:zreceiver",
+            receiver_did="did:key:zagent",  # must match token.target_did
             issuer_public_key_bytes=principal.public_key_bytes(),
         )
         session.open("did:key:zinitiator_session", "did:key:zreceiver_session")
