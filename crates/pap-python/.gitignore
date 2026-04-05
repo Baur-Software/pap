@@ -1,0 +1,6 @@
+__pycache__/
+*.abi3.so
+*.dylib
+*.dSYM/
+.venv/
+.pytest_cache/
