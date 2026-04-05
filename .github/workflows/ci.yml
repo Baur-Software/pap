@@ -109,6 +109,8 @@ jobs:
   test-java-bindings:
     name: Test (Java JNA bindings)
     runs-on: ubuntu-latest
+    # TODO: add JDK 21 matrix (strategy.matrix.java: [17, 21]) once
+    # the Gradle build is validated against JDK 21 on all platforms.
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -118,10 +120,19 @@ jobs:
         with:
           shared-key: "java-bindings"
           cache-on-failure: true
-      - name: Build native library (libpap_c.so)
+      - name: Build native library
         run: cargo build --release -p pap-c
+      - name: Set library filename
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            echo "LIB_NAME=libpap_c.dylib" >> $GITHUB_ENV
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            echo "LIB_NAME=pap_c.dll" >> $GITHUB_ENV
+          else
+            echo "LIB_NAME=libpap_c.so" >> $GITHUB_ENV
+          fi
       - name: Verify native library exists
-        run: ls -lh target/release/libpap_c.so
+        run: ls -lh target/release/$LIB_NAME
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
