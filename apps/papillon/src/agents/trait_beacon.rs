@@ -107,7 +107,11 @@ impl AgentHandler for TraitBeaconAgent {
             ));
         }
 
-        Ok(self.profile.read().expect("trait beacon rwlock poisoned").clone())
+        Ok(self
+            .profile
+            .read()
+            .expect("trait beacon rwlock poisoned")
+            .clone())
     }
 
     fn co_sign_receipt(
