@@ -145,6 +145,25 @@ impl NativeDatabase {
                 ON agents(catalog_path) WHERE catalog_path IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_agents_action ON agents(action);
             CREATE INDEX IF NOT EXISTS idx_agents_source ON agents(source);
+
+            CREATE TABLE IF NOT EXISTS conversations (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                is_group    INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id              TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL REFERENCES conversations(id),
+                author_did      TEXT NOT NULL,
+                content         TEXT NOT NULL,
+                created_at      TEXT NOT NULL,
+                delivered       INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
+                ON chat_messages(conversation_id, created_at);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -1233,6 +1252,121 @@ impl DatabaseOps for NativeDatabase {
 
         Ok(stats)
     }
+
+    // ── Chat persistence ──────────────────────────────────────────────────
+
+    fn upsert_conversation(&self, conversation: &super::Conversation) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO conversations (id, name, is_group, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                name       = excluded.name,
+                is_group   = excluded.is_group,
+                updated_at = excluded.updated_at",
+            params![
+                conversation.id,
+                conversation.name,
+                conversation.is_group as i64,
+                conversation.created_at,
+                conversation.updated_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db upsert conversation: {e}")))?;
+        Ok(())
+    }
+
+    fn list_conversations(&self) -> Result<Vec<super::Conversation>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, is_group, created_at, updated_at
+                 FROM conversations
+                 ORDER BY updated_at DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                let is_group_int: i64 = row.get(2)?;
+                Ok(super::Conversation {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    is_group: is_group_int != 0,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query conversations: {e}")))?;
+        let mut conversations = Vec::new();
+        for row in rows {
+            conversations.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(conversations)
+    }
+
+    fn insert_chat_message(&self, message: &super::ChatMessage) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT OR IGNORE INTO chat_messages
+                (id, conversation_id, author_did, content, created_at, delivered)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                message.id,
+                message.conversation_id,
+                message.author_did,
+                message.content,
+                message.created_at,
+                message.delivered as i64,
+            ],
+        )
+        .map_err(|e| DbError(format!("db insert chat message: {e}")))?;
+        Ok(())
+    }
+
+    fn mark_message_delivered(&self, message_id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "UPDATE chat_messages SET delivered = 1 WHERE id = ?1",
+            params![message_id],
+        )
+        .map_err(|e| DbError(format!("db mark delivered: {e}")))?;
+        Ok(())
+    }
+
+    fn list_chat_messages(
+        &self,
+        conversation_id: &str,
+        limit: usize,
+    ) -> Result<Vec<super::ChatMessage>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, conversation_id, author_did, content, created_at, delivered
+                 FROM chat_messages
+                 WHERE conversation_id = ?1
+                 ORDER BY created_at ASC
+                 LIMIT ?2",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![conversation_id, limit as i64], |row| {
+                let delivered_int: i64 = row.get(5)?;
+                Ok(super::ChatMessage {
+                    id: row.get(0)?,
+                    conversation_id: row.get(1)?,
+                    author_did: row.get(2)?,
+                    content: row.get(3)?,
+                    created_at: row.get(4)?,
+                    delivered: delivered_int != 0,
+                })
+            })
+            .map_err(|e| DbError(format!("db query chat messages: {e}")))?;
+        let mut messages = Vec::new();
+        for row in rows {
+            messages.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(messages)
+    }
 }
 
 #[cfg(test)]
@@ -1927,5 +2061,131 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, "ep-new");
         assert_eq!(results[1].id, "ep-old");
+    }
+
+    // ── Chat persistence tests ────────────────────────────────────────────
+
+    fn sample_conversation(id: &str, is_group: bool) -> super::super::Conversation {
+        super::super::Conversation {
+            id: id.to_string(),
+            name: format!("Room {id}"),
+            is_group,
+            created_at: "2026-04-01T10:00:00Z".to_string(),
+            updated_at: "2026-04-01T10:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_chat_message(id: &str, conversation_id: &str) -> super::super::ChatMessage {
+        super::super::ChatMessage {
+            id: id.to_string(),
+            conversation_id: conversation_id.to_string(),
+            author_did: "did:key:zSender".to_string(),
+            content: r#"{"body":{"content":"hello"}}"#.to_string(),
+            created_at: format!("2026-04-01T10:0{id}:00Z"),
+            delivered: false,
+        }
+    }
+
+    #[test]
+    fn upsert_and_list_conversations() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.upsert_conversation(&sample_conversation("conv-2", true))
+            .unwrap();
+        let convs = db.list_conversations().unwrap();
+        assert_eq!(convs.len(), 2);
+    }
+
+    #[test]
+    fn upsert_conversation_updates_existing() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        let updated = super::super::Conversation {
+            name: "Renamed Room".to_string(),
+            is_group: true,
+            updated_at: "2026-04-02T10:00:00Z".to_string(),
+            ..sample_conversation("conv-1", false)
+        };
+        db.upsert_conversation(&updated).unwrap();
+        let convs = db.list_conversations().unwrap();
+        assert_eq!(convs.len(), 1);
+        assert_eq!(convs[0].name, "Renamed Room");
+        assert!(convs[0].is_group);
+    }
+
+    #[test]
+    fn insert_and_list_chat_messages() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("2", "conv-1"))
+            .unwrap();
+        let msgs = db.list_chat_messages("conv-1", 100).unwrap();
+        assert_eq!(msgs.len(), 2);
+        assert!(!msgs[0].delivered);
+        // ordered oldest-first by created_at
+        assert!(msgs[0].created_at <= msgs[1].created_at);
+    }
+
+    #[test]
+    fn mark_chat_message_delivered() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap();
+        db.mark_message_delivered("msg-1").unwrap(); // no-op for non-existent is fine
+        db.mark_message_delivered("1").unwrap();
+        let msgs = db.list_chat_messages("conv-1", 100).unwrap();
+        assert!(msgs[0].delivered);
+    }
+
+    #[test]
+    fn list_messages_respects_limit() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        for i in 0..5_u8 {
+            db.insert_chat_message(&sample_chat_message(&i.to_string(), "conv-1"))
+                .unwrap();
+        }
+        let msgs = db.list_chat_messages("conv-1", 3).unwrap();
+        assert_eq!(msgs.len(), 3);
+    }
+
+    #[test]
+    fn insert_chat_message_ignores_duplicate_id() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap(); // dup
+        let msgs = db.list_chat_messages("conv-1", 100).unwrap();
+        assert_eq!(msgs.len(), 1);
+    }
+
+    #[test]
+    fn list_messages_scoped_to_conversation() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-a", false))
+            .unwrap();
+        db.upsert_conversation(&sample_conversation("conv-b", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-a"))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("2", "conv-b"))
+            .unwrap();
+        let msgs_a = db.list_chat_messages("conv-a", 100).unwrap();
+        let msgs_b = db.list_chat_messages("conv-b", 100).unwrap();
+        assert_eq!(msgs_a.len(), 1);
+        assert_eq!(msgs_b.len(), 1);
+        assert_eq!(msgs_a[0].id, "1");
+        assert_eq!(msgs_b[0].id, "2");
     }
 }

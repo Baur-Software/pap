@@ -38,4 +38,23 @@ pub trait AgentHandler: Send + Sync {
 
     /// Phase 6: Handle session close.
     fn handle_close(&self, session_id: &str) -> Result<(), TransportError>;
+
+    /// Phase 4 streaming: handle a `StreamingMessage` frame after `ExecutionResult`
+    /// has opened a streaming session (e.g. chat).
+    ///
+    /// Return `Some(content)` to send a reply frame back to the initiator,
+    /// or `None` to send a `StreamingAck` only.
+    ///
+    /// The default implementation returns an error — agents that do not
+    /// support streaming (all existing agents) are unaffected.
+    fn handle_stream_message(
+        &self,
+        _session_id: &str,
+        _id: &str,
+        _content: &serde_json::Value,
+    ) -> Result<Option<serde_json::Value>, TransportError> {
+        Err(TransportError::HandlerError(
+            "streaming not supported by this agent".into(),
+        ))
+    }
 }

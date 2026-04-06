@@ -96,6 +96,8 @@ jobs:
             return data.id;
 
   # ── 3. Build Tauri desktop app (macOS / Linux / Windows) ─────────────────────
+  # macOS: signed + notarized (Developer ID) when APPLE_* secrets are set.
+  # Windows: MSIX bundle produced in addition to NSIS/MSI for Store submission.
   build-desktop:
     needs: [check-version, create-release]
     permissions:
@@ -111,10 +113,14 @@ jobs:
             tauri_args: ""
             rust_targets: wasm32-unknown-unknown
           - platform: windows-latest
-            tauri_args: ""
+            # MSIX enables Microsoft Store submission; NSIS/MSI for direct install.
+            tauri_args: "--bundles nsis,msi,msix"
             rust_targets: wasm32-unknown-unknown
 
     runs-on: ${{ matrix.platform }}
+    env:
+      HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      HAS_WINDOWS_SIGNING: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -166,16 +172,96 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ── macOS code signing + Gatekeeper notarization ──────────────────
+          # Set these secrets to enable signed/notarized macOS builds.
+          # Required secrets: APPLE_CERTIFICATE (base64 .p12),
+          #   APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+          #   APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # ── Windows code signing ──────────────────────────────────────────
+          # Required secrets: WINDOWS_CERTIFICATE (base64 .pfx),
+          #   WINDOWS_CERTIFICATE_PASSWORD
+          TAURI_WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          TAURI_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         with:
           projectPath: apps/papillon
           tauriScript: cargo tauri
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.tauri_args }}
 
+      # ── Submit MSIX to Microsoft Partner Center ─────────────────────────
+      # Required secrets: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
+      #   MICROSOFT_STORE_APP_ID (from Partner Center > App identity)
+      - name: Submit MSIX to Microsoft Store
+        if: |
+          matrix.platform == 'windows-latest' &&
+          env.HAS_WINDOWS_SIGNING == 'true' &&
+          secrets.MICROSOFT_STORE_APP_ID != ''
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          STORE_APP_ID: ${{ secrets.MICROSOFT_STORE_APP_ID }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          $msix = Get-ChildItem -Recurse -Path "apps\papillon\target" `
+            -Filter "*.msix" | Select-Object -First 1
+          if (-not $msix) {
+            Write-Warning "No MSIX found — skipping Store submission"
+            exit 0
+          }
+          Write-Host "Submitting $($msix.Name) to Microsoft Store…"
+
+          # Obtain Azure AD token for the Store API
+          $tokenBody = @{
+            grant_type    = "client_credentials"
+            client_id     = $env:AZURE_CLIENT_ID
+            client_secret = $env:AZURE_CLIENT_SECRET
+            resource      = "https://manage.devcenter.microsoft.com"
+          }
+          $token = (Invoke-RestMethod `
+            -Uri "https://login.microsoftonline.com/$env:AZURE_TENANT_ID/oauth2/token" `
+            -Method Post -Body $tokenBody).access_token
+          $hdrs = @{
+            Authorization  = "Bearer $token"
+            "Content-Type" = "application/json"
+          }
+
+          $base = "https://manage.devcenter.microsoft.com/v1.0/my/applications/$env:STORE_APP_ID"
+
+          # Create a new submission
+          $sub = Invoke-RestMethod -Uri "$base/submissions" -Method Post -Headers $hdrs
+          $subId = $sub.id
+          Write-Host "Created submission $subId"
+
+          # Upload the MSIX package
+          $uploadUrl = $sub.fileUploadUrl
+          $bytes = [System.IO.File]::ReadAllBytes($msix.FullName)
+          Invoke-RestMethod -Uri $uploadUrl -Method Put -Body $bytes `
+            -ContentType "application/zip" -Headers $hdrs
+
+          # Update the submission with the new package
+          $subBody = $sub | ConvertTo-Json -Depth 10
+          Invoke-RestMethod -Uri "$base/submissions/$subId" -Method Put `
+            -Headers $hdrs -Body $subBody
+
+          # Commit the submission to trigger review
+          Invoke-RestMethod -Uri "$base/submissions/$subId/commit" `
+            -Method Post -Headers $hdrs
+          Write-Host "Submission $subId committed for review."
+
   # ── 4. Build mobile — iOS (thin client) ──────────────────────────────────────
   # Mobile builds are lightweight Capacitor wrappers around the WASM frontend.
   # The app connects to a Papillon desktop instance (LAN) or Chrysalis server
   # (internet) — no local LLM inference or Rust backend on the device.
+  # App Store submission: set APPLE_API_KEY_ID, APPLE_API_ISSUER,
+  #   APPLE_API_PRIVATE_KEY (base64 .p8) in repo secrets.
   build-mobile-ios:
     needs: [check-version, create-release, build-web]
     if: needs.check-version.outputs.should_release == 'true'
@@ -184,6 +270,7 @@ jobs:
       contents: write
     env:
       HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      HAS_ASC_API_KEY: ${{ secrets.APPLE_API_KEY_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -288,7 +375,40 @@ jobs:
               });
             }
 
+      # ── Submit IPA to App Store Connect (TestFlight → App Store) ──────────
+      # Requires: APPLE_API_KEY_ID, APPLE_API_ISSUER,
+      #           APPLE_API_PRIVATE_KEY (base64-encoded .p8 file)
+      - name: Write App Store Connect API key
+        if: env.HAS_APPLE_SIGNING == 'true' && env.HAS_ASC_API_KEY == 'true'
+        env:
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo -n "$APPLE_API_PRIVATE_KEY" | base64 --decode \
+            > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+
+      - name: Submit IPA to App Store Connect
+        if: env.HAS_APPLE_SIGNING == 'true' && env.HAS_ASC_API_KEY == 'true'
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          IPA=$(find "$RUNNER_TEMP/ipa" -name "*.ipa" 2>/dev/null | head -1)
+          if [ -z "$IPA" ]; then
+            echo "No IPA found — skipping App Store submission"
+            exit 0
+          fi
+          echo "Submitting $IPA to App Store Connect…"
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA" \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
+
   # ── 5. Build mobile — Android (thin client) ─────────────────────────────────
+  # Produces a signed AAB (Android App Bundle) for Google Play, plus a
+  # sideloadable APK when no production keystore is present.
+  # Google Play submission: set GOOGLE_PLAY_JSON_KEY in repo secrets.
   build-mobile-android:
     needs: [check-version, create-release, build-web]
     if: needs.check-version.outputs.should_release == 'true'
@@ -297,6 +417,7 @@ jobs:
       contents: write
     env:
       HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE != '' }}
+      HAS_PLAY_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -332,11 +453,12 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Build Android APK
+      # Build AAB for Google Play + APK for sideloading / GitHub Release
+      - name: Build Android AAB (Google Play) and APK (sideload)
         working-directory: apps/papillon/android
-        run: ./gradlew assembleRelease
+        run: ./gradlew bundleRelease assembleRelease
 
-      - name: Sign APK (production keystore)
+      - name: Sign AAB and APK (production keystore)
         if: env.HAS_ANDROID_SIGNING == 'true'
         env:
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
@@ -346,6 +468,8 @@ jobs:
         run: |
           echo -n "$ANDROID_KEYSTORE" | base64 --decode > $RUNNER_TEMP/keystore.jks
           BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
+
+          # Sign APK
           APK=$(find apps/papillon/android -name "*-release-unsigned.apk" -type f | head -1)
           if [ -n "$APK" ]; then
             "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
@@ -357,7 +481,19 @@ jobs:
               "$APK"
           fi
 
-      - name: Sign APK (self-signed for sideloading)
+          # Sign AAB with jarsigner (apksigner does not support AAB)
+          AAB=$(find apps/papillon/android -name "*-release.aab" -type f | head -1)
+          if [ -n "$AAB" ]; then
+            jarsigner -verbose \
+              -keystore $RUNNER_TEMP/keystore.jks \
+              -storepass "${ANDROID_KEYSTORE_PASSWORD}" \
+              -keypass "${ANDROID_KEY_PASSWORD}" \
+              -signedjar "${AAB%.aab}-signed.aab" \
+              "$AAB" \
+              "${ANDROID_KEY_ALIAS}"
+          fi
+
+      - name: Sign APK (self-signed for sideloading, no Play signing)
         if: env.HAS_ANDROID_SIGNING != 'true'
         run: |
           keytool -genkeypair -v \
@@ -377,7 +513,7 @@ jobs:
               "$APK"
           fi
 
-      - name: Upload Android artifacts to release
+      - name: Upload Android APK to GitHub Release
         uses: actions/github-script@v7
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
@@ -397,6 +533,27 @@ jobs:
                 data
               });
             }
+
+      # ── Submit AAB to Google Play ────────────────────────────────────────
+      # Requires: GOOGLE_PLAY_JSON_KEY (service account JSON, base64-encoded)
+      #           ANDROID_KEYSTORE + signing secrets (production keystore required)
+      # The package name must be registered in Google Play Console first.
+      - name: Write Google Play service account key
+        if: env.HAS_ANDROID_SIGNING == 'true' && env.HAS_PLAY_KEY == 'true'
+        env:
+          GOOGLE_PLAY_JSON_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+        run: echo -n "$GOOGLE_PLAY_JSON_KEY" | base64 --decode > $RUNNER_TEMP/play-key.json
+
+      - name: Submit AAB to Google Play (internal track)
+        if: env.HAS_ANDROID_SIGNING == 'true' && env.HAS_PLAY_KEY == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ runner.temp }}/play-key.json
+          packageName: com.baursoftware.papillon
+          releaseFiles: apps/papillon/android/**/*-signed.aab
+          track: internal
+          status: completed
+          inAppUpdatePriority: 2
 
   # ── 6. Build web (WASM) ─────────────────────────────────────────────────────
   build-web:

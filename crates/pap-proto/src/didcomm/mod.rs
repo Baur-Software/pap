@@ -132,6 +132,8 @@ fn pap_message_type_slug(msg: &crate::message::ProtocolMessage) -> &'static str 
         ProtocolMessage::SessionClose { .. } => "session-close",
         ProtocolMessage::SessionClosed => "session-closed",
         ProtocolMessage::Error { .. } => "error",
+        ProtocolMessage::StreamingMessage { .. } => "streaming-message",
+        ProtocolMessage::StreamingAck { .. } => "streaming-ack",
     }
 }
 

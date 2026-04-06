@@ -529,18 +529,7 @@ mod tests {
     use super::*;
     use crate::session::{CapabilityToken, Session};
     use chrono::Duration;
-    use ed25519_dalek::SigningKey;
-    use rand::rngs::OsRng;
-
-    fn make_keypair() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
-    }
-
-    fn did_from_key(key: &SigningKey) -> String {
-        pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
-            .unwrap()
-            .did()
-    }
+    use pap_test_utils::{did_from_key, make_keypair};
 
     fn make_executed_session() -> Session {
         let issuer_key = make_keypair();

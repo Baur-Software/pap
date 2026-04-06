@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
 use pap_did::SessionKeypair;

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! WebAuthn key ceremony Tauri commands.
 //!
 //! Wires the PAP `pap-webauthn` primitives into the Papillon desktop app as

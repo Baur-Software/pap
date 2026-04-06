@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Multi-hop delegation chain PoC demonstrating:
 //!
 //! - 4-level mandate hierarchy (principal → orchestrator → planner → booking agent)

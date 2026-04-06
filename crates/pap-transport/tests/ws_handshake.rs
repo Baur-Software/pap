@@ -1,4 +1,5 @@
 //! Integration test: full 6-phase PAP handshake over loopback WebSocket.
+#![allow(clippy::unwrap_used)]
 //!
 //! Verifies that `WsAgentClient` and `WsAgentServer` correctly implement
 //! the PAP session protocol with no TLS (loopback).

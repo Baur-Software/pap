@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Payment PoC demonstrating:
 //!
 //! - payment_proof field on mandates (Chaumian ecash blind-signed token)

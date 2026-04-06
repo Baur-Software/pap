@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 pub mod agents;
 pub mod commands;
 pub mod db;
@@ -190,6 +191,12 @@ pub fn run() {
             commands::webauthn::begin_authentication,
             commands::webauthn::complete_authentication,
             commands::canvas::get_canvas_state,
+            commands::chat::list_conversations,
+            commands::chat::get_chat_history,
+            commands::chat::create_group_chat,
+            commands::chat::join_group_chat,
+            commands::chat::record_chat_message,
+            commands::chat::mark_message_delivered,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");

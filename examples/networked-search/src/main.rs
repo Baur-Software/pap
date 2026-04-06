@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Networked search PoC demonstrating:
 //!
 //! - Full 6-phase PAP handshake over HTTP

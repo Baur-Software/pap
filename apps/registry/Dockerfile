@@ -50,11 +50,20 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-python"/d' \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
+    -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
     -e '/^[[:space:]]*"benches"/d' \
     -e '/^[[:space:]]*"examples\//d' \
+    -e '/^pap-test-utils[[:space:]]*=/d' \
+    -e '/^papillon-shared[[:space:]]*=/d' \
     Cargo.toml
+
+# Strip pap-test-utils dev-dep from crate manifests (the crate is not copied).
+RUN sed -i -e '/^pap-test-utils[[:space:]]*=/d' \
+    crates/pap-core/Cargo.toml \
+    crates/pap-credential/Cargo.toml \
+    crates/pap-federation/Cargo.toml
 
 # Build server binary (ssr feature) + WASM bundle (hydrate feature) in one step
 RUN cargo leptos build --release -p pap-registry
@@ -92,11 +101,20 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-python"/d' \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
+    -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
     -e '/^[[:space:]]*"benches"/d' \
     -e '/^[[:space:]]*"examples\//d' \
+    -e '/^pap-test-utils[[:space:]]*=/d' \
+    -e '/^papillon-shared[[:space:]]*=/d' \
     Cargo.toml
+
+# Strip pap-test-utils dev-dep from crate manifests (the crate is not copied).
+RUN sed -i -e '/^pap-test-utils[[:space:]]*=/d' \
+    crates/pap-core/Cargo.toml \
+    crates/pap-credential/Cargo.toml \
+    crates/pap-federation/Cargo.toml
 
 RUN cargo test -p pap-registry --features ssr
 

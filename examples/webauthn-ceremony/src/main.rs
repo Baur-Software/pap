@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! WebAuthn ceremony PoC demonstrating:
 //!
 //! - PrincipalSigner trait abstraction over key backends

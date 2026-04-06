@@ -111,7 +111,8 @@ pub fn get_assertion(
         "origin": format!("https://{}", signer.credential.rp_id),
         "crossOrigin": false,
     });
-    let client_data_json = serde_json::to_vec(&client_data).unwrap();
+    let client_data_json =
+        serde_json::to_vec(&client_data).expect("serde_json::json!() value is always serializable");
 
     // Sign: authenticator_data || SHA-256(client_data_json)
     let client_data_hash = Sha256::digest(&client_data_json);

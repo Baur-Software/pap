@@ -24,3 +24,6 @@ zeroize       = { workspace = true }
 
 [build-dependencies]
 cbindgen = "0.27"
+
+[lints]
+workspace = true

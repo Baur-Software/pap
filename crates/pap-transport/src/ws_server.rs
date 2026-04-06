@@ -229,15 +229,42 @@ fn dispatch_message(
             }
         }
 
-        // Phase 4: Execute (no client payload)
+        // Phase 4: Execute or streaming message frame.
+        //
+        // - No payload → initial execute (existing behaviour).
+        // - StreamingMessage payload → bidirectional streaming (e.g. chat).
         4 => {
             let sid = require_session_id(session_id)?;
-            let result = handler.execute(&sid)?;
-            Ok(WsMessage {
-                phase: 4,
-                session_id: Some(sid),
-                payload: Some(ProtocolMessage::ExecutionResult { result }),
-            })
+            match &msg.payload {
+                None => {
+                    // Standard task execution — returns ExecutionResult.
+                    let result = handler.execute(&sid)?;
+                    Ok(WsMessage {
+                        phase: 4,
+                        session_id: Some(sid),
+                        payload: Some(ProtocolMessage::ExecutionResult { result }),
+                    })
+                }
+                Some(ProtocolMessage::StreamingMessage { id, content }) => {
+                    // Streaming frame — delegate to handler, reply with frame or ack.
+                    let reply = handler.handle_stream_message(&sid, id, content)?;
+                    let payload = match reply {
+                        Some(body) => ProtocolMessage::StreamingMessage {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            content: body,
+                        },
+                        None => ProtocolMessage::StreamingAck { id: id.clone() },
+                    };
+                    Ok(WsMessage {
+                        phase: 4,
+                        session_id: Some(sid),
+                        payload: Some(payload),
+                    })
+                }
+                _ => Err(TransportError::InvalidResponse(
+                    "phase 4: unexpected payload type".into(),
+                )),
+            }
         }
 
         // Phase 5: Receipt co-signing
@@ -282,4 +309,230 @@ fn require_session_id(session_id: &Option<String>) -> Result<String, TransportEr
     session_id.clone().ok_or_else(|| {
         TransportError::InvalidResponse("no session established (phase 1 not completed)".into())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use pap_core::{receipt::TransactionReceipt, session::CapabilityToken};
+    use pap_proto::ProtocolMessage;
+
+    use super::*;
+    use crate::ws_common::WsMessage;
+
+    // ── Minimal stub handlers ─────────────────────────────────────────────
+
+    /// Handler whose execute() returns a SearchResult (no streaming support).
+    struct BasicHandler;
+    impl AgentHandler for BasicHandler {
+        fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
+            Ok(("sess-basic".into(), "did:key:zBasic".into()))
+        }
+        fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn handle_disclosure(
+            &self,
+            _: &str,
+            _: Vec<serde_json::Value>,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn execute(&self, _: &str) -> Result<serde_json::Value, TransportError> {
+            Ok(serde_json::json!({"@type": "SearchResult", "name": "test"}))
+        }
+        fn co_sign_receipt(
+            &self,
+            r: TransactionReceipt,
+        ) -> Result<TransactionReceipt, TransportError> {
+            Ok(r)
+        }
+        fn handle_close(&self, _: &str) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
+    /// Handler that echoes streaming messages back to the caller.
+    struct EchoStreamHandler;
+    impl AgentHandler for EchoStreamHandler {
+        fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
+            Ok(("sess-echo".into(), "did:key:zEcho".into()))
+        }
+        fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn handle_disclosure(
+            &self,
+            _: &str,
+            _: Vec<serde_json::Value>,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn execute(&self, _: &str) -> Result<serde_json::Value, TransportError> {
+            Ok(serde_json::json!({"@type": "Conversation", "identifier": "room-1"}))
+        }
+        fn handle_stream_message(
+            &self,
+            _: &str,
+            _: &str,
+            content: &serde_json::Value,
+        ) -> Result<Option<serde_json::Value>, TransportError> {
+            Ok(Some(content.clone())) // echo
+        }
+        fn co_sign_receipt(
+            &self,
+            r: TransactionReceipt,
+        ) -> Result<TransactionReceipt, TransportError> {
+            Ok(r)
+        }
+        fn handle_close(&self, _: &str) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
+    /// Handler that ack-only responds to streaming messages.
+    struct AckOnlyHandler;
+    impl AgentHandler for AckOnlyHandler {
+        fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
+            Ok(("sess-ack".into(), "did:key:zAck".into()))
+        }
+        fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn handle_disclosure(
+            &self,
+            _: &str,
+            _: Vec<serde_json::Value>,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn execute(&self, _: &str) -> Result<serde_json::Value, TransportError> {
+            Ok(serde_json::Value::Null)
+        }
+        fn handle_stream_message(
+            &self,
+            _: &str,
+            _: &str,
+            _: &serde_json::Value,
+        ) -> Result<Option<serde_json::Value>, TransportError> {
+            Ok(None) // ack-only
+        }
+        fn co_sign_receipt(
+            &self,
+            r: TransactionReceipt,
+        ) -> Result<TransactionReceipt, TransportError> {
+            Ok(r)
+        }
+        fn handle_close(&self, _: &str) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
+    fn arc<H: AgentHandler + 'static>(h: H) -> Arc<dyn AgentHandler> {
+        Arc::new(h)
+    }
+
+    // ── Phase 4 dispatch tests ────────────────────────────────────────────
+
+    #[test]
+    fn phase4_no_payload_calls_execute() {
+        let h = arc(BasicHandler);
+        let mut sid = Some("sess-basic".to_string());
+        let msg = WsMessage {
+            phase: 4,
+            session_id: Some("sess-basic".into()),
+            payload: None,
+        };
+        let resp = dispatch_message(&h, &mut sid, msg).unwrap();
+        assert_eq!(resp.phase, 4);
+        match resp.payload {
+            Some(ProtocolMessage::ExecutionResult { result }) => {
+                assert_eq!(result["@type"], "SearchResult");
+            }
+            _ => panic!("expected ExecutionResult"),
+        }
+    }
+
+    #[test]
+    fn phase4_streaming_message_echoed_back() {
+        let h = arc(EchoStreamHandler);
+        let mut sid = Some("sess-echo".to_string());
+        let content = serde_json::json!({"body": {"content": "hello chat"}});
+        let msg = WsMessage {
+            phase: 4,
+            session_id: Some("sess-echo".into()),
+            payload: Some(ProtocolMessage::StreamingMessage {
+                id: "msg-abc".into(),
+                content: content.clone(),
+            }),
+        };
+        let resp = dispatch_message(&h, &mut sid, msg).unwrap();
+        assert_eq!(resp.phase, 4);
+        match resp.payload {
+            Some(ProtocolMessage::StreamingMessage { content: reply, .. }) => {
+                assert_eq!(reply, content);
+            }
+            _ => panic!("expected StreamingMessage reply"),
+        }
+    }
+
+    #[test]
+    fn phase4_streaming_ack_when_handler_returns_none() {
+        let h = arc(AckOnlyHandler);
+        let mut sid = Some("sess-ack".to_string());
+        let msg = WsMessage {
+            phase: 4,
+            session_id: Some("sess-ack".into()),
+            payload: Some(ProtocolMessage::StreamingMessage {
+                id: "msg-42".into(),
+                content: serde_json::json!({}),
+            }),
+        };
+        let resp = dispatch_message(&h, &mut sid, msg).unwrap();
+        match resp.payload {
+            Some(ProtocolMessage::StreamingAck { id }) => assert_eq!(id, "msg-42"),
+            _ => panic!("expected StreamingAck"),
+        }
+    }
+
+    #[test]
+    fn phase4_streaming_error_when_unsupported() {
+        // BasicHandler uses the default handle_stream_message → returns error
+        let h = arc(BasicHandler);
+        let mut sid = Some("sess-basic".to_string());
+        let msg = WsMessage {
+            phase: 4,
+            session_id: Some("sess-basic".into()),
+            payload: Some(ProtocolMessage::StreamingMessage {
+                id: "msg-x".into(),
+                content: serde_json::json!({}),
+            }),
+        };
+        assert!(dispatch_message(&h, &mut sid, msg).is_err());
+    }
+
+    #[test]
+    fn phase4_unexpected_payload_type_returns_error() {
+        let h = arc(BasicHandler);
+        let mut sid = Some("sess-basic".to_string());
+        let msg = WsMessage {
+            phase: 4,
+            session_id: Some("sess-basic".into()),
+            payload: Some(ProtocolMessage::SessionClosed), // wrong type for phase 4
+        };
+        assert!(dispatch_message(&h, &mut sid, msg).is_err());
+    }
+
+    #[test]
+    fn phase4_requires_established_session() {
+        let h = arc(BasicHandler);
+        let mut sid: Option<String> = None; // no session yet
+        let msg = WsMessage {
+            phase: 4,
+            session_id: None,
+            payload: None,
+        };
+        assert!(dispatch_message(&h, &mut sid, msg).is_err());
+    }
 }

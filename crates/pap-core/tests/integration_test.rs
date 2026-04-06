@@ -1,7 +1,7 @@
 //! Integration tests for pap-core covering end-to-end flows
+#![allow(clippy::unwrap_used)]
 
 use chrono::{Duration, Utc};
-use ed25519_dalek::SigningKey;
 use pap_core::error::PapError;
 use pap_core::extensions::{AutoApprovalPolicy, ContinuityToken};
 use pap_core::mandate::{DecayState, Mandate};
@@ -12,17 +12,7 @@ use pap_core::recovery::{
 };
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
 use pap_core::session::{CapabilityToken, Session, SessionState};
-use rand::rngs::OsRng;
-
-fn make_keypair() -> SigningKey {
-    SigningKey::generate(&mut OsRng)
-}
-
-fn did_from_key(key: &SigningKey) -> String {
-    pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
-        .unwrap()
-        .did()
-}
+use pap_test_utils::{did_from_key, make_keypair};
 
 #[test]
 fn end_to_end_session_flow_with_receipt() {

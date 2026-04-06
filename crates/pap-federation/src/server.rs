@@ -127,7 +127,10 @@ impl FederationServer {
 /// This is the first thing a connecting node should call. It tells them
 /// who they're talking to and how to verify the TLS certificate is legit.
 async fn handle_identity(State(state): State<ServerState>) -> Json<NodeIdentityResponse> {
-    let registry = state.registry.lock().unwrap();
+    let registry = state
+        .registry
+        .lock()
+        .expect("federation registry mutex poisoned");
     Json(NodeIdentityResponse {
         did: state.node_did.clone(),
         endpoint: state.node_endpoint.clone(),
@@ -141,7 +144,10 @@ async fn handle_query(
     State(state): State<ServerState>,
     Query(params): Query<QueryParams>,
 ) -> Json<FederationMessage> {
-    let registry = state.registry.lock().unwrap();
+    let registry = state
+        .registry
+        .lock()
+        .expect("federation registry mutex poisoned");
     let page_size = params.page_size.unwrap_or(50).min(1000) as usize;
 
     let (ads, next_cursor, has_more) =
@@ -163,7 +169,10 @@ async fn handle_announce(
     match msg {
         FederationMessage::Announce { advertisement } => {
             let hash = advertisement.hash();
-            let mut registry = state.registry.lock().unwrap();
+            let mut registry = state
+                .registry
+                .lock()
+                .expect("federation registry mutex poisoned");
             let accepted = registry.merge_remote(vec![*advertisement]) > 0;
             Json(FederationMessage::AnnounceAck { hash, accepted })
         }
@@ -175,7 +184,10 @@ async fn handle_announce(
 }
 
 async fn handle_peers(State(state): State<ServerState>) -> Json<FederationMessage> {
-    let registry = state.registry.lock().unwrap();
+    let registry = state
+        .registry
+        .lock()
+        .expect("federation registry mutex poisoned");
 
     // Include ourselves in the peer list so connecting nodes learn about us
     let mut peers = registry.peers().to_vec();

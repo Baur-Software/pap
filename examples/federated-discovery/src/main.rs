@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Federated Discovery PoC demonstrating:
 //!
 //! - FederatedRegistry with peer awareness and deduplication
