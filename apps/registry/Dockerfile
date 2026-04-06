@@ -49,6 +49,7 @@ COPY apps/registry/assets ./apps/registry/assets
 RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-python"/d' \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
+    -e '/^[[:space:]]*"crates\/pap-ecash"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
     -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
@@ -100,6 +101,7 @@ COPY apps/registry/src        ./apps/registry/src
 RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-python"/d' \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
+    -e '/^[[:space:]]*"crates\/pap-ecash"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
     -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \

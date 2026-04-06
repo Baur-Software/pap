@@ -9,6 +9,11 @@ ignore = [
     { id = "RUSTSEC-2024-0429", reason = "transitive dep via tauri/GTK; upgrade tracked separately" },
     # rustls-pemfile archived Aug 2025; migration to rustls-pki-types tracked separately
     { id = "RUSTSEC-2025-0134", reason = "workspace dep; migration to rustls-pki-types tracked separately" },
+    # rsa v0.7.2 Marvin Attack timing side-channel pulled in by blind-rsa-signatures 0.14.
+    # No patched release of rsa is available on crates.io. The pap-ecash issuer is a
+    # trusted offline node; key-recovery via network timing is not in the threat model.
+    # Track upstream: https://github.com/RustCrypto/RSA/issues/19
+    { id = "RUSTSEC-2023-0071", reason = "transitive via blind-rsa-signatures 0.14; no patched rsa release available; ecash issuer is offline/trusted, Marvin attack not in threat model" },
 ]
 
 [bans]
