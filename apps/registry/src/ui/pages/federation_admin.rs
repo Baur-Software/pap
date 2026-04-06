@@ -266,7 +266,7 @@ fn PeerCard(
 
 #[component]
 fn SyncEventLog(peer_did: String) -> impl IntoView {
-    let log = Resource::new(move || peer_did.clone(), |did| api::get_peer_sync_log(did));
+    let log = Resource::new(move || peer_did.clone(), api::get_peer_sync_log);
 
     view! {
         <div style="border-top: 1px solid var(--border-subtle); background: var(--bg-2); padding: var(--sp-md)">
