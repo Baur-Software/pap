@@ -103,7 +103,7 @@ jobs:
         run: |
           curl -fsSL https://just.systems/install.sh | bash -s -- --to ~/.cargo/bin
           cargo install cargo-binstall
-          cargo binstall -y --no-confirm wasm-pack cargo-audit trunk tauri-cli
+          cargo binstall --no-confirm wasm-pack cargo-audit trunk tauri-cli
       # ── Setup ──
       - name: just setup
         run: just setup
