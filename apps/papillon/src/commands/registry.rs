@@ -22,6 +22,7 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
         content_hash: ad.hash(),
         endpoint: None,
         agent_did: None,
+        kind: Default::default(),
         source: String::new(),
         published_to: vec![],
     }

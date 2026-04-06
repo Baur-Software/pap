@@ -919,6 +919,7 @@ mod tests {
             schema_type: None,
             content: None,
             linked_block_ids: Vec::new(),
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         };
@@ -946,6 +947,7 @@ mod tests {
             schema_type: Some("FlightReservation".into()),
             content: Some(content.clone()),
             linked_block_ids: vec!["blk-3".into()],
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
         };
@@ -969,6 +971,7 @@ mod tests {
             schema_type: None,
             content: None,
             linked_block_ids: Vec::new(),
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         };
@@ -998,6 +1001,7 @@ mod tests {
                 schema_type: Some("FlightReservation".into()),
                 content: Some(serde_json::json!({"@type": "FlightReservation"})),
                 linked_block_ids: Vec::new(),
+                agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
             }],
@@ -1070,6 +1074,7 @@ mod tests {
                 schema_type: Some("Answer".into()),
                 content: Some(serde_json::json!({"text": "42"})),
                 linked_block_ids: Vec::new(),
+                agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
             },
@@ -1340,6 +1345,7 @@ mod tests {
             schema_type: None,
             content: None,
             linked_block_ids: Vec::new(),
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         };

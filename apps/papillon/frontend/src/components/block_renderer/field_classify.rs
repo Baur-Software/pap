@@ -8,7 +8,7 @@ pub enum FieldKind {
     Scalar,
     /// ISO 8601 date/datetime or a key hinting at temporal data.
     DateTime,
-    /// Monetary value (key contains "price", "cost", "amount").
+    /// Monetary value (vocabulary-keyed or heuristic fallback).
     Price,
     /// HTTP or HTTPS URL. Rendered as a plain external link.
     ExternalUrl,
@@ -17,8 +17,12 @@ pub enum FieldKind {
     PapLink,
     /// Decentralized identifier (did:key:..., did:web:..., etc.).
     Did,
-    /// Nested object with an `@type` field — can be dispatched to a renderer.
-    TypedObject { schema_type: String },
+    /// Nested object with one or more `@type` values.
+    /// The full list is preserved for composite type dispatch — the registry
+    /// tries each type in order so `["FlightReservation", "Reservation"]`
+    /// will match `FlightReservation`'s renderer on the first pass and fall
+    /// back to `Reservation`'s if the specific renderer isn't registered.
+    TypedObject { schema_types: Vec<String> },
     /// Array of items.
     List,
     /// Nested object without `@type`.
@@ -28,11 +32,21 @@ pub enum FieldKind {
 }
 
 /// Classify a JSON-LD field by its key name and value shape.
+///
+/// Classification priority:
+/// 1. PAP scheme URIs (must precede all heuristics)
+/// 2. Schema.org vocabulary catalog (property name → known type)
+/// 3. Value-shape heuristics (ISO 8601, http:// prefix, did: prefix)
+/// 4. Key-name heuristics (fallback for unknown properties)
 pub fn classify_field(key: &str, value: &Value) -> FieldKind {
     match value {
         Value::Null => FieldKind::Empty,
         Value::String(s) => classify_string(key, s),
         Value::Number(_) => {
+            // Vocabulary catalog takes priority over key-name heuristics.
+            if let Some(kind) = super::schema_property::classify_by_property(key) {
+                return kind;
+            }
             let lower = key.to_lowercase();
             if lower.contains("price") || lower.contains("cost") || lower.contains("amount") {
                 FieldKind::Price
@@ -42,8 +56,9 @@ pub fn classify_field(key: &str, value: &Value) -> FieldKind {
         }
         Value::Bool(_) => FieldKind::Scalar,
         Value::Object(map) => {
-            if let Some(t) = extract_type(map) {
-                FieldKind::TypedObject { schema_type: t }
+            let types = extract_types(map);
+            if !types.is_empty() {
+                FieldKind::TypedObject { schema_types: types }
             } else {
                 FieldKind::Object
             }
@@ -56,13 +71,21 @@ fn classify_string(key: &str, s: &str) -> FieldKind {
     if s.is_empty() {
         return FieldKind::Empty;
     }
-    // PAP schemes MUST be checked before the DateTime key-name heuristic to
-    // prevent misclassifying pap:// URIs stored in date-keyed fields.
+    // PAP schemes MUST be checked before the vocabulary catalog and DateTime
+    // heuristic to prevent misclassifying pap:// URIs stored in date-keyed fields.
     if s.starts_with("pap://") || s.starts_with("pap+https://") || s.starts_with("pap+wss://") {
         return FieldKind::PapLink;
     }
+    // Vocabulary catalog: property name maps to a known type.
+    if let Some(kind) = super::schema_property::classify_by_property(key) {
+        return kind;
+    }
+    // Value-shape heuristics for properties not in the catalog.
+    if looks_like_iso_date(s) {
+        return FieldKind::DateTime;
+    }
     let lower_key = key.to_lowercase();
-    if lower_key.contains("date") || lower_key.contains("time") || looks_like_iso_date(s) {
+    if lower_key.contains("date") || lower_key.contains("time") {
         return FieldKind::DateTime;
     }
     if s.starts_with("http://") || s.starts_with("https://") {
@@ -130,7 +153,24 @@ pub fn sanitize_css_class(s: &str) -> String {
         .collect()
 }
 
-/// Extract the primary @type from a JSON-LD object.
+/// Extract all `@type` values from a JSON-LD object.
+///
+/// Handles both `"@type": "Person"` and `"@type": ["Person", "Author"]`.
+/// Returns an empty Vec if no `@type` is present.
+/// Order is preserved — first declared type is the primary/most-specific type.
+pub fn extract_types(obj: &serde_json::Map<String, Value>) -> Vec<String> {
+    match obj.get("@type") {
+        Some(Value::String(t)) => vec![t.clone()],
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(|s| s.to_string())
+            .collect(),
+        _ => vec![],
+    }
+}
+
+/// Extract the primary (first) `@type` from a JSON-LD object.
 /// Handles both `"@type": "Person"` and `"@type": ["Person", "Author"]`.
 pub fn extract_type(obj: &serde_json::Map<String, Value>) -> Option<String> {
     match obj.get("@type") {
@@ -294,7 +334,7 @@ mod tests {
         assert_eq!(
             classify_field("location", &obj),
             FieldKind::TypedObject {
-                schema_type: "Place".into()
+                schema_types: vec!["Place".into()]
             }
         );
     }
@@ -325,11 +365,12 @@ mod tests {
 
     #[test]
     fn classify_typed_object_array_type() {
+        // Composite @type array — all types are preserved, not just the first.
         let obj = json!({"@type": ["Person", "Author"], "name": "Alice"});
         assert_eq!(
             classify_field("creator", &obj),
             FieldKind::TypedObject {
-                schema_type: "Person".into()
+                schema_types: vec!["Person".into(), "Author".into()]
             }
         );
     }

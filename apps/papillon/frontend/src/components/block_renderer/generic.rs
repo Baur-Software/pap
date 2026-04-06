@@ -31,8 +31,14 @@ pub struct StreamEntry {
 pub enum EntryKind {
     /// Section header for a typed object. If `template_hit` is true, the entry
     /// carries the full Value and children are skipped (the template renders them).
+    ///
+    /// `schema_types` preserves the full `@type` array from the source JSON-LD.
+    /// The first entry is the primary (most-specific) type used for display and
+    /// CSS; all entries are tried in order when dispatching to the registry.
+    /// This is what makes composite types work: `["FlightReservation", "Reservation"]`
+    /// falls back to `Reservation`'s renderer if no specific one is registered.
     TypedObjectHeader {
-        schema_type: String,
+        schema_types: Vec<String>,
         template_hit: bool,
         content: Option<Value>,
     },
@@ -100,13 +106,30 @@ pub fn flatten_to_entries(
     let mut entries = Vec::with_capacity(64);
     let mut stack: Vec<WorkItem> = Vec::with_capacity(32);
 
-    // Top-level template check
-    if registry.get(schema_type).is_some() {
+    // Top-level type list: pull all types from the content's own @type array,
+    // falling back to the caller-supplied schema_type. This handles composite
+    // roots like { "@type": ["FlightReservation", "Reservation"], ... }.
+    let root_types: Vec<String> = content
+        .as_object()
+        .map(|obj| {
+            use super::field_classify::extract_types;
+            let mut ts = extract_types(obj);
+            if ts.is_empty() {
+                ts.push(schema_type.to_string());
+            }
+            ts
+        })
+        .unwrap_or_else(|| vec![schema_type.to_string()]);
+
+    // Template check: try each type in order so composite types fall back
+    // to the most-specific registered renderer available.
+    let template_hit = root_types.iter().any(|t| registry.get(t).is_some());
+    if template_hit {
         entries.push(StreamEntry {
             path: String::new(),
             depth: 0,
             kind: EntryKind::TypedObjectHeader {
-                schema_type: schema_type.to_string(),
+                schema_types: root_types,
                 template_hit: true,
                 content: Some(content.clone()),
             },
@@ -114,13 +137,17 @@ pub fn flatten_to_entries(
         return entries;
     }
 
-    // No template — flatten generically
-    let css_type = schema_type_to_css(schema_type);
+    // No template — flatten generically using the primary (most-specific) type for CSS.
+    let primary_type = root_types
+        .first()
+        .map(|s| s.as_str())
+        .unwrap_or(schema_type);
+    let css_type = schema_type_to_css(primary_type);
     entries.push(StreamEntry {
         path: String::new(),
         depth: 0,
         kind: EntryKind::TypedObjectHeader {
-            schema_type: schema_type.to_string(),
+            schema_types: root_types,
             template_hit: false,
             content: None,
         },
@@ -203,32 +230,39 @@ pub fn flatten_to_entries(
             } => {
                 let kind = classify_field(&key, &value);
                 match kind {
-                    FieldKind::TypedObject { ref schema_type } => {
-                        if registry.get(schema_type).is_some() {
+                    FieldKind::TypedObject { ref schema_types } => {
+                        // Try each type in order — composite types fall back to the
+                        // most-specific registered renderer that exists.
+                        let hit = schema_types.iter().any(|t| registry.get(t).is_some());
+                        let primary = schema_types
+                            .first()
+                            .map(|s| s.as_str())
+                            .unwrap_or_default();
+                        if hit {
                             // Template hit — emit as leaf, skip children
                             entries.push(StreamEntry {
                                 path: path.clone(),
                                 depth,
                                 kind: EntryKind::TypedObjectHeader {
-                                    schema_type: schema_type.clone(),
+                                    schema_types: schema_types.clone(),
                                     template_hit: true,
                                     content: Some(value),
                                 },
                             });
                         } else {
                             // No template — flatten children
-                            let child_css = schema_type_to_css(schema_type);
+                            let child_css = schema_type_to_css(primary);
                             entries.push(StreamEntry {
                                 path: path.clone(),
                                 depth,
                                 kind: EntryKind::TypedObjectHeader {
-                                    schema_type: schema_type.clone(),
+                                    schema_types: schema_types.clone(),
                                     template_hit: false,
                                     content: None,
                                 },
                             });
                             stack.push(WorkItem::EmitTypedFooter {
-                                schema_type: schema_type.clone(),
+                                schema_type: primary.to_string(),
                             });
                             if let Some(obj) = value.as_object() {
                                 push_object_fields(&mut stack, obj, &path, depth + 1, &child_css);
@@ -340,24 +374,33 @@ pub fn render_stream(entries: Vec<StreamEntry>, registry: &Arc<RendererRegistry>
     for entry in entries {
         match entry.kind {
             EntryKind::TypedObjectHeader {
-                ref schema_type,
+                ref schema_types,
                 template_hit: true,
                 ref content,
             } => {
-                if let (Some(renderer), Some(val)) = (registry.get(schema_type), content.as_ref()) {
+                // Try each schema type in order — composite types dispatch to the
+                // first registered renderer, giving specific types priority over general ones.
+                let renderer = schema_types.iter().find_map(|t| registry.get(t));
+                if let (Some(renderer), Some(val)) = (renderer, content.as_ref()) {
                     let rendered = renderer.render(val);
                     top_children(&mut view_stack).push(rendered);
                 }
             }
 
             EntryKind::TypedObjectHeader {
-                ref schema_type,
+                ref schema_types,
                 template_hit: false,
                 ..
             } => {
-                let css_type = schema_type_to_css(schema_type);
+                let primary = schema_types.first().map(|s| s.as_str()).unwrap_or_default();
+                let css_type = schema_type_to_css(primary);
                 let css = format!("typed-generic typed-{}", css_type);
-                let label = schema_type.clone();
+                // Show all types in the label for composite objects
+                let label = if schema_types.len() > 1 {
+                    schema_types.join(" · ")
+                } else {
+                    primary.to_string()
+                };
                 view_stack.push((css, Vec::new()));
                 top_children(&mut view_stack)
                     .push(view! { <span class="typed-label">{label}</span> }.into_any());

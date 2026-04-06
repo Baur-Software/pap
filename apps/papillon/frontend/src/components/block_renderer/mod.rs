@@ -4,6 +4,7 @@ mod generic;
 mod receipt;
 mod registry;
 mod renderer;
+mod schema_property;
 mod templates;
 
 use leptos::prelude::*;
