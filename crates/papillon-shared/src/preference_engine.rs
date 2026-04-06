@@ -10,12 +10,27 @@
 //! - Whether each session produced a **success** outcome
 //! - Which disclosure property refs were **approved** vs **rejected**
 //!
-//! ## Scoring
+//! ## Scoring — Memex(RL)-inspired confidence routing
 //!
-//! `preference_score()` returns a value in `[0.0, 1.0]`:
-//! - 0.0: no preference data (cold start)
-//! - >0.0 and <MIN_EPISODES threshold: keyword-preference level only
-//! - >=MIN_EPISODES: full historical score combining success_rate and recency
+//! Inspired by [Memex(RL)](https://arxiv.org/abs/2603.04257): the aggregate
+//! preference row is a *compact index summary* of past interactions. When that
+//! summary is confident (low outcome variance, sufficient sample size), the
+//! engine scores directly from it. When the aggregate is uncertain, the engine
+//! **dereferences** to the full episode store and computes a recency-weighted
+//! success rate from raw records — preserving decision quality without carrying
+//! full interaction history in working context.
+//!
+//! ```text
+//! confidence >= MIN_CONFIDENCE  →  score from aggregate (fast path)
+//! confidence <  MIN_CONFIDENCE  →  deref to episodes  (full-fidelity path)
+//!                                   ↳ fallback: conf × 0.5 if no episodes
+//! ```
+//!
+//! Confidence is derived from the Bernoulli variance of the outcome sequence
+//! combined with a sample-size penalty, so:
+//! - `conf(3 consistent successes) ≈ 0.45` — just above threshold
+//! - `conf(2 selections)           ≈ 0.33` — below threshold → deref
+//! - `conf(10 mixed outcomes)      ≈ 0.63` — well above threshold
 //!
 //! ## Privacy invariant
 //!
@@ -25,11 +40,14 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::{DatabaseOps, PreferenceSignal};
+use crate::db::{DatabaseOps, Episode, PreferenceSignal};
 
-/// Minimum number of selections before the engine considers preference data
-/// statistically meaningful enough to influence agent scoring.
-const MIN_EPISODES: i64 = 3;
+/// Minimum aggregate confidence for the engine to (a) use the stored aggregate
+/// score directly and (b) report the selection as "preference-guided".
+///
+/// Derived from the Bernoulli variance formula — requires roughly 3 consistent
+/// selections or more mixed data to exceed this threshold.
+const MIN_CONFIDENCE: f64 = 0.40;
 
 /// Number of days after which recency decay reduces a preference score to half.
 /// At 2× this value the contribution is near zero.
@@ -53,7 +71,15 @@ impl<'a> PreferenceEngine<'a> {
     /// `(action_type, schema_type)`.  Returns `0.0` when no preference
     /// data exists or when the `DatabaseOps` call fails.
     ///
-    /// Score components (once ≥ `MIN_EPISODES` selections exist):
+    /// ## Confidence routing
+    ///
+    /// The stored aggregate row is a compact index summary (Memex(RL) §3).
+    /// When its confidence is sufficient (`≥ MIN_CONFIDENCE`), the score is
+    /// computed directly from the aggregate — fast and cheap.  When the
+    /// aggregate is uncertain, the engine **dereferences** to the raw episode
+    /// store for a recency-weighted success rate from full-fidelity records.
+    ///
+    /// Score components (fast path — aggregate confidence sufficient):
     /// - **60%** success rate: `success_count / selection_count`
     /// - **40%** recency factor: exponential decay based on days since last use
     pub fn preference_score(
@@ -70,28 +96,73 @@ impl<'a> PreferenceEngine<'a> {
             _ => return 0.0,
         };
 
-        if signal.selection_count < MIN_EPISODES {
-            // Not enough data — return a small positive signal so the agent
-            // is still visible but doesn't dominate keyword-matched agents.
-            return 0.1 * (signal.selection_count as f64 / MIN_EPISODES as f64);
+        let conf = confidence_score(signal.selection_count, signal.success_count);
+
+        if conf < MIN_CONFIDENCE {
+            // Aggregate is uncertain — dereference to full episode records.
+            return self
+                .score_from_episodes(action_type, agent_did_hash)
+                .unwrap_or(conf * 0.5);
         }
 
+        // Aggregate confidence is sufficient — score directly from summary.
         let success_rate = signal.success_count as f64 / signal.selection_count as f64;
         let recency = recency_factor(&signal.last_selected);
-
         0.6 * success_rate + 0.4 * recency
     }
 
-    /// Returns `true` when preference data is meaningful enough to have
-    /// influenced agent selection for this (action_type, schema_type) pair.
+    /// Returns `true` when the preference aggregate for at least one agent in
+    /// `(action_type, schema_type)` has confidence ≥ `MIN_CONFIDENCE`, meaning
+    /// the engine's selection was meaningfully influenced by historical data.
     pub fn is_preference_guided(&self, action_type: &str, schema_type: &str) -> bool {
         match self
             .db
             .list_preferences_for_schema(action_type, schema_type)
         {
-            Ok(signals) => signals.iter().any(|s| s.selection_count >= MIN_EPISODES),
+            Ok(signals) => signals
+                .iter()
+                .any(|s| confidence_score(s.selection_count, s.success_count) >= MIN_CONFIDENCE),
             Err(_) => false,
         }
+    }
+
+    /// Dereference path: scan recent episodes for `agent_did_hash` and compute
+    /// a recency-weighted success rate directly from full-fidelity records.
+    ///
+    /// Filters to `action_type` episodes, applies the same half-life decay as
+    /// `recency_factor`, and returns the weighted success rate.  Returns `None`
+    /// when no matching episodes exist — caller decides the fallback.
+    fn score_from_episodes(&self, action_type: &str, agent_did_hash: &str) -> Option<f64> {
+        let episodes = self
+            .db
+            .list_episodes(None, Some(agent_did_hash), 20, None)
+            .ok()?;
+
+        let relevant: Vec<&Episode> = episodes
+            .iter()
+            .filter(|e| e.action_type == action_type)
+            .collect();
+
+        if relevant.is_empty() {
+            return None;
+        }
+
+        let now = Utc::now();
+        let (weighted_success, total_weight) =
+            relevant.iter().fold((0.0_f64, 0.0_f64), |(ws, tw), ep| {
+                let success = if ep.outcome == "success" { 1.0 } else { 0.0 };
+                let ts = DateTime::parse_from_rfc3339(&ep.recorded_at)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or(now);
+                let days_ago = (now - ts).num_days().max(0) as f64;
+                let w = 2.0_f64.powf(-days_ago / RECENCY_HALF_LIFE_DAYS);
+                (ws + success * w, tw + w)
+            });
+
+        if total_weight == 0.0 {
+            return None;
+        }
+        Some(weighted_success / total_weight)
     }
 
     /// Record that `agent_did_hash` was selected for `(action_type, schema_type)`.
@@ -276,10 +347,10 @@ impl<'a> PreferenceEngine<'a> {
             Err(_) => return Vec::new(),
         };
 
-        // Only include agents with enough history.
+        // Only include agents whose aggregate confidence meets the threshold.
         let qualified: Vec<_> = signals
             .iter()
-            .filter(|s| s.selection_count >= MIN_EPISODES)
+            .filter(|s| confidence_score(s.selection_count, s.success_count) >= MIN_CONFIDENCE)
             .collect();
 
         if qualified.is_empty() {
@@ -305,6 +376,40 @@ impl<'a> PreferenceEngine<'a> {
             acc.into_iter().filter(|r| cur.contains(r)).collect()
         })
     }
+}
+
+/// Compute an aggregate confidence value in `[0.0, 1.0]` for a preference row.
+///
+/// Models the outcome sequence as Bernoulli(p) where `p = success_count / n`.
+/// The variance of a Bernoulli is `p(1−p)`, maximised at `p = 0.5`.
+///
+/// Confidence combines two factors:
+///
+/// ```text
+/// bernoulli_conf = 1 − p(1−p)            ∈ [0.75, 1.0]
+/// sample_weight  = 1 − exp(−n / 5)       → 1 as n → ∞
+/// confidence     = bernoulli_conf × sample_weight
+/// ```
+///
+/// The `sample_weight` term penalises small `n`, so a single extreme outcome
+/// (e.g. 1 success out of 1 try) doesn't inflate the confidence score.
+///
+/// # Examples
+/// - `n=1, k=1` → `1.0 × 0.18 = 0.18`  (too few samples)
+/// - `n=2, k=0` → `1.0 × 0.33 = 0.33`  (2 failures — certain but small n)
+/// - `n=3, k=3` → `1.0 × 0.45 = 0.45`  (3 successes — just above threshold)
+/// - `n=5, k=5` → `1.0 × 0.63 = 0.63`  (clearly confident)
+/// - `n=3, k=1` → `0.78 × 0.45 = 0.35` (mixed — uncertain)
+pub(crate) fn confidence_score(selection_count: i64, success_count: i64) -> f64 {
+    if selection_count == 0 {
+        return 0.0;
+    }
+    let n = selection_count as f64;
+    let k = success_count.min(selection_count) as f64;
+    let p = k / n;
+    let bernoulli_conf = 1.0 - p * (1.0 - p); // ∈ [0.75, 1.0]
+    let sample_weight = 1.0 - (-n / 5.0).exp(); // saturates near 1 at n ≈ 20
+    bernoulli_conf * sample_weight
 }
 
 /// Exponential recency decay.
@@ -359,7 +464,7 @@ mod tests {
         );
 
         let score = engine.preference_score("schema:SearchAction", "schema:SearchResult", "hash1");
-        // 2 selections < MIN_EPISODES (3), so score is small but positive
+        // confidence(2, 0) ≈ 0.33 < MIN_CONFIDENCE → deref path, no episodes → conf * 0.5 ≈ 0.165
         assert!(score > 0.0 && score < 0.5);
     }
 
@@ -435,7 +540,7 @@ mod tests {
         let db = test_db();
         let engine = PreferenceEngine::new(&db);
 
-        // Build up MIN_EPISODES selections for hash1
+        // Build up enough selections for hash1 to reach MIN_CONFIDENCE
         for _ in 0..3 {
             engine.record_agent_selected(
                 "schema:SearchAction",
@@ -461,7 +566,7 @@ mod tests {
     fn suggested_scopes_empty_below_threshold() {
         let db = test_db();
         let engine = PreferenceEngine::new(&db);
-        // Only 2 selections — below MIN_EPISODES
+        // Only 2 selections — confidence(2, 0) ≈ 0.33 < MIN_CONFIDENCE
         for _ in 0..2 {
             engine.record_agent_selected(
                 "schema:SearchAction",
