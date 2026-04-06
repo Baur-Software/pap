@@ -471,6 +471,12 @@ jobs:
           CHRYSALIS_URL: http://localhost:8080
         run: npx playwright test tests/chrysalis-integration.spec.ts --workers=1
 
+      - name: Run Tier 3 canary tests
+        working-directory: e2e
+        env:
+          CHRYSALIS_URL: http://localhost:8080
+        run: npx playwright test tests/canary.spec.ts --workers=1 --reporter=line
+
       # ── Diagnostics + artifacts ───────────────────────────────────────────
       - name: Dump Chrysalis container logs
         if: always()

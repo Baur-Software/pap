@@ -520,6 +520,7 @@ mod tests {
 
     use super::*;
     use crate::db::{sqlite::SqliteStore, RegistryStore};
+    use crate::state::SyncEventLog;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -538,6 +539,7 @@ mod tests {
             cert_fingerprint: "sha256:deadbeef".into(),
             admin_token: token.map(str::to_owned),
             max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
         };
         router().with_state(state)
     }
@@ -729,6 +731,7 @@ mod tests {
             cert_fingerprint: "sha256:test".into(),
             admin_token: None,
             max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
         };
         let app = router().with_state(state);
 
@@ -782,6 +785,7 @@ mod tests {
             cert_fingerprint: "sha256:test".into(),
             admin_token: None,
             max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
         };
         let app = router().with_state(state);
 
@@ -832,6 +836,7 @@ mod tests {
             cert_fingerprint: "sha256:test".into(),
             admin_token: None,
             max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
         };
         let app = router().with_state(state);
 
@@ -885,6 +890,7 @@ mod tests {
             cert_fingerprint: "sha256:deadbeef".into(),
             admin_token: None,
             max_ads_per_principal: limit,
+            sync_log: SyncEventLog::default(),
         };
         router().with_state(state)
     }
@@ -916,6 +922,7 @@ mod tests {
             cert_fingerprint: "sha256:deadbeef".into(),
             admin_token: None,
             max_ads_per_principal: 2,
+            sync_log: SyncEventLog::default(),
         };
         let app = router().with_state(state);
 
@@ -988,6 +995,7 @@ mod tests {
             cert_fingerprint: "sha256:deadbeef".into(),
             admin_token: None,
             max_ads_per_principal: 1,
+            sync_log: SyncEventLog::default(),
         };
         let app = router().with_state(state);
 

@@ -39,6 +39,7 @@ pub fn Sidebar() -> impl IntoView {
             </nav>
             <nav class="nav-section" style="margin-top: var(--sp-md)">
                 <div class="nav-section-label">"Admin"</div>
+                {nav_item("/admin/federation", "◉", "Federation")}
                 {nav_item("/settings", "⚙", "Settings")}
             </nav>
         </aside>
