@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod chat_store;
 pub mod commands;
 pub mod db;
 pub mod discovery;
@@ -12,6 +13,7 @@ pub mod state;
 
 use std::net::SocketAddr;
 
+use chat_store::ChatStore;
 use episode_store::EpisodeStore;
 use keypair_store::KeypairStore;
 use pap_did::PrincipalKeypair;
@@ -98,6 +100,10 @@ pub fn run() {
             // so that both handles share the same rusqlite connection and schema.
             let episode_store = EpisodeStore::from_db(app_state.db.clone());
             app.manage(episode_store);
+
+            // ChatStore shares the same database connection.
+            let chat_store = ChatStore::from_db(app_state.db.clone());
+            app.manage(chat_store);
 
             app.manage(app_state);
 
@@ -190,6 +196,12 @@ pub fn run() {
             commands::webauthn::begin_authentication,
             commands::webauthn::complete_authentication,
             commands::canvas::get_canvas_state,
+            commands::chat::list_conversations,
+            commands::chat::get_chat_history,
+            commands::chat::create_group_chat,
+            commands::chat::join_group_chat,
+            commands::chat::record_chat_message,
+            commands::chat::mark_message_delivered,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");

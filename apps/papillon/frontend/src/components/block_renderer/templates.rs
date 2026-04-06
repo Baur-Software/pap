@@ -934,3 +934,80 @@ impl BlockRenderer for QuotationTemplate {
         vec!["Quotation"]
     }
 }
+
+/// Conversation template — renders a `schema:Conversation` as a chat thread.
+///
+/// Expects:
+/// - `schema:name`        — conversation title
+/// - `schema:participant` — array of `{ name }` objects
+/// - `schema:hasPart`     — array of `schema:Message` objects:
+///     - `schema:author`      — sender DID or name string
+///     - `schema:text`        — message body
+///     - `schema:dateCreated` — ISO 8601 timestamp
+///
+/// Works for both 1:1 and group conversations — the participant array
+/// renders all members regardless of count.
+pub struct ConversationTemplate;
+
+impl BlockRenderer for ConversationTemplate {
+    fn render(&self, content: &Value) -> AnyView {
+        let title = text_field(content, "name");
+
+        let participants = content
+            .get("participant")
+            .and_then(|p| p.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|p| p.get("name").and_then(|n| n.as_str()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default();
+
+        let messages: Vec<_> = content
+            .get("hasPart")
+            .and_then(|m| m.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|msg| {
+                        // author may be a plain string DID or a { name } object
+                        let author = msg
+                            .get("author")
+                            .and_then(|a| {
+                                a.get("name")
+                                    .and_then(|n| n.as_str())
+                                    .or_else(|| a.as_str())
+                            })
+                            .unwrap_or("?")
+                            .to_string();
+                        let text = text_field(msg, "text");
+                        let date = text_field(msg, "dateCreated");
+                        view! {
+                            <div class="typed-conversation-message">
+                                <span class="msg-author typed-did">{author}</span>
+                                <span class="msg-text">{text}</span>
+                                <span class="msg-date typed-date">{date}</span>
+                            </div>
+                        }
+                        .into_any()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        view! {
+            <div class="typed-conversation">
+                <div class="conv-header">
+                    <span class="conv-title">{title}</span>
+                    <span class="conv-participants">{participants}</span>
+                </div>
+                <div class="conv-thread">{messages}</div>
+            </div>
+        }
+        .into_any()
+    }
+
+    fn schema_types(&self) -> Vec<&'static str> {
+        vec!["Conversation"]
+    }
+}

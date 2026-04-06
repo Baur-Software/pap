@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod canvas;
+pub mod chat;
 pub mod episodes;
 pub mod health;
 pub mod identity;

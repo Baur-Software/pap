@@ -199,6 +199,33 @@ impl WsAgentClient {
             .ok_or_else(|| TransportError::InvalidResponse("phase 4: missing payload".into()))
     }
 
+    /// Phase 4 streaming: send a DIDComm basicmessage frame over an open
+    /// streaming session.
+    ///
+    /// Call this after `request_execution()` returns `ExecutionResult` that
+    /// signals a streaming session is open (e.g. a `schema:Conversation`).
+    /// Returns `StreamingAck` or a `StreamingMessage` reply from the server.
+    pub async fn send_stream_message(
+        &mut self,
+        session_id: &str,
+        content: serde_json::Value,
+    ) -> Result<ProtocolMessage, TransportError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let resp = self
+            .send_recv(WsMessage {
+                phase: 4,
+                session_id: Some(session_id.to_string()),
+                payload: Some(ProtocolMessage::StreamingMessage {
+                    id: id.clone(),
+                    content,
+                }),
+            })
+            .await?;
+        resp.payload.ok_or_else(|| {
+            TransportError::InvalidResponse("streaming: missing response payload".into())
+        })
+    }
+
     /// Phase 5: Send receipt for co-signing.
     pub async fn exchange_receipt(
         &mut self,

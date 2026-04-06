@@ -209,6 +209,32 @@ pub trait DatabaseOps: Send + Sync {
     /// Delete an agent by DID. Catalog agents should use removed_from_catalog instead.
     #[cfg(feature = "native")]
     fn delete_agent(&self, agent_did: &str) -> Result<(), DbError>;
+
+    // ── Chat persistence (native only) ────────────────────────────────────
+
+    /// Insert or update a conversation record.
+    #[cfg(feature = "native")]
+    fn upsert_conversation(&self, conversation: &Conversation) -> Result<(), DbError>;
+
+    /// List all conversations ordered by updated_at descending.
+    #[cfg(feature = "native")]
+    fn list_conversations(&self) -> Result<Vec<Conversation>, DbError>;
+
+    /// Insert a chat message.
+    #[cfg(feature = "native")]
+    fn insert_chat_message(&self, message: &ChatMessage) -> Result<(), DbError>;
+
+    /// Mark a message as delivered.
+    #[cfg(feature = "native")]
+    fn mark_message_delivered(&self, message_id: &str) -> Result<(), DbError>;
+
+    /// List messages for a conversation, oldest first, up to `limit`.
+    #[cfg(feature = "native")]
+    fn list_chat_messages(
+        &self,
+        conversation_id: &str,
+        limit: usize,
+    ) -> Result<Vec<ChatMessage>, DbError>;
 }
 
 /// Summary of what the retention reducer did in a single pass.
@@ -216,4 +242,31 @@ pub trait DatabaseOps: Send + Sync {
 pub struct RetentionStats {
     pub compressed: usize,
     pub deleted: usize,
+}
+
+// ── Chat types ────────────────────────────────────────────────
+
+/// A chat conversation (1:1 or group room).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Conversation {
+    /// Room DID (group) or session_id (1:1).
+    pub id: String,
+    pub name: String,
+    pub is_group: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A single chat message stored in SQLite.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    /// UUID matching `StreamingMessage.id`.
+    pub id: String,
+    pub conversation_id: String,
+    /// Session DID of the sender.
+    pub author_did: String,
+    /// JSON: DIDComm basicmessage body.
+    pub content: String,
+    pub created_at: String,
+    pub delivered: bool,
 }

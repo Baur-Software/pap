@@ -229,15 +229,42 @@ fn dispatch_message(
             }
         }
 
-        // Phase 4: Execute (no client payload)
+        // Phase 4: Execute or streaming message frame.
+        //
+        // - No payload → initial execute (existing behaviour).
+        // - StreamingMessage payload → bidirectional streaming (e.g. chat).
         4 => {
             let sid = require_session_id(session_id)?;
-            let result = handler.execute(&sid)?;
-            Ok(WsMessage {
-                phase: 4,
-                session_id: Some(sid),
-                payload: Some(ProtocolMessage::ExecutionResult { result }),
-            })
+            match &msg.payload {
+                None => {
+                    // Standard task execution — returns ExecutionResult.
+                    let result = handler.execute(&sid)?;
+                    Ok(WsMessage {
+                        phase: 4,
+                        session_id: Some(sid),
+                        payload: Some(ProtocolMessage::ExecutionResult { result }),
+                    })
+                }
+                Some(ProtocolMessage::StreamingMessage { id, content }) => {
+                    // Streaming frame — delegate to handler, reply with frame or ack.
+                    let reply = handler.handle_stream_message(&sid, id, content)?;
+                    let payload = match reply {
+                        Some(body) => ProtocolMessage::StreamingMessage {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            content: body,
+                        },
+                        None => ProtocolMessage::StreamingAck { id: id.clone() },
+                    };
+                    Ok(WsMessage {
+                        phase: 4,
+                        session_id: Some(sid),
+                        payload: Some(payload),
+                    })
+                }
+                _ => Err(TransportError::InvalidResponse(
+                    "phase 4: unexpected payload type".into(),
+                )),
+            }
         }
 
         // Phase 5: Receipt co-signing

@@ -48,6 +48,19 @@ pub enum ProtocolMessage {
     /// Receiver returns the execution result (Schema.org JSON-LD).
     ExecutionResult { result: serde_json::Value },
 
+    /// Phase 4 streaming: a DIDComm basicmessage frame sent by either side
+    /// after `ExecutionResult` opens a streaming session (e.g. chat).
+    /// `id` is a UUID used for ack correlation.
+    /// `content` is the DIDComm basicmessage body (opaque JSON).
+    StreamingMessage {
+        id: String,
+        content: serde_json::Value,
+    },
+
+    /// Delivery acknowledgement for a `StreamingMessage`.
+    /// `id` mirrors the `StreamingMessage.id` being acknowledged.
+    StreamingAck { id: String },
+
     // ── Phase 5: Receipt Co-signing ──────────────────────────────
     /// Initiator sends its half-signed receipt for the receiver to co-sign.
     ReceiptForCoSign { receipt: TransactionReceipt },
@@ -79,6 +92,8 @@ impl ProtocolMessage {
             Self::DisclosureOffer { .. } => "DisclosureOffer",
             Self::DisclosureAccepted => "DisclosureAccepted",
             Self::ExecutionResult { .. } => "ExecutionResult",
+            Self::StreamingMessage { .. } => "StreamingMessage",
+            Self::StreamingAck { .. } => "StreamingAck",
             Self::ReceiptForCoSign { .. } => "ReceiptForCoSign",
             Self::ReceiptCoSigned { .. } => "ReceiptCoSigned",
             Self::SessionClose { .. } => "SessionClose",

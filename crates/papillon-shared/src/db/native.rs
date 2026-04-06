@@ -145,6 +145,25 @@ impl NativeDatabase {
                 ON agents(catalog_path) WHERE catalog_path IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_agents_action ON agents(action);
             CREATE INDEX IF NOT EXISTS idx_agents_source ON agents(source);
+
+            CREATE TABLE IF NOT EXISTS conversations (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                is_group    INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id              TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL REFERENCES conversations(id),
+                author_did      TEXT NOT NULL,
+                content         TEXT NOT NULL,
+                created_at      TEXT NOT NULL,
+                delivered       INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
+                ON chat_messages(conversation_id, created_at);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -1230,6 +1249,121 @@ impl DatabaseOps for NativeDatabase {
         stats.deleted += deleted;
 
         Ok(stats)
+    }
+
+    // ── Chat persistence ──────────────────────────────────────────────────
+
+    fn upsert_conversation(&self, conversation: &super::Conversation) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO conversations (id, name, is_group, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                name       = excluded.name,
+                is_group   = excluded.is_group,
+                updated_at = excluded.updated_at",
+            params![
+                conversation.id,
+                conversation.name,
+                conversation.is_group as i64,
+                conversation.created_at,
+                conversation.updated_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db upsert conversation: {e}")))?;
+        Ok(())
+    }
+
+    fn list_conversations(&self) -> Result<Vec<super::Conversation>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, is_group, created_at, updated_at
+                 FROM conversations
+                 ORDER BY updated_at DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                let is_group_int: i64 = row.get(2)?;
+                Ok(super::Conversation {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    is_group: is_group_int != 0,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query conversations: {e}")))?;
+        let mut conversations = Vec::new();
+        for row in rows {
+            conversations.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(conversations)
+    }
+
+    fn insert_chat_message(&self, message: &super::ChatMessage) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT OR IGNORE INTO chat_messages
+                (id, conversation_id, author_did, content, created_at, delivered)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                message.id,
+                message.conversation_id,
+                message.author_did,
+                message.content,
+                message.created_at,
+                message.delivered as i64,
+            ],
+        )
+        .map_err(|e| DbError(format!("db insert chat message: {e}")))?;
+        Ok(())
+    }
+
+    fn mark_message_delivered(&self, message_id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "UPDATE chat_messages SET delivered = 1 WHERE id = ?1",
+            params![message_id],
+        )
+        .map_err(|e| DbError(format!("db mark delivered: {e}")))?;
+        Ok(())
+    }
+
+    fn list_chat_messages(
+        &self,
+        conversation_id: &str,
+        limit: usize,
+    ) -> Result<Vec<super::ChatMessage>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, conversation_id, author_did, content, created_at, delivered
+                 FROM chat_messages
+                 WHERE conversation_id = ?1
+                 ORDER BY created_at ASC
+                 LIMIT ?2",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![conversation_id, limit as i64], |row| {
+                let delivered_int: i64 = row.get(5)?;
+                Ok(super::ChatMessage {
+                    id: row.get(0)?,
+                    conversation_id: row.get(1)?,
+                    author_did: row.get(2)?,
+                    content: row.get(3)?,
+                    created_at: row.get(4)?,
+                    delivered: delivered_int != 0,
+                })
+            })
+            .map_err(|e| DbError(format!("db query chat messages: {e}")))?;
+        let mut messages = Vec::new();
+        for row in rows {
+            messages.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(messages)
     }
 }
 
