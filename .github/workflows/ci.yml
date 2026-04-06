@@ -92,20 +92,65 @@ jobs:
         with:
           components: clippy, rustfmt
           targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "native"
+          shared-key: "justfile"
           cache-on-failure: true
-      - name: Install just
-        run: cargo install just
-      - name: just setup (skip — CI installs prerequisites directly)
-        run: just setup || echo "::warning::setup check failed — CI provides tools via workflow steps"
+      - name: Install tools
+        run: cargo install just wasm-pack cargo-audit
+      # ── Setup ──
+      - name: just setup
+        run: just setup
+      # ── Quality ──
       - name: just lint
         run: just lint
+      - name: just fmt (verify idempotent)
+        run: just fmt && git diff --exit-code
+      - name: just audit
+        run: just audit || echo "::warning::cargo audit found advisories"
+      # ── Test ──
       - name: just test
         run: just test
+      - name: just test-crate pap-did
+        run: just test-crate pap-did
       - name: just test-registry
         run: just test-registry
+      # ── Build ──
+      - name: just build
+        run: just build
+      # ── Services (start, probe, stop) ──
+      - name: just registry-local
+        run: |
+          just registry-local &
+          pid=$!
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && break
+            [ "$i" -eq 30 ] && { echo "::error::registry did not start"; kill $pid; exit 1; }
+            sleep 1
+          done
+          echo "Registry started successfully"
+          kill $pid
+      - name: just extension
+        run: |
+          cd apps/papillon-extension
+          npm install
+          just extension &
+          pid=$!
+          sleep 10
+          kill -0 $pid 2>/dev/null && echo "Extension running" || { echo "::error::extension failed"; exit 1; }
+          kill $pid
+      # ── Utilities ──
+      - name: just run-example
+        run: just run-example pap-search-example
+      - name: just clean
+        run: just clean
+      # ── Skipped (require display) ──
+      # just papillon — needs Tauri GUI / display server
+      # just dev — needs display (Papillon component)
+      # just registry — TLS variant; registry-local covers the code path
 
   docker-workspace:
     name: Docker workspace consistency
