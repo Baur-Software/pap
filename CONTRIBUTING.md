@@ -73,7 +73,7 @@ cargo test --workspace
 To run a protocol example:
 
 ```bash
-cargo run -p search
+cargo run -p pap-search-example
 ```
 
 ## Project Structure
@@ -254,16 +254,16 @@ docker stop chrysalis-test && docker rm chrysalis-test
 Each example demonstrates a specific protocol feature. Run them with `cargo run -p <name>`:
 
 ```bash
-cargo run -p search                # End-to-end agent search
-cargo run -p travel-booking        # Multi-step travel booking workflow
-cargo run -p delegation-chain      # Mandate delegation chain
-cargo run -p payment               # Payment handling
-cargo run -p networked-search      # Networked agent search
-cargo run -p webauthn-ceremony     # WebAuthn authentication ceremony
-cargo run -p federated-discovery   # Federated registry discovery
-cargo run -p credential-lifecycle  # Credential lifecycle management
-cargo run -p protocol-envelope     # Protocol message envelope
-cargo run -p tee-attestation       # Trusted execution environment attestation
+cargo run -p pap-search-example                # End-to-end agent search
+cargo run -p pap-travel-booking-example        # Multi-step travel booking workflow
+cargo run -p pap-delegation-chain-example      # Mandate delegation chain
+cargo run -p pap-payment-example               # Payment handling
+cargo run -p pap-networked-search-example      # Networked agent search
+cargo run -p pap-webauthn-ceremony-example     # WebAuthn authentication ceremony
+cargo run -p pap-federated-discovery-example   # Federated registry discovery
+cargo run -p pap-credential-lifecycle-example  # Credential lifecycle management
+cargo run -p pap-protocol-envelope-example     # Protocol message envelope
+cargo run -p tee-attestation                   # Trusted execution environment attestation
 ```
 
 ## Building the Browser Extension

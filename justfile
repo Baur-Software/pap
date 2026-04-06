@@ -24,9 +24,12 @@ setup:
         || { echo "  ✗ wasm32-unknown-unknown — rustup target add wasm32-unknown-unknown"; ok=false; }
     echo ""
     echo "Extension (browser):"
-    check node "install Node.js 20+ from https://nodejs.org/"
-    check npm  "included with Node.js"
+    check node     "install Node.js 20+ from https://nodejs.org/"
+    check npm      "included with Node.js"
     check wasm-pack "cargo install wasm-pack"
+    echo ""
+    echo "System:"
+    check curl "install via your package manager"
     if command -v node &>/dev/null; then
         node_major=$(node -v | sed 's/v\([0-9]*\).*/\1/')
         [ "$node_major" -ge 20 ] && echo "  ✓ node >= 20 ($(node -v))" \
