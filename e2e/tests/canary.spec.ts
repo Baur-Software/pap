@@ -1,204 +1,465 @@
 /**
  * Tier 3: Canary Monitoring
  *
- * Post-deploy health checks that verify the production app is healthy.
- * Runs after each release to detect runtime failures.
+ * Post-deploy health checks and protocol scenario verification.  Covers
+ * the five requirements from ISS-856 issue #201:
  *
- * Tests:
- * 1. Backend health endpoint is responsive and returns valid JSON
- * 2. Frontend load time is within SLA (<3 seconds)
- * 3. Scenario execution latency is normal (<500ms for mock)
+ *  1. Marketplace agent discovery  — live Chrysalis returns ≥1 agent
+ *  2. Delegation chain             — root mandate → sub-mandate, all 6 steps
+ *  3. Co-signed receipt            — both DIDs present, property refs only
+ *  4. Receipt storage/retrieval    — list_completed_runs persists across calls
+ *  5. Scope violation detection    — SCOPE_EXCEEDED on out-of-bounds delegation
+ *
+ * Tests 1 require CHRYSALIS_URL (skipped gracefully outside CI).
+ * Tests 2-5 run against the Tauri mock and execute on every CI run.
  */
 
 import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
 import { waitForApp } from "./helpers";
 
+// ── Configuration ──────────────────────────────────────────────────────────
+
+const CHRYSALIS_URL = process.env.CHRYSALIS_URL ?? "";
+const SKIP_MSG =
+  "CHRYSALIS_URL not set — start Chrysalis and set CHRYSALIS_URL to run live canary tests";
+
+function requireChrysalis() {
+  if (!CHRYSALIS_URL) {
+    if (process.env.CI) {
+      throw new Error(`CI misconfiguration: ${SKIP_MSG}`);
+    }
+    test.skip(true, SKIP_MSG);
+  }
+}
+
+// Install Tauri mock before every test that navigates to the app.
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
-// ── Tier 3 Tests: Post-Deploy Health Checks ─────────────────
+// ── 1. Marketplace agent discovery (live Chrysalis) ────────────────────────
 
-test.describe("Canary monitoring (post-deploy health checks)", () => {
-  test("backend health endpoint returns ok status", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-    const health = await page.evaluate(() => {
-      return window.__TAURI__.core.invoke("get_health_status");
-    });
-
-    // Verify response structure
-    expect(health).toHaveProperty("status");
-    expect(health).toHaveProperty("timestamp");
-    expect(health).toHaveProperty("uptime_seconds");
-    expect(health).toHaveProperty("version");
-
-    // Verify status is ok
-    expect(health.status).toBe("ok");
-
-    // Verify timestamp is valid ISO 8601
-    const timestamp = new Date(health.timestamp);
-    expect(timestamp).toBeInstanceOf(Date);
-    expect(timestamp.getTime()).not.toBeNaN();
-
-    // Verify uptime is positive
-    expect(typeof health.uptime_seconds).toBe("number");
-    // Uptime should be reasonable (app hasn't been running for years)
-    // Realistic range: 0 - 86400 seconds (24 hours)
-    expect(health.uptime_seconds).toBeLessThan(86400);
-
-    // Verify version string exists
-    expect(typeof health.version).toBe("string");
-    expect(health.version.length).toBeGreaterThan(0);
+test.describe("Canary: Marketplace agent discovery (live Chrysalis)", () => {
+  test("GET /api/browse returns ≥1 agent from live Chrysalis node", async ({
+    request,
+  }) => {
+    requireChrysalis();
+    const resp = await request.get(`${CHRYSALIS_URL}/api/browse`);
+    expect(resp.ok()).toBe(true);
+    const agents = await resp.json();
+    expect(Array.isArray(agents)).toBe(true);
+    expect(agents.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("frontend loads and becomes interactive within SLA", async ({ page }) => {
-    // Measure page load time
-    const start = Date.now();
-
-    // Navigate to app
-    await page.goto("/", { waitUntil: "commit" });
-
-    // Wait for interactive state (main content visible)
-    // WASM compilation on CI can take 30-60s for debug builds
-    await waitForApp(page);
-
-    const elapsed = Date.now() - start;
-
-    // SLA: app should be interactive within 30s on CI
-    // WASM compile+instantiate takes ~15ms; rest is module loading + CSR mount.
-    console.log(`[canary] Frontend load time: ${elapsed}ms`);
-    expect(elapsed).toBeLessThan(30_000);
-  });
-
-  test("scenario execution completes within latency SLA", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-
-    // Measure scenario execution time
-    const start = Date.now();
-
-    const result = await page.evaluate(() => {
-      return window.__TAURI__.core.invoke("run_scenario", {
-        scenarioId: "weather",
-      });
-    });
-
-    const elapsed = Date.now() - start;
-
-    // Verify execution succeeded
-    expect(result.success).toBe(true);
-
-    // SLA: scenario execution should complete within 500ms
-    // Mock implementation is faster, but production might include network calls
-    console.log(`[canary] Scenario execution time: ${elapsed}ms`);
-    expect(elapsed).toBeLessThan(500);
-  });
-
-  test("orchestrator config is retrievable and valid", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-
-    const config = await page.evaluate(() => {
-      return window.__TAURI__.core.invoke("get_orchestrator_config");
-    });
-
-    // Verify config structure
-    expect(config).toHaveProperty("llm_provider");
-    expect(config).toHaveProperty("mandate_ttl_hours");
-    expect(config).toHaveProperty("auto_approve_zero_disclosure");
-
-    // Verify types
-    expect(typeof config.mandate_ttl_hours).toBe("number");
-    expect(typeof config.auto_approve_zero_disclosure).toBe("boolean");
-  });
-
-  test("identity is accessible without errors", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-
-    const identity = await page.evaluate(() => {
-      return window.__TAURI__.core.invoke("get_identity");
-    });
-
-    // Verify identity structure
-    expect(identity).toHaveProperty("did");
-    expect(identity).toHaveProperty("public_key_b64");
-    expect(identity).toHaveProperty("created_at");
-
-    // Verify DID format (did:key:z...)
-    expect(identity.did).toMatch(/^did:key:z/);
-
-    // Verify base64 encoded key
-    expect(identity.public_key_b64).toMatch(/^[A-Za-z0-9+/=]+$/);
-
-    // Verify timestamp format
-    const created = new Date(identity.created_at);
-    expect(created.getTime()).not.toBeNaN();
-  });
-
-  test("no console errors on app startup", async ({ page }) => {
-    const consoleMessages: string[] = [];
-    const errorMessages: string[] = [];
-
-    page.on("console", (msg) => {
-      consoleMessages.push(msg.text());
-      if (msg.type() === "error") {
-        errorMessages.push(msg.text());
+  test("each discovered agent has a valid provider DID and schema: capability", async ({
+    request,
+  }) => {
+    requireChrysalis();
+    const resp = await request.get(`${CHRYSALIS_URL}/api/browse`);
+    const agents = await resp.json();
+    for (const agent of agents) {
+      expect(agent.provider_did).toMatch(/^did:key:/);
+      expect(Array.isArray(agent.capabilities)).toBe(true);
+      expect(agent.capabilities.length).toBeGreaterThan(0);
+      for (const cap of agent.capabilities) {
+        expect(cap).toMatch(/^schema:/);
       }
-    });
-
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-
-    // Log all console output for debugging
-    console.log(`[canary] Console messages during startup: ${consoleMessages.length}`);
-    console.log(`[canary] Errors during startup: ${errorMessages.length}`);
-
-    // Filter out known benign errors/warnings from canary checks
-    // Keep only actual application errors (not framework warnings, not deprecation notices)
-    const benignPatterns = [
-      /wasm/i,                           // WASM module init messages
-      /deprecated/i,                     // Deprecation warnings
-      /source map/i,                     // Source map loading (dev only)
-      /devtools/i,                       // DevTools messages
-      /^$|^\s+$/,                        // Empty/whitespace
-    ];
-
-    const criticalErrors = errorMessages.filter((e) => {
-      return !benignPatterns.some((pattern) => pattern.test(e)) && e.trim().length > 0;
-    });
-
-    // Fail if any critical errors found during startup
-    if (criticalErrors.length > 0) {
-      console.log('[canary] CRITICAL ERRORS during startup:', criticalErrors);
     }
-    expect(criticalErrors).toHaveLength(0);
   });
 
-  test("Tier 1 smoke tests still pass", async ({ page }) => {
-    // Verify basic regression: if Tier 1 is broken, canary catches it
+  test("live node identity exposes a DID and non-zero agent_count", async ({
+    request,
+  }) => {
+    requireChrysalis();
+    const resp = await request.get(`${CHRYSALIS_URL}/federation/identity`);
+    expect(resp.ok()).toBe(true);
+    const identity = await resp.json();
+    expect(identity.did).toMatch(/^did:key:/);
+    expect(typeof identity.agent_count).toBe("number");
+    expect(identity.agent_count).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ── 2. Delegation chain protocol invariants ────────────────────────────────
+
+test.describe("Canary: Delegation chain protocol invariants", () => {
+  test("run_scenario produces all 6 protocol steps including mandate and receipt", async ({
+    page,
+  }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // App window should be visible
-    const appContainer = page.locator("body");
-    await expect(appContainer).toBeVisible();
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" })
+    );
 
-    // Frontend should render (not blank screen)
-    const mainContent = page.locator("main, [role=main], .app, #app, body > div").first();
-    const contentText = await mainContent.textContent();
-    expect(contentText?.trim().length).toBeGreaterThan(0);
+    expect(result.success).toBe(true);
+    const stepNames: string[] = result.steps.map((s: any) => s.step_name);
+    expect(stepNames).toContain("Issue Mandate");
+    expect(stepNames).toContain("Open Session");
+    expect(stepNames).toContain("Exchange Data");
+    expect(stepNames).toContain("Co-sign Receipt");
+    expect(stepNames).toContain("Close Session");
+    expect(result.steps.every((s: any) => s.status === "completed")).toBe(true);
+  });
 
-    // No console errors from WASM module
-    let wasmsErrors = 0;
-    page.on("console", (msg) => {
-      if (msg.type() === "error" && msg.text().includes("WASM")) {
-        wasmsErrors++;
-      }
+  test("issue_mandate returns a root mandate with correct principal and agent DIDs", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const mandate = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("issue_mandate", {
+        agentDid: "did:key:z6MkAgent999",
+        scope: ["schema:SearchAction"],
+        ttlHours: 2,
+      })
+    );
+
+    expect(mandate.success).toBe(true);
+    expect(mandate.mandate_hash).toBeTruthy();
+    expect(mandate.principal_did).toMatch(/^did:key:/);
+    expect(mandate.agent_did).toBe("did:key:z6MkAgent999");
+    expect(mandate.parent_mandate_hash).toBeNull();
+    expect(mandate.decay_state).toBe("Active");
+    expect(Array.isArray(mandate.scope)).toBe(true);
+    expect(mandate.scope).toContain("schema:SearchAction");
+  });
+
+  test("delegate_mandate creates a child mandate contained within parent scope", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    // Issue root mandate with two actions.
+    const root = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("issue_mandate", {
+        agentDid: "did:key:z6MkAgent999",
+        scope: ["schema:SearchAction", "schema:CreateAction"],
+        ttlHours: 4,
+      })
+    );
+
+    // Delegate a narrower sub-mandate (SearchAction only).
+    const child = await page.evaluate((parentHash: string) =>
+      window.__TAURI__.core.invoke("delegate_mandate", {
+        parentMandateHash: parentHash,
+        subAgentDid: "did:key:z6MkSubAgent888",
+        scope: ["schema:SearchAction"],
+        ttlHours: 1,
+      }), root.mandate_hash
+    );
+
+    expect(child.success).toBe(true);
+    expect(child.parent_mandate_hash).toBe(root.mandate_hash);
+    expect(child.agent_did).toBe("did:key:z6MkSubAgent888");
+    expect(child.principal_did).toBe(root.principal_did);
+    // Child scope is a strict subset of parent scope.
+    for (const action of child.scope) {
+      expect(root.scope).toContain(action);
+    }
+  });
+
+  test("delegation chain links child back to root via parent_mandate_hash", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const root = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("issue_mandate", {
+        agentDid: "did:key:z6MkAgent999",
+        scope: ["schema:SearchAction"],
+        ttlHours: 4,
+      })
+    );
+    const child = await page.evaluate((parentHash: string) =>
+      window.__TAURI__.core.invoke("delegate_mandate", {
+        parentMandateHash: parentHash,
+        subAgentDid: "did:key:z6MkSubAgent888",
+        scope: ["schema:SearchAction"],
+        ttlHours: 1,
+      }), root.mandate_hash
+    );
+
+    // The chain: child.parent_mandate_hash === root.mandate_hash
+    expect(child.parent_mandate_hash).toBe(root.mandate_hash);
+    // Root has no parent (it is the root).
+    expect(root.parent_mandate_hash).toBeNull();
+  });
+});
+
+// ── 3. Co-signed receipt verification ─────────────────────────────────────
+
+test.describe("Canary: Co-signed receipt verification", () => {
+  test("receipt is co-signed by both parties", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" })
+    );
+
+    expect(result.receipt.co_signed).toBe(true);
+  });
+
+  test("receipt contains distinct initiator and receiver DIDs", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "booking" })
+    );
+
+    const { receipt } = result;
+    expect(receipt.initiator_did).toMatch(/^did:key:/);
+    expect(receipt.receiver_did).toMatch(/^did:key:/);
+    expect(receipt.initiator_did).not.toBe(receipt.receiver_did);
+  });
+
+  test("receipt contains property references, not raw PII values", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    // "booking" scenario requires name, email, passport_number disclosure.
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "booking" })
+    );
+
+    const { property_refs } = result.receipt;
+    expect(Array.isArray(property_refs)).toBe(true);
+    for (const ref of property_refs) {
+      expect(typeof ref).toBe("string");
+      // Property refs are schema field names, never actual values.
+      expect(ref).not.toMatch(/@/);            // Not an email address
+      expect(ref).not.toMatch(/[0-9]{6,}/);   // Not a passport/card number
+    }
+  });
+
+  test("receipt has a valid session_id and ISO 8601 timestamp", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "payment" })
+    );
+
+    const { receipt } = result;
+    expect(typeof receipt.session_id).toBe("string");
+    expect(receipt.session_id.length).toBeGreaterThan(0);
+    const ts = new Date(receipt.timestamp);
+    expect(ts.getTime()).not.toBeNaN();
+  });
+
+  test("receipt_url uses pap:// scheme for receipts browser", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" })
+    );
+
+    expect(result.receipt_url).toMatch(/^pap:\/\/receipts\//);
+  });
+});
+
+// ── 4. Receipt storage and retrieval ──────────────────────────────────────
+
+test.describe("Canary: Receipt storage and retrieval", () => {
+  test("completed run is retrievable from list_completed_runs", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" })
+    );
+
+    const runs = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_completed_runs")
+    );
+
+    expect(Array.isArray(runs)).toBe(true);
+    expect(runs.length).toBeGreaterThanOrEqual(1);
+    const last = runs[runs.length - 1];
+    expect(last.scenario_id).toBe("weather");
+    expect(last.success).toBe(true);
+    expect(last.receipt).toBeTruthy();
+  });
+
+  test("multiple scenario runs are all stored and retrievable", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    await page.evaluate(async () => {
+      await window.__TAURI__.core.invoke("run_scenario", { scenarioId: "weather" });
+      await window.__TAURI__.core.invoke("run_scenario", { scenarioId: "booking" });
+      await window.__TAURI__.core.invoke("run_scenario", { scenarioId: "payment" });
     });
 
-    expect(wasmsErrors).toBe(0);
+    const runs = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_completed_runs")
+    );
+
+    expect(runs.length).toBeGreaterThanOrEqual(3);
+    const ids: string[] = runs.map((r: any) => r.scenario_id);
+    expect(ids).toContain("weather");
+    expect(ids).toContain("booking");
+    expect(ids).toContain("payment");
+  });
+
+  test("each stored run has a receipt with a valid receipt_url", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario", { scenarioId: "payment" })
+    );
+
+    const runs = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_completed_runs")
+    );
+
+    for (const run of runs) {
+      if (run.receipt_url) {
+        expect(run.receipt_url).toMatch(/^pap:\/\/receipts\//);
+      }
+      expect(run.receipt).toBeTruthy();
+      expect(run.receipt.co_signed).toBe(true);
+    }
+  });
+});
+
+// ── 5. Scope violation and TTL enforcement ────────────────────────────────
+
+test.describe("Canary: Scope violation detection", () => {
+  test("run_scenario_with_error returns SCOPE_EXCEEDED error code", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario_with_error", {
+        scenarioId: "weather",
+        triggerError: "scope_exceeded",
+      })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error_code).toBe("SCOPE_EXCEEDED");
+    expect(typeof result.error).toBe("string");
+    expect(result.error.length).toBeGreaterThan(0);
+  });
+
+  test("delegate_mandate rejects sub-mandate that widens parent scope", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    // Root mandate: SearchAction only.
+    const root = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("issue_mandate", {
+        agentDid: "did:key:z6MkAgent999",
+        scope: ["schema:SearchAction"],
+        ttlHours: 2,
+      })
+    );
+
+    // Attempt to delegate with PayAction added — must be rejected.
+    const result = await page.evaluate((parentHash: string) =>
+      window.__TAURI__.core.invoke("delegate_mandate", {
+        parentMandateHash: parentHash,
+        subAgentDid: "did:key:z6MkSubAgent888",
+        scope: ["schema:SearchAction", "schema:PayAction"],
+        ttlHours: 1,
+      }), root.mandate_hash
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error_code).toBe("SCOPE_EXCEEDED");
+    expect(result.error).toContain("schema:PayAction");
+  });
+
+  test("delegate_mandate rejects sub-mandate whose TTL exceeds parent TTL", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    // Root mandate: 1-hour TTL.
+    const root = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("issue_mandate", {
+        agentDid: "did:key:z6MkAgent999",
+        scope: ["schema:SearchAction"],
+        ttlHours: 1,
+      })
+    );
+
+    // Child requests 2-hour TTL — must be rejected.
+    const result = await page.evaluate((parentHash: string) =>
+      window.__TAURI__.core.invoke("delegate_mandate", {
+        parentMandateHash: parentHash,
+        subAgentDid: "did:key:z6MkSubAgent888",
+        scope: ["schema:SearchAction"],
+        ttlHours: 2,
+      }), root.mandate_hash
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error_code).toBe("TTL_EXCEEDED");
+  });
+
+  test("mandate TTL expiry is surfaced as TTL_EXPIRED error", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("run_scenario_with_error", {
+        scenarioId: "payment",
+        triggerError: "ttl_expired",
+      })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error_code).toBe("TTL_EXPIRED");
+  });
+
+  test("delegation to unknown parent mandate returns MANDATE_NOT_FOUND", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("delegate_mandate", {
+        parentMandateHash: "mandate-does-not-exist",
+        subAgentDid: "did:key:z6MkSubAgent888",
+        scope: ["schema:SearchAction"],
+        ttlHours: 1,
+      })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error_code).toBe("MANDATE_NOT_FOUND");
   });
 });

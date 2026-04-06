@@ -90,6 +90,7 @@ window.__TAURI__ = {
     _completedRuns: [],
     _backedUp: false,
     _successors: [],
+    _mandates: {},
     _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
@@ -687,6 +688,82 @@ window.__TAURI__ = {
             uptime_seconds: 120,
             version: '0.1.0-mock',
           };
+
+        // ── Tier 3 Canary: Mandate issuance ─────────────────────────────
+        case 'issue_mandate': {
+          const agentDid = args?.agentDid || args?.agent_did || 'did:key:z6MkAgent999';
+          const scope = args?.scope || ['schema:SearchAction'];
+          const ttlHours = args?.ttlHours || args?.ttl_hours || 8;
+          const now = new Date();
+          const ttl = new Date(now.getTime() + ttlHours * 3600 * 1000);
+          const mandateHash = 'mandate-' + Math.random().toString(36).substr(2, 12);
+          const mandate = {
+            mandate_hash: mandateHash,
+            principal_did: IDENTITY.did,
+            agent_did: agentDid,
+            issuer_did: IDENTITY.did,
+            parent_mandate_hash: null,
+            scope: scope,
+            ttl: ttl.toISOString(),
+            decay_state: 'Active',
+            issued_at: now.toISOString(),
+            algorithm: 'Ed25519',
+            signature: 'mock-sig-' + mandateHash,
+            success: true,
+          };
+          window.__TAURI__.core._mandates[mandateHash] = mandate;
+          return mandate;
+        }
+
+        // ── Tier 3 Canary: Mandate delegation with scope containment ────
+        case 'delegate_mandate': {
+          const parentHash = args?.parentMandateHash || args?.parent_mandate_hash;
+          const subAgentDid = args?.subAgentDid || args?.sub_agent_did || 'did:key:z6MkSubAgent888';
+          const requestedScope = args?.scope || [];
+          const ttlHours = args?.ttlHours || args?.ttl_hours || 1;
+
+          const parent = window.__TAURI__.core._mandates[parentHash];
+          if (!parent) {
+            return { success: false, error: 'Parent mandate not found', error_code: 'MANDATE_NOT_FOUND' };
+          }
+
+          // Scope containment: every requested action must be in parent scope.
+          const parentScope = parent.scope || [];
+          const violations = requestedScope.filter((s) => !parentScope.includes(s));
+          if (violations.length > 0) {
+            return {
+              success: false,
+              error: 'Child mandate scope exceeds parent: ' + violations.join(', '),
+              error_code: 'SCOPE_EXCEEDED',
+            };
+          }
+
+          // TTL containment: child TTL must not exceed parent TTL.
+          const parentTtl = new Date(parent.ttl);
+          const childTtl = new Date(Date.now() + ttlHours * 3600 * 1000);
+          if (childTtl > parentTtl) {
+            return { success: false, error: 'Child TTL exceeds parent TTL', error_code: 'TTL_EXCEEDED' };
+          }
+
+          const childHash = 'mandate-child-' + Math.random().toString(36).substr(2, 12);
+          const now = new Date();
+          const child = {
+            mandate_hash: childHash,
+            principal_did: parent.principal_did,
+            agent_did: subAgentDid,
+            issuer_did: parent.agent_did,
+            parent_mandate_hash: parentHash,
+            scope: requestedScope,
+            ttl: childTtl.toISOString(),
+            decay_state: 'Active',
+            issued_at: now.toISOString(),
+            algorithm: 'Ed25519',
+            signature: 'mock-sig-' + childHash,
+            success: true,
+          };
+          window.__TAURI__.core._mandates[childHash] = child;
+          return child;
+        }
 
         default:
           console.warn('[tauri-mock] unhandled command:', cmd);
