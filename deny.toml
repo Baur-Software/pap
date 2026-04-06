@@ -1,7 +1,7 @@
 [advisories]
 vulnerability = "deny"
-unmaintained = "warn"
-unsound = "deny"
+unmaintained = "workspace"
+unsound = "all"
 yanked = "deny"
 
 [bans]
