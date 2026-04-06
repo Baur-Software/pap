@@ -6,6 +6,7 @@ use crate::ui::components::nav::Sidebar;
 use crate::ui::pages::agent_designer::AgentDesignerPage;
 use crate::ui::pages::agents::AgentsPage;
 use crate::ui::pages::dashboard::DashboardPage;
+use crate::ui::pages::federation_admin::FederationAdminPage;
 use crate::ui::pages::peers::PeersPage;
 use crate::ui::pages::settings::SettingsPage;
 
@@ -21,6 +22,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/agents") view=AgentsPage />
                         <Route path=path!("/agents/design") view=AgentDesignerPage />
                         <Route path=path!("/peers") view=PeersPage />
+                        <Route path=path!("/admin/federation") view=FederationAdminPage />
                         <Route path=path!("/settings") view=SettingsPage />
                     </Routes>
                 </main>

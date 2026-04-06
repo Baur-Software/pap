@@ -62,6 +62,22 @@ pub struct RegistryPeer {
     pub endpoint: String,
     pub cert_fingerprint: Option<String>,
     pub last_sync: Option<String>,
+    /// Peer status string from pap-federation: "Active" | "Probationary" | "Suspended".
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
+/// One entry in the per-peer sync event log.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncEvent {
+    /// RFC3339 timestamp.
+    pub ts: String,
+    /// `"success"` or `"error"`.
+    pub outcome: String,
+    /// Number of new agents merged (0 on error).
+    pub merged_count: usize,
+    /// Error detail if outcome is `"error"`.
+    pub error: Option<String>,
 }
 
 // ── Server functions ───────────────────────────────────────────────────────────
@@ -358,7 +374,19 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
         .get(format!("{}/federation/query?action=*", endpoint))
         .send()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(|e| {
+            let msg = e.to_string();
+            state.sync_log.record(
+                &did,
+                crate::state::SyncEvent {
+                    ts: chrono::Utc::now().to_rfc3339(),
+                    outcome: "error".into(),
+                    merged_count: 0,
+                    error: Some(msg.clone()),
+                },
+            );
+            ServerFnError::new(msg)
+        })?;
 
     let msg = resp
         .json::<pap_federation::sync::FederationMessage>()
@@ -368,7 +396,17 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
                 "Failed to deserialize federation response from {}: {e}",
                 endpoint
             );
-            ServerFnError::new(format!("invalid response from peer: {e}"))
+            let msg = format!("invalid response from peer: {e}");
+            state.sync_log.record(
+                &did,
+                crate::state::SyncEvent {
+                    ts: chrono::Utc::now().to_rfc3339(),
+                    outcome: "error".into(),
+                    merged_count: 0,
+                    error: Some(msg.clone()),
+                },
+            );
+            ServerFnError::new(msg)
         })?;
 
     if let pap_federation::sync::FederationMessage::QueryResponse { advertisements, .. } = msg {
@@ -409,9 +447,48 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
         {
             tracing::warn!("Failed to update last_sync for peer {did}: {e}");
         }
+        state.sync_log.record(
+            &did,
+            crate::state::SyncEvent {
+                ts: chrono::Utc::now().to_rfc3339(),
+                outcome: "success".into(),
+                merged_count: merged,
+                error: None,
+            },
+        );
         Ok(merged)
     } else {
         tracing::warn!("Unexpected federation message variant from {}", endpoint);
-        Err(ServerFnError::new("unexpected response type from peer"))
+        let err = "unexpected response type from peer".to_string();
+        state.sync_log.record(
+            &did,
+            crate::state::SyncEvent {
+                ts: chrono::Utc::now().to_rfc3339(),
+                outcome: "error".into(),
+                merged_count: 0,
+                error: Some(err.clone()),
+            },
+        );
+        Err(ServerFnError::new(err))
     }
+}
+
+#[server]
+pub async fn get_peer_sync_log(did: String) -> Result<Vec<SyncEvent>, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let events = state.sync_log.get(&did);
+    // JSON round-trip: state::SyncEvent → ui::api::SyncEvent (same shape)
+    let json = serde_json::to_string(&events).map_err(|e| ServerFnError::new(e.to_string()))?;
+    serde_json::from_str(&json).map_err(|e| ServerFnError::new(e.to_string()))
 }

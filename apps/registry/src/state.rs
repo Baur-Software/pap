@@ -1,9 +1,53 @@
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use pap_federation::registry::FederatedRegistry;
+use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::db::RegistryStore;
+
+// ── Sync event log ─────────────────────────────────────────────────────────
+
+/// A single federation sync event recorded when a peer sync succeeds or fails.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncEvent {
+    /// RFC3339 timestamp.
+    pub ts: String,
+    /// `"success"` or `"error"`.
+    pub outcome: String,
+    /// Number of new agents merged (0 on error).
+    pub merged_count: usize,
+    /// Error message if outcome is `"error"`.
+    pub error: Option<String>,
+}
+
+/// In-memory ring buffer of sync events per peer (last 100 per peer).
+/// Not persisted across restarts — sufficient for operator diagnostics.
+#[derive(Clone, Default)]
+pub struct SyncEventLog {
+    inner: Arc<Mutex<HashMap<String, VecDeque<SyncEvent>>>>,
+}
+
+impl SyncEventLog {
+    /// Record a sync event for `peer_did`, keeping only the last 100.
+    pub fn record(&self, peer_did: &str, event: SyncEvent) {
+        let mut map = self.inner.lock().expect("sync event log mutex poisoned");
+        let deque = map.entry(peer_did.to_owned()).or_default();
+        deque.push_front(event);
+        deque.truncate(100);
+    }
+
+    /// Return up to 100 most-recent events for `peer_did`, newest first.
+    pub fn get(&self, peer_did: &str) -> Vec<SyncEvent> {
+        let map = self.inner.lock().expect("sync event log mutex poisoned");
+        map.get(peer_did)
+            .map(|d| d.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+}
+
+// ── AppState ───────────────────────────────────────────────────────────────
 
 /// Shared application state passed into all route handlers.
 #[derive(Clone)]
@@ -15,6 +59,8 @@ pub struct AppState {
     pub cert_fingerprint: String,
     pub admin_token: Option<String>,
     pub max_ads_per_principal: usize,
+    /// In-memory per-peer sync event log.
+    pub sync_log: SyncEventLog,
 }
 
 impl AppState {
@@ -33,6 +79,7 @@ impl AppState {
             cert_fingerprint,
             admin_token: config.admin_token.clone(),
             max_ads_per_principal: config.max_ads_per_principal,
+            sync_log: SyncEventLog::default(),
         }
     }
 
@@ -68,6 +115,7 @@ mod tests {
             cert_fingerprint: "sha256:test".into(),
             admin_token: token.map(str::to_owned),
             max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
         }
     }
 
