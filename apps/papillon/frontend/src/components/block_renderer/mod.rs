@@ -1,10 +1,10 @@
-mod declarative;
-mod field_classify;
+pub(crate) mod declarative;
+pub(crate) mod field_classify;
 mod generic;
 mod receipt;
 mod registry;
-mod renderer;
-mod schema_property;
+pub(crate) mod renderer;
+pub(crate) mod schema_property;
 mod templates;
 
 use leptos::prelude::*;

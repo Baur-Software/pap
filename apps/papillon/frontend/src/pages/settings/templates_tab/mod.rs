@@ -7,9 +7,11 @@ use crate::state::templates::TemplatesState;
 use papillon_shared::types::TemplateConfig;
 use papillon_shared::Template;
 
+mod schema_type_input;
 mod template_builder;
 mod template_library;
 
+use schema_type_input::SchemaTypeInput;
 use template_builder::TemplateBuilder;
 use template_library::TemplateLibrary;
 
@@ -297,6 +299,19 @@ pub fn TemplatesTab() -> impl IntoView {
 
     let all_templates = move || templates_state.all_templates();
 
+    // Registered schema types — derived from global templates, used for type autocomplete
+    let registered_types = Signal::derive(move || {
+        let mut types: Vec<String> = templates_state
+            .global_templates
+            .get()
+            .into_iter()
+            .map(|t| t.schema_type)
+            .collect();
+        types.sort();
+        types.dedup();
+        types
+    });
+
     // Handler for builder completion (Phase 9b)
     let handle_builder_complete = move |config: TemplateConfig| {
         if let Ok(json) = serde_json::to_string_pretty(&config) {
@@ -534,14 +549,7 @@ pub fn TemplatesTab() -> impl IntoView {
                             "*"
                         </span>
                     </label>
-                    <input
-                        type="text"
-                        placeholder="Schema type (e.g., FlightReservation)"
-                        prop:value=move || new_schema_type.get()
-                        on:input=move |ev| new_schema_type.set(event_target_value(&ev))
-                        aria-label="Schema type"
-                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: var(--text-1); font-size: 13px; font-family: var(--font-body); transition: border-color 0.2s ease;"
-                    />
+                    <SchemaTypeInput value=new_schema_type registered_types=registered_types />
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
@@ -792,12 +800,9 @@ pub fn TemplatesTab() -> impl IntoView {
                                 <label style="font-size: 12px; font-weight: 500; color: var(--text-2);">
                                     "Schema Type"
                                 </label>
-                                <input
-                                    type="text"
-                                    prop:value=move || edit_schema_type.get()
-                                    on:input=move |ev| edit_schema_type.set(event_target_value(&ev))
-                                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 13px; margin-top: 4px; box-sizing: border-box;"
-                                />
+                                <div style="margin-top: 4px;">
+                                    <SchemaTypeInput value=edit_schema_type registered_types=registered_types />
+                                </div>
                             </div>
 
                             <div>
@@ -944,6 +949,8 @@ pub fn TemplatesTab() -> impl IntoView {
             <TemplateBuilder
                 is_open=builder_open
                 on_complete=Callback::new(handle_builder_complete)
+                schema_type=new_schema_type
+                registered_types=registered_types
             />
 
             <TemplateLibrary
