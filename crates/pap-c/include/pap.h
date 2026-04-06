@@ -718,7 +718,7 @@ void pap_ecash_blind_token_free(struct PapEcashBlindToken *bt);
 // **Mint:** Sign a blinded message and return the raw blind-signature bytes.
 //
 // `blinded_msg` — bytes from `pap_ecash_blind_message_bytes` on the client.
-// `out_sig_len` — written with the byte count (must not be NULL).
+// `out_sig_len` — if non-NULL, written with the byte count of the returned array.
 //
 // Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
 // Returns NULL on failure.
@@ -745,6 +745,20 @@ struct PapEcashToken *pap_ecash_unblind(const char *mint_public_pem,
 // Caller must free the returned string with `pap_string_free`.
 // Returns NULL on failure.
 char *pap_ecash_token_payment_proof_commitment(const struct PapEcashToken *token);
+
+// Return the 32-byte serial from an ecash token.
+//
+// `out_len` — if non-NULL, written with the byte count (always 32).
+// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+// Returns NULL on failure.
+uint8_t *pap_ecash_token_serial(const struct PapEcashToken *token, uintptr_t *out_len);
+
+// Return the unblinded signature bytes from an ecash token.
+//
+// `out_len` — if non-NULL, written with the byte count.
+// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+// Returns NULL on failure.
+uint8_t *pap_ecash_token_signature(const struct PapEcashToken *token, uintptr_t *out_len);
 
 // Free a token returned by `pap_ecash_unblind`.
 // # Safety

@@ -4729,8 +4729,6 @@ dependencies = [
  "base64 0.22.1",
  "blind-rsa-signatures",
  "pap-core",
- "rand_chacha 0.3.1",
- "serde",
  "serde_json",
  "sha2",
  "thiserror 2.0.18",

@@ -2313,7 +2313,7 @@ pub unsafe extern "C" fn pap_ecash_blind_token_free(bt: *mut PapEcashBlindToken)
 /// **Mint:** Sign a blinded message and return the raw blind-signature bytes.
 ///
 /// `blinded_msg` — bytes from `pap_ecash_blind_message_bytes` on the client.
-/// `out_sig_len` — written with the byte count (must not be NULL).
+/// `out_sig_len` — if non-NULL, written with the byte count of the returned array.
 ///
 /// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
 /// Returns NULL on failure.
@@ -2400,6 +2400,50 @@ pub extern "C" fn pap_ecash_token_payment_proof_commitment(
 ) -> *mut c_char {
     let token = ref_or_null!(token);
     cstring_or_null!(token.inner.commitment())
+}
+
+/// Return the 32-byte serial from an ecash token.
+///
+/// `out_len` — if non-NULL, written with the byte count (always 32).
+/// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+/// Returns NULL on failure.
+#[no_mangle]
+pub extern "C" fn pap_ecash_token_serial(
+    token: *const PapEcashToken,
+    out_len: *mut usize,
+) -> *mut u8 {
+    let token = ref_or_null!(token);
+    let bytes = token.inner.serial.to_vec();
+    let len = bytes.len();
+    if !out_len.is_null() {
+        unsafe { *out_len = len };
+    }
+    let mut boxed = bytes.into_boxed_slice();
+    let ptr = boxed.as_mut_ptr();
+    std::mem::forget(boxed);
+    ptr
+}
+
+/// Return the unblinded signature bytes from an ecash token.
+///
+/// `out_len` — if non-NULL, written with the byte count.
+/// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+/// Returns NULL on failure.
+#[no_mangle]
+pub extern "C" fn pap_ecash_token_signature(
+    token: *const PapEcashToken,
+    out_len: *mut usize,
+) -> *mut u8 {
+    let token = ref_or_null!(token);
+    let bytes = token.inner.signature.clone();
+    let len = bytes.len();
+    if !out_len.is_null() {
+        unsafe { *out_len = len };
+    }
+    let mut boxed = bytes.into_boxed_slice();
+    let ptr = boxed.as_mut_ptr();
+    std::mem::forget(boxed);
+    ptr
 }
 
 /// Free a token returned by `pap_ecash_unblind`.
