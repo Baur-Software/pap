@@ -499,3 +499,45 @@ test.describe("Template Export and Import", () => {
     expect(exportCalled).toBe(true);
   });
 });
+
+// ── 6. Live Registry Types in Autocomplete ────────────────────────────────────
+
+test.describe("Live Registry Types in Autocomplete", () => {
+  test.beforeEach(async ({ page }) => {
+    await installTauriMock(page);
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await goToTemplatesTab(page);
+  });
+
+  test("Movie appears in autocomplete (shipped renderer, absent from mock templates)", async ({
+    page,
+  }) => {
+    // Mock seeds only FlightReservation + LodgingReservation. Movie is registered in
+    // create_default_registry() via MovieTemplate — must appear in autocomplete once
+    // RendererState is app-level and registered_keys is seeded from the live registry.
+    const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
+    await schemaInput.click();
+    await schemaInput.fill("Mov");
+    const dropdown = page.locator('div[style*="z-index: 9999"]');
+    await expect(dropdown).toBeVisible({ timeout: 3000 });
+    await expect(dropdown.locator("div").filter({ hasText: /^Movie$/ }).first()).toBeVisible({
+      timeout: 3000,
+    });
+  });
+
+  test("Person appears in autocomplete (shipped renderer, absent from mock templates)", async ({
+    page,
+  }) => {
+    // Person is registered in create_default_registry() via PersonTemplate.
+    // Proves the autocomplete is fed from the live registry, not just saved templates.
+    const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
+    await schemaInput.click();
+    await schemaInput.fill("Per");
+    const dropdown = page.locator('div[style*="z-index: 9999"]');
+    await expect(dropdown).toBeVisible({ timeout: 3000 });
+    await expect(dropdown.locator("div").filter({ hasText: /^Person$/ }).first()).toBeVisible({
+      timeout: 3000,
+    });
+  });
+});
