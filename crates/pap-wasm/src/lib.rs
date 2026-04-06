@@ -23,6 +23,9 @@
 //! `WasmFederationClient` wraps the browser-native `FetchFederationClient`
 //! and lets JavaScript code discover agents via the PAP federation protocol.
 
+pub mod ecash;
+pub use ecash::*;
+
 pub mod federation;
 pub use federation::*;
 

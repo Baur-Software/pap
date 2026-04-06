@@ -4,6 +4,7 @@ exclude = ["apps/papillon/frontend", "apps/registry/frontend", "fuzz"]
 members = [
     "crates/pap-did",
     "crates/pap-core",
+    "crates/pap-ecash",
     "crates/pap-credential",
     "crates/pap-marketplace",
     "crates/pap-webauthn",
@@ -54,8 +55,13 @@ pap-federation = { path = "crates/pap-federation", default-features = false }
 pap-agents = { path = "crates/pap-agents" }
 pap-tee = { path = "crates/pap-tee" }
 pap-credential-store = { path = "crates/pap-credential-store" }
+pap-ecash = { path = "crates/pap-ecash" }
 pap-test-utils = { path = "crates/pap-test-utils" }
 papillon-shared = { path = "crates/papillon-shared" }
+
+blind-rsa-signatures = "0.14"
+rsa = { version = "0.9", features = ["pem"] }
+rand_chacha = { version = "0.3" }
 
 ed25519-dalek = { version = "2", features = ["rand_core", "zeroize"] }
 rand = "0.8"

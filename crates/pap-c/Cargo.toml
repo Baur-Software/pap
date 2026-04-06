@@ -14,6 +14,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 pap-did         = { workspace = true }
 pap-core        = { workspace = true }
+pap-ecash       = { workspace = true }
 pap-marketplace = { workspace = true }
 
 chrono        = { workspace = true }
