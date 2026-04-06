@@ -1,0 +1,23 @@
+[package]
+name = "pap-ecash"
+description = "Chaumian ecash blind-signed token issuance and verification for PAP (spec §13.1)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+pap-core = { workspace = true }
+
+blind-rsa-signatures = { workspace = true }
+# rsa: PEM encoding is done via blind_rsa_signatures::reexports::rsa (v0.7),
+# no separate workspace rsa dep needed.
+sha2      = { workspace = true }
+base64    = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

@@ -65,6 +65,18 @@ typedef struct PapDisclosureEntry PapDisclosureEntry;
 
 typedef struct PapDisclosureSet PapDisclosureSet;
 
+// Opaque handle wrapping an [`EcashBlindToken`].
+typedef struct PapEcashBlindToken PapEcashBlindToken;
+
+// Opaque handle wrapping an [`EcashMintKeypair`].
+typedef struct PapEcashMintKeypair PapEcashMintKeypair;
+
+// Opaque handle wrapping an [`EcashSpentRegistry`] (in-memory double-spend set).
+typedef struct PapEcashSpentRegistry PapEcashSpentRegistry;
+
+// Opaque handle wrapping an [`EcashToken`] (serial + unblinded signature).
+typedef struct PapEcashToken PapEcashToken;
+
 typedef struct PapMandate PapMandate;
 
 typedef struct PapMarketplaceClient PapMarketplaceClient;
@@ -659,5 +671,136 @@ const char *pap_agent_list_get_name(const struct PapAgentList *list, uintptr_t i
 // # Safety
 // `list` must be a pointer previously returned by `pap_marketplace_query`.
 void pap_agent_list_free(struct PapAgentList *list);
+
+// Generate a new ecash mint keypair.
+//
+// `key_bits` MUST be ≥ 2048 for production; 1024 is acceptable for tests.
+// Returns NULL on failure; call `pap_last_error_message()` for details.
+// Caller must free with `pap_ecash_mint_keypair_free`.
+struct PapEcashMintKeypair *pap_ecash_mint_keypair_generate(unsigned int key_bits);
+
+// Free a keypair returned by `pap_ecash_mint_keypair_generate`.
+// # Safety
+// `kp` must be a pointer previously returned by that function, or NULL.
+void pap_ecash_mint_keypair_free(struct PapEcashMintKeypair *kp);
+
+// Serialize the mint public key as a PKCS#1 PEM string.
+//
+// Returns NULL on failure. Caller must free the returned string with
+// `pap_string_free`.
+char *pap_ecash_mint_keypair_public_pem(const struct PapEcashMintKeypair *kp);
+
+// **Client:** Blind a serial number against the mint's public key.
+//
+// `mint_public_pem` — PKCS#1 PEM string from `pap_ecash_mint_keypair_public_pem`.
+// `serial` — pointer to `serial_len` bytes (typically 32).
+//
+// Returns an opaque handle or NULL on failure.
+// Caller must free with `pap_ecash_blind_token_free`.
+// Only `pap_ecash_blind_message_bytes` should be sent to the mint.
+struct PapEcashBlindToken *pap_ecash_blind(const char *mint_public_pem,
+                                           const uint8_t *serial,
+                                           uintptr_t serial_len);
+
+// Return the blinded-message bytes from a blind token — the only bytes to
+// transmit to the mint.
+//
+// `out_len` — written with the byte count (may be NULL if unneeded).
+// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+// Returns NULL on failure.
+uint8_t *pap_ecash_blind_message_bytes(const struct PapEcashBlindToken *bt, uintptr_t *out_len);
+
+// Free a blind token returned by `pap_ecash_blind`.
+// # Safety
+// `bt` must be a pointer previously returned by that function, or NULL.
+void pap_ecash_blind_token_free(struct PapEcashBlindToken *bt);
+
+// **Mint:** Sign a blinded message and return the raw blind-signature bytes.
+//
+// `blinded_msg` — bytes from `pap_ecash_blind_message_bytes` on the client.
+// `out_sig_len` — if non-NULL, written with the byte count of the returned array.
+//
+// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+// Returns NULL on failure.
+uint8_t *pap_ecash_mint_sign(const struct PapEcashMintKeypair *kp,
+                             const uint8_t *blinded_msg,
+                             uintptr_t blinded_len,
+                             uintptr_t *out_sig_len);
+
+// **Client:** Unblind the mint's signature to produce a redeemable token.
+//
+// `mint_public_pem` — same PKCS#1 PEM used during blinding.
+// `bt` — the blind token from `pap_ecash_blind` (still held by the client).
+// `blind_sig` / `blind_sig_len` — bytes returned by the mint.
+//
+// Returns an opaque token handle or NULL on failure.
+// Caller must free with `pap_ecash_token_free`.
+struct PapEcashToken *pap_ecash_unblind(const char *mint_public_pem,
+                                        const struct PapEcashBlindToken *bt,
+                                        const uint8_t *blind_sig,
+                                        uintptr_t blind_sig_len);
+
+// Return the base64url-no-pad SHA-256 payment-proof commitment for a token.
+//
+// Caller must free the returned string with `pap_string_free`.
+// Returns NULL on failure.
+char *pap_ecash_token_payment_proof_commitment(const struct PapEcashToken *token);
+
+// Return the 32-byte serial from an ecash token.
+//
+// `out_len` — if non-NULL, written with the byte count (always 32).
+// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+// Returns NULL on failure.
+uint8_t *pap_ecash_token_serial(const struct PapEcashToken *token, uintptr_t *out_len);
+
+// Return the unblinded signature bytes from an ecash token.
+//
+// `out_len` — if non-NULL, written with the byte count.
+// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+// Returns NULL on failure.
+uint8_t *pap_ecash_token_signature(const struct PapEcashToken *token, uintptr_t *out_len);
+
+// Free a token returned by `pap_ecash_unblind`.
+// # Safety
+// `token` must be a pointer previously returned by that function, or NULL.
+void pap_ecash_token_free(struct PapEcashToken *token);
+
+// **Payee:** Verify a token without recording it in the spent registry.
+//
+// Returns `0` if the signature is valid, `-1` otherwise.
+// Does not protect against double-spend — use `pap_ecash_redeem` for that.
+int pap_ecash_verify(const char *mint_public_pem,
+                     const uint8_t *serial,
+                     uintptr_t serial_len,
+                     const uint8_t *sig,
+                     uintptr_t sig_len);
+
+// Create a new empty double-spend registry.
+// Caller must free with `pap_ecash_spent_registry_free`.
+struct PapEcashSpentRegistry *pap_ecash_spent_registry_new(void);
+
+// Free a registry returned by `pap_ecash_spent_registry_new`.
+// # Safety
+// `r` must be a pointer previously returned by that function, or NULL.
+void pap_ecash_spent_registry_free(struct PapEcashSpentRegistry *r);
+
+// **Payee:** Verify a token and atomically record its serial as spent.
+//
+// Returns `0` on success (first redemption of a valid token).
+// Returns `-1` with a descriptive last-error on double-spend or invalid sig.
+int pap_ecash_redeem(const char *mint_public_pem,
+                     const uint8_t *serial,
+                     uintptr_t serial_len,
+                     const uint8_t *sig,
+                     uintptr_t sig_len,
+                     struct PapEcashSpentRegistry *registry);
+
+// Free a byte array previously returned by `pap_ecash_blind_message_bytes`
+// or `pap_ecash_mint_sign`.
+//
+// # Safety
+// `ptr` must be a pointer previously returned by one of those functions (or
+// NULL). `len` must be the exact length reported by that call.
+void pap_bytes_free(uint8_t *ptr, uintptr_t len);
 
 #endif  /* PAP_H */

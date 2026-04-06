@@ -12,8 +12,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 pap-did        = { workspace = true, features = ["wasm"] }
 pap-core       = { workspace = true }
+pap-ecash      = { workspace = true }
 pap-federation = { workspace = true, features = ["wasm"] }
 pap-proto      = { workspace = true, features = ["wasm"] }
+# getrandom with js feature is needed transitively for RSA ops in WASM (WebCrypto)
+getrandom      = { workspace = true, features = ["js"] }
 
 # chrono needs the wasmbind feature so Utc::now() works in WASM via js_sys::Date
 chrono        = { workspace = true, features = ["wasmbind"] }

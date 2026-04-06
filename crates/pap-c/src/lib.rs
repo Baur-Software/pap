@@ -2152,6 +2152,446 @@ pub unsafe extern "C" fn pap_agent_list_free(list: *mut PapAgentList) {
 // Tests
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Ecash — Chaumian blind-signed payment tokens (spec §13.1)
+// ---------------------------------------------------------------------------
+
+use pap_ecash::{
+    EcashBlindToken as RustBlindToken, EcashMintKeypair as RustMintKeypair,
+    EcashMintPublicKey as RustMintPublicKey, EcashSpentRegistry as RustSpentRegistry,
+    EcashToken as RustEcashToken,
+};
+
+/// Opaque handle wrapping an [`EcashMintKeypair`].
+pub struct PapEcashMintKeypair {
+    inner: RustMintKeypair,
+}
+
+/// Opaque handle wrapping an [`EcashBlindToken`].
+pub struct PapEcashBlindToken {
+    inner: RustBlindToken,
+}
+
+/// Opaque handle wrapping an [`EcashToken`] (serial + unblinded signature).
+pub struct PapEcashToken {
+    inner: RustEcashToken,
+}
+
+/// Opaque handle wrapping an [`EcashSpentRegistry`] (in-memory double-spend set).
+pub struct PapEcashSpentRegistry {
+    inner: RustSpentRegistry,
+}
+
+// ── Keypair ─────────────────────────────────────────────────────────────────
+
+/// Generate a new ecash mint keypair.
+///
+/// `key_bits` MUST be ≥ 2048 for production; 1024 is acceptable for tests.
+/// Returns NULL on failure; call `pap_last_error_message()` for details.
+/// Caller must free with `pap_ecash_mint_keypair_free`.
+#[no_mangle]
+pub extern "C" fn pap_ecash_mint_keypair_generate(
+    key_bits: std::os::raw::c_uint,
+) -> *mut PapEcashMintKeypair {
+    match RustMintKeypair::generate(key_bits as usize) {
+        Ok(inner) => Box::into_raw(Box::new(PapEcashMintKeypair { inner })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a keypair returned by `pap_ecash_mint_keypair_generate`.
+/// # Safety
+/// `kp` must be a pointer previously returned by that function, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_ecash_mint_keypair_free(kp: *mut PapEcashMintKeypair) {
+    if !kp.is_null() {
+        drop(unsafe { Box::from_raw(kp) });
+    }
+}
+
+/// Serialize the mint public key as a PKCS#1 PEM string.
+///
+/// Returns NULL on failure. Caller must free the returned string with
+/// `pap_string_free`.
+#[no_mangle]
+pub extern "C" fn pap_ecash_mint_keypair_public_pem(kp: *const PapEcashMintKeypair) -> *mut c_char {
+    let kp = ref_or_null!(kp);
+    match kp.inner.public_key_to_pem() {
+        Ok(pem) => cstring_or_null!(pem),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+// ── Blinding (client) ────────────────────────────────────────────────────────
+
+/// **Client:** Blind a serial number against the mint's public key.
+///
+/// `mint_public_pem` — PKCS#1 PEM string from `pap_ecash_mint_keypair_public_pem`.
+/// `serial` — pointer to `serial_len` bytes (typically 32).
+///
+/// Returns an opaque handle or NULL on failure.
+/// Caller must free with `pap_ecash_blind_token_free`.
+/// Only `pap_ecash_blind_message_bytes` should be sent to the mint.
+#[no_mangle]
+pub extern "C" fn pap_ecash_blind(
+    mint_public_pem: *const c_char,
+    serial: *const u8,
+    serial_len: usize,
+) -> *mut PapEcashBlindToken {
+    let pem = cstr_or_null!(mint_public_pem);
+    if serial.is_null() || serial_len != 32 {
+        set_last_error("serial must be exactly 32 bytes");
+        return std::ptr::null_mut();
+    }
+    let serial_slice = unsafe { std::slice::from_raw_parts(serial, serial_len) };
+    let serial_arr: [u8; 32] = match serial_slice.try_into() {
+        Ok(a) => a,
+        Err(_) => {
+            set_last_error("serial must be exactly 32 bytes");
+            return std::ptr::null_mut();
+        }
+    };
+
+    let pk = match RustMintPublicKey::from_pem(pem) {
+        Ok(pk) => pk,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            return std::ptr::null_mut();
+        }
+    };
+
+    match pap_ecash::ecash_request(&serial_arr, &pk) {
+        Ok(inner) => Box::into_raw(Box::new(PapEcashBlindToken { inner })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Return the blinded-message bytes from a blind token — the only bytes to
+/// transmit to the mint.
+///
+/// `out_len` — written with the byte count (may be NULL if unneeded).
+/// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+/// Returns NULL on failure.
+#[no_mangle]
+pub extern "C" fn pap_ecash_blind_message_bytes(
+    bt: *const PapEcashBlindToken,
+    out_len: *mut usize,
+) -> *mut u8 {
+    let bt = ref_or_null!(bt);
+    let bytes = bt.inner.blinded_message().to_vec();
+    let len = bytes.len();
+    if !out_len.is_null() {
+        unsafe { *out_len = len };
+    }
+    let mut boxed = bytes.into_boxed_slice();
+    let ptr = boxed.as_mut_ptr();
+    std::mem::forget(boxed);
+    ptr
+}
+
+/// Free a blind token returned by `pap_ecash_blind`.
+/// # Safety
+/// `bt` must be a pointer previously returned by that function, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_ecash_blind_token_free(bt: *mut PapEcashBlindToken) {
+    if !bt.is_null() {
+        drop(unsafe { Box::from_raw(bt) });
+    }
+}
+
+// ── Signing (mint) ───────────────────────────────────────────────────────────
+
+/// **Mint:** Sign a blinded message and return the raw blind-signature bytes.
+///
+/// `blinded_msg` — bytes from `pap_ecash_blind_message_bytes` on the client.
+/// `out_sig_len` — if non-NULL, written with the byte count of the returned array.
+///
+/// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+/// Returns NULL on failure.
+#[no_mangle]
+pub extern "C" fn pap_ecash_mint_sign(
+    kp: *const PapEcashMintKeypair,
+    blinded_msg: *const u8,
+    blinded_len: usize,
+    out_sig_len: *mut usize,
+) -> *mut u8 {
+    let kp = ref_or_null!(kp);
+    if blinded_msg.is_null() {
+        set_last_error("null blinded_msg pointer");
+        return std::ptr::null_mut();
+    }
+    let msg = unsafe { std::slice::from_raw_parts(blinded_msg, blinded_len) };
+    match pap_ecash::ecash_mint_sign(msg, &kp.inner) {
+        Ok(sig_bytes) => {
+            let len = sig_bytes.len();
+            if !out_sig_len.is_null() {
+                unsafe { *out_sig_len = len };
+            }
+            let mut boxed = sig_bytes.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            ptr
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+// ── Unblinding (client) ──────────────────────────────────────────────────────
+
+/// **Client:** Unblind the mint's signature to produce a redeemable token.
+///
+/// `mint_public_pem` — same PKCS#1 PEM used during blinding.
+/// `bt` — the blind token from `pap_ecash_blind` (still held by the client).
+/// `blind_sig` / `blind_sig_len` — bytes returned by the mint.
+///
+/// Returns an opaque token handle or NULL on failure.
+/// Caller must free with `pap_ecash_token_free`.
+#[no_mangle]
+pub extern "C" fn pap_ecash_unblind(
+    mint_public_pem: *const c_char,
+    bt: *const PapEcashBlindToken,
+    blind_sig: *const u8,
+    blind_sig_len: usize,
+) -> *mut PapEcashToken {
+    let pem = cstr_or_null!(mint_public_pem);
+    let bt = ref_or_null!(bt);
+    if blind_sig.is_null() {
+        set_last_error("null blind_sig pointer");
+        return std::ptr::null_mut();
+    }
+    let sig_bytes = unsafe { std::slice::from_raw_parts(blind_sig, blind_sig_len) };
+
+    let pk = match RustMintPublicKey::from_pem(pem) {
+        Ok(pk) => pk,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            return std::ptr::null_mut();
+        }
+    };
+
+    match pap_ecash::ecash_unblind(&bt.inner, sig_bytes, &pk) {
+        Ok(inner) => Box::into_raw(Box::new(PapEcashToken { inner })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Return the base64url-no-pad SHA-256 payment-proof commitment for a token.
+///
+/// Caller must free the returned string with `pap_string_free`.
+/// Returns NULL on failure.
+#[no_mangle]
+pub extern "C" fn pap_ecash_token_payment_proof_commitment(
+    token: *const PapEcashToken,
+) -> *mut c_char {
+    let token = ref_or_null!(token);
+    cstring_or_null!(token.inner.commitment())
+}
+
+/// Return the 32-byte serial from an ecash token.
+///
+/// `out_len` — if non-NULL, written with the byte count (always 32).
+/// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+/// Returns NULL on failure.
+#[no_mangle]
+pub extern "C" fn pap_ecash_token_serial(
+    token: *const PapEcashToken,
+    out_len: *mut usize,
+) -> *mut u8 {
+    let token = ref_or_null!(token);
+    let bytes = token.inner.serial.to_vec();
+    let len = bytes.len();
+    if !out_len.is_null() {
+        unsafe { *out_len = len };
+    }
+    let mut boxed = bytes.into_boxed_slice();
+    let ptr = boxed.as_mut_ptr();
+    std::mem::forget(boxed);
+    ptr
+}
+
+/// Return the unblinded signature bytes from an ecash token.
+///
+/// `out_len` — if non-NULL, written with the byte count.
+/// Returns a heap-allocated byte array. Free with `pap_bytes_free(ptr, len)`.
+/// Returns NULL on failure.
+#[no_mangle]
+pub extern "C" fn pap_ecash_token_signature(
+    token: *const PapEcashToken,
+    out_len: *mut usize,
+) -> *mut u8 {
+    let token = ref_or_null!(token);
+    let bytes = token.inner.signature.clone();
+    let len = bytes.len();
+    if !out_len.is_null() {
+        unsafe { *out_len = len };
+    }
+    let mut boxed = bytes.into_boxed_slice();
+    let ptr = boxed.as_mut_ptr();
+    std::mem::forget(boxed);
+    ptr
+}
+
+/// Free a token returned by `pap_ecash_unblind`.
+/// # Safety
+/// `token` must be a pointer previously returned by that function, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_ecash_token_free(token: *mut PapEcashToken) {
+    if !token.is_null() {
+        drop(unsafe { Box::from_raw(token) });
+    }
+}
+
+// ── Verify / Redeem ──────────────────────────────────────────────────────────
+
+/// **Payee:** Verify a token without recording it in the spent registry.
+///
+/// Returns `0` if the signature is valid, `-1` otherwise.
+/// Does not protect against double-spend — use `pap_ecash_redeem` for that.
+#[no_mangle]
+pub extern "C" fn pap_ecash_verify(
+    mint_public_pem: *const c_char,
+    serial: *const u8,
+    serial_len: usize,
+    sig: *const u8,
+    sig_len: usize,
+) -> c_int {
+    let pem = cstr_or_err!(mint_public_pem);
+    if serial.is_null() || serial_len != 32 || sig.is_null() {
+        set_last_error("null or incorrect-length argument");
+        return -1;
+    }
+    let serial_slice = unsafe { std::slice::from_raw_parts(serial, serial_len) };
+    let serial_arr: [u8; 32] = match serial_slice.try_into() {
+        Ok(a) => a,
+        Err(_) => {
+            set_last_error("serial must be exactly 32 bytes");
+            return -1;
+        }
+    };
+    let sig_bytes = unsafe { std::slice::from_raw_parts(sig, sig_len) };
+
+    let pk = match RustMintPublicKey::from_pem(pem) {
+        Ok(pk) => pk,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            return -1;
+        }
+    };
+
+    let token = RustEcashToken {
+        serial: serial_arr,
+        signature: sig_bytes.to_vec(),
+    };
+
+    if pap_ecash::ecash_verify(&token, &pk) {
+        0
+    } else {
+        set_last_error("ecash verification failed");
+        -1
+    }
+}
+
+/// Create a new empty double-spend registry.
+/// Caller must free with `pap_ecash_spent_registry_free`.
+#[no_mangle]
+pub extern "C" fn pap_ecash_spent_registry_new() -> *mut PapEcashSpentRegistry {
+    Box::into_raw(Box::new(PapEcashSpentRegistry {
+        inner: RustSpentRegistry::new(),
+    }))
+}
+
+/// Free a registry returned by `pap_ecash_spent_registry_new`.
+/// # Safety
+/// `r` must be a pointer previously returned by that function, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pap_ecash_spent_registry_free(r: *mut PapEcashSpentRegistry) {
+    if !r.is_null() {
+        drop(unsafe { Box::from_raw(r) });
+    }
+}
+
+/// **Payee:** Verify a token and atomically record its serial as spent.
+///
+/// Returns `0` on success (first redemption of a valid token).
+/// Returns `-1` with a descriptive last-error on double-spend or invalid sig.
+#[no_mangle]
+pub extern "C" fn pap_ecash_redeem(
+    mint_public_pem: *const c_char,
+    serial: *const u8,
+    serial_len: usize,
+    sig: *const u8,
+    sig_len: usize,
+    registry: *mut PapEcashSpentRegistry,
+) -> c_int {
+    let pem = cstr_or_err!(mint_public_pem);
+    if serial.is_null() || serial_len != 32 || sig.is_null() {
+        set_last_error("null or incorrect-length argument");
+        return -1;
+    }
+    let serial_slice = unsafe { std::slice::from_raw_parts(serial, serial_len) };
+    let serial_arr: [u8; 32] = match serial_slice.try_into() {
+        Ok(a) => a,
+        Err(_) => {
+            set_last_error("serial must be exactly 32 bytes");
+            return -1;
+        }
+    };
+    let sig_bytes = unsafe { std::slice::from_raw_parts(sig, sig_len) };
+    let reg = mut_or_err!(registry);
+
+    let pk = match RustMintPublicKey::from_pem(pem) {
+        Ok(pk) => pk,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            return -1;
+        }
+    };
+
+    let token = RustEcashToken {
+        serial: serial_arr,
+        signature: sig_bytes.to_vec(),
+    };
+
+    match pap_ecash::ecash_redeem(&token, &pk, &mut reg.inner) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+// ── Byte array allocator / deallocator ───────────────────────────────────────
+
+/// Free a byte array previously returned by `pap_ecash_blind_message_bytes`
+/// or `pap_ecash_mint_sign`.
+///
+/// # Safety
+/// `ptr` must be a pointer previously returned by one of those functions (or
+/// NULL). `len` must be the exact length reported by that call.
+#[no_mangle]
+pub unsafe extern "C" fn pap_bytes_free(ptr: *mut u8, len: usize) {
+    if !ptr.is_null() {
+        let slice = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+        drop(unsafe { Box::from_raw(slice) });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

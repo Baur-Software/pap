@@ -1375,6 +1375,68 @@ token itself is never stored.
   SHOULD be attached. Implementations MAY reject mandates that
   permit payment actions without a proof.
 
+#### 13.1.4. Ecash Blind Signature Protocol
+
+PAP includes a reference implementation of the Chaumian blind signature
+scheme in the `pap-ecash` crate. The scheme uses RFC 9474
+RSABSSA-SHA384-PSS (non-augmented variant, `randomize = false`).
+
+**Protocol parameters:**
+
+| Parameter | Value |
+|---|---|
+| Scheme | RSABSSA-SHA384-PSS (RFC 9474 §4.2, non-augmented) |
+| Key size | ≥ 2048 bits (production); 1024 bits (tests only) |
+| Commitment | SHA-256(`serial` ∥ `signature`), base64url-no-pad |
+| Serial size | 32 bytes, randomly chosen by the client |
+
+**Protocol steps:**
+
+1. **Request** — client calls `ecash_request(serial, mint_pk)`.
+   Returns a `BlindToken` containing a randomly-blinded serial. Only the
+   `blinded_message()` bytes are transmitted to the mint.
+2. **Mint** — mint calls `ecash_mint_sign(blinded_msg, keypair)`.
+   Returns raw blind-signature bytes to the client.
+3. **Unblind** — client calls `ecash_unblind(blind_token, blind_sig, mint_pk)`.
+   Returns the spendable `EcashToken { serial, signature }`.
+4. **Attach** — client calls `token.to_payment_proof()` and includes the
+   result in the mandate's `payment_proof` field.
+5. **Verify** — payee calls `ecash_verify(token, mint_pk)`. Valid tokens
+   have a correct RSA-PSS signature over `serial`.
+6. **Redeem** — payee calls `ecash_redeem(token, mint_pk, registry)`.
+   Atomically verifies and records `serial` in the spent registry,
+   preventing double-spend.
+
+**Unlinkability invariant:** The random blinding factor applied in step 1
+means that the `blinded_message` bytes transmitted to the mint are
+statistically independent of the final `(serial, signature)` pair. The
+mint cannot link a signing operation to a subsequent redemption.
+
+**Double-spend invariant:** `ecash_redeem` MUST return `EcashError::DoubleSpend`
+on any second call with the same serial, regardless of signature validity.
+
+**Test vectors:** The conformance test suite is in `crates/pap-ecash/`.
+Run the following to generate and verify all test vectors:
+
+```bash
+cargo test -p pap-ecash -- --nocapture
+```
+
+The `ecash_test_vector` test uses a freshly-generated 1024-bit test key
+(test-only size) and serial `0x000…001` (32 bytes). Because
+`blind-rsa-signatures` v0.14 uses `OsRng` internally (no injectable RNG),
+the blinding factor and PSS salt are non-deterministic. The test therefore
+validates structural invariants (correct verification, 43-char base64url
+commitment) rather than pinning an exact byte value.
+
+**C FFI:** `pap_ecash_mint_keypair_generate`, `pap_ecash_blind`,
+`pap_ecash_blind_message_bytes`, `pap_ecash_mint_sign`, `pap_ecash_unblind`,
+`pap_ecash_verify`, `pap_ecash_spent_registry_new`, `pap_ecash_redeem`,
+`pap_ecash_token_payment_proof_commitment`.
+
+**WASM:** `EcashMintKeypair`, `EcashBlindToken`, `EcashToken`,
+`ecashMintSign`, `ecashVerify`.
+
 ### 13.2. Payment Proof Verification
 
 A receiving agent that requires payment MUST:
