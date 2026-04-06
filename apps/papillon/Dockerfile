@@ -43,6 +43,7 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-python"/d' \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
+    -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
     -e '/^[[:space:]]*"apps\/registry"/d' \
     -e '/^[[:space:]]*"benches"/d' \

@@ -1,5 +1,11 @@
 name: Dependency Audit
 on:
+  push:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'deny.toml'
   pull_request:
     paths:
       - '**/Cargo.toml'

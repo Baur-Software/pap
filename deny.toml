@@ -1,7 +1,11 @@
 [advisories]
+vulnerability = "deny"
 unmaintained = "warn"
 unsound = "deny"
 yanked = "deny"
+
+[bans]
+multiple-versions = "warn"
 
 [licenses]
 confidence-threshold = 0.93
