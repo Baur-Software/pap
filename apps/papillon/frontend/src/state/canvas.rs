@@ -285,6 +285,7 @@ impl CanvasState {
             let result = if bridge::tauri_available() {
                 // Tauri IPC path — delegates to native backend handshake
                 #[derive(serde::Serialize)]
+                #[serde(rename_all = "camelCase")]
                 struct CanvasPromptArgs {
                     canvas_id: String,
                     prompt_id: String,
@@ -367,6 +368,7 @@ impl CanvasState {
         let cid = canvas_id.clone();
         spawn_local(async move {
             #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
             struct ReshapeArgs {
                 canvas_id: String,
                 block_id: String,
@@ -448,6 +450,7 @@ impl CanvasState {
         let cid = canvas_id.clone();
         spawn_local(async move {
             #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
             struct RetryArgs {
                 canvas_id: String,
                 block_id: String,
