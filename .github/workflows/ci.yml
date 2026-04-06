@@ -129,9 +129,10 @@ jobs:
         run: |
           just registry-local &
           pid=$!
-          for i in $(seq 1 30); do
+          for i in $(seq 1 120); do
             curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && break
-            [ "$i" -eq 30 ] && { echo "::error::registry did not start"; kill $pid; exit 1; }
+            kill -0 $pid 2>/dev/null || { echo "::error::registry process died"; exit 1; }
+            [ "$i" -eq 120 ] && { echo "::error::registry did not start within 2m"; kill $pid; exit 1; }
             sleep 1
           done
           echo "Registry started successfully"
