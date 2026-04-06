@@ -22,8 +22,8 @@ use crate::error::PapillonError;
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillon_shared::{
     builtin_model_catalog, BuiltInModelInfo, LlmProvider, ModelAvailability, ModelDownloadProgress,
-    OrchestratorConfig, OrchestratorStatus, ReceiptInfo, ScenarioCard, ScenarioRunResult,
-    ScenarioStepResult, SearchResult, SetupState,
+    OrchestratorConfig, OrchestratorStatus, PreferenceEngine, ReceiptInfo, ScenarioCard,
+    ScenarioRunResult, ScenarioStepResult, SearchResult, SetupState,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -559,29 +559,41 @@ pub async fn run_scenario(
     let disclosure_set = if scenario.requires_disclosure.is_empty() {
         DisclosureSet::empty()
     } else {
-        // If we have a profile with known minimal disclosure refs, prefer those
-        // but only if they are a valid subset of the current scenario's allowed disclosures
-        let disclosure_props = match &agent_profile {
-            Some(p) if p.episode_count >= 5 => {
-                // Try to parse the stored minimal disclosure refs
-                match serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs) {
-                    Ok(stored_refs) => {
-                        // Validate: all stored refs must be in scenario.requires_disclosure
-                        if stored_refs
-                            .iter()
-                            .all(|r| scenario.requires_disclosure.contains(r))
+        // Priority order for disclosure scope selection (most restrictive first):
+        // 1. PreferenceEngine suggested scopes (intersection of principal-approved refs)
+        // 2. Agent profile minimal_disclosure_refs (EMA-derived minimum across episodes)
+        // 3. Scenario default requirements
+        let schema_type_hint = scenario.returns.first().map(|s| s.as_str()).unwrap_or("");
+        let pref_suggested = {
+            let engine = PreferenceEngine::new(state.db.as_ref());
+            engine.suggested_scopes(action, schema_type_hint)
+        };
+
+        let disclosure_props = if !pref_suggested.is_empty()
+            && pref_suggested
+                .iter()
+                .all(|r| scenario.requires_disclosure.contains(r))
+        {
+            // Preference engine has approved scope data — use it
+            pref_suggested
+        } else {
+            match &agent_profile {
+                Some(p) if p.episode_count >= 5 => {
+                    match serde_json::from_str::<Vec<String>>(&p.minimal_disclosure_refs) {
+                        Ok(stored_refs)
+                            if stored_refs
+                                .iter()
+                                .all(|r| scenario.requires_disclosure.contains(r)) =>
                         {
                             stored_refs
-                        } else {
-                            // Invalid subset — fall back to scenario requirements
-                            scenario.requires_disclosure.clone()
                         }
+                        _ => scenario.requires_disclosure.clone(),
                     }
-                    Err(_) => scenario.requires_disclosure.clone(),
                 }
+                _ => scenario.requires_disclosure.clone(),
             }
-            _ => scenario.requires_disclosure.clone(),
         };
+
         DisclosureSet::new(vec![DisclosureEntry::new(
             "schema:Person",
             disclosure_props,

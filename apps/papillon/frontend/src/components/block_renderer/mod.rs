@@ -171,10 +171,17 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Unknown"</span></div> }.into_any(),
                     };
+                    let pref_guided = block.preference_guided;
                     view! {
                         <div class="block-content">
                             {content_view}
                         </div>
+                        <Show when=move || pref_guided>
+                            <div class="preference-hint" title="Agent selected from your local interaction history — no data left your device">
+                                <span class="preference-hint-icon">"◈"</span>
+                                <span>"Based on your preferences"</span>
+                            </div>
+                        </Show>
                         <Show when=move || show_reprompt.get()>
                             <div class="block-reprompt">
                                 <input

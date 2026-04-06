@@ -220,6 +220,35 @@ impl NativeDatabase {
         )
         .map_err(|e| DbError(format!("db migrate fts5: {e}")))?;
 
+        // Preference learning table — all data stays on-device, no network calls.
+        // Tracks which agents were selected for which (action_type, schema_type) pairs,
+        // approved/rejected scope refs, and session outcomes so the orchestrator can
+        // make preference-guided suggestions over time.
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS preferences (
+                id                   TEXT PRIMARY KEY,
+                action_type          TEXT NOT NULL,
+                schema_type          TEXT NOT NULL,
+                agent_did_hash       TEXT NOT NULL,
+                agent_name           TEXT NOT NULL,
+                selection_count      INTEGER NOT NULL DEFAULT 0,
+                success_count        INTEGER NOT NULL DEFAULT 0,
+                last_selected        TEXT NOT NULL,
+                approved_scope_refs  TEXT NOT NULL DEFAULT '[]',
+                rejected_scope_refs  TEXT NOT NULL DEFAULT '[]',
+                updated_at           TEXT NOT NULL
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_preferences_action_schema_agent
+                ON preferences(action_type, schema_type, agent_did_hash);
+
+            CREATE INDEX IF NOT EXISTS idx_preferences_action_schema
+                ON preferences(action_type, schema_type);
+            ",
+        )
+        .map_err(|e| DbError(format!("db migrate preferences: {e}")))?;
+
         Ok(())
     }
 }
@@ -1366,6 +1395,116 @@ impl DatabaseOps for NativeDatabase {
             messages.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
         }
         Ok(messages)
+    }
+
+    // ── Preference Learning ───────────────────────────────────────────────
+
+    fn upsert_preference(&self, signal: &super::PreferenceSignal) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO preferences (
+                id, action_type, schema_type, agent_did_hash, agent_name,
+                selection_count, success_count, last_selected,
+                approved_scope_refs, rejected_scope_refs, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(action_type, schema_type, agent_did_hash) DO UPDATE SET
+                agent_name           = excluded.agent_name,
+                selection_count      = excluded.selection_count,
+                success_count        = excluded.success_count,
+                last_selected        = excluded.last_selected,
+                approved_scope_refs  = excluded.approved_scope_refs,
+                rejected_scope_refs  = excluded.rejected_scope_refs,
+                updated_at           = excluded.updated_at",
+            params![
+                signal.id,
+                signal.action_type,
+                signal.schema_type,
+                signal.agent_did_hash,
+                signal.agent_name,
+                signal.selection_count,
+                signal.success_count,
+                signal.last_selected,
+                signal.approved_scope_refs,
+                signal.rejected_scope_refs,
+                signal.updated_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db upsert preference: {e}")))?;
+        Ok(())
+    }
+
+    fn get_preference(
+        &self,
+        action_type: &str,
+        schema_type: &str,
+        agent_did_hash: &str,
+    ) -> Result<Option<super::PreferenceSignal>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.query_row(
+            "SELECT id, action_type, schema_type, agent_did_hash, agent_name,
+                    selection_count, success_count, last_selected,
+                    approved_scope_refs, rejected_scope_refs, updated_at
+             FROM preferences
+             WHERE action_type = ?1 AND schema_type = ?2 AND agent_did_hash = ?3",
+            params![action_type, schema_type, agent_did_hash],
+            |row| {
+                Ok(super::PreferenceSignal {
+                    id: row.get(0)?,
+                    action_type: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    agent_did_hash: row.get(3)?,
+                    agent_name: row.get(4)?,
+                    selection_count: row.get(5)?,
+                    success_count: row.get(6)?,
+                    last_selected: row.get(7)?,
+                    approved_scope_refs: row.get(8)?,
+                    rejected_scope_refs: row.get(9)?,
+                    updated_at: row.get(10)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| DbError(format!("db get preference: {e}")))
+    }
+
+    fn list_preferences_for_schema(
+        &self,
+        action_type: &str,
+        schema_type: &str,
+    ) -> Result<Vec<super::PreferenceSignal>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, action_type, schema_type, agent_did_hash, agent_name,
+                        selection_count, success_count, last_selected,
+                        approved_scope_refs, rejected_scope_refs, updated_at
+                 FROM preferences
+                 WHERE action_type = ?1 AND schema_type = ?2
+                 ORDER BY selection_count DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare preferences: {e}")))?;
+        let rows = stmt
+            .query_map(params![action_type, schema_type], |row| {
+                Ok(super::PreferenceSignal {
+                    id: row.get(0)?,
+                    action_type: row.get(1)?,
+                    schema_type: row.get(2)?,
+                    agent_did_hash: row.get(3)?,
+                    agent_name: row.get(4)?,
+                    selection_count: row.get(5)?,
+                    success_count: row.get(6)?,
+                    last_selected: row.get(7)?,
+                    approved_scope_refs: row.get(8)?,
+                    rejected_scope_refs: row.get(9)?,
+                    updated_at: row.get(10)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query preferences: {e}")))?;
+        let mut signals = Vec::new();
+        for row in rows {
+            signals.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(signals)
     }
 }
 

@@ -15,7 +15,7 @@ use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
 use crate::handshake;
 use crate::state::AppState;
-use papillon_shared::{BlockEvent, BlockState, CanvasBlock};
+use papillon_shared::{BlockEvent, BlockState, CanvasBlock, PreferenceEngine};
 
 use super::orchestrator::hash_agent_did;
 
@@ -140,38 +140,56 @@ fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
     papillon_shared::intent::detect_intent(prompt)
 }
 
-/// Score an agent candidate using profile history. Higher is better.
-/// Combines success_rate, avg_quality, and a preference bonus for the
-/// keyword-matched agent name.
+/// Score an agent candidate using profile history and local preference signals.
+/// Higher is better.  The score combines:
+/// - `AgentProfile` EMA statistics (success_rate, avg_quality)
+/// - `PreferenceEngine` schema-type-aware preference score
+/// - A keyword-match bonus for the intent-matched agent name
+///
+/// Preference score contributes up to 30% of the total when the engine has
+/// enough history (≥ 3 sessions).  EMA statistics contribute 40% each on top.
 fn score_agent(
     db: &crate::db::Database,
     agent_did: &str,
     preferred_name: &str,
     agent_name: &str,
+    action_type: &str,
+    schema_type: &str,
 ) -> f64 {
     let agent_did_hash = hash_agent_did(agent_did);
+
+    // Preference engine score (0.0 on cold start, up to 1.0 with history)
+    let engine = PreferenceEngine::new(db);
+    let pref_score = engine.preference_score(action_type, schema_type, &agent_did_hash);
+
+    // Keyword match bonus
+    let keyword_bonus = if agent_name == preferred_name {
+        1.0
+    } else {
+        0.0
+    };
+
     match db.get_agent_profile(&agent_did_hash).ok().flatten() {
         Some(profile) if profile.episode_count >= 3 => {
-            // 40% success_rate + 40% avg_quality + 20% keyword preference
-            let base = 0.4 * profile.success_rate + 0.4 * profile.avg_quality;
-            let preference_bonus = if agent_name == preferred_name {
-                0.2
-            } else {
-                0.0
-            };
-            base + preference_bonus
+            // 35% success_rate + 35% avg_quality + 20% preference + 10% keyword
+            let base = 0.35 * profile.success_rate + 0.35 * profile.avg_quality;
+            base + 0.20 * pref_score + 0.10 * keyword_bonus
         }
         Some(_) => {
-            // Too few episodes — keyword preference only
-            if agent_name == preferred_name {
+            // Too few EMA episodes — lean on preference + keyword
+            if pref_score > 0.0 {
+                0.40 + 0.30 * pref_score + 0.10 * keyword_bonus
+            } else if agent_name == preferred_name {
                 0.7
             } else {
                 0.5
             }
         }
         None => {
-            // No history — prefer keyword match
-            if agent_name == preferred_name {
+            // No EMA history — preference engine + keyword fallback
+            if pref_score > 0.0 {
+                0.30 + 0.40 * pref_score + 0.10 * keyword_bonus
+            } else if agent_name == preferred_name {
                 0.6
             } else {
                 0.4
@@ -247,7 +265,16 @@ pub(crate) async fn resolve_agent(
             let mut scored: Vec<_> = eligible
                 .iter()
                 .map(|a| {
-                    let s = score_agent(&state.db, &a.provider.did, preferred_name, &a.name);
+                    // Use first returns type as schema hint for preference scoring
+                    let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                    let s = score_agent(
+                        &state.db,
+                        &a.provider.did,
+                        preferred_name,
+                        &a.name,
+                        action_type,
+                        schema_hint,
+                    );
                     (*a, s)
                 })
                 .collect();
@@ -285,8 +312,15 @@ pub(crate) async fn resolve_agent(
                     let mut scored: Vec<_> = eligible
                         .iter()
                         .map(|a| {
-                            let s =
-                                score_agent(&state.db, &a.provider.did, preferred_name, &a.name);
+                            let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                            let s = score_agent(
+                                &state.db,
+                                &a.provider.did,
+                                preferred_name,
+                                &a.name,
+                                action_type,
+                                schema_hint,
+                            );
                             (*a, s)
                         })
                         .collect();
@@ -366,12 +400,16 @@ async fn process_prompt(
     prompt_id: &str,
     block_id: &str,
     text: &str,
-) -> Result<(String, serde_json::Value), PapillonError> {
+) -> Result<(String, serde_json::Value, bool), PapillonError> {
     process_prompt_inner(app, state, prompt_id, block_id, text, &[], 0).await
 }
 
 /// Inner implementation with exclusion list and retry budget for reflection.
 /// Uses `Box::pin` for the recursive async call required by the reflection gate.
+///
+/// Returns `(schema_type, content, preference_guided)` where `preference_guided`
+/// is `true` when the PreferenceEngine had meaningful history that influenced
+/// agent selection.
 #[allow(clippy::type_complexity)]
 fn process_prompt_inner<'a>(
     app: &'a AppHandle,
@@ -383,7 +421,7 @@ fn process_prompt_inner<'a>(
     retry_count: u8,
 ) -> std::pin::Pin<
     Box<
-        dyn std::future::Future<Output = Result<(String, serde_json::Value), PapillonError>>
+        dyn std::future::Future<Output = Result<(String, serde_json::Value, bool), PapillonError>>
             + Send
             + 'a,
     >,
@@ -392,6 +430,28 @@ fn process_prompt_inner<'a>(
         let (action_type, preferred, query) = detect_intent(text);
 
         let resolved = resolve_agent(state, action_type, preferred, exclude_agents).await?;
+
+        // Derive schema type from agent's declared returns (first element).
+        let schema_hint = resolved.returns.first().cloned().unwrap_or_default();
+
+        // Record this agent selection in the local preference store.
+        let agent_did_hash = hash_agent_did(&resolved.did);
+        {
+            let engine = PreferenceEngine::new(state.db.as_ref());
+            engine.record_agent_selected(
+                action_type,
+                &schema_hint,
+                &agent_did_hash,
+                &resolved.name,
+            );
+            // Check before the handshake whether this was a preference-guided choice.
+        }
+
+        // Was this selection guided by historical preference data?
+        let preference_guided = {
+            let engine = PreferenceEngine::new(state.db.as_ref());
+            engine.is_preference_guided(action_type, &schema_hint)
+        };
 
         // Get principal keypair
         let principal_kp = {
@@ -423,6 +483,7 @@ fn process_prompt_inner<'a>(
                 agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
+                preference_guided: false,
             };
             let _ = app_phase.emit("block_updated", BlockEvent { block });
         });
@@ -446,6 +507,7 @@ fn process_prompt_inner<'a>(
                 agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
+                preference_guided: false,
             };
             let _ = app_fail.emit("block_resolved", BlockEvent { block });
         });
@@ -463,6 +525,13 @@ fn process_prompt_inner<'a>(
             on_fail,
         })
         .await?;
+
+        // Record the session outcome in the preference store.
+        let success = true; // handshake returned Ok — it succeeded
+        {
+            let engine = PreferenceEngine::new(state.db.as_ref());
+            engine.record_outcome(action_type, &schema_hint, &agent_did_hash, success);
+        }
 
         // Reflection gate: if quality is low and we haven't retried yet,
         // try the next-best agent.
@@ -495,6 +564,7 @@ fn process_prompt_inner<'a>(
                             agent_did: None,
                             created_at: now.clone(),
                             updated_at: now,
+                            preference_guided: false,
                         },
                     },
                 );
@@ -512,7 +582,7 @@ fn process_prompt_inner<'a>(
             }
         }
 
-        Ok((result.schema_type, result.content))
+        Ok((result.schema_type, result.content, preference_guided))
     })
 }
 
@@ -557,7 +627,8 @@ pub async fn canvas_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content) = process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+    let (schema_type, content, preference_guided) =
+        process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -579,6 +650,7 @@ pub async fn canvas_prompt(
                 agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
+                preference_guided,
             },
         },
     );
@@ -593,7 +665,8 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content) = process_prompt(&app, &state, "", &block_id, &text).await?;
+    let (schema_type, content, preference_guided) =
+        process_prompt(&app, &state, "", &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -613,6 +686,7 @@ pub async fn canvas_reshape(
                 agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
+                preference_guided,
             },
         },
     );

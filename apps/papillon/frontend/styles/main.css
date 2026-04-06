@@ -1789,6 +1789,30 @@ body {
     color: var(--text-3);
 }
 
+/* Preference-guided hint — shown when the orchestrator used local preference
+   history to select an agent. Zero network calls produced this data. */
+.preference-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: var(--sp-xs, 4px);
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(108, 92, 231, 0.08);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    font: var(--text-small);
+    font-family: var(--font-body);
+    color: var(--purple);
+    opacity: 0.85;
+    pointer-events: none;
+    user-select: none;
+}
+
+.preference-hint-icon {
+    font-size: 0.7em;
+    opacity: 0.7;
+}
+
 /* ═══════════════════════════════════════════════════════════
    GHOST BLOCKS — plan preview, dashed outline
    ═══════════════════════════════════════════════════════════ */
