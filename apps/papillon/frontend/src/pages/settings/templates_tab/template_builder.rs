@@ -1,12 +1,21 @@
 use leptos::prelude::*;
 
+use crate::components::block_renderer::{
+    declarative::DeclarativeRenderer,
+    field_classify::FieldKind,
+    schema_property::classify_by_property,
+    renderer::BlockRenderer,
+};
 use papillon_shared::types::{TemplateConfig, LayoutConfig, FieldMapping, Condition};
 
 #[component]
 pub fn TemplateBuilder(
     is_open: RwSignal<bool>,
     on_complete: Callback<TemplateConfig>,
+    #[prop(optional)] schema_type: Option<RwSignal<String>>,
 ) -> impl IntoView {
+    let schema_type_inner = schema_type.unwrap_or_else(|| RwSignal::new(String::new()));
+
     // Layout state
     let layout_type = RwSignal::new("grid".to_string());
     let layout_columns = RwSignal::new(2);
@@ -25,6 +34,21 @@ pub fn TemplateBuilder(
     // Preview state
     let preview_json = RwSignal::new(String::new());
     let preview_error = RwSignal::new(None::<String>);
+    let preview_mode = RwSignal::new("visual");
+
+    // Live field classification badge — re-evaluates on every path keystroke
+    let inferred_display = move || -> Option<&'static str> {
+        let path = current_field_path.get();
+        if path.is_empty() {
+            return None;
+        }
+        match classify_by_property(&path) {
+            Some(FieldKind::DateTime)    => Some("date"),
+            Some(FieldKind::Price)       => Some("price"),
+            Some(FieldKind::ExternalUrl) => Some("url"),
+            _                            => None,
+        }
+    };
 
     let update_preview = move || {
         let config = TemplateConfig {
@@ -60,6 +84,12 @@ pub fn TemplateBuilder(
     let add_field = move |_| {
         let path = current_field_path.get();
         let label = current_field_label.get();
+        // Auto-apply vocabulary inference if display is still the default "text"
+        if current_field_display.get() == "text" {
+            if let Some(inferred) = inferred_display() {
+                current_field_display.set(inferred.to_string());
+            }
+        }
         let display = current_field_display.get();
 
         if path.is_empty() {
@@ -237,13 +267,35 @@ pub fn TemplateBuilder(
                                 <label style="font-size: 12px; font-weight: 500; color: var(--text-2); display: block; margin-bottom: 4px;">
                                     "Path (required)"
                                 </label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g., name, offers.price, results.0.title"
-                                    prop:value=move || current_field_path.get()
-                                    on:input=move |ev| current_field_path.set(event_target_value(&ev))
-                                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 13px;"
-                                />
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., name, departureDate, totalPrice"
+                                        prop:value=move || current_field_path.get()
+                                        on:input=move |ev| current_field_path.set(event_target_value(&ev))
+                                        style="flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text-1); font-size: 13px; min-width: 0;"
+                                    />
+                                    // Live FieldKind inference badge — no dropdown, just inline hint
+                                    <Show when=move || inferred_display().is_some()>
+                                        <span style=move || format!(
+                                            "font-size: 11px; padding: 3px 8px; border-radius: 10px; white-space: nowrap; font-family: var(--font-mono); flex-shrink: 0; background: {}; color: {};",
+                                            match inferred_display() {
+                                                Some("date")  => "rgba(0, 184, 212, 0.15)",
+                                                Some("price") => "rgba(108, 92, 231, 0.15)",
+                                                Some("url")   => "rgba(0, 206, 201, 0.15)",
+                                                _             => "var(--bg-secondary)",
+                                            },
+                                            match inferred_display() {
+                                                Some("date")  => "var(--teal)",
+                                                Some("price") => "var(--purple)",
+                                                Some("url")   => "var(--teal)",
+                                                _             => "var(--text-2)",
+                                            }
+                                        )>
+                                            {move || inferred_display().unwrap_or("")}
+                                        </span>
+                                    </Show>
+                                </div>
                             </div>
 
                             <div>
@@ -376,12 +428,87 @@ pub fn TemplateBuilder(
                             </div>
 
                             <div>
-                                <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">
-                                    "JSON Preview"
-                                </h4>
-                                <pre style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 11px; overflow-x: auto; margin: 0; color: var(--text-2); font-family: var(--font-mono);">
-                                    {move || preview_json.get()}
-                                </pre>
+                                // Tab header
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <h4 style="font-size: 13px; font-weight: 600; margin: 0;">"Preview"</h4>
+                                    <div style="display: flex; gap: 4px; margin-left: auto;">
+                                        <button
+                                            class="btn"
+                                            on:click=move |_| preview_mode.set("visual")
+                                            style=move || format!(
+                                                "padding: 4px 10px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; background: {}; color: {};",
+                                                if preview_mode.get() == "visual" { "var(--purple)" } else { "var(--bg-secondary)" },
+                                                if preview_mode.get() == "visual" { "white" } else { "var(--text-1)" }
+                                            )
+                                        >
+                                            "Visual"
+                                        </button>
+                                        <button
+                                            class="btn"
+                                            on:click=move |_| preview_mode.set("json")
+                                            style=move || format!(
+                                                "padding: 4px 10px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; background: {}; color: {};",
+                                                if preview_mode.get() == "json" { "var(--purple)" } else { "var(--bg-secondary)" },
+                                                if preview_mode.get() == "json" { "white" } else { "var(--text-1)" }
+                                            )
+                                        >
+                                            "JSON"
+                                        </button>
+                                    </div>
+                                </div>
+
+                                // Visual preview — live DeclarativeRenderer output
+                                <Show when=move || preview_mode.get() == "visual">
+                                    {move || {
+                                        let stype = schema_type_inner.get();
+                                        let flds = fields.get();
+                                        if stype.is_empty() || flds.is_empty() {
+                                            return view! {
+                                                <div style="font-size: 12px; color: var(--text-2); text-align: center; padding: 24px; background: var(--bg-tertiary); border-radius: 6px;">
+                                                    "Add a type and fields to see the live rendering."
+                                                </div>
+                                            }.into_any();
+                                        }
+                                        // Build flat sample content from declared display types
+                                        let mut map = serde_json::Map::new();
+                                        for f in &flds {
+                                            let sample = match f.display.as_str() {
+                                                "title" => serde_json::json!("Sample Title"),
+                                                "price" => serde_json::json!(42.0),
+                                                "date"  => serde_json::json!("2026-04-06T10:00:00Z"),
+                                                "url"   => serde_json::json!("https://example.com"),
+                                                _       => serde_json::json!("Sample Text"),
+                                            };
+                                            // Top-level path segment only for sample data
+                                            let key = f.path.split('.').next().unwrap_or(&f.path);
+                                            map.insert(key.to_string(), sample);
+                                        }
+                                        let config = TemplateConfig {
+                                            version: 1,
+                                            layout: LayoutConfig {
+                                                r#type: layout_type.get(),
+                                                columns: if layout_type.get() == "grid" { Some(layout_columns.get()) } else { None },
+                                                direction: if layout_type.get() == "flex" { Some(layout_direction.get()) } else { None },
+                                                spacing: Some(layout_spacing.get()),
+                                            },
+                                            fields: flds,
+                                        };
+                                        let renderer = DeclarativeRenderer::new(config, &stype);
+                                        let rendered = renderer.render(&serde_json::Value::Object(map));
+                                        view! {
+                                            <div style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 12px; min-height: 80px; overflow: hidden;">
+                                                {rendered}
+                                            </div>
+                                        }.into_any()
+                                    }}
+                                </Show>
+
+                                // JSON preview (original)
+                                <Show when=move || preview_mode.get() == "json">
+                                    <pre style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 11px; overflow-x: auto; margin: 0; color: var(--text-2); font-family: var(--font-mono); max-height: 220px; overflow-y: auto;">
+                                        {move || preview_json.get()}
+                                    </pre>
+                                </Show>
                             </div>
 
                             <Show when=move || preview_error.get().is_some()>

@@ -715,6 +715,7 @@ impl DatabaseOps for NativeDatabase {
                     template_name: row.get(1)?,
                     schema_type: row.get(2)?,
                     principal_did: row.get(3)?,
+                    agent_did: None,
                     template_config,
                     version: row.get(5)?,
                     enabled: enabled_int != 0,
@@ -785,6 +786,7 @@ impl DatabaseOps for NativeDatabase {
                     template_name: row.get(1)?,
                     schema_type: row.get(2)?,
                     principal_did: row.get(3)?,
+                    agent_did: None,
                     template_config,
                     version: row.get(5)?,
                     enabled: enabled_int != 0,
@@ -1602,6 +1604,7 @@ mod tests {
             created_at: "2026-03-21T12:00:00Z".to_string(),
             updated_at: "2026-03-21T12:00:00Z".to_string(),
             created_by: None,
+            agent_did: None,
         }
     }
 

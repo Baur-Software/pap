@@ -31,8 +31,14 @@ pub struct StreamEntry {
 pub enum EntryKind {
     /// Section header for a typed object. If `template_hit` is true, the entry
     /// carries the full Value and children are skipped (the template renders them).
+    ///
+    /// `schema_types` preserves the full `@type` array from the source JSON-LD.
+    /// The first entry is the primary (most-specific) type used for display and
+    /// CSS; all entries are tried in order when dispatching to the registry.
+    /// This is what makes composite types work: `["FlightReservation", "Reservation"]`
+    /// falls back to `Reservation`'s renderer if no specific one is registered.
     TypedObjectHeader {
-        schema_type: String,
+        schema_types: Vec<String>,
         template_hit: bool,
         content: Option<Value>,
     },
@@ -100,13 +106,30 @@ pub fn flatten_to_entries(
     let mut entries = Vec::with_capacity(64);
     let mut stack: Vec<WorkItem> = Vec::with_capacity(32);
 
-    // Top-level template check
-    if registry.get(schema_type).is_some() {
+    // Top-level type list: pull all types from the content's own @type array,
+    // falling back to the caller-supplied schema_type. This handles composite
+    // roots like { "@type": ["FlightReservation", "Reservation"], ... }.
+    let root_types: Vec<String> = content
+        .as_object()
+        .map(|obj| {
+            use super::field_classify::extract_types;
+            let mut ts = extract_types(obj);
+            if ts.is_empty() {
+                ts.push(schema_type.to_string());
+            }
+            ts
+        })
+        .unwrap_or_else(|| vec![schema_type.to_string()]);
+
+    // Template check: try each type in order so composite types fall back
+    // to the most-specific registered renderer available.
+    let template_hit = root_types.iter().any(|t| registry.get(t).is_some());
+    if template_hit {
         entries.push(StreamEntry {
             path: String::new(),
             depth: 0,
             kind: EntryKind::TypedObjectHeader {
-                schema_type: schema_type.to_string(),
+                schema_types: root_types,
                 template_hit: true,
                 content: Some(content.clone()),
             },
@@ -114,13 +137,17 @@ pub fn flatten_to_entries(
         return entries;
     }
 
-    // No template — flatten generically
-    let css_type = schema_type_to_css(schema_type);
+    // No template — flatten generically using the primary (most-specific) type for CSS.
+    let primary_type = root_types
+        .first()
+        .map(|s| s.as_str())
+        .unwrap_or(schema_type);
+    let css_type = schema_type_to_css(primary_type);
     entries.push(StreamEntry {
         path: String::new(),
         depth: 0,
         kind: EntryKind::TypedObjectHeader {
-            schema_type: schema_type.to_string(),
+            schema_types: root_types,
             template_hit: false,
             content: None,
         },
@@ -203,32 +230,39 @@ pub fn flatten_to_entries(
             } => {
                 let kind = classify_field(&key, &value);
                 match kind {
-                    FieldKind::TypedObject { ref schema_type } => {
-                        if registry.get(schema_type).is_some() {
+                    FieldKind::TypedObject { ref schema_types } => {
+                        // Try each type in order — composite types fall back to the
+                        // most-specific registered renderer that exists.
+                        let hit = schema_types.iter().any(|t| registry.get(t).is_some());
+                        let primary = schema_types
+                            .first()
+                            .map(|s| s.as_str())
+                            .unwrap_or_default();
+                        if hit {
                             // Template hit — emit as leaf, skip children
                             entries.push(StreamEntry {
                                 path: path.clone(),
                                 depth,
                                 kind: EntryKind::TypedObjectHeader {
-                                    schema_type: schema_type.clone(),
+                                    schema_types: schema_types.clone(),
                                     template_hit: true,
                                     content: Some(value),
                                 },
                             });
                         } else {
                             // No template — flatten children
-                            let child_css = schema_type_to_css(schema_type);
+                            let child_css = schema_type_to_css(primary);
                             entries.push(StreamEntry {
                                 path: path.clone(),
                                 depth,
                                 kind: EntryKind::TypedObjectHeader {
-                                    schema_type: schema_type.clone(),
+                                    schema_types: schema_types.clone(),
                                     template_hit: false,
                                     content: None,
                                 },
                             });
                             stack.push(WorkItem::EmitTypedFooter {
-                                schema_type: schema_type.clone(),
+                                schema_type: primary.to_string(),
                             });
                             if let Some(obj) = value.as_object() {
                                 push_object_fields(&mut stack, obj, &path, depth + 1, &child_css);
@@ -340,24 +374,33 @@ pub fn render_stream(entries: Vec<StreamEntry>, registry: &Arc<RendererRegistry>
     for entry in entries {
         match entry.kind {
             EntryKind::TypedObjectHeader {
-                ref schema_type,
+                ref schema_types,
                 template_hit: true,
                 ref content,
             } => {
-                if let (Some(renderer), Some(val)) = (registry.get(schema_type), content.as_ref()) {
+                // Try each schema type in order — composite types dispatch to the
+                // first registered renderer, giving specific types priority over general ones.
+                let renderer = schema_types.iter().find_map(|t| registry.get(t));
+                if let (Some(renderer), Some(val)) = (renderer, content.as_ref()) {
                     let rendered = renderer.render(val);
                     top_children(&mut view_stack).push(rendered);
                 }
             }
 
             EntryKind::TypedObjectHeader {
-                ref schema_type,
+                ref schema_types,
                 template_hit: false,
                 ..
             } => {
-                let css_type = schema_type_to_css(schema_type);
+                let primary = schema_types.first().map(|s| s.as_str()).unwrap_or_default();
+                let css_type = schema_type_to_css(primary);
                 let css = format!("typed-generic typed-{}", css_type);
-                let label = schema_type.clone();
+                // Show all types in the label for composite objects
+                let label = if schema_types.len() > 1 {
+                    schema_types.join(" · ")
+                } else {
+                    primary.to_string()
+                };
                 view_stack.push((css, Vec::new()));
                 top_children(&mut view_stack)
                     .push(view! { <span class="typed-label">{label}</span> }.into_any());
@@ -435,6 +478,212 @@ fn pop_and_wrap(stack: &mut Vec<(String, Vec<AnyView>)>) {
 /// Get mutable reference to the top frame's children.
 fn top_children(stack: &mut [(String, Vec<AnyView>)]) -> &mut Vec<AnyView> {
     &mut stack.last_mut().unwrap().1
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_registry() -> Arc<RendererRegistry> {
+        Arc::new(RendererRegistry::new())
+    }
+
+    fn registry_with_type(schema_type: &str) -> Arc<RendererRegistry> {
+        use papillon_shared::types::{LayoutConfig, Template, TemplateConfig};
+        let r = Arc::new(RendererRegistry::new());
+        r.load_from_templates(vec![Template {
+            id: "t".to_string(),
+            template_name: "T".to_string(),
+            schema_type: schema_type.to_string(),
+            principal_did: None,
+            agent_did: None,
+            template_config: TemplateConfig {
+                version: 1,
+                layout: LayoutConfig {
+                    r#type: "grid".to_string(),
+                    columns: Some(1),
+                    direction: None,
+                    spacing: None,
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled: true,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            created_by: None,
+        }]);
+        r
+    }
+
+    // ── Match helpers ─────────────────────────────────────────────────────────
+
+    fn is_typed_header(e: &StreamEntry) -> bool {
+        matches!(e.kind, EntryKind::TypedObjectHeader { .. })
+    }
+    fn is_typed_footer(e: &StreamEntry) -> bool {
+        matches!(e.kind, EntryKind::TypedObjectFooter { .. })
+    }
+    fn is_field(e: &StreamEntry) -> bool {
+        matches!(e.kind, EntryKind::Field { .. })
+    }
+    fn is_list_header(e: &StreamEntry) -> bool {
+        matches!(e.kind, EntryKind::ListHeader { .. })
+    }
+    fn is_list_footer(e: &StreamEntry) -> bool {
+        matches!(e.kind, EntryKind::ListFooter)
+    }
+    fn is_list_overflow(e: &StreamEntry) -> bool {
+        matches!(e.kind, EntryKind::ListOverflow { .. })
+    }
+
+    fn header_types(e: &StreamEntry) -> Vec<String> {
+        match &e.kind {
+            EntryKind::TypedObjectHeader { schema_types, .. } => schema_types.clone(),
+            _ => panic!("expected TypedObjectHeader"),
+        }
+    }
+    fn header_template_hit(e: &StreamEntry) -> bool {
+        match &e.kind {
+            EntryKind::TypedObjectHeader { template_hit, .. } => *template_hit,
+            _ => panic!("expected TypedObjectHeader"),
+        }
+    }
+
+    // ── Tests ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn single_field_produces_header_field_footer() {
+        let entries = flatten_to_entries("Airport", &serde_json::json!({ "name": "JFK" }), &empty_registry());
+        assert_eq!(entries.len(), 3);
+        assert!(is_typed_header(&entries[0]));
+        assert!(is_field(&entries[1]));
+        assert!(is_typed_footer(&entries[2]));
+    }
+
+    #[test]
+    fn at_prefixed_keys_are_skipped() {
+        let entries = flatten_to_entries(
+            "Airport",
+            &serde_json::json!({ "@type": "Airport", "@context": "https://schema.org", "name": "JFK" }),
+            &empty_registry(),
+        );
+        let field_count = entries.iter().filter(|e| is_field(e)).count();
+        assert_eq!(field_count, 1, "@type and @context should be skipped");
+    }
+
+    #[test]
+    fn no_template_header_has_template_hit_false() {
+        let entries = flatten_to_entries(
+            "Thing",
+            &serde_json::json!({ "title": "hello" }),
+            &empty_registry(),
+        );
+        assert!(!header_template_hit(&entries[0]));
+    }
+
+    #[test]
+    fn composite_at_type_array_is_preserved_in_header() {
+        let entries = flatten_to_entries(
+            "FlightReservation",
+            &serde_json::json!({
+                "@type": ["FlightReservation", "Reservation"],
+                "departureAirport": "JFK"
+            }),
+            &empty_registry(),
+        );
+        let types = header_types(&entries[0]);
+        assert_eq!(types, vec!["FlightReservation", "Reservation"]);
+    }
+
+    #[test]
+    fn template_hit_produces_single_entry_with_content() {
+        let registry = registry_with_type("Recipe");
+        let content = serde_json::json!({ "@type": "Recipe", "name": "Pasta" });
+        let entries = flatten_to_entries("Recipe", &content, &registry);
+
+        assert_eq!(entries.len(), 1, "template hit short-circuits all children");
+        assert!(header_template_hit(&entries[0]));
+        assert!(
+            matches!(&entries[0].kind, EntryKind::TypedObjectHeader { content: Some(_), .. }),
+            "template hit entry must carry the content Value"
+        );
+    }
+
+    #[test]
+    fn composite_type_template_hit_on_second_type() {
+        // Only "Reservation" is registered; "FlightReservation" is not.
+        // The renderer should still detect a hit because the second type matches.
+        let registry = registry_with_type("Reservation");
+        let content = serde_json::json!({
+            "@type": ["FlightReservation", "Reservation"],
+            "departureAirport": "JFK"
+        });
+        let entries = flatten_to_entries("FlightReservation", &content, &registry);
+
+        assert_eq!(entries.len(), 1, "composite type fallback should also short-circuit");
+        assert!(header_template_hit(&entries[0]));
+    }
+
+    #[test]
+    fn list_field_produces_header_items_footer() {
+        let entries = flatten_to_entries(
+            "Event",
+            &serde_json::json!({ "tags": ["travel", "flights", "booking"] }),
+            &empty_registry(),
+        );
+        let lh_idx = entries.iter().position(|e| is_list_header(e)).expect("ListHeader");
+        let lf_idx = entries.iter().position(|e| is_list_footer(e)).expect("ListFooter");
+        let field_count = entries[lh_idx + 1..lf_idx].iter().filter(|e| is_field(e)).count();
+        assert_eq!(field_count, 3);
+    }
+
+    #[test]
+    fn list_over_50_items_is_capped_with_overflow() {
+        let items: Vec<serde_json::Value> =
+            (0..75).map(|i| serde_json::json!(format!("item-{}", i))).collect();
+        let entries = flatten_to_entries(
+            "Thing",
+            &serde_json::json!({ "tags": items }),
+            &empty_registry(),
+        );
+
+        assert!(entries.iter().any(|e| is_list_overflow(e)), "overflow entry expected");
+
+        let lh_idx = entries.iter().position(|e| is_list_header(e)).unwrap();
+        let lf_idx = entries.iter().position(|e| is_list_footer(e)).unwrap();
+        let rendered = entries[lh_idx + 1..lf_idx].iter().filter(|e| is_field(e)).count();
+        assert_eq!(rendered, 50, "exactly LIST_CAP items rendered");
+    }
+
+    #[test]
+    fn nested_typed_object_emits_two_headers() {
+        let entries = flatten_to_entries(
+            "FlightReservation",
+            &serde_json::json!({
+                "reservationFor": {
+                    "@type": "Flight",
+                    "flightNumber": "AA100"
+                }
+            }),
+            &empty_registry(),
+        );
+        let header_count = entries.iter().filter(|e| is_typed_header(e)).count();
+        assert_eq!(header_count, 2, "outer + inner TypedObjectHeader");
+    }
+
+    #[test]
+    fn fallback_to_caller_type_when_at_type_absent() {
+        let entries = flatten_to_entries(
+            "CustomType",
+            &serde_json::json!({ "name": "no @type key" }),
+            &empty_registry(),
+        );
+        let types = header_types(&entries[0]);
+        assert_eq!(types, vec!["CustomType"]);
+    }
 }
 
 // ── Leaf field rendering ────────────────────────────────────────────────────

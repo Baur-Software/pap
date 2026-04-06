@@ -7,9 +7,17 @@ use serde_json::Value;
 ///
 /// Unlike hardcoded templates, DeclarativeRenderer uses a JSON-LD configuration schema to
 /// define field mappings, layout, and styling, enabling users to create templates without code.
+///
+/// When `agent_did` is set the renderer is registered in the agent-scoped tier of the
+/// `RendererRegistry`, giving it priority over any global renderer for the same schema type.
+/// This is the mechanism by which a UI component agent — or any agent with a custom payload
+/// shape — can declare exactly how its output should appear, without touching the shared
+/// schema.org vocabulary mapping.
 pub struct DeclarativeRenderer {
     config: TemplateConfig,
     schema_type: String,
+    /// When Some, this renderer is scoped to a specific agent DID.
+    agent_did: Option<String>,
 }
 
 impl DeclarativeRenderer {
@@ -18,12 +26,17 @@ impl DeclarativeRenderer {
         Self {
             config,
             schema_type: schema_type.to_string(),
+            agent_did: None,
         }
     }
 
-    /// Create from a Template (uses the template_config and schema_type).
+    /// Create from a Template (uses template_config, schema_type, and agent_did).
     pub fn from_template(template: &Template) -> Self {
-        Self::new(template.template_config.clone(), &template.schema_type)
+        Self {
+            config: template.template_config.clone(),
+            schema_type: template.schema_type.clone(),
+            agent_did: template.agent_did.clone(),
+        }
     }
 
     /// Extract a value from JSON-LD content using a JSON path (simplified for now).
@@ -186,6 +199,10 @@ impl BlockRenderer for DeclarativeRenderer {
         // In practice, we'll only call this once during registration, so we can
         // leak the string for the static lifetime.
         vec![Box::leak(self.schema_type.clone().into_boxed_str())]
+    }
+
+    fn agent_id(&self) -> Option<&str> {
+        self.agent_did.as_deref()
     }
 }
 
@@ -361,5 +378,60 @@ mod tests {
 
         // Empty string
         assert_eq!(renderer.format_value(&serde_json::json!(""), "text"), "");
+    }
+
+    // ── from_template / agent_id / schema_types ───────────────────────────────
+
+    fn sample_template(schema_type: &str, agent_did: Option<&str>) -> Template {
+        Template {
+            id: "tpl-1".to_string(),
+            template_name: "Sample".to_string(),
+            schema_type: schema_type.to_string(),
+            principal_did: None,
+            agent_did: agent_did.map(|s| s.to_string()),
+            template_config: sample_template_config(),
+            version: 1,
+            enabled: true,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            created_by: None,
+        }
+    }
+
+    #[test]
+    fn from_template_sets_schema_type() {
+        let tpl = sample_template("FlightReservation", None);
+        let renderer = DeclarativeRenderer::from_template(&tpl);
+        assert_eq!(renderer.schema_types(), vec!["FlightReservation"]);
+    }
+
+    #[test]
+    fn from_template_without_agent_did_returns_none() {
+        let tpl = sample_template("Recipe", None);
+        let renderer = DeclarativeRenderer::from_template(&tpl);
+        assert!(renderer.agent_id().is_none());
+    }
+
+    #[test]
+    fn from_template_with_agent_did_returns_some() {
+        let did = "did:key:z6MkHabc123";
+        let tpl = sample_template("ProductCard", Some(did));
+        let renderer = DeclarativeRenderer::from_template(&tpl);
+        assert_eq!(renderer.agent_id(), Some(did));
+    }
+
+    #[test]
+    fn new_always_has_no_agent_id() {
+        // DeclarativeRenderer::new() never sets agent_did; only from_template() does.
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "Event");
+        assert!(renderer.agent_id().is_none());
+    }
+
+    #[test]
+    fn schema_types_returns_single_element_vec() {
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "JobPosting");
+        let types = renderer.schema_types();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0], "JobPosting");
     }
 }

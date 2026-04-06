@@ -8,7 +8,7 @@ pub enum FieldKind {
     Scalar,
     /// ISO 8601 date/datetime or a key hinting at temporal data.
     DateTime,
-    /// Monetary value (key contains "price", "cost", "amount").
+    /// Monetary value (vocabulary-keyed or heuristic fallback).
     Price,
     /// HTTP or HTTPS URL. Rendered as a plain external link.
     ExternalUrl,
@@ -17,8 +17,12 @@ pub enum FieldKind {
     PapLink,
     /// Decentralized identifier (did:key:..., did:web:..., etc.).
     Did,
-    /// Nested object with an `@type` field — can be dispatched to a renderer.
-    TypedObject { schema_type: String },
+    /// Nested object with one or more `@type` values.
+    /// The full list is preserved for composite type dispatch — the registry
+    /// tries each type in order so `["FlightReservation", "Reservation"]`
+    /// will match `FlightReservation`'s renderer on the first pass and fall
+    /// back to `Reservation`'s if the specific renderer isn't registered.
+    TypedObject { schema_types: Vec<String> },
     /// Array of items.
     List,
     /// Nested object without `@type`.
@@ -28,11 +32,21 @@ pub enum FieldKind {
 }
 
 /// Classify a JSON-LD field by its key name and value shape.
+///
+/// Classification priority:
+/// 1. PAP scheme URIs (must precede all heuristics)
+/// 2. Schema.org vocabulary catalog (property name → known type)
+/// 3. Value-shape heuristics (ISO 8601, http:// prefix, did: prefix)
+/// 4. Key-name heuristics (fallback for unknown properties)
 pub fn classify_field(key: &str, value: &Value) -> FieldKind {
     match value {
         Value::Null => FieldKind::Empty,
         Value::String(s) => classify_string(key, s),
         Value::Number(_) => {
+            // Vocabulary catalog takes priority over key-name heuristics.
+            if let Some(kind) = super::schema_property::classify_by_property(key) {
+                return kind;
+            }
             let lower = key.to_lowercase();
             if lower.contains("price") || lower.contains("cost") || lower.contains("amount") {
                 FieldKind::Price
@@ -42,8 +56,9 @@ pub fn classify_field(key: &str, value: &Value) -> FieldKind {
         }
         Value::Bool(_) => FieldKind::Scalar,
         Value::Object(map) => {
-            if let Some(t) = extract_type(map) {
-                FieldKind::TypedObject { schema_type: t }
+            let types = extract_types(map);
+            if !types.is_empty() {
+                FieldKind::TypedObject { schema_types: types }
             } else {
                 FieldKind::Object
             }
@@ -56,13 +71,21 @@ fn classify_string(key: &str, s: &str) -> FieldKind {
     if s.is_empty() {
         return FieldKind::Empty;
     }
-    // PAP schemes MUST be checked before the DateTime key-name heuristic to
-    // prevent misclassifying pap:// URIs stored in date-keyed fields.
+    // PAP schemes MUST be checked before the vocabulary catalog and DateTime
+    // heuristic to prevent misclassifying pap:// URIs stored in date-keyed fields.
     if s.starts_with("pap://") || s.starts_with("pap+https://") || s.starts_with("pap+wss://") {
         return FieldKind::PapLink;
     }
+    // Vocabulary catalog: property name maps to a known type.
+    if let Some(kind) = super::schema_property::classify_by_property(key) {
+        return kind;
+    }
+    // Value-shape heuristics for properties not in the catalog.
+    if looks_like_iso_date(s) {
+        return FieldKind::DateTime;
+    }
     let lower_key = key.to_lowercase();
-    if lower_key.contains("date") || lower_key.contains("time") || looks_like_iso_date(s) {
+    if lower_key.contains("date") || lower_key.contains("time") {
         return FieldKind::DateTime;
     }
     if s.starts_with("http://") || s.starts_with("https://") {
@@ -130,7 +153,24 @@ pub fn sanitize_css_class(s: &str) -> String {
         .collect()
 }
 
-/// Extract the primary @type from a JSON-LD object.
+/// Extract all `@type` values from a JSON-LD object.
+///
+/// Handles both `"@type": "Person"` and `"@type": ["Person", "Author"]`.
+/// Returns an empty Vec if no `@type` is present.
+/// Order is preserved — first declared type is the primary/most-specific type.
+pub fn extract_types(obj: &serde_json::Map<String, Value>) -> Vec<String> {
+    match obj.get("@type") {
+        Some(Value::String(t)) => vec![t.clone()],
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(|s| s.to_string())
+            .collect(),
+        _ => vec![],
+    }
+}
+
+/// Extract the primary (first) `@type` from a JSON-LD object.
 /// Handles both `"@type": "Person"` and `"@type": ["Person", "Author"]`.
 pub fn extract_type(obj: &serde_json::Map<String, Value>) -> Option<String> {
     match obj.get("@type") {
@@ -294,7 +334,7 @@ mod tests {
         assert_eq!(
             classify_field("location", &obj),
             FieldKind::TypedObject {
-                schema_type: "Place".into()
+                schema_types: vec!["Place".into()]
             }
         );
     }
@@ -325,11 +365,12 @@ mod tests {
 
     #[test]
     fn classify_typed_object_array_type() {
+        // Composite @type array — all types are preserved, not just the first.
         let obj = json!({"@type": ["Person", "Author"], "name": "Alice"});
         assert_eq!(
             classify_field("creator", &obj),
             FieldKind::TypedObject {
-                schema_type: "Person".into()
+                schema_types: vec!["Person".into(), "Author".into()]
             }
         );
     }
@@ -393,5 +434,119 @@ mod tests {
         let obj: serde_json::Map<String, Value> =
             serde_json::from_value(json!({"name": "Alice"})).unwrap();
         assert_eq!(extract_type(&obj), None);
+    }
+
+    // ── extract_types (plural) ────────────────────────────────────────────────
+
+    #[test]
+    fn extract_types_single_string() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": "FlightReservation"})).unwrap();
+        assert_eq!(extract_types(&obj), vec!["FlightReservation"]);
+    }
+
+    #[test]
+    fn extract_types_array_preserves_all_and_order() {
+        // All types are preserved; first declared is most-specific.
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": ["FlightReservation", "Reservation", "Intangible"]}))
+                .unwrap();
+        assert_eq!(
+            extract_types(&obj),
+            vec!["FlightReservation", "Reservation", "Intangible"]
+        );
+    }
+
+    #[test]
+    fn extract_types_missing_returns_empty() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"name": "Alice"})).unwrap();
+        assert!(extract_types(&obj).is_empty());
+    }
+
+    #[test]
+    fn extract_types_empty_array_returns_empty() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": []})).unwrap();
+        assert!(extract_types(&obj).is_empty());
+    }
+
+    #[test]
+    fn extract_types_non_string_entries_are_skipped() {
+        // Only string entries in the array survive; numbers are filtered out.
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": ["Person", 42, "Author"]})).unwrap();
+        assert_eq!(extract_types(&obj), vec!["Person", "Author"]);
+    }
+
+    // ── Vocabulary-driven classification ─────────────────────────────────────
+
+    #[test]
+    fn vocabulary_catalog_classifies_departure_date_as_datetime() {
+        // `departureDate` is in the catalog with range Date|DateTime.
+        // The value itself is not ISO 8601, so only the catalog catches this.
+        assert_eq!(
+            classify_field("departureDate", &json!("Apr 15")),
+            FieldKind::DateTime
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_total_price_number_as_price() {
+        // `totalPrice` is in the catalog. Number path checks catalog before key heuristic.
+        assert_eq!(
+            classify_field("totalPrice", &json!(299)),
+            FieldKind::Price
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_same_as_as_external_url() {
+        // `sameAs` is in the catalog with range URL.
+        // The value has no http:// prefix, so only the catalog catches this.
+        assert_eq!(
+            classify_field("sameAs", &json!("example.com/profile")),
+            FieldKind::ExternalUrl
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_checkin_date_as_datetime() {
+        assert_eq!(
+            classify_field("checkinDate", &json!("2026-06-01")),
+            FieldKind::DateTime
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_base_salary_as_price() {
+        assert_eq!(
+            classify_field("baseSalary", &json!(85000)),
+            FieldKind::Price
+        );
+    }
+
+    #[test]
+    fn pap_link_beats_vocabulary_catalog() {
+        // PAP scheme must take priority even when the property is in the catalog.
+        assert_eq!(
+            classify_field("url", &json!("pap://search/flights")),
+            FieldKind::PapLink
+        );
+    }
+
+    #[test]
+    fn unknown_property_falls_back_to_value_heuristic() {
+        // `customTimestamp` is not in the catalog; ISO 8601 value-shape heuristic applies.
+        assert_eq!(
+            classify_field("customTimestamp", &json!("2026-04-06T00:00:00Z")),
+            FieldKind::DateTime
+        );
+    }
+
+    #[test]
+    fn unknown_number_property_without_catalog_match_is_scalar() {
+        // `rating` is not in the catalog and doesn't contain price/cost/amount.
+        assert_eq!(classify_field("rating", &json!(4.5)), FieldKind::Scalar);
     }
 }

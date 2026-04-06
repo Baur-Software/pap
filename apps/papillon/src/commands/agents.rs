@@ -28,6 +28,7 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
         endpoint: None,
         content_hash: String::new(),
         agent_did: def.agent_did.clone(),
+
         source: source_to_str(&def.source).to_owned(),
         published_to: def.published_to.clone(),
     }
@@ -66,6 +67,7 @@ pub async fn list_local_agents(
                 endpoint: None,
                 content_hash: ad.hash(),
                 agent_did: Some(ad.provider.did.clone()),
+
                 source: db_def
                     .map(|d| source_to_str(&d.source).to_owned())
                     .unwrap_or_else(|| "compiled".to_owned()),

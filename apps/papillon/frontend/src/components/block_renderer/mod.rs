@@ -1,9 +1,10 @@
-mod declarative;
-mod field_classify;
+pub(crate) mod declarative;
+pub(crate) mod field_classify;
 mod generic;
 mod receipt;
 mod registry;
-mod renderer;
+pub(crate) mod renderer;
+pub(crate) mod schema_property;
 mod templates;
 
 use leptos::prelude::*;
@@ -167,7 +168,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                 }
                 BlockState::Resolved => {
                     let content_view = match (&block.schema_type, &block.content) {
-                        (Some(t), Some(content)) => render_typed_content(t, content, &registry),
+                        (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Unknown"</span></div> }.into_any(),
                     };
                     view! {
@@ -206,7 +207,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     let show_provenance = RwSignal::new(false);
 
                     let content_view = match (&block.schema_type, &block.content) {
-                        (Some(t), Some(content)) => render_typed_content(t, content, &registry),
+                        (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         (None, Some(content)) => {
                             // Outcome blocks may not have a schema_type — render
                             // the synthesized result as a generic answer block.
@@ -530,26 +531,44 @@ fn ProvenancePanel(block: papillon_shared::CanvasBlock) -> impl IntoView {
     }
 }
 
-/// Top-level dispatch: unwrap the handshake envelope, stream-parse the JSON-LD,
-/// and attach receipt metadata footer.
+/// Top-level dispatch: unwrap the handshake envelope, select the best renderer,
+/// and attach the receipt metadata footer.
 ///
 /// The handshake wraps agent output as:
 /// ```json
 /// { "@type": "...", "agent": "...", "query": "...", "result": {payload}, "receipt": {...} }
 /// ```
+///
+/// Dispatch priority:
+/// 1. Agent-scoped renderer — `(agent_did, schema_type)` key in the registry.
+///    A specific agent can own its rendering entirely, independent of the
+///    global schema.org vocabulary mapping.
+/// 2. Type-global renderer — the shipped or user-defined template for this
+///    `schema_type`. Handled inside the generic stream renderer via `template_hit`.
+/// 3. Generic stream renderer — universal fallback for unregistered types.
 fn render_typed_content(
     schema_type: &str,
     content: &Value,
     registry: &Arc<RendererRegistry>,
+    agent_did: Option<&str>,
 ) -> AnyView {
     // Extract the agent's actual result from the handshake envelope.
     // Fall back to the full content if there's no "result" key (direct JSON-LD).
     let payload = content.get("result").unwrap_or(content);
     let receipt_val = content.get("receipt");
 
-    // Stream-flatten the JSON-LD tree and render all entries — no depth limit.
-    let entries = generic::flatten_to_entries(schema_type, payload, registry);
-    let content_view = generic::render_stream(entries, registry);
+    // Agent-scoped renderer takes priority: a specific agent can fully own its
+    // output rendering without touching the shared schema-type registry.
+    let content_view = if let Some(renderer) = agent_did
+        .and_then(|did| registry.get_for_agent(did, schema_type))
+    {
+        renderer.render(payload)
+    } else {
+        // Fall through to the generic stream renderer, which handles template
+        // dispatch (shipped + user-defined) internally via the type-global tier.
+        let entries = generic::flatten_to_entries(schema_type, payload, registry);
+        generic::render_stream(entries, registry)
+    };
 
     receipt::wrap_with_receipt(content_view, receipt_val)
 }

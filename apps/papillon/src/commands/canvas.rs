@@ -420,6 +420,7 @@ fn process_prompt_inner<'a>(
                 schema_type: None,
                 content: None,
                 linked_block_ids: Vec::new(),
+                agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -442,6 +443,7 @@ fn process_prompt_inner<'a>(
                 schema_type: None,
                 content: None,
                 linked_block_ids: Vec::new(),
+                agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -490,6 +492,7 @@ fn process_prompt_inner<'a>(
                             schema_type: None,
                             content: None,
                             linked_block_ids: Vec::new(),
+                            agent_did: None,
                             created_at: now.clone(),
                             updated_at: now,
                         },
@@ -571,6 +574,9 @@ pub async fn canvas_prompt(
                 schema_type: Some(schema_type),
                 content: Some(content),
                 linked_block_ids: Vec::new(),
+                // TODO: thread agent_did from process_prompt return value
+                // so the renderer can use agent-scoped templates.
+                agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -604,6 +610,7 @@ pub async fn canvas_reshape(
                 schema_type: Some(schema_type),
                 content: Some(content),
                 linked_block_ids: Vec::new(),
+                agent_did: None,
                 created_at: now.clone(),
                 updated_at: now,
             },

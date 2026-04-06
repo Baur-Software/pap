@@ -120,6 +120,11 @@ pub struct RegistryInfo {
 /// Agent information for display in the registry browser and agent management UI.
 /// This is the safe frontend-facing type — never contains operator_key_seed,
 /// HttpEndpointConfig, llm_instructions, or endpoint internals.
+///
+/// An agent is defined entirely by its contract: the mandate it accepts and the
+/// schema type it returns. Transport and execution environment are implementation
+/// details — `endpoint` encodes them implicitly (None = local, Some(url) = remote,
+/// with the URL scheme distinguishing HTTP from WebSocket).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
     pub name: String,
@@ -129,6 +134,8 @@ pub struct AgentInfo {
     pub object_types: Vec<String>,
     pub requires_disclosure: Vec<String>,
     pub returns: Vec<String>,
+    /// Transport endpoint. None = local agent (embedded component or on-device).
+    /// Some(url) = remote agent; URL scheme implies transport (https vs wss).
     pub endpoint: Option<String>,
     pub content_hash: String,
     /// The agent's DID (did:key:z...). None for remote registry agents.
@@ -368,6 +375,10 @@ pub struct CanvasBlock {
     pub content: Option<serde_json::Value>,
     /// IDs of semantically linked blocks (same prompt, related data).
     pub linked_block_ids: Vec<String>,
+    /// DID of the agent that owns this block. Used by the renderer to select
+    /// agent-scoped templates over global schema-type renderers.
+    #[serde(default)]
+    pub agent_did: Option<String>,
     /// When this block was created.
     pub created_at: String,
     /// When this block was last updated.
@@ -631,6 +642,11 @@ pub struct Template {
     pub schema_type: String,
     /// Optional DID for per-profile templates. None = global template.
     pub principal_did: Option<String>,
+    /// Optional agent DID to scope this template to a specific agent's output.
+    /// When set, this template is registered as an agent-scoped override and
+    /// takes priority over any global renderer for the same schema_type.
+    #[serde(default)]
+    pub agent_did: Option<String>,
     /// Declarative template configuration
     pub template_config: TemplateConfig,
     /// Template version for schema evolution
@@ -885,6 +901,7 @@ mod tests {
             schema_type: None,
             content: None,
             linked_block_ids: Vec::new(),
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         };
@@ -912,6 +929,7 @@ mod tests {
             schema_type: Some("FlightReservation".into()),
             content: Some(content.clone()),
             linked_block_ids: vec!["blk-3".into()],
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
         };
@@ -935,6 +953,7 @@ mod tests {
             schema_type: None,
             content: None,
             linked_block_ids: Vec::new(),
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         };
@@ -964,6 +983,7 @@ mod tests {
                 schema_type: Some("FlightReservation".into()),
                 content: Some(serde_json::json!({"@type": "FlightReservation"})),
                 linked_block_ids: Vec::new(),
+                agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
             }],
@@ -1036,6 +1056,7 @@ mod tests {
                 schema_type: Some("Answer".into()),
                 content: Some(serde_json::json!({"text": "42"})),
                 linked_block_ids: Vec::new(),
+                agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
             },
@@ -1306,6 +1327,7 @@ mod tests {
             schema_type: None,
             content: None,
             linked_block_ids: Vec::new(),
+            agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         };

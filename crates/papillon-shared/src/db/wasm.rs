@@ -667,6 +667,7 @@ mod tests {
             template_name: "flight_template".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -700,6 +701,7 @@ mod tests {
             template_name: "test_template".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -740,6 +742,7 @@ mod tests {
             template_name: "to_delete".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -775,6 +778,7 @@ mod tests {
             template_name: "enabled_template".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -797,6 +801,7 @@ mod tests {
             template_name: "disabled_template".into(),
             schema_type: "HotelReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -836,6 +841,7 @@ mod tests {
             template_name: "global_template".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -858,6 +864,7 @@ mod tests {
             template_name: "alice_template".into(),
             schema_type: "HotelReservation".into(),
             principal_did: Some("did:pap:alice".into()),
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -880,6 +887,7 @@ mod tests {
             template_name: "bob_template".into(),
             schema_type: "PaymentReceipt".into(),
             principal_did: Some("did:pap:bob".into()),
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -923,6 +931,7 @@ mod tests {
             template_name: "my_template".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -963,6 +972,7 @@ mod tests {
             template_name: "ghost".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
@@ -1007,6 +1017,7 @@ mod tests {
             template_name: "toggleable".into(),
             schema_type: "FlightReservation".into(),
             principal_did: None,
+            agent_did: None,
             template_config: crate::types::TemplateConfig {
                 version: 1,
                 layout: crate::types::LayoutConfig {
