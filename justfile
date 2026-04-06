@@ -26,6 +26,7 @@ setup:
     echo "Extension (browser):"
     check node "install Node.js 20+ from https://nodejs.org/"
     check npm  "included with Node.js"
+    check wasm-pack "cargo install wasm-pack"
     if command -v node &>/dev/null; then
         node_major=$(node -v | sed 's/v\([0-9]*\).*/\1/')
         [ "$node_major" -ge 20 ] && echo "  ✓ node >= 20 ($(node -v))" \
@@ -50,13 +51,25 @@ dev:
     pids+=($!)
     echo -n "  Waiting for registry"
     for i in $(seq 1 30); do
-        nc -z localhost 7890 2>/dev/null && { echo " ready."; break; }
-        [ "$i" -eq 30 ] && { echo " timeout."; exit 1; }
+        curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && { echo " ready."; break; }
+        [ "$i" -eq 30 ] && { echo " timeout — registry did not start."; exit 1; }
         echo -n "."; sleep 1
     done
-    echo "  Extension → vite watch"
-    (cd apps/papillon-extension && { [ -d node_modules ] || npm install; } && npm run dev) &
+    # Bootstrap extension WASM if missing, then start watch
+    echo -n "  Extension → "
+    (
+        cd apps/papillon-extension
+        [ -d node_modules ] || npm install
+        if [ ! -d wasm ]; then
+            echo "bootstrapping WASM..."
+            npm run build:wasm
+        fi
+        npm run dev
+    ) &
     pids+=($!)
+    sleep 2
+    kill -0 "${pids[1]}" 2>/dev/null || { echo "extension failed to start."; exit 1; }
+    echo "vite watch"
     echo "  Papillon  → cargo tauri dev"
     echo ""
     echo "Press Ctrl+C to stop all."
@@ -82,7 +95,7 @@ extension:
     set -euo pipefail
     cd apps/papillon-extension
     [ -d node_modules ] || npm install
-    [ -d wasm ] || echo "Warning: wasm/ missing — run npm run build:wasm (requires wasm-pack)"
+    [ -d wasm ] || { echo "Bootstrapping extension WASM..."; npm run build:wasm; }
     npm run dev
 
 # ─── Quality ──────────────────────────────────────────────────

@@ -130,7 +130,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -
 | `just setup` | Check development prerequisites |
 | `just dev` | Start the full stack (Papillon + Registry + Extension) |
 | `just papillon` | Papillon desktop app only |
-| `just registry` | Chrysalis federation registry only |
+| `just registry-local` | Chrysalis federation registry (local dev, plain HTTP) |
 | `just lint` | Format check + clippy (same as CI) |
 | `just test` | Run all workspace tests |
 | `just test-registry` | Registry tests with SSR features |
