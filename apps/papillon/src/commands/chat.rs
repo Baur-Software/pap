@@ -9,6 +9,18 @@ use tauri::State;
 use crate::episode_store::EpisodeStore;
 use papillon_shared::db::{ChatMessage, Conversation};
 
+/// Build a `Conversation` record for a chat room, stamped with the current time.
+fn build_room_conversation(room_id: String, room_name: String) -> Conversation {
+    let now = Utc::now().to_rfc3339();
+    Conversation {
+        id: room_id,
+        name: room_name,
+        is_group: true,
+        created_at: now.clone(),
+        updated_at: now,
+    }
+}
+
 /// List all known conversations, newest first.
 #[tauri::command]
 pub fn list_conversations(store: State<'_, EpisodeStore>) -> Result<Vec<Conversation>, String> {
@@ -41,14 +53,7 @@ pub fn create_group_chat(
     room_name: String,
     room_id: String,
 ) -> Result<Conversation, String> {
-    let now = Utc::now().to_rfc3339();
-    let conversation = Conversation {
-        id: room_id,
-        name: room_name,
-        is_group: true,
-        created_at: now.clone(),
-        updated_at: now,
-    };
+    let conversation = build_room_conversation(room_id, room_name);
     store
         .upsert_conversation(&conversation)
         .map_err(|e| e.message)?;
@@ -63,14 +68,7 @@ pub fn join_group_chat(
     room_id: String,
     room_name: String,
 ) -> Result<Conversation, String> {
-    let now = Utc::now().to_rfc3339();
-    let conversation = Conversation {
-        id: room_id,
-        name: room_name,
-        is_group: true,
-        created_at: now.clone(),
-        updated_at: now,
-    };
+    let conversation = build_room_conversation(room_id, room_name);
     store
         .upsert_conversation(&conversation)
         .map_err(|e| e.message)?;

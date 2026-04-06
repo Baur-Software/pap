@@ -61,20 +61,22 @@ impl GroupChatRoom {
         capacity: usize,
     ) -> mpsc::Receiver<serde_json::Value> {
         let (tx, rx) = mpsc::channel(capacity);
-        let mut members = self.members.write().unwrap();
+        // Recover from a poisoned lock rather than propagating a panic.
+        let mut members = self.members.write().unwrap_or_else(|e| e.into_inner());
         members.insert(session_id.into(), tx);
         rx
     }
 
     /// Deregister a member session (called on Phase 6 close).
     pub fn remove_member(&self, session_id: &str) {
-        let mut members = self.members.write().unwrap();
-        members.remove(session_id);
+        if let Ok(mut members) = self.members.write() {
+            members.remove(session_id);
+        }
     }
 
     /// Number of currently connected members.
     pub fn member_count(&self) -> usize {
-        self.members.read().unwrap().len()
+        self.members.read().map(|m| m.len()).unwrap_or(0)
     }
 
     /// Room identifier.
@@ -91,9 +93,12 @@ impl AgentHandler for GroupChatRoom {
     /// Here we accept all tokens and generate an ephemeral session DID.
     fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
         let session_id = uuid::Uuid::new_v4().to_string();
-        // Ephemeral session DID for this room leg.
-        let room_session_did = format!("did:key:room-session-{}", &session_id[..8]);
-        let _ = token; // Signature validation deferred to production integration
+        // Ephemeral session DID for this room leg. Uses did:pap: method to avoid
+        // confusion with valid did:key values, which require a real public key.
+        // TODO(ISS-900): generate a real Ed25519 ephemeral key pair here and return
+        // the correct did:key multibase encoding.
+        let room_session_did = format!("did:pap:room-session:{}", &session_id[..8]);
+        let _ = token; // TODO(ISS-900): validate token.target_did == self.room_id
         Ok((session_id, room_session_did))
     }
 
@@ -140,7 +145,10 @@ impl AgentHandler for GroupChatRoom {
         _id: &str,
         content: &serde_json::Value,
     ) -> Result<Option<serde_json::Value>, TransportError> {
-        let members = self.members.read().unwrap();
+        let members = self
+            .members
+            .read()
+            .map_err(|_| TransportError::HandlerError("room: member lock poisoned".into()))?;
         for (sid, tx) in members.iter() {
             if sid != session_id {
                 // Best-effort — drop if member channel is full.

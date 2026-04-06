@@ -2059,4 +2059,130 @@ mod tests {
         assert_eq!(results[0].id, "ep-new");
         assert_eq!(results[1].id, "ep-old");
     }
+
+    // ── Chat persistence tests ────────────────────────────────────────────
+
+    fn sample_conversation(id: &str, is_group: bool) -> super::super::Conversation {
+        super::super::Conversation {
+            id: id.to_string(),
+            name: format!("Room {id}"),
+            is_group,
+            created_at: "2026-04-01T10:00:00Z".to_string(),
+            updated_at: "2026-04-01T10:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_chat_message(id: &str, conversation_id: &str) -> super::super::ChatMessage {
+        super::super::ChatMessage {
+            id: id.to_string(),
+            conversation_id: conversation_id.to_string(),
+            author_did: "did:key:zSender".to_string(),
+            content: r#"{"body":{"content":"hello"}}"#.to_string(),
+            created_at: format!("2026-04-01T10:0{id}:00Z"),
+            delivered: false,
+        }
+    }
+
+    #[test]
+    fn upsert_and_list_conversations() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.upsert_conversation(&sample_conversation("conv-2", true))
+            .unwrap();
+        let convs = db.list_conversations().unwrap();
+        assert_eq!(convs.len(), 2);
+    }
+
+    #[test]
+    fn upsert_conversation_updates_existing() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        let updated = super::super::Conversation {
+            name: "Renamed Room".to_string(),
+            is_group: true,
+            updated_at: "2026-04-02T10:00:00Z".to_string(),
+            ..sample_conversation("conv-1", false)
+        };
+        db.upsert_conversation(&updated).unwrap();
+        let convs = db.list_conversations().unwrap();
+        assert_eq!(convs.len(), 1);
+        assert_eq!(convs[0].name, "Renamed Room");
+        assert!(convs[0].is_group);
+    }
+
+    #[test]
+    fn insert_and_list_chat_messages() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("2", "conv-1"))
+            .unwrap();
+        let msgs = db.list_chat_messages("conv-1", 100).unwrap();
+        assert_eq!(msgs.len(), 2);
+        assert!(!msgs[0].delivered);
+        // ordered oldest-first by created_at
+        assert!(msgs[0].created_at <= msgs[1].created_at);
+    }
+
+    #[test]
+    fn mark_chat_message_delivered() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap();
+        db.mark_message_delivered("msg-1").unwrap(); // no-op for non-existent is fine
+        db.mark_message_delivered("1").unwrap();
+        let msgs = db.list_chat_messages("conv-1", 100).unwrap();
+        assert!(msgs[0].delivered);
+    }
+
+    #[test]
+    fn list_messages_respects_limit() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        for i in 0..5_u8 {
+            db.insert_chat_message(&sample_chat_message(&i.to_string(), "conv-1"))
+                .unwrap();
+        }
+        let msgs = db.list_chat_messages("conv-1", 3).unwrap();
+        assert_eq!(msgs.len(), 3);
+    }
+
+    #[test]
+    fn insert_chat_message_ignores_duplicate_id() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-1", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-1"))
+            .unwrap(); // dup
+        let msgs = db.list_chat_messages("conv-1", 100).unwrap();
+        assert_eq!(msgs.len(), 1);
+    }
+
+    #[test]
+    fn list_messages_scoped_to_conversation() {
+        let db = test_db();
+        db.upsert_conversation(&sample_conversation("conv-a", false))
+            .unwrap();
+        db.upsert_conversation(&sample_conversation("conv-b", false))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("1", "conv-a"))
+            .unwrap();
+        db.insert_chat_message(&sample_chat_message("2", "conv-b"))
+            .unwrap();
+        let msgs_a = db.list_chat_messages("conv-a", 100).unwrap();
+        let msgs_b = db.list_chat_messages("conv-b", 100).unwrap();
+        assert_eq!(msgs_a.len(), 1);
+        assert_eq!(msgs_b.len(), 1);
+        assert_eq!(msgs_a[0].id, "1");
+        assert_eq!(msgs_b[0].id, "2");
+    }
 }
