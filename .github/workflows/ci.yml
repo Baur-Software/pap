@@ -140,9 +140,16 @@ jobs:
         run: |
           just extension &
           pid=$!
-          sleep 10
-          kill -0 $pid 2>/dev/null && echo "Extension running" || { echo "::error::extension failed"; exit 1; }
-          kill $pid
+          # Wait for vite to produce dist/ (wasm bootstrap + npm install + build can take minutes)
+          for i in $(seq 1 90); do
+            [ -d apps/papillon-extension/dist ] && break
+            kill -0 $pid 2>/dev/null || { echo "::error::extension process died"; exit 1; }
+            sleep 2
+          done
+          [ -d apps/papillon-extension/dist ] \
+            && echo "Extension built successfully" \
+            || { echo "::error::extension build timed out"; kill $pid 2>/dev/null; exit 1; }
+          kill $pid 2>/dev/null || true
       # ── Utilities ──
       - name: just run-example
         run: just run-example pap-search-example
