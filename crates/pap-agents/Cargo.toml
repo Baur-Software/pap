@@ -21,6 +21,7 @@ pap-federation = { workspace = true, features = ["native"] }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 toml = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "json"] }
 url = "2"

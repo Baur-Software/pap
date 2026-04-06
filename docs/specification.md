@@ -1684,6 +1684,143 @@ A receiving agent that requires payment MUST:
 - Payment proofs MUST NOT appear in transaction receipts
   (Section 11.5).
 
+### 13.8. Chat and Real-Time Communication
+
+#### 13.8.1. Overview
+
+PAP provides a natural foundation for zero-trust, privacy-preserving
+real-time communication between principals. A personal agent MAY
+advertise `schema:CommunicateAction` in the federation registry — exactly
+as a service agent advertises `schema:SearchAction`. This makes a
+principal discoverable for chat without requiring a phone number,
+email address, or centrally-administered identity. Discoverability is
+opt-in, scoped, and revocable through the standard mandate system.
+
+Chat is not a new protocol. It is the **Phase 4 streaming extension** of
+the standard 6-phase handshake, applied to a `schema:CommunicateAction`
+session.
+
+#### 13.8.2. Capability Grant
+
+A `CapabilityToken` scoped to `schema:CommunicateAction` MUST be issued
+by the initiating principal (or a delegated orchestrator) and signed with
+a principal key. The token:
+
+- MUST set `action = "schema:CommunicateAction"`.
+- MUST set `target_did` to the receiving principal's agent DID.
+- MAY set a `ttl` appropriate for the conversation duration.
+- MAY carry a `scope` restricting the permitted communication modes
+  (e.g., `text-only`, `text+audio`, `text+audio+video`).
+
+#### 13.8.3. Phase 4 Streaming Mode
+
+After Phase 3 (disclosure), instead of a single task execution,
+the session transitions to **streaming mode**:
+
+1. **Phase 4 execute** (client → server, no payload): the receiving
+   agent returns `ExecutionResult` containing a `schema:Conversation`
+   JSON-LD object. This signals that the session SHOULD remain open.
+
+2. **StreamingMessage frames** (bidirectional, Phase 4): either party
+   MAY send `StreamingMessage` frames carrying DIDComm `basicmessage`
+   protocol payloads (see Section 13.8.5). Each frame MUST include:
+   - `id`: a UUID for ack correlation.
+   - `content`: a JSON object conforming to the DIDComm `basicmessage`
+     body schema.
+
+3. **StreamingAck** (responding side): upon receiving a `StreamingMessage`,
+   the server MUST reply with either a `StreamingAck` (delivery confirmed)
+   or a `StreamingMessage` (reply).
+
+4. The session MUST remain open until either party sends `SessionClose`
+   (Phase 6). Implementations SHOULD NOT proceed to Phase 5 (receipt
+   co-signing) until the conversation is concluded.
+
+#### 13.8.4. Message Format (DIDComm basicmessage)
+
+The `content` field of each `StreamingMessage` MUST conform to the
+DIDComm `basicmessage` 2.0 protocol body:
+
+```json
+{
+  "type": "https://didcomm.org/basicmessage/2.0/message",
+  "id": "<UUID>",
+  "body": {
+    "content": "<text of message>"
+  }
+}
+```
+
+The DIDComm wrapping (plaintext, signed, or encrypted) is applied at the
+`Envelope` layer via `PapToDIDComm` (Section 5.6). For chat sessions,
+implementations SHOULD use at minimum `DIDCommSigned` to bind each
+message to the sender's session DID.
+
+#### 13.8.5. Receipt
+
+Upon `SessionClose`, the receipt (Phase 5) MUST record:
+
+- `action = "schema:CommunicateAction"`
+- `executed`: a summary string, e.g., `"schema:Conversation"`.
+- `disclosed_by_initiator` / `disclosed_by_receiver`: property
+  references only (e.g., `["schema:name"]`). Message **content**
+  MUST NOT appear in receipts.
+- Both parties' session DIDs as `initiating_agent_did` /
+  `receiving_agent_did` (ephemeral, unlinked from principal DIDs).
+
+#### 13.8.6. Group Chat Rooms
+
+A group chat room is an agent with its own DID that implements
+`AgentHandler` and maintains one session per member:
+
+- The room DID is registered in the federation with
+  `capability: ["schema:CommunicateAction"]`.
+- The room owner issues a separate `CapabilityToken` to each
+  member, all targeting the room DID.
+- Each member runs the standard 6-phase handshake against the
+  room DID. After Phase 4 (streaming mode open), the room agent
+  fans out each `StreamingMessage` to all other connected members.
+- Group membership is enforced by the token system: only principals
+  holding a valid token may connect. Revocation follows the standard
+  mandate revocation flow (Section 8).
+- Rooms MAY be hosted locally (Papillon instance) or on any
+  federation peer. A room hosted on a federation peer is
+  discoverable via its DID advertisement.
+
+#### 13.8.7. Audio and Video
+
+Audio and video calls follow the same pattern as text chat, using
+WebRTC as the media transport:
+
+1. PAP Phases 1–4 establish identity, authorization, and streaming
+   mode. The `CapabilityToken` scope SHOULD include the permitted
+   media types (e.g., `text+audio+video`).
+2. **SDP negotiation** is carried via `StreamingMessage` frames:
+   the offerer sends a `StreamingMessage` whose `content.body`
+   contains the SDP offer; the answerer replies with SDP answer.
+   ICE candidates are exchanged as subsequent frames.
+3. WebRTC DTLS-SRTP establishes the media channel out-of-band.
+   PAP does not inspect or relay media.
+4. Implementations MAY route ICE/TURN through an OHTTP relay to
+   conceal participant IP addresses.
+5. The PAP receipt records call metadata (duration, participant
+   session DIDs, permitted media scope) but MUST NOT include
+   audio or video content.
+
+#### 13.8.8. Privacy Properties
+
+Chat sessions inherit all PAP privacy guarantees:
+
+- **Ephemeral session DIDs** — neither party's principal DID
+  appears in message frames or SDP.
+- **OHTTP relay** — IP addresses hidden from the relay operator.
+- **Receipts** — property references only; no message content.
+- **Discoverability** — controlled by the principal's federation
+  advertisement; opt-in.
+- **Forward secrecy** — DIDComm anoncrypt (`ECDH-ES + A256GCM`)
+  MAY be applied to `StreamingMessage` content for per-message
+  forward secrecy.
+
 ---
 
 ## 14. Transport Binding
