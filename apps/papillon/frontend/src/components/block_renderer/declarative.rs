@@ -379,4 +379,59 @@ mod tests {
         // Empty string
         assert_eq!(renderer.format_value(&serde_json::json!(""), "text"), "");
     }
+
+    // ── from_template / agent_id / schema_types ───────────────────────────────
+
+    fn sample_template(schema_type: &str, agent_did: Option<&str>) -> Template {
+        Template {
+            id: "tpl-1".to_string(),
+            template_name: "Sample".to_string(),
+            schema_type: schema_type.to_string(),
+            principal_did: None,
+            agent_did: agent_did.map(|s| s.to_string()),
+            template_config: sample_template_config(),
+            version: 1,
+            enabled: true,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            created_by: None,
+        }
+    }
+
+    #[test]
+    fn from_template_sets_schema_type() {
+        let tpl = sample_template("FlightReservation", None);
+        let renderer = DeclarativeRenderer::from_template(&tpl);
+        assert_eq!(renderer.schema_types(), vec!["FlightReservation"]);
+    }
+
+    #[test]
+    fn from_template_without_agent_did_returns_none() {
+        let tpl = sample_template("Recipe", None);
+        let renderer = DeclarativeRenderer::from_template(&tpl);
+        assert!(renderer.agent_id().is_none());
+    }
+
+    #[test]
+    fn from_template_with_agent_did_returns_some() {
+        let did = "did:key:z6MkHabc123";
+        let tpl = sample_template("ProductCard", Some(did));
+        let renderer = DeclarativeRenderer::from_template(&tpl);
+        assert_eq!(renderer.agent_id(), Some(did));
+    }
+
+    #[test]
+    fn new_always_has_no_agent_id() {
+        // DeclarativeRenderer::new() never sets agent_did; only from_template() does.
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "Event");
+        assert!(renderer.agent_id().is_none());
+    }
+
+    #[test]
+    fn schema_types_returns_single_element_vec() {
+        let renderer = DeclarativeRenderer::new(sample_template_config(), "JobPosting");
+        let types = renderer.schema_types();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0], "JobPosting");
+    }
 }

@@ -105,14 +105,10 @@ impl RendererRegistry {
 
         for template in templates {
             if template.enabled {
+                // register() routes to the correct tier automatically via renderer.agent_id().
+                // Templates with agent_did → Tier 1; global templates → Tier 2.
                 let renderer = DeclarativeRenderer::from_template(&template);
-                if template.agent_did.is_some() {
-                    // Agent-scoped: use explicit registration so the renderer
-                    // is keyed by (agent_did, schema_type) in the right tier.
-                    self.register(Arc::new(renderer));
-                } else {
-                    self.register(Arc::new(renderer));
-                }
+                self.register(Arc::new(renderer));
             }
         }
     }
@@ -121,5 +117,132 @@ impl RendererRegistry {
 impl Default for RendererRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn minimal_template(
+        schema_type: &str,
+        agent_did: Option<&str>,
+        enabled: bool,
+    ) -> papillon_shared::types::Template {
+        use papillon_shared::types::{LayoutConfig, TemplateConfig};
+        papillon_shared::types::Template {
+            id: "test-id".to_string(),
+            template_name: "Test Template".to_string(),
+            schema_type: schema_type.to_string(),
+            principal_did: None,
+            agent_did: agent_did.map(|s| s.to_string()),
+            template_config: TemplateConfig {
+                version: 1,
+                layout: LayoutConfig {
+                    r#type: "grid".to_string(),
+                    columns: Some(1),
+                    direction: None,
+                    spacing: None,
+                },
+                fields: vec![],
+            },
+            version: 1,
+            enabled,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            created_by: None,
+        }
+    }
+
+    #[test]
+    fn empty_registry_returns_none() {
+        let registry = RendererRegistry::new();
+        assert!(registry.get("FlightReservation").is_none());
+        assert!(registry.get_for_agent("did:key:abc", "FlightReservation").is_none());
+    }
+
+    #[test]
+    fn disabled_template_is_not_registered() {
+        let registry = RendererRegistry::new();
+        registry.load_from_templates(vec![minimal_template("FlightReservation", None, false)]);
+        assert!(registry.get("FlightReservation").is_none());
+    }
+
+    #[test]
+    fn global_template_registers_in_tier2_only() {
+        let registry = RendererRegistry::new();
+        registry.load_from_templates(vec![minimal_template("Recipe", None, true)]);
+        // Tier 2: type-global lookup succeeds
+        assert!(registry.get("Recipe").is_some());
+        // Tier 1: no agent-scoped entry was registered
+        assert!(registry.get_for_agent("did:key:xyz", "Recipe").is_none());
+    }
+
+    #[test]
+    fn agent_scoped_template_registers_in_tier1_not_tier2() {
+        let registry = RendererRegistry::new();
+        let did = "did:key:z6MkHabc123";
+        registry.load_from_templates(vec![minimal_template("ProductCard", Some(did), true)]);
+        // Tier 1: agent-scoped lookup with matching DID succeeds
+        assert!(registry.get_for_agent(did, "ProductCard").is_some());
+        // Tier 2: global lookup finds nothing (agent-scoped only)
+        assert!(registry.get("ProductCard").is_none());
+    }
+
+    #[test]
+    fn agent_scoped_does_not_match_wrong_agent() {
+        let registry = RendererRegistry::new();
+        let did_a = "did:key:agent_a";
+        let did_b = "did:key:agent_b";
+        registry.load_from_templates(vec![minimal_template("Widget", Some(did_a), true)]);
+        assert!(registry.get_for_agent(did_a, "Widget").is_some());
+        assert!(registry.get_for_agent(did_b, "Widget").is_none());
+    }
+
+    #[test]
+    fn tier1_and_tier2_coexist_for_same_schema_type() {
+        // A global renderer in Tier 2 and an agent-scoped renderer in Tier 1
+        // can coexist for the same schema_type without interfering.
+        let registry = RendererRegistry::new();
+        let did = "did:key:agent_c";
+        registry.load_from_templates(vec![
+            minimal_template("Event", None, true),      // → Tier 2
+            minimal_template("Event", Some(did), true), // → Tier 1
+        ]);
+        assert!(registry.get("Event").is_some());
+        assert!(registry.get_for_agent(did, "Event").is_some());
+        // An unregistered agent still gets None from Tier 1
+        assert!(registry.get_for_agent("did:key:other", "Event").is_none());
+    }
+
+    #[test]
+    fn multiple_global_templates_register_independently() {
+        let registry = RendererRegistry::new();
+        registry.load_from_templates(vec![
+            minimal_template("FlightReservation", None, true),
+            minimal_template("HotelReservation", None, true),
+            minimal_template("JobPosting", None, true),
+        ]);
+        assert!(registry.get("FlightReservation").is_some());
+        assert!(registry.get("HotelReservation").is_some());
+        assert!(registry.get("JobPosting").is_some());
+        assert!(registry.get("Unknown").is_none());
+    }
+
+    #[test]
+    fn register_for_agent_scopes_global_renderer_to_a_did() {
+        // register_for_agent() explicitly scopes any renderer to a DID,
+        // even when the renderer's own agent_id() returns None.
+        use crate::components::block_renderer::declarative::DeclarativeRenderer;
+        let registry = RendererRegistry::new();
+        let template = minimal_template("BookingForm", None, true);
+        let renderer: Arc<dyn BlockRenderer> =
+            Arc::new(DeclarativeRenderer::from_template(&template));
+        let did = "did:key:explicit_scope";
+        registry.register_for_agent(did, renderer);
+        // Should appear in Tier 1 under the explicitly supplied DID
+        assert!(registry.get_for_agent(did, "BookingForm").is_some());
+        // Should NOT appear in Tier 2
+        assert!(registry.get("BookingForm").is_none());
     }
 }

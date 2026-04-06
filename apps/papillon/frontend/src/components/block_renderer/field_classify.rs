@@ -435,4 +435,118 @@ mod tests {
             serde_json::from_value(json!({"name": "Alice"})).unwrap();
         assert_eq!(extract_type(&obj), None);
     }
+
+    // ── extract_types (plural) ────────────────────────────────────────────────
+
+    #[test]
+    fn extract_types_single_string() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": "FlightReservation"})).unwrap();
+        assert_eq!(extract_types(&obj), vec!["FlightReservation"]);
+    }
+
+    #[test]
+    fn extract_types_array_preserves_all_and_order() {
+        // All types are preserved; first declared is most-specific.
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": ["FlightReservation", "Reservation", "Intangible"]}))
+                .unwrap();
+        assert_eq!(
+            extract_types(&obj),
+            vec!["FlightReservation", "Reservation", "Intangible"]
+        );
+    }
+
+    #[test]
+    fn extract_types_missing_returns_empty() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"name": "Alice"})).unwrap();
+        assert!(extract_types(&obj).is_empty());
+    }
+
+    #[test]
+    fn extract_types_empty_array_returns_empty() {
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": []})).unwrap();
+        assert!(extract_types(&obj).is_empty());
+    }
+
+    #[test]
+    fn extract_types_non_string_entries_are_skipped() {
+        // Only string entries in the array survive; numbers are filtered out.
+        let obj: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"@type": ["Person", 42, "Author"]})).unwrap();
+        assert_eq!(extract_types(&obj), vec!["Person", "Author"]);
+    }
+
+    // ── Vocabulary-driven classification ─────────────────────────────────────
+
+    #[test]
+    fn vocabulary_catalog_classifies_departure_date_as_datetime() {
+        // `departureDate` is in the catalog with range Date|DateTime.
+        // The value itself is not ISO 8601, so only the catalog catches this.
+        assert_eq!(
+            classify_field("departureDate", &json!("Apr 15")),
+            FieldKind::DateTime
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_total_price_number_as_price() {
+        // `totalPrice` is in the catalog. Number path checks catalog before key heuristic.
+        assert_eq!(
+            classify_field("totalPrice", &json!(299)),
+            FieldKind::Price
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_same_as_as_external_url() {
+        // `sameAs` is in the catalog with range URL.
+        // The value has no http:// prefix, so only the catalog catches this.
+        assert_eq!(
+            classify_field("sameAs", &json!("example.com/profile")),
+            FieldKind::ExternalUrl
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_checkin_date_as_datetime() {
+        assert_eq!(
+            classify_field("checkinDate", &json!("2026-06-01")),
+            FieldKind::DateTime
+        );
+    }
+
+    #[test]
+    fn vocabulary_catalog_classifies_base_salary_as_price() {
+        assert_eq!(
+            classify_field("baseSalary", &json!(85000)),
+            FieldKind::Price
+        );
+    }
+
+    #[test]
+    fn pap_link_beats_vocabulary_catalog() {
+        // PAP scheme must take priority even when the property is in the catalog.
+        assert_eq!(
+            classify_field("url", &json!("pap://search/flights")),
+            FieldKind::PapLink
+        );
+    }
+
+    #[test]
+    fn unknown_property_falls_back_to_value_heuristic() {
+        // `customTimestamp` is not in the catalog; ISO 8601 value-shape heuristic applies.
+        assert_eq!(
+            classify_field("customTimestamp", &json!("2026-04-06T00:00:00Z")),
+            FieldKind::DateTime
+        );
+    }
+
+    #[test]
+    fn unknown_number_property_without_catalog_match_is_scalar() {
+        // `rating` is not in the catalog and doesn't contain price/cost/amount.
+        assert_eq!(classify_field("rating", &json!(4.5)), FieldKind::Scalar);
+    }
 }
