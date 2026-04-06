@@ -79,8 +79,7 @@ One canvas. Many agents. Your rules. Papillon is a Tauri desktop app that lets y
 - **Deep-link protocol** (`pap://`, `pap+https://`, `pap+wss://`)
 
 ```bash
-# Run from the repo root
-cargo tauri dev -p papillon
+just papillon              # or: cargo tauri dev -p papillon
 ```
 
 [Documentation](https://baur-software.github.io/pap/papillon/) · [Source](apps/papillon/)
@@ -96,8 +95,7 @@ Publish your agent. Let any canvas find it. Chrysalis is a self-hostable federat
 - **Full-text search** via FTS5 / tsvector with paginated results
 
 ```bash
-# Run locally (SQLite, no auth)
-cargo run -p pap-registry --features ssr
+just registry-local        # or: cargo run -p pap-registry --features ssr
 
 # Docker
 docker build -f apps/registry/Dockerfile -t pap-registry .
@@ -114,6 +112,31 @@ git clone https://github.com/Baur-Software/pap.git
 cd pap
 cargo test
 ```
+
+### Development Commands
+
+This project uses [just](https://github.com/casey/just) as an optional command runner. Install it, then run `just setup` to check prerequisites.
+
+```bash
+cargo install just                        # from source via crates.io
+# or
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.cargo/bin
+```
+
+**Common recipes:**
+
+| Recipe | Description |
+|--------|-------------|
+| `just setup` | Check development prerequisites |
+| `just dev` | Start the full stack (Papillon + Registry + Extension) |
+| `just papillon` | Papillon desktop app only |
+| `just registry` | Chrysalis federation registry only |
+| `just lint` | Format check + clippy (same as CI) |
+| `just test` | Run all workspace tests |
+| `just test-registry` | Registry tests with SSR features |
+| `just run-example pap-search-example` | Run any protocol example |
+
+Run `just --list` for all available recipes. Raw cargo/npm commands still work — the justfile is a convenience layer, not a requirement.
 
 ## Protocol Stack
 
