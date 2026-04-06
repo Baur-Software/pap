@@ -1,0 +1,16 @@
+[package]
+name = "pap-test-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Shared test helpers for the PAP workspace"
+
+[dependencies]
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+pap-did = { workspace = true }
+
+[lints]
+workspace = true

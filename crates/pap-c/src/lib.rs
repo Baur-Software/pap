@@ -289,7 +289,9 @@ pub unsafe extern "C" fn pap_keypair_from_bytes(
         return std::ptr::null_mut();
     }
     let slice = unsafe { std::slice::from_raw_parts(bytes, 32) };
-    let arr: [u8; 32] = slice.try_into().unwrap();
+    let arr: [u8; 32] = slice
+        .try_into()
+        .expect("slice length verified to be 32 above");
     match PrincipalKeypair::from_bytes(&arr) {
         Ok(kp) => Box::into_raw(Box::new(PapPrincipalKeypair { inner: kp })),
         Err(e) => {
@@ -813,7 +815,9 @@ pub unsafe extern "C" fn pap_mandate_verify(
         return -1;
     }
     let bytes = unsafe { std::slice::from_raw_parts(pubkey_bytes, 32) };
-    let arr: [u8; 32] = bytes.try_into().unwrap();
+    let arr: [u8; 32] = bytes
+        .try_into()
+        .expect("slice length verified to be 32 above");
     match ed25519_dalek::VerifyingKey::from_bytes(&arr) {
         Ok(vk) => match m.inner.verify(&vk) {
             Ok(()) => 0,
@@ -1149,7 +1153,9 @@ pub unsafe extern "C" fn pap_session_initiate(
         return std::ptr::null_mut();
     }
     let bytes = unsafe { std::slice::from_raw_parts(issuer_pubkey, 32) };
-    let arr: [u8; 32] = bytes.try_into().unwrap();
+    let arr: [u8; 32] = bytes
+        .try_into()
+        .expect("slice length verified to be 32 above");
     let vk = match ed25519_dalek::VerifyingKey::from_bytes(&arr) {
         Ok(k) => k,
         Err(e) => {
@@ -1341,7 +1347,9 @@ pub unsafe extern "C" fn pap_receipt_verify_signature(
         return -1;
     }
     let bytes = unsafe { std::slice::from_raw_parts(pubkey_bytes, 32) };
-    let arr: [u8; 32] = bytes.try_into().unwrap();
+    let arr: [u8; 32] = bytes
+        .try_into()
+        .expect("slice length verified to be 32 above");
     match ed25519_dalek::VerifyingKey::from_bytes(&arr) {
         Ok(vk) => match r.inner.verify_signature(index, &vk) {
             Ok(()) => 0,
@@ -1377,8 +1385,12 @@ pub unsafe extern "C" fn pap_receipt_verify_both(
     }
     let init_bytes = unsafe { std::slice::from_raw_parts(init_pubkey, 32) };
     let recv_bytes = unsafe { std::slice::from_raw_parts(recv_pubkey, 32) };
-    let init_arr: [u8; 32] = init_bytes.try_into().unwrap();
-    let recv_arr: [u8; 32] = recv_bytes.try_into().unwrap();
+    let init_arr: [u8; 32] = init_bytes
+        .try_into()
+        .expect("slice length verified to be 32 above");
+    let recv_arr: [u8; 32] = recv_bytes
+        .try_into()
+        .expect("slice length verified to be 32 above");
     let init_vk = match ed25519_dalek::VerifyingKey::from_bytes(&init_arr) {
         Ok(k) => k,
         Err(e) => {
@@ -1541,7 +1553,9 @@ pub unsafe extern "C" fn pap_advertisement_verify(
         return -1;
     }
     let bytes = unsafe { std::slice::from_raw_parts(pubkey_bytes, 32) };
-    let arr: [u8; 32] = bytes.try_into().unwrap();
+    let arr: [u8; 32] = bytes
+        .try_into()
+        .expect("slice length verified to be 32 above");
     match ed25519_dalek::VerifyingKey::from_bytes(&arr) {
         Ok(vk) => match a.inner.verify(&vk) {
             Ok(()) => 0,

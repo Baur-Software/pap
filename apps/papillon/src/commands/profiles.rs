@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use base64::Engine;
 use pap_did::PrincipalKeypair;
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};

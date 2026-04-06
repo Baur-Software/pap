@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Travel booking PoC demonstrating:
 //!
 //! - SD-JWT selective disclosure (name + nationality required, email prohibited)

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 pub mod agents;
 pub mod commands;
 pub mod db;

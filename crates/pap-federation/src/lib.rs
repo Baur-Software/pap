@@ -41,6 +41,7 @@ mod tests {
     use super::*;
     use ed25519_dalek::SigningKey;
     use pap_marketplace::AgentAdvertisement;
+    use pap_test_utils::{did_from_key, make_keypair};
     use rand::rngs::OsRng;
 
     fn make_signed_ad(name: &str, action: &str) -> AgentAdvertisement {
@@ -432,16 +433,6 @@ mod tests {
     // =========================================================================
     // Vouch-based peer registration tests
     // =========================================================================
-
-    fn make_keypair() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
-    }
-
-    fn did_from_key(key: &SigningKey) -> String {
-        pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
-            .unwrap()
-            .did()
-    }
 
     /// Create a registry pre-populated with `count` established active peers.
     /// Returns (registry, vec of (key, did) pairs for the seeded peers).

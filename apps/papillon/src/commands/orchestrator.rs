@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use chrono::{Duration, Utc};
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};

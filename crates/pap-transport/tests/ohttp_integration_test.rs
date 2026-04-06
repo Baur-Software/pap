@@ -1,4 +1,5 @@
 //! Integration tests for OHTTP-wrapped PAP handshakes.
+#![allow(clippy::unwrap_used)]
 //!
 //! Tests verify:
 //! 1. OHTTP encapsulation/decapsulation

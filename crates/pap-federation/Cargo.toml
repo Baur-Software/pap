@@ -75,3 +75,7 @@ getrandom = { workspace = true, optional = true }
 rand = { workspace = true }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
+pap-test-utils = { workspace = true }
+
+[lints]
+workspace = true

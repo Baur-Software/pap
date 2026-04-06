@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! End-to-end search PoC demonstrating the full PAP protocol flow:
 //!
 //! 1. Principal generates keypair and DID document

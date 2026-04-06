@@ -1,20 +1,10 @@
 //! Integration tests for credential layer covering edge cases and full flows
+#![allow(clippy::unwrap_used)]
 
 use chrono::{Duration, Utc};
-use ed25519_dalek::SigningKey;
 use pap_credential::{Disclosure, SelectiveDisclosureJwt, VerifiableCredential};
-use rand::rngs::OsRng;
+use pap_test_utils::{did_from_key, make_keypair};
 use std::collections::HashMap;
-
-fn make_keypair() -> SigningKey {
-    SigningKey::generate(&mut OsRng)
-}
-
-fn did_from_key(key: &SigningKey) -> String {
-    pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
-        .unwrap()
-        .did()
-}
 
 #[test]
 fn vc_expired_credential_check() {

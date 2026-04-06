@@ -27,3 +27,6 @@ x25519-dalek = { workspace = true }
 aes-gcm = { workspace = true }
 curve25519-dalek = { workspace = true }
 getrandom = { workspace = true, optional = true }
+
+[lints]
+workspace = true

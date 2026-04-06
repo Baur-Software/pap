@@ -12,6 +12,7 @@ pap-credential = { workspace = true }
 pap-marketplace = { workspace = true }
 pap-federation = { workspace = true, features = ["native"] }
 pap-proto = { workspace = true }
+pap-test-utils = { workspace = true }
 ed25519-dalek = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
@@ -22,3 +23,6 @@ criterion = { workspace = true }
 [[bench]]
 name = "protocol"
 harness = false
+
+[lints]
+workspace = true

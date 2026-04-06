@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! TEE Attestation PoC demonstrating:
 //!
 //! - Software-simulated TEE attestation (no hardware required)
