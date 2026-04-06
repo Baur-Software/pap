@@ -55,6 +55,8 @@ RUN sed -i \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
     -e '/^[[:space:]]*"benches"/d' \
     -e '/^[[:space:]]*"examples\//d' \
+    -e '/^pap-test-utils[[:space:]]*=/d' \
+    -e '/^papillon-shared[[:space:]]*=/d' \
     Cargo.toml
 
 # Build server binary (ssr feature) + WASM bundle (hydrate feature) in one step
@@ -98,6 +100,8 @@ RUN sed -i \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
     -e '/^[[:space:]]*"benches"/d' \
     -e '/^[[:space:]]*"examples\//d' \
+    -e '/^pap-test-utils[[:space:]]*=/d' \
+    -e '/^papillon-shared[[:space:]]*=/d' \
     Cargo.toml
 
 RUN cargo test -p pap-registry --features ssr

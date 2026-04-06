@@ -48,6 +48,7 @@ RUN sed -i \
     -e '/^[[:space:]]*"apps\/registry"/d' \
     -e '/^[[:space:]]*"benches"/d' \
     -e '/^[[:space:]]*"examples\//d' \
+    -e '/^pap-test-utils[[:space:]]*=/d' \
     Cargo.toml
 
 WORKDIR /build/apps/papillon/frontend
