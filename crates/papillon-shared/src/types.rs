@@ -117,31 +117,14 @@ pub struct RegistryInfo {
     pub peer_count: usize,
 }
 
-/// Describes how an agent produces its result.
-///
-/// An agent is anything that accepts a mandate, executes an action, and returns
-/// a JSON-LD payload. The kind determines execution path and block lifecycle:
-/// - Http/WebSocket go through the full 6-phase handshake
-/// - Component resolves via direct user interaction (no network call)
-/// - OnDevice runs the local LLM synthesizer (never leaves the device)
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentKind {
-    /// Standard agent communicating over HTTP (request/response).
-    #[default]
-    Http,
-    /// Agent communicating over a persistent WebSocket connection.
-    WebSocket,
-    /// Built-in UI component — produces a template payload via direct user interaction.
-    /// Skips phases 1–5; the component's submitted value IS the result.
-    Component,
-    /// On-device LLM synthesizer — runs locally, never leaves the device.
-    OnDevice,
-}
-
 /// Agent information for display in the registry browser and agent management UI.
 /// This is the safe frontend-facing type — never contains operator_key_seed,
 /// HttpEndpointConfig, llm_instructions, or endpoint internals.
+///
+/// An agent is defined entirely by its contract: the mandate it accepts and the
+/// schema type it returns. Transport and execution environment are implementation
+/// details — `endpoint` encodes them implicitly (None = local, Some(url) = remote,
+/// with the URL scheme distinguishing HTTP from WebSocket).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
     pub name: String,
@@ -151,14 +134,13 @@ pub struct AgentInfo {
     pub object_types: Vec<String>,
     pub requires_disclosure: Vec<String>,
     pub returns: Vec<String>,
+    /// Transport endpoint. None = local agent (embedded component or on-device).
+    /// Some(url) = remote agent; URL scheme implies transport (https vs wss).
     pub endpoint: Option<String>,
     pub content_hash: String,
     /// The agent's DID (did:key:z...). None for remote registry agents.
     #[serde(default)]
     pub agent_did: Option<String>,
-    /// Execution kind — determines how the agent produces its result.
-    #[serde(default)]
-    pub kind: AgentKind,
     /// Origin: "compiled", "catalog", "user_created", or "generated".
     #[serde(default)]
     pub source: String,
