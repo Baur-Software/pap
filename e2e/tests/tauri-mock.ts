@@ -605,6 +605,51 @@ window.__TAURI__ = {
           return null;
         }
 
+        case 'auto_generate_template': {
+          const schemaType = args?.schema_type || args?.schemaType || 'GeneratedType';
+          const existing = window.__TAURI__.core._templates.find(
+            (t) => t.schema_type === schemaType && t.enabled
+          );
+          if (existing) return null; // already has template — skip generation
+          const generated = {
+            id: 'tmpl-gen-' + Math.random().toString(36).substr(2, 9),
+            template_name: 'Auto: ' + schemaType,
+            schema_type: schemaType,
+            principal_did: null,
+            template_config: {
+              version: 1,
+              layout: { type: 'flex', direction: 'column', spacing: 'md' },
+              fields: [{ path: 'name', label: null, display: 'title', condition: null, style: null }],
+            },
+            version: 1,
+            enabled: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            created_by: 'orchestrator',
+          };
+          window.__TAURI__.core._templates.push(generated);
+          return generated;
+        }
+
+        case 'export_templates': {
+          return JSON.stringify(window.__TAURI__.core._templates);
+        }
+
+        case 'import_templates': {
+          const jsonStr = args?.json_str || args?.jsonStr || '[]';
+          try {
+            const imported = JSON.parse(jsonStr);
+            const existingNames = new Set(window.__TAURI__.core._templates.map(t => t.template_name));
+            for (const t of imported) {
+              if (!existingNames.has(t.template_name)) {
+                window.__TAURI__.core._templates.push(t);
+                existingNames.add(t.template_name);
+              }
+            }
+          } catch (_) {}
+          return null;
+        }
+
         // ── Tier 2 Test: Error scenarios ────────────────────────
         case 'run_scenario_with_error': {
           // Test validation error when mandate scope exceeds agent capabilities
