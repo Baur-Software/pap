@@ -59,6 +59,7 @@ xcode-select --install
 | [wasm-pack](https://rustwasm.github.io/wasm-pack/) | latest | WASM builds |
 | [trunk](https://trunkrs.dev/) | latest | Leptos frontend builds |
 | [Playwright](https://playwright.dev/) | 1.50+ | E2E smoke tests |
+| [just](https://github.com/casey/just) | latest | Development command runner (`just setup`, `just dev`) |
 
 ## Quick Start
 
