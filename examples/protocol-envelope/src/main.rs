@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Protocol Envelope PoC demonstrating:
 //!
 //! - Envelope wrapping of protocol messages with routing and sequencing

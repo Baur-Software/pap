@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use chrono::{Duration, Utc};

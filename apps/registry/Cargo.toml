@@ -111,3 +111,8 @@ serde-wasm-bindgen   = "0.6"
 
 [lints]
 workspace = true
+
+[lints.clippy]
+# Application code (Leptos SSR server) uses .unwrap() on synchronisation
+# primitives and infallible serialisation; override the workspace warn.
+unwrap_used = { level = "allow", priority = 1 }

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Credential Lifecycle PoC demonstrating:
 //!
 //! - W3C Verifiable Credential (VC Data Model 2.0) issuance and verification
