@@ -50,8 +50,3 @@ tempfile = "3"
 
 [lints]
 workspace = true
-
-[lints.clippy]
-# Application code (Tauri desktop app) uses .unwrap() on synchronisation
-# primitives (RwLock/Mutex) as idiomatic Rust; override the workspace warn.
-unwrap_used = { level = "allow", priority = 1 }

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 

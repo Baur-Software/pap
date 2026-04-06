@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use tauri::State;
 
 use crate::db::prelude::DatabaseOps;
