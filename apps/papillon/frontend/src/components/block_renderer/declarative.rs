@@ -7,9 +7,17 @@ use serde_json::Value;
 ///
 /// Unlike hardcoded templates, DeclarativeRenderer uses a JSON-LD configuration schema to
 /// define field mappings, layout, and styling, enabling users to create templates without code.
+///
+/// When `agent_did` is set the renderer is registered in the agent-scoped tier of the
+/// `RendererRegistry`, giving it priority over any global renderer for the same schema type.
+/// This is the mechanism by which a UI component agent — or any agent with a custom payload
+/// shape — can declare exactly how its output should appear, without touching the shared
+/// schema.org vocabulary mapping.
 pub struct DeclarativeRenderer {
     config: TemplateConfig,
     schema_type: String,
+    /// When Some, this renderer is scoped to a specific agent DID.
+    agent_did: Option<String>,
 }
 
 impl DeclarativeRenderer {
@@ -18,12 +26,17 @@ impl DeclarativeRenderer {
         Self {
             config,
             schema_type: schema_type.to_string(),
+            agent_did: None,
         }
     }
 
-    /// Create from a Template (uses the template_config and schema_type).
+    /// Create from a Template (uses template_config, schema_type, and agent_did).
     pub fn from_template(template: &Template) -> Self {
-        Self::new(template.template_config.clone(), &template.schema_type)
+        Self {
+            config: template.template_config.clone(),
+            schema_type: template.schema_type.clone(),
+            agent_did: template.agent_did.clone(),
+        }
     }
 
     /// Extract a value from JSON-LD content using a JSON path (simplified for now).
@@ -186,6 +199,10 @@ impl BlockRenderer for DeclarativeRenderer {
         // In practice, we'll only call this once during registration, so we can
         // leak the string for the static lifetime.
         vec![Box::leak(self.schema_type.clone().into_boxed_str())]
+    }
+
+    fn agent_id(&self) -> Option<&str> {
+        self.agent_did.as_deref()
     }
 }
 

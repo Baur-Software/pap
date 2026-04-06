@@ -61,6 +61,7 @@ pub fn generate_template_from_json_ld(schema_type: &str, content: &Value) -> Tem
         template_name: format!("auto_{}", schema_type),
         schema_type: schema_type.to_string(),
         principal_did: None,
+        agent_did: None,
         template_config,
         version: 1,
         enabled: true,

@@ -144,6 +144,7 @@ pub fn TemplatesTab() -> impl IntoView {
             template_name: name.clone(),
             schema_type: schema_type.clone(),
             principal_did: None,
+            agent_did: None,
             template_config,
             version: 1,
             enabled: true,
