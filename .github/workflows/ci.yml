@@ -81,6 +81,32 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  justfile:
+    name: Justfile recipes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev pkg-config libpq-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "native"
+          cache-on-failure: true
+      - name: Install just
+        run: cargo install just
+      - name: just setup (skip — CI installs prerequisites directly)
+        run: just setup || echo "::warning::setup check failed — CI provides tools via workflow steps"
+      - name: just lint
+        run: just lint
+      - name: just test
+        run: just test
+      - name: just test-registry
+        run: just test-registry
+
   docker-workspace:
     name: Docker workspace consistency
     runs-on: ubuntu-latest
