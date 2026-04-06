@@ -350,14 +350,42 @@ test.describe("Auto-Generate Template and Registry-Driven Rendering", () => {
     expect(found.created_by).toBe("orchestrator");
   });
 
-  test("FlightReservation canvas prompt resolves as typed block", async ({ page }) => {
-    // Submit a prompt that triggers the mock FlightReservation block
+  test("FlightReservation block uses declarative renderer (tier-2 template dispatch)", async ({
+    page,
+  }) => {
     await page.locator(".palette-input").fill("mock:flightreservation");
     await page.locator(".palette-input").press("Enter");
 
-    // The mock falls through to the generic block path for unknown keywords,
-    // so verify at minimum the canvas block resolves (Resolved state)
-    await expect(page.locator(".canvas-block").first()).toBeVisible({ timeout: 8000 });
+    // The app has pre-existing UNKNOWN blocks; filter to the one that has a declarative grid
+    // (this is the only block that DeclarativeRenderer::render() produced).
+    const declarativeBlock = page
+      .locator(".canvas-block")
+      .filter({ has: page.locator(".declarative-grid") });
+    await expect(declarativeBlock).toBeVisible({ timeout: 8000 });
+
+    // Individual field rows produced by DeclarativeRenderer
+    await expect(declarativeBlock.locator(".declarative-field").first()).toBeVisible();
+
+    // The seeded template's first field is reservationNumber → value "PX-4892"
+    await expect(declarativeBlock.locator(".declarative-value").first()).toContainText("PX-4892");
+  });
+
+  test("Hotel block uses declarative renderer (LodgingReservation tier-2 dispatch)", async ({
+    page,
+  }) => {
+    await page.locator(".palette-input").fill("mock:hotel");
+    await page.locator(".palette-input").press("Enter");
+
+    // Hotel template may use grid or flex layout — filter by either
+    const declarativeBlock = page
+      .locator(".canvas-block")
+      .filter({ has: page.locator(".declarative-grid, .declarative-flex") });
+    await expect(declarativeBlock).toBeVisible({ timeout: 8000 });
+
+    await expect(declarativeBlock.locator(".declarative-field").first()).toBeVisible();
+    await expect(declarativeBlock.locator(".declarative-value").first()).toContainText(
+      "The Grand Pacific"
+    );
   });
 });
 

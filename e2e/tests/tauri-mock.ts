@@ -159,7 +159,7 @@ window.__TAURI__ = {
       {
         id: 'tmpl-hotel',
         template_name: 'Default Hotel Template',
-        schema_type: 'Hotel',
+        schema_type: 'LodgingReservation',
         principal_did: null,
         template_config: {
           version: 1,
@@ -481,6 +481,10 @@ window.__TAURI__ = {
             block = typedBlock('DefinedTerm', { name: 'monad', inDefinedTermSet: 'noun', description: 'A design pattern in functional programming representing computations as chains.' });
           } else if (promptText.includes('__quotation') || promptText.includes('mock:quotation')) {
             block = typedBlock('Quotation', { text: 'Programs must be written for people to read, and only incidentally for machines to execute.', spokenByCharacter: { name: 'Harold Abelson' }, citation: { name: 'SICP' } });
+          } else if (promptText.includes('__flightreservation') || promptText.includes('mock:flightreservation')) {
+            block = typedBlock('FlightReservation', { reservationNumber: 'PX-4892', underName: { name: 'Ada Lovelace' }, departureAirport: 'SFO', arrivalAirport: 'JFK', departureDate: '2026-06-01', departureTime: '09:15', arrivalTime: '17:45', airline: 'United', totalPrice: 382.00 });
+          } else if (promptText.includes('__hotel') || promptText.includes('mock:hotel')) {
+            block = typedBlock('LodgingReservation', { reservationNumber: 'H-78321', underName: { name: 'Grace Hopper' }, name: 'The Grand Pacific', checkinDate: '2026-07-10', checkoutDate: '2026-07-13', totalPrice: 540.00 });
           } else {
             // Generic answer block for non-typed prompts
             block = {
