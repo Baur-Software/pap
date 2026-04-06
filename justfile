@@ -56,7 +56,8 @@ dev:
     echo -n "  Waiting for registry (compiling if needed)"
     for i in $(seq 1 300); do
         curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && { echo " ready."; break; }
-        [ "$i" -eq 300 ] && { echo " timeout — registry did not start."; exit 1; }
+        kill -0 "${pids[0]}" 2>/dev/null || { echo " failed — registry process exited."; exit 1; }
+        [ "$i" -eq 300 ] && { echo " timeout."; exit 1; }
         echo -n "."; sleep 1
     done
     # Bootstrap extension WASM if missing, then start watch
