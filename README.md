@@ -130,13 +130,14 @@ curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -
 | `just setup` | Check development prerequisites |
 | `just dev` | Start the full stack (Papillon + Registry + Extension) |
 | `just papillon` | Papillon desktop app only |
-| `just registry-local` | Chrysalis federation registry (local dev, plain HTTP) |
+| `just registry` / `registry-local` | Chrysalis federation registry (default / plain HTTP) |
+| `just extension` | Browser extension watch build |
 | `just lint` | Format check + clippy (same as CI) |
 | `just test` | Run all workspace tests |
 | `just test-registry` | Registry tests with SSR features |
 | `just run-example pap-search-example` | Run any protocol example |
 
-Run `just --list` for all available recipes. Raw cargo/npm commands still work — the justfile is a convenience layer, not a requirement.
+Run `just --list` for all available recipes.
 
 ## Protocol Stack
 

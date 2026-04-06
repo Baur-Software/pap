@@ -1,6 +1,7 @@
 # PAP Development Commands
 # Run `just setup` to check prerequisites, `just --list` for all recipes.
 
+# List available recipes
 default:
     @just --list
 
@@ -27,14 +28,14 @@ setup:
     check node     "install Node.js 20+ from https://nodejs.org/"
     check npm      "included with Node.js"
     check wasm-pack "cargo install wasm-pack"
-    echo ""
-    echo "System:"
-    check curl "install via your package manager"
     if command -v node &>/dev/null; then
         node_major=$(node -v | sed 's/v\([0-9]*\).*/\1/')
         [ "$node_major" -ge 20 ] && echo "  ✓ node >= 20 ($(node -v))" \
             || { echo "  ✗ node >= 20 required (found $(node -v))"; ok=false; }
     fi
+    echo ""
+    echo "System:"
+    check curl "install via your package manager"
     echo ""
     $ok && echo "All prerequisites met." || { echo "Some prerequisites missing. See above."; exit 1; }
 
@@ -110,14 +111,17 @@ lint:
 
 alias check := lint
 
+# Auto-format all crates
 fmt:
     cargo fmt --all
 
+# Run cargo-audit for known vulnerabilities
 audit:
     cargo audit
 
 # ─── Test ─────────────────────────────────────────────────────
 
+# Run all workspace tests
 test:
     cargo test --workspace
 
@@ -131,9 +135,11 @@ test-registry:
 
 # ─── Build ────────────────────────────────────────────────────
 
+# Build all crates (debug)
 build:
     cargo build --workspace
 
+# Build all crates (release, optimized)
 build-release:
     cargo build --workspace --release
 
@@ -143,5 +149,6 @@ build-release:
 run-example name:
     cargo run -p "{{name}}"
 
+# Remove build artifacts
 clean:
     cargo clean

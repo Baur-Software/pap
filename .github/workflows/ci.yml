@@ -97,10 +97,13 @@ jobs:
           node-version: "20"
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "justfile"
+          shared-key: "native"
           cache-on-failure: true
       - name: Install tools
-        run: cargo install just wasm-pack cargo-audit
+        run: |
+          curl -fsSL https://just.systems/install.sh | bash -s -- --to ~/.cargo/bin
+          cargo install cargo-binstall
+          cargo binstall -y --no-confirm wasm-pack cargo-audit trunk tauri-cli
       # ── Setup ──
       - name: just setup
         run: just setup
@@ -110,7 +113,7 @@ jobs:
       - name: just fmt (verify idempotent)
         run: just fmt && git diff --exit-code
       - name: just audit
-        run: just audit || echo "::warning::cargo audit found advisories"
+        run: just audit
       # ── Test ──
       - name: just test
         run: just test
@@ -135,8 +138,6 @@ jobs:
           kill $pid
       - name: just extension
         run: |
-          cd apps/papillon-extension
-          npm install
           just extension &
           pid=$!
           sleep 10
