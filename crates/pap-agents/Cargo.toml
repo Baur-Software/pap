@@ -38,3 +38,6 @@ tokenizers = { workspace = true, optional = true }
 pap-credential-store = { workspace = true, features = ["testing"] }
 rand = { workspace = true }
 tempfile = "3"
+
+[lints]
+workspace = true

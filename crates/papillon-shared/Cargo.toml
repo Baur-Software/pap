@@ -37,3 +37,6 @@ tempfile = "3"
 default = ["native"]
 native = ["rusqlite", "pap-agents"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "wasm-bindgen-futures", "uuid/js"]
+
+[lints]
+workspace = true

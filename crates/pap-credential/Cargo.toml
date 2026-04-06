@@ -23,3 +23,9 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }
 getrandom = { workspace = true, optional = true }
+
+[dev-dependencies]
+pap-test-utils = { workspace = true }
+
+[lints]
+workspace = true

@@ -285,18 +285,7 @@ pub struct NodeIdentityResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::SigningKey;
-    use rand::rngs::OsRng;
-
-    fn make_keypair() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
-    }
-
-    fn did_from_key(key: &SigningKey) -> String {
-        pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
-            .unwrap()
-            .did()
-    }
+    use pap_test_utils::{did_from_key, make_keypair};
 
     // --- RegistryPeer backward-compatibility tests ---
 

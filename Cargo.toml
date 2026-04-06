@@ -16,6 +16,7 @@ members = [
     "crates/pap-c",
     "crates/pap-wasm",
     "crates/pap-credential-store",
+    "crates/pap-test-utils",
     "crates/papillon-shared",
     "apps/papillon",
     "apps/registry",
@@ -38,6 +39,9 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Baur-Software/pap"
 
+[workspace.lints.clippy]
+unwrap_used = "warn"
+
 [workspace.dependencies]
 pap-did = { path = "crates/pap-did" }
 pap-core = { path = "crates/pap-core" }
@@ -50,6 +54,7 @@ pap-federation = { path = "crates/pap-federation", default-features = false }
 pap-agents = { path = "crates/pap-agents" }
 pap-tee = { path = "crates/pap-tee" }
 pap-credential-store = { path = "crates/pap-credential-store" }
+pap-test-utils = { path = "crates/pap-test-utils" }
 papillon-shared = { path = "crates/papillon-shared" }
 
 ed25519-dalek = { version = "2", features = ["rand_core", "zeroize"] }

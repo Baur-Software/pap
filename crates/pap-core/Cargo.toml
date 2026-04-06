@@ -24,3 +24,9 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 zeroize = { workspace = true }
 subtle = "2"
+
+[dev-dependencies]
+pap-test-utils = { workspace = true }
+
+[lints]
+workspace = true

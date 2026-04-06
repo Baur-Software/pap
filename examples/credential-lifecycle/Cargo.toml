@@ -18,3 +18,6 @@ ed25519-dalek = { workspace = true }
 chrono = { workspace = true }
 serde_json = { workspace = true }
 rand = { workspace = true }
+
+[lints]
+workspace = true

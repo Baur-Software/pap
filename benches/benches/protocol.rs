@@ -1,8 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use chrono::{Duration, Utc};
-use ed25519_dalek::SigningKey;
-use rand::rngs::OsRng;
 use std::collections::HashMap;
 
 use pap_core::mandate::{Mandate, MandateChain};
@@ -13,14 +11,7 @@ use pap_credential::SelectiveDisclosureJwt;
 use pap_did::PrincipalKeypair;
 use pap_federation::{FederatedRegistry, FederationMessage, RegistryPeer};
 use pap_marketplace::AgentAdvertisement;
-
-fn make_keypair() -> SigningKey {
-    SigningKey::generate(&mut OsRng)
-}
-
-fn did_from_key(key: &SigningKey) -> String {
-    PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap().did()
-}
+use pap_test_utils::{did_from_key, make_keypair};
 
 // ---------------------------------------------------------------------------
 // 1. Ed25519 keypair generation
