@@ -138,6 +138,7 @@ jobs:
           kill $pid
       - name: just extension
         run: |
+          rm -rf apps/papillon-extension/dist
           just extension &
           pid=$!
           # Wait for vite to produce dist/ (wasm bootstrap + npm install + build can take minutes)
