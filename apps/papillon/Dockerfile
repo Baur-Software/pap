@@ -51,6 +51,11 @@ RUN sed -i \
     -e '/^pap-test-utils[[:space:]]*=/d' \
     Cargo.toml
 
+# Strip pap-test-utils dev-dep from crate manifests (the crate is not copied).
+RUN sed -i -e '/^pap-test-utils[[:space:]]*=/d' \
+    crates/pap-core/Cargo.toml \
+    crates/pap-credential/Cargo.toml
+
 WORKDIR /build/apps/papillon/frontend
 RUN trunk build --release
 
