@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Principal Agent Protocol — Baur Software</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0c0b14;
+      --surface:  #151420;
+      --surface2: #1f1e2e;
+      --surface3: #252438;
+      --border:   #2c2b40;
+      --purple:   #6c5ce7;
+      --violet:   #8b7ff5;
+      --teal:     #2ec4a0;
+      --gold:     #f0a030;
+      --coral:    #e8706a;
+      --blue:     #5098e0;
+      --text:     #eeeef2;
+      --muted:    #9494a8;
+      --faint:    #6a6a80;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      color: var(--text);
+    }
+
+    /* ── Deck shell ── */
+    .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+
+    .slides-track {
+      display: flex;
+      height: 100%;
+      transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+      will-change: transform;
+    }
+
+    /* ── Individual slide ── */
+    .slide {
+      flex: 0 0 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 56px 80px 72px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Radial glow in upper-right of every slide */
+    .slide::after {
+      content: '';
+      position: absolute;
+      width: 700px; height: 700px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(108,92,231,0.07) 0%, transparent 65%);
+      top: -250px; right: -250px;
+      pointer-events: none;
+    }
+
+    /* ── Navigation chrome ── */
+    .nav-prev, .nav-next {
+      position: fixed;
+      top: 50%; transform: translateY(-50%);
+      background: none; border: none;
+      color: var(--faint); cursor: pointer;
+      padding: 20px 16px;
+      z-index: 200;
+      transition: color 0.2s, opacity 0.3s;
+      font-size: 22px;
+      line-height: 1;
+    }
+    .nav-prev { left: 16px; }
+    .nav-next { right: 16px; }
+    .nav-prev:hover, .nav-next:hover { color: var(--text); }
+
+    .nav-dots {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; gap: 7px;
+      z-index: 200;
+    }
+    .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--border);
+      cursor: pointer;
+      transition: background 0.25s, transform 0.25s;
+    }
+    .dot.active { background: var(--purple); transform: scale(1.5); }
+
+    .slide-counter {
+      position: fixed;
+      bottom: 22px; right: 36px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--faint);
+      z-index: 200;
+    }
+
+    /* ── Phase badge ── */
+    .phase {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      padding: 5px 11px;
+      border-radius: 5px;
+      margin-bottom: 28px;
+      width: fit-content;
+    }
+    .phase::before {
+      content: '';
+      display: block;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .ph-barrier   { color: var(--coral);  background: rgba(232,112,106,0.12); }
+    .ph-awakening { color: var(--teal);   background: rgba(46,196,160,0.12);  }
+    .ph-execution { color: var(--gold);   background: rgba(240,160,48,0.12);  }
+    .ph-ecosystem { color: var(--blue);   background: rgba(80,152,224,0.12);  }
+    .ph-transform { color: var(--violet); background: rgba(139,127,245,0.12); }
+    .ph-economics { color: var(--gold);   background: rgba(240,160,48,0.12);  }
+    .ph-join      { color: var(--teal);   background: rgba(46,196,160,0.12);  }
+
+    /* ── Typography helpers ── */
+    .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 10px;
+    }
+
+    .headline {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(26px, 3.4vw, 46px);
+      font-weight: 700;
+      line-height: 1.18;
+      letter-spacing: -0.025em;
+      margin-bottom: 36px;
+    }
+
+    .tagline {
+      margin-top: auto;
+      padding-top: 32px;
+      font-size: 13px;
+      color: var(--faint);
+      font-style: italic;
+    }
+
+    /* ── Two-column layout ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      flex: 1;
+      align-content: start;
+    }
+
+    /* ── Four-column layout ── */
+    .four-col {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      flex: 1;
+      align-content: start;
+    }
+
+    /* ── Five-column layout ── */
+    .five-col {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      flex: 1;
+      align-content: start;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 26px 24px;
+    }
+    .card-title {
+      font-family: 'Satoshi', sans-serif;
+      font-size: 15px; font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 10px;
+    }
+    .card-body {
+      font-size: 13px; line-height: 1.7;
+      color: var(--muted);
+    }
+
+    /* ── Feature card (smaller) ── */
+    .fcard {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 18px;
+    }
+    .fcard-title {
+      font-family: 'Satoshi', sans-serif;
+      font-size: 13px; font-weight: 700;
+      letter-spacing: -0.005em;
+      margin-bottom: 8px;
+    }
+    .fcard-body {
+      font-size: 12px; line-height: 1.65;
+      color: var(--muted);
+    }
+
+    /* ── Trust chain ── */
+    .chain {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      flex: 1;
+    }
+    .chain-step {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      position: relative; padding: 0 20px;
+    }
+    .chain-step:not(:last-child)::after {
+      content: '→';
+      position: absolute;
+      right: -14px; top: 20px;
+      color: var(--border);
+      font-size: 18px;
+      z-index: 2;
+    }
+    .chain-num {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--purple);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px; font-weight: 600;
+      color: var(--purple);
+      margin-bottom: 14px;
+    }
+    .chain-title {
+      font-family: 'Satoshi', sans-serif;
+      font-size: 14px; font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .chain-desc {
+      font-size: 12px; line-height: 1.65;
+      color: var(--muted);
+    }
+
+    /* ── Title slide ── */
+    .slide-title {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    .slide-title::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 30%, rgba(108,92,231,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 20% 70%, rgba(46,196,160,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(240,160,48,0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .slide-title::after { display: none; }
+
+    .title-brand {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--purple);
+      margin-bottom: 24px;
+      position: relative; z-index: 1;
+    }
+    .title-h1 {
+      font-family: 'Satoshi', -apple-system, sans-serif;
+      font-size: clamp(40px, 5.5vw, 72px);
+      font-weight: 900;
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+      margin-bottom: 18px;
+      position: relative; z-index: 1;
+    }
+    .title-sub {
+      font-family: 'DM Sans', sans-serif;
+      font-size: clamp(15px, 1.8vw, 20px);
+      color: var(--muted);
+      margin-bottom: 36px;
+      position: relative; z-index: 1;
+    }
+    .proto-pill {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px; font-weight: 500;
+      color: var(--teal);
+      background: rgba(46,196,160,0.1);
+      border: 1px solid rgba(46,196,160,0.25);
+      border-radius: 6px;
+      padding: 7px 16px;
+      position: relative; z-index: 1;
+    }
+
+    /* ── CTA links ── */
+    .cta-row {
+      display: flex; gap: 14px;
+      flex-wrap: wrap; justify-content: center;
+      margin-top: 44px;
+      position: relative; z-index: 1;
+    }
+    .cta-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px; font-weight: 500;
+      padding: 10px 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .cta-btn-purple {
+      color: var(--violet);
+      border: 1px solid rgba(108,92,231,0.35);
+      background: rgba(108,92,231,0.08);
+    }
+    .cta-btn-purple:hover { border-color: var(--purple); background: rgba(108,92,231,0.15); }
+    .cta-btn-teal {
+      color: var(--teal);
+      border: 1px solid rgba(46,196,160,0.3);
+      background: rgba(46,196,160,0.07);
+    }
+    .cta-btn-teal:hover { border-color: var(--teal); background: rgba(46,196,160,0.14); }
+
+    /* ── Butterfly SVG ── */
+    .butterfly { width: 64px; height: 64px; margin: 0 auto 20px; position: relative; z-index: 1; }
+
+    /* ── Section header line ── */
+    .section-header {
+      display: flex; align-items: baseline; gap: 14px;
+      margin-bottom: 32px;
+    }
+    .section-header .headline { margin-bottom: 0; }
+    .section-divider {
+      flex: 1; height: 1px;
+      background: linear-gradient(to right, var(--border), transparent);
+    }
+
+    /* ── Economics highlight ── */
+    .econ-highlight {
+      font-family: 'Satoshi', sans-serif;
+      font-size: 13px; font-weight: 500;
+      color: var(--faint);
+      margin-top: auto;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── CTA slide headline ── */
+    .cta-h1 {
+      font-family: 'Satoshi', sans-serif;
+      font-size: clamp(36px, 5vw, 62px);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+      position: relative; z-index: 1;
+    }
+    .cta-sub {
+      font-size: 15px;
+      color: var(--muted);
+      max-width: 460px;
+      text-align: center;
+      line-height: 1.7;
+      position: relative; z-index: 1;
+    }
+  </style>
+</head>
+<body>
+<div class="deck">
+  <div class="slides-track" id="track">
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 1 · Title
+    ───────────────────────────────────────────── -->
+    <div class="slide slide-title">
+      <div class="butterfly">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="gwl" x1="0" y1="4" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#2ec4a0"/>
+              <stop offset="100%" stop-color="#8b7ff5"/>
+            </linearGradient>
+            <linearGradient id="gwr" x1="64" y1="4" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#e8706a"/>
+              <stop offset="100%" stop-color="#8b7ff5"/>
+            </linearGradient>
+            <linearGradient id="gwl2" x1="0" y1="36" x2="32" y2="52" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#2ec4a0" stop-opacity="0.85"/>
+              <stop offset="100%" stop-color="#6c5ce7"/>
+            </linearGradient>
+            <linearGradient id="gwr2" x1="64" y1="36" x2="32" y2="52" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#f0a030" stop-opacity="0.85"/>
+              <stop offset="100%" stop-color="#6c5ce7"/>
+            </linearGradient>
+          </defs>
+          <!-- Upper wings -->
+          <path d="M32 30 C26 18 4 6 2 20 C0 32 24 35 32 33" fill="url(#gwl)" opacity="0.95"/>
+          <path d="M32 30 C38 18 60 6 62 20 C64 32 40 35 32 33" fill="url(#gwr)" opacity="0.95"/>
+          <!-- Lower wings -->
+          <path d="M32 33 C24 36 2 40 4 52 C6 62 30 48 32 40" fill="url(#gwl2)" opacity="0.8"/>
+          <path d="M32 33 C40 36 62 40 60 52 C58 62 34 48 32 40" fill="url(#gwr2)" opacity="0.8"/>
+          <!-- Body -->
+          <ellipse cx="32" cy="36" rx="2" ry="16" fill="#6c5ce7"/>
+          <circle cx="32" cy="19" r="2.5" fill="#8b7ff5"/>
+        </svg>
+      </div>
+      <div class="title-brand">Baur Software</div>
+      <div class="title-h1">Zero Trust AI.<br/>Open Source Forever.</div>
+      <div class="title-sub">The future of autonomous agent commerce.</div>
+      <div class="proto-pill">The Principal Agent Protocol &nbsp;·&nbsp; pap://</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 2 · Problem — Barrier
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="phase ph-barrier">Barrier</div>
+      <div class="headline">Gourmet takes on a classic,<br/>but no one's at the table.</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">The Platform Trap</div>
+          <div class="card-body">You're blogging and posting on social media, but it's not converting. You're building their value while your business stays stagnant.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">The Complexity</div>
+          <div class="card-body">Hiring a marketing firm is too expensive; doing it yourself is a full-time job. You're out of time and out of luck.</div>
+        </div>
+      </div>
+      <div class="tagline">We solve your business problems fast.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 3 · Solution — Awakening
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="phase ph-awakening">Awakening</div>
+      <div class="headline">A few prompts to replace<br/>a marketing department.</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Agent Discovery</div>
+          <div class="card-body">"Research my competition, find my ICP, and build a campaign." Papillon discovers specialized agents on the federated network to handle the heavy lifting.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Sovereign Canvas</div>
+          <div class="card-body">You're not just chatting — you're orchestrating a team of autonomous experts from your own private dashboard.</div>
+        </div>
+      </div>
+      <div class="tagline">We solve your business problems fast.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 4 · Execution
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="phase ph-execution">Execution</div>
+      <div class="headline">Automating the outreach<br/>on your own terms.</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Web Creation</div>
+          <div class="card-body">Agents build a high-converting website tailored to your ICP. Your marketing runs on a dashboard you designed.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Sovereign Data</div>
+          <div class="card-body">You disclose only the essential parts of your business to the agents you hire. No more over-disclosure.</div>
+        </div>
+      </div>
+      <div class="tagline">We solve your business problems fast.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 5 · Ecosystem
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="phase ph-ecosystem">Ecosystem</div>
+      <div class="headline">Discovering agents that<br/>promote their own services.</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Mutual Discovery</div>
+          <div class="card-body">Find agents made by other business owners looking for partners. The Chrysalis registry verifies the identity and capability of every agent.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Network Effects</div>
+          <div class="card-body">Every new business owner who joins the federation increases the value for everyone else. Discovery drives revenue.</div>
+        </div>
+      </div>
+      <div class="tagline">We solve your business problems fast.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 6 · Transform
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="phase ph-transform">Transform</div>
+      <div class="headline">Papillon is now the operating<br/>system for your restaurant.</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Sovereign Growth</div>
+          <div class="card-body">Your gourmet grilled cheese is now reaching the right people. You own the data, the identity, and the success.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Custom Dashboard</div>
+          <div class="card-body">Your UI is generated to fit your workflow. You're no longer fighting platforms — you're building your future.</div>
+        </div>
+      </div>
+      <div class="tagline">We solve your business problems fast.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 7 · Value Props
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="label">Baur Software</div>
+      <div class="headline">From Platform Capture<br/>to Sovereignty.</div>
+      <div class="four-col">
+        <div class="fcard">
+          <div class="fcard-title">Context Minimization</div>
+          <div class="fcard-body">Maximum agent utility with minimum data leakage. Your agents work for you, not for the platform.</div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-title">Platform Independence</div>
+          <div class="fcard-body">Seamlessly move between agent providers without losing your identity, reputation, or data history.</div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-title">The Next Billion Agents</div>
+          <div class="fcard-body">Building the foundational trust layer for the future of autonomous, agentic commerce.</div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-title">Direct Value Capture</div>
+          <div class="fcard-body">Removing architectural barriers to allow value to flow directly between principals and specialized agents.</div>
+        </div>
+      </div>
+      <div class="tagline">We solve your problems fast by removing the mediator.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 8 · Business Model
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="phase ph-economics">Economics</div>
+      <div class="headline">Monetizing the Routing Layer:<br/>Execution is Payments.</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Verification Fees</div>
+          <div class="card-body">Agents pay for "Gold-Standard" verification and ranking within the Chrysalis registry. Trust is earned, not assumed.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Handshake Taxes</div>
+          <div class="card-body">Capturing protocol-level fees at the point of mandate issuance and discovery handshake — every negotiation generates revenue.</div>
+        </div>
+      </div>
+      <div class="tagline">The profit center of the decentralized agent federation.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 9 · Safety
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="label">Baur Software</div>
+      <div class="headline">Safety Is a<br/>Protocol Guarantee.</div>
+      <div class="five-col">
+        <div class="fcard">
+          <div class="fcard-title">Deny by Default</div>
+          <div class="fcard-body">No explicit mandate means no action is permitted. Security is built into the core protocol.</div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-title">Bounded Delegation</div>
+          <div class="fcard-body">Every agent action is cryptographically limited in scope and time. Mandates cannot be exceeded.</div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-title">Ephemeral Sessions</div>
+          <div class="fcard-body">Single-use keypairs prevent persistent behavioral profiling and context leaks.</div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-title">Property-Only Receipts</div>
+          <div class="fcard-body">Verifiable proof of action without leaking private data values to the platform.</div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-title">Progressive Decay</div>
+          <div class="fcard-body">Graceful degradation of trust ensures continuous safety without sudden failure.</div>
+        </div>
+      </div>
+      <div class="tagline">Safety by design, not by implementation.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 10 · Trust Chain
+    ───────────────────────────────────────────── -->
+    <div class="slide">
+      <div class="label">Baur Software</div>
+      <div class="headline">Scaling Trust from<br/>Human to Handshake.</div>
+      <div class="chain">
+        <div class="chain-step">
+          <div class="chain-num">1</div>
+          <div class="chain-title">Human Principal</div>
+          <div class="chain-desc">Device-bound root of trust (WebAuthn). You remain the ultimate authority.</div>
+        </div>
+        <div class="chain-step">
+          <div class="chain-num">2</div>
+          <div class="chain-title">Orchestrator Agent</div>
+          <div class="chain-desc">Holds the root mandate; signs specific sub-mandates for downstream tasks.</div>
+        </div>
+        <div class="chain-step">
+          <div class="chain-num">3</div>
+          <div class="chain-title">Chrysalis Registry</div>
+          <div class="chain-desc">Verifies the identity and capability of the target agent before discovery.</div>
+        </div>
+        <div class="chain-step">
+          <div class="chain-num">4</div>
+          <div class="chain-title">Downstream Agent</div>
+          <div class="chain-desc">Executes the task within the signed cryptographic bounds of the mandate.</div>
+        </div>
+      </div>
+      <div class="tagline">A verifiable chain of command for the agentic web.</div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────
+         SLIDE 11 · CTA
+    ───────────────────────────────────────────── -->
+    <div class="slide slide-title">
+      <div class="phase ph-join" style="margin: 0 auto 28px;">Join Us</div>
+      <div class="cta-h1">Control Your AI.<br/>Own the Registry.</div>
+      <div class="cta-sub">
+        The Principal Agent Protocol is open source and built for everyone who believes AI should serve the human, not the platform.
+      </div>
+      <div class="cta-row">
+        <a class="cta-btn cta-btn-purple" href="https://github.com/baur-software/pap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          github.com/baur-software/pap
+        </a>
+        <a class="cta-btn cta-btn-teal" href="https://baur-software.github.io/pap/">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Interactive Demo
+        </a>
+      </div>
+    </div>
+
+  </div><!-- /slides-track -->
+
+  <!-- Nav chrome -->
+  <button class="nav-prev" id="prevBtn" aria-label="Previous">&#8592;</button>
+  <button class="nav-next" id="nextBtn" aria-label="Next">&#8594;</button>
+  <div class="nav-dots" id="dots"></div>
+  <div class="slide-counter" id="counter"></div>
+</div><!-- /deck -->
+
+<script>
+  const track   = document.getElementById('track');
+  const dotsEl  = document.getElementById('dots');
+  const counterEl = document.getElementById('counter');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const slides  = Array.from(document.querySelectorAll('.slide'));
+  const total   = slides.length;
+  let cur = 0;
+
+  // Build dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    d.addEventListener('click', () => goTo(i));
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n) {
+    cur = Math.max(0, Math.min(total - 1, n));
+    track.style.transform = `translateX(calc(-${cur} * 100vw))`;
+    dotsEl.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === cur));
+    counterEl.textContent = `${cur + 1} / ${total}`;
+    prevBtn.style.opacity = cur === 0 ? '0' : '1';
+    prevBtn.style.pointerEvents = cur === 0 ? 'none' : '';
+    nextBtn.style.opacity = cur === total - 1 ? '0' : '1';
+    nextBtn.style.pointerEvents = cur === total - 1 ? 'none' : '';
+  }
+
+  prevBtn.addEventListener('click', () => goTo(cur - 1));
+  nextBtn.addEventListener('click', () => goTo(cur + 1));
+
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight', 'ArrowDown', ' '].includes(e.key)) { e.preventDefault(); goTo(cur + 1); }
+    if (['ArrowLeft',  'ArrowUp'       ].includes(e.key)) { e.preventDefault(); goTo(cur - 1); }
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End')  goTo(total - 1);
+  });
+
+  // Touch swipe
+  let tx = 0;
+  track.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend',   e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 48) goTo(cur + (dx < 0 ? 1 : -1));
+  });
+
+  goTo(0);
+</script>
+</body>
+</html>
