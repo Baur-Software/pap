@@ -25,6 +25,7 @@ pub mod catalog;
 pub mod dynamic;
 pub mod dynamic_handler;
 pub mod executor;
+pub mod group_chat;
 pub mod llm;
 pub mod registry;
 pub mod selection;
@@ -37,6 +38,7 @@ pub use dynamic::{
 };
 pub use dynamic_handler::DynamicAgentHandler;
 pub use executor::{AgentExecutor, AgentMeta};
+pub use group_chat::GroupChatRoom;
 #[cfg(feature = "candle")]
 pub use llm::BuiltInLlmClient;
 pub use llm::ExternalLlmClient;

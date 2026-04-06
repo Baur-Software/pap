@@ -1,7 +1,6 @@
 pub mod client;
 pub mod endpoint;
 pub mod error;
-pub mod group_handler;
 pub mod handler;
 pub mod ohttp;
 pub mod ohttp_client;
@@ -16,7 +15,6 @@ pub(crate) mod ws_common;
 pub use client::AgentClient;
 pub use endpoint::EndpointRegistry;
 pub use error::TransportError;
-pub use group_handler::GroupChatRoom;
 pub use handler::AgentHandler;
 pub use ohttp::{
     OhttpConfig, OhttpDecryptor, OhttpEncryptor, OhttpServerDecryptor, OhttpServerEncryptor,

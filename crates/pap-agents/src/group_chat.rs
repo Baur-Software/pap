@@ -23,10 +23,9 @@ use std::sync::{Arc, RwLock};
 
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
+use pap_transport::handler::AgentHandler;
+use pap_transport::TransportError;
 use tokio::sync::mpsc;
-
-use crate::error::TransportError;
-use crate::handler::AgentHandler;
 
 /// A connected member's outbound channel.
 type MemberSender = mpsc::Sender<serde_json::Value>;

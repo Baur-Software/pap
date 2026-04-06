@@ -1,17 +1,17 @@
 //! Tauri commands for chat — conversation and message persistence.
 //!
-//! All commands delegate to `ChatStore`, following the same pattern as
-//! `commands/episodes.rs`. Group room creation is also handled here.
+//! All commands delegate to `EpisodeStore`, which also owns the chat
+//! persistence methods. Group room creation is handled here.
 
 use chrono::Utc;
 use tauri::State;
 
-use crate::chat_store::ChatStore;
+use crate::episode_store::EpisodeStore;
 use papillon_shared::db::{ChatMessage, Conversation};
 
 /// List all known conversations, newest first.
 #[tauri::command]
-pub fn list_conversations(store: State<'_, ChatStore>) -> Result<Vec<Conversation>, String> {
+pub fn list_conversations(store: State<'_, EpisodeStore>) -> Result<Vec<Conversation>, String> {
     store.list_conversations().map_err(|e| e.message)
 }
 
@@ -20,7 +20,7 @@ pub fn list_conversations(store: State<'_, ChatStore>) -> Result<Vec<Conversatio
 /// `limit` defaults to 100 and is clamped to 500.
 #[tauri::command]
 pub fn get_chat_history(
-    store: State<'_, ChatStore>,
+    store: State<'_, EpisodeStore>,
     conversation_id: String,
     limit: Option<usize>,
 ) -> Result<Vec<ChatMessage>, String> {
@@ -37,7 +37,7 @@ pub fn get_chat_history(
 /// separately by the orchestrator layer.
 #[tauri::command]
 pub fn create_group_chat(
-    store: State<'_, ChatStore>,
+    store: State<'_, EpisodeStore>,
     room_name: String,
     room_id: String,
 ) -> Result<Conversation, String> {
@@ -59,7 +59,7 @@ pub fn create_group_chat(
 /// group chat whose room DID and name are provided by the room owner.
 #[tauri::command]
 pub fn join_group_chat(
-    store: State<'_, ChatStore>,
+    store: State<'_, EpisodeStore>,
     room_id: String,
     room_name: String,
 ) -> Result<Conversation, String> {
@@ -81,7 +81,7 @@ pub fn join_group_chat(
 /// each `StreamingMessage` is received or sent).
 #[tauri::command]
 pub fn record_chat_message(
-    store: State<'_, ChatStore>,
+    store: State<'_, EpisodeStore>,
     message: ChatMessage,
 ) -> Result<(), String> {
     store.insert_message(&message).map_err(|e| e.message)
@@ -90,7 +90,7 @@ pub fn record_chat_message(
 /// Mark a message as delivered.
 #[tauri::command]
 pub fn mark_message_delivered(
-    store: State<'_, ChatStore>,
+    store: State<'_, EpisodeStore>,
     message_id: String,
 ) -> Result<(), String> {
     store.mark_delivered(&message_id).map_err(|e| e.message)
