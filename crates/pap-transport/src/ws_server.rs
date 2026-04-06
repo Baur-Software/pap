@@ -450,7 +450,7 @@ mod tests {
             Some(ProtocolMessage::ExecutionResult { result }) => {
                 assert_eq!(result["@type"], "SearchResult");
             }
-            other => panic!("expected ExecutionResult, got {other:?}"),
+            _ => panic!("expected ExecutionResult"),
         }
     }
 
@@ -473,7 +473,7 @@ mod tests {
             Some(ProtocolMessage::StreamingMessage { content: reply, .. }) => {
                 assert_eq!(reply, content);
             }
-            other => panic!("expected StreamingMessage reply, got {other:?}"),
+            _ => panic!("expected StreamingMessage reply"),
         }
     }
 
@@ -492,7 +492,7 @@ mod tests {
         let resp = dispatch_message(&h, &mut sid, msg).unwrap();
         match resp.payload {
             Some(ProtocolMessage::StreamingAck { id }) => assert_eq!(id, "msg-42"),
-            other => panic!("expected StreamingAck, got {other:?}"),
+            _ => panic!("expected StreamingAck"),
         }
     }
 
