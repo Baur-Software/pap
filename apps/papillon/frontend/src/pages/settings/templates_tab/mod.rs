@@ -950,7 +950,6 @@ pub fn TemplatesTab() -> impl IntoView {
                 is_open=builder_open
                 on_complete=Callback::new(handle_builder_complete)
                 schema_type=new_schema_type
-                registered_types=registered_types
             />
 
             <TemplateLibrary

@@ -27,7 +27,7 @@ pub fn SchemaTypeInput(
         all.into_iter()
             .filter(|t| {
                 let tl = t.to_lowercase();
-                tl.contains(&lower) && *t != value.get()
+                tl.contains(&lower) && *t != input
             })
             .take(8)
             .collect()

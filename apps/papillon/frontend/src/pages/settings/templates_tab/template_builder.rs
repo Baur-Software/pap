@@ -13,10 +13,8 @@ pub fn TemplateBuilder(
     is_open: RwSignal<bool>,
     on_complete: Callback<TemplateConfig>,
     #[prop(optional)] schema_type: Option<RwSignal<String>>,
-    #[prop(optional)] registered_types: Option<Signal<Vec<String>>>,
 ) -> impl IntoView {
     let schema_type_inner = schema_type.unwrap_or_else(|| RwSignal::new(String::new()));
-    let _registered_types_inner = registered_types.unwrap_or_else(|| Signal::derive(|| vec![]));
 
     // Layout state
     let layout_type = RwSignal::new("grid".to_string());
