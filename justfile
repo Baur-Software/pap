@@ -77,13 +77,13 @@ dev:
     echo "  Papillon  → cargo tauri dev"
     echo ""
     echo "Press Ctrl+C to stop all."
-    cargo tauri dev -p papillon
+    cd apps/papillon && cargo tauri dev
 
 # ─── Services ─────────────────────────────────────────────────
 
 # Run Papillon desktop app (Tauri + Leptos frontend)
 papillon:
-    cargo tauri dev -p papillon
+    cd apps/papillon && cargo tauri dev
 
 # Run federation registry (default transport)
 registry:

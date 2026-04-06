@@ -79,7 +79,7 @@ One canvas. Many agents. Your rules. Papillon is a Tauri desktop app that lets y
 - **Deep-link protocol** (`pap://`, `pap+https://`, `pap+wss://`)
 
 ```bash
-just papillon              # or: cargo tauri dev -p papillon
+just papillon              # or: cd apps/papillon && cargo tauri dev
 ```
 
 [Documentation](https://baur-software.github.io/pap/papillon/) · [Source](apps/papillon/)
