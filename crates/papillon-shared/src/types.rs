@@ -48,16 +48,28 @@ mod llm_types {
     }
 
     pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
-        vec![BuiltInModelInfo {
-            id: "tinyllama-1.1b".into(),
-            display_name: "TinyLlama 1.1B Chat (Q4)".into(),
-            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
-            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-            size_hint: "~0.6 GB".into(),
-            download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-            tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
-            web_compatible: false,
-        }]
+        vec![
+            BuiltInModelInfo {
+                id: "gemma-4-1b".into(),
+                display_name: "Gemma 4 1B Instruct (Q4)".into(),
+                repo: "bartowski/google_gemma-4-1b-it-GGUF".into(),
+                filename: "google_gemma-4-1b-it-Q4_K_M.gguf".into(),
+                size_hint: "~0.7 GB".into(),
+                download_url: "https://huggingface.co/bartowski/google_gemma-4-1b-it-GGUF/resolve/main/google_gemma-4-1b-it-Q4_K_M.gguf".into(),
+                tokenizer_url: "https://huggingface.co/google/gemma-4-1b-it/resolve/main/tokenizer.json".into(),
+                web_compatible: true,
+            },
+            BuiltInModelInfo {
+                id: "tinyllama-1.1b".into(),
+                display_name: "TinyLlama 1.1B Chat (Q4)".into(),
+                repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+                filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+                size_hint: "~0.6 GB".into(),
+                download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+                tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
+                web_compatible: false,
+            },
+        ]
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -85,7 +97,7 @@ mod llm_types {
     impl Default for LlmProvider {
         fn default() -> Self {
             LlmProvider::BuiltIn {
-                model_id: "tinyllama-1.1b".into(),
+                model_id: "gemma-4-1b".into(),
             }
         }
     }

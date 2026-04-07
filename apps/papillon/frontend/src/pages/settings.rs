@@ -76,7 +76,7 @@ pub fn SettingsPage() -> impl IntoView {
 fn GeneralTab() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let selected = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("tinyllama-1.1b".to_string());
+    let builtin_model = RwSignal::new("gemma-4-1b".to_string());
     let builtin_models = RwSignal::new(builtin_model_catalog());
     let mistral_key = RwSignal::new(String::new());
     let mistral_model = RwSignal::new("mistral-small-latest".to_string());
