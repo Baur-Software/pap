@@ -64,13 +64,13 @@ pub struct ModelDownloadProgress {
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
     vec![
         BuiltInModelInfo {
-            id: "gemma-4-1b".into(),
-            display_name: "Gemma 4 1B Instruct (Q4)".into(),
-            repo: "bartowski/google_gemma-4-1b-it-GGUF".into(),
-            filename: "google_gemma-4-1b-it-Q4_K_M.gguf".into(),
-            size_hint: "~0.7 GB".into(),
-            download_url: "https://huggingface.co/bartowski/google_gemma-4-1b-it-GGUF/resolve/main/google_gemma-4-1b-it-Q4_K_M.gguf".into(),
-            tokenizer_url: "https://huggingface.co/google/gemma-4-1b-it/resolve/main/tokenizer.json".into(),
+            id: "gemma-4-e2b".into(),
+            display_name: "Gemma 4 E2B Instruct (Q4)".into(),
+            repo: "bartowski/google_gemma-4-E2B-it-GGUF".into(),
+            filename: "google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+            size_hint: "~1.5 GB".into(),
+            download_url: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+            tokenizer_url: "https://huggingface.co/google/gemma-4-E2B-it/resolve/main/tokenizer.json".into(),
             web_compatible: true,
         },
         BuiltInModelInfo {
@@ -117,7 +117,7 @@ pub enum LlmProvider {
 impl Default for LlmProvider {
     fn default() -> Self {
         LlmProvider::BuiltIn {
-            model_id: "gemma-4-1b".into(),
+            model_id: "gemma-4-e2b".into(),
         }
     }
 }
@@ -634,7 +634,7 @@ mod tests {
         assert_eq!(
             LlmProvider::default(),
             LlmProvider::BuiltIn {
-                model_id: "gemma-4-1b".into()
+                model_id: "gemma-4-e2b".into()
             }
         );
     }
@@ -651,7 +651,7 @@ mod tests {
         // No model files are present on the test machine, so the
         // BuiltInLlmClient should surface an Io error on first use.
         let client = LlmProvider::BuiltIn {
-            model_id: "gemma-4-1b".into(),
+            model_id: "gemma-4-e2b".into(),
         }
         .into_client();
         // classify_intent will attempt to load the model — which won't exist
@@ -676,7 +676,7 @@ mod tests {
         let providers = vec![
             LlmProvider::None,
             LlmProvider::BuiltIn {
-                model_id: "gemma-4-1b".into(),
+                model_id: "gemma-4-e2b".into(),
             },
             LlmProvider::Mistral {
                 api_key: "key".into(),
@@ -703,12 +703,12 @@ mod tests {
     #[test]
     fn builtin_alias_deserialises() {
         // The `#[serde(alias = "BuiltIn")]` should accept the tagged form too.
-        let json = r#"{"BuiltIn":{"model_id":"gemma-4-1b"}}"#;
+        let json = r#"{"BuiltIn":{"model_id":"gemma-4-e2b"}}"#;
         let p: LlmProvider = serde_json::from_str(json).unwrap();
         assert_eq!(
             p,
             LlmProvider::BuiltIn {
-                model_id: "gemma-4-1b".into()
+                model_id: "gemma-4-e2b".into()
             }
         );
     }

@@ -50,13 +50,13 @@ mod llm_types {
     pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
         vec![
             BuiltInModelInfo {
-                id: "gemma-4-1b".into(),
-                display_name: "Gemma 4 1B Instruct (Q4)".into(),
-                repo: "bartowski/google_gemma-4-1b-it-GGUF".into(),
-                filename: "google_gemma-4-1b-it-Q4_K_M.gguf".into(),
-                size_hint: "~0.7 GB".into(),
-                download_url: "https://huggingface.co/bartowski/google_gemma-4-1b-it-GGUF/resolve/main/google_gemma-4-1b-it-Q4_K_M.gguf".into(),
-                tokenizer_url: "https://huggingface.co/google/gemma-4-1b-it/resolve/main/tokenizer.json".into(),
+                id: "gemma-4-e2b".into(),
+                display_name: "Gemma 4 E2B Instruct (Q4)".into(),
+                repo: "bartowski/google_gemma-4-E2B-it-GGUF".into(),
+                filename: "google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+                size_hint: "~1.5 GB".into(),
+                download_url: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+                tokenizer_url: "https://huggingface.co/google/gemma-4-E2B-it/resolve/main/tokenizer.json".into(),
                 web_compatible: true,
             },
             BuiltInModelInfo {
@@ -97,7 +97,7 @@ mod llm_types {
     impl Default for LlmProvider {
         fn default() -> Self {
             LlmProvider::BuiltIn {
-                model_id: "gemma-4-1b".into(),
+                model_id: "gemma-4-e2b".into(),
             }
         }
     }
@@ -691,9 +691,9 @@ mod tests {
     }
 
     #[test]
-    fn catalog_default_is_tinyllama() {
+    fn catalog_default_is_gemma_4() {
         let catalog = builtin_model_catalog();
-        assert_eq!(catalog[0].id, "tinyllama-1.1b");
+        assert_eq!(catalog[0].id, "gemma-4-e2b");
     }
 
     #[test]
@@ -719,11 +719,11 @@ mod tests {
     // ── LlmProvider default & serde ─────────────────────────
 
     #[test]
-    fn llm_provider_default_is_builtin_tinyllama() {
+    fn llm_provider_default_is_builtin_gemma_4() {
         let provider = LlmProvider::default();
         match &provider {
             LlmProvider::BuiltIn { model_id } => {
-                assert_eq!(model_id, "tinyllama-1.1b");
+                assert_eq!(model_id, "gemma-4-e2b");
             }
             other => panic!("Expected BuiltIn, got {other:?}"),
         }

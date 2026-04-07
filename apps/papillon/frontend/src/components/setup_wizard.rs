@@ -11,7 +11,7 @@ pub fn SetupWizard() -> impl IntoView {
     let show_wizard = RwSignal::new(false);
     let wizard_error = RwSignal::new(None::<String>);
     let selected_provider = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("gemma-4-1b".to_string());
+    let builtin_model = RwSignal::new("gemma-4-e2b".to_string());
     let builtin_models = RwSignal::new(builtin_model_catalog());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
     let ollama_model = RwSignal::new("llama3.2:1b".to_string());
