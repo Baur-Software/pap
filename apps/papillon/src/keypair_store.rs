@@ -172,6 +172,7 @@ impl KeypairStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
@@ -216,7 +217,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn key_file_has_mode_0600() {
+        use std::os::unix::fs::PermissionsExt;
         let dir = temp_dir();
         KeypairStore::open(dir.path()).expect("should create store");
 
