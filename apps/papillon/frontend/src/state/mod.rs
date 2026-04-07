@@ -4,4 +4,5 @@ pub mod identity;
 pub mod orchestrator;
 pub mod recovery;
 pub mod registry;
+pub mod renderer;
 pub mod templates;

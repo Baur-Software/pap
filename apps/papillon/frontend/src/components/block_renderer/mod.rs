@@ -2,7 +2,7 @@ pub(crate) mod declarative;
 pub(crate) mod field_classify;
 mod generic;
 mod receipt;
-mod registry;
+pub(crate) mod registry;
 pub(crate) mod renderer;
 pub(crate) mod schema_property;
 mod templates;
@@ -12,12 +12,13 @@ use papillon_shared::{BlockState, CanvasBlock};
 use serde_json::Value;
 use std::sync::Arc;
 
+pub use registry::RendererRegistry;
+
 use crate::state::canvas::CanvasState;
-use crate::state::templates::TemplatesState;
-use registry::RendererRegistry;
+use crate::state::renderer::RendererState;
 
 /// Create and initialize the default renderer registry with shipped templates.
-fn create_default_registry() -> Arc<RendererRegistry> {
+pub fn create_default_registry() -> Arc<RendererRegistry> {
     let registry = Arc::new(RendererRegistry::new());
     // Reservations
     registry.register(Arc::new(templates::FlightTemplate));
@@ -64,15 +65,9 @@ fn create_default_registry() -> Arc<RendererRegistry> {
 #[component]
 pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let templates_state = expect_context::<TemplatesState>();
+    let renderer_state = expect_context::<RendererState>();
 
-    let registry = create_default_registry();
-
-    // Load user-defined templates from context
-    let all_templates = templates_state.all_templates();
-    if !all_templates.is_empty() {
-        registry.load_from_templates(all_templates);
-    }
+    let registry = renderer_state.registry.with_value(|r| Arc::clone(r));
 
     let block_id = StoredValue::new(block.id.clone());
     let show_reprompt = RwSignal::new(false);
