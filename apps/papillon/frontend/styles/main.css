@@ -855,6 +855,40 @@ body {
     background: rgba(0,217,166,0.06);
 }
 
+/* Settings session/intent section */
+.settings-session-section {
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+}
+
+.settings-session-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text-2);
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    padding: var(--sp-xs) 0;
+    transition: color 0.15s ease;
+}
+
+.settings-session-toggle:hover { color: var(--text-1); }
+
+.settings-session-body {
+    margin-top: 8px;
+    padding: 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+}
+
 /* Step detail text */
 .step-detail {
     font: var(--text-label);
@@ -1217,6 +1251,32 @@ body {
     height: 1px;
     background: var(--border);
     margin: var(--sp-xs) 0;
+}
+
+.menu-item-row {
+    display: flex;
+    align-items: center;
+}
+
+.menu-item-row .menu-item {
+    flex: 1;
+    min-width: 0;
+}
+
+.menu-item-delete {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.25);
+    cursor: pointer;
+    padding: 0 10px;
+    font-size: 16px;
+    line-height: 1;
+    transition: color 0.15s ease;
+}
+
+.menu-item-delete:hover {
+    color: var(--coral, #e8706a);
 }
 
 .menu-backdrop {
@@ -3566,18 +3626,12 @@ body {
 /* ── Canvas Workspace ── */
 .canvas-workspace {
     display: grid;
-    grid-template-columns: 220px 1fr 220px;
+    grid-template-columns: 1fr 220px;
     height: 100%;
     overflow: hidden;
 }
-.canvas-workspace:has(.canvas-intent-panel.collapsed) {
-    grid-template-columns: 32px 1fr 220px;
-}
 .canvas-workspace:has(.canvas-ledger-panel.collapsed) {
-    grid-template-columns: 220px 1fr 32px;
-}
-.canvas-workspace:has(.canvas-intent-panel.collapsed):has(.canvas-ledger-panel.collapsed) {
-    grid-template-columns: 32px 1fr 32px;
+    grid-template-columns: 1fr 32px;
 }
 
 .canvas-intent-panel,

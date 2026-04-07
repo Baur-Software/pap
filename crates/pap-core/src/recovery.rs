@@ -782,4 +782,180 @@ mod tests {
         };
         assert!(revocation.verify(&key.verifying_key()).is_err());
     }
+
+    // ── RecoveryMandate::is_notary ────────────────────────────────────────────
+
+    #[test]
+    fn is_notary_returns_true_for_designated_did() {
+        let mandate = RecoveryMandate::new(
+            "did:key:zprincipal".into(),
+            1,
+            vec!["did:key:znotary1".into(), "did:key:znotary2".into()],
+        )
+        .unwrap();
+        assert!(mandate.is_notary("did:key:znotary1"));
+        assert!(mandate.is_notary("did:key:znotary2"));
+    }
+
+    #[test]
+    fn is_notary_returns_false_for_unknown_did() {
+        let mandate = RecoveryMandate::new(
+            "did:key:zprincipal".into(),
+            1,
+            vec!["did:key:znotary1".into()],
+        )
+        .unwrap();
+        assert!(!mandate.is_notary("did:key:znotary2"));
+        assert!(!mandate.is_notary(""));
+        // is_notary is case-sensitive — partial matches must not succeed
+        assert!(!mandate.is_notary("did:key:znotary"));
+    }
+
+    // ── RecoveryMandate::verify edge cases ────────────────────────────────────
+
+    #[test]
+    fn recovery_mandate_verify_with_wrong_key_fails() {
+        let principal_key = make_keypair();
+        let wrong_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did, 1, vec!["did:key:znotary1".into()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        // Verify against a *different* key — must fail
+        assert!(mandate.verify(&wrong_key.verifying_key()).is_err());
+    }
+
+    #[test]
+    fn recovery_mandate_verify_with_tampered_signature_fails() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did, 1, vec!["did:key:znotary1".into()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        // Flip a byte in the middle of the base64-encoded signature
+        if let Some(ref mut sig) = mandate.signature {
+            let mut bytes = sig.clone().into_bytes();
+            let mid = bytes.len() / 2;
+            bytes[mid] ^= 0x01;
+            *sig = String::from_utf8_lossy(&bytes).into_owned();
+        }
+
+        assert!(mandate.verify(&principal_key.verifying_key()).is_err());
+    }
+
+    #[test]
+    fn recovery_mandate_verify_unsigned_fails() {
+        let key = make_keypair();
+        let mandate =
+            RecoveryMandate::new(did_from_key(&key), 1, vec!["did:key:znotary1".into()]).unwrap();
+        // No call to .sign() — signature field is None
+        assert!(mandate.verify(&key.verifying_key()).is_err());
+    }
+
+    // ── RecoveryMandate::hash ─────────────────────────────────────────────────
+
+    #[test]
+    fn recovery_mandate_hash_changes_when_principal_changes() {
+        let notaries = vec!["did:key:znotary1".into()];
+        let m1 = RecoveryMandate::new("did:key:zprincipal_a".into(), 1, notaries.clone()).unwrap();
+        let m2 = RecoveryMandate::new("did:key:zprincipal_b".into(), 1, notaries).unwrap();
+        assert_ne!(m1.hash(), m2.hash());
+    }
+
+    #[test]
+    fn recovery_mandate_hash_changes_when_threshold_changes() {
+        let notaries = vec!["did:key:zn1".into(), "did:key:zn2".into()];
+        let m1 = RecoveryMandate::new("did:key:zprincipal".into(), 1, notaries.clone()).unwrap();
+        let m2 = RecoveryMandate::new("did:key:zprincipal".into(), 2, notaries).unwrap();
+        // Different thresholds → different canonical bytes → different hashes
+        assert_ne!(m1.hash(), m2.hash());
+    }
+
+    #[test]
+    fn recovery_mandate_sign_twice_overwrites_signature() {
+        let key = make_keypair();
+        let mut mandate =
+            RecoveryMandate::new(did_from_key(&key), 1, vec!["did:key:znotary1".into()]).unwrap();
+
+        mandate.sign(&key).unwrap();
+        let sig1 = mandate.signature.clone().unwrap();
+        mandate.sign(&key).unwrap();
+        let sig2 = mandate.signature.clone().unwrap();
+
+        // Ed25519 is deterministic — same key + same data → same signature
+        assert_eq!(sig1, sig2);
+        // And the mandate must still verify cleanly after the second sign
+        assert!(mandate.verify(&key.verifying_key()).is_ok());
+    }
+
+    // ── RecoveryMandate::new — threshold edge cases ───────────────────────────
+
+    #[test]
+    fn one_of_one_threshold_is_valid() {
+        let result = RecoveryMandate::new(
+            "did:key:zprincipal".into(),
+            1,
+            vec!["did:key:znotary1".into()],
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn n_of_n_threshold_all_notaries_required() {
+        let result = RecoveryMandate::new(
+            "did:key:zprincipal".into(),
+            3,
+            vec![
+                "did:key:zn1".into(),
+                "did:key:zn2".into(),
+                "did:key:zn3".into(),
+            ],
+        );
+        assert!(result.is_ok());
+        let mandate = result.unwrap();
+        assert_eq!(mandate.threshold, mandate.notary_dids.len());
+    }
+
+    // ── RecoveryRequest ───────────────────────────────────────────────────────
+
+    #[test]
+    fn recovery_request_hash_is_deterministic() {
+        let req = RecoveryRequest::new(
+            "did:key:zold".into(),
+            "did:key:znew".into(),
+            "mandate-hash-abc".into(),
+        );
+        assert_eq!(req.hash(), req.hash());
+    }
+
+    #[test]
+    fn recovery_request_hash_differs_for_different_content() {
+        let req1 = RecoveryRequest::new(
+            "did:key:zold_a".into(),
+            "did:key:znew".into(),
+            "mandate-hash".into(),
+        );
+        let req2 = RecoveryRequest::new(
+            "did:key:zold_b".into(),
+            "did:key:znew".into(),
+            "mandate-hash".into(),
+        );
+        assert_ne!(req1.hash(), req2.hash());
+    }
+
+    #[test]
+    fn recovery_request_fields_are_stored_correctly() {
+        let req = RecoveryRequest::new(
+            "did:key:zold".into(),
+            "did:key:znew".into(),
+            "mandate-hash-xyz".into(),
+        );
+        assert_eq!(req.old_principal_did, "did:key:zold");
+        assert_eq!(req.new_principal_did, "did:key:znew");
+        assert_eq!(req.recovery_mandate_hash, "mandate-hash-xyz");
+    }
 }
