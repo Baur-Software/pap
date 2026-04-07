@@ -15,6 +15,12 @@ pub mod agent_profile;
 #[cfg(feature = "native")]
 pub mod episode_db;
 
+/// Local preference-learning engine — all data stays on the principal's device.
+#[cfg(feature = "native")]
+pub mod preference_engine;
+#[cfg(feature = "native")]
+pub use preference_engine::PreferenceEngine;
+
 pub use events::*;
 pub use json_ld_query::JsonLdQuery;
 pub use template_gen::generate_template_from_json_ld;

@@ -383,6 +383,11 @@ pub struct CanvasBlock {
     pub created_at: String,
     /// When this block was last updated.
     pub updated_at: String,
+    /// `true` when the orchestrator's agent selection was guided by local
+    /// preference history (≥ 3 prior sessions for this schema type).
+    /// Always `false` during cold start. Never transmitted off-device.
+    #[serde(default)]
+    pub preference_guided: bool,
 }
 
 /// A saved canvas — a collection of blocks from prompt sessions.
@@ -904,6 +909,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -932,6 +938,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -956,6 +963,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -986,6 +994,7 @@ mod tests {
                 agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
+                preference_guided: false,
             }],
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1059,6 +1068,7 @@ mod tests {
                 agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
+                preference_guided: false,
             },
         };
         let json = serde_json::to_string(&event).unwrap();
@@ -1330,6 +1340,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();

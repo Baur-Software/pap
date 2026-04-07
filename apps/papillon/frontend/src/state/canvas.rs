@@ -258,6 +258,7 @@ impl CanvasState {
             agent_did: None,
             created_at: now_iso(),
             updated_at: now_iso(),
+            preference_guided: false,
         };
 
         let block_id = block.id.clone();
@@ -556,6 +557,7 @@ mod tests {
                 agent_did: None,
                 created_at: String::new(),
                 updated_at: String::new(),
+                preference_guided: false,
             }],
             created_at: String::new(),
             updated_at: String::new(),
@@ -614,6 +616,7 @@ mod tests {
                     agent_did: None,
                     created_at: String::new(),
                     updated_at: String::new(),
+                    preference_guided: false,
                 },
                 CanvasBlock {
                     id: "b".into(),
@@ -626,6 +629,7 @@ mod tests {
                     agent_did: None,
                     created_at: String::new(),
                     updated_at: String::new(),
+                    preference_guided: false,
                 },
             ],
             created_at: String::new(),
