@@ -418,6 +418,77 @@ fn GeneralTab() -> impl IntoView {
                     </span>
                 </Show>
             </div>
+            <SessionInfoSection />
+        </div>
+    }
+}
+
+#[component]
+fn SessionInfoSection() -> impl IntoView {
+    use crate::state::canvas::CanvasState;
+    let canvas_state = expect_context::<CanvasState>();
+    let orchestrator = expect_context::<OrchestratorState>();
+    let expanded = RwSignal::new(false);
+
+    let session_id = move || {
+        canvas_state
+            .current_canvas()
+            .map(|c| c.id.chars().take(12).collect::<String>())
+            .unwrap_or_else(|| "NO_SESSION".to_string())
+    };
+
+    let block_count = move || {
+        canvas_state
+            .current_canvas()
+            .map(|c| c.blocks.len())
+            .unwrap_or(0)
+    };
+
+    let llm_status = move || match orchestrator.status.get() {
+        OrchestratorStatus::Ready => "SUBSTRATE_READY",
+        OrchestratorStatus::Unconfigured => "NOT_CONFIGURED",
+        OrchestratorStatus::Disconnected => "DISCONNECTED",
+        _ => "UNKNOWN",
+    };
+
+    view! {
+        <div class="settings-session-section">
+            <button
+                class="settings-session-toggle"
+                on:click=move |_| expanded.update(|v| *v = !*v)
+            >
+                <span>"INTENT_MEMORY"</span>
+                <span>{move || if expanded.get() { "▲" } else { "▼" }}</span>
+            </button>
+            <Show when=move || expanded.get()>
+                <div class="settings-session-body">
+                    <div class="intent-section">
+                        <div class="intent-section-label">"SESSION"</div>
+                        <div class="intent-kv">
+                            <span class="intent-key">"ID"</span>
+                            <span class="intent-val">{session_id}</span>
+                        </div>
+                        <div class="intent-kv">
+                            <span class="intent-key">"BLOCKS"</span>
+                            <span class="intent-val">{block_count}</span>
+                        </div>
+                    </div>
+                    <div class="intent-divider" />
+                    <div class="intent-section">
+                        <div class="intent-section-label">"SUBSTRATE"</div>
+                        <div class="intent-kv">
+                            <span class="intent-key">"LLM"</span>
+                            <span class="intent-val intent-val-status">{llm_status}</span>
+                        </div>
+                    </div>
+                    <div class="intent-divider" />
+                    <div class="intent-section">
+                        <div class="intent-section-label">"SCOPE"</div>
+                        <div class="intent-hint">"No active mandate"</div>
+                        <div class="intent-hint">"Agents run zero-disclosure by default"</div>
+                    </div>
+                </div>
+            </Show>
         </div>
     }
 }

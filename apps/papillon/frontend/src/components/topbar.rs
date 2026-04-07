@@ -108,15 +108,11 @@ pub fn TopBar() -> impl IntoView {
                 </div>
                 <span class="topbar-meta-sep">"|"</span>
                 <span class="topbar-identity">{did_display}</span>
-                <span class="topbar-meta-sep">"|"</span>
-                <span>"BUILD_9.4.2"</span>
-                <span class="topbar-meta-sep">"|"</span>
-                <span>"UTC 2026-04-02"</span>
             </div>
             <A href="/settings" attr:class="topbar-settings-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"/>
-                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
             </A>
         </header>
@@ -136,23 +132,36 @@ pub fn TopBar() -> impl IntoView {
                     children=move |canvas| {
                         let cid = canvas.id.clone();
                         let cid_for_class = canvas.id.clone();
+                        let cid_for_delete = canvas.id.clone();
                         view! {
-                            <A
-                                href="/"
-                                attr:class=move || {
-                                    if active_id().as_deref() == Some(&cid_for_class) {
-                                        "menu-item active"
-                                    } else {
-                                        "menu-item"
+                            <div class="menu-item-row">
+                                <A
+                                    href="/"
+                                    attr:class=move || {
+                                        if active_id().as_deref() == Some(&cid_for_class) {
+                                            "menu-item active"
+                                        } else {
+                                            "menu-item"
+                                        }
                                     }
-                                }
-                                on:click=move |_| {
-                                    canvas_state.current_canvas_id.set(Some(cid.clone()));
-                                    menu_open.set(false);
-                                }
-                            >
-                                {canvas.name.clone()}
-                            </A>
+                                    on:click=move |_| {
+                                        canvas_state.current_canvas_id.set(Some(cid.clone()));
+                                        menu_open.set(false);
+                                    }
+                                >
+                                    {canvas.name.clone()}
+                                </A>
+                                <button
+                                    class="menu-item-delete"
+                                    title="Delete canvas"
+                                    on:click=move |e| {
+                                        e.stop_propagation();
+                                        canvas_state.delete_canvas(&cid_for_delete);
+                                    }
+                                >
+                                    "\u{00d7}"
+                                </button>
+                            </div>
                         }
                     }
                 />

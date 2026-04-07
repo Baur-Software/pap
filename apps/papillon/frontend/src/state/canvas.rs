@@ -168,6 +168,17 @@ impl CanvasState {
         }
     }
 
+    /// Delete a canvas by ID. If it was the active canvas, select the previous one.
+    pub fn delete_canvas(&self, id: &str) {
+        let id = id.to_string();
+        self.canvases.update(|cs| cs.retain(|c| c.id != id));
+        // If the deleted canvas was active, switch to the last remaining one
+        if self.current_canvas_id.get_untracked().as_deref() == Some(&id) {
+            let next = self.canvases.get_untracked().last().map(|c| c.id.clone());
+            self.current_canvas_id.set(next);
+        }
+    }
+
     /// Get the currently active canvas, if any.
     pub fn current_canvas(&self) -> Option<Canvas> {
         let id = self.current_canvas_id.get()?;
