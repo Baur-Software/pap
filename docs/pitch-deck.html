@@ -628,6 +628,11 @@
         --text:    #16141f;
       }
 
+      *, *::before, *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
       html, body {
         overflow: visible;
         width: 100%;
