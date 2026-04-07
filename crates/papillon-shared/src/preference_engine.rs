@@ -40,7 +40,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::{DatabaseOps, Episode, PreferenceSignal};
+use crate::db::{DatabaseOps, PreferenceSignal};
 
 /// Minimum aggregate confidence for the engine to (a) use the stored aggregate
 /// score directly and (b) report the selection as "preference-guided".
@@ -133,23 +133,19 @@ impl<'a> PreferenceEngine<'a> {
     /// `recency_factor`, and returns the weighted success rate.  Returns `None`
     /// when no matching episodes exist — caller decides the fallback.
     fn score_from_episodes(&self, action_type: &str, agent_did_hash: &str) -> Option<f64> {
+        // Filter at the DB level so the 20-episode limit covers the right action type.
         let episodes = self
             .db
-            .list_episodes(None, Some(agent_did_hash), 20, None)
+            .list_episodes(Some(action_type), Some(agent_did_hash), 20, None)
             .ok()?;
 
-        let relevant: Vec<&Episode> = episodes
-            .iter()
-            .filter(|e| e.action_type == action_type)
-            .collect();
-
-        if relevant.is_empty() {
+        if episodes.is_empty() {
             return None;
         }
 
         let now = Utc::now();
         let (weighted_success, total_weight) =
-            relevant.iter().fold((0.0_f64, 0.0_f64), |(ws, tw), ep| {
+            episodes.iter().fold((0.0_f64, 0.0_f64), |(ws, tw), ep| {
                 let success = if ep.outcome == "success" { 1.0 } else { 0.0 };
                 let ts = DateTime::parse_from_rfc3339(&ep.recorded_at)
                     .map(|dt| dt.with_timezone(&Utc))
@@ -336,7 +332,7 @@ impl<'a> PreferenceEngine<'a> {
     ///
     /// Returns an empty `Vec` when:
     /// - No preference signals exist
-    /// - No agent has reached `MIN_EPISODES` selections
+    /// - No agent's aggregate confidence meets `MIN_CONFIDENCE`
     /// - The intersection of approved refs is empty
     pub fn suggested_scopes(&self, action_type: &str, schema_type: &str) -> Vec<String> {
         let signals = match self
@@ -431,7 +427,7 @@ fn recency_factor(last_selected_rfc3339: &str) -> f64 {
 mod tests {
     use super::*;
     use crate::db::native::NativeDatabase;
-    use crate::db::DatabaseOps;
+    use crate::db::{DatabaseOps, Episode};
 
     fn test_db() -> NativeDatabase {
         NativeDatabase::open_memory().expect("in-memory db")
@@ -622,6 +618,73 @@ mod tests {
         assert!(approved.contains(&"schema:name".to_string()));
         assert!(!approved.contains(&"schema:email".to_string()));
         assert!(rejected.contains(&"schema:email".to_string()));
+    }
+
+    #[test]
+    fn deref_path_scores_from_episodes_when_aggregate_uncertain() {
+        let db = test_db();
+        let engine = PreferenceEngine::new(&db);
+
+        // 2 selections → confidence(2, 0) ≈ 0.33 < MIN_CONFIDENCE → deref path triggered
+        for _ in 0..2 {
+            engine.record_agent_selected(
+                "schema:SearchAction",
+                "schema:SearchResult",
+                "hash1",
+                "DuckDuckGo Search",
+            );
+        }
+
+        // Seed a recent success episode directly so score_from_episodes finds real data
+        db.insert_episode(&Episode {
+            id: uuid::Uuid::new_v4().to_string(),
+            receipt_session_id: "sess-deref".into(),
+            scenario_id: "sc-deref".into(),
+            action_type: "schema:SearchAction".into(),
+            agent_did_hash: "hash1".into(),
+            agent_name: "DuckDuckGo Search".into(),
+            outcome: "success".into(),
+            outcome_detail: None,
+            scope_exercised: "[]".into(),
+            disclosure_refs: "[]".into(),
+            duration_ms: 100,
+            decay_state: "Active".into(),
+            intent_summary: None,
+            result_json: None,
+            query: None,
+            recorded_at: Utc::now().to_rfc3339(),
+        })
+        .unwrap();
+
+        let score = engine.preference_score("schema:SearchAction", "schema:SearchResult", "hash1");
+        // Deref path: 1 recent success → recency-weighted score ≈ 1.0
+        assert!(
+            score > 0.5,
+            "deref path with a recent success episode should score > 0.5, got {score}"
+        );
+    }
+
+    #[test]
+    fn record_scope_approved_no_op_when_no_row() {
+        let db = test_db();
+        let engine = PreferenceEngine::new(&db);
+
+        // Call without any prior record_agent_selected — should silently no-op
+        engine.record_scope_approved(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            "hash1",
+            &["schema:name".to_string()],
+        );
+
+        // No row should have been created
+        let sig = db
+            .get_preference("schema:SearchAction", "schema:SearchResult", "hash1")
+            .unwrap();
+        assert!(
+            sig.is_none(),
+            "record_scope_approved with no row should be a no-op"
+        );
     }
 
     #[test]

@@ -1798,8 +1798,8 @@ body {
     margin-top: var(--sp-xs, 4px);
     padding: 2px 8px;
     border-radius: 10px;
-    background: rgba(108, 92, 231, 0.08);
-    border: 1px solid rgba(108, 92, 231, 0.2);
+    background: color-mix(in srgb, var(--purple) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--purple) 20%, transparent);
     font: var(--text-small);
     font-family: var(--font-body);
     color: var(--purple);

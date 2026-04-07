@@ -433,25 +433,13 @@ fn process_prompt_inner<'a>(
 
         // Derive schema type from agent's declared returns (first element).
         let schema_hint = resolved.returns.first().cloned().unwrap_or_default();
-
-        // Record this agent selection in the local preference store.
         let agent_did_hash = hash_agent_did(&resolved.did);
-        {
-            let engine = PreferenceEngine::new(state.db.as_ref());
-            engine.record_agent_selected(
-                action_type,
-                &schema_hint,
-                &agent_did_hash,
-                &resolved.name,
-            );
-            // Check before the handshake whether this was a preference-guided choice.
-        }
 
-        // Was this selection guided by historical preference data?
-        let preference_guided = {
-            let engine = PreferenceEngine::new(state.db.as_ref());
-            engine.is_preference_guided(action_type, &schema_hint)
-        };
+        // Check guidance BEFORE recording — so the badge reflects pre-selection history,
+        // not the selection we're about to record (which would fire on the tip-over episode).
+        let engine = PreferenceEngine::new(state.db.as_ref());
+        let preference_guided = engine.is_preference_guided(action_type, &schema_hint);
+        engine.record_agent_selected(action_type, &schema_hint, &agent_did_hash, &resolved.name);
 
         // Get principal keypair
         let principal_kp = {
@@ -526,13 +514,6 @@ fn process_prompt_inner<'a>(
         })
         .await?;
 
-        // Record the session outcome in the preference store.
-        let success = true; // handshake returned Ok — it succeeded
-        {
-            let engine = PreferenceEngine::new(state.db.as_ref());
-            engine.record_outcome(action_type, &schema_hint, &agent_did_hash, success);
-        }
-
         // Reflection gate: if quality is low and we haven't retried yet,
         // try the next-best agent.
         let quality = assess_handshake_quality(&result);
@@ -581,6 +562,15 @@ fn process_prompt_inner<'a>(
                 .await;
             }
         }
+
+        // Record outcome after the quality gate — success only when quality is acceptable.
+        // If we retried (returned early above), this line is never reached for the bad attempt.
+        PreferenceEngine::new(state.db.as_ref()).record_outcome(
+            action_type,
+            &schema_hint,
+            &agent_did_hash,
+            quality >= 0.5,
+        );
 
         Ok((result.schema_type, result.content, preference_guided))
     })

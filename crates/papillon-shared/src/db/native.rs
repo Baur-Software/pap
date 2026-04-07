@@ -251,6 +251,24 @@ impl NativeDatabase {
 
         Ok(())
     }
+
+    /// Map a rusqlite `Row` to a `PreferenceSignal`. Column order must match
+    /// every SELECT that reads from the `preferences` table.
+    fn map_preference_row(row: &rusqlite::Row) -> rusqlite::Result<super::PreferenceSignal> {
+        Ok(super::PreferenceSignal {
+            id: row.get(0)?,
+            action_type: row.get(1)?,
+            schema_type: row.get(2)?,
+            agent_did_hash: row.get(3)?,
+            agent_name: row.get(4)?,
+            selection_count: row.get(5)?,
+            success_count: row.get(6)?,
+            last_selected: row.get(7)?,
+            approved_scope_refs: row.get(8)?,
+            rejected_scope_refs: row.get(9)?,
+            updated_at: row.get(10)?,
+        })
+    }
 }
 
 impl DatabaseOps for NativeDatabase {
@@ -1447,21 +1465,7 @@ impl DatabaseOps for NativeDatabase {
              FROM preferences
              WHERE action_type = ?1 AND schema_type = ?2 AND agent_did_hash = ?3",
             params![action_type, schema_type, agent_did_hash],
-            |row| {
-                Ok(super::PreferenceSignal {
-                    id: row.get(0)?,
-                    action_type: row.get(1)?,
-                    schema_type: row.get(2)?,
-                    agent_did_hash: row.get(3)?,
-                    agent_name: row.get(4)?,
-                    selection_count: row.get(5)?,
-                    success_count: row.get(6)?,
-                    last_selected: row.get(7)?,
-                    approved_scope_refs: row.get(8)?,
-                    rejected_scope_refs: row.get(9)?,
-                    updated_at: row.get(10)?,
-                })
-            },
+            Self::map_preference_row,
         )
         .optional()
         .map_err(|e| DbError(format!("db get preference: {e}")))
@@ -1484,21 +1488,7 @@ impl DatabaseOps for NativeDatabase {
             )
             .map_err(|e| DbError(format!("db prepare preferences: {e}")))?;
         let rows = stmt
-            .query_map(params![action_type, schema_type], |row| {
-                Ok(super::PreferenceSignal {
-                    id: row.get(0)?,
-                    action_type: row.get(1)?,
-                    schema_type: row.get(2)?,
-                    agent_did_hash: row.get(3)?,
-                    agent_name: row.get(4)?,
-                    selection_count: row.get(5)?,
-                    success_count: row.get(6)?,
-                    last_selected: row.get(7)?,
-                    approved_scope_refs: row.get(8)?,
-                    rejected_scope_refs: row.get(9)?,
-                    updated_at: row.get(10)?,
-                })
-            })
+            .query_map(params![action_type, schema_type], Self::map_preference_row)
             .map_err(|e| DbError(format!("db query preferences: {e}")))?;
         let mut signals = Vec::new();
         for row in rows {
