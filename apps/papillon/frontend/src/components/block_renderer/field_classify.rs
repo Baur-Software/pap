@@ -170,16 +170,6 @@ pub fn extract_types(obj: &serde_json::Map<String, Value>) -> Vec<String> {
     }
 }
 
-/// Extract the primary (first) `@type` from a JSON-LD object.
-/// Handles both `"@type": "Person"` and `"@type": ["Person", "Author"]`.
-pub fn extract_type(obj: &serde_json::Map<String, Value>) -> Option<String> {
-    match obj.get("@type") {
-        Some(Value::String(t)) => Some(t.clone()),
-        Some(Value::Array(arr)) => arr.first().and_then(|v| v.as_str()).map(|s| s.to_string()),
-        _ => None,
-    }
-}
-
 /// Format an ISO 8601 datetime string for human display.
 /// Falls back to the raw string if parsing is ambiguous.
 pub fn format_datetime(val: &Value) -> String {
@@ -413,27 +403,6 @@ mod tests {
         assert_eq!(sanitize_css_class("a resolving"), "aresolving");
         assert_eq!(sanitize_css_class("a\" style=\"x"), "astylex");
         assert_eq!(sanitize_css_class("normal-type"), "normal-type");
-    }
-
-    #[test]
-    fn extract_type_string() {
-        let obj: serde_json::Map<String, Value> =
-            serde_json::from_value(json!({"@type": "Person"})).unwrap();
-        assert_eq!(extract_type(&obj), Some("Person".to_string()));
-    }
-
-    #[test]
-    fn extract_type_array() {
-        let obj: serde_json::Map<String, Value> =
-            serde_json::from_value(json!({"@type": ["Person", "Author"]})).unwrap();
-        assert_eq!(extract_type(&obj), Some("Person".to_string()));
-    }
-
-    #[test]
-    fn extract_type_missing() {
-        let obj: serde_json::Map<String, Value> =
-            serde_json::from_value(json!({"name": "Alice"})).unwrap();
-        assert_eq!(extract_type(&obj), None);
     }
 
     // ── extract_types (plural) ────────────────────────────────────────────────
