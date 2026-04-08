@@ -103,7 +103,8 @@ pub async fn get_orchestrator_status(
         }
         LlmProvider::Mistral { .. }
         | LlmProvider::Ollama { .. }
-        | LlmProvider::OpenAiCompatible { .. } => OrchestratorStatus::Ready,
+        | LlmProvider::OpenAiCompatible { .. }
+        | LlmProvider::HuggingFace { .. } => OrchestratorStatus::Ready,
     };
     Ok(status)
 }

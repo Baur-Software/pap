@@ -110,6 +110,10 @@ pub enum LlmProvider {
         api_key: String,
         model: String,
     },
+    /// HuggingFace Inference API — serverless inference for models hosted on
+    /// the Hub. Requires a HF access token (free tier available).
+    /// Endpoint: `https://api-inference.huggingface.co/models/{model_id}`
+    HuggingFace { api_token: String, model: String },
     /// No LLM configured.
     None,
 }
@@ -159,6 +163,9 @@ impl LlmProvider {
                     api_key,
                     model,
                 },
+            }),
+            LlmProvider::HuggingFace { api_token, model } => Box::new(ExternalLlmClient {
+                kind: ExternalKind::HuggingFace { api_token, model },
             }),
             LlmProvider::None => Box::new(UnavailableLlmClient {
                 reason: "no LLM provider configured".into(),
@@ -290,6 +297,10 @@ enum ExternalKind {
         api_key: String,
         model: String,
     },
+    HuggingFace {
+        api_token: String,
+        model: String,
+    },
 }
 
 /// HTTP-based LLM client for Mistral, Ollama, and OpenAI-compatible APIs.
@@ -356,6 +367,31 @@ impl ExternalLlmClient {
                 system,
                 user,
             ),
+            ExternalKind::HuggingFace { api_token, model } => {
+                let prompt = format!("System: {system}\n\nUser: {user}\n\nAssistant:");
+                let url = format!("https://api-inference.huggingface.co/models/{model}");
+                let payload = serde_json::json!({
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_new_tokens": 512,
+                        "return_full_text": false,
+                    }
+                });
+                let resp: serde_json::Value = client
+                    .post(&url)
+                    .bearer_auth(api_token)
+                    .json(&payload)
+                    .send()
+                    .map_err(|e| LlmClientError::Request(format!("huggingface: {e}")))?
+                    .json()
+                    .map_err(|e| LlmClientError::ResponseParse(format!("huggingface json: {e}")))?;
+                resp[0]["generated_text"]
+                    .as_str()
+                    .map(String::from)
+                    .ok_or_else(|| {
+                        LlmClientError::ResponseParse("huggingface: missing generated_text".into())
+                    })
+            }
         }
     }
 }
@@ -690,6 +726,10 @@ mod tests {
                 endpoint: "https://api.example.com/v1".into(),
                 api_key: "key".into(),
                 model: "gpt-4o".into(),
+            },
+            LlmProvider::HuggingFace {
+                api_token: "hf_test".into(),
+                model: "google/gemma-4-E2B-it".into(),
             },
         ];
 

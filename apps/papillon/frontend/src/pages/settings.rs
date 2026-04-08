@@ -81,10 +81,12 @@ fn GeneralTab() -> impl IntoView {
     let mistral_key = RwSignal::new(String::new());
     let mistral_model = RwSignal::new("mistral-small-latest".to_string());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
-    let ollama_model = RwSignal::new("llama3.2:1b".to_string());
+    let ollama_model = RwSignal::new("mistral:latest".to_string());
     let openai_endpoint = RwSignal::new(String::new());
     let openai_key = RwSignal::new(String::new());
     let openai_model = RwSignal::new(String::new());
+    let hf_token = RwSignal::new(String::new());
+    let hf_model = RwSignal::new("google/gemma-4-E2B-it".to_string());
     let saved_msg = RwSignal::new(false);
     let save_error = RwSignal::new(None::<String>);
     let model_availability = RwSignal::new(Vec::<ModelAvailability>::new());
@@ -118,6 +120,11 @@ fn GeneralTab() -> impl IntoView {
                 openai_endpoint.set(endpoint.clone());
                 openai_key.set(api_key.clone());
                 openai_model.set(model.clone());
+            }
+            LlmProvider::HuggingFace { api_token, model } => {
+                selected.set("huggingface".into());
+                hf_token.set(api_token.clone());
+                hf_model.set(model.clone());
             }
             LlmProvider::None => selected.set("none".into()),
         }
@@ -154,6 +161,10 @@ fn GeneralTab() -> impl IntoView {
                 endpoint: openai_endpoint.get(),
                 api_key: openai_key.get(),
                 model: openai_model.get(),
+            },
+            "huggingface" => LlmProvider::HuggingFace {
+                api_token: hf_token.get(),
+                model: hf_model.get(),
             },
             _ => LlmProvider::None,
         };
@@ -213,7 +224,8 @@ fn GeneralTab() -> impl IntoView {
             >
                 <option value="builtin">"Built-in (Recommended)"</option>
                 <option value="mistral">"Mistral API"</option>
-                <option value="ollama">"Ollama (requires HTTP)"</option>
+                <option value="ollama">"Ollama (local)"</option>
+                <option value="huggingface">"HuggingFace Inference API"</option>
                 <option value="openai">"OpenAI-compatible (requires network)"</option>
                 <option value="none">"None"</option>
             </select>
@@ -378,6 +390,28 @@ fn GeneralTab() -> impl IntoView {
                         prop:value=move || ollama_model.get()
                         on:input=move |ev| ollama_model.set(event_target_value(&ev))
                     />
+                </div>
+            </Show>
+
+            <Show when=move || selected.get() == "huggingface">
+                <div class="setup-inputs">
+                    <label>"Access Token"</label>
+                    <input
+                        type="password"
+                        placeholder="hf_..."
+                        prop:value=move || hf_token.get()
+                        on:input=move |ev| hf_token.set(event_target_value(&ev))
+                    />
+                    <label>"Model ID"</label>
+                    <input
+                        type="text"
+                        placeholder="google/gemma-4-E2B-it"
+                        prop:value=move || hf_model.get()
+                        on:input=move |ev| hf_model.set(event_target_value(&ev))
+                    />
+                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                        "Get a free token at huggingface.co/settings/tokens. Enter any Hub model ID."
+                    </p>
                 </div>
             </Show>
 

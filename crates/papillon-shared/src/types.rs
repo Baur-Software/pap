@@ -91,6 +91,11 @@ mod llm_types {
             api_key: String,
             model: String,
         },
+        /// HuggingFace Inference API — serverless inference for Hub models.
+        HuggingFace {
+            api_token: String,
+            model: String,
+        },
         None,
     }
 

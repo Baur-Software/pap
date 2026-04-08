@@ -14,10 +14,12 @@ pub fn SetupWizard() -> impl IntoView {
     let builtin_model = RwSignal::new("gemma-4-e2b".to_string());
     let builtin_models = RwSignal::new(builtin_model_catalog());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
-    let ollama_model = RwSignal::new("llama3.2:1b".to_string());
+    let ollama_model = RwSignal::new("mistral:latest".to_string());
     let openai_endpoint = RwSignal::new(String::new());
     let openai_key = RwSignal::new(String::new());
     let openai_model = RwSignal::new(String::new());
+    let hf_token = RwSignal::new(String::new());
+    let hf_model = RwSignal::new("google/gemma-4-E2B-it".to_string());
     let model_availability = RwSignal::new(Vec::<ModelAvailability>::new());
     let downloading = RwSignal::new(false);
 
@@ -67,6 +69,10 @@ pub fn SetupWizard() -> impl IntoView {
                 endpoint: openai_endpoint.get(),
                 api_key: openai_key.get(),
                 model: openai_model.get(),
+            },
+            "huggingface" => papillon_shared::LlmProvider::HuggingFace {
+                api_token: hf_token.get(),
+                model: hf_model.get(),
             },
             _ => papillon_shared::LlmProvider::None,
         };
@@ -134,7 +140,7 @@ pub fn SetupWizard() -> impl IntoView {
                         </div>
                         <div class=move || {
                             let p = selected_provider.get();
-                            if p == "builtin" || p == "ollama" || p == "openai" {
+                            if p == "builtin" || p == "ollama" || p == "openai" || p == "huggingface" {
                                 "setup-step active"
                             } else {
                                 "setup-step"
@@ -161,6 +167,13 @@ pub fn SetupWizard() -> impl IntoView {
                         >
                             <div class="setup-option-title">"OLLAMA \u{2014} LOCAL_HTTP"</div>
                             <div class="setup-option-desc">"External process \u{2014} prompts leave this app via localhost"</div>
+                        </div>
+                        <div
+                            class=move || if selected_provider.get() == "huggingface" { "setup-option selected" } else { "setup-option" }
+                            on:click=move |_| selected_provider.set("huggingface".into())
+                        >
+                            <div class="setup-option-title">"HUGGINGFACE \u{2014} INFERENCE_API"</div>
+                            <div class="setup-option-desc">"Serverless Hub inference \u{2014} free tier, prompts sent to HF"</div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "openai" { "setup-option selected" } else { "setup-option" }
@@ -269,7 +282,7 @@ pub fn SetupWizard() -> impl IntoView {
                     </Show>
 
                     // Security warning for HTTP providers
-                    <Show when=move || selected_provider.get() == "ollama" || selected_provider.get() == "openai">
+                    <Show when=move || selected_provider.get() == "ollama" || selected_provider.get() == "openai" || selected_provider.get() == "huggingface">
                         <div class="setup-sec-warning">
                             <p class="setup-sec-warning-label">"SECURITY_DISCLOSURE"</p>
                             <p class="setup-sec-warning-body">
@@ -294,6 +307,25 @@ pub fn SetupWizard() -> impl IntoView {
                                 type="text"
                                 prop:value=move || ollama_model.get()
                                 on:input=move |ev| ollama_model.set(event_target_value(&ev))
+                            />
+                        </div>
+                    </Show>
+
+                    <Show when=move || selected_provider.get() == "huggingface">
+                        <div class="setup-inputs">
+                            <label>"ACCESS_TOKEN"</label>
+                            <input
+                                type="password"
+                                placeholder="hf_..."
+                                prop:value=move || hf_token.get()
+                                on:input=move |ev| hf_token.set(event_target_value(&ev))
+                            />
+                            <label>"MODEL_ID"</label>
+                            <input
+                                type="text"
+                                placeholder="google/gemma-4-E2B-it"
+                                prop:value=move || hf_model.get()
+                                on:input=move |ev| hf_model.set(event_target_value(&ev))
                             />
                         </div>
                     </Show>
