@@ -3,6 +3,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
+use crate::state::renderer::RendererState;
 use crate::state::templates::TemplatesState;
 use papillon_shared::types::TemplateConfig;
 use papillon_shared::Template;
@@ -18,6 +19,7 @@ use template_library::TemplateLibrary;
 #[component]
 pub fn TemplatesTab() -> impl IntoView {
     let templates_state = expect_context::<TemplatesState>();
+    let renderer_state = expect_context::<RendererState>();
 
     // Form state for creating new templates
     let new_name = RwSignal::new(String::new());
@@ -299,18 +301,11 @@ pub fn TemplatesTab() -> impl IntoView {
 
     let all_templates = move || templates_state.all_templates();
 
-    // Registered schema types — derived from global templates, used for type autocomplete
-    let registered_types = Signal::derive(move || {
-        let mut types: Vec<String> = templates_state
-            .global_templates
-            .get()
-            .into_iter()
-            .map(|t| t.schema_type)
-            .collect();
-        types.sort();
-        types.dedup();
-        types
-    });
+    // Registered schema types — sourced from the live renderer registry.
+    // Includes all shipped hardcoded types (Movie, Person, etc.) plus any
+    // user-defined or agent-registered templates. Updated reactively by the
+    // sync Effect in app.rs whenever templates change.
+    let registered_types = Signal::derive(move || renderer_state.registered_keys.get());
 
     // Handler for builder completion (Phase 9b)
     let handle_builder_complete = move |config: TemplateConfig| {

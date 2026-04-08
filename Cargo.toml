@@ -87,8 +87,8 @@ axum-server = { version = "0.8", features = ["tls-rustls"] }
 tokio-tungstenite = "0.28"
 futures-util = "0.3"
 hex = "0.4"
-candle-core = "0.8"
-candle-transformers = "0.8"
+candle-core = "0.10"
+candle-transformers = "0.10"
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 getrandom = { version = "0.2", default-features = false }
 zeroize = { version = "1", features = ["derive"] }

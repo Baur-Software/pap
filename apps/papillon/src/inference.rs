@@ -10,16 +10,40 @@ use std::path::{Path, PathBuf};
 use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
 use candle_transformers::generation::{LogitsProcessor, Sampling};
-use candle_transformers::models::quantized_llama as model;
+use candle_transformers::models::quantized_gemma3;
+use candle_transformers::models::quantized_llama;
 use futures_util::StreamExt;
 use tokenizers::Tokenizer;
 
 use papillon_shared::{builtin_model_catalog, BuiltInModelInfo, ModelAvailability};
 
+/// Architecture-specific model weights. Dispatches forward() to the right backend.
+pub enum ModelBackend {
+    Llama(quantized_llama::ModelWeights),
+    Gemma3(quantized_gemma3::ModelWeights),
+}
+
+impl ModelBackend {
+    pub fn forward(&mut self, x: &Tensor, index_pos: usize) -> candle_core::Result<Tensor> {
+        match self {
+            Self::Llama(m) => m.forward(x, index_pos),
+            Self::Gemma3(m) => m.forward(x, index_pos),
+        }
+    }
+
+    /// EOS token string for the architecture.
+    pub fn eos_token(&self) -> &'static str {
+        match self {
+            Self::Llama(_) => "</s>",
+            Self::Gemma3(_) => "<end_of_turn>",
+        }
+    }
+}
+
 /// A loaded model ready for inference.
 pub struct LoadedModel {
     pub info: BuiltInModelInfo,
-    pub model: model::ModelWeights,
+    pub model: ModelBackend,
     pub tokenizer: Tokenizer,
     pub device: Device,
 }
@@ -188,15 +212,34 @@ pub async fn download_file(
     result
 }
 
+/// Detect model architecture from GGUF metadata.
+/// Returns a lowercase architecture string, e.g. "llama", "gemma3".
+fn detect_gguf_arch(gguf: &gguf_file::Content) -> String {
+    gguf.metadata
+        .get("general.architecture")
+        .and_then(|v| v.to_string().ok())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| "llama".to_string())
+}
+
 /// Load a downloaded GGUF model into memory, ready for inference.
 pub fn load_model(model_path: &Path, tokenizer_path: &Path) -> Result<LoadedModel, String> {
     let device = Device::Cpu;
 
-    // Load GGUF
+    // Load GGUF and detect architecture
     let mut file = std::fs::File::open(model_path).map_err(|e| format!("Open model: {e}"))?;
     let gguf = gguf_file::Content::read(&mut file).map_err(|e| format!("Parse GGUF: {e}"))?;
-    let weights = model::ModelWeights::from_gguf(gguf, &mut file, &device)
-        .map_err(|e| format!("Load weights: {e}"))?;
+    let arch = detect_gguf_arch(&gguf);
+
+    let model = if arch.contains("gemma") {
+        let weights = quantized_gemma3::ModelWeights::from_gguf(gguf, &mut file, &device)
+            .map_err(|e| format!("Load weights ({arch}): {e}"))?;
+        ModelBackend::Gemma3(weights)
+    } else {
+        let weights = quantized_llama::ModelWeights::from_gguf(gguf, &mut file, &device)
+            .map_err(|e| format!("Load weights ({arch}): {e}"))?;
+        ModelBackend::Llama(weights)
+    };
 
     // Load tokenizer
     let tokenizer =
@@ -213,7 +256,7 @@ pub fn load_model(model_path: &Path, tokenizer_path: &Path) -> Result<LoadedMode
             tokenizer_url: String::new(),
             web_compatible: false,
         },
-        model: weights,
+        model,
         tokenizer,
         device,
     })
@@ -230,7 +273,8 @@ pub fn generate(
         .encode(prompt, true)
         .map_err(|e| format!("Tokenize: {e}"))?;
     let prompt_tokens = encoding.get_ids();
-    let eos_token = loaded.tokenizer.token_to_id("</s>").unwrap_or(2);
+    let eos_str = loaded.model.eos_token();
+    let eos_token = loaded.tokenizer.token_to_id(eos_str).unwrap_or(1); // 1 = <eos> in Gemma vocab; </s>=2 in Llama
 
     let mut logits_processor = LogitsProcessor::from_sampling(
         42,
@@ -258,6 +302,7 @@ pub fn generate(
             .model
             .forward(&input, pos)
             .map_err(|e| format!("Forward: {e}"))?;
+
         let logits = logits.squeeze(0).map_err(|e| format!("Squeeze: {e}"))?;
         let next_token = logits_processor
             .sample(&logits)
@@ -291,9 +336,36 @@ pub fn generate(
         .map_err(|e| format!("Decode: {e}"))
 }
 
+/// Chat template style for prompt construction.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ChatTemplate {
+    /// LLaMA / Mistral: `[INST] … [/INST]`
+    Llama,
+    /// Gemma: `<start_of_turn>user\n…<end_of_turn>\n<start_of_turn>model\n`
+    Gemma,
+}
+
+impl ChatTemplate {
+    pub fn from_backend(backend: &ModelBackend) -> Self {
+        match backend {
+            ModelBackend::Llama(_) => Self::Llama,
+            ModelBackend::Gemma3(_) => Self::Gemma,
+        }
+    }
+}
+
 /// Build the tool-calling prompt that the orchestrator uses to decompose
 /// a user query into PAP actions.
 pub fn build_orchestrator_prompt(user_query: &str, available_tools: &[ToolDef]) -> String {
+    build_orchestrator_prompt_with_template(user_query, available_tools, ChatTemplate::Llama)
+}
+
+/// Build the tool-calling prompt with an explicit chat template.
+pub fn build_orchestrator_prompt_with_template(
+    user_query: &str,
+    available_tools: &[ToolDef],
+    template: ChatTemplate,
+) -> String {
     let tools_json: Vec<String> = available_tools
         .iter()
         .map(|t| {
@@ -304,22 +376,18 @@ pub fn build_orchestrator_prompt(user_query: &str, available_tools: &[ToolDef]) 
         })
         .collect();
 
-    format!(
-        r#"[INST] You are a PAP orchestrator. Given a user query, decompose it into one or more tool calls.
-
-Available tools:
-[
-{tools}
-]
-
-Respond with a JSON array of tool calls. Each entry must have "tool" and "query" fields.
-Example: [{{"tool": "web_search", "query": "best restaurants in Paris"}}]
-
-User query: {query}
-[/INST]"#,
+    let body = format!(
+        "You are a PAP orchestrator. Given a user query, decompose it into one or more tool calls.\n\nAvailable tools:\n[\n{tools}\n]\n\nRespond with a JSON array of tool calls. Each entry must have \"tool\" and \"query\" fields.\nExample: [{{\"tool\": \"web_search\", \"query\": \"best restaurants in Paris\"}}]\n\nUser query: {query}",
         tools = tools_json.join(",\n"),
-        query = user_query
-    )
+        query = user_query,
+    );
+
+    match template {
+        ChatTemplate::Llama => format!("[INST] {body} [/INST]"),
+        ChatTemplate::Gemma => {
+            format!("<start_of_turn>user\n{body}<end_of_turn>\n<start_of_turn>model\n")
+        }
+    }
 }
 
 /// Definition of a tool available to the orchestrator.
@@ -382,10 +450,17 @@ mod tests {
 
     #[test]
     fn resolve_known_model() {
-        let info = resolve_model("tinyllama-1.1b").expect("should resolve");
+        let info = resolve_model("gemma-4-e2b").expect("should resolve");
+        assert_eq!(info.id, "gemma-4-e2b");
+        assert!(info.filename.ends_with(".gguf"));
+        assert!(info.repo.contains("gemma"));
+    }
+
+    #[test]
+    fn resolve_tinyllama_still_present() {
+        let info = resolve_model("tinyllama-1.1b").expect("tinyllama should still be in catalog");
         assert_eq!(info.id, "tinyllama-1.1b");
         assert!(info.filename.ends_with(".gguf"));
-        assert!(info.repo.contains("TinyLlama"));
     }
 
     #[test]
@@ -420,6 +495,14 @@ mod tests {
         let prompt = build_orchestrator_prompt("test", &[]);
         assert!(prompt.starts_with("[INST]"));
         assert!(prompt.ends_with("[/INST]"));
+    }
+
+    #[test]
+    fn prompt_gemma_template_uses_turn_tags() {
+        let prompt = build_orchestrator_prompt_with_template("test", &[], ChatTemplate::Gemma);
+        assert!(prompt.starts_with("<start_of_turn>user\n"));
+        assert!(prompt.contains("<end_of_turn>"));
+        assert!(prompt.ends_with("<start_of_turn>model\n"));
     }
 
     #[test]

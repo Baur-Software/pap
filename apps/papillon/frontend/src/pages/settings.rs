@@ -76,15 +76,17 @@ pub fn SettingsPage() -> impl IntoView {
 fn GeneralTab() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let selected = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("tinyllama-1.1b".to_string());
+    let builtin_model = RwSignal::new("gemma-4-e2b".to_string());
     let builtin_models = RwSignal::new(builtin_model_catalog());
     let mistral_key = RwSignal::new(String::new());
     let mistral_model = RwSignal::new("mistral-small-latest".to_string());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
-    let ollama_model = RwSignal::new("llama3.2:1b".to_string());
+    let ollama_model = RwSignal::new("mistral:latest".to_string());
     let openai_endpoint = RwSignal::new(String::new());
     let openai_key = RwSignal::new(String::new());
     let openai_model = RwSignal::new(String::new());
+    let hf_token = RwSignal::new(String::new());
+    let hf_model = RwSignal::new("google/gemma-4-E2B-it".to_string());
     let saved_msg = RwSignal::new(false);
     let save_error = RwSignal::new(None::<String>);
     let model_availability = RwSignal::new(Vec::<ModelAvailability>::new());
@@ -118,6 +120,11 @@ fn GeneralTab() -> impl IntoView {
                 openai_endpoint.set(endpoint.clone());
                 openai_key.set(api_key.clone());
                 openai_model.set(model.clone());
+            }
+            LlmProvider::HuggingFace { api_token, model } => {
+                selected.set("huggingface".into());
+                hf_token.set(api_token.clone());
+                hf_model.set(model.clone());
             }
             LlmProvider::None => selected.set("none".into()),
         }
@@ -154,6 +161,10 @@ fn GeneralTab() -> impl IntoView {
                 endpoint: openai_endpoint.get(),
                 api_key: openai_key.get(),
                 model: openai_model.get(),
+            },
+            "huggingface" => LlmProvider::HuggingFace {
+                api_token: hf_token.get(),
+                model: hf_model.get(),
             },
             _ => LlmProvider::None,
         };
@@ -213,7 +224,8 @@ fn GeneralTab() -> impl IntoView {
             >
                 <option value="builtin">"Built-in (Recommended)"</option>
                 <option value="mistral">"Mistral API"</option>
-                <option value="ollama">"Ollama (requires HTTP)"</option>
+                <option value="ollama">"Ollama (local)"</option>
+                <option value="huggingface">"HuggingFace Inference API"</option>
                 <option value="openai">"OpenAI-compatible (requires network)"</option>
                 <option value="none">"None"</option>
             </select>
@@ -381,6 +393,28 @@ fn GeneralTab() -> impl IntoView {
                 </div>
             </Show>
 
+            <Show when=move || selected.get() == "huggingface">
+                <div class="setup-inputs">
+                    <label>"Access Token"</label>
+                    <input
+                        type="password"
+                        placeholder="hf_..."
+                        prop:value=move || hf_token.get()
+                        on:input=move |ev| hf_token.set(event_target_value(&ev))
+                    />
+                    <label>"Model ID"</label>
+                    <input
+                        type="text"
+                        placeholder="google/gemma-4-E2B-it"
+                        prop:value=move || hf_model.get()
+                        on:input=move |ev| hf_model.set(event_target_value(&ev))
+                    />
+                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                        "Get a free token at huggingface.co/settings/tokens. Enter any Hub model ID."
+                    </p>
+                </div>
+            </Show>
+
             <Show when=move || selected.get() == "openai">
                 <div class="setup-inputs">
                     <label>"Endpoint"</label>
@@ -418,6 +452,77 @@ fn GeneralTab() -> impl IntoView {
                     </span>
                 </Show>
             </div>
+            <SessionInfoSection />
+        </div>
+    }
+}
+
+#[component]
+fn SessionInfoSection() -> impl IntoView {
+    use crate::state::canvas::CanvasState;
+    let canvas_state = expect_context::<CanvasState>();
+    let orchestrator = expect_context::<OrchestratorState>();
+    let expanded = RwSignal::new(false);
+
+    let session_id = move || {
+        canvas_state
+            .current_canvas()
+            .map(|c| c.id.chars().take(12).collect::<String>())
+            .unwrap_or_else(|| "NO_SESSION".to_string())
+    };
+
+    let block_count = move || {
+        canvas_state
+            .current_canvas()
+            .map(|c| c.blocks.len())
+            .unwrap_or(0)
+    };
+
+    let llm_status = move || match orchestrator.status.get() {
+        OrchestratorStatus::Ready => "SUBSTRATE_READY",
+        OrchestratorStatus::Unconfigured => "NOT_CONFIGURED",
+        OrchestratorStatus::Disconnected => "DISCONNECTED",
+        _ => "UNKNOWN",
+    };
+
+    view! {
+        <div class="settings-session-section">
+            <button
+                class="settings-session-toggle"
+                on:click=move |_| expanded.update(|v| *v = !*v)
+            >
+                <span>"INTENT_MEMORY"</span>
+                <span>{move || if expanded.get() { "▲" } else { "▼" }}</span>
+            </button>
+            <Show when=move || expanded.get()>
+                <div class="settings-session-body">
+                    <div class="intent-section">
+                        <div class="intent-section-label">"SESSION"</div>
+                        <div class="intent-kv">
+                            <span class="intent-key">"ID"</span>
+                            <span class="intent-val">{session_id}</span>
+                        </div>
+                        <div class="intent-kv">
+                            <span class="intent-key">"BLOCKS"</span>
+                            <span class="intent-val">{block_count}</span>
+                        </div>
+                    </div>
+                    <div class="intent-divider" />
+                    <div class="intent-section">
+                        <div class="intent-section-label">"SUBSTRATE"</div>
+                        <div class="intent-kv">
+                            <span class="intent-key">"LLM"</span>
+                            <span class="intent-val intent-val-status">{llm_status}</span>
+                        </div>
+                    </div>
+                    <div class="intent-divider" />
+                    <div class="intent-section">
+                        <div class="intent-section-label">"SCOPE"</div>
+                        <div class="intent-hint">"No active mandate"</div>
+                        <div class="intent-hint">"Agents run zero-disclosure by default"</div>
+                    </div>
+                </div>
+            </Show>
         </div>
     }
 }

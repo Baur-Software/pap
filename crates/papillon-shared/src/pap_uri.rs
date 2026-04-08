@@ -478,4 +478,92 @@ mod tests {
         // Uppercased DID:KEY: must be treated as a DID passthrough, not NotFound
         assert_eq!(r, ResolvedUri::Did(uri.into()));
     }
+
+    // ── Path-traversal variants ───────────────────────────────────────────────
+
+    #[test]
+    fn literal_dot_encoded_dot_traversal_is_rejected() {
+        // .%2e is ".." with the second dot percent-encoded
+        let cat = catalog(&[("arxiv", "did:key:z6MkTestKey")]);
+        let err = resolve_pap_uri("pap://arxiv/.%2e/etc/passwd", &cat, LinkOrigin::Principal)
+            .unwrap_err();
+        assert!(matches!(err, PapUriError::ParseError(_)));
+    }
+
+    #[test]
+    fn uppercase_percent_encoded_dotdot_traversal_is_rejected() {
+        // %2E%2E is ".." with uppercase hex digits
+        let cat = catalog(&[("arxiv", "did:key:z6MkTestKey")]);
+        let err = resolve_pap_uri("pap://arxiv/%2E%2E/etc/passwd", &cat, LinkOrigin::Principal)
+            .unwrap_err();
+        assert!(matches!(err, PapUriError::ParseError(_)));
+    }
+
+    // ── LinkOrigin::Agent blocking of special authorities ─────────────────────
+
+    #[test]
+    fn agent_origin_blocked_from_receipt_authority() {
+        let err = resolve_pap_uri("pap://receipt/RCP_1", &empty(), LinkOrigin::Agent).unwrap_err();
+        assert_eq!(err, PapUriError::Reserved);
+    }
+
+    #[test]
+    fn agent_origin_blocked_from_canvas_authority() {
+        let err =
+            resolve_pap_uri("pap://canvas/some-canvas", &empty(), LinkOrigin::Agent).unwrap_err();
+        assert_eq!(err, PapUriError::Reserved);
+    }
+
+    #[test]
+    fn agent_origin_blocked_from_settings_authority() {
+        let err =
+            resolve_pap_uri("pap://settings/general", &empty(), LinkOrigin::Agent).unwrap_err();
+        assert_eq!(err, PapUriError::Reserved);
+    }
+
+    #[test]
+    fn principal_origin_can_access_special_authorities() {
+        // Same URIs accepted for Principal origin
+        let r = resolve_pap_uri("pap://receipt/RCP_1", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::LocalIntent("show receipt RCP_1".into()));
+
+        let r = resolve_pap_uri("pap://settings", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::LocalIntent("open settings".into()));
+    }
+
+    // ── special_to_intent — canvas with block ID ──────────────────────────────
+
+    #[test]
+    fn special_canvas_with_canvas_and_block_ids() {
+        let r = resolve_pap_uri(
+            "pap://canvas/cid-123/blk-456",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::LocalIntent("show canvas cid-123 block blk-456".into())
+        );
+    }
+
+    #[test]
+    fn special_canvas_empty_path_shows_canvas() {
+        let r = resolve_pap_uri("pap://canvas/", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::LocalIntent("show canvas".into()));
+    }
+
+    // ── special_to_intent — settings path ────────────────────────────────────
+
+    #[test]
+    fn special_settings_with_sub_path() {
+        let r = resolve_pap_uri("pap://settings/general", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::LocalIntent("open settings general".into()));
+    }
+
+    #[test]
+    fn special_settings_no_path() {
+        let r = resolve_pap_uri("pap://settings", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::LocalIntent("open settings".into()));
+    }
 }

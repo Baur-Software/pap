@@ -48,16 +48,28 @@ mod llm_types {
     }
 
     pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
-        vec![BuiltInModelInfo {
-            id: "tinyllama-1.1b".into(),
-            display_name: "TinyLlama 1.1B Chat (Q4)".into(),
-            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
-            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-            size_hint: "~0.6 GB".into(),
-            download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-            tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
-            web_compatible: false,
-        }]
+        vec![
+            BuiltInModelInfo {
+                id: "gemma-4-e2b".into(),
+                display_name: "Gemma 4 E2B Instruct (Q4)".into(),
+                repo: "bartowski/google_gemma-4-E2B-it-GGUF".into(),
+                filename: "google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+                size_hint: "~1.5 GB".into(),
+                download_url: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+                tokenizer_url: "https://huggingface.co/google/gemma-4-E2B-it/resolve/main/tokenizer.json".into(),
+                web_compatible: true,
+            },
+            BuiltInModelInfo {
+                id: "tinyllama-1.1b".into(),
+                display_name: "TinyLlama 1.1B Chat (Q4)".into(),
+                repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+                filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+                size_hint: "~0.6 GB".into(),
+                download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+                tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
+                web_compatible: false,
+            },
+        ]
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -79,13 +91,18 @@ mod llm_types {
             api_key: String,
             model: String,
         },
+        /// HuggingFace Inference API — serverless inference for Hub models.
+        HuggingFace {
+            api_token: String,
+            model: String,
+        },
         None,
     }
 
     impl Default for LlmProvider {
         fn default() -> Self {
             LlmProvider::BuiltIn {
-                model_id: "tinyllama-1.1b".into(),
+                model_id: "gemma-4-e2b".into(),
             }
         }
     }
@@ -383,6 +400,11 @@ pub struct CanvasBlock {
     pub created_at: String,
     /// When this block was last updated.
     pub updated_at: String,
+    /// `true` when the orchestrator's agent selection was guided by local
+    /// preference history (≥ 3 prior sessions for this schema type).
+    /// Always `false` during cold start. Never transmitted off-device.
+    #[serde(default)]
+    pub preference_guided: bool,
 }
 
 /// A saved canvas — a collection of blocks from prompt sessions.
@@ -674,9 +696,9 @@ mod tests {
     }
 
     #[test]
-    fn catalog_default_is_tinyllama() {
+    fn catalog_default_is_gemma_4() {
         let catalog = builtin_model_catalog();
-        assert_eq!(catalog[0].id, "tinyllama-1.1b");
+        assert_eq!(catalog[0].id, "gemma-4-e2b");
     }
 
     #[test]
@@ -702,11 +724,11 @@ mod tests {
     // ── LlmProvider default & serde ─────────────────────────
 
     #[test]
-    fn llm_provider_default_is_builtin_tinyllama() {
+    fn llm_provider_default_is_builtin_gemma_4() {
         let provider = LlmProvider::default();
         match &provider {
             LlmProvider::BuiltIn { model_id } => {
-                assert_eq!(model_id, "tinyllama-1.1b");
+                assert_eq!(model_id, "gemma-4-e2b");
             }
             other => panic!("Expected BuiltIn, got {other:?}"),
         }
@@ -904,6 +926,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -932,6 +955,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -956,6 +980,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -986,6 +1011,7 @@ mod tests {
                 agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
+                preference_guided: false,
             }],
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1059,6 +1085,7 @@ mod tests {
                 agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
+                preference_guided: false,
             },
         };
         let json = serde_json::to_string(&event).unwrap();
@@ -1330,6 +1357,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();

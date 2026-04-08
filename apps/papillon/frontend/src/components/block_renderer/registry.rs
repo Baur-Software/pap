@@ -112,6 +112,18 @@ impl RendererRegistry {
             }
         }
     }
+
+    /// Sorted schema type keys from the type-global tier (Tier 2).
+    ///
+    /// Agent-scoped (Tier 1) keys are intentionally excluded — they are
+    /// per-agent rendering overrides, not broadly useful vocabulary entries
+    /// for autocomplete or type enumeration.
+    pub fn registered_type_keys(&self) -> Vec<String> {
+        let map = self.type_renderers.read().unwrap();
+        let mut keys: Vec<String> = map.keys().cloned().collect();
+        keys.sort();
+        keys
+    }
 }
 
 impl Default for RendererRegistry {
