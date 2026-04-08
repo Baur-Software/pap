@@ -20,6 +20,23 @@ pub fn tauri_available() -> bool {
         .unwrap_or(false)
 }
 
+/// Extract a human-readable message from a Tauri IPC error JsValue.
+/// Tauri errors are often `{"code":"...","message":"..."}` objects.
+fn extract_tauri_error(e: JsValue) -> String {
+    // First try: direct string value
+    if let Some(s) = e.as_string() {
+        return s;
+    }
+    // Second try: extract "message" field from error object
+    if let Ok(msg) = js_sys::Reflect::get(&e, &JsValue::from_str("message")) {
+        if let Some(s) = msg.as_string() {
+            return s;
+        }
+    }
+    // Fallback: debug representation
+    format!("{:?}", e)
+}
+
 /// Call a Tauri command with typed arguments and return type.
 pub async fn invoke<A: Serialize, R: DeserializeOwned>(
     command: &str,
@@ -31,7 +48,7 @@ pub async fn invoke<A: Serialize, R: DeserializeOwned>(
     let args_js = serde_wasm_bindgen::to_value(args).map_err(|e| e.to_string())?;
     let result = tauri_invoke(command, args_js)
         .await
-        .map_err(|e| e.as_string().unwrap_or_else(|| format!("{:?}", e)))?;
+        .map_err(extract_tauri_error)?;
     serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string())
 }
 
@@ -43,7 +60,7 @@ pub async fn invoke_no_args<R: DeserializeOwned>(command: &str) -> Result<R, Str
     let empty = serde_wasm_bindgen::to_value(&serde_json::json!({})).map_err(|e| e.to_string())?;
     let result = tauri_invoke(command, empty)
         .await
-        .map_err(|e| e.as_string().unwrap_or_else(|| format!("{:?}", e)))?;
+        .map_err(extract_tauri_error)?;
     serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string())
 }
 

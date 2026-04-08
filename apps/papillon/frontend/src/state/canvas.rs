@@ -168,6 +168,17 @@ impl CanvasState {
         }
     }
 
+    /// Delete a canvas by ID. If it was the active canvas, select the previous one.
+    pub fn delete_canvas(&self, id: &str) {
+        let id = id.to_string();
+        self.canvases.update(|cs| cs.retain(|c| c.id != id));
+        // If the deleted canvas was active, switch to the last remaining one
+        if self.current_canvas_id.get_untracked().as_deref() == Some(&id) {
+            let next = self.canvases.get_untracked().last().map(|c| c.id.clone());
+            self.current_canvas_id.set(next);
+        }
+    }
+
     /// Get the currently active canvas, if any.
     pub fn current_canvas(&self) -> Option<Canvas> {
         let id = self.current_canvas_id.get()?;
@@ -258,6 +269,7 @@ impl CanvasState {
             agent_did: None,
             created_at: now_iso(),
             updated_at: now_iso(),
+            preference_guided: false,
         };
 
         let block_id = block.id.clone();
@@ -285,6 +297,7 @@ impl CanvasState {
             let result = if bridge::tauri_available() {
                 // Tauri IPC path — delegates to native backend handshake
                 #[derive(serde::Serialize)]
+                #[serde(rename_all = "camelCase")]
                 struct CanvasPromptArgs {
                     canvas_id: String,
                     prompt_id: String,
@@ -367,6 +380,7 @@ impl CanvasState {
         let cid = canvas_id.clone();
         spawn_local(async move {
             #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
             struct ReshapeArgs {
                 canvas_id: String,
                 block_id: String,
@@ -448,6 +462,7 @@ impl CanvasState {
         let cid = canvas_id.clone();
         spawn_local(async move {
             #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
             struct RetryArgs {
                 canvas_id: String,
                 block_id: String,
@@ -553,6 +568,7 @@ mod tests {
                 agent_did: None,
                 created_at: String::new(),
                 updated_at: String::new(),
+                preference_guided: false,
             }],
             created_at: String::new(),
             updated_at: String::new(),
@@ -611,6 +627,7 @@ mod tests {
                     agent_did: None,
                     created_at: String::new(),
                     updated_at: String::new(),
+                    preference_guided: false,
                 },
                 CanvasBlock {
                     id: "b".into(),
@@ -623,6 +640,7 @@ mod tests {
                     agent_did: None,
                     created_at: String::new(),
                     updated_at: String::new(),
+                    preference_guided: false,
                 },
             ],
             created_at: String::new(),
@@ -647,5 +665,64 @@ mod tests {
         let text = "just a normal prompt";
         let expanded = expand_block_references(text, &canvases);
         assert_eq!(expanded, text);
+    }
+
+    // ── extract_block_ids — edge cases ────────────────────────────────────────
+
+    #[test]
+    fn extract_block_ids_empty_id_is_skipped() {
+        // {{block:}} has an empty ID — should not be extracted
+        let ids = extract_block_ids("{{block:}}");
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn extract_block_ids_adjacent_refs() {
+        let ids = extract_block_ids("{{block:x}}{{block:y}}");
+        assert_eq!(ids, vec!["x", "y"]);
+    }
+
+    // ── auto_name_from_prompt ─────────────────────────────────────────────────
+
+    #[test]
+    fn auto_name_from_prompt_short_unchanged() {
+        let result = auto_name_from_prompt("hello world");
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn auto_name_from_prompt_empty_is_empty() {
+        let result = auto_name_from_prompt("");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn auto_name_from_prompt_exactly_40_chars_no_ellipsis() {
+        let input = "1234567890123456789012345678901234567890"; // 40 ASCII chars
+        assert_eq!(input.len(), 40);
+        let result = auto_name_from_prompt(input);
+        assert_eq!(result, input);
+        assert!(!result.ends_with("..."));
+    }
+
+    #[test]
+    fn auto_name_from_prompt_41_chars_truncates_with_ellipsis() {
+        let input = "12345678901234567890123456789012345678901"; // 41 ASCII chars
+        assert_eq!(input.len(), 41);
+        let result = auto_name_from_prompt(input);
+        assert!(result.ends_with("..."));
+        // The truncated body should be the first 40 characters
+        let body = result.trim_end_matches("...");
+        assert_eq!(body.len(), 40);
+        assert_eq!(body, &input[..40]);
+    }
+
+    #[test]
+    fn auto_name_from_prompt_long_prompt_body_is_first_40_chars() {
+        let input = "search for information about quantum computing and its applications in cryptography";
+        let result = auto_name_from_prompt(input);
+        assert!(result.ends_with("..."));
+        let body: String = input.chars().take(40).collect();
+        assert!(result.starts_with(&body));
     }
 }

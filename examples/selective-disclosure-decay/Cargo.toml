@@ -1,0 +1,22 @@
+[package]
+name = "pap-selective-disclosure-decay-example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "selective-disclosure-decay"
+path = "src/main.rs"
+
+[dependencies]
+pap-did = { workspace = true }
+pap-core = { workspace = true }
+pap-marketplace = { workspace = true }
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

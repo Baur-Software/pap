@@ -26,6 +26,7 @@ use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::recovery::RecoveryState;
 use crate::state::registry::RegistryState;
+use crate::state::renderer::RendererState;
 use crate::state::templates::TemplatesState;
 use papillon_shared::{
     BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, RecoveryStatus, Template,
@@ -38,6 +39,7 @@ pub fn App() -> impl IntoView {
     let orchestrator_state = OrchestratorState::default();
     let canvas_state = CanvasState::default();
     let templates_state = TemplatesState::default();
+    let renderer_state = RendererState::default();
     let catalog_state = CatalogState::default();
     let recovery_state = RecoveryState::default();
     provide_context(identity_state);
@@ -45,6 +47,7 @@ pub fn App() -> impl IntoView {
     provide_context(orchestrator_state);
     provide_context(canvas_state);
     provide_context(templates_state);
+    provide_context(renderer_state);
     provide_context(catalog_state);
     provide_context(recovery_state);
 
@@ -53,6 +56,18 @@ pub fn App() -> impl IntoView {
     Effect::new(move || {
         let agents = registry_state.agents.get();
         catalog_state.refresh(&agents);
+    });
+
+    // Keep the renderer registry in sync with user-defined templates.
+    // First run seeds registered_keys from the hardcoded shipped types; subsequent
+    // runs extend the registry when agents or users create new templates.
+    Effect::new(move || {
+        let all_templates = templates_state.all_templates();
+        renderer_state.registry.with_value(|r| {
+            r.load_from_templates(all_templates);
+        });
+        let keys = renderer_state.registry.with_value(|r| r.registered_type_keys());
+        renderer_state.registered_keys.set(keys);
     });
 
     // Provide PapillonService context — prevents panic in WASM handshake path.
