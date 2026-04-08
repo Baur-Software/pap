@@ -4756,6 +4756,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pap-selective-disclosure-decay-example"
+version = "0.6.0"
+dependencies = [
+ "ed25519-dalek",
+ "pap-core",
+ "pap-did",
+ "pap-marketplace",
+ "rand 0.8.5",
+ "tokio",
+]
+
+[[package]]
 name = "pap-tee"
 version = "0.6.0"
 dependencies = [

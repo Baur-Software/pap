@@ -610,6 +610,77 @@
       color: var(--faint);
       z-index: 300;
     }
+
+    /* ── Print ── */
+    @media print {
+      @page { size: landscape; margin: 0; }
+
+      /* Light-mode palette for print */
+      :root {
+        --bg:      #ffffff;
+        --surface: #f4f3fa;
+        --border:  #dddcee;
+        --purple:  #5b4bd4;
+        --violet:  #5b4bd4;
+        --teal:    #1a9e82;
+        --muted:   #4a4a62;
+        --faint:   #7a7a98;
+        --text:    #16141f;
+      }
+
+      html, body {
+        overflow: visible;
+        width: 100%;
+        height: auto;
+        background: #fff;
+        color: #16141f;
+      }
+
+      .deck {
+        position: static;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+      }
+
+      .track {
+        display: block;
+        transform: none !important;
+        transition: none;
+        height: auto;
+      }
+
+      .s {
+        flex: none;
+        width: 100%;
+        height: 100vh;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden;
+        position: relative;
+        background: #fff;
+      }
+
+      .s:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+
+      /* Decorative glows don't translate to print */
+      .cover-glow, .vision-glow { display: none; }
+
+      /* Cards / surfaces */
+      .sys-node { background: var(--surface); border-color: var(--border); }
+      .biz-row  { background: var(--surface); border-color: var(--border); }
+      .ba-before .ba-item { background: var(--surface); border-color: var(--border); }
+      .ba-after  .ba-item { background: #eeebfc; border-color: rgba(91,75,212,0.35); color: var(--text); }
+      .flow-box           { border-color: var(--border); }
+      .flow-box.highlight { background: #eeebfc; border-color: rgba(91,75,212,0.4); color: var(--violet); }
+      .vlink-p { background: #eeebfc; border-color: rgba(91,75,212,0.3); color: var(--violet); }
+      .vlink-t { background: #e6f7f3; border-color: rgba(26,158,130,0.3); color: var(--teal); }
+
+      .nav-btn, .dots, .counter { display: none !important; }
+    }
   </style>
 </head>
 <body>
