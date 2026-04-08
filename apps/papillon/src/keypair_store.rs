@@ -172,8 +172,6 @@ impl KeypairStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(unix)]
-    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
     fn temp_dir() -> TempDir {
