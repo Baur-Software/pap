@@ -168,7 +168,7 @@ fn main() {
     let mut entries = vec![];
 
     // Entry 1: Name (always available, not session-only)
-    let mut entry_name = DisclosureEntry {
+    let entry_name = DisclosureEntry {
         schema_type: "schema:Person".to_string(),
         permitted_properties: vec!["schema:Person.name".to_string()],
         prohibited_properties: vec![],
@@ -178,7 +178,7 @@ fn main() {
     entries.push(entry_name);
 
     // Entry 2: Nationality (always available, not session-only)
-    let mut entry_nat = DisclosureEntry {
+    let entry_nat = DisclosureEntry {
         schema_type: "schema:Person".to_string(),
         permitted_properties: vec!["schema:Person.nationality".to_string()],
         prohibited_properties: vec![],
@@ -188,7 +188,7 @@ fn main() {
     entries.push(entry_nat);
 
     // Entry 3: Email (session-only — becomes unavailable when TTL enters decay window)
-    let mut entry_email = DisclosureEntry {
+    let entry_email = DisclosureEntry {
         schema_type: "schema:Person".to_string(),
         permitted_properties: vec!["schema:Person.email".to_string()],
         prohibited_properties: vec![],
@@ -228,12 +228,8 @@ fn main() {
     let decay_window = 8;
 
     for elapsed in [0, 10, 15, 18, 25].iter() {
-        let current_time = now + elapsed;
-        let remaining = if current_time >= ttl {
-            0
-        } else {
-            ttl - current_time
-        };
+        let current_time = now.saturating_add(*elapsed);
+        let remaining = ttl.saturating_sub(current_time);
 
         let state = if remaining == 0 {
             DecayState::ReadOnly
