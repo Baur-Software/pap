@@ -566,10 +566,6 @@ mod tests {
         serde_json::from_slice(&bytes).unwrap()
     }
 
-    fn bearer(token: &str) -> (header::HeaderName, String) {
-        (header::AUTHORIZATION, format!("Bearer {token}"))
-    }
-
     // ── extract_bearer unit tests ─────────────────────────────────────────────
 
     #[test]
@@ -873,27 +869,6 @@ mod tests {
     }
 
     // ── Rate limiting ─────────────────────────────────────────────────────────
-
-    /// Helper: build a router with a custom max_ads_per_principal limit.
-    async fn test_router_with_limit(limit: usize) -> axum::Router {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("src/db/migrations/sqlite")
-            .run(&pool)
-            .await
-            .unwrap();
-        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
-        let state = AppState {
-            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
-            store,
-            node_did: "did:key:zTestNode".into(),
-            node_endpoint: "http://localhost:7890".into(),
-            cert_fingerprint: "sha256:deadbeef".into(),
-            admin_token: None,
-            max_ads_per_principal: limit,
-            sync_log: SyncEventLog::default(),
-        };
-        router().with_state(state)
-    }
 
     /// Helper: POST a signed AgentAdvertisement and return the HTTP status code.
     async fn post_ad(app: axum::Router, ad: &AgentAdvertisement) -> StatusCode {
