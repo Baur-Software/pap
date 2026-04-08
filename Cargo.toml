@@ -32,6 +32,7 @@ members = [
     "examples/credential-lifecycle",
     "examples/protocol-envelope",
     "examples/tee-attestation",
+    "examples/selective-disclosure-decay",
 ]
 
 [workspace.package]
