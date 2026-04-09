@@ -17,3 +17,4 @@ fuzz/artifacts/
 # Bundled model weights (too large for git — download during setup)
 *.gguf
 apps/papillon/models/tokenizer.json
+.claude/

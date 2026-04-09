@@ -15,7 +15,7 @@ use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
 use crate::handshake;
 use crate::state::AppState;
-use papillon_shared::{BlockEvent, BlockState, CanvasBlock, PreferenceEngine};
+use papillon_shared::{BlockEvent, BlockState, CanvasBlock, IntentPlan, PreferenceEngine};
 
 use super::orchestrator::hash_agent_did;
 
@@ -469,9 +469,9 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided: false,
             };
             let _ = app_phase.emit("block_updated", BlockEvent { block });
         });
@@ -493,9 +493,9 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided: false,
             };
             let _ = app_fail.emit("block_resolved", BlockEvent { block });
         });
@@ -543,9 +543,9 @@ fn process_prompt_inner<'a>(
                             content: None,
                             linked_block_ids: Vec::new(),
                             agent_did: None,
+                            preference_guided: false,
                             created_at: now.clone(),
                             updated_at: now,
-                            preference_guided: false,
                         },
                     },
                 );
@@ -638,9 +638,9 @@ pub async fn canvas_prompt(
                 // TODO: thread agent_did from process_prompt return value
                 // so the renderer can use agent-scoped templates.
                 agent_did: None,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided,
             },
         },
     );
@@ -674,9 +674,9 @@ pub async fn canvas_reshape(
                 content: Some(content),
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided,
             },
         },
     );
@@ -705,6 +705,183 @@ pub async fn canvas_retry(
         original_text,
     )
     .await
+}
+
+/// Two-phase canvas prompt: plan first (emit `AwaitingApproval`), then wait for
+/// principal approval before running the full handshake.
+///
+/// If `auto_approve_zero_disclosure` is enabled in the orchestrator config and the
+/// resolved agent requires no disclosure fields, the gate is skipped and the
+/// handshake runs immediately.
+#[tauri::command]
+pub async fn canvas_plan_prompt(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    _canvas_id: String,
+    prompt_id: String,
+    block_id: String,
+    text: String,
+) -> Result<serde_json::Value, PapillonError> {
+    let (action_type, preferred, _query) = detect_intent(&text);
+
+    // Resolve agent to build the IntentPlan.
+    let resolved = resolve_agent(&state, action_type, preferred, &[]).await?;
+
+    let approval_request_id = uuid::Uuid::new_v4().to_string();
+
+    let plan = IntentPlan {
+        action: action_type.to_string(),
+        selected_agent_name: resolved.name.clone(),
+        selected_agent_did: Some(resolved.did.clone()),
+        requires_disclosure: resolved.requires_disclosure.clone(),
+        returns: resolved.returns.clone(),
+        approval_request_id: approval_request_id.clone(),
+    };
+
+    // Check auto-approve shortcut: if configured and no disclosure required, skip the gate.
+    let auto_approve = {
+        let config = state
+            .orchestrator_config
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        config.auto_approve_zero_disclosure && plan.requires_disclosure.is_empty()
+    };
+
+    if auto_approve {
+        // Run directly without emitting AwaitingApproval.
+        let (schema_type, content, preference_guided) =
+            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+        maybe_auto_generate_template(&state, &schema_type, &content);
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_resolved",
+            BlockEvent {
+                block: CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id,
+                    prompt_text: Some(text),
+                    state: BlockState::Resolved,
+                    schema_type: Some(schema_type),
+                    content: Some(content),
+                    linked_block_ids: Vec::new(),
+                    agent_did: None,
+                    preference_guided,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+        return Ok(serde_json::json!({ "status": "ok", "block_id": block_id }));
+    }
+
+    // Emit the AwaitingApproval block so the frontend can render the approval UI.
+    let now = Utc::now().to_rfc3339();
+    let _ = app.emit(
+        "block_updated",
+        BlockEvent {
+            block: CanvasBlock {
+                id: block_id.clone(),
+                prompt_id: prompt_id.clone(),
+                prompt_text: Some(text.clone()),
+                state: BlockState::AwaitingApproval { plan: plan.clone() },
+                schema_type: None,
+                content: None,
+                linked_block_ids: Vec::new(),
+                agent_did: None,
+                preference_guided: false,
+                created_at: now.clone(),
+                updated_at: now,
+            },
+        },
+    );
+
+    // Create the oneshot channel and store the sender in the approval_gates map.
+    let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
+    {
+        let mut gates = state.approval_gates.write().await;
+        gates.insert(approval_request_id.clone(), sender);
+    }
+
+    // Block until the principal approves or rejects (or the sender is dropped).
+    let approved = receiver.await.unwrap_or(false);
+
+    if approved {
+        // Run the full handshake.
+        let (schema_type, content, preference_guided) =
+            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+        maybe_auto_generate_template(&state, &schema_type, &content);
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_resolved",
+            BlockEvent {
+                block: CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id,
+                    prompt_text: Some(text),
+                    state: BlockState::Resolved,
+                    schema_type: Some(schema_type),
+                    content: Some(content),
+                    linked_block_ids: Vec::new(),
+                    agent_did: None,
+                    preference_guided,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+        Ok(serde_json::json!({ "status": "ok", "block_id": block_id }))
+    } else {
+        // Principal rejected — emit a Failed block.
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_resolved",
+            BlockEvent {
+                block: CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id,
+                    prompt_text: Some(text),
+                    state: BlockState::Failed {
+                        phase: 0,
+                        reason: "Rejected by principal".to_string(),
+                    },
+                    schema_type: None,
+                    content: None,
+                    linked_block_ids: Vec::new(),
+                    agent_did: None,
+                    preference_guided: false,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+        Ok(serde_json::json!({ "status": "rejected", "block_id": block_id }))
+    }
+}
+
+/// Resolve a pending approval gate created by `canvas_plan_prompt`.
+///
+/// Sends `approved` (true/false) through the oneshot channel, which unblocks
+/// the waiting `canvas_plan_prompt` command and either proceeds with the
+/// handshake or emits a Failed block.
+#[tauri::command]
+pub async fn canvas_approve_block(
+    approval_request_id: String,
+    approved: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let sender = {
+        let mut gates = state.approval_gates.write().await;
+        gates.remove(&approval_request_id)
+    };
+    if let Some(sender) = sender {
+        let _ = sender.send(approved);
+        Ok(())
+    } else {
+        Err(format!(
+            "No approval gate found for {}",
+            approval_request_id
+        ))
+    }
 }
 
 #[cfg(test)]

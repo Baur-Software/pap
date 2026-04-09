@@ -112,7 +112,7 @@ pub async fn check_llm_connection(
         .map_err(|e| PapillonError::from(e.to_string()))?
         .clone();
 
-    match &config.llm_provider {
+    match &config.inference_substrate {
         LlmProvider::BuiltIn { model_id } => {
             // For BuiltIn, verify the model is loaded and can generate
             let resource_dir = state
