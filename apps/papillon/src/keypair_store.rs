@@ -214,6 +214,7 @@ mod tests {
         assert_eq!(did1, did2, "DID must be stable across restarts");
     }
 
+    #[cfg(unix)]
     #[test]
     #[cfg(unix)]
     fn key_file_has_mode_0600() {

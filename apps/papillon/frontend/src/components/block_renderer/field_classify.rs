@@ -405,8 +405,6 @@ mod tests {
         assert_eq!(sanitize_css_class("normal-type"), "normal-type");
     }
 
-    // ── extract_types (plural) ────────────────────────────────────────────────
-
     #[test]
     fn extract_types_single_string() {
         let obj: serde_json::Map<String, Value> =
