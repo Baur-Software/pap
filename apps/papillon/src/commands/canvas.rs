@@ -472,7 +472,6 @@ fn process_prompt_inner<'a>(
                 preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided: false,
             };
             let _ = app_phase.emit("block_updated", BlockEvent { block });
         });
@@ -497,7 +496,6 @@ fn process_prompt_inner<'a>(
                 preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided: false,
             };
             let _ = app_fail.emit("block_resolved", BlockEvent { block });
         });
@@ -548,7 +546,6 @@ fn process_prompt_inner<'a>(
                             preference_guided: false,
                             created_at: now.clone(),
                             updated_at: now,
-                            preference_guided: false,
                         },
                     },
                 );
@@ -641,10 +638,9 @@ pub async fn canvas_prompt(
                 // TODO: thread agent_did from process_prompt return value
                 // so the renderer can use agent-scoped templates.
                 agent_did: None,
-                preference_guided: false,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided,
             },
         },
     );
@@ -678,10 +674,9 @@ pub async fn canvas_reshape(
                 content: Some(content),
                 linked_block_ids: Vec::new(),
                 agent_did: None,
-                preference_guided: false,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
-                preference_guided,
             },
         },
     );
@@ -754,7 +749,7 @@ pub async fn canvas_plan_prompt(
 
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
-        let (schema_type, content) =
+        let (schema_type, content, preference_guided) =
             process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
@@ -770,7 +765,7 @@ pub async fn canvas_plan_prompt(
                     content: Some(content),
                     linked_block_ids: Vec::new(),
                     agent_did: None,
-                    preference_guided: false,
+                    preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
                 },
@@ -812,7 +807,7 @@ pub async fn canvas_plan_prompt(
 
     if approved {
         // Run the full handshake.
-        let (schema_type, content) =
+        let (schema_type, content, preference_guided) =
             process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
@@ -828,7 +823,7 @@ pub async fn canvas_plan_prompt(
                     content: Some(content),
                     linked_block_ids: Vec::new(),
                     agent_did: None,
-                    preference_guided: false,
+                    preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
                 },

@@ -273,7 +273,6 @@ impl CanvasState {
             preference_guided: false,
             created_at: now_iso(),
             updated_at: now_iso(),
-            preference_guided: false,
         };
 
         let block_id = block.id.clone();
