@@ -84,6 +84,10 @@ pub struct AppState {
     /// Pending WebAuthn challenges awaiting completion.
     /// Keyed by a UUID challenge_id; entries expire after `CHALLENGE_TTL_SECS`.
     pub webauthn_challenges: WebAuthnChallengeStore,
+    /// Pending approval gates for `canvas_plan_prompt` two-phase execution.
+    /// Keyed by approval_request_id; resolved by `canvas_approve_block`.
+    pub approval_gates:
+        tokio::sync::RwLock<std::collections::HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
 }
 
 impl AppState {
@@ -134,6 +138,8 @@ impl AppState {
             // Each clone gets its own isolated challenge store — background
             // threads never need to complete WebAuthn ceremonies.
             webauthn_challenges: WebAuthnChallengeStore::new(),
+            // Background clones never handle approval gates; start fresh.
+            approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }
 
@@ -200,7 +206,7 @@ impl AppState {
         // ── Register all DB agents (catalog + user_created + generated) ───────────
         {
             let orchestrator_config = saved_orchestrator_config.clone();
-            let llm_provider = Arc::new(orchestrator_config.llm_provider.clone());
+            let llm_provider = Arc::new(orchestrator_config.inference_substrate.clone());
             let db_agents = db.load_all_agents().unwrap_or_default();
             for def in db_agents {
                 if let Err(e) = agent_set.register_dynamic(&def, llm_provider.clone()) {
@@ -398,6 +404,7 @@ impl AppState {
             node_cert_fingerprint: RwLock::new(String::new()),
             local_pap_urls: RwLock::new(Vec::new()),
             webauthn_challenges: WebAuthnChallengeStore::new(),
+            approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }
 

@@ -3623,6 +3623,7 @@ body {
 .partitions-decay-bar.compressed { background: rgba(255,255,255,0.2); }
 .partitions-decay-count { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.4); width: 24px; text-align: right; }
 
+/* === 3-COLUMN LAYOUT REMOVED: renderer-first single-column layout replaces this ===
 /* ── Canvas Workspace ── */
 .canvas-workspace {
     display: grid;
@@ -3773,6 +3774,7 @@ body {
     color: rgba(255,255,255,0.25);
 }
 
+=== END REMOVED 3-COLUMN LAYOUT === */
 /* ── Outcome Synthesis Panel ── */
 
 /* Container — sits below the ledger entries in the right panel */
@@ -4266,4 +4268,120 @@ body {
     line-height: 1.6;
     border-top: 1px solid rgba(255,255,255,0.05);
     padding-top: 10px;
+}
+
+/* ─── Canvas: single-column renderer-first layout ─── */
+.canvas-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-0);
+}
+
+.canvas-prompt-bar {
+    flex-shrink: 0;
+    padding: var(--sp-md);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-1);
+    z-index: 10;
+}
+
+.canvas-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--sp-lg) var(--sp-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-md);
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.canvas-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-3xl) 0;
+    gap: var(--sp-md);
+}
+
+.canvas-empty-hint {
+    font-size: 13px;
+    color: var(--text-3);
+    text-align: center;
+    font-family: var(--font-body);
+}
+
+/* ─── AwaitingApproval block ─── */
+.canvas-block.awaiting-approval {
+    border: 1px dashed var(--purple);
+    border-radius: var(--r-lg);
+    padding: var(--sp-md);
+    background: transparent;
+}
+
+.awaiting-approval-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: var(--sp-md);
+    font-family: var(--font-mono);
+}
+
+.awaiting-approval-section-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    margin-bottom: var(--sp-xs);
+}
+
+.awaiting-approval-skeleton-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: var(--sp-sm);
+    margin-bottom: var(--sp-md);
+    opacity: 0.45;
+    pointer-events: none;
+    overflow: hidden;
+    max-height: 160px;
+}
+
+.awaiting-approval-disclosure {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-xs);
+    margin-bottom: var(--sp-md);
+}
+
+.awaiting-approval-mandate-note {
+    font-size: 10px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    margin-bottom: var(--sp-md);
+}
+
+.awaiting-approval-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-sm);
+    padding-top: var(--sp-md);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.awaiting-approval-actions .hitl-reject-btn {
+    flex: 0 0 auto;
+}
+
+.awaiting-approval-actions .hitl-authorize-btn {
+    flex: 1;
 }

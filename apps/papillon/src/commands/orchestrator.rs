@@ -62,7 +62,7 @@ pub async fn configure_orchestrator(
 
     // Load the model when BuiltIn is selected so that get_orchestrator_status
     // returns Ready immediately after this call returns.
-    if let LlmProvider::BuiltIn { ref model_id } = config.llm_provider {
+    if let LlmProvider::BuiltIn { ref model_id } = config.inference_substrate {
         let resource_dir = state
             .resource_dir
             .read()
@@ -91,7 +91,7 @@ pub async fn get_orchestrator_status(
         .read()
         .map_err(|e| PapillonError::from(e.to_string()))?
         .clone();
-    let status = match &config.llm_provider {
+    let status = match &config.inference_substrate {
         LlmProvider::None => OrchestratorStatus::Disconnected,
         LlmProvider::BuiltIn { model_id } => {
             let mgr = state.model_manager.lock().await;
@@ -117,7 +117,7 @@ pub fn get_setup_state(state: State<'_, AppState>) -> Result<SetupState, Papillo
         .orchestrator_config
         .read()
         .map_err(|e| PapillonError::from(e.to_string()))?;
-    let llm_configured = config.llm_provider != LlmProvider::None;
+    let llm_configured = config.inference_substrate != LlmProvider::None;
     Ok(SetupState {
         identity_created: has_signer,
         llm_configured,
@@ -142,7 +142,7 @@ pub async fn load_builtin_model(
             .orchestrator_config
             .read()
             .map_err(|e| PapillonError::from(e.to_string()))?;
-        match &config.llm_provider {
+        match &config.inference_substrate {
             LlmProvider::BuiltIn { model_id } => model_id.clone(),
             _ => return Err(PapillonError::from("Provider is not BuiltIn")),
         }

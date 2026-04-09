@@ -35,6 +35,8 @@ pub struct CanvasState {
     pub prefill_prompt: RwSignal<Option<String>>,
     /// Pending HitL gate — set by the protocol layer, cleared by user decision.
     pub hitl_pending: RwSignal<Option<HitlRequest>>,
+    /// Tracks block IDs for which an approval invoke is in-flight (prevents double-submit).
+    pub approval_in_flight: RwSignal<std::collections::HashSet<String>>,
 }
 
 impl Default for CanvasState {
@@ -47,6 +49,7 @@ impl Default for CanvasState {
             focus_prompt: RwSignal::new(0),
             prefill_prompt: RwSignal::new(None),
             hitl_pending: RwSignal::new(None),
+            approval_in_flight: RwSignal::new(std::collections::HashSet::new()),
         }
     }
 }
@@ -267,6 +270,7 @@ impl CanvasState {
             content: None,
             linked_block_ids,
             agent_did: None,
+            preference_guided: false,
             created_at: now_iso(),
             updated_at: now_iso(),
             preference_guided: false,
@@ -499,6 +503,50 @@ impl CanvasState {
                 }
                 canvas.updated_at = now_iso();
             }
+        });
+    }
+
+    /// Approve an AwaitingApproval block — sends the decision to the backend
+    /// and begins the handshake. Guards against double-submit via approval_in_flight.
+    pub fn approve_block(&self, block_id: String, approval_request_id: String) {
+        // Prevent double-submit
+        if self.approval_in_flight.get_untracked().contains(&block_id) {
+            return;
+        }
+        self.approval_in_flight.update(|s| {
+            s.insert(block_id.clone());
+        });
+
+        let in_flight = self.approval_in_flight;
+        let block_id_clone = block_id.clone();
+
+        spawn_local(async move {
+            let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                "canvas_approve_block",
+                &serde_json::json!({
+                    "approvalRequestId": approval_request_id,
+                    "approved": true,
+                }),
+            )
+            .await;
+            in_flight.update(|s| {
+                s.remove(&block_id_clone);
+            });
+        });
+    }
+
+    /// Reject an AwaitingApproval block — sends the decision to the backend.
+    pub fn reject_block(&self, block_id: String, approval_request_id: String) {
+        let _ = block_id; // state update arrives via block event from backend
+        spawn_local(async move {
+            let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                "canvas_approve_block",
+                &serde_json::json!({
+                    "approvalRequestId": approval_request_id,
+                    "approved": false,
+                }),
+            )
+            .await;
         });
     }
 

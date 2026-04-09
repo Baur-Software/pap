@@ -96,7 +96,7 @@ fn GeneralTab() -> impl IntoView {
     // Initialize from current config
     Effect::new(move || {
         let config = orchestrator.config.get();
-        match &config.llm_provider {
+        match &config.inference_substrate {
             LlmProvider::BuiltIn { model_id } => {
                 selected.set("builtin".into());
                 builtin_model.set(model_id.clone());
@@ -170,7 +170,7 @@ fn GeneralTab() -> impl IntoView {
         };
 
         let config = OrchestratorConfig {
-            llm_provider: provider,
+            inference_substrate: provider,
             mandate_ttl_hours: orchestrator.config.get().mandate_ttl_hours,
             auto_approve_zero_disclosure: orchestrator.config.get().auto_approve_zero_disclosure,
         };
@@ -212,10 +212,63 @@ fn GeneralTab() -> impl IntoView {
 
     view! {
         <div class="card">
-            <h3 style="font-size: 14px; margin-bottom: 12px;">"LLM Provider"</h3>
+            // ── PAP Orchestrator ─────────────────────────────────────
+            <div style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border);">
+                <h3 style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; font-family: var(--font-mono);">
+                    "PAP_ORCHESTRATOR"
+                </h3>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+                    "Routes your intent to agents. Deterministic — never sends data to an external model."
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                        <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"STATUS"</span>
+                        <span style="color: #00b894; font-family: var(--font-mono); font-size: 11px;">"ACTIVE"</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                        <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"MANDATE TTL"</span>
+                        <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 11px;">"1h per execution (renewable, bounded)"</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                        <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"AUTO-APPROVE"</span>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input
+                                type="checkbox"
+                                prop:checked=move || orchestrator.config.get().auto_approve_zero_disclosure
+                                on:change=move |ev| {
+                                    use web_sys::HtmlInputElement;
+                                    use wasm_bindgen::JsCast;
+                                    let checked = ev.target()
+                                        .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
+                                        .map(|el| el.checked())
+                                        .unwrap_or(false);
+                                    let mut cfg = orchestrator.config.get();
+                                    cfg.auto_approve_zero_disclosure = checked;
+                                    let cfg_clone = cfg.clone();
+                                    spawn_local(async move {
+                                        let _ = bridge::invoke::<serde_json::Value, OrchestratorConfig>(
+                                            "configure_orchestrator",
+                                            &serde_json::json!({ "config": cfg_clone }),
+                                        ).await;
+                                    });
+                                    orchestrator.config.set(cfg);
+                                }
+                            />
+                            <span style="font-size: 11px; color: var(--text-secondary);">"Skip approval for zero-disclosure requests"</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            // ── Inference Substrate (optional) ────────────────────────
+            <h3 style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; font-family: var(--font-mono);">
+                "INFERENCE_SUBSTRATE"
+                <span style="font-size: 10px; color: var(--text-tertiary); margin-left: 8px; text-transform: none; letter-spacing: 0;">"optional"</span>
+            </h3>
             <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                "Configure the language model that powers the orchestrator. "
-                "The built-in option runs entirely on-device with no network calls."
+                "Synthesizes natural-language answers from structured agent data. "
+                "PAP routing works without it. Sending queries to an external provider "
+                "shares your query context with that provider."
             </p>
             <select
                 style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px; margin-bottom: 16px;"

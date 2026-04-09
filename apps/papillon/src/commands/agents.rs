@@ -256,7 +256,7 @@ pub async fn generate_agent(
         .read()
         .map_err(|e| format!("orchestrator_config lock poisoned: {e}"))?
         .clone()
-        .llm_provider;
+        .inference_substrate;
 
     // BuiltIn provider cannot issue HTTP chat completions
     if matches!(provider, papillon_shared::LlmProvider::BuiltIn { .. }) {

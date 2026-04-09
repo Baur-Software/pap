@@ -78,7 +78,7 @@ pub fn SetupWizard() -> impl IntoView {
         };
 
         let config = OrchestratorConfig {
-            llm_provider: llm,
+            inference_substrate: llm,
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
         };
