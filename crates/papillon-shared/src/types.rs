@@ -341,7 +341,7 @@ impl<'a> PreferenceEngine<'a> {
     /// that have handled `action_type` with at least 5 successful episodes.
     /// Returns an empty vec when insufficient data is available, causing the caller
     /// to fall back to profile-based or scenario-default disclosure selection.
-    pub fn suggested_scopes(&self, action_type: &str, _schema_type_hint: &str) -> Vec<String> {
+    pub fn suggested_scopes(&self, _action_type: &str, _schema_type_hint: &str) -> Vec<String> {
         // Gather all agent profiles that handle this action type.
         let profiles = match self.db.list_agent_profiles() {
             Ok(ps) => ps,

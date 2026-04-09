@@ -66,13 +66,13 @@ test.describe("Web standalone: app shell", () => {
 // ── Canvas Page ──────────────────────────────────────────────
 
 test.describe("Web standalone: canvas page", () => {
-  test("shows new-tab empty state with agent tiles", async ({ page }) => {
+  test("shows single-column canvas with empty state", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await expect(page.locator(".canvas-area")).toBeVisible();
-    // No Tauri backend → no seed → shows the new-tab page with agent tiles
-    await expect(page.locator(".canvas-empty")).toBeVisible();
+    await expect(page.locator(".canvas-page")).toBeVisible();
+    // No Tauri backend → no seed → shows the empty state (prompt only)
+    await expect(page.locator(".canvas-empty-state")).toBeVisible();
   });
 
   test("shows inline prompt for user queries", async ({ page }) => {
@@ -107,12 +107,12 @@ test.describe("Web standalone: settings page", () => {
     await waitForApp(page);
     await page.locator(".topbar-settings-btn").click();
 
-    // Start on General — should show LLM Provider heading
-    await expect(page.locator("text=LLM Provider")).toBeVisible();
+    // Start on General — should show INFERENCE_SUBSTRATE heading
+    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
 
     // Switch to Identity tab — General content should disappear
     await page.locator(".settings-tab").nth(3).click();
-    await expect(page.locator("text=LLM Provider")).not.toBeVisible();
+    await expect(page.locator("text=INFERENCE_SUBSTRATE")).not.toBeVisible();
 
     // Switch to Advanced tab — shows Registry Browser
     await page.locator(".settings-tab").nth(4).click();
@@ -209,7 +209,7 @@ test.describe("Web standalone: graceful degradation", () => {
     // Back to home via menu
     await page.locator(".topbar-menu-btn").click();
     await page.locator(".menu-dropdown >> text=New Canvas").click();
-    await expect(page.locator(".canvas-area")).toBeVisible();
+    await expect(page.locator(".canvas-page")).toBeVisible();
 
     expect(errors).toHaveLength(0);
   });
