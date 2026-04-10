@@ -28,3 +28,13 @@ author = "$.hits[0].author"
 commentCount = "$.hits[0].num_comments"
 interactionCount = "$.hits[0].points"
 datePublished = "$.hits[0].created_at"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "hits_per_page"
+name = "Results Per Page"
+description = "Number of stories to fetch per query"
+defaultValue = 5
+minValue = 1
+maxValue = 20

@@ -312,6 +312,7 @@ mod tests {
                 object_types: &["schema:Thing"],
                 requires_disclosure: &[],
                 returns: &["schema:Thing"],
+                configurable_properties: vec![],
             }
         }
 

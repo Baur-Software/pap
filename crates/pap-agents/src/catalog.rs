@@ -23,6 +23,10 @@ struct CatalogEntry {
     llm_instructions: String,
     #[serde(default)]
     subagents: Vec<String>,
+    /// Agent-declared configurable properties as schema.org PropertyValueSpecification.
+    /// Flows into AgentAdvertisement for federation advertisement.
+    #[serde(default)]
+    configurable_properties: Vec<serde_json::Value>,
 }
 
 pub fn load_catalog(catalog_dir: &Path) -> Vec<DynamicAgentDef> {
@@ -98,6 +102,7 @@ fn load_one(root: &Path, path: &Path) -> Option<DynamicAgentDef> {
         operator_key_seed: None,
         agent_did: None,
         published_to: vec![],
+        configurable_properties: entry.configurable_properties,
         created_at: String::new(),
         updated_at: String::new(),
     })

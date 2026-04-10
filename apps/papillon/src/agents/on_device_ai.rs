@@ -29,6 +29,7 @@ impl AgentExecutor for OnDeviceAiExecutor {
             object_types: &["schema:Question"],
             requires_disclosure: &[],
             returns: &["schema:Answer"],
+            configurable_properties: vec![],
         }
     }
 

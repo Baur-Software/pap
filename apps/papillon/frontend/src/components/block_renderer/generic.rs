@@ -4,9 +4,10 @@ use std::sync::Arc;
 
 use super::field_classify::{
     camel_to_kebab, classify_field, format_datetime, humanize_key, sanitize_css_class,
-    scalar_to_string, schema_type_to_css, FieldKind,
+    scalar_to_string, schema_type_to_css, FieldKind, FormInputType,
 };
 use super::registry::RendererRegistry;
+use super::SettingsActionSink;
 use crate::state::canvas::CanvasState;
 
 /// Maximum items rendered per list before showing an overflow indicator.
@@ -318,7 +319,8 @@ pub fn flatten_to_entries(
                     | FieldKind::Price
                     | FieldKind::ExternalUrl
                     | FieldKind::PapLink
-                    | FieldKind::Did => {
+                    | FieldKind::Did
+                    | FieldKind::FormField { .. } => {
                         entries.push(StreamEntry {
                             path,
                             depth,
@@ -675,6 +677,36 @@ mod tests {
     }
 
     #[test]
+    fn pvs_object_emits_as_leaf_field_not_recursed() {
+        // PropertyValueSpecification objects should be emitted as a single
+        // Field entry (FormField kind), not recursed into like TypedObject.
+        let content = serde_json::json!({
+            "setting": {
+                "@type": "PropertyValueSpecification",
+                "valueName": "safe_search",
+                "name": "Safe Search",
+                "defaultValue": true
+            }
+        });
+        let entries = flatten_to_entries("Thing", &content, &empty_registry());
+        // Header + Field(FormField) + Footer = 3 entries
+        assert_eq!(entries.len(), 3);
+        assert!(is_typed_header(&entries[0]));
+        assert!(is_field(&entries[1]));
+        assert!(is_typed_footer(&entries[2]));
+        // Verify it's a FormField kind, not TypedObject
+        if let EntryKind::Field { ref field_kind, .. } = entries[1].kind {
+            assert!(
+                matches!(field_kind, FieldKind::FormField { .. }),
+                "PVS should classify as FormField, got {:?}",
+                field_kind
+            );
+        } else {
+            panic!("expected Field entry");
+        }
+    }
+
+    #[test]
     fn fallback_to_caller_type_when_at_type_absent() {
         let entries = flatten_to_entries(
             "CustomType",
@@ -808,6 +840,206 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
             }
             .into_any()
         }
+        FieldKind::FormField {
+            input_type,
+            value_name,
+        } => render_form_field(val, input_type, value_name, &css_field),
         _ => view! { <span></span> }.into_any(),
+    }
+}
+
+/// Render a PropertyValueSpecification as an interactive form input.
+///
+/// The full PVS object is passed as `val`. The input widget is chosen by
+/// `FormInputType` (derived from the spec's constraints). When a
+/// `SettingsActionSink` context is present, changes emit `SettingsAction`
+/// events. When absent, the field renders as read-only display.
+fn render_form_field(
+    val: &Value,
+    input_type: &FormInputType,
+    value_name: &str,
+    css_field: &str,
+) -> AnyView {
+    let name = val
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| val.get("valueName").and_then(|v| v.as_str()).unwrap_or("Setting"));
+    let description = val
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let current = val
+        .get("value")
+        .or(val.get("defaultValue"))
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    let label = name.to_string();
+    let css = format!("typed-field typed-field-form {}", css_field);
+
+    // Check if we have an action sink (interactive) or not (read-only)
+    let sink = use_context::<SettingsActionSink>();
+    let vn = value_name.to_string();
+
+    match input_type {
+        FormInputType::Toggle => {
+            let checked = current.as_bool().unwrap_or(false);
+            let checked_sig = RwSignal::new(checked);
+            let vn_change = vn.clone();
+            let sink_change = sink.clone();
+            view! {
+                <div class=css>
+                    <label class="typed-form-toggle">
+                        <input
+                            type="checkbox"
+                            prop:checked=move || checked_sig.get()
+                            prop:disabled=move || sink_change.is_none()
+                            on:change=move |ev| {
+                                use web_sys::HtmlInputElement;
+                                use wasm_bindgen::JsCast;
+                                let new_val = ev.target()
+                                    .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
+                                    .map(|el| el.checked())
+                                    .unwrap_or(false);
+                                checked_sig.set(new_val);
+                                if let Some(ref s) = sink {
+                                    s.0.run(super::SettingsAction {
+                                        target: "papillon".into(),
+                                        value_name: vn_change.clone(),
+                                        new_value: Value::Bool(new_val),
+                                    });
+                                }
+                            }
+                        />
+                        <span class="typed-form-label">{label}</span>
+                    </label>
+                    <p class="typed-form-description">{description}</p>
+                </div>
+            }
+            .into_any()
+        }
+        FormInputType::Number => {
+            let num_val = current.as_f64().unwrap_or(0.0);
+            let num_sig = RwSignal::new(num_val);
+            let min = val
+                .get("minValue")
+                .and_then(|v| v.as_f64());
+            let max = val
+                .get("maxValue")
+                .and_then(|v| v.as_f64());
+            let step = val
+                .get("stepValue")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+            let vn_change = vn.clone();
+            let sink_change = sink.clone();
+            view! {
+                <div class=css>
+                    <span class="typed-form-label">{label}</span>
+                    <input
+                        type="number"
+                        prop:value=move || num_sig.get().to_string()
+                        prop:disabled=move || sink_change.is_none()
+                        attr:min=min.map(|v| v.to_string())
+                        attr:max=max.map(|v| v.to_string())
+                        attr:step=step.to_string()
+                        on:change=move |ev| {
+                            let raw = event_target_value(&ev);
+                            if let Ok(v) = raw.parse::<f64>() {
+                                num_sig.set(v);
+                                if let Some(ref s) = sink {
+                                    // Prefer integer if step is whole
+                                    let json_val = if step.fract() == 0.0 && v.fract() == 0.0 {
+                                        serde_json::json!(v as i64)
+                                    } else {
+                                        serde_json::json!(v)
+                                    };
+                                    s.0.run(super::SettingsAction {
+                                        target: "papillon".into(),
+                                        value_name: vn_change.clone(),
+                                        new_value: json_val,
+                                    });
+                                }
+                            }
+                        }
+                    />
+                    <p class="typed-form-description">{description}</p>
+                </div>
+            }
+            .into_any()
+        }
+        FormInputType::Select => {
+            let pattern = val
+                .get("valuePattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let options: Vec<String> = pattern.split('|').map(|s| s.trim().to_string()).collect();
+            let current_str = current.as_str().unwrap_or("").to_string();
+            let selected = RwSignal::new(current_str);
+            let vn_change = vn.clone();
+            let sink_change = sink.clone();
+            view! {
+                <div class=css>
+                    <span class="typed-form-label">{label}</span>
+                    <select
+                        class="typed-form-select"
+                        prop:value=move || selected.get()
+                        prop:disabled=move || sink_change.is_none()
+                        on:change=move |ev| {
+                            let new_val = event_target_value(&ev);
+                            selected.set(new_val.clone());
+                            if let Some(ref s) = sink {
+                                s.0.run(super::SettingsAction {
+                                    target: "papillon".into(),
+                                    value_name: vn_change.clone(),
+                                    new_value: Value::String(new_val),
+                                });
+                            }
+                        }
+                    >
+                        <For
+                            each=move || options.clone()
+                            key=|opt| opt.clone()
+                            children=move |opt| {
+                                view! { <option value=opt.clone()>{opt}</option> }
+                            }
+                        />
+                    </select>
+                    <p class="typed-form-description">{description}</p>
+                </div>
+            }
+            .into_any()
+        }
+        FormInputType::Text => {
+            let current_str = current.as_str().unwrap_or("").to_string();
+            let text_sig = RwSignal::new(current_str);
+            let vn_change = vn.clone();
+            let sink_change = sink.clone();
+            view! {
+                <div class=css>
+                    <span class="typed-form-label">{label}</span>
+                    <input
+                        type="text"
+                        class="typed-form-text"
+                        prop:value=move || text_sig.get()
+                        prop:disabled=move || sink_change.is_none()
+                        on:change=move |ev| {
+                            let new_val = event_target_value(&ev);
+                            text_sig.set(new_val.clone());
+                            if let Some(ref s) = sink {
+                                s.0.run(super::SettingsAction {
+                                    target: "papillon".into(),
+                                    value_name: vn_change.clone(),
+                                    new_value: Value::String(new_val),
+                                });
+                            }
+                        }
+                    />
+                    <p class="typed-form-description">{description}</p>
+                </div>
+            }
+            .into_any()
+        }
     }
 }

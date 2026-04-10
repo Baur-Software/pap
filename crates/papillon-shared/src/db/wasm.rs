@@ -207,6 +207,31 @@ impl DatabaseOps for WasmDatabase {
         Ok(())
     }
 
+    fn set_agent_setting(
+        &self,
+        _agent_did_hash: &str,
+        _value_name: &str,
+        _value: &str,
+    ) -> Result<(), DbError> {
+        // WASM: no-op for now — agent settings are native-only
+        Ok(())
+    }
+
+    fn get_agent_settings(
+        &self,
+        _agent_did_hash: &str,
+    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+        Ok(std::collections::HashMap::new())
+    }
+
+    fn delete_agent_setting(
+        &self,
+        _agent_did_hash: &str,
+        _value_name: &str,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
     fn search_by_schema_type(
         &self,
         schema_type: &str,

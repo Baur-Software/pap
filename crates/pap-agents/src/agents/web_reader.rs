@@ -22,6 +22,7 @@ impl AgentExecutor for WebReaderExecutor {
             object_types: &["schema:WebPage"],
             requires_disclosure: &["schema:URL"],
             returns: &["schema:WebPage"],
+            configurable_properties: vec![],
         }
     }
 

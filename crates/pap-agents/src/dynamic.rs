@@ -21,6 +21,10 @@ pub struct DynamicAgentDef {
     pub published_to: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_path: Option<String>,
+    /// Configurable properties advertised as schema.org PropertyValueSpecification.
+    /// Flows into AgentAdvertisement for federation — remote registries serve these.
+    #[serde(default)]
+    pub configurable_properties: Vec<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -378,6 +382,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: Some("food/open_food_facts.toml".to_string()),
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         };
@@ -415,6 +420,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: None,
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         };

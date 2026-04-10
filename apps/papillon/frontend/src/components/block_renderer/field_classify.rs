@@ -2,7 +2,7 @@ use serde_json::Value;
 
 /// Semantic classification of a JSON-LD field value.
 /// Used by the generic renderer to choose visual treatment.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum FieldKind {
     /// Plain text, number, or boolean.
     Scalar,
@@ -29,6 +29,27 @@ pub enum FieldKind {
     Object,
     /// Null or empty string — skip rendering.
     Empty,
+    /// Interactive form field described by a schema.org PropertyValueSpecification.
+    /// The renderer projects this as a toggle, number input, select, or text field
+    /// depending on the spec's constraints. The full PVS object is carried in the
+    /// value so the renderer has access to all constraints.
+    FormField {
+        input_type: FormInputType,
+        value_name: String,
+    },
+}
+
+/// Input widget type derived from PropertyValueSpecification constraints.
+#[derive(Debug, PartialEq, Clone)]
+pub enum FormInputType {
+    /// Boolean defaultValue → checkbox/toggle
+    Toggle,
+    /// minValue/maxValue present → number spinner
+    Number,
+    /// valuePattern with pipe-separated options → dropdown
+    Select,
+    /// Fallback → text input
+    Text,
 }
 
 /// Classify a JSON-LD field by its key name and value shape.
@@ -57,6 +78,10 @@ pub fn classify_field(key: &str, value: &Value) -> FieldKind {
         Value::Bool(_) => FieldKind::Scalar,
         Value::Object(map) => {
             let types = extract_types(map);
+            // PropertyValueSpecification → interactive form field
+            if types.iter().any(|t| t == "PropertyValueSpecification") {
+                return classify_pvs(map);
+            }
             if !types.is_empty() {
                 FieldKind::TypedObject { schema_types: types }
             } else {
@@ -95,6 +120,42 @@ fn classify_string(key: &str, s: &str) -> FieldKind {
         return FieldKind::Did;
     }
     FieldKind::Scalar
+}
+
+/// Classify a PropertyValueSpecification object into the appropriate FormField kind.
+///
+/// Uses the spec's constraints to choose the input widget:
+/// - `defaultValue` is bool → Toggle
+/// - `minValue` or `maxValue` present → Number
+/// - `valuePattern` with `|` separator → Select (enum-like)
+/// - Otherwise → Text
+fn classify_pvs(map: &serde_json::Map<String, Value>) -> FieldKind {
+    let value_name = map
+        .get("valueName")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let default_val = map.get("defaultValue").or(map.get("value"));
+
+    let input_type = if default_val.map_or(false, |v| v.is_boolean()) {
+        FormInputType::Toggle
+    } else if map.contains_key("minValue") || map.contains_key("maxValue") {
+        FormInputType::Number
+    } else if map
+        .get("valuePattern")
+        .and_then(|v| v.as_str())
+        .map_or(false, |p| p.contains('|'))
+    {
+        FormInputType::Select
+    } else {
+        FormInputType::Text
+    };
+
+    FieldKind::FormField {
+        input_type,
+        value_name,
+    }
 }
 
 /// Check if a string looks like an ISO 8601 date (YYYY-MM-...).
@@ -515,5 +576,92 @@ mod tests {
     fn unknown_number_property_without_catalog_match_is_scalar() {
         // `rating` is not in the catalog and doesn't contain price/cost/amount.
         assert_eq!(classify_field("rating", &json!(4.5)), FieldKind::Scalar);
+    }
+
+    // ── PropertyValueSpecification classification ───────────────────────────
+
+    #[test]
+    fn pvs_boolean_default_classifies_as_toggle() {
+        let pvs = json!({
+            "@type": "PropertyValueSpecification",
+            "valueName": "safe_search",
+            "defaultValue": true
+        });
+        assert_eq!(
+            classify_field("setting", &pvs),
+            FieldKind::FormField {
+                input_type: FormInputType::Toggle,
+                value_name: "safe_search".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn pvs_min_max_classifies_as_number() {
+        let pvs = json!({
+            "@type": "PropertyValueSpecification",
+            "valueName": "max_results",
+            "defaultValue": 10,
+            "minValue": 1,
+            "maxValue": 50
+        });
+        assert_eq!(
+            classify_field("setting", &pvs),
+            FieldKind::FormField {
+                input_type: FormInputType::Number,
+                value_name: "max_results".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn pvs_value_pattern_with_pipes_classifies_as_select() {
+        let pvs = json!({
+            "@type": "PropertyValueSpecification",
+            "valueName": "provider",
+            "defaultValue": "none",
+            "valuePattern": "none|builtin|ollama|mistral"
+        });
+        assert_eq!(
+            classify_field("setting", &pvs),
+            FieldKind::FormField {
+                input_type: FormInputType::Select,
+                value_name: "provider".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn pvs_plain_string_classifies_as_text() {
+        let pvs = json!({
+            "@type": "PropertyValueSpecification",
+            "valueName": "api_key",
+            "defaultValue": ""
+        });
+        assert_eq!(
+            classify_field("setting", &pvs),
+            FieldKind::FormField {
+                input_type: FormInputType::Text,
+                value_name: "api_key".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn pvs_uses_value_field_for_type_detection() {
+        // When `value` is set (current state), it takes priority for type detection
+        let pvs = json!({
+            "@type": "PropertyValueSpecification",
+            "valueName": "enabled",
+            "value": false,
+            "defaultValue": true
+        });
+        assert_eq!(
+            classify_field("setting", &pvs),
+            FieldKind::FormField {
+                input_type: FormInputType::Toggle,
+                value_name: "enabled".into(),
+            }
+        );
     }
 }

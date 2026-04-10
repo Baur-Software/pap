@@ -27,3 +27,18 @@ description = "$.AbstractText"
 url = "$.AbstractURL"
 source = "$.AbstractSource"
 image = "$.Image"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "safe_search"
+name = "Safe Search"
+description = "Filter explicit content from results"
+defaultValue = true
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "no_html"
+name = "Strip HTML"
+description = "Remove HTML tags from result text"
+defaultValue = true

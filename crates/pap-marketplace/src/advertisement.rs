@@ -95,6 +95,20 @@ pub struct AgentAdvertisement {
     /// The marketplace never uses this field for ranking or filtering.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<OperatorMetrics>,
+
+    /// Configurable properties this agent exposes to principals.
+    ///
+    /// Each entry is a schema.org `PropertyValueSpecification` describing
+    /// a tunable parameter — name, type constraints, default value. Stored
+    /// as raw `serde_json::Value` because these ARE vocabulary objects that
+    /// the renderer projects directly; typing them as Rust structs would
+    /// recreate the coupling the renderer is designed to eliminate.
+    ///
+    /// Like `metrics`, this field is **excluded** from signature computation
+    /// because configurable properties are mutable metadata that change over
+    /// time. The signature covers identity and capability fields only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configurable_properties: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,6 +149,7 @@ impl AgentAdvertisement {
             algorithm: SignatureAlgorithm::default(),
             signature: None,
             metrics: None,
+            configurable_properties: Vec::new(),
         }
     }
 
@@ -144,6 +159,16 @@ impl AgentAdvertisement {
     /// so they can be attached or updated without re-signing.
     pub fn with_metrics(mut self, metrics: OperatorMetrics) -> Self {
         self.metrics = Some(metrics);
+        self
+    }
+
+    /// Attach configurable properties to this advertisement.
+    ///
+    /// Each entry should be a schema.org `PropertyValueSpecification` object.
+    /// Like metrics, these are excluded from signature computation and can be
+    /// attached or updated without re-signing.
+    pub fn with_configurable_properties(mut self, props: Vec<serde_json::Value>) -> Self {
+        self.configurable_properties = props;
         self
     }
 
@@ -456,5 +481,98 @@ mod tests {
         assert!(!json.contains("first_seen"));
         let deserialized: OperatorMetrics = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.first_seen, None);
+    }
+
+    // ── Configurable properties ─────────────────────────────────────────────
+
+    fn sample_configurable_properties() -> Vec<serde_json::Value> {
+        vec![
+            serde_json::json!({
+                "@type": "PropertyValueSpecification",
+                "valueName": "safe_search",
+                "name": "Safe Search",
+                "description": "Filter explicit content from results",
+                "defaultValue": true
+            }),
+            serde_json::json!({
+                "@type": "PropertyValueSpecification",
+                "valueName": "max_results",
+                "name": "Maximum Results",
+                "description": "Maximum results returned per query",
+                "defaultValue": 10,
+                "minValue": 1,
+                "maxValue": 50
+            }),
+        ]
+    }
+
+    #[test]
+    fn configurable_properties_excluded_from_signature() {
+        // Sign an advertisement, then attach configurable_properties.
+        // The signature must still verify because they're excluded
+        // from canonical_bytes().
+        let (ad, key) = make_search_ad();
+        let hash_before = ad.hash();
+
+        let ad_with_props = ad
+            .clone()
+            .with_configurable_properties(sample_configurable_properties());
+
+        assert!(ad_with_props.verify(&key.verifying_key()).is_ok());
+        assert_eq!(hash_before, ad_with_props.hash());
+    }
+
+    #[test]
+    fn configurable_properties_different_props_same_signature() {
+        let (ad, key) = make_search_ad();
+
+        let ad_a = ad
+            .clone()
+            .with_configurable_properties(sample_configurable_properties());
+        let ad_b = ad
+            .clone()
+            .with_configurable_properties(vec![serde_json::json!({
+                "@type": "PropertyValueSpecification",
+                "valueName": "totally_different",
+                "defaultValue": "something"
+            })]);
+
+        assert!(ad_a.verify(&key.verifying_key()).is_ok());
+        assert!(ad_b.verify(&key.verifying_key()).is_ok());
+        assert_eq!(ad_a.hash(), ad_b.hash());
+    }
+
+    #[test]
+    fn configurable_properties_json_roundtrip() {
+        let (ad, _) = make_search_ad();
+        let ad = ad.with_configurable_properties(sample_configurable_properties());
+
+        let json = ad.to_json();
+        let ad2: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert_eq!(ad.configurable_properties.len(), 2);
+        assert_eq!(ad2.configurable_properties.len(), 2);
+        assert_eq!(ad2.configurable_properties[0]["valueName"], "safe_search");
+    }
+
+    #[test]
+    fn configurable_properties_absent_deserializes_empty() {
+        // Backward compatibility: advertisements without the field
+        // should deserialize with an empty Vec.
+        let (ad, _) = make_search_ad();
+        assert!(ad.configurable_properties.is_empty());
+
+        let json = ad.to_json();
+        let ad2: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert!(ad2.configurable_properties.is_empty());
+    }
+
+    #[test]
+    fn with_configurable_properties_builder() {
+        let (ad, _) = make_search_ad();
+        assert!(ad.configurable_properties.is_empty());
+
+        let props = sample_configurable_properties();
+        let ad = ad.with_configurable_properties(props.clone());
+        assert_eq!(ad.configurable_properties.len(), 2);
     }
 }

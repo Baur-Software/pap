@@ -190,6 +190,27 @@ pub trait DatabaseOps: Send + Sync {
     /// Returns the number of episodes compressed and deleted.
     fn apply_retention_policy(&self) -> Result<RetentionStats, DbError>;
 
+    // ── Agent Settings (per-agent local overrides) ─────────────────────
+
+    /// Store a per-agent setting override. The key is (agent_did_hash, value_name).
+    /// `value` is a JSON-encoded string.
+    fn set_agent_setting(
+        &self,
+        agent_did_hash: &str,
+        value_name: &str,
+        value: &str,
+    ) -> Result<(), DbError>;
+
+    /// Retrieve all setting overrides for a specific agent.
+    /// Returns a map of value_name → JSON-encoded value string.
+    fn get_agent_settings(
+        &self,
+        agent_did_hash: &str,
+    ) -> Result<std::collections::HashMap<String, String>, DbError>;
+
+    /// Delete a single agent setting (reset to default from advertisement).
+    fn delete_agent_setting(&self, agent_did_hash: &str, value_name: &str) -> Result<(), DbError>;
+
     // ── Agent Management (native only) ───────────────────────────────────
     // pap-agents pulls in reqwest::blocking → tokio → mio which does not compile
     // for wasm32-unknown-unknown. These methods are only available in the native build.

@@ -164,6 +164,16 @@ impl NativeDatabase {
             );
             CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
                 ON chat_messages(conversation_id, created_at);
+
+            -- Per-agent setting overrides. Specification comes from the
+            -- agent's advertisement (via pap://); values live here.
+            CREATE TABLE IF NOT EXISTS agent_settings (
+                agent_did_hash TEXT NOT NULL,
+                value_name     TEXT NOT NULL,
+                value          TEXT NOT NULL,
+                updated_at     TEXT NOT NULL,
+                PRIMARY KEY (agent_did_hash, value_name)
+            );
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -525,6 +535,58 @@ impl DatabaseOps for NativeDatabase {
         )
         .map_err(|e| DbError(format!("db set setting: {e}")))?;
 
+        Ok(())
+    }
+
+    fn set_agent_setting(
+        &self,
+        agent_did_hash: &str,
+        value_name: &str,
+        value: &str,
+    ) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO agent_settings (agent_did_hash, value_name, value, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(agent_did_hash, value_name)
+             DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            params![agent_did_hash, value_name, value, now],
+        )
+        .map_err(|e| DbError(format!("db set agent setting: {e}")))?;
+        Ok(())
+    }
+
+    fn get_agent_settings(
+        &self,
+        agent_did_hash: &str,
+    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare("SELECT value_name, value FROM agent_settings WHERE agent_did_hash = ?1")
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map(params![agent_did_hash], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| DbError(format!("db query: {e}")))?;
+
+        let mut result = std::collections::HashMap::new();
+        for row in rows {
+            let (k, v) = row.map_err(|e| DbError(format!("db row: {e}")))?;
+            result.insert(k, v);
+        }
+        Ok(result)
+    }
+
+    fn delete_agent_setting(&self, agent_did_hash: &str, value_name: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "DELETE FROM agent_settings WHERE agent_did_hash = ?1 AND value_name = ?2",
+            params![agent_did_hash, value_name],
+        )
+        .map_err(|e| DbError(format!("db delete agent setting: {e}")))?;
         Ok(())
     }
 
@@ -1106,6 +1168,9 @@ impl DatabaseOps for NativeDatabase {
                     operator_key_seed: Some(seed_arr),
                     published_to: parse_json_array(14, row.get(14)?)?,
                     catalog_path: row.get(15)?,
+                    // configurable_properties are sourced from TOML/advertisement,
+                    // not stored in the agents table. Default to empty.
+                    configurable_properties: vec![],
                     created_at: row.get(16)?,
                     updated_at: row.get(17)?,
                 })
@@ -1992,6 +2057,7 @@ mod tests {
             operator_key_seed: Some([42u8; 32]),
             published_to: vec![],
             catalog_path: catalog_path.map(|s| s.to_string()),
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         }

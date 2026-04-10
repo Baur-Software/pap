@@ -16,6 +16,9 @@ pub struct AgentMeta {
     pub object_types: &'static [&'static str],
     pub requires_disclosure: &'static [&'static str],
     pub returns: &'static [&'static str],
+    /// Configurable properties advertised to principals as schema.org
+    /// `PropertyValueSpecification` objects. Defaults to empty.
+    pub configurable_properties: Vec<serde_json::Value>,
 }
 
 /// Simplified trait for standard query-in / JSON-LD-out agents.

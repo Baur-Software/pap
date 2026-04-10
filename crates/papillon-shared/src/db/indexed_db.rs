@@ -256,6 +256,32 @@ impl DatabaseOps for IndexedDbDatabase {
         Ok(())
     }
 
+    fn set_agent_setting(
+        &self,
+        agent_did_hash: &str,
+        value_name: &str,
+        value: &str,
+    ) -> Result<(), DbError> {
+        self.inner
+            .set_agent_setting(agent_did_hash, value_name, value)?;
+        self.persist_to_storage()?;
+        Ok(())
+    }
+
+    fn get_agent_settings(
+        &self,
+        agent_did_hash: &str,
+    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+        self.inner.get_agent_settings(agent_did_hash)
+    }
+
+    fn delete_agent_setting(&self, agent_did_hash: &str, value_name: &str) -> Result<(), DbError> {
+        self.inner
+            .delete_agent_setting(agent_did_hash, value_name)?;
+        self.persist_to_storage()?;
+        Ok(())
+    }
+
     fn search_by_schema_type(
         &self,
         schema_type: &str,
