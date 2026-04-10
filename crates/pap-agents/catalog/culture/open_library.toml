@@ -20,3 +20,9 @@ url_template = "https://openlibrary.org/search.json?q={query}&limit=5&fields=tit
 method = "Get"
 response_jsonpath = "$.docs[0].title"
 response_schema_type = "schema:Book"
+
+# Map Open Library Search fields → schema.org vocabulary
+[endpoint.response_mapping]
+name = "$.docs[0].title"
+author = "$.docs[0].author_name[0]"
+datePublished = "$.docs[0].first_publish_year"

@@ -19,3 +19,12 @@ url_template = "https://hn.algolia.com/api/v1/search?query={query}&tags=story&hi
 method = "Get"
 response_jsonpath = "$.hits[0].title"
 response_schema_type = "schema:DiscussionForumPosting"
+
+# Map Algolia HN Search fields → schema.org vocabulary
+[endpoint.response_mapping]
+headline = "$.hits[0].title"
+url = "$.hits[0].url"
+author = "$.hits[0].author"
+commentCount = "$.hits[0].num_comments"
+interactionCount = "$.hits[0].points"
+datePublished = "$.hits[0].created_at"

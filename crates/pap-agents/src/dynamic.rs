@@ -34,6 +34,13 @@ pub struct HttpEndpointConfig {
     pub body_template: Option<String>,
     pub response_jsonpath: String,
     pub response_schema_type: String,
+    /// Schema.org property → JSONPath mapping for multi-field extraction.
+    ///
+    /// When present, the agent extracts each field from the API response and
+    /// builds a proper schema.org object. When absent/empty (default), falls
+    /// back to `response_jsonpath` single-value extraction.
+    #[serde(default)]
+    pub response_mapping: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -363,6 +370,7 @@ mod tests {
                 body_template: None,
                 response_jsonpath: "$.products[0]".to_string(),
                 response_schema_type: "schema:NutritionInformation".to_string(),
+                response_mapping: HashMap::new(),
             }),
             llm_instructions: "You are a nutrition lookup assistant.".to_string(),
             subagents: vec![],

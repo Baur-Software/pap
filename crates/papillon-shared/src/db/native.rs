@@ -1984,6 +1984,7 @@ mod tests {
                 body_template: None,
                 response_jsonpath: "$.results[*]".to_string(),
                 response_schema_type: "schema:SearchResult".to_string(),
+                response_mapping: std::collections::HashMap::new(),
             }),
             llm_instructions: "You are a search assistant.".to_string(),
             subagents: vec![],
