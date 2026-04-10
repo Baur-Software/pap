@@ -655,7 +655,11 @@ jobs:
     if: |
       always() &&
       needs.create-release.result == 'success' &&
-      needs.build-desktop.result == 'success'
+      needs.build-desktop.result == 'success' &&
+      (needs.build-mobile-ios.result == 'success' || needs.build-mobile-ios.result == 'skipped') &&
+      (needs.build-mobile-android.result == 'success' || needs.build-mobile-android.result == 'skipped') &&
+      (needs.publish-npm.result == 'success' || needs.publish-npm.result == 'skipped') &&
+      (needs.publish-docker.result == 'success' || needs.publish-docker.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
