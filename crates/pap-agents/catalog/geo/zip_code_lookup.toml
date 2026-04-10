@@ -13,5 +13,5 @@ subagents = []
 [endpoint]
 url_template = "https://api.zippopotam.us/us/{query}"
 method = "Get"
-response_jsonpath = "$.places[0]."place name""
+response_jsonpath = '$.places[0]."place name"'
 response_schema_type = "schema:Place"
