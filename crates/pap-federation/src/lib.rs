@@ -1024,4 +1024,61 @@ mod tests {
             _ => panic!("wrong variant"),
         }
     }
+
+    // ── Version-aware query tests ───────────────────────────────────────────
+
+    fn make_versioned_ad(name: &str, version: &str, key: &SigningKey) -> AgentAdvertisement {
+        let did = pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
+            .unwrap()
+            .did();
+        let mut ad = AgentAdvertisement::new(
+            name,
+            "TestCorp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec!["schema:SearchResult".into()],
+        )
+        .with_version(version);
+        ad.sign(key).unwrap();
+        ad
+    }
+
+    #[test]
+    fn query_local_versioned_filters_correctly() {
+        let mut registry = FederatedRegistry::new();
+        let key_a = SigningKey::generate(&mut OsRng);
+        let key_b = SigningKey::generate(&mut OsRng);
+        registry
+            .register_local(make_versioned_ad("Agent v1", "1.0.0", &key_a))
+            .unwrap();
+        registry
+            .register_local(make_versioned_ad("Agent v2", "2.0.0", &key_b))
+            .unwrap();
+
+        let results = registry.query_local_versioned("schema:SearchAction", "1.0.0");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "Agent v1");
+
+        let results = registry.query_local_versioned("schema:SearchAction", "9.9.9");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn query_local_latest_returns_highest() {
+        let mut registry = FederatedRegistry::new();
+        // Same provider key → same DID
+        let key = SigningKey::generate(&mut OsRng);
+        registry
+            .register_local(make_versioned_ad("Agent v1", "0.1.0", &key))
+            .unwrap();
+        registry
+            .register_local(make_versioned_ad("Agent v2", "0.2.0", &key))
+            .unwrap();
+
+        let results = registry.query_local_latest("schema:SearchAction");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].version, "0.2.0");
+    }
 }

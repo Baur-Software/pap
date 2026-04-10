@@ -103,12 +103,13 @@ impl RegistryStore {
     pub async fn search_agents(
         &self,
         q: Option<&str>,
+        version: Option<&str>,
         page: u32,
         per_page: u32,
     ) -> Result<AgentsPage> {
         match self {
-            RegistryStore::Sqlite(s) => s.search_agents(q, page, per_page).await,
-            RegistryStore::Postgres(p) => p.search_agents(q, page, per_page).await,
+            RegistryStore::Sqlite(s) => s.search_agents(q, version, page, per_page).await,
+            RegistryStore::Postgres(p) => p.search_agents(q, version, page, per_page).await,
         }
     }
 

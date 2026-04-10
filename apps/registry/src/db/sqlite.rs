@@ -81,14 +81,15 @@ impl SqliteStore {
         let ad_json = serde_json::to_string(ad)?;
         let cap_json = serde_json::to_string(&ad.capability)?;
         sqlx::query(
-            "INSERT OR IGNORE INTO agents (hash, ad_json, name, provider_name, capability_json)
-             VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO agents (hash, ad_json, name, provider_name, capability_json, version)
+             VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(hash)
         .bind(&ad_json)
         .bind(&ad.name)
         .bind(&ad.provider.name)
         .bind(&cap_json)
+        .bind(&ad.version)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -115,17 +116,50 @@ impl SqliteStore {
     pub async fn search_agents(
         &self,
         q: Option<&str>,
+        version: Option<&str>,
         page: u32,
         per_page: u32,
     ) -> Result<AgentsPage> {
         let offset = page.saturating_sub(1) * per_page;
 
-        let (total, rows): (u64, Vec<(String, String)>) =
-            if let Some(query) = q.filter(|s| !s.is_empty()) {
-                // Wrap user input in FTS5 phrase quotes so special characters (", (, NOT, *)
-                // are treated as literals rather than FTS5 syntax operators.
-                let fts_query = format!("\"{}\"", query.replace('"', "\"\""));
+        let (total, rows): (u64, Vec<(String, String)>) = if let Some(query) =
+            q.filter(|s| !s.is_empty())
+        {
+            // Wrap user input in FTS5 phrase quotes so special characters (", (, NOT, *)
+            // are treated as literals rather than FTS5 syntax operators.
+            let fts_query = format!("\"{}\"", query.replace('"', "\"\""));
 
+            if let Some(ver) = version {
+                let total: i64 = sqlx::query_as::<_, (i64,)>(
+                    "SELECT COUNT(*)
+                         FROM agents_fts
+                         JOIN agents a ON agents_fts.rowid = a.rowid
+                         WHERE agents_fts MATCH ? AND a.version = ?",
+                )
+                .bind(&fts_query)
+                .bind(ver)
+                .fetch_one(&self.pool)
+                .await
+                .map(|(n,)| n)
+                .unwrap_or(0);
+
+                let rows = sqlx::query_as::<_, (String, String)>(
+                    "SELECT a.hash, a.ad_json
+                         FROM agents_fts
+                         JOIN agents a ON agents_fts.rowid = a.rowid
+                         WHERE agents_fts MATCH ? AND a.version = ?
+                         ORDER BY rank
+                         LIMIT ? OFFSET ?",
+                )
+                .bind(&fts_query)
+                .bind(ver)
+                .bind(per_page as i64)
+                .bind(offset as i64)
+                .fetch_all(&self.pool)
+                .await?;
+
+                (total as u64, rows)
+            } else {
                 let total: i64 = sqlx::query_as::<_, (i64,)>(
                     "SELECT COUNT(*) FROM agents_fts WHERE agents_fts MATCH ?",
                 )
@@ -137,11 +171,11 @@ impl SqliteStore {
 
                 let rows = sqlx::query_as::<_, (String, String)>(
                     "SELECT a.hash, a.ad_json
-                     FROM agents_fts
-                     JOIN agents a ON agents_fts.rowid = a.rowid
-                     WHERE agents_fts MATCH ?
-                     ORDER BY rank
-                     LIMIT ? OFFSET ?",
+                         FROM agents_fts
+                         JOIN agents a ON agents_fts.rowid = a.rowid
+                         WHERE agents_fts MATCH ?
+                         ORDER BY rank
+                         LIMIT ? OFFSET ?",
                 )
                 .bind(&fts_query)
                 .bind(per_page as i64)
@@ -150,23 +184,43 @@ impl SqliteStore {
                 .await?;
 
                 (total as u64, rows)
-            } else {
-                let total: i64 = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM agents")
+            }
+        } else if let Some(ver) = version {
+            let total: i64 =
+                sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM agents WHERE version = ?")
+                    .bind(ver)
                     .fetch_one(&self.pool)
                     .await
                     .map(|(n,)| n)
                     .unwrap_or(0);
 
-                let rows = sqlx::query_as::<_, (String, String)>(
-                    "SELECT hash, ad_json FROM agents ORDER BY inserted_at DESC LIMIT ? OFFSET ?",
+            let rows = sqlx::query_as::<_, (String, String)>(
+                    "SELECT hash, ad_json FROM agents WHERE version = ? ORDER BY inserted_at DESC LIMIT ? OFFSET ?",
                 )
+                .bind(ver)
                 .bind(per_page as i64)
                 .bind(offset as i64)
                 .fetch_all(&self.pool)
                 .await?;
 
-                (total as u64, rows)
-            };
+            (total as u64, rows)
+        } else {
+            let total: i64 = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM agents")
+                .fetch_one(&self.pool)
+                .await
+                .map(|(n,)| n)
+                .unwrap_or(0);
+
+            let rows = sqlx::query_as::<_, (String, String)>(
+                "SELECT hash, ad_json FROM agents ORDER BY inserted_at DESC LIMIT ? OFFSET ?",
+            )
+            .bind(per_page as i64)
+            .bind(offset as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+            (total as u64, rows)
+        };
 
         let items = rows
             .into_iter()
@@ -321,7 +375,7 @@ mod tests {
         let hash = ad.hash();
         s.insert_agent(&hash, &ad).await.unwrap();
         let page = s
-            .search_agents(Some("FlightSearcher"), 1, 20)
+            .search_agents(Some("FlightSearcher"), None, 1, 20)
             .await
             .unwrap();
         assert_eq!(page.total, 1);
@@ -337,7 +391,7 @@ mod tests {
         s.insert_agent(&make_signed_ad("B").hash(), &make_signed_ad("B"))
             .await
             .unwrap();
-        let page = s.search_agents(None, 1, 20).await.unwrap();
+        let page = s.search_agents(None, None, 1, 20).await.unwrap();
         assert_eq!(page.total, 2);
     }
 
@@ -345,7 +399,7 @@ mod tests {
     async fn agent_search_special_chars_no_error() {
         // Regression test for I8: FTS5 special chars must not cause an error.
         let s = in_memory_store().await;
-        let result = s.search_agents(Some("(NOT\"*"), 1, 20).await;
+        let result = s.search_agents(Some("(NOT\"*"), None, 1, 20).await;
         assert!(
             result.is_ok(),
             "FTS special chars caused an error: {:?}",

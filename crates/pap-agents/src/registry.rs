@@ -389,6 +389,18 @@ mod tests {
     }
 
     #[test]
+    fn all_advertisements_carry_version() {
+        let set = build_agents(vec![]);
+        for ad in set.registry.all_advertisements() {
+            assert!(
+                !ad.version.is_empty(),
+                "Agent '{}' has empty version",
+                ad.name
+            );
+        }
+    }
+
+    #[test]
     fn register_dynamic_did_is_stable_for_same_seed() {
         use ed25519_dalek::SigningKey;
         use rand::rngs::OsRng;

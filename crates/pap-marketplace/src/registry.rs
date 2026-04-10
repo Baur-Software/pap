@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::advertisement::{AgentAdvertisement, OperatorMetrics};
 use crate::MarketplaceError;
 
@@ -114,11 +116,78 @@ impl MarketplaceRegistry {
         &self.advertisements
     }
 
+    /// Query for agents that support a given action AND match an exact version.
+    ///
+    /// Results are returned in insertion order. This method MUST NOT rank,
+    /// sort, or filter by operator metrics. Ranking is the principal's
+    /// responsibility.
+    pub fn query_by_action_and_version(
+        &self,
+        action: &str,
+        version: &str,
+    ) -> Vec<&AgentAdvertisement> {
+        self.advertisements
+            .iter()
+            .filter(|ad| ad.supports_action(action) && ad.version == version)
+            .collect()
+    }
+
+    /// Query for agents by action, returning only the latest version per
+    /// provider DID.
+    ///
+    /// When the same provider publishes multiple versions of an agent
+    /// supporting the same action (e.g. v0.1.0 and v0.2.0), only the
+    /// highest-versioned advertisement is returned. Uses semver ordering;
+    /// non-semver strings fall back to lexicographic comparison.
+    ///
+    /// Results are returned in insertion order of the winning (latest)
+    /// advertisement. This method MUST NOT rank, sort, or filter by
+    /// operator metrics. Ranking is the principal's responsibility.
+    pub fn query_latest_by_action(&self, action: &str) -> Vec<&AgentAdvertisement> {
+        // Collect the best (highest-versioned) ad per provider DID.
+        let mut best: HashMap<&str, &AgentAdvertisement> = HashMap::new();
+        // Track insertion order of first appearance per provider.
+        let mut order: Vec<&str> = Vec::new();
+
+        for ad in &self.advertisements {
+            if !ad.supports_action(action) {
+                continue;
+            }
+            let did = ad.provider.did.as_str();
+            match best.get(did) {
+                Some(existing) => {
+                    if version_gt(&ad.version, &existing.version) {
+                        best.insert(did, ad);
+                    }
+                }
+                None => {
+                    order.push(did);
+                    best.insert(did, ad);
+                }
+            }
+        }
+
+        // Return in insertion order of each provider's first appearance.
+        order
+            .iter()
+            .filter_map(|did| best.get(did).copied())
+            .collect()
+    }
+
     /// Remove an advertisement by its content hash. Returns true if found and removed.
     pub fn remove_by_hash(&mut self, hash: &str) -> bool {
         let before = self.advertisements.len();
         self.advertisements.retain(|ad| ad.hash() != hash);
         self.advertisements.len() < before
+    }
+}
+
+/// Compare two version strings using semver ordering.
+/// Falls back to lexicographic comparison when either string is not valid semver.
+fn version_gt(a: &str, b: &str) -> bool {
+    match (semver::Version::parse(a), semver::Version::parse(b)) {
+        (Ok(va), Ok(vb)) => va > vb,
+        _ => a > b,
     }
 }
 
@@ -510,5 +579,113 @@ mod tests {
         assert!(registry.register(ad_no_metrics).is_ok());
         assert!(registry.register(ad_with_metrics).is_ok());
         assert_eq!(registry.len(), 2);
+    }
+
+    // ── Version-aware query tests ───────────────────────────────────────────
+
+    fn make_versioned_ad(name: &str, version: &str, key: &SigningKey) -> AgentAdvertisement {
+        let did = pap_did::PrincipalKeypair::from_bytes(&key.to_bytes())
+            .unwrap()
+            .did();
+        let mut ad = AgentAdvertisement::new(
+            name,
+            "TestCorp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec!["schema:SearchResult".into()],
+        )
+        .with_version(version);
+        ad.sign(key).unwrap();
+        ad
+    }
+
+    #[test]
+    fn query_by_action_and_version_exact_match() {
+        let mut registry = MarketplaceRegistry::new();
+        let key = SigningKey::generate(&mut OsRng);
+
+        registry
+            .register(make_versioned_ad("Agent v1", "1.0.0", &key))
+            .unwrap();
+        // Different key so same provider DID doesn't collide hash
+        let key2 = SigningKey::generate(&mut OsRng);
+        registry
+            .register(make_versioned_ad("Agent v2", "2.0.0", &key2))
+            .unwrap();
+
+        let results = registry.query_by_action_and_version("schema:SearchAction", "1.0.0");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "Agent v1");
+
+        let results = registry.query_by_action_and_version("schema:SearchAction", "2.0.0");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "Agent v2");
+    }
+
+    #[test]
+    fn query_by_action_and_version_no_match() {
+        let mut registry = MarketplaceRegistry::new();
+        let key = SigningKey::generate(&mut OsRng);
+        registry
+            .register(make_versioned_ad("Agent", "1.0.0", &key))
+            .unwrap();
+
+        let results = registry.query_by_action_and_version("schema:SearchAction", "9.9.9");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn query_latest_by_action_deduplicates_by_provider() {
+        let mut registry = MarketplaceRegistry::new();
+        // Same provider key → same DID → should dedup to latest version.
+        let key = SigningKey::generate(&mut OsRng);
+        registry
+            .register(make_versioned_ad("Agent v1", "0.1.0", &key))
+            .unwrap();
+        registry
+            .register(make_versioned_ad("Agent v2", "0.2.0", &key))
+            .unwrap();
+
+        let results = registry.query_latest_by_action("schema:SearchAction");
+        assert_eq!(results.len(), 1, "same provider should dedup to one result");
+        assert_eq!(results[0].version, "0.2.0");
+        assert_eq!(results[0].name, "Agent v2");
+    }
+
+    #[test]
+    fn query_latest_by_action_different_providers_both_returned() {
+        let mut registry = MarketplaceRegistry::new();
+        let key_a = SigningKey::generate(&mut OsRng);
+        let key_b = SigningKey::generate(&mut OsRng);
+
+        registry
+            .register(make_versioned_ad("Provider A Agent", "1.0.0", &key_a))
+            .unwrap();
+        registry
+            .register(make_versioned_ad("Provider B Agent", "2.0.0", &key_b))
+            .unwrap();
+
+        let results = registry.query_latest_by_action("schema:SearchAction");
+        assert_eq!(results.len(), 2, "different providers should both appear");
+    }
+
+    #[test]
+    fn query_latest_by_action_invalid_semver_graceful() {
+        let mut registry = MarketplaceRegistry::new();
+        let key = SigningKey::generate(&mut OsRng);
+        // Non-semver versions — should fall back to lexicographic comparison.
+        registry
+            .register(make_versioned_ad("Agent A", "alpha", &key))
+            .unwrap();
+        registry
+            .register(make_versioned_ad("Agent B", "beta", &key))
+            .unwrap();
+
+        let results = registry.query_latest_by_action("schema:SearchAction");
+        assert_eq!(results.len(), 1, "same provider deduplicates");
+        // Lexicographic: "beta" > "alpha"
+        assert_eq!(results[0].version, "beta");
     }
 }

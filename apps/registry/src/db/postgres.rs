@@ -102,8 +102,8 @@ impl PostgresStore {
         let ad_json = serde_json::to_string(ad)?;
         let cap_json = serde_json::to_string(&ad.capability)?;
         sqlx::query(
-            "INSERT INTO agents (hash, ad_json, name, provider_name, capability_json)
-             VALUES ($1, $2, $3, $4, $5)
+            "INSERT INTO agents (hash, ad_json, name, provider_name, capability_json, version)
+             VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT(hash) DO NOTHING",
         )
         .bind(hash)
@@ -111,6 +111,7 @@ impl PostgresStore {
         .bind(&ad.name)
         .bind(&ad.provider.name)
         .bind(&cap_json)
+        .bind(&ad.version)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -137,27 +138,56 @@ impl PostgresStore {
     pub async fn search_agents(
         &self,
         q: Option<&str>,
+        version: Option<&str>,
         page: u32,
         per_page: u32,
     ) -> Result<AgentsPage> {
         let offset = page.saturating_sub(1) * per_page;
 
-        let (total, rows): (u64, Vec<(String, String)>) =
-            if let Some(query) = q.filter(|s| !s.is_empty()) {
+        let (total, rows): (u64, Vec<(String, String)>) = if let Some(query) =
+            q.filter(|s| !s.is_empty())
+        {
+            if let Some(ver) = version {
                 let total: i64 = sqlx::query_as::<_, (i64,)>(
-                "SELECT COUNT(*) FROM agents WHERE search_vec @@ plainto_tsquery('english', $1)",
-            )
-            .bind(query)
-            .fetch_one(&self.pool)
-            .await
-            .map(|(n,)| n)
-            .unwrap_or(0);
+                    "SELECT COUNT(*) FROM agents
+                         WHERE search_vec @@ plainto_tsquery('english', $1) AND version = $2",
+                )
+                .bind(query)
+                .bind(ver)
+                .fetch_one(&self.pool)
+                .await
+                .map(|(n,)| n)
+                .unwrap_or(0);
 
                 let rows = sqlx::query_as::<_, (String, String)>(
                     "SELECT hash, ad_json FROM agents
-                     WHERE search_vec @@ plainto_tsquery('english', $1)
-                     ORDER BY ts_rank(search_vec, plainto_tsquery('english', $1)) DESC
-                     LIMIT $2 OFFSET $3",
+                         WHERE search_vec @@ plainto_tsquery('english', $1) AND version = $2
+                         ORDER BY ts_rank(search_vec, plainto_tsquery('english', $1)) DESC
+                         LIMIT $3 OFFSET $4",
+                )
+                .bind(query)
+                .bind(ver)
+                .bind(per_page as i64)
+                .bind(offset as i64)
+                .fetch_all(&self.pool)
+                .await?;
+
+                (total as u64, rows)
+            } else {
+                let total: i64 = sqlx::query_as::<_, (i64,)>(
+                        "SELECT COUNT(*) FROM agents WHERE search_vec @@ plainto_tsquery('english', $1)",
+                    )
+                    .bind(query)
+                    .fetch_one(&self.pool)
+                    .await
+                    .map(|(n,)| n)
+                    .unwrap_or(0);
+
+                let rows = sqlx::query_as::<_, (String, String)>(
+                    "SELECT hash, ad_json FROM agents
+                         WHERE search_vec @@ plainto_tsquery('english', $1)
+                         ORDER BY ts_rank(search_vec, plainto_tsquery('english', $1)) DESC
+                         LIMIT $2 OFFSET $3",
                 )
                 .bind(query)
                 .bind(per_page as i64)
@@ -166,23 +196,43 @@ impl PostgresStore {
                 .await?;
 
                 (total as u64, rows)
-            } else {
-                let total: i64 = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM agents")
+            }
+        } else if let Some(ver) = version {
+            let total: i64 =
+                sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM agents WHERE version = $1")
+                    .bind(ver)
                     .fetch_one(&self.pool)
                     .await
                     .map(|(n,)| n)
                     .unwrap_or(0);
 
-                let rows = sqlx::query_as::<_, (String, String)>(
-                    "SELECT hash, ad_json FROM agents ORDER BY inserted_at DESC LIMIT $1 OFFSET $2",
+            let rows = sqlx::query_as::<_, (String, String)>(
+                    "SELECT hash, ad_json FROM agents WHERE version = $1 ORDER BY inserted_at DESC LIMIT $2 OFFSET $3",
                 )
+                .bind(ver)
                 .bind(per_page as i64)
                 .bind(offset as i64)
                 .fetch_all(&self.pool)
                 .await?;
 
-                (total as u64, rows)
-            };
+            (total as u64, rows)
+        } else {
+            let total: i64 = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM agents")
+                .fetch_one(&self.pool)
+                .await
+                .map(|(n,)| n)
+                .unwrap_or(0);
+
+            let rows = sqlx::query_as::<_, (String, String)>(
+                "SELECT hash, ad_json FROM agents ORDER BY inserted_at DESC LIMIT $1 OFFSET $2",
+            )
+            .bind(per_page as i64)
+            .bind(offset as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+            (total as u64, rows)
+        };
 
         let items = rows
             .into_iter()
