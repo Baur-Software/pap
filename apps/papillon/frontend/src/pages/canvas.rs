@@ -152,12 +152,31 @@ pub fn CanvasPage() -> impl IntoView {
     }
 }
 
-/// Minimal empty state — the prompt bar above is the primary affordance.
+/// Empty-state capability tiles — shown when the canvas has no blocks.
+/// Each tile prefills the prompt bar so the user can complete and submit.
 #[component]
 fn CanvasEmptyState() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+
     view! {
         <div class="canvas-empty-state">
-            <p class="canvas-empty-hint">"Ask anything, or navigate to an agent"</p>
+            <div class="agent-tiles">
+                {AGENT_TILES.iter().map(|&(label, example)| {
+                    let canvas_state = canvas_state;
+                    view! {
+                        <button
+                            class="agent-tile"
+                            on:click=move |_| {
+                                canvas_state.prefill_prompt.set(Some(example.to_string()));
+                                canvas_state.focus_prompt.update(|n| *n += 1);
+                            }
+                        >
+                            <span class="agent-tile-label">{label}</span>
+                            <span class="agent-tile-example">{example}</span>
+                        </button>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
         </div>
     }
 }

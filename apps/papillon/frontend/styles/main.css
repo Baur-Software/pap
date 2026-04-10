@@ -4153,16 +4153,53 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: var(--sp-3xl) 0;
+    justify-content: flex-start;
+    padding: var(--sp-3xl) var(--sp-xl);
     gap: var(--sp-md);
 }
 
-.canvas-empty-hint {
-    font-size: 13px;
+/* Agent capability tiles shown in the canvas empty state */
+.agent-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--sp-sm);
+    width: 100%;
+    max-width: 720px;
+}
+
+.agent-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: var(--sp-sm) var(--sp-md);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.agent-tile:hover {
+    background: rgba(108, 92, 231, 0.12);
+    border-color: var(--purple);
+}
+
+.agent-tile-label {
+    font: var(--text-small);
+    font-weight: 600;
+    color: var(--text-1);
+    letter-spacing: 0.03em;
+}
+
+.agent-tile-example {
+    font: var(--text-small);
     color: var(--text-3);
-    text-align: center;
-    font-family: var(--font-body);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 /* ─── AwaitingApproval block ─── */
