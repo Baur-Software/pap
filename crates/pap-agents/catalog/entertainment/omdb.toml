@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "OMDb Movie/TV Lookup"
 provider = "Open Movie Database"
 description = "Look up detailed movie and TV metadata via the Open Movie Database API."

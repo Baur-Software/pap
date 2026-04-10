@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Etymology Dictionary"
 provider = "Etymonline"
 description = "Look up word origins and historical development of English words."

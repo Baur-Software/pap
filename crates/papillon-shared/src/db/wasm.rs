@@ -212,6 +212,7 @@ impl DatabaseOps for WasmDatabase {
         _agent_did_hash: &str,
         _value_name: &str,
         _value: &str,
+        _agent_version: &str,
     ) -> Result<(), DbError> {
         // WASM: no-op for now — agent settings are native-only
         Ok(())
@@ -220,7 +221,7 @@ impl DatabaseOps for WasmDatabase {
     fn get_agent_settings(
         &self,
         _agent_did_hash: &str,
-    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+    ) -> Result<std::collections::HashMap<String, super::AgentSettingOverride>, DbError> {
         Ok(std::collections::HashMap::new())
     }
 

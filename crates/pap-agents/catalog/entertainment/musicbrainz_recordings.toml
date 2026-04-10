@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "MusicBrainz Recording Search"
 provider = "MusicBrainz"
 description = "Search music recordings, songs, and tracks via MusicBrainz open music encyclopedia."

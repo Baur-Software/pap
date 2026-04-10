@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Economic Calendar"
 provider = "Investing.com"
 description = "Get upcoming economic events and earnings releases calendar."

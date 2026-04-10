@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Yelp Business Search"
 provider = "Yelp"
 description = "Search local businesses, restaurants, and services with ratings via Yelp Fusion API."

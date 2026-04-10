@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Calorie Information"
 provider = "CalorieKing"
 description = "Search calorie and nutritional data for foods and meals."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Formula 1 Data"
 provider = "Ergast Developer API"
 description = "Get Formula 1 race results, standings, and driver statistics via the Ergast API."

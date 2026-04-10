@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Random User Generator"
 provider = "RandomUser.me"
 description = "Generate realistic fake user profiles for testing and development."

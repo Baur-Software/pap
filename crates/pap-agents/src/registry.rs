@@ -90,6 +90,7 @@ fn register_executor<E: AgentExecutor + 'static>(
         meta.requires_disclosure_vec(),
         meta.returns_vec(),
     )
+    .with_version(meta.version)
     .with_configurable_properties(meta.configurable_properties);
     let mut ad = ad;
     ad.sign(kp.signing_key())
@@ -124,6 +125,7 @@ fn register_handler(
         meta.requires_disclosure_vec(),
         meta.returns_vec(),
     )
+    .with_version(meta.version)
     .with_configurable_properties(meta.configurable_properties);
     let mut ad = ad;
     ad.sign(kp.signing_key())
@@ -184,6 +186,7 @@ impl AgentSet {
             def.requires_disclosure.clone(),
             def.returns.clone(),
         )
+        .with_version(&def.version)
         .with_configurable_properties(def.configurable_properties.clone());
         let mut ad = ad;
         ad.sign(kp.signing_key())
@@ -330,6 +333,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Test Dynamic Agent".into(),
             provider: "Test Corp".into(),
             description: "A test dynamic agent".into(),

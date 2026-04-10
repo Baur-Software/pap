@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "DuckDuckGo Search"
 provider = "DuckDuckGo"
 description = "Web search via DuckDuckGo. Returns organic search results without tracking."

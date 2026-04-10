@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Website Availability Check"
 provider = "UptimeRobot API"
 description = "Check if a website or API endpoint is currently online and responding."

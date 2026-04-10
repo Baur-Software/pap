@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Wikimedia News"
 provider = "Wikimedia Foundation"
 description = "Get recent Wikipedia featured articles and current events coverage."

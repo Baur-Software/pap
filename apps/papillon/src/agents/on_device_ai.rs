@@ -24,6 +24,7 @@ impl AgentExecutor for OnDeviceAiExecutor {
     fn meta(&self) -> AgentMeta {
         AgentMeta {
             name: "On-Device AI",
+            version: "0.1.0",
             provider: "Papillon",
             action: "schema:AskAction",
             object_types: &["schema:Question"],

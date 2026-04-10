@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open-Meteo Hourly Forecast"
 provider = "Open-Meteo"
 description = "Free 48-hour hourly weather forecast with temperature, precipitation, and wind."

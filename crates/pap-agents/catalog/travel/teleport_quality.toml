@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Teleport City Quality"
 provider = "Teleport"
 description = "Get quality of life scores for cities: safety, cost, salaries, culture, internet speed."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Mediastack Live News"
 provider = "Mediastack"
 description = "Get live news from 7,500+ global news sources via Mediastack."

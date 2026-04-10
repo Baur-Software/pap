@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Bandcamp Music Search"
 provider = "Bandcamp"
 description = "Discover independent music artists and albums on Bandcamp."

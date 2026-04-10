@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Synonym Finder"
 provider = "Datamuse"
 description = "Find synonyms, antonyms, and related words via Datamuse word relationship API."

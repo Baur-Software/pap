@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Reddit Search"
 provider = "Reddit"
 description = "Search Reddit posts and discussions across all subreddits."

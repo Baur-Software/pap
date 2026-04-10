@@ -261,9 +261,10 @@ impl DatabaseOps for IndexedDbDatabase {
         agent_did_hash: &str,
         value_name: &str,
         value: &str,
+        agent_version: &str,
     ) -> Result<(), DbError> {
         self.inner
-            .set_agent_setting(agent_did_hash, value_name, value)?;
+            .set_agent_setting(agent_did_hash, value_name, value, agent_version)?;
         self.persist_to_storage()?;
         Ok(())
     }
@@ -271,7 +272,7 @@ impl DatabaseOps for IndexedDbDatabase {
     fn get_agent_settings(
         &self,
         agent_did_hash: &str,
-    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+    ) -> Result<std::collections::HashMap<String, super::AgentSettingOverride>, DbError> {
         self.inner.get_agent_settings(agent_did_hash)
     }
 

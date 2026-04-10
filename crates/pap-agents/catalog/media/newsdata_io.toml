@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "NewsData.io Headlines"
 provider = "NewsData.io"
 description = "Get latest news headlines from global sources via NewsData.io API."

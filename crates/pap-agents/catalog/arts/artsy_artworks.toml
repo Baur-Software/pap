@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Artsy Artwork Search"
 provider = "Artsy"
 description = "Search contemporary and modern artworks via Artsy public API."

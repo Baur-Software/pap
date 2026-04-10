@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "ClinicalTrials.gov Search"
 provider = "NIH / ClinicalTrials.gov"
 description = "Search clinical trials by condition, intervention, or location via ClinicalTrials.gov API."

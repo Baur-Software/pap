@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Feedly RSS Search"
 provider = "Feedly"
 description = "Search RSS feeds and publications via Feedly discovery API."

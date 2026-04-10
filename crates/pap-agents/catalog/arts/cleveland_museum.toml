@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Cleveland Museum of Art"
 provider = "Cleveland Museum of Art"
 description = "Search the Cleveland Museum of Art's open access collection of 61,000+ works."

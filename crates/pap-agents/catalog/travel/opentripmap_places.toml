@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "OpenTripMap Places"
 provider = "OpenTripMap"
 description = "Discover tourist attractions, landmarks, and places of interest near any location."

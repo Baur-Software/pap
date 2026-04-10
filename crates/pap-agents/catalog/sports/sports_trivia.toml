@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Sports Trivia"
 provider = "OpenTrivia DB"
 description = "Get sports trivia questions covering multiple sports and eras."

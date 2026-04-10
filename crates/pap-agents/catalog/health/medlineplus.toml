@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "MedlinePlus Health Info"
 provider = "NLM / MedlinePlus"
 description = "Get patient-friendly health information on diseases, conditions, and wellness."

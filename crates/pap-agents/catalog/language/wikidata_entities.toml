@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Wikidata Entity Search"
 provider = "Wikimedia Foundation"
 description = "Search Wikidata for structured knowledge graph entities by name or concept."

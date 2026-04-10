@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Lyrics.ovh Search"
 provider = "Lyrics.ovh"
 description = "Fetch song lyrics by artist and title via the Lyrics.ovh free API."

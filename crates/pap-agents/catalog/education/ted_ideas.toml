@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "TED Ideas Articles"
 provider = "TED"
 description = "Explore TED Ideas written articles on science, technology, and culture."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "GitHub Releases"
 provider = "GitHub"
 description = "Get latest release notes and changelog for any GitHub repository."

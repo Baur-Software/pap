@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Working Nomads Jobs"
 provider = "Working Nomads"
 description = "Find curated remote job listings for digital nomads."

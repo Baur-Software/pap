@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Semantic Scholar Paper Search"
 provider = "Allen Institute for AI"
 description = "Search academic papers with citation metrics via Semantic Scholar."

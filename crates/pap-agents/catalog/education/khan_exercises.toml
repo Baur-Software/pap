@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Khan Academy Exercises"
 provider = "Khan Academy"
 description = "Find learning exercises and lessons on Khan Academy by topic."

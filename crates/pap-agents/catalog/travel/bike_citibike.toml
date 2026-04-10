@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Citi Bike Station Status"
 provider = "Citi Bike / NYC"
 description = "Get real-time NYC Citi Bike station availability."

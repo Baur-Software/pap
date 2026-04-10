@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Libraries.io Package Search"
 provider = "Libraries.io"
 description = "Search open source packages across all major package managers via Libraries.io."

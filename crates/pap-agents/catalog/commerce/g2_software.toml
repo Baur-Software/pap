@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "G2 Software Reviews"
 provider = "G2.com"
 description = "Search software products and reviews on G2 business marketplace."

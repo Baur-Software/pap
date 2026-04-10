@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Cooper Hewitt Design Museum"
 provider = "Smithsonian / Cooper Hewitt"
 description = "Search the Cooper Hewitt design museum collection: industrial design, textiles, graphics."

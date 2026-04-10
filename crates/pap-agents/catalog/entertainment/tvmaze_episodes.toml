@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "TVmaze Episodes"
 provider = "TVmaze"
 description = "Get episode details and guides for any TV show."

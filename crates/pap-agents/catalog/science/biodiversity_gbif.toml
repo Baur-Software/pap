@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "GBIF Biodiversity"
 provider = "Global Biodiversity Information Facility"
 description = "Search biodiversity occurrence records from GBIF open data."

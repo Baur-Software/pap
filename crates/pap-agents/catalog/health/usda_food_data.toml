@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "USDA Food Data Central"
 provider = "USDA"
 description = "Look up nutritional content of foods in the USDA FoodData Central database."

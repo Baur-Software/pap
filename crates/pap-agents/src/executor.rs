@@ -11,6 +11,8 @@ use pap_transport::TransportError;
 /// registry seeding, and intent detection.
 pub struct AgentMeta {
     pub name: &'static str,
+    /// Semantic version (e.g. "1.0.0"). Included in advertisement signature.
+    pub version: &'static str,
     pub provider: &'static str,
     pub action: &'static str,
     pub object_types: &'static [&'static str],

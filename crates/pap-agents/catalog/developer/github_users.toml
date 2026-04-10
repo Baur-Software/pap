@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "GitHub User Search"
 provider = "GitHub"
 description = "Search GitHub users and organizations, find profiles and repositories."

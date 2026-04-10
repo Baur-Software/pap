@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open Library Works Search"
 provider = "Internet Archive / Open Library"
 description = "Search books and literary works via Open Library's works API."

@@ -1,10 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn default_agent_version() -> String {
+    "0.1.0".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicAgentDef {
     pub agent_did: Option<String>,
     pub schema_version: u32,
+    /// Semantic version of this agent (e.g. "1.0.0").
+    /// Included in advertisement signature — setting overrides are pinned to this.
+    #[serde(default = "default_agent_version")]
+    pub version: String,
     pub name: String,
     pub provider: String,
     pub description: String,
@@ -358,6 +366,7 @@ mod tests {
         let def = DynamicAgentDef {
             agent_did: Some("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK".to_string()),
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Open Food Facts".to_string(),
             provider: "Open Food Facts".to_string(),
             description: "Look up nutritional data for food products".to_string(),
@@ -406,6 +415,7 @@ mod tests {
         let def = DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Test".to_string(),
             provider: "Test".to_string(),
             description: "test".to_string(),

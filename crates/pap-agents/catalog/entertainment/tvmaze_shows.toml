@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "TVmaze Show Search"
 provider = "TVmaze"
 description = "Search TV shows, get episode guides, cast bios, and schedule data via TVmaze."

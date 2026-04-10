@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open-Meteo Weather Forecast"
 provider = "Open-Meteo"
 description = "Get 7-day weather forecasts by coordinates using Open-Meteo's free forecast API."

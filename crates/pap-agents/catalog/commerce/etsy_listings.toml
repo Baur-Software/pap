@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Etsy Shop Search"
 provider = "Etsy"
 description = "Search handmade, vintage, and craft items on Etsy marketplace."

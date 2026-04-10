@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "LanguageTool Grammar Check"
 provider = "LanguageTool"
 description = "Check grammar, spelling, and style in text via LanguageTool open source API."

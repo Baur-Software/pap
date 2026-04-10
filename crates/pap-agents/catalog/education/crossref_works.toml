@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "CrossRef DOI Lookup"
 provider = "CrossRef"
 description = "Search scholarly articles and look up DOIs via CrossRef metadata API."

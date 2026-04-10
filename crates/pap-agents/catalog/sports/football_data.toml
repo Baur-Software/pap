@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Football-Data.org"
 provider = "Football-Data.org"
 description = "European football (soccer) fixtures, standings, and live scores via Football-Data.org."

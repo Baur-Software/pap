@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "GNews Search"
 provider = "GNews.io"
 description = "Search real-time news articles from thousands of sources via GNews API."

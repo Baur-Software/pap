@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "World Bank Indicators"
 provider = "World Bank"
 description = "Query World Bank development indicators including GDP, population, and poverty data."

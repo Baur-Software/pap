@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "NPR News Stories"
 provider = "National Public Radio"
 description = "Search NPR news stories, transcripts, and audio content."

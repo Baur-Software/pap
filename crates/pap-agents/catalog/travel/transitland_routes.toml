@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Transitland Transit Routes"
 provider = "Transitland / Interline"
 description = "Search public transit routes and schedules via Transitland API."

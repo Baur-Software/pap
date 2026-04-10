@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Maven Central Search"
 provider = "Sonatype / Apache Maven"
 description = "Search Java and JVM packages on Maven Central Repository."

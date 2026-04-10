@@ -5,6 +5,10 @@ use sha2::{Digest, Sha256};
 
 use crate::MarketplaceError;
 
+fn default_version() -> String {
+    "0.1.0".into()
+}
+
 /// Raw, verifiable operator metrics attached as advertisement metadata.
 ///
 /// These metrics are derived from co-signed transaction receipts and TEE
@@ -57,6 +61,15 @@ pub struct AgentAdvertisement {
 
     /// Human-readable name
     pub name: String,
+
+    /// Semantic version of this agent (e.g. "1.0.0").
+    ///
+    /// Included in signature computation — the version is an identity claim.
+    /// When configurable_properties change (add, remove, rename, constraint
+    /// changes), the version should bump. Setting overrides are pinned to
+    /// the version they were configured against.
+    #[serde(default = "default_version")]
+    pub version: String,
 
     /// Provider organization with DID
     pub provider: Provider,
@@ -135,6 +148,7 @@ impl AgentAdvertisement {
             context: "https://schema.org".into(),
             schema_type: "schema:Service".into(),
             name: name.into(),
+            version: default_version(),
             provider: Provider {
                 schema_type: "schema:Organization".into(),
                 name: provider_name.into(),
@@ -167,6 +181,12 @@ impl AgentAdvertisement {
     /// Each entry should be a schema.org `PropertyValueSpecification` object.
     /// Like metrics, these are excluded from signature computation and can be
     /// attached or updated without re-signing.
+    /// Set the agent version (semver). Included in signature computation.
+    pub fn with_version(mut self, version: impl Into<String>) -> Self {
+        self.version = version.into();
+        self
+    }
+
     pub fn with_configurable_properties(mut self, props: Vec<serde_json::Value>) -> Self {
         self.configurable_properties = props;
         self
@@ -248,6 +268,7 @@ impl AgentAdvertisement {
             "@context": self.context,
             "@type": self.schema_type,
             "name": self.name,
+            "version": self.version,
             "provider": self.provider,
             "capability": self.capability,
             "object_types": self.object_types,
@@ -255,10 +276,13 @@ impl AgentAdvertisement {
             "returns": self.returns,
             "ttl_min": self.ttl_min,
             "signed_by": self.signed_by,
-            // NOTE: `signature` and `metrics` are deliberately omitted.
-            // `signature` because it's what we're computing.
-            // `metrics` because they are mutable metadata that principals
-            // evaluate locally — they must not affect the identity signature.
+            // NOTE: `signature`, `metrics`, and `configurable_properties`
+            // are deliberately omitted from the canonical form.
+            // - `signature`: it's what we're computing.
+            // - `metrics`: mutable metadata evaluated locally by principals.
+            // - `configurable_properties`: mutable setting descriptors.
+            // The `version` field IS included — when properties change,
+            // the version bumps and the signature must be recomputed.
         });
         serde_json::to_vec(&canonical).expect("canonical serialization cannot fail")
     }
@@ -574,5 +598,69 @@ mod tests {
         let props = sample_configurable_properties();
         let ad = ad.with_configurable_properties(props.clone());
         assert_eq!(ad.configurable_properties.len(), 2);
+    }
+
+    // ── Version tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn default_version_is_0_1_0() {
+        let (ad, _) = make_search_ad();
+        assert_eq!(ad.version, "0.1.0");
+    }
+
+    #[test]
+    fn with_version_builder() {
+        let (ad, _) = make_search_ad();
+        let ad = ad.with_version("2.3.1");
+        assert_eq!(ad.version, "2.3.1");
+    }
+
+    #[test]
+    fn version_included_in_signature() {
+        // Two ads that differ only in version must produce different signatures.
+        let (ad1, key) = make_search_ad();
+        let mut v1 = ad1.clone().with_version("1.0.0");
+        v1.sign(&key).unwrap();
+
+        let mut v2 = ad1.with_version("2.0.0");
+        v2.sign(&key).unwrap();
+
+        assert_ne!(
+            v1.signature, v2.signature,
+            "different versions must produce different signatures"
+        );
+    }
+
+    #[test]
+    fn version_survives_json_roundtrip() {
+        let (ad, _) = make_search_ad();
+        let ad = ad.with_version("3.14.0");
+        let json = serde_json::to_string(&ad).unwrap();
+        let back: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.version, "3.14.0");
+    }
+
+    #[test]
+    fn absent_version_deserializes_as_default() {
+        // Backward compatibility: advertisements from before versioning
+        // should deserialize with the default version "0.1.0".
+        let json = serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "schema:Service",
+            "name": "Legacy Agent",
+            "provider": {
+                "@type": "schema:Organization",
+                "name": "Test",
+                "did": "did:key:test"
+            },
+            "capability": ["schema:SearchAction"],
+            "object_types": [],
+            "requires_disclosure": [],
+            "returns": [],
+            "ttl_min": 300,
+            "signed_by": "did:key:test"
+        });
+        let ad: AgentAdvertisement = serde_json::from_value(json).unwrap();
+        assert_eq!(ad.version, "0.1.0");
     }
 }

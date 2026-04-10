@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Mastodon Account Search"
 provider = "Mastodon"
 description = "Search Mastodon user accounts and public profiles on the Fediverse."

@@ -5,9 +5,16 @@ use crate::dynamic::{is_safe_url, DynamicAgentDef, DynamicAgentSource, HttpEndpo
 use serde::Deserialize;
 use std::path::Path;
 
+fn default_catalog_version() -> String {
+    "0.1.0".into()
+}
+
 #[derive(Debug, Deserialize)]
 struct CatalogEntry {
     schema_version: u32,
+    /// Semantic version of this agent (e.g. "1.0.0").
+    #[serde(default = "default_catalog_version")]
+    version: String,
     name: String,
     provider: String,
     description: String,
@@ -87,6 +94,7 @@ fn load_one(root: &Path, path: &Path) -> Option<DynamicAgentDef> {
         .replace('\\', "/");
     Some(DynamicAgentDef {
         schema_version: entry.schema_version,
+        version: entry.version,
         name: entry.name,
         provider: entry.provider,
         description: entry.description,

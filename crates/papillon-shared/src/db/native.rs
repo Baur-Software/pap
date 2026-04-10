@@ -123,6 +123,7 @@ impl NativeDatabase {
             CREATE TABLE IF NOT EXISTS agents (
                 agent_did TEXT PRIMARY KEY,
                 schema_version INTEGER NOT NULL DEFAULT 1,
+                version TEXT NOT NULL DEFAULT '0.1.0',
                 name TEXT NOT NULL,
                 provider TEXT NOT NULL,
                 description TEXT NOT NULL,
@@ -167,10 +168,13 @@ impl NativeDatabase {
 
             -- Per-agent setting overrides. Specification comes from the
             -- agent's advertisement (via pap://); values live here.
+            -- agent_version pins each override to the version it was
+            -- configured against, like Docker image tags.
             CREATE TABLE IF NOT EXISTS agent_settings (
                 agent_did_hash TEXT NOT NULL,
                 value_name     TEXT NOT NULL,
                 value          TEXT NOT NULL,
+                agent_version  TEXT NOT NULL DEFAULT '0.1.0',
                 updated_at     TEXT NOT NULL,
                 PRIMARY KEY (agent_did_hash, value_name)
             );
@@ -543,15 +547,18 @@ impl DatabaseOps for NativeDatabase {
         agent_did_hash: &str,
         value_name: &str,
         value: &str,
+        agent_version: &str,
     ) -> Result<(), DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
-            "INSERT INTO agent_settings (agent_did_hash, value_name, value, updated_at)
-             VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO agent_settings (agent_did_hash, value_name, value, agent_version, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(agent_did_hash, value_name)
-             DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-            params![agent_did_hash, value_name, value, now],
+             DO UPDATE SET value = excluded.value,
+                           agent_version = excluded.agent_version,
+                           updated_at = excluded.updated_at",
+            params![agent_did_hash, value_name, value, agent_version, now],
         )
         .map_err(|e| DbError(format!("db set agent setting: {e}")))?;
         Ok(())
@@ -560,15 +567,23 @@ impl DatabaseOps for NativeDatabase {
     fn get_agent_settings(
         &self,
         agent_did_hash: &str,
-    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+    ) -> Result<std::collections::HashMap<String, super::AgentSettingOverride>, DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let mut stmt = conn
-            .prepare("SELECT value_name, value FROM agent_settings WHERE agent_did_hash = ?1")
+            .prepare(
+                "SELECT value_name, value, agent_version FROM agent_settings WHERE agent_did_hash = ?1",
+            )
             .map_err(|e| DbError(format!("db prepare: {e}")))?;
 
         let rows = stmt
             .query_map(params![agent_did_hash], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                Ok((
+                    row.get::<_, String>(0)?,
+                    super::AgentSettingOverride {
+                        value: row.get(1)?,
+                        agent_version: row.get(2)?,
+                    },
+                ))
             })
             .map_err(|e| DbError(format!("db query: {e}")))?;
 
@@ -1054,21 +1069,22 @@ impl DatabaseOps for NativeDatabase {
         };
         conn.execute(
             "INSERT INTO agents (
-                agent_did, schema_version, name, provider, description, action,
+                agent_did, schema_version, version, name, provider, description, action,
                 object_types_json, requires_disclosure_json, returns_json,
                 endpoint_json, llm_instructions, subagents_json, source,
                 operator_key_seed, published_to_json, catalog_path,
                 created_at, updated_at
             ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6,
-                ?7, ?8, ?9,
-                ?10, ?11, ?12, ?13,
-                ?14, ?15, ?16,
-                ?17, ?18
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7,
+                ?8, ?9, ?10,
+                ?11, ?12, ?13, ?14,
+                ?15, ?16, ?17,
+                ?18, ?19
             )",
             params![
                 agent_did,
                 def.schema_version,
+                def.version,
                 def.name,
                 def.provider,
                 def.description,
@@ -1095,7 +1111,7 @@ impl DatabaseOps for NativeDatabase {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let mut stmt = conn
             .prepare(
-                "SELECT agent_did, schema_version, name, provider, description, action,
+                "SELECT agent_did, schema_version, version, name, provider, description, action,
                     object_types_json, requires_disclosure_json, returns_json,
                     endpoint_json, llm_instructions, subagents_json, source,
                     operator_key_seed, published_to_json, catalog_path,
@@ -1108,33 +1124,39 @@ impl DatabaseOps for NativeDatabase {
 
         let rows = stmt
             .query_map([], |row| {
-                let source_str: String = row.get(12)?;
+                // Column indices: 0=agent_did, 1=schema_version, 2=version,
+                // 3=name, 4=provider, 5=description, 6=action,
+                // 7=object_types_json, 8=requires_disclosure_json, 9=returns_json,
+                // 10=endpoint_json, 11=llm_instructions, 12=subagents_json, 13=source,
+                // 14=operator_key_seed, 15=published_to_json, 16=catalog_path,
+                // 17=created_at, 18=updated_at
+                let source_str: String = row.get(13)?;
                 let source = match source_str.as_str() {
                     "catalog" => DynamicAgentSource::Catalog,
                     "user_created" => DynamicAgentSource::UserCreated,
                     "generated" => DynamicAgentSource::Generated,
                     other => {
                         return Err(rusqlite::Error::FromSqlConversionFailure(
-                            12,
+                            13,
                             rusqlite::types::Type::Text,
                             format!("unknown source: {other}").into(),
                         ))
                     }
                 };
-                let seed_blob: Vec<u8> = row.get(13)?;
+                let seed_blob: Vec<u8> = row.get(14)?;
                 let seed_arr: [u8; 32] = seed_blob.try_into().map_err(|_| {
                     rusqlite::Error::FromSqlConversionFailure(
-                        13,
+                        14,
                         rusqlite::types::Type::Blob,
                         "operator_key_seed must be 32 bytes".into(),
                     )
                 })?;
-                let endpoint_json: Option<String> = row.get(9)?;
+                let endpoint_json: Option<String> = row.get(10)?;
                 let endpoint = endpoint_json
                     .map(|j| {
                         serde_json::from_str::<HttpEndpointConfig>(&j).map_err(|e| {
                             rusqlite::Error::FromSqlConversionFailure(
-                                9,
+                                10,
                                 rusqlite::types::Type::Text,
                                 Box::new(e),
                             )
@@ -1154,25 +1176,26 @@ impl DatabaseOps for NativeDatabase {
                 Ok(DynamicAgentDef {
                     agent_did: Some(row.get(0)?),
                     schema_version: row.get::<_, i64>(1)? as u32,
-                    name: row.get(2)?,
-                    provider: row.get(3)?,
-                    description: row.get(4)?,
-                    action: row.get(5)?,
-                    object_types: parse_json_array(6, row.get(6)?)?,
-                    requires_disclosure: parse_json_array(7, row.get(7)?)?,
-                    returns: parse_json_array(8, row.get(8)?)?,
+                    version: row.get(2)?,
+                    name: row.get(3)?,
+                    provider: row.get(4)?,
+                    description: row.get(5)?,
+                    action: row.get(6)?,
+                    object_types: parse_json_array(7, row.get(7)?)?,
+                    requires_disclosure: parse_json_array(8, row.get(8)?)?,
+                    returns: parse_json_array(9, row.get(9)?)?,
                     endpoint,
-                    llm_instructions: row.get(10)?,
-                    subagents: parse_json_array(11, row.get(11)?)?,
+                    llm_instructions: row.get(11)?,
+                    subagents: parse_json_array(12, row.get(12)?)?,
                     source,
                     operator_key_seed: Some(seed_arr),
-                    published_to: parse_json_array(14, row.get(14)?)?,
-                    catalog_path: row.get(15)?,
+                    published_to: parse_json_array(15, row.get(15)?)?,
+                    catalog_path: row.get(16)?,
                     // configurable_properties are sourced from TOML/advertisement,
                     // not stored in the agents table. Default to empty.
                     configurable_properties: vec![],
-                    created_at: row.get(16)?,
-                    updated_at: row.get(17)?,
+                    created_at: row.get(17)?,
+                    updated_at: row.get(18)?,
                 })
             })
             .map_err(|e| DbError(format!("db query: {e}")))?;
@@ -1209,15 +1232,16 @@ impl DatabaseOps for NativeDatabase {
         let rows_changed = conn
             .execute(
                 "UPDATE agents SET
-                schema_version = ?1, name = ?2, provider = ?3,
-                description = ?4, action = ?5,
-                object_types_json = ?6, requires_disclosure_json = ?7,
-                returns_json = ?8, endpoint_json = ?9,
-                llm_instructions = ?10, subagents_json = ?11,
-                published_to_json = ?12, updated_at = ?13
-             WHERE agent_did = ?14",
+                schema_version = ?1, version = ?2, name = ?3, provider = ?4,
+                description = ?5, action = ?6,
+                object_types_json = ?7, requires_disclosure_json = ?8,
+                returns_json = ?9, endpoint_json = ?10,
+                llm_instructions = ?11, subagents_json = ?12,
+                published_to_json = ?13, updated_at = ?14
+             WHERE agent_did = ?15",
                 params![
                     def.schema_version,
+                    def.version,
                     def.name,
                     def.provider,
                     def.description,
@@ -2035,6 +2059,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: Some(agent_did.to_string()),
             schema_version: 1,
+            version: "0.1.0".into(),
             name: format!("Test Agent {agent_did}"),
             provider: "Test Provider".to_string(),
             description: "A test agent".to_string(),
@@ -2072,6 +2097,7 @@ mod tests {
         assert_eq!(agents.len(), 1);
         let loaded = &agents[0];
         assert_eq!(loaded.agent_did, def.agent_did);
+        assert_eq!(loaded.version, "0.1.0");
         assert_eq!(loaded.name, def.name);
         assert_eq!(loaded.source, DynamicAgentSource::Catalog);
         assert_eq!(loaded.operator_key_seed, Some([42u8; 32]));
@@ -2383,5 +2409,68 @@ mod tests {
         assert_eq!(msgs_b.len(), 1);
         assert_eq!(msgs_a[0].id, "1");
         assert_eq!(msgs_b[0].id, "2");
+    }
+
+    // ── Agent settings version pinning ──────────────────────────────
+
+    #[test]
+    fn agent_setting_stores_and_retrieves_with_version() {
+        let db = test_db();
+        db.set_agent_setting("did-hash-1", "safe_search", "true", "0.1.0")
+            .unwrap();
+        let settings = db.get_agent_settings("did-hash-1").unwrap();
+        assert_eq!(settings.len(), 1);
+        let s = settings.get("safe_search").unwrap();
+        assert_eq!(s.value, "true");
+        assert_eq!(s.agent_version, "0.1.0");
+    }
+
+    #[test]
+    fn agent_setting_upsert_updates_version() {
+        let db = test_db();
+        db.set_agent_setting("did-hash-1", "safe_search", "true", "0.1.0")
+            .unwrap();
+        // Agent bumps version → user reconfigures → new version stored
+        db.set_agent_setting("did-hash-1", "safe_search", "false", "0.2.0")
+            .unwrap();
+        let settings = db.get_agent_settings("did-hash-1").unwrap();
+        let s = settings.get("safe_search").unwrap();
+        assert_eq!(s.value, "false");
+        assert_eq!(s.agent_version, "0.2.0");
+    }
+
+    #[test]
+    fn agent_setting_delete_removes_override() {
+        let db = test_db();
+        db.set_agent_setting("did-hash-1", "units", "\"imperial\"", "0.1.0")
+            .unwrap();
+        db.delete_agent_setting("did-hash-1", "units").unwrap();
+        let settings = db.get_agent_settings("did-hash-1").unwrap();
+        assert!(settings.is_empty());
+    }
+
+    #[test]
+    fn agent_settings_scoped_by_did_hash() {
+        let db = test_db();
+        db.set_agent_setting("agent-a", "safe_search", "true", "0.1.0")
+            .unwrap();
+        db.set_agent_setting("agent-b", "units", "\"metric\"", "1.0.0")
+            .unwrap();
+        let a = db.get_agent_settings("agent-a").unwrap();
+        let b = db.get_agent_settings("agent-b").unwrap();
+        assert_eq!(a.len(), 1);
+        assert_eq!(b.len(), 1);
+        assert!(a.contains_key("safe_search"));
+        assert!(b.contains_key("units"));
+    }
+
+    #[test]
+    fn agent_version_round_trips_through_agents_table() {
+        let db = test_db();
+        let mut def = sample_agent_def("did:key:zVersioned", Some("test/versioned.toml"));
+        def.version = "1.2.3".into();
+        db.insert_agent(&def).unwrap();
+        let agents = db.load_all_agents().unwrap();
+        assert_eq!(agents[0].version, "1.2.3");
     }
 }

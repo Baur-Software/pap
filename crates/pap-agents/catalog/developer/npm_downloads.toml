@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "npm Download Stats"
 provider = "npm"
 description = "Get weekly download statistics for npm packages."

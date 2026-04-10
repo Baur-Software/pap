@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Project Gutenberg Search"
 provider = "Project Gutenberg"
 description = "Search public domain books and literature via Gutendex, the Project Gutenberg catalog API."

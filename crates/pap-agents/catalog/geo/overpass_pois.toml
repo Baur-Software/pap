@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "OpenStreetMap Points of Interest"
 provider = "OpenStreetMap / Overpass API"
 description = "Find amenities, shops, and points of interest near any location using Overpass API."

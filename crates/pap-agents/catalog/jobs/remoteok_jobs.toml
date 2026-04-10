@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "RemoteOK Job Board"
 provider = "RemoteOK"
 description = "Search remote tech job listings across engineering, design, and marketing."

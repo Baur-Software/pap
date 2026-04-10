@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "RubyGems Search"
 provider = "RubyGems.org"
 description = "Search Ruby gems on RubyGems.org with download counts and documentation."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Geoapify Places API"
 provider = "Geoapify"
 description = "Search places and amenities near a location using Geoapify."

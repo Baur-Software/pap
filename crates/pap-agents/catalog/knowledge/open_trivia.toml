@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open Trivia Database"
 provider = "Open Trivia DB"
 description = "Get trivia questions across categories: science, history, geography, entertainment."

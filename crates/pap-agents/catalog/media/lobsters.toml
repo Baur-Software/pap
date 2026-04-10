@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Lobsters Tech Community"
 provider = "Lobste.rs"
 description = "Browse technology stories and discussions on the Lobsters community platform."

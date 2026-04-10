@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "crates.io Rust Package Search"
 provider = "Rust Foundation / crates.io"
 description = "Search Rust packages (crates) on crates.io with download counts and documentation links."

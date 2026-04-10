@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "DevDocs API Documentation"
 provider = "DevDocs.io"
 description = "Search API documentation across 400+ technologies via DevDocs."

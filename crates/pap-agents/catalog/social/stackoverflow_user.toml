@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Stack Overflow User Search"
 provider = "Stack Exchange"
 description = "Search Stack Overflow user profiles and contribution statistics."

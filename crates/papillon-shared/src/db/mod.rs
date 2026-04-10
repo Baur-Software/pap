@@ -192,21 +192,24 @@ pub trait DatabaseOps: Send + Sync {
 
     // ── Agent Settings (per-agent local overrides) ─────────────────────
 
-    /// Store a per-agent setting override. The key is (agent_did_hash, value_name).
-    /// `value` is a JSON-encoded string.
+    /// Store a per-agent setting override pinned to the agent's current version.
+    /// The key is (agent_did_hash, value_name). `value` is a JSON-encoded string.
+    /// `agent_version` is the semver of the agent when the override was configured.
     fn set_agent_setting(
         &self,
         agent_did_hash: &str,
         value_name: &str,
         value: &str,
+        agent_version: &str,
     ) -> Result<(), DbError>;
 
     /// Retrieve all setting overrides for a specific agent.
-    /// Returns a map of value_name → JSON-encoded value string.
+    /// Returns a map of value_name → (value, agent_version) so callers can
+    /// detect stale overrides when the agent has bumped its version.
     fn get_agent_settings(
         &self,
         agent_did_hash: &str,
-    ) -> Result<std::collections::HashMap<String, String>, DbError>;
+    ) -> Result<std::collections::HashMap<String, AgentSettingOverride>, DbError>;
 
     /// Delete a single agent setting (reset to default from advertisement).
     fn delete_agent_setting(&self, agent_did_hash: &str, value_name: &str) -> Result<(), DbError>;
@@ -326,6 +329,17 @@ pub struct PreferenceSignal {
 pub struct RetentionStats {
     pub compressed: usize,
     pub deleted: usize,
+}
+
+/// A single per-agent setting override, pinned to the agent version
+/// it was configured against. When the agent bumps its version, stale
+/// overrides are surfaced to the principal rather than silently applied.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSettingOverride {
+    /// JSON-encoded setting value.
+    pub value: String,
+    /// Semver of the agent when this override was stored.
+    pub agent_version: String,
 }
 
 // ── Chat types ────────────────────────────────────────────────

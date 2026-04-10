@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "PubMed Article Search"
 provider = "NCBI / NLM"
 description = "Search biomedical literature from MEDLINE/PubMed via NCBI E-utilities API."

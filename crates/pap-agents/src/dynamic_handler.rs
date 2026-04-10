@@ -322,6 +322,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Test Agent".into(),
             provider: "Test".into(),
             description: "Test".into(),
@@ -354,6 +355,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "LLM Agent".into(),
             provider: "Test".into(),
             description: "Test".into(),

@@ -73,12 +73,17 @@ pub fn get_settings_vocabulary(state: State<'_, AppState>) -> Result<Value, Papi
 ///
 /// `target` is `"papillon"` for app-level settings, or an agent DID hash
 /// for per-agent overrides stored in `agent_settings`.
+///
+/// `agent_version` pins the override to the agent version it was configured
+/// against. When the agent bumps its version, stale overrides are surfaced
+/// rather than silently applied — like Docker image tags.
 #[tauri::command]
 pub async fn apply_setting(
     state: State<'_, AppState>,
     target: String,
     value_name: String,
     new_value: Value,
+    agent_version: Option<String>,
 ) -> Result<Value, PapillonError> {
     match target.as_str() {
         "papillon" => {
@@ -91,9 +96,12 @@ pub async fn apply_setting(
             // from the agent's advertisement; the VALUE lives here.
             let json_str = serde_json::to_string(&new_value)
                 .map_err(|e| PapillonError::from(e.to_string()))?;
+            let version = agent_version
+                .or_else(|| resolve_agent_version(&state, agent_did_hash))
+                .unwrap_or_else(|| "0.1.0".into());
             state
                 .db
-                .set_agent_setting(agent_did_hash, &value_name, &json_str)
+                .set_agent_setting(agent_did_hash, &value_name, &json_str, &version)
                 .map_err(|e| PapillonError::from(e.0))?;
             get_agent_settings_vocabulary(&state, agent_did_hash)
         }
@@ -105,19 +113,23 @@ pub async fn apply_setting(
 /// The specification comes from the agent's `AgentAdvertisement`
 /// (reachable via `pap://` on any registry). Local overrides from the
 /// `agent_settings` table are merged in as `"value"` fields.
+///
+/// Stale overrides (pinned to an older agent version) are flagged with
+/// `"_staleOverride": true` so the renderer can surface a warning.
 #[tauri::command]
 pub fn get_agent_settings_vocabulary(
     state: &State<'_, AppState>,
     agent_did_hash: &str,
 ) -> Result<Value, PapillonError> {
     // 1. Find the agent's advertisement in local registries
-    let (agent_name, mut properties) = {
+    let (agent_name, agent_version, mut properties) = {
         let registries = state
             .registries
             .read()
             .map_err(|e| PapillonError::from(e.to_string()))?;
 
         let mut found_name = String::from("Agent");
+        let mut found_version = String::from("0.1.0");
         let mut found_props = Vec::new();
 
         for registry in registries.values() {
@@ -126,6 +138,7 @@ pub fn get_agent_settings_vocabulary(
                 let hash = crate::commands::orchestrator::hash_agent_did(&ad.provider.did);
                 if hash == agent_did_hash {
                     found_name = ad.name.clone();
+                    found_version = ad.version.clone();
                     found_props = ad.configurable_properties.clone();
                     break;
                 }
@@ -135,7 +148,7 @@ pub fn get_agent_settings_vocabulary(
             }
         }
 
-        (found_name, found_props)
+        (found_name, found_version, found_props)
     };
 
     // 2. Merge in local overrides from agent_settings table
@@ -146,11 +159,18 @@ pub fn get_agent_settings_vocabulary(
 
     for prop in &mut properties {
         if let Some(name) = prop.get("valueName").and_then(|v| v.as_str()) {
-            if let Some(override_json) = overrides.get(name) {
+            if let Some(setting) = overrides.get(name) {
                 // Parse the JSON string back to a Value
-                if let Ok(val) = serde_json::from_str::<Value>(override_json) {
-                    prop.as_object_mut()
-                        .map(|obj| obj.insert("value".into(), val));
+                if let Ok(val) = serde_json::from_str::<Value>(&setting.value) {
+                    if let Some(obj) = prop.as_object_mut() {
+                        obj.insert("value".into(), val);
+
+                        // Flag stale overrides — pinned to an older version
+                        if setting.agent_version != agent_version {
+                            obj.insert("_staleOverride".into(), json!(true));
+                            obj.insert("_pinnedVersion".into(), json!(setting.agent_version));
+                        }
+                    }
                 }
             }
         }
@@ -160,6 +180,7 @@ pub fn get_agent_settings_vocabulary(
         "@context": "https://schema.org",
         "@type": "Service",
         "name": agent_name,
+        "version": agent_version,
         "mainEntity": {
             "@type": "ItemList",
             "name": "Agent Settings",
@@ -169,6 +190,21 @@ pub fn get_agent_settings_vocabulary(
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────
+
+/// Look up the current version of an agent from its advertisement.
+/// Returns None if the agent isn't found in any registry.
+fn resolve_agent_version(state: &State<'_, AppState>, agent_did_hash: &str) -> Option<String> {
+    let registries = state.registries.read().ok()?;
+    for registry in registries.values() {
+        for ad in registry.all_advertisements() {
+            let hash = crate::commands::orchestrator::hash_agent_did(&ad.provider.did);
+            if hash == agent_did_hash {
+                return Some(ad.version.clone());
+            }
+        }
+    }
+    None
+}
 
 /// Apply a Papillon-level setting and persist to SQLite.
 fn apply_papillon_setting(

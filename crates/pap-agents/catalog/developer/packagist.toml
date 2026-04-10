@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Packagist PHP Search"
 provider = "Packagist.org"
 description = "Search PHP Composer packages on the official PHP package registry."

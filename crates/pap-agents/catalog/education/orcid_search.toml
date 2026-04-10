@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "ORCID Researcher Search"
 provider = "ORCID"
 description = "Look up academic researcher profiles via ORCID public API."

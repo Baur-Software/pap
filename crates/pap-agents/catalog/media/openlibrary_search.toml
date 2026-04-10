@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open Library Book Search"
 provider = "Internet Archive"
 description = "Search the Internet Archive Open Library catalog of millions of books."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Product Hunt Launches"
 provider = "Product Hunt"
 description = "Discover new product launches and startup launches via Product Hunt API."

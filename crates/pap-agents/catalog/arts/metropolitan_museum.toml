@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "The Met Collection"
 provider = "The Metropolitan Museum of Art"
 description = "Search the Metropolitan Museum of Art's 500,000+ collection objects online."

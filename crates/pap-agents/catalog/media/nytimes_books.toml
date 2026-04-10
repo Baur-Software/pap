@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "NYT Best Sellers"
 provider = "New York Times"
 description = "Get New York Times bestseller lists by category."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Discogs Music Database"
 provider = "Discogs"
 description = "Search vinyl records, CDs, and music releases in the Discogs database."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "edX Course Catalog"
 provider = "edX"
 description = "Browse online courses from top universities via the edX catalog."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Go Package Search"
 provider = "pkg.go.dev / Google"
 description = "Search Go packages and modules via the official Go package discovery site."

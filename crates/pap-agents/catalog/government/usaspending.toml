@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "USASpending.gov"
 provider = "US Treasury / USASpending"
 description = "Search federal government spending awards and contracts."

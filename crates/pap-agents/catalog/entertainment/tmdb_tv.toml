@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "TMDB TV Search"
 provider = "The Movie Database"
 description = "Search TV shows, episodes, and series details via The Movie Database."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Harvard Art Museums"
 provider = "Harvard University Art Museums"
 description = "Access Harvard Art Museums' 250,000+ object collection via open API."

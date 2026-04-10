@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "CORE Research Papers"
 provider = "CORE"
 description = "Search 200M+ open access research papers via the CORE academic aggregator."

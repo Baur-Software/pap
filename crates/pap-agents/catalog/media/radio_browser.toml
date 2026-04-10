@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Radio Browser"
 provider = "Radio-Browser.info"
 description = "Search 30,000+ internet radio stations by name, language, genre, or country."

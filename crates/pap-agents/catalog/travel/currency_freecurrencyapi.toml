@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Free Currency API"
 provider = "FreeCurrencyAPI"
 description = "Get live foreign exchange rates between currencies."

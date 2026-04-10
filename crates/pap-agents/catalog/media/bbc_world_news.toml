@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "BBC World News"
 provider = "BBC"
 description = "Get international news headlines and reports from BBC World Service."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "OpenAlex Research Works"
 provider = "OurResearch"
 description = "Search 200M+ research works in the OpenAlex open academic knowledge graph."

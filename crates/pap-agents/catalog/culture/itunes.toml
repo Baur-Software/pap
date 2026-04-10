@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "iTunes Search"
 provider = "Apple"
 description = "Search the iTunes catalog for music, podcasts, apps, and other media."

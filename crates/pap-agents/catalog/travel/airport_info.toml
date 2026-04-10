@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Airport Information"
 provider = "AviationStack"
 description = "Look up airport details including IATA code, city, country, and timezone."

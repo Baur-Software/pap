@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open Exchange Rates"
 provider = "Open Exchange Rates"
 description = "Access hourly updated exchange rates for 170 world currencies."

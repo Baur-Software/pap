@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Smithsonian Open Access"
 provider = "Smithsonian Institution"
 description = "Search the Smithsonian's 4.7 million open access digital records."

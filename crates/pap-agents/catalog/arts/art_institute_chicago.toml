@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Art Institute of Chicago"
 provider = "Art Institute of Chicago"
 description = "Search the Art Institute of Chicago's public collection of 50,000+ artworks."

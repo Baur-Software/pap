@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "OpenCorporates Company Search"
 provider = "OpenCorporates"
 description = "Search the world's largest open database of companies and corporate relationships."

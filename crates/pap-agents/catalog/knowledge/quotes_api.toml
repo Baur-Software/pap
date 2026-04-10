@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Famous Quotes API"
 provider = "They Said So / Quotable"
 description = "Search famous quotes by author, topic, or keyword."

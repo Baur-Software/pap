@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "HN Top Stories"
 provider = "Hacker News / Algolia"
 description = "Get current top stories on Hacker News sorted by score."

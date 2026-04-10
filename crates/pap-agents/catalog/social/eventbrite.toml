@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Eventbrite Event Search"
 provider = "Eventbrite"
 description = "Search public events on Eventbrite by keyword, location, or category."

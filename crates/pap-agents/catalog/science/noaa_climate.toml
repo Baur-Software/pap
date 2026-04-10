@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "NOAA Climate Data"
 provider = "NOAA"
 description = "Access historical climate records and normals via NOAA Climate Data Online."

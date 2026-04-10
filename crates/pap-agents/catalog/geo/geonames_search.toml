@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "GeoNames Gazetteer"
 provider = "GeoNames"
 description = "Search the GeoNames geographic database for cities, mountains, rivers, and places."

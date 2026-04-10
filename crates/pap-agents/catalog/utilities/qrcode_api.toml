@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "QR Code Generator"
 provider = "QR Code API"
 description = "Generate QR codes for URLs, text, contact info, and other data."

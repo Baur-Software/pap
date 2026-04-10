@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Hiking Project Trails"
 provider = "REI / Hiking Project"
 description = "Find hiking trails with difficulty ratings, distance, elevation, and conditions."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Hacker News Search"
 provider = "Algolia / Y Combinator"
 description = "Search Hacker News stories and comments via the Algolia HN Search API."
