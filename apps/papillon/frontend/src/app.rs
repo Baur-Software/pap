@@ -15,7 +15,7 @@ use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
 use crate::pages::dashboard::DashboardPage;
-use crate::pages::home::HomePage;
+// home.rs removed — canvas at "/" IS the home screen
 use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
@@ -329,7 +329,6 @@ pub fn App() -> impl IntoView {
                 <main class="app-main">
                     <Routes fallback=|| "Page not found.">
                         <Route path=path!("/") view=CanvasPage />
-                        <Route path=path!("/home") view=HomePage />
                         <Route path=path!("/scenario/:id") view=ScenarioPage />
                         <Route path=path!("/activity") view=ActivityPage />
                         <Route path=path!("/receipts") view=ReceiptsPage />
