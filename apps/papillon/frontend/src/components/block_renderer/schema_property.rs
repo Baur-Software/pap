@@ -86,6 +86,13 @@ pub fn classify_by_property(property_name: &str) -> Option<FieldKind> {
         | "ticketToken"
         | "checkoutPageURLTemplate" => Some(FieldKind::ExternalUrl),
 
+        // ── PropertyValueSpecification properties ─────────────────────────────
+        // These are always scalar metadata within a PVS object.
+        "valueName" | "defaultValue" | "valueRequired" | "readonlyValue"
+        | "valueMinLength" | "valueMaxLength" | "valuePattern"
+        | "minValue" | "maxValue" | "stepValue"
+        | "multipleValues" => Some(FieldKind::Scalar),
+
         // All other known properties — explicitly scalar so the heuristic
         // doesn't mistakenly promote them (e.g., a field named "timestamp"
         // in a non-temporal context).

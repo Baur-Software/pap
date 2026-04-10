@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Email Validation"
 provider = "Hunter.io"
 description = "Validate email address format and domain existence."

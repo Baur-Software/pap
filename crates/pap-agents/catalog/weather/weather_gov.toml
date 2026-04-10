@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "US National Weather Service"
 provider = "NOAA / NWS"
 description = "Get official US weather forecasts, alerts, and conditions from the National Weather Service."

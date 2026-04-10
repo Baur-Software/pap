@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "SimilarWeb Traffic"
 provider = "SimilarWeb"
 description = "Get website traffic estimates and audience demographics."

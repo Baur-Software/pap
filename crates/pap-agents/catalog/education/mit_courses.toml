@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "MIT OpenCourseWare"
 provider = "MIT"
 description = "Access free MIT course materials via OpenCourseWare API."
@@ -15,3 +16,11 @@ url_template = "https://ocw.mit.edu/search/?q={query}&f=Courses&s=_score&ui_sort
 method = "Get"
 response_jsonpath = "$.results[0].title"
 response_schema_type = "schema:Course"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_access_only"
+name = "Open Access Only"
+description = "Only return freely accessible publications"
+defaultValue = false

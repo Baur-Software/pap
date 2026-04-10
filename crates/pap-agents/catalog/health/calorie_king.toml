@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Calorie Information"
 provider = "CalorieKing"
 description = "Search calorie and nutritional data for foods and meals."
@@ -15,3 +16,13 @@ url_template = "https://api.nal.usda.gov/fdc/v1/foods/search?query={query}&pageS
 method = "Get"
 response_jsonpath = "$.foods[0].description"
 response_schema_type = "schema:NutritionInformation"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

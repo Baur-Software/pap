@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Country Information"
 provider = "RestCountries"
 description = "Get comprehensive country data: capital, population, languages, currency, flag."
@@ -18,3 +19,11 @@ url_template = "https://restcountries.com/v3.1/name/{query}?fields=name,capital,
 method = "Get"
 response_jsonpath = "$[0].name.common"
 response_schema_type = "schema:Country"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

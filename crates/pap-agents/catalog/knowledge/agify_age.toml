@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Agify Name Age Predictor"
 provider = "Agify.io"
 description = "Predict the likely age of a person based on their first name using statistical data."

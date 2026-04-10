@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Stock Financial Analysis"
 provider = "Financial Modeling Prep"
 description = "Get detailed financial statements and ratios for public companies."

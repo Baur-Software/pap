@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Genderize Name Predictor"
 provider = "Genderize.io"
 description = "Predict the likely gender associated with a first name using global data."

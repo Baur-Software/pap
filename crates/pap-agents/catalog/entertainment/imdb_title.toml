@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "IMDB Title Search"
 provider = "IMDB"
 description = "Search movies and shows via the IMDB public search."
@@ -15,3 +16,11 @@ url_template = "https://imdb-api.com/en/API/SearchTitle/k_demo/{query}"
 method = "Get"
 response_jsonpath = "$.results[0].title"
 response_schema_type = "schema:Movie"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

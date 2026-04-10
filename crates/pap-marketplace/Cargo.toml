@@ -17,6 +17,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+semver = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

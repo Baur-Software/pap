@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Foursquare Places"
 provider = "Foursquare"
 description = "Search restaurants, cafes, shops and local venues via Foursquare Places API."
@@ -18,3 +19,20 @@ url_template = "https://api.foursquare.com/v3/places/search?query={query}&limit=
 method = "Get"
 response_jsonpath = "$.results[0].name"
 response_schema_type = "schema:LocalBusiness"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

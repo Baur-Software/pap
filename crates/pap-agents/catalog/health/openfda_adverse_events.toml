@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "FDA Drug Adverse Events"
 provider = "FDA"
 description = "Search adverse drug event reports from the FDA FAERS database."
@@ -15,3 +16,13 @@ url_template = "https://api.fda.gov/drug/event.json?search={query}&limit=5"
 method = "Get"
 response_jsonpath = "$.results[0].patient.drug[0].medicinalproduct"
 response_schema_type = "schema:MedicalCause"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "FRED Economic Data"
 provider = "Federal Reserve Bank of St. Louis"
 description = "Access 800,000+ US and international economic time series from FRED database."

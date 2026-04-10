@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "OpenWeatherMap Current"
 provider = "OpenWeather"
 description = "Get current weather conditions for any city worldwide via OpenWeatherMap."
@@ -15,3 +16,12 @@ url_template = "https://api.openweathermap.org/data/2.5/weather?q={query}&units=
 method = "Get"
 response_jsonpath = "$.weather[0].description"
 response_schema_type = "schema:WeatherForecast"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "units"
+name = "Units"
+description = "Measurement system for temperature and wind"
+defaultValue = "metric"
+valuePattern = "metric|imperial"

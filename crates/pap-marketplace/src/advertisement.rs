@@ -5,6 +5,10 @@ use sha2::{Digest, Sha256};
 
 use crate::MarketplaceError;
 
+fn default_version() -> String {
+    "0.1.0".into()
+}
+
 /// Raw, verifiable operator metrics attached as advertisement metadata.
 ///
 /// These metrics are derived from co-signed transaction receipts and TEE
@@ -58,6 +62,15 @@ pub struct AgentAdvertisement {
     /// Human-readable name
     pub name: String,
 
+    /// Semantic version of this agent (e.g. "1.0.0").
+    ///
+    /// Included in signature computation — the version is an identity claim.
+    /// When configurable_properties change (add, remove, rename, constraint
+    /// changes), the version should bump. Setting overrides are pinned to
+    /// the version they were configured against.
+    #[serde(default = "default_version")]
+    pub version: String,
+
     /// Provider organization with DID
     pub provider: Provider,
 
@@ -95,6 +108,20 @@ pub struct AgentAdvertisement {
     /// The marketplace never uses this field for ranking or filtering.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<OperatorMetrics>,
+
+    /// Configurable properties this agent exposes to principals.
+    ///
+    /// Each entry is a schema.org `PropertyValueSpecification` describing
+    /// a tunable parameter — name, type constraints, default value. Stored
+    /// as raw `serde_json::Value` because these ARE vocabulary objects that
+    /// the renderer projects directly; typing them as Rust structs would
+    /// recreate the coupling the renderer is designed to eliminate.
+    ///
+    /// Like `metrics`, this field is **excluded** from signature computation
+    /// because configurable properties are mutable metadata that change over
+    /// time. The signature covers identity and capability fields only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configurable_properties: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +148,7 @@ impl AgentAdvertisement {
             context: "https://schema.org".into(),
             schema_type: "schema:Service".into(),
             name: name.into(),
+            version: default_version(),
             provider: Provider {
                 schema_type: "schema:Organization".into(),
                 name: provider_name.into(),
@@ -135,6 +163,7 @@ impl AgentAdvertisement {
             algorithm: SignatureAlgorithm::default(),
             signature: None,
             metrics: None,
+            configurable_properties: Vec::new(),
         }
     }
 
@@ -144,6 +173,22 @@ impl AgentAdvertisement {
     /// so they can be attached or updated without re-signing.
     pub fn with_metrics(mut self, metrics: OperatorMetrics) -> Self {
         self.metrics = Some(metrics);
+        self
+    }
+
+    /// Attach configurable properties to this advertisement.
+    ///
+    /// Each entry should be a schema.org `PropertyValueSpecification` object.
+    /// Like metrics, these are excluded from signature computation and can be
+    /// attached or updated without re-signing.
+    /// Set the agent version (semver). Included in signature computation.
+    pub fn with_version(mut self, version: impl Into<String>) -> Self {
+        self.version = version.into();
+        self
+    }
+
+    pub fn with_configurable_properties(mut self, props: Vec<serde_json::Value>) -> Self {
+        self.configurable_properties = props;
         self
     }
 
@@ -223,6 +268,7 @@ impl AgentAdvertisement {
             "@context": self.context,
             "@type": self.schema_type,
             "name": self.name,
+            "version": self.version,
             "provider": self.provider,
             "capability": self.capability,
             "object_types": self.object_types,
@@ -230,10 +276,13 @@ impl AgentAdvertisement {
             "returns": self.returns,
             "ttl_min": self.ttl_min,
             "signed_by": self.signed_by,
-            // NOTE: `signature` and `metrics` are deliberately omitted.
-            // `signature` because it's what we're computing.
-            // `metrics` because they are mutable metadata that principals
-            // evaluate locally — they must not affect the identity signature.
+            // NOTE: `signature`, `metrics`, and `configurable_properties`
+            // are deliberately omitted from the canonical form.
+            // - `signature`: it's what we're computing.
+            // - `metrics`: mutable metadata evaluated locally by principals.
+            // - `configurable_properties`: mutable setting descriptors.
+            // The `version` field IS included — when properties change,
+            // the version bumps and the signature must be recomputed.
         });
         serde_json::to_vec(&canonical).expect("canonical serialization cannot fail")
     }
@@ -456,5 +505,162 @@ mod tests {
         assert!(!json.contains("first_seen"));
         let deserialized: OperatorMetrics = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.first_seen, None);
+    }
+
+    // ── Configurable properties ─────────────────────────────────────────────
+
+    fn sample_configurable_properties() -> Vec<serde_json::Value> {
+        vec![
+            serde_json::json!({
+                "@type": "PropertyValueSpecification",
+                "valueName": "safe_search",
+                "name": "Safe Search",
+                "description": "Filter explicit content from results",
+                "defaultValue": true
+            }),
+            serde_json::json!({
+                "@type": "PropertyValueSpecification",
+                "valueName": "max_results",
+                "name": "Maximum Results",
+                "description": "Maximum results returned per query",
+                "defaultValue": 10,
+                "minValue": 1,
+                "maxValue": 50
+            }),
+        ]
+    }
+
+    #[test]
+    fn configurable_properties_excluded_from_signature() {
+        // Sign an advertisement, then attach configurable_properties.
+        // The signature must still verify because they're excluded
+        // from canonical_bytes().
+        let (ad, key) = make_search_ad();
+        let hash_before = ad.hash();
+
+        let ad_with_props = ad
+            .clone()
+            .with_configurable_properties(sample_configurable_properties());
+
+        assert!(ad_with_props.verify(&key.verifying_key()).is_ok());
+        assert_eq!(hash_before, ad_with_props.hash());
+    }
+
+    #[test]
+    fn configurable_properties_different_props_same_signature() {
+        let (ad, key) = make_search_ad();
+
+        let ad_a = ad
+            .clone()
+            .with_configurable_properties(sample_configurable_properties());
+        let ad_b = ad
+            .clone()
+            .with_configurable_properties(vec![serde_json::json!({
+                "@type": "PropertyValueSpecification",
+                "valueName": "totally_different",
+                "defaultValue": "something"
+            })]);
+
+        assert!(ad_a.verify(&key.verifying_key()).is_ok());
+        assert!(ad_b.verify(&key.verifying_key()).is_ok());
+        assert_eq!(ad_a.hash(), ad_b.hash());
+    }
+
+    #[test]
+    fn configurable_properties_json_roundtrip() {
+        let (ad, _) = make_search_ad();
+        let ad = ad.with_configurable_properties(sample_configurable_properties());
+
+        let json = ad.to_json();
+        let ad2: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert_eq!(ad.configurable_properties.len(), 2);
+        assert_eq!(ad2.configurable_properties.len(), 2);
+        assert_eq!(ad2.configurable_properties[0]["valueName"], "safe_search");
+    }
+
+    #[test]
+    fn configurable_properties_absent_deserializes_empty() {
+        // Backward compatibility: advertisements without the field
+        // should deserialize with an empty Vec.
+        let (ad, _) = make_search_ad();
+        assert!(ad.configurable_properties.is_empty());
+
+        let json = ad.to_json();
+        let ad2: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert!(ad2.configurable_properties.is_empty());
+    }
+
+    #[test]
+    fn with_configurable_properties_builder() {
+        let (ad, _) = make_search_ad();
+        assert!(ad.configurable_properties.is_empty());
+
+        let props = sample_configurable_properties();
+        let ad = ad.with_configurable_properties(props.clone());
+        assert_eq!(ad.configurable_properties.len(), 2);
+    }
+
+    // ── Version tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn default_version_is_0_1_0() {
+        let (ad, _) = make_search_ad();
+        assert_eq!(ad.version, "0.1.0");
+    }
+
+    #[test]
+    fn with_version_builder() {
+        let (ad, _) = make_search_ad();
+        let ad = ad.with_version("2.3.1");
+        assert_eq!(ad.version, "2.3.1");
+    }
+
+    #[test]
+    fn version_included_in_signature() {
+        // Two ads that differ only in version must produce different signatures.
+        let (ad1, key) = make_search_ad();
+        let mut v1 = ad1.clone().with_version("1.0.0");
+        v1.sign(&key).unwrap();
+
+        let mut v2 = ad1.with_version("2.0.0");
+        v2.sign(&key).unwrap();
+
+        assert_ne!(
+            v1.signature, v2.signature,
+            "different versions must produce different signatures"
+        );
+    }
+
+    #[test]
+    fn version_survives_json_roundtrip() {
+        let (ad, _) = make_search_ad();
+        let ad = ad.with_version("3.14.0");
+        let json = serde_json::to_string(&ad).unwrap();
+        let back: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.version, "3.14.0");
+    }
+
+    #[test]
+    fn absent_version_deserializes_as_default() {
+        // Backward compatibility: advertisements from before versioning
+        // should deserialize with the default version "0.1.0".
+        let json = serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": "schema:Service",
+            "name": "Legacy Agent",
+            "provider": {
+                "@type": "schema:Organization",
+                "name": "Test",
+                "did": "did:key:test"
+            },
+            "capability": ["schema:SearchAction"],
+            "object_types": [],
+            "requires_disclosure": [],
+            "returns": [],
+            "ttl_min": 300,
+            "signed_by": "did:key:test"
+        });
+        let ad: AgentAdvertisement = serde_json::from_value(json).unwrap();
+        assert_eq!(ad.version, "0.1.0");
     }
 }

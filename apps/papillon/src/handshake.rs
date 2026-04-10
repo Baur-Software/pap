@@ -307,11 +307,13 @@ mod tests {
         fn meta(&self) -> AgentMeta {
             AgentMeta {
                 name: "Echo",
+                version: "0.1.0",
                 provider: "Test",
                 action: "schema:SearchAction",
                 object_types: &["schema:Thing"],
                 requires_disclosure: &[],
                 returns: &["schema:Thing"],
+                configurable_properties: vec![],
             }
         }
 

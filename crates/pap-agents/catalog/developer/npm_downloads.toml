@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "npm Download Stats"
 provider = "npm"
 description = "Get weekly download statistics for npm packages."
@@ -15,3 +16,11 @@ url_template = "https://api.npmjs.org/downloads/point/last-week/{query}"
 method = "Get"
 response_jsonpath = "$.downloads"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

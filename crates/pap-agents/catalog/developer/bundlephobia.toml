@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Bundlephobia Bundle Size"
 provider = "Bundlephobia"
 description = "Check the minified and gzipped bundle size of any npm package."
@@ -18,3 +19,11 @@ url_template = "https://bundlephobia.com/api/size?package={query}"
 method = "Get"
 response_jsonpath = "$.name"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Wikipedia Knowledge"
 provider = "Wikimedia Foundation"
 description = "Search Wikipedia articles via the Wikimedia REST API v1. Returns article excerpts and URLs."
@@ -20,3 +21,13 @@ url_template = "https://en.wikipedia.org/w/rest.php/v1/search/page?q={query}&lim
 method = "Get"
 response_jsonpath = "$.pages[0].excerpt"
 response_schema_type = "schema:Article"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

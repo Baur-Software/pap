@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "World Bank Indicators"
 provider = "World Bank"
 description = "Query World Bank development indicators including GDP, population, and poverty data."
@@ -20,3 +21,13 @@ url_template = "https://api.worldbank.org/v2/country/{query}/indicator/NY.GDP.MK
 method = "Get"
 response_jsonpath = "$[1][0].value"
 response_schema_type = "schema:Dataset"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 1
+minValue = 1
+maxValue = 50

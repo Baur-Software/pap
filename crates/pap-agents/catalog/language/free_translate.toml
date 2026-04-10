@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "LibreTranslate Translation"
 provider = "LibreTranslate"
 description = "Translate text between 30+ languages using the LibreTranslate open API."

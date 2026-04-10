@@ -17,14 +17,34 @@ pub use registry::RendererRegistry;
 use crate::state::canvas::CanvasState;
 use crate::state::renderer::RendererState;
 
+/// Action emitted when a user modifies a setting rendered from vocabulary.
+///
+/// The renderer doesn't know what it's rendering — it projects
+/// PropertyValueSpecification as form inputs. When the user changes a value,
+/// the renderer emits this action. The consuming page (settings, agent detail)
+/// routes it to the correct Tauri command.
+#[derive(Debug, Clone)]
+pub struct SettingsAction {
+    /// Target agent DID or "papillon" for app-level settings.
+    pub target: String,
+    /// The `valueName` from the PropertyValueSpecification.
+    pub value_name: String,
+    /// The new value.
+    pub new_value: Value,
+}
+
+/// Context type for the settings action callback.
+/// When present, form fields are interactive. When absent, they render read-only.
+#[derive(Clone)]
+pub struct SettingsActionSink(pub leptos::callback::Callback<SettingsAction>);
+
 /// Create and initialize the default renderer registry with shipped templates.
 pub fn create_default_registry() -> Arc<RendererRegistry> {
     let registry = Arc::new(RendererRegistry::new());
     // Reservations
     registry.register(Arc::new(templates::FlightTemplate));
     registry.register(Arc::new(templates::HotelTemplate));
-    // Q&A
-    registry.register(Arc::new(templates::SearchTemplate));
+    // Q&A — SearchResultsPage/SearchAction handled by generic composite renderer
     registry.register(Arc::new(templates::AnswerTemplate));
     // Entertainment
     registry.register(Arc::new(templates::MovieTemplate));
@@ -645,7 +665,7 @@ fn ProvenancePanel(block: papillon_shared::CanvasBlock) -> impl IntoView {
 /// 2. Type-global renderer — the shipped or user-defined template for this
 ///    `schema_type`. Handled inside the generic stream renderer via `template_hit`.
 /// 3. Generic stream renderer — universal fallback for unregistered types.
-fn render_typed_content(
+pub(crate) fn render_typed_content(
     schema_type: &str,
     content: &Value,
     registry: &Arc<RendererRegistry>,

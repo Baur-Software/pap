@@ -81,7 +81,7 @@ fn register_executor<E: AgentExecutor + 'static>(
     let kp = PrincipalKeypair::generate();
     let did = kp.did();
 
-    let mut ad = AgentAdvertisement::new(
+    let ad = AgentAdvertisement::new(
         meta.name,
         meta.provider,
         &did,
@@ -89,7 +89,10 @@ fn register_executor<E: AgentExecutor + 'static>(
         meta.object_types_vec(),
         meta.requires_disclosure_vec(),
         meta.returns_vec(),
-    );
+    )
+    .with_version(meta.version)
+    .with_configurable_properties(meta.configurable_properties);
+    let mut ad = ad;
     ad.sign(kp.signing_key())
         .expect("Ed25519 is always supported");
     registry
@@ -113,7 +116,7 @@ fn register_handler(
     let kp = PrincipalKeypair::generate();
     let did = kp.did();
 
-    let mut ad = AgentAdvertisement::new(
+    let ad = AgentAdvertisement::new(
         meta.name,
         meta.provider,
         &did,
@@ -121,7 +124,10 @@ fn register_handler(
         meta.object_types_vec(),
         meta.requires_disclosure_vec(),
         meta.returns_vec(),
-    );
+    )
+    .with_version(meta.version)
+    .with_configurable_properties(meta.configurable_properties);
+    let mut ad = ad;
     ad.sign(kp.signing_key())
         .expect("Ed25519 is always supported");
     registry
@@ -171,7 +177,7 @@ impl AgentSet {
             .map_err(|e| RegistrationError::InvalidKeySeed(e.to_string()))?;
         let did = kp.did();
 
-        let mut ad = AgentAdvertisement::new(
+        let ad = AgentAdvertisement::new(
             &def.name,
             &def.provider,
             &did,
@@ -179,7 +185,10 @@ impl AgentSet {
             def.object_types.clone(),
             def.requires_disclosure.clone(),
             def.returns.clone(),
-        );
+        )
+        .with_version(&def.version)
+        .with_configurable_properties(def.configurable_properties.clone());
+        let mut ad = ad;
         ad.sign(kp.signing_key())
             .map_err(|_| RegistrationError::SignatureInvalid)?;
 
@@ -324,6 +333,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Test Dynamic Agent".into(),
             provider: "Test Corp".into(),
             description: "A test dynamic agent".into(),
@@ -338,6 +348,7 @@ mod tests {
             operator_key_seed: seed,
             published_to: vec![],
             catalog_path: None,
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".into(),
             updated_at: "2026-04-01T00:00:00Z".into(),
         }
@@ -375,6 +386,18 @@ mod tests {
         let ad = ads.iter().find(|a| a.name == "Test Dynamic Agent").unwrap();
         assert!(ad.signature.is_some());
         assert!(ad.signed_by.starts_with("did:key:"));
+    }
+
+    #[test]
+    fn all_advertisements_carry_version() {
+        let set = build_agents(vec![]);
+        for ad in set.registry.all_advertisements() {
+            assert!(
+                !ad.version.is_empty(),
+                "Agent '{}' has empty version",
+                ad.name
+            );
+        }
     }
 
     #[test]

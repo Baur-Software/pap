@@ -1,10 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn default_agent_version() -> String {
+    "0.1.0".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicAgentDef {
     pub agent_did: Option<String>,
     pub schema_version: u32,
+    /// Semantic version of this agent (e.g. "1.0.0").
+    /// Included in advertisement signature — setting overrides are pinned to this.
+    #[serde(default = "default_agent_version")]
+    pub version: String,
     pub name: String,
     pub provider: String,
     pub description: String,
@@ -21,6 +29,10 @@ pub struct DynamicAgentDef {
     pub published_to: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_path: Option<String>,
+    /// Configurable properties advertised as schema.org PropertyValueSpecification.
+    /// Flows into AgentAdvertisement for federation — remote registries serve these.
+    #[serde(default)]
+    pub configurable_properties: Vec<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -34,6 +46,13 @@ pub struct HttpEndpointConfig {
     pub body_template: Option<String>,
     pub response_jsonpath: String,
     pub response_schema_type: String,
+    /// Schema.org property → JSONPath mapping for multi-field extraction.
+    ///
+    /// When present, the agent extracts each field from the API response and
+    /// builds a proper schema.org object. When absent/empty (default), falls
+    /// back to `response_jsonpath` single-value extraction.
+    #[serde(default)]
+    pub response_mapping: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -347,6 +366,7 @@ mod tests {
         let def = DynamicAgentDef {
             agent_did: Some("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK".to_string()),
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Open Food Facts".to_string(),
             provider: "Open Food Facts".to_string(),
             description: "Look up nutritional data for food products".to_string(),
@@ -363,6 +383,7 @@ mod tests {
                 body_template: None,
                 response_jsonpath: "$.products[0]".to_string(),
                 response_schema_type: "schema:NutritionInformation".to_string(),
+                response_mapping: HashMap::new(),
             }),
             llm_instructions: "You are a nutrition lookup assistant.".to_string(),
             subagents: vec![],
@@ -370,6 +391,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: Some("food/open_food_facts.toml".to_string()),
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         };
@@ -393,6 +415,7 @@ mod tests {
         let def = DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Test".to_string(),
             provider: "Test".to_string(),
             description: "test".to_string(),
@@ -407,6 +430,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: None,
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         };

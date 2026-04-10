@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Hex.pm Package Search"
 provider = "Hex.pm"
 description = "Search Elixir and Erlang packages on Hex.pm package manager."
@@ -18,3 +19,19 @@ url_template = "https://hex.pm/api/packages?search={query}&sort=downloads&page=1
 method = "Get"
 response_jsonpath = "$[0].name"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "sort_by"
+name = "Sort Order"
+description = "How to order results"
+defaultValue = "downloads"
+valuePattern = "relevance|stars|updated|downloads"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

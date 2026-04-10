@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Company Reviews Search"
 provider = "Glassdoor"
 description = "Search company reviews, ratings, salaries, and CEO approval via Glassdoor."
@@ -15,3 +16,13 @@ url_template = "https://api.glassdoor.com/api/api.htm?v=1&format=json&t.p={query
 method = "Get"
 response_jsonpath = "$.response.employers[0].name"
 response_schema_type = "schema:Organization"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

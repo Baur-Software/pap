@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Hiking Project Trails"
 provider = "REI / Hiking Project"
 description = "Find hiking trails with difficulty ratings, distance, elevation, and conditions."
@@ -18,3 +19,11 @@ url_template = "https://www.hikingproject.com/data/get-trails?lat=47.6062&lon=-1
 method = "Get"
 response_jsonpath = "$.trails[0].name"
 response_schema_type = "schema:SportsActivityLocation"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

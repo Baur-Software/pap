@@ -451,7 +451,9 @@ fn process_prompt_inner<'a>(
                 .map_err(|e| PapillonError::from(format!("Failed to load keypair: {}", e)))?
         };
 
-        // Phase progress callbacks emit Tauri events
+        // Phase progress callbacks emit Tauri events.
+        // Thread the computed preference_guided flag so the frontend can show
+        // the "based on your preferences" badge during intermediate states too.
         let bid = block_id.to_string();
         let pid = prompt_id.to_string();
         let app_phase = app.clone();
@@ -469,7 +471,7 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
-                preference_guided: false,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -493,7 +495,7 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
-                preference_guided: false,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -543,7 +545,7 @@ fn process_prompt_inner<'a>(
                             content: None,
                             linked_block_ids: Vec::new(),
                             agent_did: None,
-                            preference_guided: false,
+                            preference_guided,
                             created_at: now.clone(),
                             updated_at: now,
                         },

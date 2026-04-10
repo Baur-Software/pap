@@ -4611,6 +4611,7 @@ dependencies = [
  "pap-core",
  "pap-did",
  "rand 0.8.5",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

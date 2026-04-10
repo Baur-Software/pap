@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Cron Expression Validator"
 provider = "Cron Validator"
 description = "Validate and describe cron expressions in human-readable terms."

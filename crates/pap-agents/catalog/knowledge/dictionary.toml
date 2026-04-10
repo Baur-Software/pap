@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Free Dictionary"
 provider = "dictionaryapi.dev"
 description = "Look up word definitions, phonetics, and etymology via the Free Dictionary API."
