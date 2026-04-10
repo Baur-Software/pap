@@ -176,6 +176,42 @@ pub fn is_safe_url(url: &str) -> bool {
     true
 }
 
+/// Validate that a URL is acceptable for a **user-configured local LLM** endpoint.
+///
+/// This is a superset of [`is_safe_url`] that additionally permits plain-HTTP
+/// connections to the loopback interface (`localhost` and `127.0.0.1`).
+/// Ollama and other local inference servers run on `http://localhost` by default
+/// and cannot be switched to HTTPS without substantial user effort.
+///
+/// **Scope:** Use ONLY for the Ollama / local-LLM endpoint that the user
+/// configures in Papillon's settings.  All other outbound endpoints (catalog
+/// agents, dynamic agents, registry federation) must continue to use
+/// [`is_safe_url`] which requires HTTPS + a public hostname.
+///
+/// # Security note
+/// Allowing `http://localhost` is safe because the destination is the same
+/// machine as the app.  Requests never leave the device, so there is no
+/// plaintext leakage risk.  The RFC 1918 / link-local blocks remain in effect —
+/// only the two loopback identifiers are whitelisted.
+pub fn is_local_llm_url(url: &str) -> bool {
+    // HTTPS public-hostname URLs are always accepted.
+    if is_safe_url(url) {
+        return true;
+    }
+    // Additionally accept http://localhost[:<port>][/path] and
+    // http://127.0.0.1[:<port>][/path].
+    let rest = match url.strip_prefix("http://") {
+        Some(r) => r,
+        None => return false,
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+    let host = match authority.rfind(':') {
+        Some(i) => &authority[..i],
+        None => authority,
+    };
+    host == "localhost" || host == "127.0.0.1"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,5 +494,49 @@ mod tests {
             let back: DynamicAgentSource = serde_json::from_str(&json).unwrap();
             assert_eq!(src, back);
         }
+    }
+
+    // ── is_local_llm_url tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn local_llm_localhost_with_port_accepted() {
+        assert!(is_local_llm_url("http://localhost:11434"));
+        assert!(is_local_llm_url("http://localhost:11434/api/chat"));
+        assert!(is_local_llm_url(
+            "http://localhost:8080/v1/chat/completions"
+        ));
+    }
+
+    #[test]
+    fn local_llm_loopback_ipv4_accepted() {
+        assert!(is_local_llm_url("http://127.0.0.1:11434"));
+        assert!(is_local_llm_url("http://127.0.0.1:11434/api/generate"));
+    }
+
+    #[test]
+    fn local_llm_https_public_still_accepted() {
+        assert!(is_local_llm_url(
+            "https://api.openai.com/v1/chat/completions"
+        ));
+        assert!(is_local_llm_url("https://llm.example.com/v1"));
+    }
+
+    #[test]
+    fn local_llm_rejects_rfc1918() {
+        assert!(!is_local_llm_url("http://192.168.1.100:11434"));
+        assert!(!is_local_llm_url("http://10.0.0.1:11434"));
+        assert!(!is_local_llm_url("http://172.16.0.1:11434"));
+    }
+
+    #[test]
+    fn local_llm_rejects_http_public() {
+        assert!(!is_local_llm_url("http://example.com/api"));
+        assert!(!is_local_llm_url("http://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn local_llm_rejects_no_scheme() {
+        assert!(!is_local_llm_url("localhost:11434"));
+        assert!(!is_local_llm_url("127.0.0.1:11434"));
     }
 }

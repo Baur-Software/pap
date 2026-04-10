@@ -341,7 +341,19 @@ pub fn flatten_to_entries(
     entries
 }
 
+/// Handshake envelope keys that must never appear as rendered block fields.
+///
+/// These are PAP-internal metadata fields added by the 6-phase handshake.
+/// They are excluded as a defense-in-depth measure: even if the envelope
+/// stripping in `render_typed_content` fails, these keys will not bubble up
+/// as visible rendered content.
+///
+/// "result" is intentionally absent — `render_typed_content` handles it via
+/// sentinel detection, and "result" can be a valid schema.org property.
+const ENVELOPE_KEYS: &[&str] = &["agent", "query", "receipt", "provenance"];
+
 /// Push an object's non-@ fields onto the work stack in reverse order.
+/// Skips `@`-prefixed JSON-LD metadata keys and known PAP envelope keys.
 fn push_object_fields(
     stack: &mut Vec<WorkItem>,
     obj: &serde_json::Map<String, Value>,
@@ -349,7 +361,10 @@ fn push_object_fields(
     depth: u16,
     parent_css: &str,
 ) {
-    let fields: Vec<_> = obj.iter().filter(|(k, _)| !k.starts_with('@')).collect();
+    let fields: Vec<_> = obj
+        .iter()
+        .filter(|(k, _)| !k.starts_with('@') && !ENVELOPE_KEYS.contains(&k.as_str()))
+        .collect();
     for (key, val) in fields.iter().rev() {
         let path = if parent_path.is_empty() {
             key.to_string()
@@ -715,6 +730,48 @@ mod tests {
         );
         let types = header_types(&entries[0]);
         assert_eq!(types, vec!["CustomType"]);
+    }
+
+    #[test]
+    fn envelope_metadata_keys_are_stripped() {
+        // Simulate a full handshake envelope arriving at the generic renderer
+        // (defense-in-depth: envelope extraction in render_typed_content should
+        // already have unwrapped the payload, but we verify the filter here too).
+        let envelope = serde_json::json!({
+            "@type": "DefinedTerm",
+            "agent": "Dictionary",
+            "query": "protocol",
+            "result": {
+                "@type": "DefinedTerm",
+                "description": "A set of rules governing data exchange"
+            },
+            "receipt": { "session_id": "s1", "co_signatures": 2 },
+            "provenance": { "agent_did": "did:key:z6Mk..." }
+        });
+        let entries = flatten_to_entries("DefinedTerm", &envelope, &empty_registry());
+        let rendered_keys: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| match &e.kind {
+                EntryKind::Field { key, .. } => Some(key.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !rendered_keys.contains(&"agent"),
+            "envelope 'agent' must not render"
+        );
+        assert!(
+            !rendered_keys.contains(&"query"),
+            "envelope 'query' must not render"
+        );
+        assert!(
+            !rendered_keys.contains(&"receipt"),
+            "envelope 'receipt' must not render"
+        );
+        assert!(
+            !rendered_keys.contains(&"provenance"),
+            "envelope 'provenance' must not render"
+        );
     }
 }
 

@@ -671,9 +671,23 @@ pub(crate) fn render_typed_content(
     registry: &Arc<RendererRegistry>,
     agent_did: Option<&str>,
 ) -> AnyView {
-    // Extract the agent's actual result from the handshake envelope.
-    // Fall back to the full content if there's no "result" key (direct JSON-LD).
-    let payload = content.get("result").unwrap_or(content);
+    // Detect the handshake envelope by the presence of its sentinel keys
+    // ("receipt" or "provenance").  When detected, extract "result" to get the
+    // actual agent output.  Fall back to the full content when the block was
+    // stored as direct JSON-LD (e.g. from federation or legacy blocks that did
+    // not go through the standard 6-phase handshake).
+    //
+    // Using sentinels rather than unconditionally calling `.get("result")` is
+    // important because some legitimate schema.org types (e.g. LearningResource,
+    // SoftwareApplication) also carry a `"result"` property — we must not strip
+    // those as if they were envelope wrappers.
+    let is_envelope =
+        content.get("receipt").is_some() || content.get("provenance").is_some();
+    let payload = if is_envelope {
+        content.get("result").unwrap_or(content)
+    } else {
+        content
+    };
     let receipt_val = content.get("receipt");
 
     // Agent-scoped renderer takes priority: a specific agent can fully own its
