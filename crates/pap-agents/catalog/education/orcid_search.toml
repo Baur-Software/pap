@@ -15,3 +15,20 @@ url_template = "https://pub.orcid.org/v3.0/search?q={query}&rows=5"
 method = "Get"
 response_jsonpath = "$.result[0].orcid-identifier.path"
 response_schema_type = "schema:Person"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_access_only"
+name = "Open Access Only"
+description = "Only return freely accessible publications"
+defaultValue = false

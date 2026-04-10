@@ -15,3 +15,12 @@ url_template = "https://api.producthunt.com/v1/posts?category={query}&sort_by=vo
 method = "Get"
 response_jsonpath = "$.posts[0].name"
 response_schema_type = "schema:Product"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "sort_by"
+name = "Sort Order"
+description = "How to order results"
+defaultValue = "votes_count"
+valuePattern = "votes_count|relevance|price|popularity|newest"

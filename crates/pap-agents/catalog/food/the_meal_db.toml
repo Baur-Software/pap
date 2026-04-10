@@ -19,3 +19,12 @@ url_template = "https://www.themealdb.com/api/json/v1/1/search.php?s={query}"
 method = "Get"
 response_jsonpath = "$.meals[0].strMeal"
 response_schema_type = "schema:Recipe"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "dietary_filter"
+name = "Dietary Filter"
+description = "Filter by dietary category"
+defaultValue = ""
+valuePattern = "none|vegetarian|vegan|gluten-free"

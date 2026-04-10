@@ -15,3 +15,12 @@ url_template = "https://weather.visualcrossing.com/VisualCrossingWebServices/res
 method = "Get"
 response_jsonpath = "$.currentConditions.conditions"
 response_schema_type = "schema:WeatherForecast"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "units"
+name = "Units"
+description = "Measurement system for temperature and wind"
+defaultValue = "metric"
+valuePattern = "metric|imperial"

@@ -15,3 +15,13 @@ url_template = "https://api.fda.gov/device/510k.json?search={query}&limit=5"
 method = "Get"
 response_jsonpath = "$.results[0].device_name"
 response_schema_type = "schema:MedicalDevice"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

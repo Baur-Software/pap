@@ -15,3 +15,11 @@ url_template = "https://www.goodreads.com/search/index.xml?q={query}&key=demo"
 method = "Get"
 response_jsonpath = "$.GoodreadsResponse.search.results.work[0].best_book.title"
 response_schema_type = "schema:Book"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

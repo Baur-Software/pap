@@ -18,3 +18,11 @@ url_template = "https://api.nationalize.io/?name={query}"
 method = "Get"
 response_jsonpath = "$.country[0].country_id"
 response_schema_type = "schema:Country"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

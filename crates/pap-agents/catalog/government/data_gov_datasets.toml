@@ -15,3 +15,13 @@ url_template = "https://catalog.data.gov/api/3/action/package_search?q={query}&r
 method = "Get"
 response_jsonpath = "$.result.results[0].title"
 response_schema_type = "schema:Dataset"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

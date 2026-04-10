@@ -19,3 +19,11 @@ url_template = "https://api.teleport.org/api/urban_areas/slug:{query}/scores/"
 method = "Get"
 response_jsonpath = "$.categories[0].name"
 response_schema_type = "schema:Place"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

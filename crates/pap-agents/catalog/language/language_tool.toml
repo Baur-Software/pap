@@ -15,3 +15,11 @@ url_template = "https://api.languagetool.org/v2/check?language=en-US&text={query
 method = "Get"
 response_jsonpath = "$.matches[0].message"
 response_schema_type = "schema:Review"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "language"
+name = "Language"
+description = "Preferred language for results"
+defaultValue = "en"

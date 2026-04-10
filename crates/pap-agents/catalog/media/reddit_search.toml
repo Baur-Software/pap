@@ -15,3 +15,28 @@ url_template = "https://www.reddit.com/search.json?q={query}&limit=5&sort=releva
 method = "Get"
 response_jsonpath = "$.data.children[0].data.title"
 response_schema_type = "schema:DiscussionForumPosting"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "sort_by"
+name = "Sort Order"
+description = "How to order results"
+defaultValue = "relevance"
+valuePattern = "relevance|hot|top|new"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

@@ -15,3 +15,13 @@ url_template = "https://api.congress.gov/v3/vote?q={query}&limit=5&api_key=demo"
 method = "Get"
 response_jsonpath = "$.votes.vote[0].description"
 response_schema_type = "schema:LegislationObject"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

@@ -15,3 +15,11 @@ url_template = "https://en.wikipedia.org/api/rest_v1/page/summary/{query}"
 method = "Get"
 response_jsonpath = "$.extract"
 response_schema_type = "schema:Article"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_access_only"
+name = "Open Access Only"
+description = "Only return freely accessible publications"
+defaultValue = false

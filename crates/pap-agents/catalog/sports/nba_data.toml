@@ -15,3 +15,13 @@ url_template = "https://api.balldontlie.io/v1/players?search={query}&per_page=5"
 method = "Get"
 response_jsonpath = "$.data[0].last_name"
 response_schema_type = "schema:SportsEvent"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

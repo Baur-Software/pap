@@ -15,3 +15,13 @@ url_template = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={q
 method = "Get"
 response_jsonpath = "$"
 response_schema_type = "schema:ImageObject"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 150
+minValue = 1
+maxValue = 100

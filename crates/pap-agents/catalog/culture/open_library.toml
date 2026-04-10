@@ -26,3 +26,13 @@ response_schema_type = "schema:Book"
 name = "$.docs[0].title"
 author = "$.docs[0].author_name[0]"
 datePublished = "$.docs[0].first_publish_year"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

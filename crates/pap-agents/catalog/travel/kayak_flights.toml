@@ -15,3 +15,11 @@ url_template = "https://sky-scanner3.p.rapidapi.com/flights/search-one-way?fromE
 method = "Get"
 response_jsonpath = "$.data.itineraries[0].price.formatted"
 response_schema_type = "schema:Flight"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

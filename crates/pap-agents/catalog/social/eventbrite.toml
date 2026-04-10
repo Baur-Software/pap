@@ -15,3 +15,20 @@ url_template = "https://www.eventbriteapi.com/v3/events/search/?q={query}&expand
 method = "Get"
 response_jsonpath = "$.events[0].name.text"
 response_schema_type = "schema:Event"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

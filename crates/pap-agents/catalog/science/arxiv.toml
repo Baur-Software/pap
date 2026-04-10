@@ -20,3 +20,13 @@ url_template = "https://export.arxiv.org/api/query?search_query=all:{query}&star
 method = "Get"
 response_jsonpath = "$.feed.entry[0].summary"
 response_schema_type = "schema:ScholarlyArticle"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

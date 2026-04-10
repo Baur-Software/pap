@@ -18,3 +18,11 @@ url_template = "https://api.opentripmap.com/0.1/en/places/geoname?name={query}&c
 method = "Get"
 response_jsonpath = "$.name"
 response_schema_type = "schema:TouristAttraction"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

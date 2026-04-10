@@ -18,3 +18,11 @@ url_template = "https://rubygems.org/api/v1/search.json?query={query}&page=1"
 method = "Get"
 response_jsonpath = "$[0].name"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

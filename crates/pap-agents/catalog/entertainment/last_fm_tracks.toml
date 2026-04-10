@@ -18,3 +18,20 @@ url_template = "https://ws.audioscrobbler.com/2.0/?method=track.search&track={qu
 method = "Get"
 response_jsonpath = "$.results.trackmatches.track[0].name"
 response_schema_type = "schema:MusicRecording"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

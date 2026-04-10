@@ -18,3 +18,11 @@ url_template = "https://azuresearch-usnc.nuget.org/query?q={query}&take=5&prerel
 method = "Get"
 response_jsonpath = "$.data[0].id"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

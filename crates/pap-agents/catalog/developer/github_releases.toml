@@ -18,3 +18,11 @@ url_template = "https://api.github.com/repos/{owner}/{repo}/releases/latest"
 method = "Get"
 response_jsonpath = "$.tag_name"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

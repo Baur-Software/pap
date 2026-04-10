@@ -15,3 +15,20 @@ url_template = "https://api.hostelworld.com/v1/search?query={query}&page=1&limit
 method = "Get"
 response_jsonpath = "$.properties[0].name"
 response_schema_type = "schema:LodgingBusiness"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

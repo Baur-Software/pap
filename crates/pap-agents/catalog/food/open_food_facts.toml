@@ -20,3 +20,12 @@ url_template = "https://world.openfoodfacts.org/cgi/search.pl?search_terms={quer
 method = "Get"
 response_jsonpath = "$.products[0].product_name"
 response_schema_type = "schema:NutritionInformation"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "dietary_filter"
+name = "Dietary Filter"
+description = "Filter by dietary category"
+defaultValue = ""
+valuePattern = "none|vegetarian|vegan|gluten-free"

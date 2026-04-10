@@ -15,3 +15,11 @@ url_template = "https://content.guardianapis.com/search?q={query}&api-key=test&p
 method = "Get"
 response_jsonpath = "$.response.results[0].webTitle"
 response_schema_type = "schema:NewsArticle"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

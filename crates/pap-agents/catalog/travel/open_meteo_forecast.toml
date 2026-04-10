@@ -19,3 +19,11 @@ url_template = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude=
 method = "Get"
 response_jsonpath = "$.daily.time[0]"
 response_schema_type = "schema:WeatherForecast"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

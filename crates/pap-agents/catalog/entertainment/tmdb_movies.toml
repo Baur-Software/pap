@@ -19,3 +19,18 @@ url_template = "https://api.themoviedb.org/3/search/movie?query={query}&language
 method = "Get"
 response_jsonpath = "$.results[0].title"
 response_schema_type = "schema:Movie"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "language"
+name = "Language"
+description = "Preferred language for results"
+defaultValue = "en"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

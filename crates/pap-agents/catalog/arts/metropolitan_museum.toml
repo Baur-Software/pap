@@ -15,3 +15,11 @@ url_template = "https://collectionapi.metmuseum.org/public/collection/v1/search?
 method = "Get"
 response_jsonpath = "$.total"
 response_schema_type = "schema:VisualArtwork"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "require_images"
+name = "Require Images"
+description = "Only return items that have images"
+defaultValue = true

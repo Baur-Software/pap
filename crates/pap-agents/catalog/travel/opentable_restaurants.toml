@@ -15,3 +15,18 @@ url_template = "https://www.opentable.com/widget/reservation/search?otRestaurant
 method = "Get"
 response_jsonpath = "$.RestaurantDetails.name"
 response_schema_type = "schema:FoodEstablishment"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "language"
+name = "Language"
+description = "Preferred language for results"
+defaultValue = "en"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

@@ -15,3 +15,13 @@ url_template = "https://api.investing.com/api/financialdata/calendar/get?country
 method = "Get"
 response_jsonpath = "$.data[0].event"
 response_schema_type = "schema:Event"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

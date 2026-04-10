@@ -15,3 +15,11 @@ url_template = "https://free.rome2rio.com/api/1.4/json/Search?key=demo&oName={or
 method = "Get"
 response_jsonpath = "$.routes[0].name"
 response_schema_type = "schema:Trip"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

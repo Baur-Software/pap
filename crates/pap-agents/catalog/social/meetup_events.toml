@@ -15,3 +15,19 @@ url_template = "https://api.meetup.com/find/events?text={query}&page=5&order=tim
 method = "Get"
 response_jsonpath = "$[0].name"
 response_schema_type = "schema:Event"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "sort_by"
+name = "Sort Order"
+description = "How to order results"
+defaultValue = "time"
+valuePattern = "time|relevance|recent|popular"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

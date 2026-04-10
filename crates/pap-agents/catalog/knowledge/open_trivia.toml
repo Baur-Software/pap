@@ -15,3 +15,13 @@ url_template = "https://opentdb.com/api.php?amount=5&category={query}&type=multi
 method = "Get"
 response_jsonpath = "$.results[0].question"
 response_schema_type = "schema:Question"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

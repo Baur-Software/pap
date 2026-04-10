@@ -15,3 +15,11 @@ url_template = "https://www.numbeo.com/api/indices?api_key=demo&query={query}"
 method = "Get"
 response_jsonpath = "$.city"
 response_schema_type = "schema:MonetaryAmount"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

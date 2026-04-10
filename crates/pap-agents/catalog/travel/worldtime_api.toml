@@ -18,3 +18,11 @@ url_template = "https://worldtimeapi.org/api/timezone/{query}"
 method = "Get"
 response_jsonpath = "$.datetime"
 response_schema_type = "schema:Event"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

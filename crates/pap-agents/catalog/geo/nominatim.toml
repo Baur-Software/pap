@@ -20,3 +20,13 @@ url_template = "https://nominatim.openstreetmap.org/search?q={query}&format=json
 method = "Get"
 response_jsonpath = "$[0].display_name"
 response_schema_type = "schema:GeoCoordinates"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 1
+minValue = 1
+maxValue = 50
