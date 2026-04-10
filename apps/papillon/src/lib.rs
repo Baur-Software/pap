@@ -43,6 +43,34 @@ pub fn run() {
                 .expect("failed to resolve resource dir");
             let catalog_dir = resource_dir.join("catalog");
 
+            // Dev-mode fallback: when running via `cargo tauri dev` the resource
+            // bundle hasn't been assembled yet, so fall back to the workspace path.
+            let catalog_dir = if catalog_dir.exists() {
+                eprintln!("INFO papillon: catalog at {}", catalog_dir.display());
+                catalog_dir
+            } else {
+                let ws_catalog = std::env::var("CARGO_MANIFEST_DIR")
+                    .map(|d| {
+                        std::path::PathBuf::from(d)
+                            .join("../..")
+                            .join("crates/pap-agents/catalog")
+                    })
+                    .unwrap_or_default();
+                if ws_catalog.exists() {
+                    eprintln!(
+                        "INFO papillon: catalog not in resources, using workspace path {}",
+                        ws_catalog.display()
+                    );
+                    ws_catalog
+                } else {
+                    eprintln!(
+                        "WARN papillon: catalog not found at {} — agents will not be seeded",
+                        catalog_dir.display()
+                    );
+                    catalog_dir
+                }
+            };
+
             // Open (or create) the persistent principal keypair store.
             // The 32-byte Ed25519 seed is stored as `principal.key` with mode
             // 0600 and zeroized in memory on drop.
