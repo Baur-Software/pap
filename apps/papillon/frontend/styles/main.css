@@ -313,8 +313,7 @@ body {
     flex-shrink: 0;
 }
 
-.status-bar-item.active { color: var(--teal); }
-.status-bar-item.warn { color: var(--gold); }
+/* .status-bar-item.active/.warn removed — status colour now driven by .status-indicator classes */
 
 .status-bar-sep {
     color: rgba(255, 255, 255, 0.15);
