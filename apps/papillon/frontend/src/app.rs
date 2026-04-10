@@ -339,14 +339,6 @@ pub fn App() -> impl IntoView {
                     </Routes>
                 </main>
                 <footer class="status-bar app-statusbar">
-                    <span class="status-bar-item active">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>
-                        "ZERO_TRUST_ENFORCED"
-                    </span>
-                    <span class="status-bar-sep">"|"</span>
-                    <span class="status-bar-item">"LOCAL_VAULT_ENCRYPTED"</span>
-                    <span class="status-bar-sep">"|"</span>
-                    <span class="status-bar-item">"NO_TELEMETRY"</span>
                     <span class="status-bar-spacer" />
                     <span class="status-bar-item">"PAPILLON_v0.6.0"</span>
                     <span class="status-bar-sep">"|"</span>
