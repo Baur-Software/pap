@@ -941,9 +941,9 @@ fn render_form_field(
                         type="number"
                         prop:value=move || num_sig.get().to_string()
                         prop:disabled=move || sink_change.is_none()
-                        attr:min=min.map(|v| v.to_string())
-                        attr:max=max.map(|v| v.to_string())
-                        attr:step=step.to_string()
+                        min=min.map(|v| v.to_string())
+                        max=max.map(|v| v.to_string())
+                        step=step.to_string()
                         on:change=move |ev| {
                             let raw = event_target_value(&ev);
                             if let Ok(v) = raw.parse::<f64>() {
