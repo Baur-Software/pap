@@ -17,7 +17,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASELINE="$SCRIPT_DIR/baseline.json"
 CRITERION_DIR="target/criterion"
-THRESHOLD=20  # percent — 10% was too tight for CI runner variance (typical variance: 5-15%)
+THRESHOLD=30  # percent — bumped 20→30 because GitHub-hosted runners show 20-27% variance
+              # across the runner pool for crypto-heavy benchmarks (Ed25519, SD-JWT, mandates).
+              # A 30% gate still catches meaningful regressions while absorbing inter-runner drift.
 
 # ── Argument parsing ──────────────────────────────────────────────────
 UPDATE_BASELINE=0
