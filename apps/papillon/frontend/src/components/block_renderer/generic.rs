@@ -1001,8 +1001,9 @@ fn render_form_field(
                         <For
                             each=move || options.clone()
                             key=|opt| opt.clone()
-                            children=move |opt| {
-                                view! { <option value=opt.clone()>{opt}</option> }
+                            children=move |opt: String| {
+                                let val = opt.clone();
+                                view! { <option value=val>{opt}</option> }
                             }
                         />
                     </select>
