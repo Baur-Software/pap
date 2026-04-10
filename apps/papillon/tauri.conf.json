@@ -40,7 +40,8 @@
       "icons/icon.png"
     ],
     "resources": {
-      "models/*": "models/"
+      "models/*": "models/",
+      "../../crates/pap-agents/catalog/**/*": "catalog/"
     }
   }
 }

@@ -2,6 +2,8 @@
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
+use anyhow::Context as _;
+
 use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
@@ -33,8 +35,40 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Database setup ────────────────────────────────────────────────────────
     let db_cfg = DbConfig::resolve()?;
+
+    // PAP_REGISTRY_RESET_DB=true: wipe the SQLite file so migrations start
+    // from a clean slate.  Use this to recover from "migration was previously
+    // applied but has been modified" errors during development.
+    if config.reset_db {
+        if let Some(path) = db_cfg.sqlite_file_path() {
+            if std::path::Path::new(&path).exists() {
+                tracing::warn!(
+                    "PAP_REGISTRY_RESET_DB=true — deleting existing database at {path}. \
+                     All agents, peers, and node identity will be regenerated."
+                );
+                std::fs::remove_file(&path)
+                    .with_context(|| format!("Failed to delete database file at {path}"))?;
+            }
+        }
+    }
+
     let store = RegistryStore::connect(&db_cfg).await?;
-    store.migrate().await?;
+    store.migrate().await.map_err(|e| {
+        // Surface a clear recovery hint when the migration checksum mismatches —
+        // the most common cause is a volume created with an older schema.
+        if e.to_string()
+            .contains("previously applied but has been modified")
+        {
+            anyhow::anyhow!(
+                "{e}\n\n\
+                 HINT: The on-disk database was created with an earlier version of the schema.\n\
+                 To recover, restart the registry with PAP_REGISTRY_RESET_DB=true (this will \
+                 delete all stored data and regenerate the node identity)."
+            )
+        } else {
+            e
+        }
+    })?;
     let store = Arc::new(store);
 
     // ── Node identity (persisted across restarts) ─────────────────────────────

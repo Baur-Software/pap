@@ -26,6 +26,12 @@ pub struct Config {
     /// Maximum advertisements accepted from a single principal DID.
     /// Enforced at POST /api/agents. Default: 100.
     pub max_ads_per_principal: usize,
+
+    /// When `true`, delete the SQLite database file at startup so migrations
+    /// run against a clean slate.  **Destructive** — all stored agents, peers,
+    /// and the node identity are lost.  Only meaningful for SQLite; ignored for
+    /// Postgres.  Set `PAP_REGISTRY_RESET_DB=true` to enable.
+    pub reset_db: bool,
 }
 
 impl Config {
@@ -52,6 +58,10 @@ impl Config {
             .and_then(|v| v.parse().ok())
             .unwrap_or(100);
 
+        let reset_db = env::var("PAP_REGISTRY_RESET_DB")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
         Self {
             port,
             host,
@@ -59,6 +69,7 @@ impl Config {
             public_endpoint,
             no_tls,
             max_ads_per_principal,
+            reset_db,
         }
     }
 }
@@ -77,6 +88,7 @@ mod tests {
         env::remove_var("PAP_REGISTRY_ENDPOINT");
         env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
         env::remove_var("PAP_REGISTRY_NO_TLS");
+        env::remove_var("PAP_REGISTRY_RESET_DB");
     }
 
     #[test]
@@ -190,5 +202,38 @@ mod tests {
         assert_eq!(config.port, cloned.port);
         // Debug impl works without panic
         let _ = format!("{:?}", config);
+    }
+
+    #[test]
+    fn reset_db_defaults_to_false() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+
+        let config = Config::from_env();
+        assert!(!config.reset_db);
+    }
+
+    #[test]
+    fn reset_db_enabled_by_true_string() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+
+        let config = Config::from_env();
+        assert!(config.reset_db);
+
+        env::remove_var("PAP_REGISTRY_RESET_DB");
+    }
+
+    #[test]
+    fn reset_db_enabled_by_one() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "1");
+
+        let config = Config::from_env();
+        assert!(config.reset_db);
+
+        env::remove_var("PAP_REGISTRY_RESET_DB");
     }
 }
