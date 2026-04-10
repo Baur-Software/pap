@@ -28,6 +28,31 @@ struct OpenAiRequest<'a> {
     messages: &'a [ChatMessage],
 }
 
+/// HuggingFace Inference API (text-generation task, Chat Completions format).
+#[derive(Serialize)]
+struct HfRequest<'a> {
+    inputs: &'a str,
+    parameters: HfParameters,
+}
+
+#[derive(Serialize)]
+struct HfParameters {
+    max_new_tokens: u32,
+    return_full_text: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum HfResponse {
+    List(Vec<HfGenerated>),
+    Error { error: String },
+}
+
+#[derive(Deserialize)]
+struct HfGenerated {
+    generated_text: String,
+}
+
 #[derive(Deserialize)]
 struct OpenAiResponse {
     choices: Vec<OpenAiChoice>,
@@ -71,6 +96,7 @@ pub async fn chat(
             api_key,
             model,
         } => openai_chat(endpoint, api_key, model, messages).await,
+        LlmProvider::HuggingFace { api_token, model } => hf_chat(api_token, model, messages).await,
         LlmProvider::None => Err(PapillonError::from("No LLM provider configured")),
     }
 }
@@ -86,7 +112,7 @@ pub async fn check_llm_connection(
         .map_err(|e| PapillonError::from(e.to_string()))?
         .clone();
 
-    match &config.llm_provider {
+    match &config.inference_substrate {
         LlmProvider::BuiltIn { model_id } => {
             // For BuiltIn, verify the model is loaded and can generate
             let resource_dir = state
@@ -102,9 +128,16 @@ pub async fn check_llm_connection(
             let mut mgr = state.model_manager.lock().await;
             mgr.ensure_loaded(model_id, &resource_dir, &data_dir)
                 .map_err(PapillonError::from)?;
-            let response = mgr
-                .generate("[INST] Say hello in one sentence. [/INST]", 50)
-                .map_err(PapillonError::from)?;
+            // Pick the right prompt format for the loaded architecture
+            let probe = crate::inference::build_orchestrator_prompt_with_template(
+                "Say hello in one sentence.",
+                &[],
+                mgr.loaded
+                    .as_ref()
+                    .map(|m| crate::inference::ChatTemplate::from_backend(&m.model))
+                    .unwrap_or(crate::inference::ChatTemplate::Llama),
+            );
+            let response = mgr.generate(&probe, 50).map_err(PapillonError::from)?;
             Ok(response)
         }
         LlmProvider::None => Err(PapillonError::from("No LLM provider configured")),
@@ -186,4 +219,53 @@ async fn openai_chat(
         .next()
         .map(|c| c.message.content)
         .ok_or_else(|| PapillonError::from("No response from model"))
+}
+
+// ── HuggingFace Inference API ─────────────────────────────────
+
+const HF_INFERENCE_BASE: &str = "https://api-inference.huggingface.co/models";
+
+async fn hf_chat(
+    api_token: &str,
+    model: &str,
+    messages: &[ChatMessage],
+) -> Result<String, PapillonError> {
+    // Flatten messages into a single prompt string — the HF text-generation
+    // API does not support the chat-completions format for all models.
+    let prompt = messages
+        .iter()
+        .map(|m| format!("{}: {}", m.role, m.content))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let url = format!("{HF_INFERENCE_BASE}/{model}");
+    let body = HfRequest {
+        inputs: &prompt,
+        parameters: HfParameters {
+            max_new_tokens: 512,
+            return_full_text: false,
+        },
+    };
+
+    let client = reqwest::Client::new();
+    let raw = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {api_token}"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| PapillonError::from(format!("HuggingFace request failed: {e}")))?
+        .json::<HfResponse>()
+        .await
+        .map_err(|e| PapillonError::from(format!("HuggingFace response parse failed: {e}")))?;
+
+    match raw {
+        HfResponse::List(mut items) => items
+            .pop()
+            .map(|r| r.generated_text)
+            .ok_or_else(|| PapillonError::from("HuggingFace returned empty response")),
+        HfResponse::Error { error } => Err(PapillonError::from(format!(
+            "HuggingFace API error: {error}"
+        ))),
+    }
 }

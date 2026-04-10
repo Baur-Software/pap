@@ -15,7 +15,7 @@ use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
 use crate::handshake;
 use crate::state::AppState;
-use papillon_shared::{BlockEvent, BlockState, CanvasBlock};
+use papillon_shared::{BlockEvent, BlockState, CanvasBlock, IntentPlan, PreferenceEngine};
 
 use super::orchestrator::hash_agent_did;
 
@@ -140,38 +140,56 @@ fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
     papillon_shared::intent::detect_intent(prompt)
 }
 
-/// Score an agent candidate using profile history. Higher is better.
-/// Combines success_rate, avg_quality, and a preference bonus for the
-/// keyword-matched agent name.
+/// Score an agent candidate using profile history and local preference signals.
+/// Higher is better.  The score combines:
+/// - `AgentProfile` EMA statistics (success_rate, avg_quality)
+/// - `PreferenceEngine` schema-type-aware preference score
+/// - A keyword-match bonus for the intent-matched agent name
+///
+/// Preference score contributes up to 30% of the total when the engine has
+/// enough history (≥ 3 sessions).  EMA statistics contribute 40% each on top.
 fn score_agent(
     db: &crate::db::Database,
     agent_did: &str,
     preferred_name: &str,
     agent_name: &str,
+    action_type: &str,
+    schema_type: &str,
 ) -> f64 {
     let agent_did_hash = hash_agent_did(agent_did);
+
+    // Preference engine score (0.0 on cold start, up to 1.0 with history)
+    let engine = PreferenceEngine::new(db);
+    let pref_score = engine.preference_score(action_type, schema_type, &agent_did_hash);
+
+    // Keyword match bonus
+    let keyword_bonus = if agent_name == preferred_name {
+        1.0
+    } else {
+        0.0
+    };
+
     match db.get_agent_profile(&agent_did_hash).ok().flatten() {
         Some(profile) if profile.episode_count >= 3 => {
-            // 40% success_rate + 40% avg_quality + 20% keyword preference
-            let base = 0.4 * profile.success_rate + 0.4 * profile.avg_quality;
-            let preference_bonus = if agent_name == preferred_name {
-                0.2
-            } else {
-                0.0
-            };
-            base + preference_bonus
+            // 35% success_rate + 35% avg_quality + 20% preference + 10% keyword
+            let base = 0.35 * profile.success_rate + 0.35 * profile.avg_quality;
+            base + 0.20 * pref_score + 0.10 * keyword_bonus
         }
         Some(_) => {
-            // Too few episodes — keyword preference only
-            if agent_name == preferred_name {
+            // Too few EMA episodes — lean on preference + keyword
+            if pref_score > 0.0 {
+                0.40 + 0.30 * pref_score + 0.10 * keyword_bonus
+            } else if agent_name == preferred_name {
                 0.7
             } else {
                 0.5
             }
         }
         None => {
-            // No history — prefer keyword match
-            if agent_name == preferred_name {
+            // No EMA history — preference engine + keyword fallback
+            if pref_score > 0.0 {
+                0.30 + 0.40 * pref_score + 0.10 * keyword_bonus
+            } else if agent_name == preferred_name {
                 0.6
             } else {
                 0.4
@@ -247,7 +265,16 @@ pub(crate) async fn resolve_agent(
             let mut scored: Vec<_> = eligible
                 .iter()
                 .map(|a| {
-                    let s = score_agent(&state.db, &a.provider.did, preferred_name, &a.name);
+                    // Use first returns type as schema hint for preference scoring
+                    let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                    let s = score_agent(
+                        &state.db,
+                        &a.provider.did,
+                        preferred_name,
+                        &a.name,
+                        action_type,
+                        schema_hint,
+                    );
                     (*a, s)
                 })
                 .collect();
@@ -285,8 +312,15 @@ pub(crate) async fn resolve_agent(
                     let mut scored: Vec<_> = eligible
                         .iter()
                         .map(|a| {
-                            let s =
-                                score_agent(&state.db, &a.provider.did, preferred_name, &a.name);
+                            let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                            let s = score_agent(
+                                &state.db,
+                                &a.provider.did,
+                                preferred_name,
+                                &a.name,
+                                action_type,
+                                schema_hint,
+                            );
                             (*a, s)
                         })
                         .collect();
@@ -366,12 +400,16 @@ async fn process_prompt(
     prompt_id: &str,
     block_id: &str,
     text: &str,
-) -> Result<(String, serde_json::Value), PapillonError> {
+) -> Result<(String, serde_json::Value, bool), PapillonError> {
     process_prompt_inner(app, state, prompt_id, block_id, text, &[], 0).await
 }
 
 /// Inner implementation with exclusion list and retry budget for reflection.
 /// Uses `Box::pin` for the recursive async call required by the reflection gate.
+///
+/// Returns `(schema_type, content, preference_guided)` where `preference_guided`
+/// is `true` when the PreferenceEngine had meaningful history that influenced
+/// agent selection.
 #[allow(clippy::type_complexity)]
 fn process_prompt_inner<'a>(
     app: &'a AppHandle,
@@ -383,7 +421,7 @@ fn process_prompt_inner<'a>(
     retry_count: u8,
 ) -> std::pin::Pin<
     Box<
-        dyn std::future::Future<Output = Result<(String, serde_json::Value), PapillonError>>
+        dyn std::future::Future<Output = Result<(String, serde_json::Value, bool), PapillonError>>
             + Send
             + 'a,
     >,
@@ -392,6 +430,16 @@ fn process_prompt_inner<'a>(
         let (action_type, preferred, query) = detect_intent(text);
 
         let resolved = resolve_agent(state, action_type, preferred, exclude_agents).await?;
+
+        // Derive schema type from agent's declared returns (first element).
+        let schema_hint = resolved.returns.first().cloned().unwrap_or_default();
+        let agent_did_hash = hash_agent_did(&resolved.did);
+
+        // Check guidance BEFORE recording — so the badge reflects pre-selection history,
+        // not the selection we're about to record (which would fire on the tip-over episode).
+        let engine = PreferenceEngine::new(state.db.as_ref());
+        let preference_guided = engine.is_preference_guided(action_type, &schema_hint);
+        engine.record_agent_selected(action_type, &schema_hint, &agent_did_hash, &resolved.name);
 
         // Get principal keypair
         let principal_kp = {
@@ -421,6 +469,7 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -444,6 +493,7 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -493,6 +543,7 @@ fn process_prompt_inner<'a>(
                             content: None,
                             linked_block_ids: Vec::new(),
                             agent_did: None,
+                            preference_guided: false,
                             created_at: now.clone(),
                             updated_at: now,
                         },
@@ -512,7 +563,16 @@ fn process_prompt_inner<'a>(
             }
         }
 
-        Ok((result.schema_type, result.content))
+        // Record outcome after the quality gate — success only when quality is acceptable.
+        // If we retried (returned early above), this line is never reached for the bad attempt.
+        PreferenceEngine::new(state.db.as_ref()).record_outcome(
+            action_type,
+            &schema_hint,
+            &agent_did_hash,
+            quality >= 0.5,
+        );
+
+        Ok((result.schema_type, result.content, preference_guided))
     })
 }
 
@@ -557,7 +617,8 @@ pub async fn canvas_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content) = process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+    let (schema_type, content, preference_guided) =
+        process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -577,6 +638,7 @@ pub async fn canvas_prompt(
                 // TODO: thread agent_did from process_prompt return value
                 // so the renderer can use agent-scoped templates.
                 agent_did: None,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -593,7 +655,8 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content) = process_prompt(&app, &state, "", &block_id, &text).await?;
+    let (schema_type, content, preference_guided) =
+        process_prompt(&app, &state, "", &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -611,6 +674,7 @@ pub async fn canvas_reshape(
                 content: Some(content),
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -641,6 +705,183 @@ pub async fn canvas_retry(
         original_text,
     )
     .await
+}
+
+/// Two-phase canvas prompt: plan first (emit `AwaitingApproval`), then wait for
+/// principal approval before running the full handshake.
+///
+/// If `auto_approve_zero_disclosure` is enabled in the orchestrator config and the
+/// resolved agent requires no disclosure fields, the gate is skipped and the
+/// handshake runs immediately.
+#[tauri::command]
+pub async fn canvas_plan_prompt(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    _canvas_id: String,
+    prompt_id: String,
+    block_id: String,
+    text: String,
+) -> Result<serde_json::Value, PapillonError> {
+    let (action_type, preferred, _query) = detect_intent(&text);
+
+    // Resolve agent to build the IntentPlan.
+    let resolved = resolve_agent(&state, action_type, preferred, &[]).await?;
+
+    let approval_request_id = uuid::Uuid::new_v4().to_string();
+
+    let plan = IntentPlan {
+        action: action_type.to_string(),
+        selected_agent_name: resolved.name.clone(),
+        selected_agent_did: Some(resolved.did.clone()),
+        requires_disclosure: resolved.requires_disclosure.clone(),
+        returns: resolved.returns.clone(),
+        approval_request_id: approval_request_id.clone(),
+    };
+
+    // Check auto-approve shortcut: if configured and no disclosure required, skip the gate.
+    let auto_approve = {
+        let config = state
+            .orchestrator_config
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        config.auto_approve_zero_disclosure && plan.requires_disclosure.is_empty()
+    };
+
+    if auto_approve {
+        // Run directly without emitting AwaitingApproval.
+        let (schema_type, content, preference_guided) =
+            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+        maybe_auto_generate_template(&state, &schema_type, &content);
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_resolved",
+            BlockEvent {
+                block: CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id,
+                    prompt_text: Some(text),
+                    state: BlockState::Resolved,
+                    schema_type: Some(schema_type),
+                    content: Some(content),
+                    linked_block_ids: Vec::new(),
+                    agent_did: None,
+                    preference_guided,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+        return Ok(serde_json::json!({ "status": "ok", "block_id": block_id }));
+    }
+
+    // Emit the AwaitingApproval block so the frontend can render the approval UI.
+    let now = Utc::now().to_rfc3339();
+    let _ = app.emit(
+        "block_updated",
+        BlockEvent {
+            block: CanvasBlock {
+                id: block_id.clone(),
+                prompt_id: prompt_id.clone(),
+                prompt_text: Some(text.clone()),
+                state: BlockState::AwaitingApproval { plan: plan.clone() },
+                schema_type: None,
+                content: None,
+                linked_block_ids: Vec::new(),
+                agent_did: None,
+                preference_guided: false,
+                created_at: now.clone(),
+                updated_at: now,
+            },
+        },
+    );
+
+    // Create the oneshot channel and store the sender in the approval_gates map.
+    let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
+    {
+        let mut gates = state.approval_gates.write().await;
+        gates.insert(approval_request_id.clone(), sender);
+    }
+
+    // Block until the principal approves or rejects (or the sender is dropped).
+    let approved = receiver.await.unwrap_or(false);
+
+    if approved {
+        // Run the full handshake.
+        let (schema_type, content, preference_guided) =
+            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+        maybe_auto_generate_template(&state, &schema_type, &content);
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_resolved",
+            BlockEvent {
+                block: CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id,
+                    prompt_text: Some(text),
+                    state: BlockState::Resolved,
+                    schema_type: Some(schema_type),
+                    content: Some(content),
+                    linked_block_ids: Vec::new(),
+                    agent_did: None,
+                    preference_guided,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+        Ok(serde_json::json!({ "status": "ok", "block_id": block_id }))
+    } else {
+        // Principal rejected — emit a Failed block.
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_resolved",
+            BlockEvent {
+                block: CanvasBlock {
+                    id: block_id.clone(),
+                    prompt_id,
+                    prompt_text: Some(text),
+                    state: BlockState::Failed {
+                        phase: 0,
+                        reason: "Rejected by principal".to_string(),
+                    },
+                    schema_type: None,
+                    content: None,
+                    linked_block_ids: Vec::new(),
+                    agent_did: None,
+                    preference_guided: false,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+        Ok(serde_json::json!({ "status": "rejected", "block_id": block_id }))
+    }
+}
+
+/// Resolve a pending approval gate created by `canvas_plan_prompt`.
+///
+/// Sends `approved` (true/false) through the oneshot channel, which unblocks
+/// the waiting `canvas_plan_prompt` command and either proceeds with the
+/// handshake or emits a Failed block.
+#[tauri::command]
+pub async fn canvas_approve_block(
+    approval_request_id: String,
+    approved: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let sender = {
+        let mut gates = state.approval_gates.write().await;
+        gates.remove(&approval_request_id)
+    };
+    if let Some(sender) = sender {
+        let _ = sender.send(approved);
+        Ok(())
+    } else {
+        Err(format!(
+            "No approval gate found for {}",
+            approval_request_id
+        ))
+    }
 }
 
 #[cfg(test)]

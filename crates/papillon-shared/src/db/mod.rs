@@ -235,6 +235,69 @@ pub trait DatabaseOps: Send + Sync {
         conversation_id: &str,
         limit: usize,
     ) -> Result<Vec<ChatMessage>, DbError>;
+
+    // ── Preference Learning (native only) ─────────────────────────────────
+    // All preference data is stored locally. No row is ever transmitted over
+    // the network. These methods are native-only because the WASM build has
+    // no persistent backing store for preference signals.
+
+    /// Upsert a preference signal row, incrementing selection_count and
+    /// updating success_count / scope refs atomically.
+    #[cfg(feature = "native")]
+    fn upsert_preference(&self, signal: &PreferenceSignal) -> Result<(), DbError>;
+
+    /// Retrieve the preference signal for a specific (action_type, schema_type,
+    /// agent_did_hash) triple. Returns `None` if no row exists yet.
+    #[cfg(feature = "native")]
+    fn get_preference(
+        &self,
+        action_type: &str,
+        schema_type: &str,
+        agent_did_hash: &str,
+    ) -> Result<Option<PreferenceSignal>, DbError>;
+
+    /// List all preference signals for the given (action_type, schema_type) pair,
+    /// ordered by selection_count descending (most preferred first).
+    #[cfg(feature = "native")]
+    fn list_preferences_for_schema(
+        &self,
+        action_type: &str,
+        schema_type: &str,
+    ) -> Result<Vec<PreferenceSignal>, DbError>;
+}
+
+/// A preference signal recording which agent was selected for a given
+/// (action_type, schema_type) pair, and the outcomes of those selections.
+///
+/// All data lives in the local SQLite database — no network calls ever read or
+/// write this table.  The `PreferenceEngine` (see `preference_engine` module)
+/// reads these rows to bias agent selection toward historically preferred agents
+/// and to suggest approved mandate scopes for the same schema type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreferenceSignal {
+    /// UUID row identifier.
+    pub id: String,
+    /// Schema.org action type exercised (e.g. "schema:SearchAction").
+    pub action_type: String,
+    /// Schema.org type of the agent's return value (e.g. "schema:SearchResult").
+    /// Empty string when the agent advertises no specific returns type.
+    pub schema_type: String,
+    /// SHA-256 of the agent DID — never the raw DID.
+    pub agent_did_hash: String,
+    /// Human-readable agent name for display purposes only.
+    pub agent_name: String,
+    /// Number of times this agent was selected for this (action, schema) pair.
+    pub selection_count: i64,
+    /// Number of sessions that resulted in a "success" outcome.
+    pub success_count: i64,
+    /// ISO-8601 timestamp of the most recent selection.
+    pub last_selected: String,
+    /// JSON array of disclosure property refs the user approved for this schema type.
+    pub approved_scope_refs: String,
+    /// JSON array of disclosure property refs the user rejected for this schema type.
+    pub rejected_scope_refs: String,
+    /// ISO-8601 timestamp of the most recent update to this row.
+    pub updated_at: String,
 }
 
 /// Summary of what the retention reducer did in a single pass.

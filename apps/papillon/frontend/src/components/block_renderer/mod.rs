@@ -2,7 +2,7 @@ pub(crate) mod declarative;
 pub(crate) mod field_classify;
 mod generic;
 mod receipt;
-mod registry;
+pub(crate) mod registry;
 pub(crate) mod renderer;
 pub(crate) mod schema_property;
 mod templates;
@@ -12,12 +12,13 @@ use papillon_shared::{BlockState, CanvasBlock};
 use serde_json::Value;
 use std::sync::Arc;
 
+pub use registry::RendererRegistry;
+
 use crate::state::canvas::CanvasState;
-use crate::state::templates::TemplatesState;
-use registry::RendererRegistry;
+use crate::state::renderer::RendererState;
 
 /// Create and initialize the default renderer registry with shipped templates.
-fn create_default_registry() -> Arc<RendererRegistry> {
+pub fn create_default_registry() -> Arc<RendererRegistry> {
     let registry = Arc::new(RendererRegistry::new());
     // Reservations
     registry.register(Arc::new(templates::FlightTemplate));
@@ -64,15 +65,9 @@ fn create_default_registry() -> Arc<RendererRegistry> {
 #[component]
 pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let templates_state = expect_context::<TemplatesState>();
+    let renderer_state = expect_context::<RendererState>();
 
-    let registry = create_default_registry();
-
-    // Load user-defined templates from context
-    let all_templates = templates_state.all_templates();
-    if !all_templates.is_empty() {
-        registry.load_from_templates(all_templates);
-    }
+    let registry = renderer_state.registry.with_value(|r| Arc::clone(r));
 
     let block_id = StoredValue::new(block.id.clone());
     let show_reprompt = RwSignal::new(false);
@@ -84,6 +79,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
 
     let block_class = match &block.state {
         BlockState::Ghost { .. } => "canvas-block ghost",
+        BlockState::AwaitingApproval { .. } => "canvas-block awaiting-approval",
         BlockState::Resolving { .. } => "canvas-block resolving",
         BlockState::Resolved => "canvas-block",
         BlockState::Failed { .. } => "canvas-block failed",
@@ -155,6 +151,102 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         </div>
                     }.into_any()
                 }
+                BlockState::AwaitingApproval { plan } => {
+                    let plan = plan.clone();
+                    let agent_name = plan.selected_agent_name.clone();
+                    let action_label = plan
+                        .action
+                        .strip_prefix("schema:")
+                        .unwrap_or(&plan.action)
+                        .to_string();
+                    let disclosure_items = plan.requires_disclosure.clone();
+                    let has_disclosure = !disclosure_items.is_empty();
+                    let approval_id = plan.approval_request_id.clone();
+                    let approval_id_reject = approval_id.clone();
+                    let block_id_approve = block_id.get_value();
+                    let block_id_reject = block_id.get_value();
+                    let cs_approve = canvas_state;
+                    let cs_reject = canvas_state;
+
+                    // Skeleton preview: minimal JSON-LD for the first returns type.
+                    let first_returns_type = plan
+                        .returns
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "schema:Thing".to_string());
+                    let skeleton_json = serde_json::json!({
+                        "@type": first_returns_type,
+                        "name": "\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}",
+                        "description": "\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}"
+                    });
+                    let skeleton_type = plan
+                        .returns
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "schema:Thing".to_string());
+                    let skeleton_entries =
+                        generic::flatten_to_entries(&skeleton_type, &skeleton_json, &registry);
+                    let skeleton_view = generic::render_stream(skeleton_entries, &registry);
+
+                    view! {
+                        <div class="awaiting-approval-header">
+                            <span>"\u{25cc}"</span>
+                            <span>"AWAITING APPROVAL"</span>
+                            <span>{agent_name}</span>
+                            <span style="opacity:0.5">{format!("\u{00b7} {}", action_label)}</span>
+                        </div>
+
+                        <div class="awaiting-approval-section-label">"WILL RETURN"</div>
+                        <div class="awaiting-approval-skeleton-wrap">
+                            {skeleton_view}
+                        </div>
+
+                        <Show when=move || has_disclosure>
+                            <div class="awaiting-approval-section-label">"WILL NEED FROM YOU"</div>
+                            <div class="awaiting-approval-disclosure">
+                                {disclosure_items.iter().map(|item| {
+                                    let label = item
+                                        .trim_start_matches("schema:")
+                                        .to_string();
+                                    view! {
+                                        <span class="scope-badge disclosure">{label}</span>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        </Show>
+
+                        <div class="awaiting-approval-mandate-note">
+                            "MANDATE DURATION  ~1h (renewable, bounded)"
+                        </div>
+
+                        <div class="awaiting-approval-actions">
+                            <button
+                                class="hitl-reject-btn"
+                                on:click=move |e: leptos::ev::MouseEvent| {
+                                    e.stop_propagation();
+                                    cs_reject.reject_block(
+                                        block_id_reject.clone(),
+                                        approval_id_reject.clone(),
+                                    );
+                                }
+                            >
+                                "[ REJECT ]"
+                            </button>
+                            <button
+                                class="hitl-authorize-btn"
+                                on:click=move |e: leptos::ev::MouseEvent| {
+                                    e.stop_propagation();
+                                    cs_approve.approve_block(
+                                        block_id_approve.clone(),
+                                        approval_id.clone(),
+                                    );
+                                }
+                            >
+                                "[ APPROVE ]"
+                            </button>
+                        </div>
+                    }.into_any()
+                }
                 BlockState::Resolving { phase, phase_label } => {
                     view! {
                         <PhaseDots current_phase=*phase />
@@ -171,10 +263,17 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Unknown"</span></div> }.into_any(),
                     };
+                    let pref_guided = block.preference_guided;
                     view! {
                         <div class="block-content">
                             {content_view}
                         </div>
+                        <Show when=move || pref_guided>
+                            <div class="preference-hint" title="Agent selected from your local interaction history — no data left your device">
+                                <span class="preference-hint-icon">"◈"</span>
+                                <span>"Based on your preferences"</span>
+                            </div>
+                        </Show>
                         <Show when=move || show_reprompt.get()>
                             <div class="block-reprompt">
                                 <input

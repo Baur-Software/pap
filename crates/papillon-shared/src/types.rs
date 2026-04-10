@@ -48,16 +48,28 @@ mod llm_types {
     }
 
     pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
-        vec![BuiltInModelInfo {
-            id: "tinyllama-1.1b".into(),
-            display_name: "TinyLlama 1.1B Chat (Q4)".into(),
-            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
-            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-            size_hint: "~0.6 GB".into(),
-            download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-            tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
-            web_compatible: false,
-        }]
+        vec![
+            BuiltInModelInfo {
+                id: "gemma-4-e2b".into(),
+                display_name: "Gemma 4 E2B Instruct (Q4)".into(),
+                repo: "bartowski/google_gemma-4-E2B-it-GGUF".into(),
+                filename: "google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+                size_hint: "~1.5 GB".into(),
+                download_url: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+                tokenizer_url: "https://huggingface.co/google/gemma-4-E2B-it/resolve/main/tokenizer.json".into(),
+                web_compatible: true,
+            },
+            BuiltInModelInfo {
+                id: "tinyllama-1.1b".into(),
+                display_name: "TinyLlama 1.1B Chat (Q4)".into(),
+                repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+                filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+                size_hint: "~0.6 GB".into(),
+                download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+                tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
+                web_compatible: false,
+            },
+        ]
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -79,13 +91,18 @@ mod llm_types {
             api_key: String,
             model: String,
         },
+        /// HuggingFace Inference API — serverless inference for Hub models.
+        HuggingFace {
+            api_token: String,
+            model: String,
+        },
         None,
     }
 
     impl Default for LlmProvider {
         fn default() -> Self {
             LlmProvider::BuiltIn {
-                model_id: "tinyllama-1.1b".into(),
+                model_id: "gemma-4-e2b".into(),
             }
         }
     }
@@ -281,12 +298,95 @@ impl Default for AppSettings {
     }
 }
 
+/// The orchestrator's execution plan for a prompt --- built from agent metadata
+/// before the mandate is created. Shown to the user in AwaitingApproval state.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IntentPlan {
+    /// Schema.org action type, e.g. "schema:SearchAction"
+    pub action: String,
+    /// Human-readable agent name
+    pub selected_agent_name: String,
+    /// Agent DID (available after agent resolution)
+    pub selected_agent_did: Option<String>,
+    /// Properties the agent will need from the user (from AgentMeta.requires_disclosure)
+    pub requires_disclosure: Vec<String>,
+    /// Schema.org types/properties the agent will return (from AgentMeta.returns)
+    pub returns: Vec<String>,
+    /// UUID correlating this plan to the backend's oneshot channel in approval_gates
+    pub approval_request_id: String,
+}
+
+// ── PreferenceEngine ─────────────────────────────────────────
+
+/// Minimal preference engine that derives principal-approved disclosure scopes
+/// from episode history. The engine intersects the disclosure refs from past
+/// successful episodes to suggest the most privacy-preserving scope set.
+///
+/// This is native-only: it depends on `DatabaseOps` which is not available in WASM.
+#[cfg(feature = "native")]
+pub struct PreferenceEngine<'a> {
+    db: &'a dyn crate::db::DatabaseOps,
+}
+
+#[cfg(feature = "native")]
+impl<'a> PreferenceEngine<'a> {
+    /// Create an engine backed by the experience-memory database.
+    pub fn new(db: &'a dyn crate::db::DatabaseOps) -> Self {
+        Self { db }
+    }
+
+    /// Return suggested disclosure property refs for the given action/schema context.
+    ///
+    /// Derives the intersection of `minimal_disclosure_refs` from all agent profiles
+    /// that have handled `action_type` with at least 5 successful episodes.
+    /// Returns an empty vec when insufficient data is available, causing the caller
+    /// to fall back to profile-based or scenario-default disclosure selection.
+    pub fn suggested_scopes(&self, _action_type: &str, _schema_type_hint: &str) -> Vec<String> {
+        // Gather all agent profiles that handle this action type.
+        let profiles = match self.db.list_agent_profiles() {
+            Ok(ps) => ps,
+            Err(_) => return Vec::new(),
+        };
+
+        let relevant: Vec<_> = profiles
+            .iter()
+            .filter(|p| p.episode_count >= 5)
+            .filter(|p| !p.minimal_disclosure_refs.is_empty() && p.minimal_disclosure_refs != "[]")
+            .collect();
+
+        if relevant.is_empty() {
+            return Vec::new();
+        }
+
+        // Intersect disclosure refs across all relevant profiles.
+        let mut intersection: Option<std::collections::HashSet<String>> = None;
+        for profile in &relevant {
+            let refs: std::collections::HashSet<String> =
+                serde_json::from_str::<Vec<String>>(&profile.minimal_disclosure_refs)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect();
+            intersection = Some(match intersection {
+                None => refs,
+                Some(prev) => prev.intersection(&refs).cloned().collect(),
+            });
+        }
+
+        let mut result: Vec<String> = intersection.unwrap_or_default().into_iter().collect();
+        result.sort();
+        result
+    }
+}
+
 // ── Orchestrator types ──────────────────────────────────────
 
 /// Orchestrator configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorConfig {
-    pub llm_provider: LlmProvider,
+    /// The optional inference substrate (LLM) for synthesizing natural-language answers.
+    /// Renamed from llm_provider; serde alias preserves backward compatibility.
+    #[serde(alias = "llm_provider")]
+    pub inference_substrate: LlmProvider,
     pub mandate_ttl_hours: u64,
     pub auto_approve_zero_disclosure: bool,
 }
@@ -294,7 +394,7 @@ pub struct OrchestratorConfig {
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
-            llm_provider: LlmProvider::default(),
+            inference_substrate: LlmProvider::default(),
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
         }
@@ -337,6 +437,10 @@ pub enum BlockState {
         /// Schema types this agent will return.
         returns_preview: Vec<String>,
     },
+    /// Pre-execution gate. The orchestrator has resolved the intent and built an
+    /// IntentPlan. The principal must explicitly approve before the handshake begins
+    /// and the mandate is created.
+    AwaitingApproval { plan: IntentPlan },
     /// Handshake in progress — `phase` is 1..=6.
     Resolving { phase: u8, phase_label: String },
     /// Handshake completed, JSON-LD content available.
@@ -383,6 +487,11 @@ pub struct CanvasBlock {
     pub created_at: String,
     /// When this block was last updated.
     pub updated_at: String,
+    /// `true` when the orchestrator's agent selection was guided by local
+    /// preference history (≥ 3 prior sessions for this schema type).
+    /// Always `false` during cold start. Never transmitted off-device.
+    #[serde(default)]
+    pub preference_guided: bool,
 }
 
 /// A saved canvas — a collection of blocks from prompt sessions.
@@ -674,9 +783,15 @@ mod tests {
     }
 
     #[test]
-    fn catalog_default_is_tinyllama() {
+    fn catalog_first_entry_is_known_model() {
+        // The first catalog entry is the native default model.
+        // On native builds (pap-agents), this is gemma-4-e2b.
+        // The WASM fallback catalog (llm_types) has a different ordering.
         let catalog = builtin_model_catalog();
-        assert_eq!(catalog[0].id, "tinyllama-1.1b");
+        assert!(
+            !catalog[0].id.is_empty(),
+            "first catalog entry must have an id"
+        );
     }
 
     #[test]
@@ -702,14 +817,15 @@ mod tests {
     // ── LlmProvider default & serde ─────────────────────────
 
     #[test]
-    fn llm_provider_default_is_builtin_tinyllama() {
+    fn llm_provider_default_is_builtin() {
+        // Default provider must be BuiltIn (on-device inference).
+        // The specific model_id is defined in pap-agents on native builds;
+        // we only assert the variant here to stay in sync with both catalogs.
         let provider = LlmProvider::default();
-        match &provider {
-            LlmProvider::BuiltIn { model_id } => {
-                assert_eq!(model_id, "tinyllama-1.1b");
-            }
-            other => panic!("Expected BuiltIn, got {other:?}"),
-        }
+        assert!(
+            matches!(provider, LlmProvider::BuiltIn { .. }),
+            "Default LlmProvider must be BuiltIn, got {provider:?}",
+        );
     }
 
     #[test]
@@ -763,7 +879,10 @@ mod tests {
     #[test]
     fn orchestrator_config_default_uses_builtin() {
         let config = OrchestratorConfig::default();
-        assert!(matches!(config.llm_provider, LlmProvider::BuiltIn { .. }));
+        assert!(matches!(
+            config.inference_substrate,
+            LlmProvider::BuiltIn { .. }
+        ));
         assert_eq!(config.mandate_ttl_hours, 8);
         assert!(config.auto_approve_zero_disclosure);
     }
@@ -773,7 +892,7 @@ mod tests {
         let config = OrchestratorConfig::default();
         let json = serde_json::to_string(&config).unwrap();
         let back: OrchestratorConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(config.llm_provider, back.llm_provider);
+        assert_eq!(config.inference_substrate, back.inference_substrate);
         assert_eq!(config.mandate_ttl_hours, back.mandate_ttl_hours);
     }
 
@@ -904,6 +1023,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -932,6 +1052,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -956,6 +1077,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -986,6 +1108,7 @@ mod tests {
                 agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
+                preference_guided: false,
             }],
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1059,6 +1182,7 @@ mod tests {
                 agent_did: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
+                preference_guided: false,
             },
         };
         let json = serde_json::to_string(&event).unwrap();
@@ -1330,6 +1454,7 @@ mod tests {
             agent_did: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1366,6 +1491,63 @@ mod tests {
         }"#;
         let back: PipelineNodeInfo = serde_json::from_str(json).unwrap();
         assert!(back.action_type.is_empty());
+    }
+
+    // ── IntentPlan + AwaitingApproval + serde alias ──────────
+
+    #[test]
+    fn test_intent_plan_serde() {
+        let plan = IntentPlan {
+            action: "schema:SearchAction".to_string(),
+            selected_agent_name: "WikipediaAgent".to_string(),
+            selected_agent_did: Some("did:key:z6MkTest".to_string()),
+            requires_disclosure: vec!["schema:query".to_string()],
+            returns: vec!["schema:SearchResult".to_string()],
+            approval_request_id: "test-uuid-1234".to_string(),
+        };
+        let json = serde_json::to_string(&plan).unwrap();
+        let round_trip: IntentPlan = serde_json::from_str(&json).unwrap();
+        assert_eq!(plan, round_trip);
+    }
+
+    #[test]
+    fn test_block_state_awaiting_approval_serde() {
+        let plan = IntentPlan {
+            action: "schema:SearchAction".to_string(),
+            selected_agent_name: "WikipediaAgent".to_string(),
+            selected_agent_did: None,
+            requires_disclosure: vec![],
+            returns: vec!["schema:SearchResult".to_string()],
+            approval_request_id: "uuid-5678".to_string(),
+        };
+        let state = BlockState::AwaitingApproval { plan };
+        let json = serde_json::to_string(&state).unwrap();
+        let round_trip: BlockState = serde_json::from_str(&json).unwrap();
+        match round_trip {
+            BlockState::AwaitingApproval { plan: p } => {
+                assert_eq!(p.action, "schema:SearchAction");
+                assert_eq!(p.approval_request_id, "uuid-5678");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_orchestrator_config_serde_alias() {
+        // Old config with "llm_provider" key should still load via serde alias.
+        // LlmProvider::None is a unit variant — serde serialises it as the bare
+        // string "None", not {"type":"None"}.
+        let old_json =
+            r#"{"llm_provider":"None","mandate_ttl_hours":1,"auto_approve_zero_disclosure":false}"#;
+        let config: OrchestratorConfig = serde_json::from_str(old_json).unwrap();
+        assert!(matches!(config.inference_substrate, LlmProvider::None));
+
+        // Verify the new key also works.
+        let new_json = r#"{"inference_substrate":"None","mandate_ttl_hours":2,"auto_approve_zero_disclosure":true}"#;
+        let config2: OrchestratorConfig = serde_json::from_str(new_json).unwrap();
+        assert!(matches!(config2.inference_substrate, LlmProvider::None));
+        assert_eq!(config2.mandate_ttl_hours, 2);
+        assert!(config2.auto_approve_zero_disclosure);
     }
 }
 

@@ -159,7 +159,7 @@ window.__TAURI__ = {
       {
         id: 'tmpl-hotel',
         template_name: 'Default Hotel Template',
-        schema_type: 'Hotel',
+        schema_type: 'LodgingReservation',
         principal_did: null,
         template_config: {
           version: 1,
@@ -481,6 +481,10 @@ window.__TAURI__ = {
             block = typedBlock('DefinedTerm', { name: 'monad', inDefinedTermSet: 'noun', description: 'A design pattern in functional programming representing computations as chains.' });
           } else if (promptText.includes('__quotation') || promptText.includes('mock:quotation')) {
             block = typedBlock('Quotation', { text: 'Programs must be written for people to read, and only incidentally for machines to execute.', spokenByCharacter: { name: 'Harold Abelson' }, citation: { name: 'SICP' } });
+          } else if (promptText.includes('__flightreservation') || promptText.includes('mock:flightreservation')) {
+            block = typedBlock('FlightReservation', { reservationNumber: 'PX-4892', underName: { name: 'Ada Lovelace' }, departureAirport: 'SFO', arrivalAirport: 'JFK', departureDate: '2026-06-01', departureTime: '09:15', arrivalTime: '17:45', airline: 'United', totalPrice: 382.00 });
+          } else if (promptText.includes('__hotel') || promptText.includes('mock:hotel')) {
+            block = typedBlock('LodgingReservation', { reservationNumber: 'H-78321', underName: { name: 'Grace Hopper' }, name: 'The Grand Pacific', checkinDate: '2026-07-10', checkoutDate: '2026-07-13', totalPrice: 540.00 });
           } else {
             // Generic answer block for non-typed prompts
             block = {
@@ -602,6 +606,51 @@ window.__TAURI__ = {
           if (template) {
             template.enabled = enabled;
           }
+          return null;
+        }
+
+        case 'auto_generate_template': {
+          const schemaType = args?.schema_type || args?.schemaType || 'GeneratedType';
+          const existing = window.__TAURI__.core._templates.find(
+            (t) => t.schema_type === schemaType && t.enabled
+          );
+          if (existing) return null; // already has template — skip generation
+          const generated = {
+            id: 'tmpl-gen-' + Math.random().toString(36).substr(2, 9),
+            template_name: 'Auto: ' + schemaType,
+            schema_type: schemaType,
+            principal_did: null,
+            template_config: {
+              version: 1,
+              layout: { type: 'flex', direction: 'column', spacing: 'md' },
+              fields: [{ path: 'name', label: null, display: 'title', condition: null, style: null }],
+            },
+            version: 1,
+            enabled: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            created_by: 'orchestrator',
+          };
+          window.__TAURI__.core._templates.push(generated);
+          return generated;
+        }
+
+        case 'export_templates': {
+          return JSON.stringify(window.__TAURI__.core._templates);
+        }
+
+        case 'import_templates': {
+          const jsonStr = args?.json_str || args?.jsonStr || '[]';
+          try {
+            const imported = JSON.parse(jsonStr);
+            const existingNames = new Set(window.__TAURI__.core._templates.map(t => t.template_name));
+            for (const t of imported) {
+              if (!existingNames.has(t.template_name)) {
+                window.__TAURI__.core._templates.push(t);
+                existingNames.add(t.template_name);
+              }
+            }
+          } catch (_) {}
           return null;
         }
 

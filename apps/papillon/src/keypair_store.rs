@@ -172,7 +172,6 @@ impl KeypairStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
     fn temp_dir() -> TempDir {
@@ -215,8 +214,11 @@ mod tests {
         assert_eq!(did1, did2, "DID must be stable across restarts");
     }
 
+    #[cfg(unix)]
     #[test]
+    #[cfg(unix)]
     fn key_file_has_mode_0600() {
+        use std::os::unix::fs::PermissionsExt;
         let dir = temp_dir();
         KeypairStore::open(dir.path()).expect("should create store");
 

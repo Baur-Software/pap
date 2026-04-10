@@ -62,16 +62,28 @@ pub struct ModelDownloadProgress {
 /// Catalog of models available for on-device inference.
 /// The first entry is the default.
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
-    vec![BuiltInModelInfo {
-        id: "tinyllama-1.1b".into(),
-        display_name: "TinyLlama 1.1B Chat (Q4)".into(),
-        repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
-        filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-        size_hint: "~0.6 GB".into(),
-        download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
-        tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
-        web_compatible: false,
-    }]
+    vec![
+        BuiltInModelInfo {
+            id: "gemma-4-e2b".into(),
+            display_name: "Gemma 4 E2B Instruct (Q4)".into(),
+            repo: "bartowski/google_gemma-4-E2B-it-GGUF".into(),
+            filename: "google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+            size_hint: "~1.5 GB".into(),
+            download_url: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf".into(),
+            tokenizer_url: "https://huggingface.co/google/gemma-4-E2B-it/resolve/main/tokenizer.json".into(),
+            web_compatible: true,
+        },
+        BuiltInModelInfo {
+            id: "tinyllama-1.1b".into(),
+            display_name: "TinyLlama 1.1B Chat (Q4)".into(),
+            repo: "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into(),
+            filename: "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+            size_hint: "~0.6 GB".into(),
+            download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
+            tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
+            web_compatible: false,
+        },
+    ]
 }
 
 /// LLM provider for the orchestrator.
@@ -98,6 +110,10 @@ pub enum LlmProvider {
         api_key: String,
         model: String,
     },
+    /// HuggingFace Inference API — serverless inference for models hosted on
+    /// the Hub. Requires a HF access token (free tier available).
+    /// Endpoint: `https://api-inference.huggingface.co/models/{model_id}`
+    HuggingFace { api_token: String, model: String },
     /// No LLM configured.
     None,
 }
@@ -105,7 +121,7 @@ pub enum LlmProvider {
 impl Default for LlmProvider {
     fn default() -> Self {
         LlmProvider::BuiltIn {
-            model_id: "tinyllama-1.1b".into(),
+            model_id: "gemma-4-e2b".into(),
         }
     }
 }
@@ -147,6 +163,9 @@ impl LlmProvider {
                     api_key,
                     model,
                 },
+            }),
+            LlmProvider::HuggingFace { api_token, model } => Box::new(ExternalLlmClient {
+                kind: ExternalKind::HuggingFace { api_token, model },
             }),
             LlmProvider::None => Box::new(UnavailableLlmClient {
                 reason: "no LLM provider configured".into(),
@@ -278,6 +297,10 @@ enum ExternalKind {
         api_key: String,
         model: String,
     },
+    HuggingFace {
+        api_token: String,
+        model: String,
+    },
 }
 
 /// HTTP-based LLM client for Mistral, Ollama, and OpenAI-compatible APIs.
@@ -344,6 +367,31 @@ impl ExternalLlmClient {
                 system,
                 user,
             ),
+            ExternalKind::HuggingFace { api_token, model } => {
+                let prompt = format!("System: {system}\n\nUser: {user}\n\nAssistant:");
+                let url = format!("https://api-inference.huggingface.co/models/{model}");
+                let payload = serde_json::json!({
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_new_tokens": 512,
+                        "return_full_text": false,
+                    }
+                });
+                let resp: serde_json::Value = client
+                    .post(&url)
+                    .bearer_auth(api_token)
+                    .json(&payload)
+                    .send()
+                    .map_err(|e| LlmClientError::Request(format!("huggingface: {e}")))?
+                    .json()
+                    .map_err(|e| LlmClientError::ResponseParse(format!("huggingface json: {e}")))?;
+                resp[0]["generated_text"]
+                    .as_str()
+                    .map(String::from)
+                    .ok_or_else(|| {
+                        LlmClientError::ResponseParse("huggingface: missing generated_text".into())
+                    })
+            }
         }
     }
 }
@@ -622,7 +670,7 @@ mod tests {
         assert_eq!(
             LlmProvider::default(),
             LlmProvider::BuiltIn {
-                model_id: "tinyllama-1.1b".into()
+                model_id: "gemma-4-e2b".into()
             }
         );
     }
@@ -639,7 +687,7 @@ mod tests {
         // No model files are present on the test machine, so the
         // BuiltInLlmClient should surface an Io error on first use.
         let client = LlmProvider::BuiltIn {
-            model_id: "tinyllama-1.1b".into(),
+            model_id: "gemma-4-e2b".into(),
         }
         .into_client();
         // classify_intent will attempt to load the model — which won't exist
@@ -664,7 +712,7 @@ mod tests {
         let providers = vec![
             LlmProvider::None,
             LlmProvider::BuiltIn {
-                model_id: "tinyllama-1.1b".into(),
+                model_id: "gemma-4-e2b".into(),
             },
             LlmProvider::Mistral {
                 api_key: "key".into(),
@@ -679,6 +727,10 @@ mod tests {
                 api_key: "key".into(),
                 model: "gpt-4o".into(),
             },
+            LlmProvider::HuggingFace {
+                api_token: "hf_test".into(),
+                model: "google/gemma-4-E2B-it".into(),
+            },
         ];
 
         for p in providers {
@@ -691,13 +743,27 @@ mod tests {
     #[test]
     fn builtin_alias_deserialises() {
         // The `#[serde(alias = "BuiltIn")]` should accept the tagged form too.
-        let json = r#"{"BuiltIn":{"model_id":"tinyllama-1.1b"}}"#;
+        let json = r#"{"BuiltIn":{"model_id":"gemma-4-e2b"}}"#;
         let p: LlmProvider = serde_json::from_str(json).unwrap();
         assert_eq!(
             p,
             LlmProvider::BuiltIn {
-                model_id: "tinyllama-1.1b".into()
+                model_id: "gemma-4-e2b".into()
             }
+        );
+    }
+
+    #[test]
+    fn catalog_first_entry_is_default_model() {
+        let catalog = builtin_model_catalog();
+        assert!(!catalog.is_empty(), "catalog must not be empty");
+        let default_id = match LlmProvider::default() {
+            LlmProvider::BuiltIn { model_id } => model_id,
+            _ => panic!("default provider must be BuiltIn"),
+        };
+        assert_eq!(
+            catalog[0].id, default_id,
+            "first catalog entry must match the default model_id"
         );
     }
 }
