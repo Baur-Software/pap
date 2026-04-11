@@ -121,6 +121,7 @@ jobs:
     env:
       HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
       HAS_WINDOWS_SIGNING: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+      HAS_STORE_APP_ID: ${{ secrets.MICROSOFT_STORE_APP_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -201,7 +202,7 @@ jobs:
         if: |
           matrix.platform == 'windows-latest' &&
           env.HAS_WINDOWS_SIGNING == 'true' &&
-          secrets.MICROSOFT_STORE_APP_ID != ''
+          env.HAS_STORE_APP_ID == 'true'
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
