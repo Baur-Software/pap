@@ -12,9 +12,9 @@
 
 use rdma_sys::{
     ibv_access_flags, ibv_cq, ibv_create_cq, ibv_create_qp, ibv_destroy_cq, ibv_destroy_qp,
-    ibv_gid, ibv_modify_qp, ibv_mtu, ibv_poll_cq, ibv_post_recv, ibv_post_send, ibv_qp,
-    ibv_qp_attr, ibv_qp_attr_mask, ibv_qp_init_attr, ibv_qp_state, ibv_qp_type, ibv_recv_wr,
-    ibv_send_flags, ibv_send_wr, ibv_sge, ibv_wc, ibv_wr_opcode,
+    ibv_modify_qp, ibv_mtu, ibv_poll_cq, ibv_post_recv, ibv_post_send, ibv_qp, ibv_qp_attr,
+    ibv_qp_attr_mask, ibv_qp_init_attr, ibv_qp_state, ibv_qp_type, ibv_recv_wr, ibv_send_flags,
+    ibv_send_wr, ibv_sge, ibv_wc, ibv_wr_opcode,
 };
 use serde::{Deserialize, Serialize};
 use std::ptr;
@@ -139,7 +139,7 @@ impl QueuePair {
         attr.qp_access_flags = (ibv_access_flags::IBV_ACCESS_REMOTE_READ
             | ibv_access_flags::IBV_ACCESS_REMOTE_WRITE
             | ibv_access_flags::IBV_ACCESS_LOCAL_WRITE)
-            .0 as i32;
+            .0;
 
         let mask = ibv_qp_attr_mask::IBV_QP_STATE
             | ibv_qp_attr_mask::IBV_QP_PKEY_INDEX
@@ -241,7 +241,7 @@ impl QueuePair {
         };
 
         let mut wr = unsafe { std::mem::zeroed::<ibv_recv_wr>() };
-        wr.wr_id = 0xBEEF_RECV;
+        wr.wr_id = 0xBEEF_0001u64;
         wr.sg_list = &mut sge;
         wr.num_sge = 1;
 
@@ -265,7 +265,7 @@ impl QueuePair {
         };
 
         let mut wr = unsafe { std::mem::zeroed::<ibv_send_wr>() };
-        wr.wr_id = 0xBEEF_SEND;
+        wr.wr_id = 0xBEEF_0002u64;
         wr.sg_list = &mut sge;
         wr.num_sge = 1;
         wr.opcode = ibv_wr_opcode::IBV_WR_SEND;
@@ -291,7 +291,7 @@ impl QueuePair {
             let n = unsafe { ibv_poll_cq(self.send_cq, 1, &mut wc) };
             if n > 0 {
                 if wc.status != rdma_sys::ibv_wc_status::IBV_WC_SUCCESS {
-                    return Err(BluefieldError::WorkCompletionError(wc.status.0));
+                    return Err(BluefieldError::WorkCompletionError(wc.status));
                 }
                 return Ok(());
             } else if n < 0 {
@@ -313,7 +313,7 @@ impl QueuePair {
             let n = unsafe { ibv_poll_cq(self.recv_cq, 1, &mut wc) };
             if n > 0 {
                 if wc.status != rdma_sys::ibv_wc_status::IBV_WC_SUCCESS {
-                    return Err(BluefieldError::WorkCompletionError(wc.status.0));
+                    return Err(BluefieldError::WorkCompletionError(wc.status));
                 }
                 return Ok(wc.byte_len as usize);
             } else if n < 0 {

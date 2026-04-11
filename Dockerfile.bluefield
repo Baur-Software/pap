@@ -39,7 +39,22 @@
 #
 # ─────────────────────────────────────────────────────────────────────────
 
-FROM rust:latest
+# Ubuntu 22.04 (Jammy) ships rdma-core 34.x — the version rdma-sys 0.3.0 /
+# bindgen 0.59.2 was designed for.  Newer Debian/Ubuntu releases (rdma-core
+# ≥ 40) changed the anonymous-union naming in ib_user_ioctl_verbs.h in a way
+# that triggers a panic in bindgen 0.59.2.
+FROM ubuntu:22.04
+
+# ── Rust toolchain ─────────────────────────────────────────────────────────
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --no-modify-path --default-toolchain stable \
+    && rm -rf /var/lib/apt/lists/*
 
 # ── System dependencies ────────────────────────────────────────────────────
 # libibverbs-dev + librdmacm-dev  → C headers for rdma-sys bindgen
@@ -77,10 +92,12 @@ COPY . .
 
 # ── Build: verify the rdma feature compiles ────────────────────────────────
 # This links against libibverbs and runs bindgen — confirms headers are present.
+# Also builds the loopback example to catch any example-specific errors.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/workspace/target \
-    cargo build -p pap-bluefield 2>&1
+    cargo build -p pap-bluefield && \
+    cargo build -p pap-bluefield --example loopback 2>&1
 
 # ── Test: run mock tests (no hardware required) ────────────────────────────
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

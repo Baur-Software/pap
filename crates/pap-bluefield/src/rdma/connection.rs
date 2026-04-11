@@ -16,7 +16,6 @@
 //! by serialising [`ProtocolMessage`]s with the length-prefix framing defined
 //! in [`crate::frame`] and transferring them via RDMA SEND operations.
 
-use std::io::{BufRead, BufReader, Write as IoWrite};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
