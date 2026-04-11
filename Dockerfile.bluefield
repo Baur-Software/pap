@@ -1,0 +1,93 @@
+# syntax=docker/dockerfile:1.4
+# ── pap-bluefield build & test environment ─────────────────────────────────
+#
+# Provides everything needed to compile and test pap-bluefield:
+#
+#   libibverbs-dev / librdmacm-dev  — ibverbs C headers (rdma-sys bindgen)
+#   clang + libclang-dev            — bindgen code generation
+#   pkg-config                      — library discovery
+#
+# Stage 1 (build): compile pap-bluefield with the rdma feature.
+# Stage 2 (test):  run mock tests (no RDMA hardware) + rdma compile check.
+#
+# ── Usage ──────────────────────────────────────────────────────────────────
+#
+#   # Build the image
+#   docker build -f Dockerfile.bluefield -t pap-bluefield .
+#
+#   # Run mock tests (no hardware required)
+#   docker run --rm pap-bluefield cargo test -p pap-bluefield \
+#       --no-default-features --features mock
+#
+#   # Run mock tests interactively
+#   docker run --rm -it pap-bluefield bash
+#
+#   # Run against real BlueField hardware (Linux host with MLNX_OFED / DOCA)
+#   docker run --rm \
+#       --device /dev/infiniband/uverbs0 \
+#       --device /dev/infiniband/rdma_cm \
+#       --cap-add IPC_LOCK \
+#       --ulimit memlock=-1 \
+#       pap-bluefield \
+#       cargo test -p pap-bluefield
+#
+# ── NVIDIA DOCA alternative ────────────────────────────────────────────────
+# For a container with the full DOCA SDK (enables doca-crypto feature):
+#
+#   FROM nvcr.io/nvidia/doca/doca:2.9.1-base-rt-host
+#   # then install Rust and continue as below
+#
+# ─────────────────────────────────────────────────────────────────────────
+
+FROM rust:latest
+
+# ── System dependencies ────────────────────────────────────────────────────
+# libibverbs-dev + librdmacm-dev  → C headers for rdma-sys bindgen
+# clang + libclang-dev            → bindgen requires libclang
+# pkg-config                      → rdma-sys build.rs library discovery
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pkg-config \
+        libssl-dev \
+        ca-certificates \
+        libibverbs-dev \
+        librdmacm-dev \
+        clang \
+        libclang-dev \
+        rdma-core \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Rust toolchain cache ───────────────────────────────────────────────────
+# Pre-fetch workspace dependencies into the layer cache.
+WORKDIR /workspace
+
+# Copy manifests first for better layer caching.
+COPY Cargo.toml Cargo.lock ./
+COPY crates/pap-bluefield/Cargo.toml crates/pap-bluefield/
+# Stub out every other crate with an empty lib.rs so `cargo fetch` succeeds
+# without pulling in unrelated source files.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    find crates -name "Cargo.toml" ! -path "crates/pap-bluefield/*" \
+        -exec dirname {} \; \
+    | xargs -I{} sh -c 'mkdir -p {}/src && echo "// stub" > {}/src/lib.rs' && \
+    cargo fetch --locked 2>&1 || true
+
+# ── Full source copy ───────────────────────────────────────────────────────
+COPY . .
+
+# ── Build: verify the rdma feature compiles ────────────────────────────────
+# This links against libibverbs and runs bindgen — confirms headers are present.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/workspace/target \
+    cargo build -p pap-bluefield 2>&1
+
+# ── Test: run mock tests (no hardware required) ────────────────────────────
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/workspace/target \
+    cargo test -p pap-bluefield \
+        --no-default-features --features mock \
+        2>&1
+
+CMD ["cargo", "test", "-p", "pap-bluefield", "--no-default-features", "--features", "mock"]
