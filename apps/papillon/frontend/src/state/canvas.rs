@@ -152,11 +152,22 @@ impl CanvasState {
 
     /// Seed the first-ever canvas with live agent queries so the app
     /// opens with real content resolving through the handshake pipeline.
+    ///
+    /// All current catalog agents declare `requires_disclosure = []` (zero-disclosure).
+    /// The PAP approval gate auto-approves these without a manual gate and each
+    /// resolved block shows the `zero disclosure · no data left this device` badge,
+    /// demonstrating the privacy model on first launch.
+    ///
+    /// When a catalog agent with non-empty `requires_disclosure` is added, the third
+    /// seed prompt should be replaced with a prompt that targets it — ensuring every
+    /// new user consciously approves at least one disclosure-gated agent on first launch.
     pub fn seed_first_canvas(&self) {
         const SEED_PROMPTS: &[&str] = &[
             "hacker news",
             "define protocol",
-            "tell me about decentralized identity",
+            // Zero-disclosure demo: on-device lookup, no data leaves the device.
+            // Replace with a disclosure-requiring prompt once such an agent ships in catalog.
+            "what is the principal agent protocol",
         ];
 
         let canvas_id = self.new_canvas();
@@ -313,7 +324,7 @@ impl CanvasState {
                     block_id: block_id.clone(),
                     text: expanded_text,
                 };
-                bridge::invoke::<_, serde_json::Value>("canvas_prompt", &args)
+                bridge::invoke::<_, serde_json::Value>("canvas_plan_prompt", &args)
                     .await
                     .map(|_| ())
             } else {

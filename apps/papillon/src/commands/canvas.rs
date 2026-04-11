@@ -400,16 +400,16 @@ async fn process_prompt(
     prompt_id: &str,
     block_id: &str,
     text: &str,
-) -> Result<(String, serde_json::Value, bool), PapillonError> {
+) -> Result<(String, serde_json::Value, bool, String), PapillonError> {
     process_prompt_inner(app, state, prompt_id, block_id, text, &[], 0).await
 }
 
 /// Inner implementation with exclusion list and retry budget for reflection.
 /// Uses `Box::pin` for the recursive async call required by the reflection gate.
 ///
-/// Returns `(schema_type, content, preference_guided)` where `preference_guided`
+/// Returns `(schema_type, content, preference_guided, agent_did)` where `preference_guided`
 /// is `true` when the PreferenceEngine had meaningful history that influenced
-/// agent selection.
+/// agent selection, and `agent_did` is the DID of the resolved agent.
 #[allow(clippy::type_complexity)]
 fn process_prompt_inner<'a>(
     app: &'a AppHandle,
@@ -421,8 +421,9 @@ fn process_prompt_inner<'a>(
     retry_count: u8,
 ) -> std::pin::Pin<
     Box<
-        dyn std::future::Future<Output = Result<(String, serde_json::Value, bool), PapillonError>>
-            + Send
+        dyn std::future::Future<
+                Output = Result<(String, serde_json::Value, bool, String), PapillonError>,
+            > + Send
             + 'a,
     >,
 > {
@@ -430,6 +431,8 @@ fn process_prompt_inner<'a>(
         let (action_type, preferred, query) = detect_intent(text);
 
         let resolved = resolve_agent(state, action_type, preferred, exclude_agents).await?;
+        // Capture agent DID before the handshake so it can be threaded into block_resolved.
+        let agent_did = resolved.did.clone();
 
         // Derive schema type from agent's declared returns (first element).
         let schema_hint = resolved.returns.first().cloned().unwrap_or_default();
@@ -471,6 +474,7 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
@@ -495,6 +499,7 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
@@ -545,6 +550,7 @@ fn process_prompt_inner<'a>(
                             content: None,
                             linked_block_ids: Vec::new(),
                             agent_did: None,
+                            mandate_expires_at: None,
                             preference_guided,
                             created_at: now.clone(),
                             updated_at: now,
@@ -574,7 +580,12 @@ fn process_prompt_inner<'a>(
             quality >= 0.5,
         );
 
-        Ok((result.schema_type, result.content, preference_guided))
+        Ok((
+            result.schema_type,
+            result.content,
+            preference_guided,
+            agent_did,
+        ))
     })
 }
 
@@ -619,13 +630,19 @@ pub async fn canvas_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content, preference_guided) =
+    let (schema_type, content, preference_guided, agent_did) =
         process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
 
     let now = Utc::now().to_rfc3339();
+    let mandate_ttl_hours = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.mandate_ttl_hours
+    };
+    let mandate_expires_at =
+        Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
     let _ = app.emit(
         "block_resolved",
         BlockEvent {
@@ -637,9 +654,8 @@ pub async fn canvas_prompt(
                 schema_type: Some(schema_type),
                 content: Some(content),
                 linked_block_ids: Vec::new(),
-                // TODO: thread agent_did from process_prompt return value
-                // so the renderer can use agent-scoped templates.
-                agent_did: None,
+                agent_did: Some(agent_did),
+                mandate_expires_at,
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
@@ -657,13 +673,19 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content, preference_guided) =
+    let (schema_type, content, preference_guided, agent_did) =
         process_prompt(&app, &state, "", &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
 
     let now = Utc::now().to_rfc3339();
+    let mandate_ttl_hours = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.mandate_ttl_hours
+    };
+    let mandate_expires_at =
+        Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
     let _ = app.emit(
         "block_resolved",
         BlockEvent {
@@ -675,7 +697,8 @@ pub async fn canvas_reshape(
                 schema_type: Some(schema_type),
                 content: Some(content),
                 linked_block_ids: Vec::new(),
-                agent_did: None,
+                agent_did: Some(agent_did),
+                mandate_expires_at,
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
@@ -731,6 +754,13 @@ pub async fn canvas_plan_prompt(
 
     let approval_request_id = uuid::Uuid::new_v4().to_string();
 
+    let mandate_ttl_hours = {
+        let cfg = state
+            .orchestrator_config
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        cfg.mandate_ttl_hours
+    };
     let plan = IntentPlan {
         action: action_type.to_string(),
         selected_agent_name: resolved.name.clone(),
@@ -738,6 +768,7 @@ pub async fn canvas_plan_prompt(
         requires_disclosure: resolved.requires_disclosure.clone(),
         returns: resolved.returns.clone(),
         approval_request_id: approval_request_id.clone(),
+        ttl_hours: mandate_ttl_hours as u32,
     };
 
     // Check auto-approve shortcut: if configured and no disclosure required, skip the gate.
@@ -746,15 +777,17 @@ pub async fn canvas_plan_prompt(
             .orchestrator_config
             .read()
             .map_err(|e| PapillonError::from(e.to_string()))?;
-        config.auto_approve_zero_disclosure && plan.requires_disclosure.is_empty()
-    };
+        config.auto_approve_zero_disclosure
+    } && plan.requires_disclosure.is_empty();
 
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
-        let (schema_type, content, preference_guided) =
+        let (schema_type, content, preference_guided, agent_did) =
             process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
+        let mandate_expires_at =
+            Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
@@ -766,7 +799,8 @@ pub async fn canvas_plan_prompt(
                     schema_type: Some(schema_type),
                     content: Some(content),
                     linked_block_ids: Vec::new(),
-                    agent_did: None,
+                    agent_did: Some(agent_did),
+                    mandate_expires_at,
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
@@ -790,6 +824,7 @@ pub async fn canvas_plan_prompt(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
@@ -809,10 +844,12 @@ pub async fn canvas_plan_prompt(
 
     if approved {
         // Run the full handshake.
-        let (schema_type, content, preference_guided) =
+        let (schema_type, content, preference_guided, agent_did) =
             process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
+        let mandate_expires_at =
+            Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
@@ -824,7 +861,8 @@ pub async fn canvas_plan_prompt(
                     schema_type: Some(schema_type),
                     content: Some(content),
                     linked_block_ids: Vec::new(),
-                    agent_did: None,
+                    agent_did: Some(agent_did),
+                    mandate_expires_at,
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
@@ -850,6 +888,7 @@ pub async fn canvas_plan_prompt(
                     content: None,
                     linked_block_ids: Vec::new(),
                     agent_did: None,
+                    mandate_expires_at: None,
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
