@@ -644,4 +644,151 @@ mod tests {
         );
         assert!(mandate.verify(&key.verifying_key()).is_err());
     }
+
+    // ── is_expired() ──────────────────────────────────────────
+
+    #[test]
+    fn not_expired_when_ttl_is_in_the_future() {
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:ReadAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        assert!(!mandate.is_expired());
+    }
+
+    #[test]
+    fn expired_when_ttl_is_in_the_past() {
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:ReadAction")]),
+            DisclosureSet::empty(),
+            Utc::now() - Duration::seconds(1),
+        );
+        assert!(mandate.is_expired());
+    }
+
+    #[test]
+    fn recently_expired_is_expired() {
+        // Mandate that expired 5 minutes ago is still expired — no grace period.
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:ReadAction")]),
+            DisclosureSet::empty(),
+            Utc::now() - Duration::minutes(5),
+        );
+        assert!(mandate.is_expired());
+    }
+
+    // ── validate_payment_proof() ──────────────────────────────
+
+    #[test]
+    fn payment_proof_not_required_when_scope_has_no_pay_action() {
+        // ReadAction scope — no PayAction → no proof required → Ok.
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:ReadAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        assert!(mandate.validate_payment_proof().is_ok());
+    }
+
+    #[test]
+    fn payment_proof_required_when_scope_permits_pay_action() {
+        // PayAction scope without a proof → Err(MissingPaymentProof).
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:PayAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        assert!(matches!(
+            mandate.validate_payment_proof(),
+            Err(PapError::MissingPaymentProof)
+        ));
+    }
+
+    #[test]
+    fn valid_payment_proof_accepted_when_scope_permits_pay_action() {
+        // PayAction scope with a valid Lightning proof → Ok.
+        use crate::payment::PaymentProof;
+        let proof = PaymentProof::lightning(b"test_preimage_pap");
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:PayAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        )
+        .with_payment_proof(proof);
+        assert!(mandate.validate_payment_proof().is_ok());
+    }
+
+    // ── transition_decay() ────────────────────────────────────
+
+    #[test]
+    fn valid_decay_transition_active_to_degraded() {
+        let mut mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        assert_eq!(mandate.decay_state, DecayState::Active);
+        mandate
+            .transition_decay(DecayState::Degraded)
+            .expect("Active → Degraded is a valid transition");
+        assert_eq!(mandate.decay_state, DecayState::Degraded);
+    }
+
+    #[test]
+    fn invalid_decay_transition_suspended_to_active_rejected() {
+        // Walk the mandate to Suspended, then attempt to revive it.
+        let mut mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(1),
+        );
+        mandate.transition_decay(DecayState::Degraded).unwrap();
+        mandate.transition_decay(DecayState::ReadOnly).unwrap();
+        mandate.transition_decay(DecayState::Suspended).unwrap();
+
+        let result = mandate.transition_decay(DecayState::Active);
+        assert!(
+            matches!(result, Err(PapError::InvalidDecayTransition(_, _))),
+            "Suspended → Active is forbidden"
+        );
+    }
+
+    #[test]
+    fn full_decay_chain_active_degraded_readonly_suspended() {
+        let mut mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(8),
+        );
+
+        assert_eq!(mandate.decay_state, DecayState::Active);
+
+        mandate.transition_decay(DecayState::Degraded).unwrap();
+        assert_eq!(mandate.decay_state, DecayState::Degraded);
+
+        mandate.transition_decay(DecayState::ReadOnly).unwrap();
+        assert_eq!(mandate.decay_state, DecayState::ReadOnly);
+
+        mandate.transition_decay(DecayState::Suspended).unwrap();
+        assert_eq!(mandate.decay_state, DecayState::Suspended);
+    }
 }

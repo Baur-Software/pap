@@ -314,6 +314,14 @@ pub struct IntentPlan {
     pub returns: Vec<String>,
     /// UUID correlating this plan to the backend's oneshot channel in approval_gates
     pub approval_request_id: String,
+    /// Mandate TTL in hours, sourced from orchestrator config at plan-build time.
+    /// Used by the AwaitingApproval UI to show the correct authorization window.
+    #[serde(default = "default_ttl_hours")]
+    pub ttl_hours: u32,
+}
+
+fn default_ttl_hours() -> u32 {
+    8
 }
 
 // ── PreferenceEngine ─────────────────────────────────────────
@@ -487,6 +495,11 @@ pub struct CanvasBlock {
     pub created_at: String,
     /// When this block was last updated.
     pub updated_at: String,
+    /// ISO-8601 timestamp when the mandate authorizing this block expires.
+    /// `None` while Resolving / AwaitingApproval / Ghost — set on block_resolved.
+    /// Drives the TTL badge decay state: active (teal) → degraded (gold) → readonly (blue).
+    #[serde(default)]
+    pub mandate_expires_at: Option<String>,
     /// `true` when the orchestrator's agent selection was guided by local
     /// preference history (≥ 3 prior sessions for this schema type).
     /// Always `false` during cold start. Never transmitted off-device.
@@ -1021,6 +1034,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
@@ -1050,6 +1064,7 @@ mod tests {
             content: Some(content.clone()),
             linked_block_ids: vec!["blk-3".into()],
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
             preference_guided: false,
@@ -1075,6 +1090,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
@@ -1106,6 +1122,7 @@ mod tests {
                 content: Some(serde_json::json!({"@type": "FlightReservation"})),
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
@@ -1180,6 +1197,7 @@ mod tests {
                 content: Some(serde_json::json!({"text": "42"})),
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
@@ -1452,6 +1470,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
@@ -1504,6 +1523,7 @@ mod tests {
             requires_disclosure: vec!["schema:query".to_string()],
             returns: vec!["schema:SearchResult".to_string()],
             approval_request_id: "test-uuid-1234".to_string(),
+            ttl_hours: 8,
         };
         let json = serde_json::to_string(&plan).unwrap();
         let round_trip: IntentPlan = serde_json::from_str(&json).unwrap();
@@ -1519,6 +1539,7 @@ mod tests {
             requires_disclosure: vec![],
             returns: vec!["schema:SearchResult".to_string()],
             approval_request_id: "uuid-5678".to_string(),
+            ttl_hours: 8,
         };
         let state = BlockState::AwaitingApproval { plan };
         let json = serde_json::to_string(&state).unwrap();

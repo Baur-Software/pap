@@ -4271,3 +4271,137 @@ body {
 .awaiting-approval-actions .hitl-authorize-btn {
     flex: 1;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   APPROVAL BLOCK HEADER — agent-centric framing
+   ═══════════════════════════════════════════════════════════ */
+
+.approval-header-label {
+    font-weight: 600;
+    color: var(--purple);
+    letter-spacing: var(--ls-label);
+}
+
+.approval-agent-name {
+    color: var(--text-1);
+}
+
+.approval-action-sep {
+    opacity: 0.4;
+}
+
+.approval-action-label {
+    color: var(--text-3);
+}
+
+/* Schema type label above skeleton preview */
+.approval-schema-type {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    color: var(--purple);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    margin-bottom: var(--sp-xs);
+    opacity: 0.8;
+}
+
+/* Skeleton fade: bottom gradient fade instead of hard max-height clip */
+.awaiting-approval-skeleton-wrap {
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MANDATE TTL BADGE — decay-state expiry indicator
+   ═══════════════════════════════════════════════════════════ */
+
+.mandate-ttl {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-xs);
+    margin-top: var(--sp-xs);
+    padding-top: var(--sp-xs);
+    border-top: 1px solid var(--border-subtle);
+    font-size: 10px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    transition: color 0.3s ease;
+}
+
+.mandate-ttl.active {
+    color: var(--teal);
+}
+
+.mandate-ttl.degraded {
+    color: var(--gold);
+}
+
+.mandate-ttl.readonly {
+    color: var(--blue);
+}
+
+.mandate-ttl-refresh {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    padding: 0 2px;
+    opacity: 0.6;
+    font-size: 12px;
+    line-height: 1;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.mandate-ttl-refresh:hover {
+    opacity: 1;
+    color: var(--teal);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ZERO-DISCLOSURE FOOTER — auto-approved privacy badge
+   ═══════════════════════════════════════════════════════════ */
+
+.block-zero-disclosure {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-xs);
+    margin-top: var(--sp-sm);
+}
+
+.block-zd-note {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CUSTOM SCROLLBARS — dark-mode consistent
+   ═══════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-3);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BLOCK WIDTH — fill stream container, don't cap at 600px
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-block {
+    max-width: 100%;
+}
