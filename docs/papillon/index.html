@@ -545,6 +545,7 @@
     .tech-badge-indigo  { background: rgba(99,102,241,.1);  color: var(--indigo);  border: 1px solid rgba(99,102,241,.2); }
     .tech-badge-amber   { background: rgba(245,158,11,.1);  color: var(--amber);   border: 1px solid rgba(245,158,11,.2); }
     .tech-badge-teal    { background: rgba(20,184,166,.08); color: #5ee7d0;        border: 1px solid rgba(20,184,166,.15); }
+    .tech-badge-rose    { background: rgba(244,63,94,.08);  color: #fb7185;        border: 1px solid rgba(244,63,94,.15); }
     .tech-icon { font-size: 1.5rem; line-height: 1; }
     .tech-title { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
     .tech-desc { color: var(--muted); font-size: .9rem; line-height: 1.65; flex: 1; }
@@ -854,7 +855,7 @@
   <div class="container reveal">
     <span class="section-label">The Technology</span>
     <h2>A canvas built for the age of intent-driven Internet.</h2>
-    <p class="lead">Five guarantees that hold whether your agents use AI or not.</p>
+    <p class="lead">Six guarantees that hold whether your agents use AI or not.</p>
     <div class="tech-grid">
 
       <div class="tech-card">
@@ -914,6 +915,18 @@
           <span class="tech-fact">on-device synthesis</span>
           <span class="tech-fact">provenance on demand</span>
           <span class="tech-fact">Candle / local LLM</span>
+        </div>
+      </div>
+
+      <div class="tech-card">
+        <span class="tech-badge tech-badge-rose">Payments</span>
+        <div class="tech-icon">&#x1FA99;</div>
+        <div class="tech-title">Chaumian Ecash Payments</div>
+        <p class="tech-desc">Mandates with payment scope carry blind-signed ecash tokens (RFC 9474 RSABSSA-SHA384-PSS). The mint signs a blinded message; the client unblinds it. The mint cannot link its signing operation to redemption &mdash; unlinkability is a cryptographic invariant, not a policy. Amounts, destinations, and routing data never appear in the mandate.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">RFC 9474 RSABSSA-SHA384-PSS</span>
+          <span class="tech-fact">Lightning + Cashu proofs</span>
+          <span class="tech-fact">unlinkability invariant</span>
         </div>
       </div>
 
