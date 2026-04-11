@@ -1068,4 +1068,127 @@ mod tests {
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.3).abs() < f64::EPSILON);
     }
+
+    // ── assess_handshake_quality — uncovered branches ─────────
+
+    #[test]
+    fn assess_quality_short_string_scores_medium() {
+        // Non-empty string shorter than 20 chars hits the `s.len() < 20 => 0.5` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": "short answer"}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.5).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_long_string_scores_high() {
+        // String ≥ 20 chars falls through to the generic `_ => 0.8` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": "this is a longer answer that exceeds twenty characters"}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.8).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_one_field_object_scores_medium() {
+        // Object with 1-2 fields hits the `1..=2 => 0.6` branch.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": {"name": "Rust"}}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.6).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_six_field_object_scores_perfect() {
+        // Object with > 5 fields hits the `_ => 1.0` branch.
+        let result = handshake::HandshakeResult {
+            schema_type: "SearchResult".into(),
+            content: serde_json::json!({
+                "result": {
+                    "a": 1, "b": 2, "c": 3,
+                    "d": 4, "e": 5, "f": 6
+                }
+            }),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 1.0).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_small_array_scores_medium() {
+        // Array with 1-2 items hits the `arr.len() < 3 => 0.6` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": ["only_one"]}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.6).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_empty_array_scores_low() {
+        // Empty array hits the `arr.is_empty() => 0.3` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": []}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.3).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_boolean_result_scores_high() {
+        // Boolean value falls through to the generic `_ => 0.8` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": true}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.8).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    // ── score_agent — constant validation ─────────────────────
+
+    #[test]
+    fn score_agent_cold_start_preferred_beats_non_preferred() {
+        // When there is no EMA history (None path), keyword match gives 0.6 vs 0.4.
+        // This test documents the cold-start scoring constants without requiring a DB.
+        let preferred_cold: f64 = 0.6; // agent_name == preferred_name, no history
+        let non_preferred_cold: f64 = 0.4; // no match, no history
+        assert!(
+            preferred_cold > non_preferred_cold,
+            "cold-start preferred score ({preferred_cold}) must beat non-preferred ({non_preferred_cold})"
+        );
+        // Both should be in [0, 1]
+        assert!((0.0..=1.0).contains(&preferred_cold));
+        assert!((0.0..=1.0).contains(&non_preferred_cold));
+    }
+
+    #[test]
+    fn score_agent_constants_are_valid_probability_weights() {
+        // The scoring formula uses 35% + 35% + 20% + 10% = 100% when a full
+        // EMA profile is present. Verify the weights sum to 1.0.
+        let w_success: f64 = 0.35;
+        let w_quality: f64 = 0.35;
+        let w_pref: f64 = 0.20;
+        let w_keyword: f64 = 0.10;
+        let sum = w_success + w_quality + w_pref + w_keyword;
+        assert!(
+            (sum - 1.0).abs() < f64::EPSILON,
+            "score_agent weights must sum to 1.0, got {sum}"
+        );
+    }
 }

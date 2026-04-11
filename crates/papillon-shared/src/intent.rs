@@ -378,4 +378,46 @@ mod tests {
         assert_eq!(action, "schema:ReadAction");
         assert_eq!(agent, "Web Page Reader");
     }
+
+    // ── Edge-input robustness ──
+
+    #[test]
+    fn detect_intent_empty_string_falls_back_to_ai() {
+        // An empty address bar should never panic and should route to the AI fallback.
+        let (action, agent, query) = detect_intent("");
+        assert_eq!(action, "schema:AskAction");
+        assert_eq!(agent, "On-Device AI");
+        assert_eq!(query, "", "clean_query of empty prompt should be empty");
+    }
+
+    #[test]
+    fn detect_intent_whitespace_only_falls_back_to_ai() {
+        // Whitespace-only input has no matching keywords — must not panic.
+        let (action, _, _) = detect_intent("   ");
+        assert_eq!(action, "schema:AskAction");
+    }
+
+    #[test]
+    fn detect_intent_unicode_prompt_falls_back_to_ai() {
+        // CJK characters and emoji contain no English keywords — safe AI fallback.
+        let (action, agent, _) = detect_intent("中文搜索 🦀");
+        assert_eq!(action, "schema:AskAction");
+        assert_eq!(agent, "On-Device AI");
+    }
+
+    #[test]
+    fn detect_intent_numbers_only_falls_back_to_ai() {
+        // Pure numeric input with no currency codes should not match any rule.
+        let (action, _, _) = detect_intent("42 100 3.14");
+        assert_eq!(action, "schema:AskAction");
+    }
+
+    #[test]
+    fn detect_intent_keyword_case_insensitive() {
+        // The lowercase comparison must make "WEATHER" behave identically to "weather".
+        let (action_lower, agent_lower, _) = detect_intent("weather London");
+        let (action_upper, agent_upper, _) = detect_intent("WEATHER London");
+        assert_eq!(action_lower, action_upper);
+        assert_eq!(agent_lower, agent_upper);
+    }
 }
