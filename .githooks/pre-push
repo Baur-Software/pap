@@ -1,0 +1,44 @@
+#!/bin/bash
+# Pre-push hook: run WASM compilation check when frontend or its deps change.
+# Mirrors the wasm32-unknown-unknown step in CI (web-build.yml / ci.yml smoke-test).
+#
+# The frontend lives in its own Cargo workspace (excluded from --workspace flags),
+# so cargo check/test --workspace silently skips it. This hook fills that gap.
+
+set -e
+
+# Directories whose changes should trigger a WASM check
+FRONTEND_PATTERNS=(
+    "apps/papillon/frontend/"
+    "crates/papillon-shared/"
+    "crates/pap-did/"
+    "crates/pap-proto/"
+    "crates/pap-core/"
+)
+
+# git passes push info on stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
+CHANGED=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        # New branch — diff against immediate parent commit
+        CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+    else
+        CHANGED=$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)
+    fi
+done
+
+NEEDS_WASM_CHECK=0
+for pattern in "${FRONTEND_PATTERNS[@]}"; do
+    if echo "$CHANGED" | grep -q "$pattern"; then
+        NEEDS_WASM_CHECK=1
+        break
+    fi
+done
+
+if [ "$NEEDS_WASM_CHECK" -eq 1 ]; then
+    echo "Frontend or WASM-dep changed — running just check-wasm..."
+    just check-wasm
+    echo "WASM check passed."
+fi
+
+exit 0

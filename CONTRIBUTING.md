@@ -310,6 +310,19 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+If you modified anything under `apps/papillon/frontend/` **or** any crate it depends on
+(`crates/papillon-shared`, `crates/pap-did`, `crates/pap-proto`, `crates/pap-core`), also run:
+
+```bash
+just check-wasm
+```
+
+The frontend lives in its own Cargo workspace and is excluded from `--workspace` flags, so
+`cargo check/test --workspace` silently skips it. `just check-wasm` runs
+`cargo check --target wasm32-unknown-unknown` against the frontend manifest directly, catching
+`js-sys`/`web-sys` API errors and missing struct fields in seconds rather than waiting for
+`trunk build --release` to fail in CI.
+
 ## Code Style
 
 - Rust stable toolchain
