@@ -320,7 +320,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         .as_ref()
                         .map(|expires| {
                             let now_ms = js_sys::Date::now();
-                            let exp_ms = js_sys::Date::new_with_str(expires).get_time();
+                            let exp_ms = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(expires)).get_time();
                             let remaining_ms = exp_ms - now_ms;
                             let decay_class = if remaining_ms < 0.0 {
                                 "readonly"
