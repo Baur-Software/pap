@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "ATP Tennis Rankings"
 provider = "Tennis Live Data"
 description = "Get ATP and WTA tennis player rankings and match results."

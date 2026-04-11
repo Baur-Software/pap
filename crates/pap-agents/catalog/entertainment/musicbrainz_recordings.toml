@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "MusicBrainz Recording Search"
 provider = "MusicBrainz"
 description = "Search music recordings, songs, and tracks via MusicBrainz open music encyclopedia."
@@ -18,3 +19,20 @@ url_template = "https://musicbrainz.org/ws/2/recording/?query={query}&fmt=json&l
 method = "Get"
 response_jsonpath = "$.recordings[0].title"
 response_schema_type = "schema:MusicRecording"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

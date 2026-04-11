@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "US Treasury Rates"
 provider = "US Treasury"
 description = "Get official US Treasury yield rates and bond data."

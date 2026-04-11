@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Khan Academy Exercises"
 provider = "Khan Academy"
 description = "Find learning exercises and lessons on Khan Academy by topic."
@@ -15,3 +16,11 @@ url_template = "https://www.khanacademy.org/api/v1/topic/{query}"
 method = "Get"
 response_jsonpath = "$.translated_title"
 response_schema_type = "schema:LearningResource"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_access_only"
+name = "Open Access Only"
+description = "Only return freely accessible publications"
+defaultValue = false

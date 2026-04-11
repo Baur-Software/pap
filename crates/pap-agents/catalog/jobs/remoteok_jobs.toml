@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "RemoteOK Job Board"
 provider = "RemoteOK"
 description = "Search remote tech job listings across engineering, design, and marketing."
@@ -15,3 +16,11 @@ url_template = "https://remoteok.com/api?tag={query}"
 method = "Get"
 response_jsonpath = "0.position"
 response_schema_type = "schema:JobPosting"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "remote_only"
+name = "Remote Only"
+description = "Show only remote-friendly positions"
+defaultValue = false

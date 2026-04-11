@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Yelp Business Search"
 provider = "Yelp"
 description = "Search local businesses, restaurants, and services with ratings via Yelp Fusion API."
@@ -15,3 +16,13 @@ url_template = "https://api.yelp.com/v3/businesses/search?term={query}&location=
 method = "Get"
 response_jsonpath = "$.businesses[0].name"
 response_schema_type = "schema:LocalBusiness"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Olympic Games Data"
 provider = "Olympics API"
 description = "Search Olympic Games results, athletes, and medal tables."

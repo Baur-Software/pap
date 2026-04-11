@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Citi Bike Station Status"
 provider = "Citi Bike / NYC"
 description = "Get real-time NYC Citi Bike station availability."
@@ -15,3 +16,11 @@ url_template = "https://gbfs.citibikenyc.com/gbfs/en/station_status.json"
 method = "Get"
 response_jsonpath = "$.data.stations[0].num_bikes_available"
 response_schema_type = "schema:Place"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

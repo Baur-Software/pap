@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Hacker News Jobs"
 provider = "Hacker News"
 description = "Find tech job listings from the monthly HN Who is hiring threads."
@@ -15,3 +16,11 @@ url_template = "https://hacker-news.firebaseio.com/v0/jobstories.json?limitToFir
 method = "Get"
 response_jsonpath = "0"
 response_schema_type = "schema:JobPosting"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "remote_only"
+name = "Remote Only"
+description = "Show only remote-friendly positions"
+defaultValue = false

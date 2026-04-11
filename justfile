@@ -112,6 +112,11 @@ lint:
 
 alias check := lint
 
+# Check frontend WASM target compiles (catches js-sys / web-sys API errors before CI)
+check-wasm:
+    cargo check --target wasm32-unknown-unknown \
+        --manifest-path apps/papillon/frontend/Cargo.toml
+
 # Auto-format all crates
 fmt:
     cargo fmt --all

@@ -1,8 +1,9 @@
 schema_version = 1
+version = "0.1.0"
 name = "ExchangeRate-API"
 provider = "ExchangeRate-API"
 description = "Get live and historical foreign exchange rates for 160+ currencies."
-action = "schema:FindAction"
+action = "schema:TradeAction"
 object_types = ["schema:MonetaryAmount"]
 requires_disclosure = []
 returns = ["schema:MonetaryAmount"]

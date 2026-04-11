@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "TheSportsDB Team Search"
 provider = "TheSportsDB"
 description = "Search for sports teams, leagues, and events via TheSportsDB public API."

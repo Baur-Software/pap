@@ -17,11 +17,13 @@ impl AgentExecutor for WebReaderExecutor {
     fn meta(&self) -> AgentMeta {
         AgentMeta {
             name: "Web Page Reader",
+            version: "0.1.0",
             provider: "Papillon",
             action: "schema:ReadAction",
             object_types: &["schema:WebPage"],
             requires_disclosure: &["schema:URL"],
             returns: &["schema:WebPage"],
+            configurable_properties: vec![],
         }
     }
 

@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::dynamic::is_safe_url;
+use crate::dynamic::is_local_llm_url;
 
 /// Known built-in models that ship with (or can be downloaded by) Papillon.
 /// Each entry maps to a GGUF file in either the bundled resources or the
@@ -320,9 +320,11 @@ impl ExternalLlmClient {
 
         match &self.kind {
             ExternalKind::Ollama { endpoint, model } => {
-                if !is_safe_url(endpoint) {
+                if !is_local_llm_url(endpoint) {
                     return Err(LlmClientError::Request(format!(
-                        "ollama endpoint is not a safe URL (must be https:// with a public hostname): {endpoint}"
+                        "ollama endpoint is not a safe URL \
+                         (must be https:// with a public hostname, \
+                         or http://localhost / http://127.0.0.1): {endpoint}"
                     )));
                 }
                 let payload = serde_json::json!({

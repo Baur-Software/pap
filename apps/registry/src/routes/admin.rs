@@ -35,6 +35,7 @@ pub struct AddPeerRequest {
 #[derive(Debug, Deserialize)]
 pub struct AgentListQuery {
     pub q: Option<String>,
+    pub version: Option<String>,
     #[serde(default = "default_page")]
     pub page: u32,
     #[serde(default = "default_per_page")]
@@ -62,6 +63,7 @@ pub struct AgentListResponse {
 #[derive(Debug, Serialize)]
 pub struct BrowseAgentInfo {
     pub name: String,
+    pub version: String,
     pub provider_name: String,
     pub provider_did: String,
     pub capabilities: Vec<String>,
@@ -131,7 +133,12 @@ async fn list_agents(
     let per_page = params.per_page.clamp(1, 200);
     match state
         .store
-        .search_agents(params.q.as_deref(), params.page, per_page)
+        .search_agents(
+            params.q.as_deref(),
+            params.version.as_deref(),
+            params.page,
+            per_page,
+        )
         .await
     {
         Ok(page) => {
@@ -164,6 +171,7 @@ async fn browse_agents(State(state): State<AppState>) -> Response {
             let slug = ad.name.to_lowercase().replace(' ', "-");
             BrowseAgentInfo {
                 name: ad.name.clone(),
+                version: ad.version.clone(),
                 provider_name: ad.provider.name.clone(),
                 provider_did: ad.provider.did.clone(),
                 capabilities: ad.capability.clone(),

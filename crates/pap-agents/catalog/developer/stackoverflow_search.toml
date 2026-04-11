@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Stack Overflow Question Search"
 provider = "Stack Exchange"
 description = "Search Stack Overflow questions and answers via the Stack Exchange API."
@@ -18,3 +19,19 @@ url_template = "https://api.stackexchange.com/2.3/search?order=desc&sort=relevan
 method = "Get"
 response_jsonpath = "$.items[0].title"
 response_schema_type = "schema:QAPage"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "sort_by"
+name = "Sort Order"
+description = "How to order results"
+defaultValue = "relevance"
+valuePattern = "relevance|stars|updated|downloads"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

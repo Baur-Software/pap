@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "JokeAPI"
 provider = "JokeAPI"
 description = "Get programming, general, and pun jokes with category and content filters."

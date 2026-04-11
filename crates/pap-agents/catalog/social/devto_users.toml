@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "DEV.to Community Profile"
 provider = "DEV Community"
 description = "Look up developer profiles and articles on DEV.to community."
@@ -15,3 +16,11 @@ url_template = "https://dev.to/api/users/by_username?url={query}"
 method = "Get"
 response_jsonpath = "$.name"
 response_schema_type = "schema:Person"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

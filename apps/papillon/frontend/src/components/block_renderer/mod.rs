@@ -17,14 +17,34 @@ pub use registry::RendererRegistry;
 use crate::state::canvas::CanvasState;
 use crate::state::renderer::RendererState;
 
+/// Action emitted when a user modifies a setting rendered from vocabulary.
+///
+/// The renderer doesn't know what it's rendering — it projects
+/// PropertyValueSpecification as form inputs. When the user changes a value,
+/// the renderer emits this action. The consuming page (settings, agent detail)
+/// routes it to the correct Tauri command.
+#[derive(Debug, Clone)]
+pub struct SettingsAction {
+    /// Target agent DID or "papillon" for app-level settings.
+    pub target: String,
+    /// The `valueName` from the PropertyValueSpecification.
+    pub value_name: String,
+    /// The new value.
+    pub new_value: Value,
+}
+
+/// Context type for the settings action callback.
+/// When present, form fields are interactive. When absent, they render read-only.
+#[derive(Clone)]
+pub struct SettingsActionSink(pub leptos::callback::Callback<SettingsAction>);
+
 /// Create and initialize the default renderer registry with shipped templates.
 pub fn create_default_registry() -> Arc<RendererRegistry> {
     let registry = Arc::new(RendererRegistry::new());
     // Reservations
     registry.register(Arc::new(templates::FlightTemplate));
     registry.register(Arc::new(templates::HotelTemplate));
-    // Q&A
-    registry.register(Arc::new(templates::SearchTemplate));
+    // Q&A — SearchResultsPage/SearchAction handled by generic composite renderer
     registry.register(Arc::new(templates::AnswerTemplate));
     // Entertainment
     registry.register(Arc::new(templates::MovieTemplate));
@@ -168,6 +188,13 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     let cs_approve = canvas_state;
                     let cs_reject = canvas_state;
 
+                    // Button labels vary by disclosure risk.
+                    let approve_label = if has_disclosure { "[ GRANT ACCESS ]" } else { "[ ALLOW ]" };
+                    let reject_label = if has_disclosure { "[ DENY ]" } else { "[ DECLINE ]" };
+
+                    // TTL from the plan (sourced from orchestrator config at plan-build time).
+                    let ttl_hours = plan.ttl_hours;
+
                     // Skeleton preview: minimal JSON-LD for the first returns type.
                     let first_returns_type = plan
                         .returns
@@ -184,19 +211,25 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         .first()
                         .cloned()
                         .unwrap_or_else(|| "schema:Thing".to_string());
+                    // Schema type label shown above skeleton preview (strip "schema:" prefix, uppercase).
+                    let skeleton_type_label = skeleton_type
+                        .strip_prefix("schema:")
+                        .unwrap_or(&skeleton_type)
+                        .to_uppercase();
                     let skeleton_entries =
                         generic::flatten_to_entries(&skeleton_type, &skeleton_json, &registry);
                     let skeleton_view = generic::render_stream(skeleton_entries, &registry);
 
                     view! {
                         <div class="awaiting-approval-header">
-                            <span>"\u{25cc}"</span>
-                            <span>"AWAITING APPROVAL"</span>
-                            <span>{agent_name}</span>
-                            <span style="opacity:0.5">{format!("\u{00b7} {}", action_label)}</span>
+                            <span class="approval-header-label">"AGENT REQUEST"</span>
+                            <span class="approval-agent-name">{agent_name}</span>
+                            <span class="approval-action-sep">"·"</span>
+                            <span class="approval-action-label">{action_label}</span>
                         </div>
 
                         <div class="awaiting-approval-section-label">"WILL RETURN"</div>
+                        <div class="approval-schema-type">{skeleton_type_label}</div>
                         <div class="awaiting-approval-skeleton-wrap">
                             {skeleton_view}
                         </div>
@@ -216,7 +249,10 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         </Show>
 
                         <div class="awaiting-approval-mandate-note">
-                            "MANDATE DURATION  ~1h (renewable, bounded)"
+                            {format!("DATA VALID  \u{007e}{}h  \u{00b7}  refresh any time", ttl_hours)}
+                        </div>
+                        <div class="awaiting-approval-mandate-note">
+                            "AGENT ACCESS EXPIRES  with this mandate"
                         </div>
 
                         <div class="awaiting-approval-actions">
@@ -230,7 +266,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                                     );
                                 }
                             >
-                                "[ REJECT ]"
+                                {reject_label}
                             </button>
                             <button
                                 class="hitl-authorize-btn"
@@ -242,7 +278,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                                     );
                                 }
                             >
-                                "[ APPROVE ]"
+                                {approve_label}
                             </button>
                         </div>
                     }.into_any()
@@ -264,6 +300,48 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Unknown"</span></div> }.into_any(),
                     };
                     let pref_guided = block.preference_guided;
+
+                    // Zero-disclosure: detected when provenance.disclosed[] is empty.
+                    // The provenance object is embedded by the handshake inside the
+                    // content envelope when the agent returns its co-signed receipt.
+                    let is_zero_disclosure = block
+                        .content
+                        .as_ref()
+                        .and_then(|c| c.get("provenance"))
+                        .and_then(|p| p.get("disclosed"))
+                        .and_then(|d| d.as_array())
+                        .map(|a| a.is_empty())
+                        .unwrap_or(false);
+
+                    // TTL expiry badge: compute remaining time from mandate_expires_at.
+                    // Decay: active (teal) → degraded/gold (< 10 min) → readonly/blue (expired).
+                    let ttl_display: Option<(String, &'static str)> = block
+                        .mandate_expires_at
+                        .as_ref()
+                        .map(|expires| {
+                            let now_ms = js_sys::Date::now();
+                            let exp_ms = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(expires)).get_time();
+                            let remaining_ms = exp_ms - now_ms;
+                            let decay_class = if remaining_ms < 0.0 {
+                                "readonly"
+                            } else if remaining_ms < 600_000.0 {
+                                "degraded"
+                            } else {
+                                "active"
+                            };
+                            let remaining_hours = (remaining_ms / 3_600_000.0).ceil() as i64;
+                            let label = if remaining_ms < 0.0 {
+                                "expired".to_string()
+                            } else {
+                                format!("valid \u{007e}{}h", remaining_hours.max(1))
+                            };
+                            (label, decay_class)
+                        });
+                    let has_ttl = ttl_display.is_some();
+                    let ttl_label = ttl_display.as_ref().map(|(l, _)| l.clone()).unwrap_or_default();
+                    let ttl_decay_class = ttl_display.as_ref().map(|(_, c)| *c).unwrap_or("active");
+                    let ttl_full_class = format!("mandate-ttl {}", ttl_decay_class);
+
                     view! {
                         <div class="block-content">
                             {content_view}
@@ -272,6 +350,25 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                             <div class="preference-hint" title="Agent selected from your local interaction history — no data left your device">
                                 <span class="preference-hint-icon">"◈"</span>
                                 <span>"Based on your preferences"</span>
+                            </div>
+                        </Show>
+                        <Show when=move || is_zero_disclosure>
+                            <div class="block-zero-disclosure">
+                                <span class="scope-badge zero-disclosure">"zero disclosure"</span>
+                                <span class="block-zd-note">"no data left this device"</span>
+                            </div>
+                        </Show>
+                        <Show when=move || has_ttl>
+                            <div class={ttl_full_class.clone()}>
+                                <span>{ttl_label.clone()}</span>
+                                <button
+                                    class="mandate-ttl-refresh"
+                                    title="Refresh this block in-place"
+                                    on:click=move |e: leptos::ev::MouseEvent| {
+                                        e.stop_propagation();
+                                        canvas_state.retry_block(block_id.get_value());
+                                    }
+                                >"↺"</button>
                             </div>
                         </Show>
                         <Show when=move || show_reprompt.get()>
@@ -645,15 +742,29 @@ fn ProvenancePanel(block: papillon_shared::CanvasBlock) -> impl IntoView {
 /// 2. Type-global renderer — the shipped or user-defined template for this
 ///    `schema_type`. Handled inside the generic stream renderer via `template_hit`.
 /// 3. Generic stream renderer — universal fallback for unregistered types.
-fn render_typed_content(
+pub(crate) fn render_typed_content(
     schema_type: &str,
     content: &Value,
     registry: &Arc<RendererRegistry>,
     agent_did: Option<&str>,
 ) -> AnyView {
-    // Extract the agent's actual result from the handshake envelope.
-    // Fall back to the full content if there's no "result" key (direct JSON-LD).
-    let payload = content.get("result").unwrap_or(content);
+    // Detect the handshake envelope by the presence of its sentinel keys
+    // ("receipt" or "provenance").  When detected, extract "result" to get the
+    // actual agent output.  Fall back to the full content when the block was
+    // stored as direct JSON-LD (e.g. from federation or legacy blocks that did
+    // not go through the standard 6-phase handshake).
+    //
+    // Using sentinels rather than unconditionally calling `.get("result")` is
+    // important because some legitimate schema.org types (e.g. LearningResource,
+    // SoftwareApplication) also carry a `"result"` property — we must not strip
+    // those as if they were envelope wrappers.
+    let is_envelope =
+        content.get("receipt").is_some() || content.get("provenance").is_some();
+    let payload = if is_envelope {
+        content.get("result").unwrap_or(content)
+    } else {
+        content
+    };
     let receipt_val = content.get("receipt");
 
     // Agent-scoped renderer takes priority: a specific agent can fully own its

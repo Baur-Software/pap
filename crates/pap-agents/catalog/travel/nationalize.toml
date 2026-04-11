@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Name Nationality Predictor"
 provider = "Nationalize.io"
 description = "Predict the nationality of a first name using statistical analysis."
@@ -18,3 +19,11 @@ url_template = "https://api.nationalize.io/?name={query}"
 method = "Get"
 response_jsonpath = "$.country[0].country_id"
 response_schema_type = "schema:Country"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

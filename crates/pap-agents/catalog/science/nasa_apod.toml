@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "NASA Astronomy Picture of the Day"
 provider = "NASA"
 description = "Fetch NASA's Astronomy Picture of the Day with title, explanation, and image URL."

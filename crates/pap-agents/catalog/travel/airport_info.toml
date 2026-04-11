@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Airport Information"
 provider = "AviationStack"
 description = "Look up airport details including IATA code, city, country, and timezone."
@@ -18,3 +19,11 @@ url_template = "https://api.aviationstack.com/v1/airports?search={query}"
 method = "Get"
 response_jsonpath = "$.data[0].airport_name"
 response_schema_type = "schema:Airport"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

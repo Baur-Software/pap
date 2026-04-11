@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Bandcamp Music Search"
 provider = "Bandcamp"
 description = "Discover independent music artists and albums on Bandcamp."
@@ -15,3 +16,11 @@ url_template = "https://bandcamp.com/search?q={query}&item_type=t"
 method = "Get"
 response_jsonpath = "$.results[0].name"
 response_schema_type = "schema:MusicAlbum"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

@@ -127,7 +127,7 @@ pub async fn list_agents(
     let per_page = per_page.clamp(1, 200);
     let db_page = state
         .store
-        .search_agents(q.as_deref().filter(|s| !s.is_empty()), page, per_page)
+        .search_agents(q.as_deref().filter(|s| !s.is_empty()), None, page, per_page)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 

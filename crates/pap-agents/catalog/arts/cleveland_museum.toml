@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Cleveland Museum of Art"
 provider = "Cleveland Museum of Art"
 description = "Search the Cleveland Museum of Art's open access collection of 61,000+ works."
@@ -15,3 +16,13 @@ url_template = "https://openaccess-api.clevelandart.org/api/artworks?q={query}&l
 method = "Get"
 response_jsonpath = "$.data[0].title"
 response_schema_type = "schema:VisualArtwork"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

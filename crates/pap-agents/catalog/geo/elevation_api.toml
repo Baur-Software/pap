@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open Elevation API"
 provider = "Open-Elevation"
 description = "Get elevation above sea level for any GPS coordinates."

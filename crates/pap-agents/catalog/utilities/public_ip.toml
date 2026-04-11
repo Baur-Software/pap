@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Public IP Address"
 provider = "ipify"
 description = "Get the current public IP address of the requesting client."

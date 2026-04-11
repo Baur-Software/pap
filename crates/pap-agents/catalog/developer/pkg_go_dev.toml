@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Go Package Search"
 provider = "pkg.go.dev / Google"
 description = "Search Go packages and modules via the official Go package discovery site."
@@ -18,3 +19,11 @@ url_template = "https://pkg.go.dev/search?q={query}&m=package"
 method = "Get"
 response_jsonpath = "$.results[0].Name"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

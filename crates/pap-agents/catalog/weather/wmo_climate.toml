@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "WMO Climate Monitoring"
 provider = "World Meteorological Organization"
 description = "Access WMO global climate monitoring reports and data."

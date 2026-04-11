@@ -11,11 +11,16 @@ use pap_transport::TransportError;
 /// registry seeding, and intent detection.
 pub struct AgentMeta {
     pub name: &'static str,
+    /// Semantic version (e.g. "1.0.0"). Included in advertisement signature.
+    pub version: &'static str,
     pub provider: &'static str,
     pub action: &'static str,
     pub object_types: &'static [&'static str],
     pub requires_disclosure: &'static [&'static str],
     pub returns: &'static [&'static str],
+    /// Configurable properties advertised to principals as schema.org
+    /// `PropertyValueSpecification` objects. Defaults to empty.
+    pub configurable_properties: Vec<serde_json::Value>,
 }
 
 /// Simplified trait for standard query-in / JSON-LD-out agents.

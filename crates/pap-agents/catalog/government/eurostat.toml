@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Eurostat European Statistics"
 provider = "European Commission / Eurostat"
 description = "Access European Union statistical data via the Eurostat data browser API."

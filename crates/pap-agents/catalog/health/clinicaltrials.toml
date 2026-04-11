@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "ClinicalTrials.gov Search"
 provider = "NIH / ClinicalTrials.gov"
 description = "Search clinical trials by condition, intervention, or location via ClinicalTrials.gov API."
@@ -15,3 +16,13 @@ url_template = "https://clinicaltrials.gov/api/v2/studies?query.term={query}&pag
 method = "Get"
 response_jsonpath = "$.studies[0].protocolSection.identificationModule.briefTitle"
 response_schema_type = "schema:MedicalTrial"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

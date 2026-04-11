@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Dog Breed API"
 provider = "Dog CEO API"
 description = "Get information about dog breeds and random dog images from Dog CEO."

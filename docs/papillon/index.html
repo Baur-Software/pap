@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Papillon — One canvas. Many agents. Your rules.</title>
-  <meta name="description" content="A canvas where specialized AI agents work together on your tasks. Preview their plans, approve their actions, verify their results. No agent ever sees your full context." />
+  <meta name="description" content="A canvas where specialized agents work together on your tasks. Preview their plans, approve their actions, verify their results. No agent ever sees your full context." />
   <meta property="og:title" content="Papillon — One canvas. Many agents. Your rules." />
-  <meta property="og:description" content="Specialized AI agents work together on your tasks. Preview plans, approve actions, verify results. No agent sees your full context." />
+  <meta property="og:description" content="Specialized agents work together on your tasks. Preview plans, approve actions, verify results. No agent sees your full context." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -517,6 +517,45 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    /* ─── Tech Section ───────────────────────────────────────────── */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+    .tech-card {
+      padding: 28px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      display: flex; flex-direction: column; gap: 12px;
+      transition: border-color .2s;
+    }
+    .tech-card:hover { border-color: rgba(139,92,246,.25); }
+    .tech-badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 10px; border-radius: 99px;
+      font-size: .7rem; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; width: fit-content;
+    }
+    .tech-badge-emerald { background: rgba(16,185,129,.1);  color: var(--emerald); border: 1px solid rgba(16,185,129,.2); }
+    .tech-badge-violet  { background: rgba(139,92,246,.1);  color: var(--violet);  border: 1px solid rgba(139,92,246,.2); }
+    .tech-badge-indigo  { background: rgba(99,102,241,.1);  color: var(--indigo);  border: 1px solid rgba(99,102,241,.2); }
+    .tech-badge-amber   { background: rgba(245,158,11,.1);  color: var(--amber);   border: 1px solid rgba(245,158,11,.2); }
+    .tech-badge-teal    { background: rgba(20,184,166,.08); color: #5ee7d0;        border: 1px solid rgba(20,184,166,.15); }
+    .tech-badge-rose    { background: rgba(244,63,94,.08);  color: #fb7185;        border: 1px solid rgba(244,63,94,.15); }
+    .tech-icon { font-size: 1.5rem; line-height: 1; }
+    .tech-title { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
+    .tech-desc { color: var(--muted); font-size: .9rem; line-height: 1.65; flex: 1; }
+    .tech-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .tech-fact {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .7rem; color: var(--faint);
+      padding: 3px 8px; border-radius: 5px;
+      background: var(--surface2); border: 1px solid var(--border);
+    }
   </style>
 </head>
 <body>
@@ -545,6 +584,7 @@
 <!-- ─── Hero ─────────────────────────────────────────────────────── -->
 <section class="hero" id="hero">
   <div>
+    <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:99px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:#f59e0b;font-size:.75rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:20px;">In Development</div>
     <h1>See what they'll do<br><span>before they do it.</span></h1>
     <p class="subtitle">Multiple agents work your task. Each sees only what it needs.<br>Preview the plan, approve the action, expand the receipt.</p>
     <div class="hero-ctas">
@@ -558,8 +598,8 @@
 <section class="section" id="problem">
   <div class="container reveal">
     <span class="section-label">The problem</span>
-    <h2>AI assistants see everything.<br>You see nothing.</h2>
-    <p class="lead">Today's AI tools hand your entire context to every agent in the chain. You trade privacy for convenience.</p>
+    <h2>Every service sees everything.<br>You see nothing.</h2>
+    <p class="lead">Today's tools hand your entire context to every service in the chain. You trade privacy for convenience.</p>
     <div class="problem-grid">
       <div class="problem-card">
         <div class="problem-icon">&#x1F441;</div>
@@ -584,7 +624,7 @@
 <section class="section" id="shift">
   <div class="container reveal">
     <span class="section-label">The shift</span>
-    <h2>The canvas inverts how AI works.</h2>
+    <h2>The canvas inverts how delegation works.</h2>
     <p class="lead">You describe what you want. Agents come to you with only what they need. The output is the interface.</p>
     <div class="shift-steps">
       <div class="shift-step">
@@ -806,6 +846,90 @@
         <div class="demo-dot" onclick="demoGoTo(4)"></div>
         <div class="demo-dot" onclick="demoGoTo(5)"></div>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Technology ──────────────────────────────────────────────── -->
+<section class="section" id="technology">
+  <div class="container reveal">
+    <span class="section-label">The Technology</span>
+    <h2>A canvas built for the age of intent-driven Internet.</h2>
+    <p class="lead">Six guarantees that hold whether your agents use AI or not.</p>
+    <div class="tech-grid">
+
+      <div class="tech-card">
+        <span class="tech-badge tech-badge-emerald">Renderer</span>
+        <div class="tech-icon">&#x1F9E9;</div>
+        <div class="tech-title">Type-Safe Renderer</div>
+        <p class="tech-desc">Agents return Schema.org JSON-LD. Papillon dispatches to a two-tier renderer &mdash; agent-scoped first, then type-global, then generic fallback. 20+ registered types produce rich views: flight cards, hotel blocks, search results, answer text. All values rendered as text only. Never innerHTML.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">FlightReservation &rarr; route card</span>
+          <span class="tech-fact">SearchResultsPage &rarr; result list</span>
+          <span class="tech-fact">Answer &rarr; on-device text</span>
+        </div>
+      </div>
+
+      <div class="tech-card">
+        <span class="tech-badge tech-badge-violet">Memory</span>
+        <div class="tech-icon">&#x1F9E0;</div>
+        <div class="tech-title">Long Horizon Memex</div>
+        <p class="tech-desc">Every interaction is stored as a receipt-anchored episode &mdash; outcome, scope exercised, disclosure refs, duration. Never raw values. After 5+ episodes, Papillon scores each agent: 35% success rate (EMA &alpha;=0.2) + 35% quality + 20% preference + 10% keyword match. The canvas improves with use.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">EMA &alpha;=0.2 success rate</span>
+          <span class="tech-fact">minimal disclosure set</span>
+          <span class="tech-fact">SQLite, local only</span>
+        </div>
+      </div>
+
+      <div class="tech-card">
+        <span class="tech-badge tech-badge-indigo">Protocol</span>
+        <div class="tech-icon">&#x1F9ED;</div>
+        <div class="tech-title">Intent-First, Not Query-First</div>
+        <p class="tech-desc">The pap:// scheme is a contract. Every protocol link requires your explicit confirmation before dispatch &mdash; no background requests, no silent handshakes. You describe what you want. The canvas resolves which agents can do it. Your intent shapes the Internet, not the other way around.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">pap://</span>
+          <span class="tech-fact">pap+https://</span>
+          <span class="tech-fact">pap+wss://</span>
+        </div>
+      </div>
+
+      <div class="tech-card">
+        <span class="tech-badge tech-badge-amber">Workflow</span>
+        <div class="tech-icon">&#x1F4CB;</div>
+        <div class="tech-title">Dry Runs &amp; Approval Gates</div>
+        <p class="tech-desc">Before any agent executes, ghost blocks preview the full plan &mdash; which agent, what it will see, what it will return. The canvas enters AwaitingApproval state with a skeleton preview of the output. No mandate is created, no data is disclosed, until you press Approve.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">Ghost &rarr; AwaitingApproval</span>
+          <span class="tech-fact">skeleton output preview</span>
+          <span class="tech-fact">explicit mandate creation</span>
+        </div>
+      </div>
+
+      <div class="tech-card">
+        <span class="tech-badge tech-badge-teal">Canvas</span>
+        <div class="tech-icon">&#x1F5BC;&#xFE0F;</div>
+        <div class="tech-title">The Canvas</div>
+        <p class="tech-desc">Two layers: the Surface shows synthesized outcomes &mdash; readable answers to your actual question, composed on-device. The Provenance layer is always one click away &mdash; each agent block, mandate scope, timing, and co-signed receipt. One canvas, many agents, your rules.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">on-device synthesis</span>
+          <span class="tech-fact">provenance on demand</span>
+          <span class="tech-fact">Candle / local LLM</span>
+        </div>
+      </div>
+
+      <div class="tech-card">
+        <span class="tech-badge tech-badge-rose">Payments</span>
+        <div class="tech-icon">&#x1FA99;</div>
+        <div class="tech-title">Chaumian Ecash Payments</div>
+        <p class="tech-desc">Mandates with payment scope carry blind-signed ecash tokens (RFC 9474 RSABSSA-SHA384-PSS). The mint signs a blinded message; the client unblinds it. The mint cannot link its signing operation to redemption &mdash; unlinkability is a cryptographic invariant, not a policy. Amounts, destinations, and routing data never appear in the mandate.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">RFC 9474 RSABSSA-SHA384-PSS</span>
+          <span class="tech-fact">Lightning + Cashu proofs</span>
+          <span class="tech-fact">unlinkability invariant</span>
+        </div>
+      </div>
+
     </div>
   </div>
 </section>

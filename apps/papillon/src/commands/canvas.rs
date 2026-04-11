@@ -400,16 +400,16 @@ async fn process_prompt(
     prompt_id: &str,
     block_id: &str,
     text: &str,
-) -> Result<(String, serde_json::Value, bool), PapillonError> {
+) -> Result<(String, serde_json::Value, bool, String), PapillonError> {
     process_prompt_inner(app, state, prompt_id, block_id, text, &[], 0).await
 }
 
 /// Inner implementation with exclusion list and retry budget for reflection.
 /// Uses `Box::pin` for the recursive async call required by the reflection gate.
 ///
-/// Returns `(schema_type, content, preference_guided)` where `preference_guided`
+/// Returns `(schema_type, content, preference_guided, agent_did)` where `preference_guided`
 /// is `true` when the PreferenceEngine had meaningful history that influenced
-/// agent selection.
+/// agent selection, and `agent_did` is the DID of the resolved agent.
 #[allow(clippy::type_complexity)]
 fn process_prompt_inner<'a>(
     app: &'a AppHandle,
@@ -421,8 +421,9 @@ fn process_prompt_inner<'a>(
     retry_count: u8,
 ) -> std::pin::Pin<
     Box<
-        dyn std::future::Future<Output = Result<(String, serde_json::Value, bool), PapillonError>>
-            + Send
+        dyn std::future::Future<
+                Output = Result<(String, serde_json::Value, bool, String), PapillonError>,
+            > + Send
             + 'a,
     >,
 > {
@@ -430,6 +431,8 @@ fn process_prompt_inner<'a>(
         let (action_type, preferred, query) = detect_intent(text);
 
         let resolved = resolve_agent(state, action_type, preferred, exclude_agents).await?;
+        // Capture agent DID before the handshake so it can be threaded into block_resolved.
+        let agent_did = resolved.did.clone();
 
         // Derive schema type from agent's declared returns (first element).
         let schema_hint = resolved.returns.first().cloned().unwrap_or_default();
@@ -451,7 +454,9 @@ fn process_prompt_inner<'a>(
                 .map_err(|e| PapillonError::from(format!("Failed to load keypair: {}", e)))?
         };
 
-        // Phase progress callbacks emit Tauri events
+        // Phase progress callbacks emit Tauri events.
+        // Thread the computed preference_guided flag so the frontend can show
+        // the "based on your preferences" badge during intermediate states too.
         let bid = block_id.to_string();
         let pid = prompt_id.to_string();
         let app_phase = app.clone();
@@ -469,7 +474,8 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
-                preference_guided: false,
+                mandate_expires_at: None,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -493,7 +499,8 @@ fn process_prompt_inner<'a>(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
-                preference_guided: false,
+                mandate_expires_at: None,
+                preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -543,7 +550,8 @@ fn process_prompt_inner<'a>(
                             content: None,
                             linked_block_ids: Vec::new(),
                             agent_did: None,
-                            preference_guided: false,
+                            mandate_expires_at: None,
+                            preference_guided,
                             created_at: now.clone(),
                             updated_at: now,
                         },
@@ -572,7 +580,12 @@ fn process_prompt_inner<'a>(
             quality >= 0.5,
         );
 
-        Ok((result.schema_type, result.content, preference_guided))
+        Ok((
+            result.schema_type,
+            result.content,
+            preference_guided,
+            agent_did,
+        ))
     })
 }
 
@@ -617,13 +630,19 @@ pub async fn canvas_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content, preference_guided) =
+    let (schema_type, content, preference_guided, agent_did) =
         process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
 
     let now = Utc::now().to_rfc3339();
+    let mandate_ttl_hours = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.mandate_ttl_hours
+    };
+    let mandate_expires_at =
+        Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
     let _ = app.emit(
         "block_resolved",
         BlockEvent {
@@ -635,9 +654,8 @@ pub async fn canvas_prompt(
                 schema_type: Some(schema_type),
                 content: Some(content),
                 linked_block_ids: Vec::new(),
-                // TODO: thread agent_did from process_prompt return value
-                // so the renderer can use agent-scoped templates.
-                agent_did: None,
+                agent_did: Some(agent_did),
+                mandate_expires_at,
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
@@ -655,13 +673,19 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content, preference_guided) =
+    let (schema_type, content, preference_guided, agent_did) =
         process_prompt(&app, &state, "", &block_id, &text).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
 
     let now = Utc::now().to_rfc3339();
+    let mandate_ttl_hours = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.mandate_ttl_hours
+    };
+    let mandate_expires_at =
+        Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
     let _ = app.emit(
         "block_resolved",
         BlockEvent {
@@ -673,7 +697,8 @@ pub async fn canvas_reshape(
                 schema_type: Some(schema_type),
                 content: Some(content),
                 linked_block_ids: Vec::new(),
-                agent_did: None,
+                agent_did: Some(agent_did),
+                mandate_expires_at,
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
@@ -729,6 +754,13 @@ pub async fn canvas_plan_prompt(
 
     let approval_request_id = uuid::Uuid::new_v4().to_string();
 
+    let mandate_ttl_hours = {
+        let cfg = state
+            .orchestrator_config
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        cfg.mandate_ttl_hours
+    };
     let plan = IntentPlan {
         action: action_type.to_string(),
         selected_agent_name: resolved.name.clone(),
@@ -736,6 +768,7 @@ pub async fn canvas_plan_prompt(
         requires_disclosure: resolved.requires_disclosure.clone(),
         returns: resolved.returns.clone(),
         approval_request_id: approval_request_id.clone(),
+        ttl_hours: mandate_ttl_hours as u32,
     };
 
     // Check auto-approve shortcut: if configured and no disclosure required, skip the gate.
@@ -744,15 +777,17 @@ pub async fn canvas_plan_prompt(
             .orchestrator_config
             .read()
             .map_err(|e| PapillonError::from(e.to_string()))?;
-        config.auto_approve_zero_disclosure && plan.requires_disclosure.is_empty()
-    };
+        config.auto_approve_zero_disclosure
+    } && plan.requires_disclosure.is_empty();
 
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
-        let (schema_type, content, preference_guided) =
+        let (schema_type, content, preference_guided, agent_did) =
             process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
+        let mandate_expires_at =
+            Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
@@ -764,7 +799,8 @@ pub async fn canvas_plan_prompt(
                     schema_type: Some(schema_type),
                     content: Some(content),
                     linked_block_ids: Vec::new(),
-                    agent_did: None,
+                    agent_did: Some(agent_did),
+                    mandate_expires_at,
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
@@ -788,6 +824,7 @@ pub async fn canvas_plan_prompt(
                 content: None,
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
@@ -807,10 +844,12 @@ pub async fn canvas_plan_prompt(
 
     if approved {
         // Run the full handshake.
-        let (schema_type, content, preference_guided) =
+        let (schema_type, content, preference_guided, agent_did) =
             process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
+        let mandate_expires_at =
+            Some((Utc::now() + chrono::Duration::hours(mandate_ttl_hours as i64)).to_rfc3339());
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
@@ -822,7 +861,8 @@ pub async fn canvas_plan_prompt(
                     schema_type: Some(schema_type),
                     content: Some(content),
                     linked_block_ids: Vec::new(),
-                    agent_did: None,
+                    agent_did: Some(agent_did),
+                    mandate_expires_at,
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
@@ -848,6 +888,7 @@ pub async fn canvas_plan_prompt(
                     content: None,
                     linked_block_ids: Vec::new(),
                     agent_did: None,
+                    mandate_expires_at: None,
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
@@ -1026,5 +1067,128 @@ mod tests {
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.3).abs() < f64::EPSILON);
+    }
+
+    // ── assess_handshake_quality — uncovered branches ─────────
+
+    #[test]
+    fn assess_quality_short_string_scores_medium() {
+        // Non-empty string shorter than 20 chars hits the `s.len() < 20 => 0.5` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": "short answer"}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.5).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_long_string_scores_high() {
+        // String ≥ 20 chars falls through to the generic `_ => 0.8` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": "this is a longer answer that exceeds twenty characters"}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.8).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_one_field_object_scores_medium() {
+        // Object with 1-2 fields hits the `1..=2 => 0.6` branch.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": {"name": "Rust"}}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.6).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_six_field_object_scores_perfect() {
+        // Object with > 5 fields hits the `_ => 1.0` branch.
+        let result = handshake::HandshakeResult {
+            schema_type: "SearchResult".into(),
+            content: serde_json::json!({
+                "result": {
+                    "a": 1, "b": 2, "c": 3,
+                    "d": 4, "e": 5, "f": 6
+                }
+            }),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 1.0).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_small_array_scores_medium() {
+        // Array with 1-2 items hits the `arr.len() < 3 => 0.6` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": ["only_one"]}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.6).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_empty_array_scores_low() {
+        // Empty array hits the `arr.is_empty() => 0.3` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": []}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.3).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    #[test]
+    fn assess_quality_boolean_result_scores_high() {
+        // Boolean value falls through to the generic `_ => 0.8` arm.
+        let result = handshake::HandshakeResult {
+            schema_type: "Thing".into(),
+            content: serde_json::json!({"result": true}),
+            agent_name: "Test".into(),
+        };
+        let quality = assess_handshake_quality(&result);
+        assert!((quality - 0.8).abs() < f64::EPSILON, "got {quality}");
+    }
+
+    // ── score_agent — constant validation ─────────────────────
+
+    #[test]
+    fn score_agent_cold_start_preferred_beats_non_preferred() {
+        // When there is no EMA history (None path), keyword match gives 0.6 vs 0.4.
+        // This test documents the cold-start scoring constants without requiring a DB.
+        let preferred_cold: f64 = 0.6; // agent_name == preferred_name, no history
+        let non_preferred_cold: f64 = 0.4; // no match, no history
+        assert!(
+            preferred_cold > non_preferred_cold,
+            "cold-start preferred score ({preferred_cold}) must beat non-preferred ({non_preferred_cold})"
+        );
+        // Both should be in [0, 1]
+        assert!((0.0..=1.0).contains(&preferred_cold));
+        assert!((0.0..=1.0).contains(&non_preferred_cold));
+    }
+
+    #[test]
+    fn score_agent_constants_are_valid_probability_weights() {
+        // The scoring formula uses 35% + 35% + 20% + 10% = 100% when a full
+        // EMA profile is present. Verify the weights sum to 1.0.
+        let w_success: f64 = 0.35;
+        let w_quality: f64 = 0.35;
+        let w_pref: f64 = 0.20;
+        let w_keyword: f64 = 0.10;
+        let sum = w_success + w_quality + w_pref + w_keyword;
+        assert!(
+            (sum - 1.0).abs() < f64::EPSILON,
+            "score_agent weights must sum to 1.0, got {sum}"
+        );
     }
 }

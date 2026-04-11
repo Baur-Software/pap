@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "BigDataCloud Reverse Geocoding"
 provider = "BigDataCloud"
 description = "Reverse geocode coordinates to address, neighborhood, city, and country details."

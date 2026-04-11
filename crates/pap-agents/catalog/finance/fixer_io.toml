@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Fixer.io Exchange Rates"
 provider = "Fixer.io"
 description = "Get real-time and historical forex exchange rates from Fixer.io."

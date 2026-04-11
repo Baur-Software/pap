@@ -228,6 +228,17 @@ impl FederatedRegistry {
         (ads, next_cursor, has_more)
     }
 
+    /// Query local registry by action with an exact version constraint.
+    pub fn query_local_versioned(&self, action: &str, version: &str) -> Vec<&AgentAdvertisement> {
+        self.local.query_by_action_and_version(action, version)
+    }
+
+    /// Query local registry by action, returning only the latest version
+    /// per provider DID. Uses semver ordering.
+    pub fn query_local_latest(&self, action: &str) -> Vec<&AgentAdvertisement> {
+        self.local.query_latest_by_action(action)
+    }
+
     /// Query local registry by action type + disclosure satisfiability.
     pub fn query_local_satisfiable(
         &self,

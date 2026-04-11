@@ -9,9 +9,9 @@ pub fn Sidebar() -> impl IntoView {
     view! {
         <nav class="sidebar app-sidebar">
             <A
-                href="/home"
+                href="/"
                 attr:class=move || {
-                    if location.pathname.get() == "/home" {
+                    if location.pathname.get() == "/" {
                         "sidebar-icon active"
                     } else {
                         "sidebar-icon"

@@ -220,6 +220,8 @@ pub fn run() {
             commands::webauthn::complete_registration,
             commands::webauthn::begin_authentication,
             commands::webauthn::complete_authentication,
+            commands::settings_vocab::get_settings_vocabulary,
+            commands::settings_vocab::apply_setting,
             commands::canvas::get_canvas_state,
             commands::chat::list_conversations,
             commands::chat::get_chat_history,

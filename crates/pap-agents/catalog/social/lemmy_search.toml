@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Lemmy Community Search"
 provider = "Lemmy / Fediverse"
 description = "Search posts and communities on Lemmy federated discussion platform."
@@ -15,3 +16,20 @@ url_template = "https://lemmy.world/api/v3/search?q={query}&type_=Posts&limit=5"
 method = "Get"
 response_jsonpath = "$.posts[0].post.name"
 response_schema_type = "schema:DiscussionForumPosting"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open Trivia Database"
 provider = "Open Trivia DB"
 description = "Get trivia questions across categories: science, history, geography, entertainment."
@@ -15,3 +16,13 @@ url_template = "https://opentdb.com/api.php?amount=5&category={query}&type=multi
 method = "Get"
 response_jsonpath = "$.results[0].question"
 response_schema_type = "schema:Question"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

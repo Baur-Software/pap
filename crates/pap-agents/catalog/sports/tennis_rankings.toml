@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "ATP/WTA Rankings"
 provider = "Tennis.com API"
 description = "Get current ATP and WTA tennis player world rankings."

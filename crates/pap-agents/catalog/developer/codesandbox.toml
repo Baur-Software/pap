@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "CodeSandbox Templates"
 provider = "CodeSandbox"
 description = "Find starter templates and sandboxes on CodeSandbox."
@@ -15,3 +16,11 @@ url_template = "https://codesandbox.io/api/v1/sandboxes/search?query={query}&pag
 method = "Get"
 response_jsonpath = "$.sandboxes[0].title"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

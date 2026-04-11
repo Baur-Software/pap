@@ -17,6 +17,8 @@ use pap_did::SessionKeypair;
 use pap_transport::{AgentHandler, TransportError};
 use serde_json::Value;
 
+use std::collections::HashMap;
+
 use crate::dynamic::{DynamicAgentDef, HttpMethod};
 use crate::llm::{LlmClient, LlmProvider};
 use crate::session_store::SessionStore;
@@ -141,14 +143,31 @@ impl AgentHandler for DynamicAgentHandler {
             if let Ok(resp) = response {
                 if resp.status().is_success() {
                     if let Ok(json_body) = resp.json::<Value>() {
+                        // Priority 1: Multi-field response_mapping → proper schema.org
+                        if !endpoint.response_mapping.is_empty() {
+                            let mapped = build_mapped_response(
+                                &json_body,
+                                &endpoint.response_mapping,
+                                &endpoint.response_schema_type,
+                            );
+                            // Only use mapped result if at least one field extracted
+                            let field_count = mapped
+                                .as_object()
+                                .map(|m| m.keys().filter(|k| !k.starts_with('@')).count())
+                                .unwrap_or(0);
+                            if field_count > 0 {
+                                return Ok(mapped);
+                            }
+                        }
+
+                        // Priority 2: Legacy single-field extraction with proper wrapping
                         if let Some(extracted) =
                             extract_jsonpath(&json_body, &endpoint.response_jsonpath)
                         {
-                            return Ok(serde_json::json!({
-                                "@context": "https://schema.org",
-                                "@type": endpoint.response_schema_type,
-                                "result": extracted,
-                            }));
+                            return Ok(wrap_extracted_value(
+                                extracted,
+                                &endpoint.response_schema_type,
+                            ));
                         }
                     }
                 }
@@ -189,6 +208,83 @@ impl AgentHandler for DynamicAgentHandler {
     }
 }
 
+/// Build a schema.org object from field-level JSONPath mappings.
+///
+/// Each entry in `mapping` maps a schema.org property name to a JSONPath
+/// expression. The function extracts each field from the API response and
+/// assembles them into a valid schema.org object with `@context` and `@type`.
+fn build_mapped_response(
+    json_body: &Value,
+    mapping: &HashMap<String, String>,
+    schema_type: &str,
+) -> Value {
+    let clean_type = schema_type.trim_start_matches("schema:");
+    let mut obj = serde_json::Map::new();
+    obj.insert("@context".into(), serde_json::json!("https://schema.org"));
+    obj.insert("@type".into(), serde_json::json!(clean_type));
+
+    for (property, jsonpath) in mapping {
+        if let Some(extracted) = extract_jsonpath(json_body, jsonpath) {
+            // Skip null and empty-string extractions
+            match &extracted {
+                Value::Null => continue,
+                Value::String(s) if s.is_empty() => continue,
+                _ => {
+                    obj.insert(property.clone(), extracted);
+                }
+            }
+        }
+    }
+
+    Value::Object(obj)
+}
+
+/// Wrap a single extracted value in valid schema.org (legacy fallback).
+///
+/// Instead of the old `"result": extracted` pattern (which is not schema.org
+/// vocabulary), this maps the extracted value to the appropriate schema.org
+/// property based on its type.
+fn wrap_extracted_value(extracted: Value, schema_type: &str) -> Value {
+    let clean_type = schema_type.trim_start_matches("schema:");
+    match &extracted {
+        // Object with @type — already schema.org, ensure @context
+        Value::Object(map) if map.contains_key("@type") => {
+            let mut obj = map.clone();
+            obj.entry("@context".to_string())
+                .or_insert(serde_json::json!("https://schema.org"));
+            Value::Object(obj)
+        }
+        // Object without @type — add type metadata
+        Value::Object(map) => {
+            let mut obj = map.clone();
+            obj.insert("@context".into(), serde_json::json!("https://schema.org"));
+            obj.insert("@type".into(), serde_json::json!(clean_type));
+            Value::Object(obj)
+        }
+        // String — use "description" (universal schema.org property)
+        Value::String(_) => serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": clean_type,
+            "description": extracted,
+        }),
+        // Array — wrap in ItemList
+        Value::Array(_) => serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": clean_type,
+            "mainEntity": {
+                "@type": "ItemList",
+                "itemListElement": extracted,
+            }
+        }),
+        // Number/Bool/Null — use "value"
+        _ => serde_json::json!({
+            "@context": "https://schema.org",
+            "@type": clean_type,
+            "value": extracted,
+        }),
+    }
+}
+
 /// Extract a value from a JSON document using a simple JSONPath-like expression.
 ///
 /// Supports dotted field access (e.g. `$.field.nested`) and array indexing
@@ -226,6 +322,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Test Agent".into(),
             provider: "Test".into(),
             description: "Test".into(),
@@ -240,6 +337,7 @@ mod tests {
                 body_template: None,
                 response_jsonpath: "$.results[0]".into(),
                 response_schema_type: "schema:SearchResultsPage".into(),
+                response_mapping: HashMap::new(),
             }),
             llm_instructions: "You are helpful.".into(),
             subagents: vec![],
@@ -247,6 +345,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: None,
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".into(),
             updated_at: "2026-04-01T00:00:00Z".into(),
         }
@@ -256,6 +355,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "LLM Agent".into(),
             provider: "Test".into(),
             description: "Test".into(),
@@ -270,6 +370,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: None,
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".into(),
             updated_at: "2026-04-01T00:00:00Z".into(),
         }
@@ -390,5 +491,118 @@ mod tests {
         assert!(handler
             .handle_did_exchange("no-such-session", "did:key:x")
             .is_err());
+    }
+
+    // ── build_mapped_response tests ──────────────────────────────────────
+
+    #[test]
+    fn mapped_response_extracts_multiple_fields() {
+        let api_response = json!({
+            "Heading": "Rust (programming language)",
+            "AbstractText": "Rust is a multi-paradigm language...",
+            "AbstractURL": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+            "AbstractSource": "Wikipedia",
+            "Image": ""
+        });
+        let mut mapping = HashMap::new();
+        mapping.insert("name".into(), "$.Heading".into());
+        mapping.insert("description".into(), "$.AbstractText".into());
+        mapping.insert("url".into(), "$.AbstractURL".into());
+        mapping.insert("source".into(), "$.AbstractSource".into());
+        mapping.insert("image".into(), "$.Image".into());
+
+        let result = build_mapped_response(&api_response, &mapping, "schema:SearchResultsPage");
+
+        assert_eq!(result["@type"], "SearchResultsPage");
+        assert_eq!(result["@context"], "https://schema.org");
+        assert_eq!(result["name"], "Rust (programming language)");
+        assert_eq!(
+            result["description"],
+            "Rust is a multi-paradigm language..."
+        );
+        assert_eq!(
+            result["url"],
+            "https://en.wikipedia.org/wiki/Rust_(programming_language)"
+        );
+        assert_eq!(result["source"], "Wikipedia");
+        // Empty string "Image" should be skipped
+        assert!(result.get("image").is_none());
+    }
+
+    #[test]
+    fn mapped_response_skips_missing_paths() {
+        let api_response = json!({"Heading": "Test"});
+        let mut mapping = HashMap::new();
+        mapping.insert("name".into(), "$.Heading".into());
+        mapping.insert("description".into(), "$.AbstractText".into()); // not present
+
+        let result = build_mapped_response(&api_response, &mapping, "schema:Thing");
+        assert_eq!(result["name"], "Test");
+        assert!(result.get("description").is_none());
+    }
+
+    #[test]
+    fn mapped_response_skips_null_values() {
+        let api_response = json!({"Heading": null, "Text": "hello"});
+        let mut mapping = HashMap::new();
+        mapping.insert("name".into(), "$.Heading".into());
+        mapping.insert("description".into(), "$.Text".into());
+
+        let result = build_mapped_response(&api_response, &mapping, "schema:Thing");
+        assert!(result.get("name").is_none());
+        assert_eq!(result["description"], "hello");
+    }
+
+    // ── wrap_extracted_value tests ───────────────────────────────────────
+
+    #[test]
+    fn wrap_string_uses_description_property() {
+        let result = wrap_extracted_value(
+            json!("A cat is a domesticated species"),
+            "schema:SearchResultsPage",
+        );
+        assert_eq!(result["@type"], "SearchResultsPage");
+        assert_eq!(result["description"], "A cat is a domesticated species");
+        assert!(
+            result.get("result").is_none(),
+            "should not use 'result' key"
+        );
+    }
+
+    #[test]
+    fn wrap_object_with_type_preserves_it() {
+        let obj = json!({
+            "@type": "Person",
+            "name": "Alice"
+        });
+        let result = wrap_extracted_value(obj, "schema:Person");
+        assert_eq!(result["@type"], "Person");
+        assert_eq!(result["name"], "Alice");
+        assert_eq!(result["@context"], "https://schema.org");
+    }
+
+    #[test]
+    fn wrap_object_without_type_adds_type() {
+        let obj = json!({"name": "Bob", "age": 30});
+        let result = wrap_extracted_value(obj, "schema:Person");
+        assert_eq!(result["@type"], "Person");
+        assert_eq!(result["name"], "Bob");
+        assert_eq!(result["age"], 30);
+    }
+
+    #[test]
+    fn wrap_array_creates_item_list() {
+        let arr = json!(["item1", "item2"]);
+        let result = wrap_extracted_value(arr, "schema:SearchResultsPage");
+        assert_eq!(result["@type"], "SearchResultsPage");
+        assert_eq!(result["mainEntity"]["@type"], "ItemList");
+        assert_eq!(result["mainEntity"]["itemListElement"][0], "item1");
+    }
+
+    #[test]
+    fn wrap_number_uses_value_property() {
+        let result = wrap_extracted_value(json!(42.5), "schema:QuantitativeValue");
+        assert_eq!(result["@type"], "QuantitativeValue");
+        assert_eq!(result["value"], 42.5);
     }
 }
