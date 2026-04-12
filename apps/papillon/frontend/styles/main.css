@@ -1672,6 +1672,31 @@ body {
     opacity: 0.4;
 }
 
+/* pap:// autocomplete row — removes the arrow glyph; uses inline spans instead */
+.palette-suggestion-pap::before {
+    content: "";
+}
+
+/* Keyboard-selected suggestion (Up/Down navigation) */
+.palette-suggestion--active {
+    background: var(--bg-2);
+    color: var(--text-1);
+}
+
+.pap-suggestion-scheme {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--purple);
+    opacity: 0.85;
+    letter-spacing: 0.02em;
+}
+
+.pap-suggestion-name {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-1);
+}
+
 /* ═══════════════════════════════════════════════════════════
    CANVAS BLOCKS
    ═══════════════════════════════════════════════════════════ */

@@ -8,6 +8,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::bridge;
 use crate::components::block_renderer::BlockRenderer;
 use crate::state::canvas::CanvasState;
+use crate::state::catalog::CatalogState;
 
 // ── Canvas outcome synthesis types (mirrors Tauri backend) ────────────────
 
@@ -185,8 +186,36 @@ fn CanvasEmptyState() -> impl IntoView {
 #[component]
 fn InlinePrompt() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
+    let catalog_state = use_context::<CatalogState>();
     let input_ref = NodeRef::<html::Input>::new();
     let input_value = RwSignal::new(String::new());
+    // Keyboard-navigation cursor for pap:// suggestions (None = no selection).
+    let selected_idx: RwSignal<Option<usize>> = RwSignal::new(None);
+
+    // Live pap:// URI autocomplete — filters catalog names by the prefix the
+    // user has typed after "pap://".  Empty when input doesn't start with
+    // "pap://" or no catalog names match.
+    let pap_suggestions = Memo::new(move |_| {
+        let val = input_value.get();
+        if !val.starts_with("pap://") {
+            return vec![];
+        }
+        let prefix = val["pap://".len()..].to_lowercase();
+        let entries = catalog_state
+            .map(|c| c.entries.get())
+            .unwrap_or_default();
+        let mut names: Vec<String> = entries
+            .keys()
+            .filter(|k| k.starts_with(&prefix))
+            .take(8)
+            .cloned()
+            .collect();
+        names.sort();
+        names
+    });
+
+    let show_pap_suggestions =
+        Memo::new(move |_| input_value.get().starts_with("pap://") && !pap_suggestions.get().is_empty());
 
     let submit = move || {
         let text = input_value.get();
@@ -195,11 +224,42 @@ fn InlinePrompt() -> impl IntoView {
         }
         canvas_state.submit_prompt(text.clone());
         input_value.set(String::new());
+        selected_idx.set(None);
     };
 
     let on_keydown = move |e: ev::KeyboardEvent| {
-        if e.key() == "Enter" {
-            submit();
+        let suggestions = pap_suggestions.get_untracked();
+        match e.key().as_str() {
+            "Enter" => {
+                if let Some(idx) = selected_idx.get_untracked() {
+                    if let Some(name) = suggestions.get(idx) {
+                        input_value.set(format!("pap://{name}"));
+                        selected_idx.set(None);
+                        return;
+                    }
+                }
+                submit();
+            }
+            "ArrowDown" if !suggestions.is_empty() => {
+                e.prevent_default();
+                let next = match selected_idx.get_untracked() {
+                    None => 0,
+                    Some(i) => (i + 1).min(suggestions.len() - 1),
+                };
+                selected_idx.set(Some(next));
+            }
+            "ArrowUp" if !suggestions.is_empty() => {
+                e.prevent_default();
+                let prev = match selected_idx.get_untracked() {
+                    None | Some(0) => None,
+                    Some(i) => Some(i - 1),
+                };
+                selected_idx.set(prev);
+            }
+            "Escape" => {
+                selected_idx.set(None);
+            }
+            _ => {}
         }
     };
 
@@ -246,9 +306,38 @@ fn InlinePrompt() -> impl IntoView {
                 prop:value=move || input_value.get()
                 on:input=move |e| {
                     input_value.set(event_target_value(&e));
+                    selected_idx.set(None);
                 }
                 on:keydown=on_keydown
             />
+
+            // pap:// URI autocomplete — surfaces live agent names while the user types.
+            // Only shown when input starts with "pap://" and the catalog has matches.
+            <Show when=move || show_pap_suggestions.get()>
+                <div class="palette-suggestions">
+                    {move || pap_suggestions.get().into_iter().enumerate().map(|(i, name)| {
+                        let name_for_click = name.clone();
+                        view! {
+                            <button
+                                class="palette-suggestion palette-suggestion-pap"
+                                class:palette-suggestion--active=move || selected_idx.get() == Some(i)
+                                on:click=move |_| {
+                                    input_value.set(format!("pap://{}", name_for_click));
+                                    selected_idx.set(None);
+                                    if let Some(el) = input_ref.get() {
+                                        let _ = el.focus();
+                                    }
+                                }
+                            >
+                                <span class="pap-suggestion-scheme">"pap://"</span>
+                                <span class="pap-suggestion-name">{name}</span>
+                            </button>
+                        }
+                    }).collect::<Vec<_>>()}
+                </div>
+            </Show>
+
+            // Quick-start prompts — shown only when the input is completely empty.
             <Show when=move || input_value.get().is_empty()>
                 <div class="palette-suggestions">
                     {QUICK_PROMPTS.iter().map(|&text| {
