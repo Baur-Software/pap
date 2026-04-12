@@ -1012,34 +1012,123 @@ body {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
-    padding: 0 var(--sp-md);
-    gap: var(--sp-md);
+    /* No padding — each zone controls its own spacing so the brand
+       aligns flush with the sidebar column below it. */
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     -webkit-app-region: drag;
     z-index: 100;
 }
 
+/* Left zone — exactly as wide as the sidebar, drag-disabled so the logo
+   click registers and the canvas dropdown can open. */
 .topbar-brand {
+    width: var(--sidebar-width);
+    height: 100%;
     display: flex;
     align-items: center;
-    gap: var(--sp-sm);
+    justify-content: center;
+    gap: var(--sp-xs, 4px);
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    -webkit-app-region: no-drag;
+}
+
+.topbar-brand:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.topbar-brand-icon {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.topbar-brand-name {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-1);
+}
+
+/* Center zone — grows to fill remaining width; holds the address bar. */
+.topbar-address {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--sp-sm);
+    -webkit-app-region: no-drag;
+    min-width: 0;
+}
+
+/* Wrapper for the input + floating suggestions (position: relative anchor). */
+.topbar-address-inner {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Pill-shaped address input — browser-style. */
+.topbar-address-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 5px 16px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--text-1);
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.topbar-address-input::placeholder {
+    color: var(--text-3);
+}
+
+.topbar-address-input:focus {
+    border-color: var(--purple);
+    background: rgba(108, 92, 231, 0.08);
+}
+
+/* Floating suggestions panel anchored below the address bar. */
+.topbar-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    z-index: 300;
+}
+
+/* Right zone — status dot only. */
+.topbar-end {
+    padding: 0 var(--sp-md);
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
     -webkit-app-region: no-drag;
 }
 
-.topbar-brand-icon {
-    width: 28px;
-    height: 28px;
-    object-fit: contain;
+.topbar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
-.topbar-brand-name {
-    font: var(--text-label);
-    letter-spacing: var(--ls-label);
-    color: var(--sys-green);
-    font-size: 13px;
-}
+.topbar-dot.ready       { background: var(--teal); }
+.topbar-dot.working     { background: var(--gold); }
+.topbar-dot.agents-only { background: var(--blue); }
 
 .topbar-spacer { flex: 1; }
 

@@ -1,85 +1,29 @@
 use leptos::prelude::*;
+use leptos::{ev, html};
 use leptos_router::components::A;
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 
-use crate::bridge;
-use crate::components::profile_avatar::ProfileAvatar;
 use crate::state::canvas::CanvasState;
-use crate::state::identity::IdentityState;
+use crate::state::catalog::CatalogState;
 use crate::state::orchestrator::OrchestratorState;
-use papillon_shared::{IdentityInfo, OrchestratorStatus};
+use papillon_shared::OrchestratorStatus;
 
 #[component]
 pub fn TopBar() -> impl IntoView {
-    let identity = expect_context::<IdentityState>();
-    let orchestrator = expect_context::<OrchestratorState>();
     let canvas_state = expect_context::<CanvasState>();
+    let orchestrator = expect_context::<OrchestratorState>();
     let menu_open = RwSignal::new(false);
-    let profile_menu_open = RwSignal::new(false);
-
-    let did_display = move || {
-        identity
-            .info
-            .get()
-            .map(|i| {
-                let did = &i.did;
-                if did.len() > 20 {
-                    format!("{}...{}", &did[..8], &did[did.len() - 6..])
-                } else {
-                    did.clone()
-                }
-            })
-            .unwrap_or_else(|| "No identity".to_string())
-    };
-
-    let _current_profile_name = move || {
-        identity
-            .current_profile()
-            .map(|p| p.name)
-            .unwrap_or_else(|| "Profile".to_string())
-    };
-
-    let switch_profile = move |profile_id: String| {
-        profile_menu_open.set(false);
-        spawn_local(async move {
-            if let Ok(info) = bridge::invoke::<_, IdentityInfo>(
-                "switch_profile",
-                &serde_json::json!({"profile_id": profile_id}),
-            )
-            .await
-            {
-                identity.info.set(Some(info));
-                // Reload profiles list to update active status
-                use papillon_shared::ProfileMetadata;
-                if let Ok(profiles) =
-                    bridge::invoke_no_args::<Vec<ProfileMetadata>>("list_profiles").await
-                {
-                    if let Some(active) = profiles.iter().find(|p: &&ProfileMetadata| p.active) {
-                        identity.current_profile_id.set(Some(active.id.clone()));
-                    }
-                    identity.profiles.set(profiles);
-                }
-            }
-        });
-    };
-
-    let status_label = move || match orchestrator.status.get() {
-        OrchestratorStatus::Ready => "Ready",
-        OrchestratorStatus::Downloading { .. } => "Setting up\u{2026}",
-        OrchestratorStatus::Disconnected => "Agents only",
-        OrchestratorStatus::Unconfigured => "Agents only",
-    };
 
     let status_class = move || match orchestrator.status.get() {
-        OrchestratorStatus::Ready => "topbar-status ready",
-        OrchestratorStatus::Downloading { .. } => "topbar-status working",
-        _ => "topbar-status agents-only",
+        OrchestratorStatus::Ready => "topbar-dot ready",
+        OrchestratorStatus::Downloading { .. } => "topbar-dot working",
+        _ => "topbar-dot agents-only",
     };
 
     let toggle_menu = move |_: leptos::ev::MouseEvent| {
         menu_open.update(|v| *v = !*v);
     };
-
     let close_menu = move |_| {
         menu_open.set(false);
     };
@@ -89,33 +33,24 @@ pub fn TopBar() -> impl IntoView {
 
     view! {
         <header class="topbar app-topbar">
-            <button class="topbar-menu-btn" on:click=toggle_menu>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="3" y1="6" x2="21" y2="6"/>
-                    <line x1="3" y1="12" x2="21" y2="12"/>
-                    <line x1="3" y1="18" x2="21" y2="18"/>
-                </svg>
-            </button>
-            <div class="topbar-brand">
+            // Left zone — 64px, aligns flush with the sidebar column
+            <button class="topbar-brand" on:click=toggle_menu title="Canvases">
                 <img class="topbar-brand-icon" src="/logo.png" alt="Papillon" />
-                <span class="topbar-brand-name">"PAPILLON_SYS"</span>
+                <span class="topbar-brand-name">"Papillon"</span>
+            </button>
+
+            // Center zone — expands to fill remaining width
+            <div class="topbar-address">
+                <TopbarPrompt />
             </div>
-            <div class="topbar-spacer" />
-            <div class="topbar-meta">
-                <div class="topbar-session-badge">
-                    <div class="topbar-session-dot" />
-                    <span class=status_class>{status_label}</span>
-                </div>
-                <span class="topbar-meta-sep">"|"</span>
-                <span class="topbar-identity">{did_display}</span>
+
+            // Right zone — subtle status dot only
+            <div class="topbar-end">
+                <div class=status_class title="Orchestrator status" />
             </div>
-            <A href="/settings" attr:class="topbar-settings-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-            </A>
         </header>
+
+        // Canvas switcher dropdown (triggered by brand logo click)
         <Show when=move || menu_open.get()>
             <div class="menu-backdrop" on:click=close_menu></div>
             <div class="menu-dropdown">
@@ -174,44 +109,151 @@ pub fn TopBar() -> impl IntoView {
                 </A>
             </div>
         </Show>
-        <Show when=move || profile_menu_open.get()>
-            <div class="profile-menu-backdrop" on:click=move |_| profile_menu_open.set(false)></div>
-            <div class="profile-menu-dropdown">
-                <div class="profile-menu-section">
-                    <div class="profile-menu-title">"Profiles"</div>
-                    <For
-                        each=move || identity.profiles.get()
-                        key=|p| p.id.clone()
-                        children=move |profile| {
-                            let profile_id = profile.id.clone();
-                            let is_active = profile.active;
-                            let profile_name = profile.name.clone();
-                            view! {
-                                <button
-                                    class=move || {
-                                        if is_active {
-                                            "profile-menu-item active"
-                                        } else {
-                                            "profile-menu-item"
-                                        }
+    }
+}
+
+/// Browser-style address bar — lives in the top chrome across all pages.
+/// Accepts natural-language prompts, pap:// URIs, and https:// URLs.
+/// Identical logic to the former canvas InlinePrompt, but styled as a
+/// compact pill input rather than a card.
+#[component]
+fn TopbarPrompt() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let catalog_state = use_context::<CatalogState>();
+    let input_ref = NodeRef::<html::Input>::new();
+    let input_value = RwSignal::new(String::new());
+    let selected_idx: RwSignal<Option<usize>> = RwSignal::new(None);
+
+    // Live pap:// completions from the catalog — only when user types "pap://".
+    let pap_suggestions = Memo::new(move |_| {
+        let val = input_value.get();
+        if !val.starts_with("pap://") {
+            return vec![];
+        }
+        let prefix = val["pap://".len()..].to_lowercase();
+        let entries = catalog_state
+            .map(|c| c.entries.get())
+            .unwrap_or_default();
+        let mut names: Vec<String> = entries
+            .keys()
+            .filter(|k| k.starts_with(&prefix))
+            .take(8)
+            .cloned()
+            .collect();
+        names.sort();
+        names
+    });
+
+    let show_pap_suggestions = Memo::new(move |_| {
+        input_value.get().starts_with("pap://") && !pap_suggestions.get().is_empty()
+    });
+
+    let submit = move || {
+        let text = input_value.get();
+        if text.trim().is_empty() {
+            return;
+        }
+        canvas_state.submit_prompt(text.clone());
+        input_value.set(String::new());
+        selected_idx.set(None);
+    };
+
+    let on_keydown = move |e: ev::KeyboardEvent| {
+        let suggestions = pap_suggestions.get_untracked();
+        match e.key().as_str() {
+            "Enter" => {
+                if let Some(idx) = selected_idx.get_untracked() {
+                    if let Some(name) = suggestions.get(idx) {
+                        input_value.set(format!("pap://{name}"));
+                        selected_idx.set(None);
+                        return;
+                    }
+                }
+                submit();
+            }
+            "ArrowDown" if !suggestions.is_empty() => {
+                e.prevent_default();
+                let next = match selected_idx.get_untracked() {
+                    None => 0,
+                    Some(i) => (i + 1).min(suggestions.len() - 1),
+                };
+                selected_idx.set(Some(next));
+            }
+            "ArrowUp" if !suggestions.is_empty() => {
+                e.prevent_default();
+                let prev = match selected_idx.get_untracked() {
+                    None | Some(0) => None,
+                    Some(i) => Some(i - 1),
+                };
+                selected_idx.set(prev);
+            }
+            "Escape" => {
+                selected_idx.set(None);
+            }
+            _ => {}
+        }
+    };
+
+    // Pick up prefill text set by agent tile clicks in the canvas empty state.
+    Effect::new(move || {
+        if let Some(text) = canvas_state.prefill_prompt.get() {
+            input_value.set(text);
+            canvas_state.prefill_prompt.set(None);
+        }
+    });
+
+    // Focus on mount and whenever focus_prompt is bumped (⌘K).
+    Effect::new(move || {
+        let _ = canvas_state.focus_prompt.get();
+        let el_opt = input_ref.get();
+        let cb = Closure::once(move || {
+            if let Some(el) = el_opt {
+                let _ = el.focus();
+            }
+        });
+        let window = web_sys::window().unwrap();
+        let _ = window
+            .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 50);
+        cb.forget();
+    });
+
+    view! {
+        <div class="topbar-address-inner">
+            <input
+                node_ref=input_ref
+                class="topbar-address-input"
+                type="text"
+                placeholder="Search agents, ask a question, or enter a pap:// address\u{2026}"
+                prop:value=move || input_value.get()
+                on:input=move |e| {
+                    input_value.set(event_target_value(&e));
+                    selected_idx.set(None);
+                }
+                on:keydown=on_keydown
+            />
+            <Show when=move || show_pap_suggestions.get()>
+                <div class="topbar-suggestions">
+                    {move || pap_suggestions.get().into_iter().enumerate().map(|(i, name)| {
+                        let name_for_click = name.clone();
+                        view! {
+                            <button
+                                class="palette-suggestion palette-suggestion-pap"
+                                class:palette-suggestion--active=move || selected_idx.get() == Some(i)
+                                on:click=move |_| {
+                                    input_value.set(format!("pap://{}", name_for_click));
+                                    selected_idx.set(None);
+                                    if let Some(el) = input_ref.get() {
+                                        let _ = el.focus();
                                     }
-                                    on:click=move |_| switch_profile(profile_id.clone())
-                                >
-                                    <ProfileAvatar name=profile_name.clone() />
-                                    <span class="profile-menu-name">{profile_name}</span>
-                                    <Show when=move || is_active>
-                                        <span class="profile-menu-active-badge">"\u{2713}"</span>
-                                    </Show>
-                                </button>
-                            }
+                                }
+                            >
+                                <span class="pap-suggestion-scheme">"pap://"</span>
+                                <span class="pap-suggestion-name">{name}</span>
+                            </button>
                         }
-                    />
+                    }).collect::<Vec<_>>()}
                 </div>
-                <div class="profile-menu-divider"></div>
-                <A href="/settings?tab=profiles" attr:class="profile-menu-link" on:click=move |_| profile_menu_open.set(false)>
-                    "\u{2699} Profiles Settings"
-                </A>
-            </div>
-        </Show>
+            </Show>
+        </div>
     }
 }

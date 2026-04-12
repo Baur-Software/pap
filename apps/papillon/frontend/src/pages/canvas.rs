@@ -1,14 +1,10 @@
 use leptos::prelude::*;
-use leptos::{ev, html};
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::components::block_renderer::BlockRenderer;
 use crate::state::canvas::CanvasState;
-use crate::state::catalog::CatalogState;
 
 // ── Canvas outcome synthesis types (mirrors Tauri backend) ────────────────
 
@@ -34,16 +30,6 @@ pub struct CanvasSummaryState {
     pub failure_count: u32,
     pub active_sessions: u32,
 }
-
-/// Try-it-now prompts that match real intent rules in `papillon_shared::intent`.
-const QUICK_PROMPTS: &[&str] = &[
-    "search for Rust programming",
-    "weather in Tokyo",
-    "define ephemeral",
-    "paper on zero-knowledge proofs",
-    "tell me about photosynthesis",
-    "convert 100 USD to EUR",
-];
 
 /// Agent capabilities shown as clickable tiles on the new-tab canvas.
 /// Each entry is (label, example_prompt).
@@ -110,10 +96,6 @@ pub fn CanvasPage() -> impl IntoView {
         <HitlGate />
 
         <div class="canvas-page">
-            <div class="canvas-prompt-bar">
-                <InlinePrompt />
-            </div>
-
             <div class="canvas-stream">
                 <Show
                     when=has_blocks
@@ -182,180 +164,7 @@ fn CanvasEmptyState() -> impl IntoView {
     }
 }
 
-/// Prompt input embedded directly in the canvas — the address bar of the agent web.
-#[component]
-fn InlinePrompt() -> impl IntoView {
-    let canvas_state = expect_context::<CanvasState>();
-    let catalog_state = use_context::<CatalogState>();
-    let input_ref = NodeRef::<html::Input>::new();
-    let input_value = RwSignal::new(String::new());
-    // Keyboard-navigation cursor for pap:// suggestions (None = no selection).
-    let selected_idx: RwSignal<Option<usize>> = RwSignal::new(None);
-
-    // Live pap:// URI autocomplete — filters catalog names by the prefix the
-    // user has typed after "pap://".  Empty when input doesn't start with
-    // "pap://" or no catalog names match.
-    let pap_suggestions = Memo::new(move |_| {
-        let val = input_value.get();
-        if !val.starts_with("pap://") {
-            return vec![];
-        }
-        let prefix = val["pap://".len()..].to_lowercase();
-        let entries = catalog_state
-            .map(|c| c.entries.get())
-            .unwrap_or_default();
-        let mut names: Vec<String> = entries
-            .keys()
-            .filter(|k| k.starts_with(&prefix))
-            .take(8)
-            .cloned()
-            .collect();
-        names.sort();
-        names
-    });
-
-    let show_pap_suggestions =
-        Memo::new(move |_| input_value.get().starts_with("pap://") && !pap_suggestions.get().is_empty());
-
-    let submit = move || {
-        let text = input_value.get();
-        if text.trim().is_empty() {
-            return;
-        }
-        canvas_state.submit_prompt(text.clone());
-        input_value.set(String::new());
-        selected_idx.set(None);
-    };
-
-    let on_keydown = move |e: ev::KeyboardEvent| {
-        let suggestions = pap_suggestions.get_untracked();
-        match e.key().as_str() {
-            "Enter" => {
-                if let Some(idx) = selected_idx.get_untracked() {
-                    if let Some(name) = suggestions.get(idx) {
-                        input_value.set(format!("pap://{name}"));
-                        selected_idx.set(None);
-                        return;
-                    }
-                }
-                submit();
-            }
-            "ArrowDown" if !suggestions.is_empty() => {
-                e.prevent_default();
-                let next = match selected_idx.get_untracked() {
-                    None => 0,
-                    Some(i) => (i + 1).min(suggestions.len() - 1),
-                };
-                selected_idx.set(Some(next));
-            }
-            "ArrowUp" if !suggestions.is_empty() => {
-                e.prevent_default();
-                let prev = match selected_idx.get_untracked() {
-                    None | Some(0) => None,
-                    Some(i) => Some(i - 1),
-                };
-                selected_idx.set(prev);
-            }
-            "Escape" => {
-                selected_idx.set(None);
-            }
-            _ => {}
-        }
-    };
-
-    let click_suggestion = move |text: &'static str| {
-        input_value.set(text.to_string());
-        if let Some(el) = input_ref.get() {
-            let _ = el.focus();
-        }
-    };
-
-    // Pick up prefill values from agent tile clicks
-    Effect::new(move || {
-        if let Some(text) = canvas_state.prefill_prompt.get() {
-            input_value.set(text);
-            canvas_state.prefill_prompt.set(None);
-        }
-    });
-
-    // Focus the input on mount and whenever focus_prompt is bumped (e.g. ⌘K).
-    // Capture the DOM element eagerly in the reactive context (still alive)
-    // so the setTimeout callback doesn't access a disposed NodeRef.
-    Effect::new(move || {
-        let _ = canvas_state.focus_prompt.get(); // subscribe to signal
-        let el_opt = input_ref.get();
-        let cb = Closure::once(move || {
-            if let Some(el) = el_opt {
-                let _ = el.focus();
-            }
-        });
-        let window = web_sys::window().unwrap();
-        let _ = window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 50);
-        cb.forget();
-    });
-
-    view! {
-        <div class="canvas-prompt">
-            <span class="palette-label">"What do you want to build?"</span>
-            <input
-                node_ref=input_ref
-                class="palette-input"
-                type="text"
-                placeholder="Search agents, ask a question, or enter a pap:// address\u{2026}"
-                prop:value=move || input_value.get()
-                on:input=move |e| {
-                    input_value.set(event_target_value(&e));
-                    selected_idx.set(None);
-                }
-                on:keydown=on_keydown
-            />
-
-            // pap:// URI autocomplete — surfaces live agent names while the user types.
-            // Only shown when input starts with "pap://" and the catalog has matches.
-            <Show when=move || show_pap_suggestions.get()>
-                <div class="palette-suggestions">
-                    {move || pap_suggestions.get().into_iter().enumerate().map(|(i, name)| {
-                        let name_for_click = name.clone();
-                        view! {
-                            <button
-                                class="palette-suggestion palette-suggestion-pap"
-                                class:palette-suggestion--active=move || selected_idx.get() == Some(i)
-                                on:click=move |_| {
-                                    input_value.set(format!("pap://{}", name_for_click));
-                                    selected_idx.set(None);
-                                    if let Some(el) = input_ref.get() {
-                                        let _ = el.focus();
-                                    }
-                                }
-                            >
-                                <span class="pap-suggestion-scheme">"pap://"</span>
-                                <span class="pap-suggestion-name">{name}</span>
-                            </button>
-                        }
-                    }).collect::<Vec<_>>()}
-                </div>
-            </Show>
-
-            // Quick-start prompts — shown only when the input is completely empty.
-            <Show when=move || input_value.get().is_empty()>
-                <div class="palette-suggestions">
-                    {QUICK_PROMPTS.iter().map(|&text| {
-                        let t = text;
-                        view! {
-                            <button
-                                class="palette-suggestion"
-                                on:click=move |_| click_suggestion(t)
-                            >
-                                {t}
-                            </button>
-                        }
-                    }).collect::<Vec<_>>()}
-                </div>
-            </Show>
-        </div>
-    }
-}
+// Address bar (InlinePrompt) promoted to TopbarPrompt in components/topbar.rs.
 
 /// Human-in-the-Loop gate — a full-screen critical action barrier.
 /// Appears when `canvas_state.hitl_pending` is `Some`.
@@ -365,12 +174,10 @@ fn HitlGate() -> impl IntoView {
 
     let authorize = move |_| {
         canvas_state.hitl_pending.set(None);
-        // Future: send approval signal back to the protocol layer
     };
 
     let reject = move |_| {
         canvas_state.hitl_pending.set(None);
-        // Future: send rejection signal back to the protocol layer
     };
 
     view! {
