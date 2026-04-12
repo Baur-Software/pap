@@ -19,7 +19,7 @@ import { waitForApp } from "./helpers";
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  await page.locator(".topbar-settings-btn").click();
+  await page.locator('a[href="/settings"]').click();
   await expect(page.locator(".settings-tab", { hasText: "TEMPLATES" })).toBeVisible();
   await page.locator(".settings-tab", { hasText: "TEMPLATES" }).click();
   await expect(page.locator('input[placeholder*="Name"]')).toBeVisible();
@@ -353,8 +353,8 @@ test.describe("Auto-Generate Template and Registry-Driven Rendering", () => {
   test("FlightReservation block uses declarative renderer (tier-2 template dispatch)", async ({
     page,
   }) => {
-    await page.locator(".palette-input").fill("mock:flightreservation");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("mock:flightreservation");
+    await page.locator(".topbar-address-input").press("Enter");
 
     // The app has pre-existing UNKNOWN blocks; filter to the one that has a declarative grid
     // (this is the only block that DeclarativeRenderer::render() produced).
@@ -373,8 +373,8 @@ test.describe("Auto-Generate Template and Registry-Driven Rendering", () => {
   test("Hotel block uses declarative renderer (LodgingReservation tier-2 dispatch)", async ({
     page,
   }) => {
-    await page.locator(".palette-input").fill("mock:hotel");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("mock:hotel");
+    await page.locator(".topbar-address-input").press("Enter");
 
     // Hotel template may use grid or flex layout — filter by either
     const declarativeBlock = page

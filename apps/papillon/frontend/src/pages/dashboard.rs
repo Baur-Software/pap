@@ -26,7 +26,7 @@ pub fn DashboardPage() -> impl IntoView {
     });
 
     let active_count = move || {
-        agents.get().iter().filter(|a| a.source == "compiled" || a.source == "catalog").count()
+        agents.get().iter().filter(|a| a.source == "compiled").count()
     };
     let total_count = move || agents.get().len();
 
