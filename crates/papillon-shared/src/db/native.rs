@@ -263,6 +263,17 @@ impl NativeDatabase {
         )
         .map_err(|e| DbError(format!("db migrate preferences: {e}")))?;
 
+        // Additive column migrations — ALTER TABLE returns an error if the column
+        // already exists; we suppress those to keep migrations idempotent.
+        let _ = conn.execute(
+            "ALTER TABLE agents ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE agents ADD COLUMN version TEXT NOT NULL DEFAULT '0.1.0'",
+            [],
+        );
+
         Ok(())
     }
 
