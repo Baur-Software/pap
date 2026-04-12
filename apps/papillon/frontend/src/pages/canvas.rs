@@ -1,8 +1,5 @@
 use leptos::prelude::*;
-use leptos::{ev, html};
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
@@ -33,16 +30,6 @@ pub struct CanvasSummaryState {
     pub failure_count: u32,
     pub active_sessions: u32,
 }
-
-/// Try-it-now prompts that match real intent rules in `papillon_shared::intent`.
-const QUICK_PROMPTS: &[&str] = &[
-    "search for Rust programming",
-    "weather in Tokyo",
-    "define ephemeral",
-    "paper on zero-knowledge proofs",
-    "tell me about photosynthesis",
-    "convert 100 USD to EUR",
-];
 
 /// Agent capabilities shown as clickable tiles on the new-tab canvas.
 /// Each entry is (label, example_prompt).
@@ -109,10 +96,6 @@ pub fn CanvasPage() -> impl IntoView {
         <HitlGate />
 
         <div class="canvas-page">
-            <div class="canvas-prompt-bar">
-                <InlinePrompt />
-            </div>
-
             <div class="canvas-stream">
                 <Show
                     when=has_blocks
@@ -181,92 +164,7 @@ fn CanvasEmptyState() -> impl IntoView {
     }
 }
 
-/// Prompt input embedded directly in the canvas — the address bar of the agent web.
-#[component]
-fn InlinePrompt() -> impl IntoView {
-    let canvas_state = expect_context::<CanvasState>();
-    let input_ref = NodeRef::<html::Input>::new();
-    let input_value = RwSignal::new(String::new());
-
-    let submit = move || {
-        let text = input_value.get();
-        if text.trim().is_empty() {
-            return;
-        }
-        canvas_state.submit_prompt(text.clone());
-        input_value.set(String::new());
-    };
-
-    let on_keydown = move |e: ev::KeyboardEvent| {
-        if e.key() == "Enter" {
-            submit();
-        }
-    };
-
-    let click_suggestion = move |text: &'static str| {
-        input_value.set(text.to_string());
-        if let Some(el) = input_ref.get() {
-            let _ = el.focus();
-        }
-    };
-
-    // Pick up prefill values from agent tile clicks
-    Effect::new(move || {
-        if let Some(text) = canvas_state.prefill_prompt.get() {
-            input_value.set(text);
-            canvas_state.prefill_prompt.set(None);
-        }
-    });
-
-    // Focus the input on mount and whenever focus_prompt is bumped (e.g. ⌘K).
-    // Capture the DOM element eagerly in the reactive context (still alive)
-    // so the setTimeout callback doesn't access a disposed NodeRef.
-    Effect::new(move || {
-        let _ = canvas_state.focus_prompt.get(); // subscribe to signal
-        let el_opt = input_ref.get();
-        let cb = Closure::once(move || {
-            if let Some(el) = el_opt {
-                let _ = el.focus();
-            }
-        });
-        let window = web_sys::window().unwrap();
-        let _ = window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 50);
-        cb.forget();
-    });
-
-    view! {
-        <div class="canvas-prompt">
-            <span class="palette-label">"What do you want to build?"</span>
-            <input
-                node_ref=input_ref
-                class="palette-input"
-                type="text"
-                placeholder="Search agents, ask a question, or enter a pap:// address\u{2026}"
-                prop:value=move || input_value.get()
-                on:input=move |e| {
-                    input_value.set(event_target_value(&e));
-                }
-                on:keydown=on_keydown
-            />
-            <Show when=move || input_value.get().is_empty()>
-                <div class="palette-suggestions">
-                    {QUICK_PROMPTS.iter().map(|&text| {
-                        let t = text;
-                        view! {
-                            <button
-                                class="palette-suggestion"
-                                on:click=move |_| click_suggestion(t)
-                            >
-                                {t}
-                            </button>
-                        }
-                    }).collect::<Vec<_>>()}
-                </div>
-            </Show>
-        </div>
-    }
-}
+// Address bar (InlinePrompt) promoted to TopbarPrompt in components/topbar.rs.
 
 /// Human-in-the-Loop gate — a full-screen critical action barrier.
 /// Appears when `canvas_state.hitl_pending` is `Some`.
@@ -276,12 +174,10 @@ fn HitlGate() -> impl IntoView {
 
     let authorize = move |_| {
         canvas_state.hitl_pending.set(None);
-        // Future: send approval signal back to the protocol layer
     };
 
     let reject = move |_| {
         canvas_state.hitl_pending.set(None);
-        // Future: send rejection signal back to the protocol layer
     };
 
     view! {

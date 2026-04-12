@@ -9,31 +9,31 @@ test.beforeEach(async ({ page }) => {
 // ── Top Bar & App Shell ──────────────────────────────────────
 
 test.describe("App shell", () => {
-  test("renders top bar with identity and status", async ({ page }) => {
+  test("renders top bar with brand icon and status dot", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(page.locator(".topbar")).toBeVisible();
-    await expect(page.locator(".topbar-identity")).not.toBeEmpty();
-    await expect(page.locator(".topbar-status")).toBeVisible();
+    await expect(page.locator(".topbar-brand-icon")).toBeVisible();
+    await expect(page.locator(".topbar-dot")).toBeVisible();
   });
 
-  test("shows orchestrator status in top bar", async ({ page }) => {
+  test("shows orchestrator status dot in top bar", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Mock returns "Ready" → topbar maps to "Ready"
-    await expect(page.locator(".topbar-status")).toContainText("Ready");
+    // Mock returns "Ready" → topbar renders .topbar-dot.ready (no text, colour only)
+    await expect(page.locator(".topbar-dot.ready")).toBeVisible();
   });
 
-  test("shows settings gear link", async ({ page }) => {
+  test("shows settings link in sidebar", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".topbar-settings-btn")).toBeVisible();
+    await expect(page.locator('a[href="/settings"]')).toBeVisible();
   });
 
-  test("hamburger menu opens and shows nav items", async ({ page }) => {
+  test("brand button opens canvas dropdown and shows nav items", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await expect(page.locator(".menu-dropdown")).toBeVisible();
     await expect(page.locator("text=Browse Registries")).toBeVisible();
     await expect(page.locator(".menu-dropdown >> text=Settings")).toBeVisible();
@@ -53,35 +53,32 @@ test.describe("Canvas page", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(page.locator(".canvas-area")).toBeVisible();
-    // Seed canvas has blocks — create a new empty canvas via menu
-    await page.locator(".topbar-menu-btn").click();
+    // Seed canvas has blocks — create a new empty canvas via brand dropdown
+    await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
     await expect(page.locator(".canvas-empty")).toBeVisible();
     await expect(page.locator(".inspiration-line").first()).toBeVisible();
   });
 
-  test("shows inline prompt when orchestrator is ready", async ({ page }) => {
+  test("shows address bar prompt when orchestrator is ready", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-prompt")).toBeVisible();
-    await expect(
-      page.locator(".palette-label")
-    ).toContainText("What do you want to build?");
+    // The prompt input is now the topbar address bar, not an inline canvas element
+    await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 
-  test("inline prompt shows suggestion buttons", async ({ page }) => {
+  test("address bar shows pap:// suggestion buttons", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-prompt")).toBeVisible();
+    await page.locator(".topbar-address-input").click();
     await expect(page.locator(".palette-suggestion").first()).toBeVisible();
   });
 
-  test("inline prompt input accepts text", async ({ page }) => {
+  test("address bar input accepts text", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-prompt")).toBeVisible();
-    await page.locator(".palette-input").fill("Search for flights");
-    await expect(page.locator(".palette-input")).toHaveValue("Search for flights");
+    await page.locator(".topbar-address-input").fill("Search for flights");
+    await expect(page.locator(".topbar-address-input")).toHaveValue("Search for flights");
     // Suggestions should hide when input has text
     await expect(page.locator(".palette-suggestion").first()).not.toBeVisible();
   });
@@ -98,7 +95,7 @@ test.describe("Canvas page", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     // Seed canvas has blocks — create a new empty canvas to see the setup prompt
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
     await expect(page.locator(".canvas-prompt-setup")).toBeVisible();
     await expect(page.locator("text=Configure an LLM provider")).toBeVisible();
@@ -240,7 +237,7 @@ test.describe("Agent discovery workflow", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     // Navigate to browse registries
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await page.locator("text=Browse Registries").click();
     // Should show registry page
     await expect(page.locator("text=Browse Registries")).toBeVisible({ timeout: 5000 });
@@ -251,7 +248,7 @@ test.describe("Agent discovery workflow", () => {
   test("agent cards display name and action type", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await page.locator("text=Browse Registries").click();
     // Wait for first agent card
     await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
@@ -264,7 +261,7 @@ test.describe("Agent discovery workflow", () => {
   test("clicking agent shows detail view", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await page.locator("text=Browse Registries").click();
     // Click first agent card
     await page.locator(".agent-card").first().click();
@@ -281,7 +278,7 @@ test.describe("Scenario selection and disclosure", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     // Click "Browse Scenarios" or navigate to scenarios
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     // Assuming there's a scenarios link
     const scenariosLink = page.locator("text=Scenarios, Mandates & Receipts");
     if (await scenariosLink.isVisible()) {

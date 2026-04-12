@@ -164,6 +164,14 @@ pub struct AgentInfo {
     /// Registry URLs this agent's advertisement has been published to.
     #[serde(default)]
     pub published_to: Vec<String>,
+    /// True when the agent has a live runtime handler registered in the local
+    /// registry (i.e. it was loaded via `register_dynamic` or `build_agents`
+    /// at startup and can actually execute).  False for DB-only catalog agents
+    /// that are known to the system but whose handler failed to register or
+    /// whose seed has not yet been activated — they appear in the fleet roster
+    /// but cannot be invoked or resolved via `pap://` catalog URIs.
+    #[serde(default)]
+    pub live: bool,
 }
 
 /// Federation peer information.
