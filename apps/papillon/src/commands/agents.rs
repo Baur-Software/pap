@@ -38,6 +38,14 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
 
 /// List all local agents: compiled + catalog + user_created + generated.
 /// Returns AgentInfo for each. No sensitive fields.
+///
+/// Sources:
+/// - Registry advertisements → compiled agents (no DB row) and any
+///   dynamically-registered agents.
+/// - DB rows with agent_did not already in the registry → catalog/user/generated
+///   agents that are available but weren't loaded into the runtime registry
+///   (e.g. first launch before catalog seeding completes, or production builds
+///   where the catalog is pre-seeded but not re-registered yet).
 #[tauri::command]
 pub async fn list_local_agents(
     state: tauri::State<'_, AppState>,
@@ -50,7 +58,12 @@ pub async fn list_local_agents(
     let ads = registry.all_advertisements();
     let db_defs = state.db.load_all_agents().unwrap_or_default();
 
-    let agents: Vec<AgentInfo> = ads
+    // Collect DIDs already covered by the registry so we can append DB-only agents below.
+    let mut seen_dids: std::collections::HashSet<String> =
+        ads.iter().map(|ad| ad.provider.did.clone()).collect();
+
+    // 1. Registry ads (compiled + successfully registered dynamic agents).
+    let mut agents: Vec<AgentInfo> = ads
         .iter()
         .map(|ad| {
             let db_def = db_defs
@@ -75,6 +88,16 @@ pub async fn list_local_agents(
             }
         })
         .collect();
+
+    // 2. DB-only agents (catalog/user_created/generated agents whose advertisement
+    //    didn't make it into the runtime registry).
+    for def in &db_defs {
+        if let Some(did) = &def.agent_did {
+            if seen_dids.insert(did.clone()) {
+                agents.push(def_to_agent_info(def));
+            }
+        }
+    }
 
     Ok(agents)
 }
