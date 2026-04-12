@@ -216,8 +216,8 @@ async function submitAndAwaitTypedBlock(
   await waitForApp(page);
 
   // Fill in the prompt and submit
-  await page.locator(".palette-input").fill(mockKeyword);
-  await page.locator(".palette-input").press("Enter");
+  await page.locator(".topbar-address-input").fill(mockKeyword);
+  await page.locator(".topbar-address-input").press("Enter");
 
   // Wait for the typed CSS class to appear
   await expect(page.locator(cssClass).first()).toBeVisible({ timeout });
@@ -364,8 +364,8 @@ test.describe("JSON-LD block rendering — schema.org typed templates", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await page.locator(".palette-input").fill("mock:book");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("mock:book");
+    await page.locator(".topbar-address-input").press("Enter");
 
     // Wait for book block
     await expect(page.locator(".typed-book").first()).toBeVisible({ timeout: 8000 });
@@ -381,8 +381,8 @@ test.describe("JSON-LD block rendering — schema.org typed templates", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await page.locator(".palette-input").fill("mock:book");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("mock:book");
+    await page.locator(".topbar-address-input").press("Enter");
     await expect(page.locator(".typed-book").first()).toBeVisible({ timeout: 8000 });
 
     const block = page.locator(".canvas-block").first();
@@ -684,10 +684,10 @@ test.describe("Canvas block lifecycle", () => {
     await waitForApp(page);
 
     // Submit a prompt — block should appear in resolving state first
-    await page.locator(".palette-input").fill("mock:book");
+    await page.locator(".topbar-address-input").fill("mock:book");
 
     // The block will be in .resolving state momentarily before the event fires
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").press("Enter");
 
     // Eventually resolves (event fires after 200ms mock delay)
     await expect(page.locator(".typed-book").first()).toBeVisible({ timeout: 8000 });
@@ -727,8 +727,8 @@ test.describe("Canvas block lifecycle", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await page.locator(".palette-input").fill("trigger a failure");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("trigger a failure");
+    await page.locator(".topbar-address-input").press("Enter");
 
     // Should render failed block with retry button
     await expect(page.locator(".canvas-block.failed").first()).toBeVisible({ timeout: 8000 });
@@ -766,8 +766,8 @@ test.describe("Canvas block lifecycle", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await page.locator(".palette-input").fill("book a flight for me");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("book a flight for me");
+    await page.locator(".topbar-address-input").press("Enter");
 
     const ghostBlock = page.locator(".canvas-block.ghost").first();
     await expect(ghostBlock).toBeVisible({ timeout: 8000 });

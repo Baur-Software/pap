@@ -24,14 +24,13 @@ test.describe("Web standalone: app shell", () => {
     await expect(page.locator(".app-shell-canvas")).toBeVisible();
   });
 
-  test("top bar renders with identity", async ({ page }) => {
+  test("top bar renders with brand icon", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
     await expect(page.locator(".topbar")).toBeVisible();
-    // WebService auto-creates a default identity in browser mode
-    const identityText = await page.locator(".topbar-identity").innerText();
-    expect(identityText.length).toBeGreaterThan(0);
+    // The identity DID is no longer displayed in the topbar — confirm brand icon is present
+    await expect(page.locator(".topbar-brand-icon")).toBeVisible();
   });
 
   test("status bar shows agents-only state", async ({ page }) => {
@@ -44,19 +43,19 @@ test.describe("Web standalone: app shell", () => {
     await expect(statusBar).toContainText("Agents only");
   });
 
-  test("top bar shows agents-only orchestrator status", async ({ page }) => {
+  test("top bar shows agents-only orchestrator status dot", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Browser mode: Unconfigured → topbar shows "Agents only"
-    await expect(page.locator(".topbar-status")).toContainText("Agents only");
+    // Browser mode: Unconfigured → topbar shows .topbar-dot.agents-only (colour dot, no text)
+    await expect(page.locator(".topbar-dot.agents-only")).toBeVisible();
   });
 
   test("navigation menu opens and shows links", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await expect(page.locator(".menu-dropdown")).toBeVisible();
     await expect(page.locator(".menu-dropdown >> text=Browse Registries")).toBeVisible();
     await expect(page.locator(".menu-dropdown >> text=Settings")).toBeVisible();
@@ -75,23 +74,23 @@ test.describe("Web standalone: canvas page", () => {
     await expect(page.locator(".canvas-empty-state")).toBeVisible();
   });
 
-  test("shows inline prompt for user queries", async ({ page }) => {
+  test("shows address bar prompt for user queries", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // InlinePrompt renders inside the new-tab canvas
-    await expect(page.locator(".palette-input")).toBeVisible();
+    // The prompt input is now .topbar-address-input in the topbar, not a canvas-inline element
+    await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 });
 
 // ── Settings Page ────────────────────────────────────────────
-// Navigate via topbar gear icon — http-server has no SPA fallback.
+// Navigate via sidebar settings link — http-server has no SPA fallback.
 
 test.describe("Web standalone: settings page", () => {
   test("renders all settings tabs", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-settings-btn").click();
+    await page.locator('a[href="/settings"]').click();
 
     await expect(page.locator(".settings-tab")).toHaveCount(6);
     await expect(page.locator(".settings-tab").nth(0)).toHaveText("GENERAL");
@@ -105,7 +104,7 @@ test.describe("Web standalone: settings page", () => {
   test("tabs are clickable and switch content", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-settings-btn").click();
+    await page.locator('a[href="/settings"]').click();
 
     // Start on General — should show INFERENCE_SUBSTRATE heading
     await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
@@ -121,13 +120,13 @@ test.describe("Web standalone: settings page", () => {
 });
 
 // ── Browse Page ──────────────────────────────────────────────
-// Navigate via hamburger menu — http-server has no SPA fallback.
+// Navigate via brand dropdown — http-server has no SPA fallback.
 
 test.describe("Web standalone: browse page", () => {
   test("shows registry browser heading", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await page.locator(".menu-dropdown >> text=Browse Registries").click();
 
     await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
@@ -136,7 +135,7 @@ test.describe("Web standalone: browse page", () => {
   test("shows disconnected empty state", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await page.locator(".menu-dropdown >> text=Browse Registries").click();
 
     // Registry is not connected → shows quickstart to connect
@@ -197,17 +196,17 @@ test.describe("Web standalone: graceful degradation", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Navigate to settings via gear icon
-    await page.locator(".topbar-settings-btn").click();
+    // Navigate to settings via sidebar link
+    await page.locator('a[href="/settings"]').click();
     await expect(page.locator(".settings-tab").first()).toBeVisible();
 
-    // Navigate to browse via menu
-    await page.locator(".topbar-menu-btn").click();
+    // Navigate to browse via brand dropdown
+    await page.locator(".topbar-brand").click();
     await page.locator(".menu-dropdown >> text=Browse Registries").click();
     await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
 
-    // Back to home via menu
-    await page.locator(".topbar-menu-btn").click();
+    // Back to home via brand dropdown
+    await page.locator(".topbar-brand").click();
     await page.locator(".menu-dropdown >> text=New Canvas").click();
     await expect(page.locator(".canvas-page")).toBeVisible();
 

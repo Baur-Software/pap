@@ -24,12 +24,12 @@ const VALID_CONFIG = JSON.stringify({
 
 /** Navigate to Settings > Templates tab and wait for content.
  *
- * Uses in-app SPA navigation (topbar link click) so the Leptos router handles
- * the transition without a full page reload — this preserves in-memory mock
+ * Uses in-app SPA navigation (sidebar settings link click) so the Leptos router
+ * handles the transition without a full page reload — this preserves in-memory mock
  * state (e.g. created templates) across navigation in the same test.
  */
 async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  await page.locator(".topbar-settings-btn").click();
+  await page.locator('a[href="/settings"]').click();
   await expect(page.locator(".settings-tab", { hasText: "TEMPLATES" })).toBeVisible();
   await page.locator(".settings-tab", { hasText: "TEMPLATES" }).click();
   // Wait for the create form to appear (confirms tab content loaded)
@@ -148,7 +148,7 @@ test.describe("Templates", () => {
     await expect(templateRow(page, templateName)).toBeVisible();
 
     // Navigate away (back to canvas) and back to Settings > Templates
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
     await goToTemplatesTab(page);
 
