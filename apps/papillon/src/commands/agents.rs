@@ -31,6 +31,8 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
 
         source: source_to_str(&def.source).to_owned(),
         published_to: def.published_to.clone(),
+        // Callers that need live=false (DB-only agents) override this after construction.
+        live: true,
     }
 }
 
@@ -63,6 +65,7 @@ pub async fn list_local_agents(
         ads.iter().map(|ad| ad.provider.did.clone()).collect();
 
     // 1. Registry ads (compiled + successfully registered dynamic agents).
+    //    These are fully live — the runtime has a handler and keypair for each.
     let mut agents: Vec<AgentInfo> = ads
         .iter()
         .map(|ad| {
@@ -85,16 +88,21 @@ pub async fn list_local_agents(
                     .map(|d| source_to_str(&d.source).to_owned())
                     .unwrap_or_else(|| "compiled".to_owned()),
                 published_to: db_def.map(|d| d.published_to.clone()).unwrap_or_default(),
+                live: true,
             }
         })
         .collect();
 
     // 2. DB-only agents (catalog/user_created/generated agents whose advertisement
-    //    didn't make it into the runtime registry).
+    //    didn't make it into the runtime registry — e.g. first-launch timing or
+    //    registration failure). Marked live=false so the frontend knows they are
+    //    not yet invocable and must not be added to the pap:// catalog index.
     for def in &db_defs {
         if let Some(did) = &def.agent_did {
             if seen_dids.insert(did.clone()) {
-                agents.push(def_to_agent_info(def));
+                let mut info = def_to_agent_info(def);
+                info.live = false;
+                agents.push(info);
             }
         }
     }

@@ -26,6 +26,8 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
 
         source: String::new(),
         published_to: vec![],
+        // Remote registry agents are advertised and reachable — treat as live.
+        live: true,
     }
 }
 
