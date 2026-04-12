@@ -1021,19 +1021,20 @@ body {
 }
 
 /* Left zone — exactly as wide as the sidebar, drag-disabled so the logo
-   click registers and the canvas dropdown can open. */
+   click registers and the canvas dropdown can open. Icon-only to match
+   the sidebar's compact style; "Papillon" label lives in the tooltip. */
 .topbar-brand {
     width: var(--sidebar-width);
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--sp-xs, 4px);
     flex-shrink: 0;
     background: none;
     border: none;
     cursor: pointer;
     color: inherit;
+    overflow: hidden;
     -webkit-app-region: no-drag;
 }
 
@@ -1042,18 +1043,15 @@ body {
 }
 
 .topbar-brand-icon {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     object-fit: contain;
     flex-shrink: 0;
 }
 
+/* Name hidden — icon only in the 64px zone, title attr carries the label. */
 .topbar-brand-name {
-    font-family: var(--font-body);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    color: var(--text-1);
+    display: none;
 }
 
 /* Center zone — grows to fill remaining width; holds the address bar. */
