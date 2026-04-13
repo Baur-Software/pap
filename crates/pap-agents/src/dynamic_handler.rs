@@ -8,7 +8,7 @@
 //! at save time by the Tauri command layer). RFC 1918, loopback, link-local,
 //! and IP-literal addresses are rejected before any network call.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use pap_core::receipt::TransactionReceipt;
@@ -29,12 +29,12 @@ struct DynamicSession {
 
 pub struct DynamicAgentHandler {
     def: DynamicAgentDef,
-    llm_provider: Arc<LlmProvider>,
+    llm_provider: Arc<RwLock<LlmProvider>>,
     sessions: SessionStore<DynamicSession>,
 }
 
 impl DynamicAgentHandler {
-    pub fn new(def: DynamicAgentDef, llm_provider: Arc<LlmProvider>) -> Self {
+    pub fn new(def: DynamicAgentDef, llm_provider: Arc<RwLock<LlmProvider>>) -> Self {
         Self {
             def,
             llm_provider,
@@ -42,11 +42,12 @@ impl DynamicAgentHandler {
         }
     }
 
-    /// Build an [`LlmClient`] from the stored provider for a single
-    /// LLM call.  Cloning `Arc<LlmProvider>` is cheap; the client itself
-    /// is short-lived (used for one inference, then dropped).
+    /// Build an [`LlmClient`] from the current provider for a single
+    /// LLM call.  Reading through the `RwLock` ensures the latest
+    /// settings (changed via `configure_orchestrator`) are always used.
     fn make_llm_client(&self) -> Box<dyn LlmClient> {
-        (*self.llm_provider).clone().into_client()
+        let provider = self.llm_provider.read().unwrap_or_else(|e| e.into_inner());
+        (*provider).clone().into_client()
     }
 }
 
@@ -391,7 +392,7 @@ mod tests {
     #[test]
     fn ssrf_blocked_at_execution() {
         let def = make_def_with_endpoint("http://10.0.0.1/data");
-        let handler = DynamicAgentHandler::new(def, Arc::new(LlmProvider::None));
+        let handler = DynamicAgentHandler::new(def, Arc::new(RwLock::new(LlmProvider::None)));
         let token = make_token("schema:SearchAction");
         let (sid, _) = handler.handle_token(token).unwrap();
         handler.handle_did_exchange(&sid, "did:key:peer").unwrap();
@@ -465,7 +466,7 @@ mod tests {
     #[test]
     fn llm_none_provider_returns_error() {
         let def = make_def_llm_only();
-        let handler = DynamicAgentHandler::new(def, Arc::new(LlmProvider::None));
+        let handler = DynamicAgentHandler::new(def, Arc::new(RwLock::new(LlmProvider::None)));
         let token = make_token("schema:SearchAction");
         let (sid, _) = handler.handle_token(token).unwrap();
         handler.handle_did_exchange(&sid, "did:key:peer").unwrap();
@@ -478,7 +479,7 @@ mod tests {
     #[test]
     fn wrong_action_rejected() {
         let def = make_def_llm_only();
-        let handler = DynamicAgentHandler::new(def, Arc::new(LlmProvider::None));
+        let handler = DynamicAgentHandler::new(def, Arc::new(RwLock::new(LlmProvider::None)));
         assert!(handler
             .handle_token(make_token("schema:PayAction"))
             .is_err());
@@ -487,7 +488,7 @@ mod tests {
     #[test]
     fn unknown_session_did_exchange_errors() {
         let def = make_def_llm_only();
-        let handler = DynamicAgentHandler::new(def, Arc::new(LlmProvider::None));
+        let handler = DynamicAgentHandler::new(def, Arc::new(RwLock::new(LlmProvider::None)));
         assert!(handler
             .handle_did_exchange("no-such-session", "did:key:x")
             .is_err());

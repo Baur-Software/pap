@@ -5,7 +5,7 @@
 //! No more 3-file string matching.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
@@ -168,7 +168,7 @@ impl AgentSet {
     pub fn register_dynamic(
         &mut self,
         def: &DynamicAgentDef,
-        llm_provider: Arc<LlmProvider>,
+        llm_provider: Arc<RwLock<LlmProvider>>,
     ) -> Result<String, RegistrationError> {
         let seed = def
             .operator_key_seed
@@ -359,7 +359,7 @@ mod tests {
         let mut set = build_agents(vec![]);
         let def = make_dynamic_def(true);
         let did = set
-            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .register_dynamic(&def, Arc::new(RwLock::new(LlmProvider::None)))
             .unwrap();
         assert!(did.starts_with("did:key:z"), "got: {did}");
         let results = set.registry.query_local("schema:SearchAction");
@@ -372,7 +372,7 @@ mod tests {
     fn register_dynamic_missing_seed_errors() {
         let mut set = build_agents(vec![]);
         let def = make_dynamic_def(false);
-        let result = set.register_dynamic(&def, Arc::new(LlmProvider::None));
+        let result = set.register_dynamic(&def, Arc::new(RwLock::new(LlmProvider::None)));
         assert!(matches!(result, Err(RegistrationError::MissingKeySeed)));
     }
 
@@ -380,7 +380,7 @@ mod tests {
     fn register_dynamic_signed_advertisement() {
         let mut set = build_agents(vec![]);
         let def = make_dynamic_def(true);
-        set.register_dynamic(&def, Arc::new(LlmProvider::None))
+        set.register_dynamic(&def, Arc::new(RwLock::new(LlmProvider::None)))
             .unwrap();
         let ads = set.registry.all_advertisements();
         let ad = ads.iter().find(|a| a.name == "Test Dynamic Agent").unwrap();
@@ -411,13 +411,13 @@ mod tests {
         def.name = "Stable DID Agent A".into();
         let mut set = build_agents(vec![]);
         let did1 = set
-            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .register_dynamic(&def, Arc::new(RwLock::new(LlmProvider::None)))
             .unwrap();
 
         let mut set2 = build_agents(vec![]);
         def.name = "Stable DID Agent B".into();
         let did2 = set2
-            .register_dynamic(&def, Arc::new(LlmProvider::None))
+            .register_dynamic(&def, Arc::new(RwLock::new(LlmProvider::None)))
             .unwrap();
 
         assert_eq!(did1, did2, "same seed must produce same DID");
