@@ -55,6 +55,17 @@ pub async fn configure_orchestrator(
         *current = config.clone();
     }
 
+    // Update the shared LLM provider so all DynamicAgentHandlers pick up the
+    // new settings immediately — without this they would keep using the
+    // provider snapshot from startup (the original bug).
+    {
+        let mut provider = state
+            .shared_llm_provider
+            .write()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        *provider = config.inference_substrate.clone();
+    }
+
     // Persist the new config so it survives restarts.
     if let Ok(json) = serde_json::to_string(&config) {
         let _ = state.db.set_setting("orchestrator_config", &json);

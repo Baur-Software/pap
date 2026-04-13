@@ -10,7 +10,7 @@ use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_transport::{AgentHandler, EndpointRegistry};
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillon_shared::{OrchestratorConfig, SuccessorDesignation};
+use papillon_shared::{LlmProvider, OrchestratorConfig, SuccessorDesignation};
 use zeroize::Zeroizing;
 
 use crate::agents::on_device_ai::OnDeviceAiExecutor;
@@ -47,6 +47,9 @@ pub struct AppState {
     pub local_registry: Arc<Mutex<FederatedRegistry>>,
     pub bookmarks: RwLock<Vec<String>>,
     pub orchestrator_config: RwLock<OrchestratorConfig>,
+    /// Shared LLM provider — written by `configure_orchestrator` so all
+    /// `DynamicAgentHandler`s pick up new settings without a restart.
+    pub shared_llm_provider: Arc<RwLock<LlmProvider>>,
     /// On-device Candle model for the BuiltIn LLM provider.
     pub model_manager: Arc<tokio::sync::Mutex<ModelManager>>,
     /// Agent keypairs retained for both sides of the PAP handshake.
@@ -120,6 +123,7 @@ impl AppState {
             local_registry: self.local_registry.clone(),
             bookmarks: RwLock::new(self.bookmarks.read().unwrap().clone()),
             orchestrator_config: RwLock::new(self.orchestrator_config.read().unwrap().clone()),
+            shared_llm_provider: self.shared_llm_provider.clone(),
             model_manager: self.model_manager.clone(),
             agent_keypairs: RwLock::new(HashMap::new()), // Will be populated on demand
             db: self.db.clone(),
@@ -203,13 +207,16 @@ impl AppState {
             .and_then(|json| serde_json::from_str::<OrchestratorConfig>(&json).ok())
             .unwrap_or_default();
 
+        // ── Shared LLM provider — writable so configure_orchestrator can update it ─
+        let shared_llm_provider: Arc<RwLock<LlmProvider>> = Arc::new(RwLock::new(
+            saved_orchestrator_config.inference_substrate.clone(),
+        ));
+
         // ── Register all DB agents (catalog + user_created + generated) ───────────
         {
-            let orchestrator_config = saved_orchestrator_config.clone();
-            let llm_provider = Arc::new(orchestrator_config.inference_substrate.clone());
             let db_agents = db.load_all_agents().unwrap_or_default();
             for def in db_agents {
-                if let Err(e) = agent_set.register_dynamic(&def, llm_provider.clone()) {
+                if let Err(e) = agent_set.register_dynamic(&def, shared_llm_provider.clone()) {
                     eprintln!("Failed to register agent '{}': {e}", def.name);
                 }
             }
@@ -390,6 +397,7 @@ impl AppState {
             local_registry,
             bookmarks: RwLock::new(bookmarks),
             orchestrator_config: RwLock::new(saved_orchestrator_config),
+            shared_llm_provider,
             model_manager,
             agent_keypairs: RwLock::new(keypairs),
             db,
