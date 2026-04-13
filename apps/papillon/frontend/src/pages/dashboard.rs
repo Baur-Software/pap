@@ -29,6 +29,9 @@ pub fn DashboardPage() -> impl IntoView {
         agents.get().iter().filter(|a| a.source == "compiled").count()
     };
     let total_count = move || agents.get().len();
+    let active_agents = move || -> Vec<_> {
+        agents.get().into_iter().filter(|a| a.source == "compiled").collect()
+    };
 
     view! {
         <div class="fleet-page">
@@ -66,7 +69,7 @@ pub fn DashboardPage() -> impl IntoView {
                         fallback=move || view! {
                             <div class="fleet-grid">
                                 <For
-                                    each=move || agents.get()
+                                    each=active_agents
                                     key=|a| a.content_hash.clone()
                                     children=move |agent| {
                                         view! { <AgentCard agent=agent /> }

@@ -49,15 +49,15 @@ test.describe("App shell", () => {
 // ── Canvas Page (Home) ───────────────────────────────────────
 
 test.describe("Canvas page", () => {
-  test("shows empty state with inspiration lines on new canvas", async ({ page }) => {
+  test("shows empty state with agent tiles on new canvas", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-area")).toBeVisible();
+    await expect(page.locator(".canvas-stream")).toBeVisible();
     // Seed canvas has blocks — create a new empty canvas via brand dropdown
     await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
-    await expect(page.locator(".canvas-empty")).toBeVisible();
-    await expect(page.locator(".inspiration-line").first()).toBeVisible();
+    await expect(page.locator(".canvas-empty-state")).toBeVisible();
+    await expect(page.locator(".agent-tile").first()).toBeVisible();
   });
 
   test("shows address bar prompt when orchestrator is ready", async ({ page }) => {
@@ -67,11 +67,12 @@ test.describe("Canvas page", () => {
     await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 
-  test("address bar shows pap:// suggestion buttons", async ({ page }) => {
+  test("address bar shows pap:// suggestion buttons when typing pap://", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-address-input").click();
-    await expect(page.locator(".palette-suggestion").first()).toBeVisible();
+    // Suggestions appear only when user types "pap://" prefix
+    await page.locator(".topbar-address-input").fill("pap://");
+    await expect(page.locator(".palette-suggestion").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("address bar input accepts text", async ({ page }) => {
@@ -79,11 +80,11 @@ test.describe("Canvas page", () => {
     await waitForApp(page);
     await page.locator(".topbar-address-input").fill("Search for flights");
     await expect(page.locator(".topbar-address-input")).toHaveValue("Search for flights");
-    // Suggestions should hide when input has text
+    // Suggestions should hide when input has non-pap:// text
     await expect(page.locator(".palette-suggestion").first()).not.toBeVisible();
   });
 
-  test("shows setup prompt when orchestrator is disconnected", async ({ page }) => {
+  test("canvas renders normally when orchestrator is disconnected", async ({ page }) => {
     // Override mock to return Disconnected status
     await page.addInitScript(`
       const origInvoke = window.__TAURI__.core.invoke;
@@ -94,12 +95,10 @@ test.describe("Canvas page", () => {
     `);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Seed canvas has blocks — create a new empty canvas to see the setup prompt
-    await page.locator(".topbar-brand").click();
-    await page.locator("text=+ New Canvas").click();
-    await expect(page.locator(".canvas-prompt-setup")).toBeVisible();
-    await expect(page.locator("text=Configure an LLM provider")).toBeVisible();
-    await expect(page.locator("text=Open Settings")).toBeVisible();
+    // Canvas still renders — deterministic routing works without LLM
+    await expect(page.locator(".canvas-stream")).toBeVisible();
+    // Topbar address input is still available
+    await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 });
 
@@ -130,10 +129,10 @@ test.describe("Settings page", () => {
     await expect(page.locator(".settings-tab").nth(5)).toHaveText("MANDATES");
   });
 
-  test("General tab shows LLM Provider config", async ({ page }) => {
+  test("General tab shows inference substrate config", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator("text=LLM Provider")).toBeVisible();
+    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
     // Provider select is the first select on the page
     await expect(page.locator("select").first()).toBeVisible();
   });
@@ -218,7 +217,7 @@ test.describe("Settings page", () => {
     await waitForApp(page);
 
     // Start on General
-    await expect(page.locator("text=LLM Provider")).toBeVisible();
+    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
 
     // Switch to Identity
     await page.locator(".settings-tab").nth(3).click();

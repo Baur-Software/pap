@@ -44,41 +44,41 @@ test.describe("Agent fleet page", () => {
   test("active badge shows correct count", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    // 2 catalog agents in mock → 2 ACTIVE
+    // 2 compiled agents in mock (Web Page Reader, On-Device AI) → 2 ACTIVE
     const activeBadge = page.locator(".fleet-badge.active");
     await expect(activeBadge).toBeVisible();
     await expect(activeBadge).toContainText("2 ACTIVE");
   });
 
-  test("total badge shows all 3 agents", async ({ page }) => {
+  test("total badge shows all 5 agents", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
     const totalBadge = page.locator(".fleet-badge.total");
     await expect(totalBadge).toBeVisible();
-    await expect(totalBadge).toContainText("3 TOTAL");
+    await expect(totalBadge).toContainText("5 TOTAL");
   });
 
-  test("renders 3 agent cards from list_local_agents", async ({ page }) => {
+  test("ACTIVE AGENTS section renders 2 compiled agent cards", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".agent-card")).toHaveCount(3);
+    // Only compiled agents appear in the ACTIVE AGENTS grid
+    await expect(page.locator(".agent-card")).toHaveCount(2);
   });
 
-  test("first agent card shows DuckDuckGo Search", async ({ page }) => {
+  test("first agent card shows Web Page Reader (first compiled agent)", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
     const firstCard = page.locator(".agent-card").first();
     await expect(firstCard.locator(".agent-card-name")).toContainText(
-      "DuckDuckGo Search"
+      "Web Page Reader"
     );
   });
 
-  test("agent cards show source badges", async ({ page }) => {
+  test("agent cards show compiled source badges", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    // Two catalog + one user_created
-    await expect(page.locator(".agent-source-badge.catalog")).toHaveCount(2);
-    await expect(page.locator(".agent-source-badge.user")).toHaveCount(1);
+    // Only compiled agents are shown in the ACTIVE AGENTS grid
+    await expect(page.locator(".agent-source-badge.compiled")).toHaveCount(2);
   });
 
   test("agent cards show truncated DID", async ({ page }) => {
@@ -98,7 +98,7 @@ test.describe("Agent fleet page", () => {
     await waitForApp(page);
     const firstCard = page.locator(".agent-card").first();
     const actionStat = firstCard.locator(".agent-stat").nth(1);
-    await expect(actionStat).toContainText("SearchAction");
+    await expect(actionStat).toContainText("ReadAction");
     // Must NOT include raw "schema:" prefix
     await expect(actionStat).not.toContainText("schema:");
   });
@@ -119,7 +119,7 @@ test.describe("Agent fleet page", () => {
 // ── Agent command round-trips ─────────────────────────────────
 
 test.describe("Agent command round-trips", () => {
-  test("list_local_agents returns 3 seeded agents with new fields", async ({
+  test("list_local_agents returns 5 seeded agents with new fields", async ({
     page,
   }) => {
     await page.goto("/", { waitUntil: "commit" });
@@ -129,7 +129,8 @@ test.describe("Agent command round-trips", () => {
       window.__TAURI__.core.invoke("list_local_agents")
     );
 
-    expect(agents).toHaveLength(3);
+    // 2 compiled + 2 catalog + 1 user_created = 5
+    expect(agents).toHaveLength(5);
 
     // Every agent must have the new AgentInfo fields
     for (const agent of agents) {
@@ -142,6 +143,7 @@ test.describe("Agent command round-trips", () => {
 
     // Sources must be valid
     const sources = agents.map((a: any) => a.source);
+    expect(sources).toContain("compiled");
     expect(sources).toContain("catalog");
     expect(sources).toContain("user_created");
   });
@@ -176,7 +178,7 @@ test.describe("Agent command round-trips", () => {
     const agents = await page.evaluate(() =>
       window.__TAURI__.core.invoke("list_local_agents")
     );
-    expect(agents).toHaveLength(4);
+    expect(agents).toHaveLength(6); // 5 seeded + 1 new
     expect(agents.find((a: any) => a.name === "Test Agent")).toBeDefined();
   });
 
@@ -227,7 +229,7 @@ test.describe("Agent command round-trips", () => {
     const after = await page.evaluate(() =>
       window.__TAURI__.core.invoke("list_local_agents")
     );
-    expect(after).toHaveLength(2);
+    expect(after).toHaveLength(4); // 5 seeded - 1 deleted = 4
     expect(after.find((a: any) => a.agent_did === custom.agent_did)).toBeUndefined();
   });
 

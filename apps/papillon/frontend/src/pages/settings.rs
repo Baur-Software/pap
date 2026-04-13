@@ -210,6 +210,17 @@ fn GeneralTab() -> impl IntoView {
         });
     };
 
+    let orch_status_text = move || match orchestrator.status.get() {
+        OrchestratorStatus::Ready | OrchestratorStatus::Unconfigured => "ACTIVE",
+        OrchestratorStatus::Downloading { .. } => "LOADING",
+        OrchestratorStatus::Disconnected => "OFFLINE",
+    };
+    let orch_status_color = move || match orchestrator.status.get() {
+        OrchestratorStatus::Ready | OrchestratorStatus::Unconfigured => "#00b894",
+        OrchestratorStatus::Downloading { .. } => "#fdcb6e",
+        OrchestratorStatus::Disconnected => "#b2bec3",
+    };
+
     view! {
         <div class="card">
             // ── PAP Orchestrator ─────────────────────────────────────
@@ -223,7 +234,7 @@ fn GeneralTab() -> impl IntoView {
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
                         <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"STATUS"</span>
-                        <span style="color: #00b894; font-family: var(--font-mono); font-size: 11px;">"ACTIVE"</span>
+                        <span style=move || format!("color: {}; font-family: var(--font-mono); font-size: 11px;", orch_status_color())>{move || orch_status_text()}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
                         <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"MANDATE TTL"</span>
