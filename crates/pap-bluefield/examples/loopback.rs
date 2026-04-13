@@ -9,19 +9,36 @@
 //!
 //! ```text
 //! # default device, port 7777, GID index 0
-//! cargo run -p pap-bluefield --example loopback
+//! cargo run -p pap-bluefield --example loopback --features rdma
 //!
 //! # explicit device/port/GID
-//! cargo run -p pap-bluefield --example loopback -- \
-//!     --device mlx5_0 --port 7777 --gid-index 1
+//! cargo run -p pap-bluefield --example loopback --features rdma -- \
+//!     --device mlx5_2 --port 7777 --gid-index 0
+//! ```
+//!
+//! # BlueField-2 ARM: which device to use
+//!
+//! On BlueField-2 running from the ARM (DPU) side, `ibv_devices` lists four
+//! devices.  **Only `mlx5_2` and `mlx5_3` are the physical Ethernet ports**
+//! with populated RoCEv2 GID tables.  `mlx5_0` and `mlx5_1` are internal
+//! IB-mode ports whose GID tables are empty — querying GID index 0 on them
+//! returns `errno=-1`.
+//!
+//! Use `--device mlx5_2` (or `mlx5_3`) explicitly when running on BlueField
+//! ARM.  GID index 0 (link-local `fe80::`) works for intra-card loopback.
+//!
+//! ```text
+//! # Confirmed working on BlueField-2 ARM (FW 24.31.2006, Ubuntu 20.04):
+//! cargo run -p pap-bluefield --example loopback --features rdma -- \
+//!     --device mlx5_2 --gid-index 0
 //! ```
 //!
 //! # Choosing the right GID index
 //!
-//! On RoCEv2 (Ethernet) adapters, GID index 0 is typically a link-local GID
-//! (`fe80::…`) that may not support loopback routing.  If the example hangs
-//! waiting for RDMA completions, re-run with `--gid-index 1` (or whichever
-//! index is listed as a routable IPv4/IPv6 address by `show_gids`).
+//! On RoCEv2 (Ethernet) adapters, GID index 0 is a link-local GID
+//! (`fe80::…`) which works for intra-card loopback.  If you assign an IPv4
+//! address to the underlying netdev (e.g. `enp3s0f0s0`) a routable GID
+//! appears at index 1 and can also be used.  Run `show_gids` to inspect.
 //!
 //! On native InfiniBand (IB) adapters, GID index 0 always works and loopback
 //! is handled by the subnet manager.
