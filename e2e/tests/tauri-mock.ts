@@ -94,6 +94,34 @@ window.__TAURI__ = {
     _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
+        name: 'Web Page Reader',
+        provider_name: 'Papillon',
+        provider_did: 'did:key:z6MkPap001',
+        capabilities: ['schema:ReadAction'],
+        object_types: ['WebPage'],
+        requires_disclosure: [],
+        returns: ['WebPage'],
+        endpoint: null,
+        content_hash: 'web-reader-hash',
+        agent_did: 'did:key:z6MkPapAgent001',
+        source: 'compiled',
+        published_to: [],
+      },
+      {
+        name: 'On-Device AI',
+        provider_name: 'Papillon',
+        provider_did: 'did:key:z6MkPap002',
+        capabilities: ['schema:AskAction'],
+        object_types: ['Answer'],
+        requires_disclosure: [],
+        returns: ['Answer'],
+        endpoint: null,
+        content_hash: 'on-device-ai-hash',
+        agent_did: 'did:key:z6MkPapAgent002',
+        source: 'compiled',
+        published_to: [],
+      },
+      {
         name: 'DuckDuckGo Search',
         provider_name: 'DuckDuckGo',
         provider_did: 'did:key:z6MkDDG111',
@@ -310,10 +338,11 @@ window.__TAURI__ = {
 
         case 'list_agents':
           // Registry browser — returns remote/federated agents
+          // live: true is required so build_catalog() indexes them for pap:// suggestions
           return [
-            { name: 'DuckDuckGo Search', provider_name: 'DuckDuckGo', provider_did: 'did:key:z6MkDDG', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['results'], endpoint: null, content_hash: 'ddg-hash', agent_did: 'did:key:z6MkDDGFed', source: 'catalog', published_to: [] },
-            { name: 'Wikipedia', provider_name: 'Wikimedia', provider_did: 'did:key:z6MkWiki', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['article'], endpoint: null, content_hash: 'wiki-hash', agent_did: 'did:key:z6MkWikiFed', source: 'catalog', published_to: [] },
-            { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['schema:CreateAction'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash', agent_did: 'did:key:z6MkMistralFed', source: 'catalog', published_to: [] },
+            { name: 'DuckDuckGo Search', provider_name: 'DuckDuckGo', provider_did: 'did:key:z6MkDDG', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['results'], endpoint: null, content_hash: 'ddg-hash', agent_did: 'did:key:z6MkDDGFed', source: 'catalog', published_to: [], live: true },
+            { name: 'Wikipedia', provider_name: 'Wikimedia', provider_did: 'did:key:z6MkWiki', capabilities: ['schema:SearchAction'], object_types: ['SearchAction'], requires_disclosure: [], returns: ['article'], endpoint: null, content_hash: 'wiki-hash', agent_did: 'did:key:z6MkWikiFed', source: 'catalog', published_to: [], live: true },
+            { name: 'Mistral AI', provider_name: 'Mistral', provider_did: 'did:key:z6MkMistral', capabilities: ['schema:CreateAction'], object_types: ['InferenceAction'], requires_disclosure: [], returns: ['response'], endpoint: null, content_hash: 'mistral-hash', agent_did: 'did:key:z6MkMistralFed', source: 'catalog', published_to: [], live: true },
           ];
 
         case 'list_local_agents':
@@ -432,7 +461,8 @@ window.__TAURI__ = {
               prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
               state: 'Resolved',
               schema_type: schemaType,
-              content: { result: contentObj },
+              // Include receipt sentinel so render_typed_content unwraps 'result'
+              content: { result: contentObj, receipt: { status: 'ok', session: 'mock-session-001' } },
               linked_block_ids: [],
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -813,6 +843,94 @@ window.__TAURI__ = {
           window.__TAURI__.core._mandates[childHash] = child;
           return child;
         }
+
+        // canvas_plan_prompt is the Tauri IPC entry point for the planning
+        // phase — same mock behaviour as canvas_prompt (emit block_resolved
+        // after a short delay so the Leptos UI can transition states).
+        case 'canvas_plan_prompt': {
+          const blockId = (args && (args.block_id || args.blockId)) || 'block-mock';
+          const promptText = ((args && args.text) || '').toLowerCase();
+          function typedBlock2(schemaType, contentObj) {
+            return {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: schemaType,
+              // Include receipt sentinel so render_typed_content unwraps 'result'
+              content: { result: contentObj, receipt: { status: 'ok', session: 'mock-session-001' } },
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+          }
+          var planBlock = null;
+          if (promptText.includes('mock:movie') || promptText.includes('__movie')) {
+            planBlock = typedBlock2('Movie', { name: 'Inception', datePublished: '2010', director: { name: 'Christopher Nolan' }, genre: 'Sci-Fi', aggregateRating: { ratingValue: '8.8' }, description: 'A mind-bending thriller.' });
+          } else if (promptText.includes('mock:tvseries') || promptText.includes('__tvseries')) {
+            planBlock = typedBlock2('TVSeries', { name: 'Breaking Bad', startDate: '2008', broadcastChannel: 'AMC', numberOfSeasons: '5', description: 'A chemistry teacher turns drug lord.' });
+          } else if (promptText.includes('mock:videogame') || promptText.includes('__videogame')) {
+            planBlock = typedBlock2('VideoGame', { name: 'The Legend of Zelda', genre: 'Adventure', gamePlatform: 'Nintendo Switch', author: { name: 'Nintendo' }, description: 'An epic adventure game.' });
+          } else if (promptText.includes('mock:musicrecording') || promptText.includes('__musicrecording')) {
+            planBlock = typedBlock2('MusicRecording', { name: 'Bohemian Rhapsody', byArtist: { name: 'Queen' }, inAlbum: { name: 'A Night at the Opera' }, duration: 'PT5M55S' });
+          } else if (promptText.includes('mock:musicgroup') || promptText.includes('__musicgroup')) {
+            planBlock = typedBlock2('MusicGroup', { name: 'The Beatles', genre: 'Rock', foundingDate: '1960', description: 'Legendary British rock band.' });
+          } else if (promptText.includes('mock:book') || promptText.includes('__book')) {
+            planBlock = typedBlock2('Book', { name: 'The Rust Programming Language', author: { name: 'Steve Klabnik' }, publisher: { name: 'No Starch Press' }, datePublished: '2019', isbn: '978-1593278281', description: 'The official Rust book.' });
+          } else if (promptText.includes('mock:newsarticle') || promptText.includes('__newsarticle')) {
+            planBlock = typedBlock2('NewsArticle', { headline: 'Rust Tops Developer Survey for 9th Year', publisher: { name: 'Stack Overflow' }, datePublished: '2024-06-01', description: 'Rust remains the most loved language.', url: 'https://survey.stackoverflow.co/2024' });
+          } else if (promptText.includes('mock:scholarlyarticle') || promptText.includes('__scholarlyarticle')) {
+            planBlock = typedBlock2('ScholarlyArticle', { name: 'Attention Is All You Need', author: [{ name: 'Vaswani et al.' }], isPartOf: 'NeurIPS 2017', datePublished: '2017', identifier: '10.5555/3295222.3295349', abstract: 'We propose the Transformer architecture.' });
+          } else if (promptText.includes('mock:person') || promptText.includes('__person')) {
+            planBlock = typedBlock2('Person', { name: 'Grace Hopper', jobTitle: 'Rear Admiral', affiliation: { name: 'US Navy' }, description: 'Pioneer of computer programming.', url: 'https://en.wikipedia.org/wiki/Grace_Hopper' });
+          } else if (promptText.includes('mock:organization') || promptText.includes('__organization')) {
+            planBlock = typedBlock2('Organization', { name: 'Mozilla Foundation', '@type': 'Organization', address: { addressLocality: 'San Francisco', addressCountry: 'US' }, description: 'Champions of the open web.', url: 'https://mozilla.org' });
+          } else if (promptText.includes('mock:weather') || promptText.includes('__weather')) {
+            planBlock = typedBlock2('WeatherForecast', { name: 'San Francisco', temperature: '65°F', description: 'Foggy with partial clearing', humidity: '78%', windSpeed: '15 mph' });
+          } else if (promptText.includes('mock:geocoords') || promptText.includes('__geocoords')) {
+            planBlock = typedBlock2('GeoCoordinates', { name: 'Eiffel Tower', latitude: 48.8584, longitude: 2.2945, elevation: '330m', address: 'Champ de Mars, Paris, France' });
+          } else if (promptText.includes('mock:product') || promptText.includes('__product')) {
+            planBlock = typedBlock2('Product', { name: 'Framework Laptop 16', brand: { name: 'Framework' }, offers: { price: '1049.00' }, aggregateRating: { ratingValue: '4.7' }, description: 'A modular, repairable laptop.' });
+          } else if (promptText.includes('mock:event') || promptText.includes('__event')) {
+            planBlock = typedBlock2('Event', { name: 'RustConf 2024', startDate: '2024-09-10', endDate: '2024-09-11', location: { name: 'Montreal, Canada' }, organizer: { name: 'Rust Foundation' }, description: 'Annual Rust programming conference.' });
+          } else if (promptText.includes('mock:sportsteam') || promptText.includes('__sportsteam')) {
+            planBlock = typedBlock2('SportsTeam', { name: 'World Cup Final 2026', homeTeam: { name: 'Spain' }, awayTeam: { name: 'Brazil' }, startDate: '2026-07-19', location: { name: 'MetLife Stadium, NJ' } });
+          } else if (promptText.includes('mock:course') || promptText.includes('__course')) {
+            planBlock = typedBlock2('Course', { name: 'CS50: Introduction to Computer Science', provider: { name: 'Harvard / edX' }, description: 'A broad introduction to computer science.', url: 'https://cs50.harvard.edu' });
+          } else if (promptText.includes('mock:nutrition') || promptText.includes('__nutrition')) {
+            planBlock = typedBlock2('NutritionInformation', { name: 'Avocado', servingSize: '100g', calories: '160', proteinContent: '2g', carbohydrateContent: '9g', fatContent: '15g' });
+          } else if (promptText.includes('mock:jobposting') || promptText.includes('__jobposting')) {
+            planBlock = typedBlock2('JobPosting', { title: 'Senior Rust Engineer', hiringOrganization: { name: 'Fastly' }, jobLocation: { address: { addressLocality: 'Remote' } }, datePosted: '2024-05-01', baseSalary: { value: { minValue: 180000, maxValue: 250000 } }, description: 'Build high-performance networking software.' });
+          } else if (promptText.includes('mock:visualartwork') || promptText.includes('__visualartwork')) {
+            planBlock = typedBlock2('VisualArtwork', { name: 'Starry Night', creator: { name: 'Vincent van Gogh' }, artMedium: 'Oil on canvas', dateCreated: '1889', locationCreated: { name: 'MoMA, New York' }, description: 'A swirling night sky over a village.' });
+          } else if (promptText.includes('mock:definedterm') || promptText.includes('__definedterm')) {
+            planBlock = typedBlock2('DefinedTerm', { name: 'monad', inDefinedTermSet: 'noun', description: 'A design pattern in functional programming representing computations as chains.' });
+          } else if (promptText.includes('mock:quotation') || promptText.includes('__quotation')) {
+            planBlock = typedBlock2('Quotation', { text: 'Programs must be written for people to read, and only incidentally for machines to execute.', spokenByCharacter: { name: 'Harold Abelson' }, citation: { name: 'SICP' } });
+          } else if (promptText.includes('mock:flightreservation') || promptText.includes('__flightreservation')) {
+            planBlock = typedBlock2('FlightReservation', { reservationNumber: 'PX-4892', underName: { name: 'Ada Lovelace' }, departureAirport: 'SFO', arrivalAirport: 'JFK', departureDate: '2026-06-01', departureTime: '09:15', arrivalTime: '17:45', airline: 'United', totalPrice: 382.00 });
+          } else if (promptText.includes('mock:hotel') || promptText.includes('__hotel')) {
+            planBlock = typedBlock2('LodgingReservation', { reservationNumber: 'H-78321', underName: { name: 'Grace Hopper' }, name: 'The Grand Pacific', checkinDate: '2026-07-10', checkoutDate: '2026-07-13', totalPrice: 540.00 });
+          } else {
+            planBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: null,
+              content: { result: 'Here is your answer.' },
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+          }
+          var resolvedPlanBlock = planBlock;
+          setTimeout(function() {
+            window.__TAURI__.event.emit('block_resolved', { block: resolvedPlanBlock });
+          }, 200);
+          return null;
+        }
+
+        case 'get_recovery_status':
+          return { has_recovery: false, guardian_count: 0, threshold: 0 };
 
         default:
           console.warn('[tauri-mock] unhandled command:', cmd);

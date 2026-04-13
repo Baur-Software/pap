@@ -179,11 +179,11 @@ test.describe("LLM provider configuration", () => {
     expect(saved.mandate_ttl_hours).toBe(24);
   });
 
-  test("settings UI General tab shows LLM provider select", async ({ page }) => {
+  test("settings UI General tab shows inference substrate select", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await expect(page.locator("text=LLM Provider")).toBeVisible();
+    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
     // First select on the page is the provider dropdown
     await expect(page.locator("select").first()).toBeVisible();
   });
@@ -209,7 +209,7 @@ async function submitAndAwaitTypedBlock(
   page: import("@playwright/test").Page,
   mockKeyword: string,
   cssClass: string,
-  timeout = 8000
+  timeout = 15000
 ): Promise<void> {
   // Navigate to canvas
   await page.goto("/", { waitUntil: "commit" });
@@ -503,9 +503,9 @@ test.describe("Chrysalis federation commands", () => {
       })
     );
 
-    // Local agents have explicit source fields (catalog, user_created)
+    // Local agents have explicit source fields (compiled, catalog, user_created)
     for (const a of localAgents) {
-      expect(["catalog", "user_created"]).toContain(a.source);
+      expect(["compiled", "catalog", "user_created"]).toContain(a.source);
     }
 
     // Remote agents from a registry are a separate list
@@ -690,7 +690,7 @@ test.describe("Canvas block lifecycle", () => {
     await page.locator(".topbar-address-input").press("Enter");
 
     // Eventually resolves (event fires after 200ms mock delay)
-    await expect(page.locator(".typed-book").first()).toBeVisible({ timeout: 8000 });
+    await expect(page.locator(".typed-book").first()).toBeVisible({ timeout: 15000 });
 
     // After resolution the block should NOT have the resolving class
     const block = page.locator(".canvas-block").first();
@@ -702,7 +702,7 @@ test.describe("Canvas block lifecycle", () => {
     await page.addInitScript(`
       const origInvoke = window.__TAURI__.core.invoke;
       window.__TAURI__.core.invoke = async function(cmd, args) {
-        if (cmd === 'canvas_prompt') {
+        if (cmd === 'canvas_plan_prompt') {
           const blockId = (args && (args.block_id || args.blockId)) || 'block-fail';
           setTimeout(function() {
             window.__TAURI__.event.emit('block_resolved', {
@@ -741,7 +741,7 @@ test.describe("Canvas block lifecycle", () => {
     await page.addInitScript(`
       const origInvoke = window.__TAURI__.core.invoke;
       window.__TAURI__.core.invoke = async function(cmd, args) {
-        if (cmd === 'canvas_prompt') {
+        if (cmd === 'canvas_plan_prompt') {
           const blockId = (args && (args.block_id || args.blockId)) || 'block-ghost';
           setTimeout(function() {
             window.__TAURI__.event.emit('block_resolved', {

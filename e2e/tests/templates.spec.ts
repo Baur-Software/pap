@@ -44,7 +44,8 @@ async function createTemplate(
   config: string = VALID_CONFIG,
 ) {
   await page.locator('input[placeholder*="Name"]').fill(name);
-  await page.locator('input[placeholder*="Schema"]').fill(schemaType);
+  // SchemaTypeInput placeholder is "e.g. FlightReservation"
+  await page.locator('input[placeholder*="FlightReservation"]').fill(schemaType);
   await page.locator("textarea").first().fill(config);
   await page.locator('button:has-text("Create Template")').click();
   // Wait for success message
@@ -180,7 +181,7 @@ test.describe("Templates", () => {
     // Try to create with malformed JSON
     const templateName = `BadJSON-${Date.now()}`;
     await page.locator('input[placeholder*="Name"]').fill(templateName);
-    await page.locator('input[placeholder*="Schema"]').fill("Recipe");
+    await page.locator('input[placeholder*="FlightReservation"]').fill("Recipe");
     await page.locator("textarea").first().fill("{invalid json");
     await page.locator('button:has-text("Create Template")').click();
 
@@ -195,7 +196,7 @@ test.describe("Templates", () => {
     await goToTemplatesTab(page);
 
     // Try to create with empty name — just fill schema and config
-    await page.locator('input[placeholder*="Schema"]').fill("Recipe");
+    await page.locator('input[placeholder*="FlightReservation"]').fill("Recipe");
     await page.locator("textarea").first().fill(VALID_CONFIG);
 
     // Click Create and expect error
