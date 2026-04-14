@@ -517,10 +517,6 @@ pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnEr
     use crate::routes::admin::extract_bearer;
     use crate::state::AppState;
     use axum::http::HeaderMap;
-    use ed25519_dalek::SigningKey;
-    use pap_did::public_key_to_did;
-    use pap_marketplace::AgentAdvertisement;
-    use sha2::{Digest, Sha256};
     use std::path::PathBuf;
 
     let headers: HeaderMap = leptos_axum::extract()
@@ -551,35 +547,14 @@ pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnEr
     let mut errors = 0usize;
 
     for entry in entries {
-        // Derive a deterministic 32-byte seed from the agent name so reinstalls
-        // produce the same operator DID and content hash.
-        let seed_bytes: [u8; 32] = Sha256::digest(entry.name.as_bytes()).into();
-        let signing_key = SigningKey::from_bytes(&seed_bytes);
-        let verifying_key = signing_key.verifying_key();
-        let operator_did = public_key_to_did(&verifying_key);
-
-        let mut ad = AgentAdvertisement::new(
-            &entry.name,
-            &entry.provider,
-            &operator_did,
-            vec![entry.action.clone()],
-            entry.object_types.clone(),
-            entry.requires_disclosure.clone(),
-            entry.returns.clone(),
-        );
-        ad.ttl_min = 3600;
-        if !entry.version.is_empty() {
-            ad = ad.with_version(&entry.version);
-        }
-        if !entry.configurable_properties.is_empty() {
-            ad = ad.with_configurable_properties(entry.configurable_properties.clone());
-        }
-
-        if let Err(e) = ad.sign(&signing_key) {
-            tracing::warn!("Failed to sign catalog agent '{}': {e}", entry.name);
-            errors += 1;
-            continue;
-        }
+        let ad = match entry.to_signed_advertisement() {
+            Ok(ad) => ad,
+            Err(e) => {
+                tracing::warn!("Failed to build catalog agent '{}': {e}", entry.name);
+                errors += 1;
+                continue;
+            }
+        };
 
         let hash = ad.hash();
 

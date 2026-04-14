@@ -28,6 +28,7 @@ url = "2"
 uuid = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 # On-device inference (feature-gated so WASM builds can opt out)

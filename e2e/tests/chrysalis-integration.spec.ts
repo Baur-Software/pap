@@ -420,3 +420,44 @@ test.describe("Local vs. Chrysalis agent routing (live server)", () => {
     }
   });
 });
+
+// ── 7. Agent Designer + Catalog Install (new features) ───────
+
+test.describe("Chrysalis new features (live server)", () => {
+  test("GET /agents page renders Design Agent entry point", async ({
+    request,
+  }) => {
+    requireChrysalis();
+    const resp = await request.get(`${CHRYSALIS_URL}/agents`);
+    expect(resp.ok()).toBe(true);
+    expect(await resp.text()).toContain("Design Agent");
+  });
+
+  test("GET /agents/design page is reachable", async ({ request }) => {
+    requireChrysalis();
+    const resp = await request.get(`${CHRYSALIS_URL}/agents/design`);
+    expect(resp.ok()).toBe(true);
+    expect(await resp.text()).toContain("Design Agent");
+  });
+
+  test("GET /settings page renders Catalog Install card", async ({
+    request,
+  }) => {
+    requireChrysalis();
+    const resp = await request.get(`${CHRYSALIS_URL}/settings`);
+    expect(resp.ok()).toBe(true);
+    const html = await resp.text();
+    expect(html).toContain("PAP Catalog Agents");
+    expect(html).toContain("Install Catalog Agents");
+  });
+
+  test("startup-seeded TOML catalog agents appear in /api/browse", async ({
+    request,
+  }) => {
+    requireChrysalis();
+    const resp = await request.get(`${CHRYSALIS_URL}/api/browse`);
+    const agents = await resp.json();
+    // With PAP_CATALOG_PATH set in Docker, catalog agents are seeded on first boot
+    expect(agents.length).toBeGreaterThanOrEqual(10);
+  });
+});
