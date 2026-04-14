@@ -492,3 +492,126 @@ pub async fn get_peer_sync_log(did: String) -> Result<Vec<SyncEvent>, ServerFnEr
     let json = serde_json::to_string(&events).map_err(|e| ServerFnError::new(e.to_string()))?;
     serde_json::from_str(&json).map_err(|e| ServerFnError::new(e.to_string()))
 }
+
+/// Result of a catalog install operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogInstallResult {
+    pub installed: usize,
+    pub skipped: usize,
+    pub errors: usize,
+    pub catalog_path: String,
+}
+
+/// Install PAP catalog agents (from the shared pap-agents package) into this registry.
+///
+/// Each catalog agent receives a deterministic Ed25519 operator keypair derived from
+/// its name via SHA-256, so reinstalls produce the same DIDs and content hashes —
+/// making the operation fully idempotent.
+///
+/// Catalog path is resolved in order:
+///   1. `$PAP_CATALOG_PATH` environment variable
+///   2. `crates/pap-agents/catalog` relative to the current working directory
+///      (works when running `cargo run -p pap-registry` from the workspace root)
+#[server]
+pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+    use ed25519_dalek::SigningKey;
+    use pap_did::public_key_to_did;
+    use pap_marketplace::AgentAdvertisement;
+    use sha2::{Digest, Sha256};
+    use std::path::PathBuf;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    // Resolve catalog path
+    let catalog_path: PathBuf = std::env::var("PAP_CATALOG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("crates/pap-agents/catalog"));
+
+    if !catalog_path.exists() {
+        return Err(ServerFnError::new(format!(
+            "Catalog directory not found: {}. Set $PAP_CATALOG_PATH or run from the workspace root.",
+            catalog_path.display()
+        )));
+    }
+
+    let catalog_path_str = catalog_path.display().to_string();
+    let entries = pap_agents::load_catalog(&catalog_path);
+
+    let mut installed = 0usize;
+    let mut skipped = 0usize;
+    let mut errors = 0usize;
+
+    for entry in entries {
+        // Derive a deterministic 32-byte seed from the agent name so reinstalls
+        // produce the same operator DID and content hash.
+        let seed_bytes: [u8; 32] = Sha256::digest(entry.name.as_bytes()).into();
+        let signing_key = SigningKey::from_bytes(&seed_bytes);
+        let verifying_key = signing_key.verifying_key();
+        let operator_did = public_key_to_did(&verifying_key);
+
+        let mut ad = AgentAdvertisement::new(
+            &entry.name,
+            &entry.provider,
+            &operator_did,
+            vec![entry.action.clone()],
+            entry.object_types.clone(),
+            entry.requires_disclosure.clone(),
+            entry.returns.clone(),
+        );
+        ad.ttl_min = 3600;
+        if !entry.version.is_empty() {
+            ad = ad.with_version(&entry.version);
+        }
+        if !entry.configurable_properties.is_empty() {
+            ad = ad.with_configurable_properties(entry.configurable_properties.clone());
+        }
+
+        if let Err(e) = ad.sign(&signing_key) {
+            tracing::warn!("Failed to sign catalog agent '{}': {e}", entry.name);
+            errors += 1;
+            continue;
+        }
+
+        let hash = ad.hash();
+
+        match state.store.insert_agent(&hash, &ad).await {
+            Ok(()) => {
+                let mut registry = state.registry.lock().unwrap();
+                let _ = registry.register_local(ad); // duplicate silently ignored
+                installed += 1;
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("UNIQUE")
+                    || msg.contains("duplicate")
+                    || msg.contains("already exists")
+                {
+                    skipped += 1;
+                } else {
+                    tracing::warn!("Failed to insert catalog agent '{}': {e}", entry.name);
+                    errors += 1;
+                }
+            }
+        }
+    }
+
+    tracing::info!(
+        "Catalog install complete: {installed} installed, {skipped} skipped, {errors} errors"
+    );
+
+    Ok(CatalogInstallResult {
+        installed,
+        skipped,
+        errors,
+        catalog_path: catalog_path_str,
+    })
+}
