@@ -512,3 +512,54 @@ pub async fn unpublish_agent(
 
     Ok(())
 }
+
+// ── TraitBeacon profile ───────────────────────────────────────────────────────
+
+/// Save the user's advertised Trait Beacon profile (a Schema.org Person document).
+///
+/// Persists the profile to settings DB under `"trait_beacon_profile"`, updates
+/// the in-memory `trait_beacon_profile` field on `AppState`, and pushes a
+/// rebuilt personal-context preamble into the watch channel so all orchestrator
+/// LLM consumers immediately reflect the updated traits.
+///
+/// Returns an error if `profile` does not carry `"@type": "Person"`.
+#[tauri::command]
+pub fn save_trait_beacon_profile(
+    state: tauri::State<'_, AppState>,
+    profile: serde_json::Value,
+) -> Result<(), String> {
+    // Validate that this is a Schema.org Person document.
+    match profile.get("@type").and_then(|v| v.as_str()) {
+        Some("Person") | Some("schema:Person") => {}
+        other => {
+            return Err(format!(
+                "Trait Beacon profile must have @type 'Person', got {:?}",
+                other
+            ));
+        }
+    }
+
+    // Persist to settings DB so it survives restarts.
+    state
+        .db
+        .set_setting(
+            "trait_beacon_profile",
+            &serde_json::to_string(&profile)
+                .map_err(|e| format!("Failed to serialize profile: {e}"))?,
+        )
+        .map_err(|e| format!("Failed to persist trait beacon profile: {e}"))?;
+
+    // Update in-memory Arc so the next context rebuild picks it up.
+    if let Ok(mut guard) = state.trait_beacon_profile.write() {
+        *guard = profile.clone();
+    }
+
+    // Rebuild and broadcast the personal context preamble.
+    {
+        use papillon_shared::PersonalContext;
+        let preamble = PersonalContext::from_db(&*state.db, Some(profile)).to_system_preamble();
+        let _ = state.context_tx.send(preamble);
+    }
+
+    Ok(())
+}

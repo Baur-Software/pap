@@ -141,6 +141,7 @@ pub async fn check_llm_connection(
                     .as_ref()
                     .map(|m| crate::inference::ChatTemplate::from_backend(&m.model))
                     .unwrap_or(crate::inference::ChatTemplate::Llama),
+                None, // probe call — no personal context needed
             );
             let response = mgr.generate(&probe, 50).map_err(PapillonError::from)?;
             Ok(response)
