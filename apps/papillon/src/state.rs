@@ -21,7 +21,7 @@ use crate::error::PapillonError;
 use crate::inference::ModelManager;
 use crate::profiles_db::ProfilesDatabase;
 use pap_agents::{build_agents, load_catalog, AgentExecutor, SimpleAgent};
-use papillon_shared::ProfileMetadata;
+use papillon_shared::{PersonalContext, ProfileMetadata};
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
@@ -91,6 +91,13 @@ pub struct AppState {
     /// Keyed by approval_request_id; resolved by `canvas_approve_block`.
     pub approval_gates:
         tokio::sync::RwLock<std::collections::HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
+    /// Watch-channel sender for the orchestrator personal-context preamble.
+    /// Push a fresh preamble string whenever episode history or traits change.
+    /// All orchestrator LLM consumers hold a cloned `Receiver` and borrow at call time.
+    pub context_tx: tokio::sync::watch::Sender<String>,
+    /// The user's advertised TraitBeacon Schema.org Person document.
+    /// Persisted to settings DB under key `"trait_beacon_profile"`.
+    pub trait_beacon_profile: Arc<RwLock<serde_json::Value>>,
 }
 
 impl AppState {
@@ -144,6 +151,9 @@ impl AppState {
             webauthn_challenges: WebAuthnChallengeStore::new(),
             // Background clones never handle approval gates; start fresh.
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+            // Share the same watch sender so background threads can push context updates.
+            context_tx: self.context_tx.clone(),
+            trait_beacon_profile: self.trait_beacon_profile.clone(),
         }
     }
 
@@ -154,8 +164,29 @@ impl AppState {
     ) -> Self {
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
 
+        // ── Personal context channel ─────────────────────────────────────────────
+        // Load the user's TraitBeacon profile (Schema.org Person) from persisted settings.
+        let trait_beacon_profile_value: serde_json::Value = db
+            .get_setting("trait_beacon_profile")
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+
+        let trait_beacon_profile = Arc::new(RwLock::new(trait_beacon_profile_value.clone()));
+
+        // Build initial personal context preamble from DB state at startup.
+        let initial_trait =
+            if trait_beacon_profile_value == serde_json::Value::Object(serde_json::Map::new()) {
+                None
+            } else {
+                Some(trait_beacon_profile_value)
+            };
+        let initial_preamble = PersonalContext::from_db(&*db, initial_trait).to_system_preamble();
+        let (context_tx, context_rx) = tokio::sync::watch::channel(initial_preamble);
+
         // On-device AI needs the local model manager — register as an extra agent.
-        let ai_executor = OnDeviceAiExecutor::new(model_manager.clone());
+        let ai_executor = OnDeviceAiExecutor::new(model_manager.clone(), context_rx);
         let ai_meta = ai_executor.meta();
         let extra = vec![(
             ai_meta.name,
@@ -413,6 +444,8 @@ impl AppState {
             local_pap_urls: RwLock::new(Vec::new()),
             webauthn_challenges: WebAuthnChallengeStore::new(),
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+            context_tx,
+            trait_beacon_profile,
         }
     }
 

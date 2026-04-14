@@ -855,6 +855,20 @@ pub async fn run_scenario(
         eprintln!("Failed to record episode: {e}");
     }
 
+    // Rebuild personal context and push to the watch channel so all orchestrator
+    // LLM consumers immediately see the updated history on their next call.
+    {
+        use papillon_shared::PersonalContext;
+        let trait_val = state
+            .trait_beacon_profile
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .filter(|v| !v.is_null() && *v != serde_json::Value::Object(serde_json::Map::new()));
+        let preamble = PersonalContext::from_db(&*state.db, trait_val).to_system_preamble();
+        let _ = state.context_tx.send(preamble);
+    }
+
     // Update agent profile with exponential moving average
     update_agent_profile(&state, &agent_did_hash, &result.agent_name, &episode);
 

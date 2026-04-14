@@ -7,20 +7,45 @@
 //!
 //! Each command takes `State<'_, EpisodeStore>` rather than the monolithic
 //! `AppState` so the episode sub-system remains independently testable and
-//! follows the single-responsibility principle.
+//! follows the single-responsibility principle.  `record_episode` additionally
+//! accepts `AppState` to push an updated personal-context preamble after each
+//! write — the two managed states share the same underlying SQLite connection.
 
 use tauri::State;
 
 use crate::db::Episode;
 use crate::episode_store::EpisodeStore;
+use crate::state::AppState;
 
 /// Record a completed agent run to the SQLite episode store.
 ///
-/// The frontend (or other Tauri commands) call this after every scenario
-/// execution to persist the run so it survives app restarts.
+/// After persisting the episode, pushes a freshly-built personal-context
+/// preamble into the watch channel so all orchestrator LLM consumers see
+/// up-to-date history on their next inference call.
 #[tauri::command]
-pub fn record_episode(store: State<'_, EpisodeStore>, episode: Episode) -> Result<(), String> {
-    store.record(&episode).map_err(|e| e.message)
+pub fn record_episode(
+    store: State<'_, EpisodeStore>,
+    app_state: State<'_, AppState>,
+    episode: Episode,
+) -> Result<(), String> {
+    store.record(&episode).map_err(|e| e.message)?;
+
+    // Rebuild and broadcast the personal context preamble.
+    // `app_state.db` is the same SQLite connection as `store` — opened from
+    // the same path — so the freshly-inserted episode is immediately visible.
+    {
+        use papillon_shared::PersonalContext;
+        let trait_val = app_state
+            .trait_beacon_profile
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .filter(|v| !v.is_null() && *v != serde_json::Value::Object(serde_json::Map::new()));
+        let preamble = PersonalContext::from_db(&*app_state.db, trait_val).to_system_preamble();
+        let _ = app_state.context_tx.send(preamble);
+    }
+
+    Ok(())
 }
 
 /// Return the `limit` most-recent episodes, newest first.
