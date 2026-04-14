@@ -14,6 +14,10 @@ ignore = [
     # trusted offline node; key-recovery via network timing is not in the threat model.
     # Track upstream: https://github.com/RustCrypto/RSA/issues/19
     { id = "RUSTSEC-2023-0071", reason = "transitive via blind-rsa-signatures 0.14; no patched rsa release available; ecash issuer is offline/trusted, Marvin attack not in threat model" },
+    # rand crate is unsound when a custom global logger that calls rand::rng() is used.
+    # No patched release available; the PAP codebase does not use custom loggers with rand.
+    # Track upstream: https://rustsec.org/advisories/RUSTSEC-2026-0097
+    { id = "RUSTSEC-2026-0097", reason = "transitive dep; PAP does not use custom loggers that invoke rand::rng(); tracked for upgrade separately" },
 ]
 
 [bans]

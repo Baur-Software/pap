@@ -28,9 +28,12 @@ pub fn AgentsPage() -> impl IntoView {
                         <h1 class="page-title">"Agents"</h1>
                         <p class="page-subtitle">"All registered agent advertisements in this node's registry."</p>
                     </div>
-                    <button class="btn btn-primary" on:click=move |_| show_register.set(true)>
-                        "+ Register Agent"
-                    </button>
+                    <div style="display:flex; gap:8px;">
+                        <a href="/agents/design" class="btn btn-secondary">"+ Design Agent"</a>
+                        <button class="btn btn-primary" on:click=move |_| show_register.set(true)>
+                            "+ Register Agent"
+                        </button>
+                    </div>
                 </div>
             </div>
 

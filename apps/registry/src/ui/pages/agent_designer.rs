@@ -1,10 +1,9 @@
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::ui::api::AgentAdvertisement;
-// Phase 4: These will be used when implementing full async signing flow
-#[allow(unused_imports)]
 use crate::ui::api::{register_agent_json, sign_advertisement};
 
 /// Form state for the agent designer
@@ -54,7 +53,7 @@ impl AgentFormState {
             requires_disclosure: self.requires_disclosure.clone(),
             returns: self.returns.clone(),
             ttl_min: self.ttl_min,
-            signed_by: String::new(),
+            signed_by: self.provider_did.clone(),
             signature: None,
         }
     }
@@ -187,7 +186,7 @@ pub fn AgentDesignerPage() -> impl IntoView {
     }
 }
 
-/// Form component with all sections (Phases 2-5 integrated)
+/// Form component with all sections
 #[component]
 fn DesignerForm(
     form_state: RwSignal<AgentFormState>,
@@ -210,9 +209,7 @@ fn DesignerForm(
                         submit_status.set(Some("⚠️ Signing key required. Paste your Ed25519 private key (base64)".to_string()));
                         return;
                     }
-                    // Phase 4: Prepare for signing and registration
-                    // Full async handling requires using Action component for proper state management
-                    submit_status.set(Some("📋 Ready to sign. Use Sign & Register button to proceed.".to_string()));
+                    submit_status.set(Some("📋 Form valid. Use Sign & Register to publish.".to_string()));
                 } else {
                     form_state.set(state);
                     submit_status.set(None);
@@ -238,26 +235,51 @@ fn DesignerForm(
                 <button
                     class="btn btn-primary"
                     type="button"
-                    disabled=move || {
-                        let state = form_state.get();
-                        state.errors.is_empty() && signing_key.get().trim().is_empty() || is_submitting.get()
-                    }
+                    disabled=move || signing_key.get().trim().is_empty() || is_submitting.get()
                     on:click=move |_| {
-                        is_submitting.set(true);
-                        let _state = form_state.get();
-                        let _ad = _state.to_advertisement();
-                        let _key = signing_key.get();
-
-                        // Phase 4: TODO - Implement actual signing and registration
-                        // This will:
-                        // 1. Call sign_advertisement(json, key) server function
-                        // 2. On success, call register_agent_json(signed_json)
-                        // 3. Update status with hash on success or error message on failure
-                        submit_status.set(Some("⏳ Signing & registering... (Phase 4 in progress)".to_string()));
-                        is_submitting.set(false);
+                        let mut state = form_state.get();
+                        validation_attempted.set(true);
+                        if !state.validate() {
+                            form_state.set(state);
+                            return;
+                        }
+                        form_state.set(state.clone());
+                        let key = signing_key.get();
+                        if key.trim().is_empty() {
+                            submit_status.set(Some("⚠️ Signing key required.".to_string()));
+                            return;
+                        }
+                        let ad = state.to_advertisement();
+                        match serde_json::to_string(&ad) {
+                            Ok(json) => {
+                                is_submitting.set(true);
+                                submit_status.set(Some("⏳ Signing & registering…".to_string()));
+                                spawn_local(async move {
+                                    let result = match sign_advertisement(json, key).await {
+                                        Ok(signed_json) => match register_agent_json(signed_json).await {
+                                            Ok(hash) => Ok(hash),
+                                            Err(e) => Err(e.to_string()),
+                                        },
+                                        Err(e) => Err(e.to_string()),
+                                    };
+                                    match result {
+                                        Ok(hash) => {
+                                            submit_status.set(Some(format!("✓ Registered! Hash: {hash}")));
+                                        }
+                                        Err(e) => {
+                                            submit_status.set(Some(format!("✗ {e}")));
+                                        }
+                                    }
+                                    is_submitting.set(false);
+                                });
+                            }
+                            Err(e) => {
+                                submit_status.set(Some(format!("✗ Serialization error: {e}")));
+                            }
+                        }
                     }
                 >
-                    {move || if is_submitting.get() { "⏳ Signing..." } else { "🔐 Sign & Register" }}
+                    {move || if is_submitting.get() { "⏳ Signing…" } else { "🔐 Sign & Register" }}
                 </button>
                 <a href="/agents" class="btn btn-secondary">
                     "Cancel"

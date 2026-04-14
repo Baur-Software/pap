@@ -77,8 +77,10 @@ WORKDIR /app
 COPY --from=builder /build/target/release/pap-registry ./pap-registry
 COPY --from=builder /build/apps/registry/assets        ./assets
 COPY --from=builder /build/apps/registry/styles/main.css ./styles/main.css
+COPY --from=builder /build/crates/pap-agents/catalog   ./catalog
 
 # Plain HTTP on port 8080 — suitable for CI (no TLS certificates to manage)
+ENV PAP_CATALOG_PATH=/app/catalog
 ENV PAP_REGISTRY_HOST=0.0.0.0
 ENV PAP_REGISTRY_PORT=8080
 ENV PAP_REGISTRY_NO_TLS=true

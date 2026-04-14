@@ -131,6 +131,9 @@ jobs:
       # ── Services (start, probe, stop) ──
       - name: just registry-local
         run: |
+          # Pre-build the binary so the 120s startup timer is not eaten by compilation
+          # (cold-cache CI runs re-compile pap-registry after Cargo.lock changes)
+          cargo build -p pap-registry --features ssr
           just registry-local &
           pid=$!
           for i in $(seq 1 120); do
