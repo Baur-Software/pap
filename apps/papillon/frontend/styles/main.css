@@ -4516,4 +4516,114 @@ body {
 
 .canvas-block {
     max-width: 100%;
+    position: relative; /* anchor for the absolute-positioned expand button */
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BROWSE BLOCK — viewport-filling expansion
+   ═══════════════════════════════════════════════════════════ */
+
+/* When a browse block (or any block with the expand toggle) fills the canvas,
+   it is positioned fixed over the content area, below the topbar and to the
+   right of the sidebar, mirroring the main layout grid exactly. */
+.canvas-block--expanded {
+    position: fixed;
+    inset: var(--topbar-height, 36px) 0 0 var(--sidebar-width, 64px);
+    z-index: 200;
+    max-width: none;
+    border-radius: 0;
+    border: none;
+    overflow-y: auto;
+    /* Inherit the block background so it covers the canvas cleanly */
+    background: var(--bg-1);
+}
+
+/* Expand / collapse toggle button — hidden until block is hovered or expanded */
+.block-expand-btn {
+    position: absolute;
+    top: var(--sp-sm, 8px);
+    right: var(--sp-sm, 8px);
+    background: none;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 1;
+    border-radius: var(--r-sm, 4px);
+}
+
+.canvas-block:hover .block-expand-btn,
+.canvas-block--expanded .block-expand-btn {
+    opacity: 1;
+}
+
+.block-expand-btn:hover {
+    color: var(--text-1);
+    background: var(--bg-2);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BROWSE BAR — in-block URL navigation for browse blocks
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-block-browse-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm, 8px);
+    padding: var(--sp-xs, 4px) var(--sp-sm, 8px);
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--r-sm, 4px) var(--r-sm, 4px) 0 0;
+}
+
+.canvas-block--expanded .canvas-block-browse-bar {
+    border-radius: 0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.browse-bar-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.browse-bar-input {
+    flex: 1;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm, 4px);
+    padding: 4px 8px;
+    color: var(--text-1);
+    outline: none;
+    min-width: 0; /* allow flex shrink */
+}
+
+.browse-bar-input:focus {
+    border-color: var(--purple, #6c5ce7);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXTERNAL URL LINKS — navigable from any block
+   ═══════════════════════════════════════════════════════════ */
+
+/* ExternalUrl field values rendered as PAP navigation links */
+.typed-url-nav {
+    color: var(--purple, #6c5ce7);
+    text-decoration: none;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.typed-url-nav:hover {
+    text-decoration: underline;
+    opacity: 0.85;
 }

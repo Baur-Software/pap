@@ -8,6 +8,7 @@ use super::field_classify::{
 };
 use super::registry::RendererRegistry;
 use super::SettingsActionSink;
+use super::SourceBlockId;
 use crate::state::canvas::CanvasState;
 
 /// Maximum items rendered per list before showing an overflow indicator.
@@ -818,11 +819,31 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
             .into_any()
         }
         FieldKind::ExternalUrl => {
-            let display = val.as_str().unwrap_or("-").to_string();
+            let raw = val.as_str().unwrap_or("").to_string();
+            let canvas_state = use_context::<CanvasState>();
+            // Carry the source block ID so the new browse block is graph-linked.
+            let source_id = use_context::<SourceBlockId>().map(|s| s.0);
+            // Rewrite http(s):// → pap:// so clicks route through the PAP handshake.
+            let pap = if raw.starts_with("https://") {
+                format!("pap://{}", &raw["https://".len()..])
+            } else if raw.starts_with("http://") {
+                format!("pap://{}", &raw["http://".len()..])
+            } else {
+                raw.clone()
+            };
+            let pap_for_click = pap.clone();
+            let raw_display = raw.clone();
             view! {
                 <div class=format!("typed-field typed-field-url {}", css_field)>
                     <span class="typed-key">{label}</span>
-                    <span class="typed-val typed-url">{display}</span>
+                    <a class="pap-link typed-url-nav" href=pap
+                        on:click=move |e: leptos::ev::MouseEvent| {
+                            e.prevent_default();
+                            if let Some(cs) = canvas_state {
+                                cs.submit_agent_link(pap_for_click.clone(), source_id.clone());
+                            }
+                        }
+                    >{raw_display}</a>
                 </div>
             }
             .into_any()
@@ -870,7 +891,7 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
                                 .unwrap_or(false);
                             if confirmed {
                                 if let Some(cs) = canvas_state {
-                                    cs.submit_agent_link(url_inner);
+                                    cs.submit_agent_link(url_inner, None);
                                 }
                             }
                         }

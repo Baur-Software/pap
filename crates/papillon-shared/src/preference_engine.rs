@@ -326,6 +326,84 @@ impl<'a> PreferenceEngine<'a> {
         let _ = self.db.upsert_preference(&signal);
     }
 
+    /// True if any prior grant for `(action_type, schema_type)` covers all `required` scopes.
+    ///
+    /// Returns `true` immediately when `required` is empty (nothing to disclose).
+    /// Used to skip the `AwaitingApproval` gate when the principal has already
+    /// approved the same scope set for this interaction type.
+    pub fn has_approved_scopes(
+        &self,
+        action_type: &str,
+        schema_type: &str,
+        required: &[String],
+    ) -> bool {
+        if required.is_empty() {
+            return true;
+        }
+        let Ok(rows) = self
+            .db
+            .list_preferences_for_schema(action_type, schema_type)
+        else {
+            return false;
+        };
+        rows.iter().any(|r| {
+            let approved: Vec<String> =
+                serde_json::from_str(&r.approved_scope_refs).unwrap_or_default();
+            required.iter().all(|s| approved.contains(s))
+        })
+    }
+
+    /// Upsert an approval record for `agent_did_hash` in `(action_type, schema_type)`,
+    /// creating the row from scratch if it does not exist yet.
+    ///
+    /// Unlike [`record_scope_approved`], this never silently no-ops on a missing row.
+    /// New scope refs are merged (deduplicating) into any existing `approved_scope_refs`.
+    /// Errors are silently discarded — the preference store is advisory.
+    pub fn save_approved_scopes(
+        &self,
+        action_type: &str,
+        schema_type: &str,
+        agent_did_hash: &str,
+        agent_name: &str,
+        scopes: &[String],
+    ) {
+        let now = Utc::now().to_rfc3339();
+        let existing = self
+            .db
+            .get_preference(action_type, schema_type, agent_did_hash)
+            .ok()
+            .flatten();
+        let signal = match existing {
+            Some(mut s) => {
+                let mut approved: Vec<String> =
+                    serde_json::from_str(&s.approved_scope_refs).unwrap_or_default();
+                for scope in scopes {
+                    if !approved.contains(scope) {
+                        approved.push(scope.clone());
+                    }
+                }
+                s.approved_scope_refs =
+                    serde_json::to_string(&approved).unwrap_or_else(|_| "[]".into());
+                s.updated_at = now;
+                s
+            }
+            None => PreferenceSignal {
+                id: Uuid::new_v4().to_string(),
+                action_type: action_type.to_string(),
+                schema_type: schema_type.to_string(),
+                agent_did_hash: agent_did_hash.to_string(),
+                agent_name: agent_name.to_string(),
+                selection_count: 0,
+                success_count: 0,
+                last_selected: now.clone(),
+                approved_scope_refs: serde_json::to_string(scopes).unwrap_or_else(|_| "[]".into()),
+                rejected_scope_refs: "[]".to_string(),
+                updated_at: now,
+            },
+        };
+        let _ = self.db.upsert_preference(&signal);
+    }
+
     /// Return the intersection of approved scope refs across all agents for
     /// `(action_type, schema_type)` — the mandate properties the principal has
     /// consistently approved for this type of interaction.
@@ -685,6 +763,114 @@ mod tests {
             sig.is_none(),
             "record_scope_approved with no row should be a no-op"
         );
+    }
+
+    // ── has_approved_scopes ──────────────────────────────────────────────────
+
+    #[test]
+    fn has_approved_scopes_empty_required_always_true() {
+        let db = test_db();
+        let engine = PreferenceEngine::new(&db);
+        assert!(engine.has_approved_scopes("schema:SearchAction", "schema:SearchResult", &[]));
+    }
+
+    #[test]
+    fn has_approved_scopes_no_rows_returns_false() {
+        let db = test_db();
+        let engine = PreferenceEngine::new(&db);
+        assert!(!engine.has_approved_scopes(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            &["schema:name".to_string()],
+        ));
+    }
+
+    #[test]
+    fn has_approved_scopes_covers_required() {
+        let db = test_db();
+        let engine = PreferenceEngine::new(&db);
+        engine.save_approved_scopes(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            "hash1",
+            "Agent",
+            &["schema:name".to_string(), "schema:url".to_string()],
+        );
+        assert!(engine.has_approved_scopes(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            &["schema:name".to_string()],
+        ));
+        assert!(engine.has_approved_scopes(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            &["schema:name".to_string(), "schema:url".to_string()],
+        ));
+        // scope not previously approved → false
+        assert!(!engine.has_approved_scopes(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            &["schema:email".to_string()],
+        ));
+    }
+
+    // ── save_approved_scopes ─────────────────────────────────────────────────
+
+    #[test]
+    fn save_approved_scopes_creates_row_when_missing() {
+        let db = test_db();
+        let engine = PreferenceEngine::new(&db);
+        // No prior record_agent_selected — row must be created from scratch.
+        engine.save_approved_scopes(
+            "schema:ReadAction",
+            "schema:WebPage",
+            "hash_web",
+            "Web Page Reader",
+            &["schema:url".to_string()],
+        );
+        let sig = db
+            .get_preference("schema:ReadAction", "schema:WebPage", "hash_web")
+            .unwrap()
+            .expect("row should have been created");
+        let approved: Vec<String> = serde_json::from_str(&sig.approved_scope_refs).unwrap();
+        assert!(approved.contains(&"schema:url".to_string()));
+    }
+
+    #[test]
+    fn save_approved_scopes_merges_into_existing_row() {
+        let db = test_db();
+        let engine = PreferenceEngine::new(&db);
+        // Seed an existing row via record_agent_selected.
+        engine.record_agent_selected(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            "hash1",
+            "Agent",
+        );
+        engine.save_approved_scopes(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            "hash1",
+            "Agent",
+            &["schema:name".to_string()],
+        );
+        engine.save_approved_scopes(
+            "schema:SearchAction",
+            "schema:SearchResult",
+            "hash1",
+            "Agent",
+            &["schema:name".to_string(), "schema:email".to_string()],
+        );
+        let sig = db
+            .get_preference("schema:SearchAction", "schema:SearchResult", "hash1")
+            .unwrap()
+            .unwrap();
+        let approved: Vec<String> = serde_json::from_str(&sig.approved_scope_refs).unwrap();
+        // Both scopes present, no duplicates.
+        assert_eq!(approved.iter().filter(|&s| s == "schema:name").count(), 1);
+        assert!(approved.contains(&"schema:email".to_string()));
+        // selection_count from the earlier record_agent_selected call is preserved.
+        assert_eq!(sig.selection_count, 1);
     }
 
     #[test]

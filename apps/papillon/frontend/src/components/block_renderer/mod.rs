@@ -17,6 +17,13 @@ pub use registry::RendererRegistry;
 use crate::state::canvas::CanvasState;
 use crate::state::renderer::RendererState;
 
+/// Leptos context that carries the ID of the block currently being rendered.
+/// Set in [`BlockRenderer`] via `provide_context`.
+/// Read in child renderers (e.g. generic.rs `ExternalUrl` arm) to link
+/// agent-initiated navigation back to the source block.
+#[derive(Clone)]
+pub struct SourceBlockId(pub String);
+
 /// Action emitted when a user modifies a setting rendered from vocabulary.
 ///
 /// The renderer doesn't know what it's rendering — it projects
@@ -99,7 +106,17 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         BlockState::Resolved | BlockState::Outcome { .. }
     );
 
-    let block_class = match &block.state {
+    // Provide block ID as context so child renderers (ExternalUrl links) can
+    // pass it as source_block_id when calling submit_agent_link.
+    provide_context(SourceBlockId(block.id.clone()));
+
+    // Browse-mode expansion: browse blocks fill the canvas viewport by default.
+    // All resolved blocks support manual expand/collapse via the toggle button.
+    let is_browse = block.auto_expand;
+    let expanded = RwSignal::new(block.auto_expand);
+    let browse_url = block.prompt_text.clone().unwrap_or_default();
+
+    let base_block_class = match &block.state {
         BlockState::Ghost { .. } => "canvas-block ghost",
         BlockState::AwaitingApproval { .. } => "canvas-block awaiting-approval",
         BlockState::Resolving { .. } => "canvas-block resolving",
@@ -107,6 +124,9 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         BlockState::Failed { .. } => "canvas-block failed",
         BlockState::Outcome { .. } => "canvas-block outcome",
     };
+
+    // Keep old name for the few places below that still use it unchanged.
+    let block_class = base_block_class;
 
     let on_click = move |_| {
         if is_resolved {
@@ -133,7 +153,31 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     };
 
     view! {
-        <div class=block_class role="article" tabindex="0" on:click=on_click>
+        <div
+            class=move || {
+                if is_resolved && expanded.get() {
+                    format!("{} canvas-block--expanded", block_class)
+                } else {
+                    block_class.to_string()
+                }
+            }
+            role="article"
+            tabindex="0"
+            on:click=on_click
+        >
+            // Expand / collapse toggle — appears on hover for resolved blocks.
+            <Show when=move || is_resolved>
+                <button
+                    class="block-expand-btn"
+                    on:click=move |e: leptos::ev::MouseEvent| {
+                        e.stop_propagation();
+                        expanded.update(|v| *v = !*v);
+                    }
+                    title=move || if expanded.get() { "Collapse" } else { "Expand" }
+                >
+                    {move || if expanded.get() { "⊡" } else { "⊞" }}
+                </button>
+            </Show>
             {match &block.state {
                 BlockState::Ghost { agent_name, action_type, disclosure_preview, returns_preview } => {
                     let agent = agent_name.clone();
@@ -345,6 +389,14 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     let ttl_full_class = format!("mandate-ttl {}", ttl_decay_class);
 
                     view! {
+                        // In-block URL bar: only for browse blocks when expanded.
+                        <Show when=move || is_browse && expanded.get()>
+                            <BrowseBar
+                                block_id=block.id.clone()
+                                current_url=browse_url.clone()
+                                on_expand=expanded
+                            />
+                        </Show>
                         <div class="block-content">
                             {content_view}
                         </div>
@@ -488,6 +540,56 @@ fn PhaseDots(current_phase: u8, #[prop(default = false)] failed: bool) -> impl I
     view! {
         <div class="phase-dots" aria-live="polite" aria-label=move || format!("Handshake phase {} of 6", current_phase)>
             {dots}
+        </div>
+    }
+}
+
+/// URL bar shown inside a browse block when it is expanded.
+///
+/// Pre-fills with the current block URL.  Pressing Enter submits the new URL
+/// as `submit_agent_link` (which spawns a linked browse block with
+/// `auto_expand=true`), then collapses the current block so the new one fills
+/// the viewport.  Pressing Escape collapses without navigating.
+#[component]
+fn BrowseBar(
+    /// ID of the block that owns this bar (used as source_block_id for the new block).
+    block_id: String,
+    /// Current page URL — used to pre-fill the input.
+    current_url: String,
+    /// Signal controlling the parent block's expanded state.
+    on_expand: RwSignal<bool>,
+) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let url_input = RwSignal::new(current_url);
+    let block_id_sv = StoredValue::new(block_id);
+
+    let on_keydown = move |e: leptos::ev::KeyboardEvent| {
+        if e.key() == "Enter" {
+            let url = url_input.get();
+            if !url.trim().is_empty() {
+                // Spawn a new linked browse block, then collapse this one.
+                canvas_state.submit_agent_link(url, Some(block_id_sv.get_value()));
+                on_expand.set(false);
+            }
+        } else if e.key() == "Escape" {
+            on_expand.set(false);
+        }
+    };
+
+    view! {
+        <div
+            class="canvas-block-browse-bar"
+            // Prevent the outer block on:click from toggling reprompt.
+            on:click=|e: leptos::ev::MouseEvent| e.stop_propagation()
+        >
+            <span class="browse-bar-icon">"🌐"</span>
+            <input
+                type="text"
+                class="browse-bar-input"
+                prop:value=move || url_input.get()
+                on:input=move |e| url_input.set(event_target_value(&e))
+                on:keydown=on_keydown
+            />
         </div>
     }
 }
