@@ -48,6 +48,29 @@
         </div>
       </section>
 
+      <!-- Auto-intercept toggle -->
+      <section class="pop-section" id="intercept-section">
+        <div class="label">HTTPS Auto-Intercept</div>
+        <div class="pop-toggle-row">
+          <span class="pop-toggle-label">Route all HTTPS links through PAP</span>
+          <button
+            class="pop-toggle-btn"
+            id="intercept-toggle"
+            role="switch"
+            aria-checked="true"
+            aria-label="Auto-intercept HTTPS links"
+          ></button>
+        </div>
+      </section>
+
+      <!-- Per-domain exclusion -->
+      <section class="pop-section" id="domain-section">
+        <div class="label">This Site</div>
+        <button class="btn pop-btn pop-btn-domain" id="domain-toggle">
+          Disable on this site
+        </button>
+      </section>
+
       <!-- Quick Actions -->
       <section class="pop-actions">
         <button class="btn btn-primary pop-btn" id="open-handshake">

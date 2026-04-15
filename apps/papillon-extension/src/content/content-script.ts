@@ -14,6 +14,51 @@ import { fetchManifest } from "../lib/discovery.js";
 
 const PAP_SCHEMES = ["pap://", "pap+https://", "pap+wss://"];
 
+// ── Auto-intercept HTTPS links ──────────────────────────────────────────
+
+const STORAGE_AUTO_INTERCEPT = "autoInterceptHttps";
+const STORAGE_EXCLUDED_DOMAINS = "excludedDomains";
+
+/** Live-updated from chrome.storage.sync. Default: on. */
+let autoInterceptEnabled = true;
+
+/** Live-updated from chrome.storage.sync. Hostname strings only. */
+let excludedDomains = new Set<string>();
+
+// Load initial values from storage before any click can arrive.
+chrome.storage.sync.get(
+  [STORAGE_AUTO_INTERCEPT, STORAGE_EXCLUDED_DOMAINS],
+  (result) => {
+    if (typeof result[STORAGE_AUTO_INTERCEPT] === "boolean") {
+      autoInterceptEnabled = result[STORAGE_AUTO_INTERCEPT] as boolean;
+    }
+    if (Array.isArray(result[STORAGE_EXCLUDED_DOMAINS])) {
+      excludedDomains = new Set<string>(
+        (result[STORAGE_EXCLUDED_DOMAINS] as unknown[]).filter(
+          (d): d is string => typeof d === "string"
+        )
+      );
+    }
+  }
+);
+
+// Keep in-memory state in sync when the user changes settings in the popup.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync") return;
+  if (STORAGE_AUTO_INTERCEPT in changes) {
+    const next = changes[STORAGE_AUTO_INTERCEPT].newValue;
+    if (typeof next === "boolean") autoInterceptEnabled = next;
+  }
+  if (STORAGE_EXCLUDED_DOMAINS in changes) {
+    const next = changes[STORAGE_EXCLUDED_DOMAINS].newValue;
+    if (Array.isArray(next)) {
+      excludedDomains = new Set<string>(
+        (next as unknown[]).filter((d): d is string => typeof d === "string")
+      );
+    }
+  }
+});
+
 function isPapLink(el: HTMLAnchorElement): boolean {
   const href = el.getAttribute("href");
   if (!href) return false;
@@ -46,6 +91,58 @@ function interceptClick(e: MouseEvent) {
   chrome.runtime.sendMessage({
     type: "PAP_LINK_CLICKED",
     uri: href,
+    pageTitle: document.title,
+    pageUrl: window.location.href,
+  });
+}
+
+/**
+ * Auto-intercept plain left-clicks on https:// links and route through PAP.
+ *
+ * Pass-through conditions (returns early without intercepting):
+ *   - Not a left-click (button !== 0)
+ *   - Modifier held: Ctrl/Meta (new tab), Shift (new window), Alt (per-click opt-out)
+ *   - Synthetic click (isTrusted === false)
+ *   - No <a> ancestor found, or href is not https://
+ *   - Link has `download` attribute
+ *   - Global auto-intercept disabled
+ *   - Link hostname is in excludedDomains
+ */
+function interceptHttpsClick(e: MouseEvent): void {
+  if (e.button !== 0) return;
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  if (!e.isTrusted) return;
+
+  const link = (e.target as HTMLElement).closest("a") as HTMLAnchorElement | null;
+  if (!link) return;
+  if (link.hasAttribute("download")) return;
+
+  const rawHref = link.getAttribute("href");
+  if (!rawHref) return;
+
+  let resolvedUrl: URL;
+  try {
+    resolvedUrl = new URL(rawHref, document.baseURI);
+  } catch {
+    return; // Malformed href — pass through
+  }
+
+  // Only intercept https:// — pap://, pap+https://, http://, etc. are all excluded.
+  if (resolvedUrl.protocol !== "https:") return;
+
+  // Check global toggle
+  if (!autoInterceptEnabled) return;
+
+  // Check per-domain exclusion list
+  if (excludedDomains.has(resolvedUrl.hostname)) return;
+
+  // All guards passed — intercept the click.
+  e.preventDefault();
+  e.stopPropagation();
+
+  chrome.runtime.sendMessage({
+    type: "HTTPS_LINK_CLICKED",
+    httpsUrl: resolvedUrl.href,
     pageTitle: document.title,
     pageUrl: window.location.href,
   });
@@ -85,9 +182,10 @@ observer.observe(document.body, {
   subtree: true,
 });
 
-// ── Click handler ──────────────────────────────────────────────────────
+// ── Click handlers ─────────────────────────────────────────────────────
 
 document.addEventListener("click", interceptClick, true);
+document.addEventListener("click", interceptHttpsClick, true);
 
 // ── Layer 0+1: PAP site discovery ─────────────────────────────────────
 
@@ -154,4 +252,5 @@ if (proto === "https:" || proto === "http:") {
 window.addEventListener("pagehide", () => {
   observer.disconnect();
   document.removeEventListener("click", interceptClick, true);
+  document.removeEventListener("click", interceptHttpsClick, true);
 });

@@ -135,3 +135,66 @@ main {
   font-size: 10px;
   color: var(--text-3);
 }
+
+/* ── Auto-intercept toggle ──────────────────────────── */
+
+.pop-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-sm);
+}
+
+.pop-toggle-label {
+  font-size: 13px;
+  color: var(--text-2);
+  flex: 1;
+}
+
+.pop-toggle-btn {
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  padding: 0;
+}
+
+.pop-toggle-btn[aria-checked="true"] {
+  background: var(--purple);
+  border-color: var(--purple);
+}
+
+.pop-toggle-btn::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.pop-toggle-btn[aria-checked="true"]::after {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+/* Domain exclusion button */
+.pop-btn-domain {
+  width: 100%;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.pop-btn-domain.excluded {
+  border-color: var(--teal);
+  color: var(--teal);
+}

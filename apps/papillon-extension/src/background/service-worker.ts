@@ -161,6 +161,16 @@ chrome.runtime.onMessage.addListener(
         openHandshakeTab(msg.uri);
         break;
 
+      // Content script: user left-clicked an https:// link (auto-intercept)
+      case "HTTPS_LINK_CLICKED": {
+        // Convert https://example.com/path → pap://example.com/path
+        // resolve_pap_uri() treats dotted authorities as HttpsEndpoint, so
+        // pap:// is the canonical form; pap+https:// is the transport detail.
+        const papUri = msg.httpsUrl.replace(/^https:\/\//, "pap://");
+        openHandshakeTab(papUri, undefined, undefined, msg.httpsUrl);
+        break;
+      }
+
       // Handshake page: start the protocol
       case "START_HANDSHAKE":
         ensureOffscreen().then(() => {
