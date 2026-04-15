@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use papillon_shared::{resolve_pap_uri, LinkOrigin, ResolvedUri};
-use papillon_shared::{BlockState, Canvas, CanvasBlock};
+use papillon_shared::{BlockState, BlockUpdate, Canvas, CanvasBlock};
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
@@ -598,24 +598,28 @@ impl CanvasState {
     }
 
     /// Apply a streaming phase update from the backend.
-    /// Searches all canvases for the block by ID, preserving prompt_text
-    /// and other frontend-only fields that the backend doesn't have.
-    pub fn apply_block_event(&self, event_block: CanvasBlock) {
+    /// Searches all canvases for the block by ID and directly assigns
+    /// backend-owned fields. Frontend-only fields (`linked_block_ids`,
+    /// `auto_expand`) are structurally absent from `BlockUpdate` and
+    /// are therefore never touched — no save/restore needed.
+    pub fn apply_block_event(&self, update: BlockUpdate) {
         self.canvases.update(|cs| {
             for canvas in cs.iter_mut() {
-                if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == event_block.id) {
-                    // Preserve frontend-only fields that backend events don't carry.
-                    let prompt_text = b.prompt_text.take();
-                    let linked = std::mem::take(&mut b.linked_block_ids);
-                    let auto_expand = b.auto_expand; // set at creation time, never reset by events
-                    *b = event_block;
-                    if b.prompt_text.is_none() {
-                        b.prompt_text = prompt_text;
+                if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == update.id) {
+                    // Apply backend-owned fields directly.
+                    b.prompt_id          = update.prompt_id;
+                    b.state              = update.state;
+                    b.schema_type        = update.schema_type;
+                    b.content            = update.content;
+                    b.agent_did          = update.agent_did;
+                    b.mandate_expires_at = update.mandate_expires_at;
+                    b.preference_guided  = update.preference_guided;
+                    b.created_at         = update.created_at;
+                    b.updated_at         = update.updated_at;
+                    // Only overwrite prompt_text when the event carries one.
+                    if let Some(pt) = update.prompt_text {
+                        b.prompt_text = Some(pt);
                     }
-                    if b.linked_block_ids.is_empty() {
-                        b.linked_block_ids = linked;
-                    }
-                    b.auto_expand = auto_expand;
                     canvas.updated_at = now_iso();
                     return;
                 }

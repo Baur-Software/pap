@@ -15,7 +15,7 @@ use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
 use crate::handshake;
 use crate::state::AppState;
-use papillon_shared::{BlockEvent, BlockState, CanvasBlock, IntentPlan, PreferenceEngine};
+use papillon_shared::{BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine};
 
 use super::orchestrator::hash_agent_did;
 
@@ -462,7 +462,7 @@ fn process_prompt_inner<'a>(
         let app_phase = app.clone();
         let on_phase: handshake::PhaseCallback = Box::new(move |phase, label| {
             let now = Utc::now().to_rfc3339();
-            let block = CanvasBlock {
+            let block = BlockUpdate {
                 id: bid.clone(),
                 prompt_id: pid.clone(),
                 prompt_text: None,
@@ -472,11 +472,9 @@ fn process_prompt_inner<'a>(
                 },
                 schema_type: None,
                 content: None,
-                linked_block_ids: Vec::new(),
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided,
-                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -488,7 +486,7 @@ fn process_prompt_inner<'a>(
         let app_fail = app.clone();
         let on_fail: handshake::FailCallback = Box::new(move |phase, reason| {
             let now = Utc::now().to_rfc3339();
-            let block = CanvasBlock {
+            let block = BlockUpdate {
                 id: bid2.clone(),
                 prompt_id: pid2.clone(),
                 prompt_text: None,
@@ -498,11 +496,9 @@ fn process_prompt_inner<'a>(
                 },
                 schema_type: None,
                 content: None,
-                linked_block_ids: Vec::new(),
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided,
-                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -540,7 +536,7 @@ fn process_prompt_inner<'a>(
                 let _ = app.emit(
                     "block_updated",
                     BlockEvent {
-                        block: CanvasBlock {
+                        block: BlockUpdate {
                             id: block_id.to_string(),
                             prompt_id: prompt_id.to_string(),
                             prompt_text: None,
@@ -550,11 +546,9 @@ fn process_prompt_inner<'a>(
                             },
                             schema_type: None,
                             content: None,
-                            linked_block_ids: Vec::new(),
                             agent_did: None,
                             mandate_expires_at: None,
                             preference_guided,
-                            auto_expand: false,
                             created_at: now.clone(),
                             updated_at: now,
                         },
@@ -649,18 +643,16 @@ pub async fn canvas_prompt(
     let _ = app.emit(
         "block_resolved",
         BlockEvent {
-            block: CanvasBlock {
+            block: BlockUpdate {
                 id: block_id.clone(),
                 prompt_id,
                 prompt_text: Some(text),
                 state: BlockState::Resolved,
                 schema_type: Some(schema_type),
                 content: Some(content),
-                linked_block_ids: Vec::new(),
                 agent_did: Some(agent_did),
                 mandate_expires_at,
                 preference_guided,
-                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -693,18 +685,16 @@ pub async fn canvas_reshape(
     let _ = app.emit(
         "block_resolved",
         BlockEvent {
-            block: CanvasBlock {
+            block: BlockUpdate {
                 id: block_id.clone(),
                 prompt_id: String::new(),
                 prompt_text: Some(text),
                 state: BlockState::Resolved,
                 schema_type: Some(schema_type),
                 content: Some(content),
-                linked_block_ids: Vec::new(),
                 agent_did: Some(agent_did),
                 mandate_expires_at,
                 preference_guided,
-                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -806,18 +796,16 @@ pub async fn canvas_plan_prompt(
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
-                block: CanvasBlock {
+                block: BlockUpdate {
                     id: block_id.clone(),
                     prompt_id,
                     prompt_text: Some(text),
                     state: BlockState::Resolved,
                     schema_type: Some(schema_type),
                     content: Some(content),
-                    linked_block_ids: Vec::new(),
                     agent_did: Some(agent_did),
                     mandate_expires_at,
                     preference_guided,
-                    auto_expand: false,
                     created_at: now.clone(),
                     updated_at: now,
                 },
@@ -831,18 +819,16 @@ pub async fn canvas_plan_prompt(
     let _ = app.emit(
         "block_updated",
         BlockEvent {
-            block: CanvasBlock {
+            block: BlockUpdate {
                 id: block_id.clone(),
                 prompt_id: prompt_id.clone(),
                 prompt_text: Some(text.clone()),
                 state: BlockState::AwaitingApproval { plan: plan.clone() },
                 schema_type: None,
                 content: None,
-                linked_block_ids: Vec::new(),
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided: false,
-                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -879,18 +865,16 @@ pub async fn canvas_plan_prompt(
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
-                block: CanvasBlock {
+                block: BlockUpdate {
                     id: block_id.clone(),
                     prompt_id,
                     prompt_text: Some(text),
                     state: BlockState::Resolved,
                     schema_type: Some(schema_type),
                     content: Some(content),
-                    linked_block_ids: Vec::new(),
                     agent_did: Some(agent_did),
                     mandate_expires_at,
                     preference_guided,
-                    auto_expand: false,
                     created_at: now.clone(),
                     updated_at: now,
                 },
@@ -903,7 +887,7 @@ pub async fn canvas_plan_prompt(
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
-                block: CanvasBlock {
+                block: BlockUpdate {
                     id: block_id.clone(),
                     prompt_id,
                     prompt_text: Some(text),
@@ -913,11 +897,9 @@ pub async fn canvas_plan_prompt(
                     },
                     schema_type: None,
                     content: None,
-                    linked_block_ids: Vec::new(),
                     agent_did: None,
                     mandate_expires_at: None,
                     preference_guided: false,
-                    auto_expand: false,
                     created_at: now.clone(),
                     updated_at: now,
                 },
