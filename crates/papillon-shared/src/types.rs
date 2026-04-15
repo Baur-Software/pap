@@ -550,10 +550,45 @@ pub struct CanvasPrompt {
     pub submitted_at: String,
 }
 
-/// Tauri event payloads for streaming block updates to the frontend.
+/// Backend-to-frontend event payload for block state transitions.
+///
+/// Contains **only backend-owned fields**. The frontend-only fields
+/// `linked_block_ids` and `auto_expand` are intentionally absent — the type
+/// system prevents them from ever appearing in an event and being accidentally
+/// overwritten. Adding a new frontend-only field to `CanvasBlock` is
+/// automatically safe: it cannot be present here, so `apply_block_event` never
+/// touches it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockUpdate {
+    /// Matches the `id` of the `CanvasBlock` to patch on the frontend.
+    pub id: String,
+    pub prompt_id: String,
+    /// `None` during intermediate phase events; `Some(text)` on final
+    /// resolution. `apply_block_event` only writes this field when `Some`,
+    /// preserving whatever prompt text was set at block creation.
+    #[serde(default)]
+    pub prompt_text: Option<String>,
+    pub state: BlockState,
+    pub schema_type: Option<String>,
+    pub content: Option<serde_json::Value>,
+    #[serde(default)]
+    pub agent_did: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(default)]
+    pub mandate_expires_at: Option<String>,
+    #[serde(default)]
+    pub preference_guided: bool,
+}
+
+/// Tauri event payload wrapping a `BlockUpdate`.
+///
+/// Used for both `"block_updated"` (phase progress) and `"block_resolved"`
+/// (completion/failure) events emitted by the backend during the 6-phase
+/// PAP handshake.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockEvent {
-    pub block: CanvasBlock,
+    pub block: BlockUpdate,
 }
 
 /// A user-facing scenario card for the Home page.
@@ -1203,16 +1238,17 @@ mod tests {
     // ── BlockEvent serde ──────────────────────────────────
 
     #[test]
-    fn block_event_wraps_block() {
+    fn block_event_wraps_block_update() {
+        // BlockEvent now carries a BlockUpdate (backend-owned fields only).
+        // linked_block_ids and auto_expand are intentionally absent.
         let event = BlockEvent {
-            block: CanvasBlock {
+            block: BlockUpdate {
                 id: "blk-ev".into(),
                 prompt_id: "p-1".into(),
                 prompt_text: None,
                 state: BlockState::Resolved,
                 schema_type: Some("Answer".into()),
                 content: Some(serde_json::json!({"text": "42"})),
-                linked_block_ids: Vec::new(),
                 agent_did: None,
                 mandate_expires_at: None,
                 created_at: "2026-01-01T00:00:00Z".into(),

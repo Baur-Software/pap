@@ -17,12 +17,20 @@ pub use registry::RendererRegistry;
 use crate::state::canvas::CanvasState;
 use crate::state::renderer::RendererState;
 
-/// Leptos context that carries the ID of the block currently being rendered.
-/// Set in [`BlockRenderer`] via `provide_context`.
-/// Read in child renderers (e.g. generic.rs `ExternalUrl` arm) to link
-/// agent-initiated navigation back to the source block.
-#[derive(Clone)]
-pub struct SourceBlockId(pub String);
+/// Per-block reactive UI context provided by [`BlockRenderer`].
+/// Consume via `expect_context::<BlockContext>()` in any descendant component.
+/// Carries all per-block reactive state so descendants never need block-ID props.
+#[derive(Clone, Copy)]
+pub struct BlockContext {
+    /// Stable block ID — never changes after creation.
+    pub id: StoredValue<String>,
+    /// Whether this block is viewport-expanded.
+    pub expanded: RwSignal<bool>,
+    /// Whether the inline reprompt form is visible.
+    pub show_reprompt: RwSignal<bool>,
+    /// Current reprompt input value.
+    pub reprompt_value: RwSignal<String>,
+}
 
 /// Action emitted when a user modifies a setting rendered from vocabulary.
 ///
@@ -98,22 +106,22 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
 
     let registry = renderer_state.registry.with_value(|r| Arc::clone(r));
 
-    let block_id = StoredValue::new(block.id.clone());
-    let show_reprompt = RwSignal::new(false);
-    let reprompt_value = RwSignal::new(String::new());
+    let block_ctx = BlockContext {
+        id: StoredValue::new(block.id.clone()),
+        expanded: RwSignal::new(block.auto_expand),
+        show_reprompt: RwSignal::new(false),
+        reprompt_value: RwSignal::new(String::new()),
+    };
+    provide_context(block_ctx);
+
     let is_resolved = matches!(
         block.state,
         BlockState::Resolved | BlockState::Outcome { .. }
     );
 
-    // Provide block ID as context so child renderers (ExternalUrl links) can
-    // pass it as source_block_id when calling submit_agent_link.
-    provide_context(SourceBlockId(block.id.clone()));
-
     // Browse-mode expansion: browse blocks fill the canvas viewport by default.
     // All resolved blocks support manual expand/collapse via the toggle button.
     let is_browse = block.auto_expand;
-    let expanded = RwSignal::new(block.auto_expand);
     let browse_url = block.prompt_text.clone().unwrap_or_default();
 
     let base_block_class = match &block.state {
@@ -130,32 +138,32 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
 
     let on_click = move |_| {
         if is_resolved {
-            show_reprompt.update(|v| *v = !*v);
+            block_ctx.show_reprompt.update(|v| *v = !*v);
         }
     };
 
     let on_reprompt_keydown = move |e: leptos::ev::KeyboardEvent| {
         if e.key() == "Enter" {
-            let text = reprompt_value.get();
+            let text = block_ctx.reprompt_value.get();
             if !text.trim().is_empty() {
-                canvas_state.submit_reshape(block_id.get_value(), text);
-                show_reprompt.set(false);
-                reprompt_value.set(String::new());
+                canvas_state.submit_reshape(block_ctx.id.get_value(), text);
+                block_ctx.show_reprompt.set(false);
+                block_ctx.reprompt_value.set(String::new());
             }
         } else if e.key() == "Escape" {
-            show_reprompt.set(false);
-            reprompt_value.set(String::new());
+            block_ctx.show_reprompt.set(false);
+            block_ctx.reprompt_value.set(String::new());
         }
     };
 
     let on_retry = move |_| {
-        canvas_state.retry_block(block_id.get_value());
+        canvas_state.retry_block(block_ctx.id.get_value());
     };
 
     view! {
         <div
             class=move || {
-                if is_resolved && expanded.get() {
+                if is_resolved && block_ctx.expanded.get() {
                     format!("{} canvas-block--expanded", block_class)
                 } else {
                     block_class.to_string()
@@ -171,11 +179,11 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     class="block-expand-btn"
                     on:click=move |e: leptos::ev::MouseEvent| {
                         e.stop_propagation();
-                        expanded.update(|v| *v = !*v);
+                        block_ctx.expanded.update(|v| *v = !*v);
                     }
-                    title=move || if expanded.get() { "Collapse" } else { "Expand" }
+                    title=move || if block_ctx.expanded.get() { "Collapse" } else { "Expand" }
                 >
-                    {move || if expanded.get() { "⊡" } else { "⊞" }}
+                    {move || if block_ctx.expanded.get() { "⊡" } else { "⊞" }}
                 </button>
             </Show>
             {match &block.state {
@@ -229,8 +237,8 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     let has_disclosure = !disclosure_items.is_empty();
                     let approval_id = plan.approval_request_id.clone();
                     let approval_id_reject = approval_id.clone();
-                    let block_id_approve = block_id.get_value();
-                    let block_id_reject = block_id.get_value();
+                    let block_id_approve = block_ctx.id.get_value();
+                    let block_id_reject = block_ctx.id.get_value();
                     let cs_approve = canvas_state;
                     let cs_reject = canvas_state;
 
@@ -390,12 +398,8 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
 
                     view! {
                         // In-block URL bar: only for browse blocks when expanded.
-                        <Show when=move || is_browse && expanded.get()>
-                            <BrowseBar
-                                block_id=block.id.clone()
-                                current_url=browse_url.clone()
-                                on_expand=expanded
-                            />
+                        <Show when=move || is_browse && block_ctx.expanded.get()>
+                            <BrowseBar current_url=browse_url.clone() />
                         </Show>
                         <div class="block-content">
                             {content_view}
@@ -420,18 +424,18 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                                     title="Refresh this block in-place"
                                     on:click=move |e: leptos::ev::MouseEvent| {
                                         e.stop_propagation();
-                                        canvas_state.retry_block(block_id.get_value());
+                                        canvas_state.retry_block(block_ctx.id.get_value());
                                     }
                                 >"↺"</button>
                             </div>
                         </Show>
-                        <Show when=move || show_reprompt.get()>
+                        <Show when=move || block_ctx.show_reprompt.get()>
                             <div class="block-reprompt">
                                 <input
                                     type="text"
                                     placeholder="Reshape this block..."
-                                    prop:value=move || reprompt_value.get()
-                                    on:input=move |e| reprompt_value.set(event_target_value(&e))
+                                    prop:value=move || block_ctx.reprompt_value.get()
+                                    on:input=move |e| block_ctx.reprompt_value.set(event_target_value(&e))
                                     on:keydown=on_reprompt_keydown
                                 />
                             </div>
@@ -501,13 +505,13 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                                 <ProvenanceLayer block_ids=prov_ids.clone() />
                             </div>
                         </div>
-                        <Show when=move || show_reprompt.get()>
+                        <Show when=move || block_ctx.show_reprompt.get()>
                             <div class="block-reprompt">
                                 <input
                                     type="text"
                                     placeholder="Reshape this outcome..."
-                                    prop:value=move || reprompt_value.get()
-                                    on:input=move |e| reprompt_value.set(event_target_value(&e))
+                                    prop:value=move || block_ctx.reprompt_value.get()
+                                    on:input=move |e| block_ctx.reprompt_value.set(event_target_value(&e))
                                     on:keydown=on_reprompt_keydown
                                 />
                             </div>
@@ -552,27 +556,23 @@ fn PhaseDots(current_phase: u8, #[prop(default = false)] failed: bool) -> impl I
 /// the viewport.  Pressing Escape collapses without navigating.
 #[component]
 fn BrowseBar(
-    /// ID of the block that owns this bar (used as source_block_id for the new block).
-    block_id: String,
     /// Current page URL — used to pre-fill the input.
     current_url: String,
-    /// Signal controlling the parent block's expanded state.
-    on_expand: RwSignal<bool>,
 ) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
+    let block_ctx = expect_context::<BlockContext>();
     let url_input = RwSignal::new(current_url);
-    let block_id_sv = StoredValue::new(block_id);
 
     let on_keydown = move |e: leptos::ev::KeyboardEvent| {
         if e.key() == "Enter" {
             let url = url_input.get();
             if !url.trim().is_empty() {
                 // Spawn a new linked browse block, then collapse this one.
-                canvas_state.submit_agent_link(url, Some(block_id_sv.get_value()));
-                on_expand.set(false);
+                canvas_state.submit_agent_link(url, Some(block_ctx.id.get_value()));
+                block_ctx.expanded.set(false);
             }
         } else if e.key() == "Escape" {
-            on_expand.set(false);
+            block_ctx.expanded.set(false);
         }
     };
 

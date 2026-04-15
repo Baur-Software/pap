@@ -8,7 +8,7 @@ use super::field_classify::{
 };
 use super::registry::RendererRegistry;
 use super::SettingsActionSink;
-use super::SourceBlockId;
+use super::BlockContext;
 use crate::state::canvas::CanvasState;
 
 /// Maximum items rendered per list before showing an overflow indicator.
@@ -822,7 +822,7 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
             let raw = val.as_str().unwrap_or("").to_string();
             let canvas_state = use_context::<CanvasState>();
             // Carry the source block ID so the new browse block is graph-linked.
-            let source_id = use_context::<SourceBlockId>().map(|s| s.0);
+            let source_id = use_context::<BlockContext>().map(|c| c.id.get_value());
             // Rewrite http(s):// → pap:// so clicks route through the PAP handshake.
             let pap = if raw.starts_with("https://") {
                 format!("pap://{}", &raw["https://".len()..])
