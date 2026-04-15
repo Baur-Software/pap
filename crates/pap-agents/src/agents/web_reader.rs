@@ -109,7 +109,7 @@ fn parse_html_to_webpage(original_url: &str, final_url: &str, html: &str) -> ser
     };
 
     // Extract up to 12 same-origin links as schema:WebPage mentions.
-    let mentions = extract_mentions(html, &final_url);
+    let mentions = extract_mentions(html, final_url);
 
     let mut page = json!({
         "@context": "https://schema.org",
