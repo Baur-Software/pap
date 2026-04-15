@@ -607,15 +607,15 @@ impl CanvasState {
             for canvas in cs.iter_mut() {
                 if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == update.id) {
                     // Apply backend-owned fields directly.
-                    b.prompt_id          = update.prompt_id;
-                    b.state              = update.state;
-                    b.schema_type        = update.schema_type;
-                    b.content            = update.content;
-                    b.agent_did          = update.agent_did;
+                    b.prompt_id = update.prompt_id;
+                    b.state = update.state;
+                    b.schema_type = update.schema_type;
+                    b.content = update.content;
+                    b.agent_did = update.agent_did;
                     b.mandate_expires_at = update.mandate_expires_at;
-                    b.preference_guided  = update.preference_guided;
-                    b.created_at         = update.created_at;
-                    b.updated_at         = update.updated_at;
+                    b.preference_guided = update.preference_guided;
+                    b.created_at = update.created_at;
+                    b.updated_at = update.updated_at;
                     // Only overwrite prompt_text when the event carries one.
                     if let Some(pt) = update.prompt_text {
                         b.prompt_text = Some(pt);

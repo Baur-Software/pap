@@ -1254,6 +1254,7 @@ mod tests {
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
+                auto_expand: false,
             },
         };
         let json = serde_json::to_string(&event).unwrap();
