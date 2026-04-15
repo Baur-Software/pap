@@ -55,6 +55,17 @@ pub async fn configure_orchestrator(
         *current = config.clone();
     }
 
+    // Update the shared LLM provider so all DynamicAgentHandlers pick up the
+    // new settings immediately — without this they would keep using the
+    // provider snapshot from startup (the original bug).
+    {
+        let mut provider = state
+            .shared_llm_provider
+            .write()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        *provider = config.inference_substrate.clone();
+    }
+
     // Persist the new config so it survives restarts.
     if let Ok(json) = serde_json::to_string(&config) {
         let _ = state.db.set_setting("orchestrator_config", &json);
@@ -842,6 +853,20 @@ pub async fn run_scenario(
     // Write episode — non-blocking, memory is advisory
     if let Err(e) = state.db.insert_episode(&episode) {
         eprintln!("Failed to record episode: {e}");
+    }
+
+    // Rebuild personal context and push to the watch channel so all orchestrator
+    // LLM consumers immediately see the updated history on their next call.
+    {
+        use papillon_shared::PersonalContext;
+        let trait_val = state
+            .trait_beacon_profile
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .filter(|v| !v.is_null() && *v != serde_json::Value::Object(serde_json::Map::new()));
+        let preamble = PersonalContext::from_db(&*state.db, trait_val).to_system_preamble();
+        let _ = state.context_tx.send(preamble);
     }
 
     // Update agent profile with exponential moving average

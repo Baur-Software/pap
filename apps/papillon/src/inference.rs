@@ -383,14 +383,20 @@ impl ChatTemplate {
 /// Build the tool-calling prompt that the orchestrator uses to decompose
 /// a user query into PAP actions.
 pub fn build_orchestrator_prompt(user_query: &str, available_tools: &[ToolDef]) -> String {
-    build_orchestrator_prompt_with_template(user_query, available_tools, ChatTemplate::Llama)
+    build_orchestrator_prompt_with_template(user_query, available_tools, ChatTemplate::Llama, None)
 }
 
-/// Build the tool-calling prompt with an explicit chat template.
+/// Build the tool-calling prompt with an explicit chat template and optional
+/// personal-context preamble.
+///
+/// When `context` is `Some(s)` and non-empty the preamble is prepended before
+/// the `"You are a PAP orchestrator…"` instruction so the model can factor in
+/// the user's history and declared traits when decomposing the query into tools.
 pub fn build_orchestrator_prompt_with_template(
     user_query: &str,
     available_tools: &[ToolDef],
     template: ChatTemplate,
+    context: Option<&str>,
 ) -> String {
     let tools_json: Vec<String> = available_tools
         .iter()
@@ -402,11 +408,18 @@ pub fn build_orchestrator_prompt_with_template(
         })
         .collect();
 
-    let body = format!(
+    let orchestrator_instruction = format!(
         "You are a PAP orchestrator. Given a user query, decompose it into one or more tool calls.\n\nAvailable tools:\n[\n{tools}\n]\n\nRespond with a JSON array of tool calls. Each entry must have \"tool\" and \"query\" fields.\nExample: [{{\"tool\": \"web_search\", \"query\": \"best restaurants in Paris\"}}]\n\nUser query: {query}",
         tools = tools_json.join(",\n"),
         query = user_query,
     );
+
+    // Prepend personal context when available so the orchestrator can use the
+    // user's history and traits to select and phrase tool calls more precisely.
+    let body = match context {
+        Some(ctx) if !ctx.is_empty() => format!("{ctx}\n\n{orchestrator_instruction}"),
+        _ => orchestrator_instruction,
+    };
 
     match template {
         ChatTemplate::Llama => format!("[INST] {body} [/INST]"),
@@ -525,10 +538,39 @@ mod tests {
 
     #[test]
     fn prompt_gemma_template_uses_turn_tags() {
-        let prompt = build_orchestrator_prompt_with_template("test", &[], ChatTemplate::Gemma);
+        let prompt =
+            build_orchestrator_prompt_with_template("test", &[], ChatTemplate::Gemma, None);
         assert!(prompt.starts_with("<start_of_turn>user\n"));
         assert!(prompt.contains("<end_of_turn>"));
         assert!(prompt.ends_with("<start_of_turn>model\n"));
+    }
+
+    #[test]
+    fn prompt_with_context_prepends_preamble() {
+        let ctx = "[PAP PERSONAL CONTEXT]\n{\"recentEpisodes\":[]}\n[END PAP CONTEXT]";
+        let prompt = build_orchestrator_prompt_with_template(
+            "find flights",
+            &[],
+            ChatTemplate::Llama,
+            Some(ctx),
+        );
+        let preamble_pos = prompt
+            .find("[PAP PERSONAL CONTEXT]")
+            .expect("preamble present");
+        let instruction_pos = prompt
+            .find("You are a PAP orchestrator")
+            .expect("instruction present");
+        assert!(
+            preamble_pos < instruction_pos,
+            "preamble must precede orchestrator instruction"
+        );
+    }
+
+    #[test]
+    fn prompt_with_empty_context_skips_preamble() {
+        let prompt =
+            build_orchestrator_prompt_with_template("test", &[], ChatTemplate::Llama, Some(""));
+        assert!(!prompt.contains("[PAP PERSONAL CONTEXT]"));
     }
 
     #[test]

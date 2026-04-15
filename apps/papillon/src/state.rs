@@ -10,7 +10,7 @@ use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_transport::{AgentHandler, EndpointRegistry};
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillon_shared::{OrchestratorConfig, SuccessorDesignation};
+use papillon_shared::{LlmProvider, OrchestratorConfig, SuccessorDesignation};
 use zeroize::Zeroizing;
 
 use crate::agents::on_device_ai::OnDeviceAiExecutor;
@@ -21,7 +21,7 @@ use crate::error::PapillonError;
 use crate::inference::ModelManager;
 use crate::profiles_db::ProfilesDatabase;
 use pap_agents::{build_agents, load_catalog, AgentExecutor, SimpleAgent};
-use papillon_shared::ProfileMetadata;
+use papillon_shared::{PersonalContext, ProfileMetadata};
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
@@ -47,6 +47,9 @@ pub struct AppState {
     pub local_registry: Arc<Mutex<FederatedRegistry>>,
     pub bookmarks: RwLock<Vec<String>>,
     pub orchestrator_config: RwLock<OrchestratorConfig>,
+    /// Shared LLM provider — written by `configure_orchestrator` so all
+    /// `DynamicAgentHandler`s pick up new settings without a restart.
+    pub shared_llm_provider: Arc<RwLock<LlmProvider>>,
     /// On-device Candle model for the BuiltIn LLM provider.
     pub model_manager: Arc<tokio::sync::Mutex<ModelManager>>,
     /// Agent keypairs retained for both sides of the PAP handshake.
@@ -88,6 +91,13 @@ pub struct AppState {
     /// Keyed by approval_request_id; resolved by `canvas_approve_block`.
     pub approval_gates:
         tokio::sync::RwLock<std::collections::HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
+    /// Watch-channel sender for the orchestrator personal-context preamble.
+    /// Push a fresh preamble string whenever episode history or traits change.
+    /// All orchestrator LLM consumers hold a cloned `Receiver` and borrow at call time.
+    pub context_tx: tokio::sync::watch::Sender<String>,
+    /// The user's advertised TraitBeacon Schema.org Person document.
+    /// Persisted to settings DB under key `"trait_beacon_profile"`.
+    pub trait_beacon_profile: Arc<RwLock<serde_json::Value>>,
 }
 
 impl AppState {
@@ -120,6 +130,7 @@ impl AppState {
             local_registry: self.local_registry.clone(),
             bookmarks: RwLock::new(self.bookmarks.read().unwrap().clone()),
             orchestrator_config: RwLock::new(self.orchestrator_config.read().unwrap().clone()),
+            shared_llm_provider: self.shared_llm_provider.clone(),
             model_manager: self.model_manager.clone(),
             agent_keypairs: RwLock::new(HashMap::new()), // Will be populated on demand
             db: self.db.clone(),
@@ -140,6 +151,9 @@ impl AppState {
             webauthn_challenges: WebAuthnChallengeStore::new(),
             // Background clones never handle approval gates; start fresh.
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+            // Share the same watch sender so background threads can push context updates.
+            context_tx: self.context_tx.clone(),
+            trait_beacon_profile: self.trait_beacon_profile.clone(),
         }
     }
 
@@ -150,8 +164,29 @@ impl AppState {
     ) -> Self {
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
 
+        // ── Personal context channel ─────────────────────────────────────────────
+        // Load the user's TraitBeacon profile (Schema.org Person) from persisted settings.
+        let trait_beacon_profile_value: serde_json::Value = db
+            .get_setting("trait_beacon_profile")
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+
+        let trait_beacon_profile = Arc::new(RwLock::new(trait_beacon_profile_value.clone()));
+
+        // Build initial personal context preamble from DB state at startup.
+        let initial_trait =
+            if trait_beacon_profile_value == serde_json::Value::Object(serde_json::Map::new()) {
+                None
+            } else {
+                Some(trait_beacon_profile_value)
+            };
+        let initial_preamble = PersonalContext::from_db(&*db, initial_trait).to_system_preamble();
+        let (context_tx, context_rx) = tokio::sync::watch::channel(initial_preamble);
+
         // On-device AI needs the local model manager — register as an extra agent.
-        let ai_executor = OnDeviceAiExecutor::new(model_manager.clone());
+        let ai_executor = OnDeviceAiExecutor::new(model_manager.clone(), context_rx);
         let ai_meta = ai_executor.meta();
         let extra = vec![(
             ai_meta.name,
@@ -203,13 +238,16 @@ impl AppState {
             .and_then(|json| serde_json::from_str::<OrchestratorConfig>(&json).ok())
             .unwrap_or_default();
 
+        // ── Shared LLM provider — writable so configure_orchestrator can update it ─
+        let shared_llm_provider: Arc<RwLock<LlmProvider>> = Arc::new(RwLock::new(
+            saved_orchestrator_config.inference_substrate.clone(),
+        ));
+
         // ── Register all DB agents (catalog + user_created + generated) ───────────
         {
-            let orchestrator_config = saved_orchestrator_config.clone();
-            let llm_provider = Arc::new(orchestrator_config.inference_substrate.clone());
             let db_agents = db.load_all_agents().unwrap_or_default();
             for def in db_agents {
-                if let Err(e) = agent_set.register_dynamic(&def, llm_provider.clone()) {
+                if let Err(e) = agent_set.register_dynamic(&def, shared_llm_provider.clone()) {
                     eprintln!("Failed to register agent '{}': {e}", def.name);
                 }
             }
@@ -390,6 +428,7 @@ impl AppState {
             local_registry,
             bookmarks: RwLock::new(bookmarks),
             orchestrator_config: RwLock::new(saved_orchestrator_config),
+            shared_llm_provider,
             model_manager,
             agent_keypairs: RwLock::new(keypairs),
             db,
@@ -405,6 +444,8 @@ impl AppState {
             local_pap_urls: RwLock::new(Vec::new()),
             webauthn_challenges: WebAuthnChallengeStore::new(),
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+            context_tx,
+            trait_beacon_profile,
         }
     }
 

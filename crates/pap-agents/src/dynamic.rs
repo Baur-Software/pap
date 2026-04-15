@@ -212,6 +212,44 @@ pub fn is_local_llm_url(url: &str) -> bool {
     host == "localhost" || host == "127.0.0.1"
 }
 
+impl DynamicAgentDef {
+    /// Build a signed [`pap_marketplace::AgentAdvertisement`] using a deterministic
+    /// Ed25519 keypair derived from this agent's name via SHA-256.
+    ///
+    /// The same name always produces the same operator DID and content hash, making
+    /// this suitable for idempotent catalog installs and first-boot registry seeding.
+    pub fn to_signed_advertisement(&self) -> Result<pap_marketplace::AgentAdvertisement, String> {
+        use ed25519_dalek::SigningKey;
+        use pap_did::public_key_to_did;
+        use sha2::{Digest, Sha256};
+
+        let seed_bytes: [u8; 32] = Sha256::digest(self.name.as_bytes()).into();
+        let signing_key = SigningKey::from_bytes(&seed_bytes);
+        let operator_did = public_key_to_did(&signing_key.verifying_key());
+
+        let mut ad = pap_marketplace::AgentAdvertisement::new(
+            &self.name,
+            &self.provider,
+            &operator_did,
+            vec![self.action.clone()],
+            self.object_types.clone(),
+            self.requires_disclosure.clone(),
+            self.returns.clone(),
+        );
+        ad.ttl_min = 3600;
+        if !self.version.is_empty() {
+            ad = ad.with_version(&self.version);
+        }
+        if !self.configurable_properties.is_empty() {
+            ad = ad.with_configurable_properties(self.configurable_properties.clone());
+        }
+
+        ad.sign(&signing_key)
+            .map_err(|e| format!("Failed to sign '{}': {e}", self.name))?;
+        Ok(ad)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
