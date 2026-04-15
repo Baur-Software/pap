@@ -124,13 +124,26 @@ fn TopbarPrompt() -> impl IntoView {
     let input_value = RwSignal::new(String::new());
     let selected_idx: RwSignal<Option<usize>> = RwSignal::new(None);
 
-    // Live pap:// completions from the catalog — only when user types "pap://".
+    // Live pap:// completions from the catalog, plus web-browse for domains.
+    //
+    // - Web domain (prefix contains '.') → single "Browse → domain" suggestion.
+    //   Any external domain resolves to HttpsEndpoint and routes to Web Page Reader.
+    // - Catalog name (no dot) → agent name completions from local catalog.
     let pap_suggestions = Memo::new(move |_| {
         let val = input_value.get();
         if !val.starts_with("pap://") {
             return vec![];
         }
         let prefix = val["pap://".len()..].to_lowercase();
+        if prefix.is_empty() {
+            return vec![];
+        }
+        // Web domain: show a single confirm suggestion so the user can see
+        // that pressing Enter will browse the site on the canvas.
+        if prefix.contains('.') {
+            return vec![prefix];
+        }
+        // Catalog agent name match.
         let entries = catalog_state
             .map(|c| c.entries.get())
             .unwrap_or_default();
@@ -164,7 +177,16 @@ fn TopbarPrompt() -> impl IntoView {
             "Enter" => {
                 if let Some(idx) = selected_idx.get_untracked() {
                     if let Some(name) = suggestions.get(idx) {
-                        input_value.set(format!("pap://{name}"));
+                        let full = format!("pap://{name}");
+                        if name.contains('.') {
+                            // Web domain: submit immediately.
+                            canvas_state.submit_prompt(full);
+                            input_value.set(String::new());
+                        } else {
+                            // Catalog agent: fill the address bar so the user
+                            // can review / refine before submitting.
+                            input_value.set(full);
+                        }
                         selected_idx.set(None);
                         return;
                     }
@@ -235,20 +257,38 @@ fn TopbarPrompt() -> impl IntoView {
                 <div class="topbar-suggestions">
                     {move || pap_suggestions.get().into_iter().enumerate().map(|(i, name)| {
                         let name_for_click = name.clone();
+                        let is_web_domain = name.contains('.');
                         view! {
                             <button
                                 class="palette-suggestion palette-suggestion-pap"
                                 class:palette-suggestion--active=move || selected_idx.get() == Some(i)
                                 on:click=move |_| {
-                                    input_value.set(format!("pap://{}", name_for_click));
+                                    let full = format!("pap://{}", name_for_click);
+                                    // For web domains, selecting the suggestion submits immediately
+                                    // since what's typed is already the complete address.
+                                    if name_for_click.contains('.') {
+                                        canvas_state.submit_prompt(full);
+                                        input_value.set(String::new());
+                                    } else {
+                                        input_value.set(full);
+                                    }
                                     selected_idx.set(None);
                                     if let Some(el) = input_ref.get() {
                                         let _ = el.focus();
                                     }
                                 }
                             >
-                                <span class="pap-suggestion-scheme">"pap://"</span>
-                                <span class="pap-suggestion-name">{name}</span>
+                                {if is_web_domain {
+                                    view! {
+                                        <span class="pap-suggestion-scheme">"Browse  "</span>
+                                        <span class="pap-suggestion-name">{format!("pap://{}", name)}</span>
+                                    }.into_any()
+                                } else {
+                                    view! {
+                                        <span class="pap-suggestion-scheme">"pap://"</span>
+                                        <span class="pap-suggestion-name">{name}</span>
+                                    }.into_any()
+                                }}
                             </button>
                         }
                     }).collect::<Vec<_>>()}

@@ -78,6 +78,8 @@ pub fn create_default_registry() -> Arc<RendererRegistry> {
     // Vocabulary
     registry.register(Arc::new(templates::DefinedTermTemplate));
     registry.register(Arc::new(templates::QuotationTemplate));
+    // Web
+    registry.register(Arc::new(templates::WebPageTemplate));
     registry
 }
 
