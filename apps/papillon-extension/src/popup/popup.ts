@@ -3,14 +3,21 @@
  */
 
 import type { StateResponse, PapSiteResponse } from "../lib/types.js";
+import { STORAGE_AUTO_INTERCEPT, STORAGE_EXCLUDED_DOMAINS } from "../lib/constants.js";
 
-const principalDidEl = document.getElementById("principal-did")!;
-const sessionCountEl = document.getElementById("session-count")!;
-const nativeStatusEl = document.getElementById("native-status")!;
-const papSiteSectionEl = document.getElementById("pap-site-section")!;
-const papSiteNameEl = document.getElementById("pap-site-name")!;
-const openHandshakeBtn = document.getElementById("open-handshake")!;
-const openSettingsBtn = document.getElementById("open-settings")!;
+function $<T extends HTMLElement = HTMLElement>(id: string): T {
+  return document.getElementById(id) as T;
+}
+
+const principalDidEl = $("principal-did");
+const sessionCountEl = $("session-count");
+const nativeStatusEl = $("native-status");
+const papSiteSectionEl = $("pap-site-section");
+const papSiteNameEl = $("pap-site-name");
+const openHandshakeBtn = $("open-handshake");
+const openSettingsBtn = $("open-settings");
+const interceptToggleBtn = $<HTMLButtonElement>("intercept-toggle");
+const domainToggleBtn = $<HTMLButtonElement>("domain-toggle");
 
 // ── Load State ─────────────────────────────────────────────────────────
 
@@ -60,6 +67,74 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       papSiteNameEl.textContent = resp.manifest.name;
     }
   );
+});
+
+// ── Auto-intercept controls ────────────────────────────────────────────
+
+let currentHostname: string | null = null;
+
+function updateDomainButton(excluded: boolean): void {
+  domainToggleBtn.textContent = excluded
+    ? "Enable on this site"
+    : "Disable on this site";
+  if (excluded) {
+    domainToggleBtn.classList.add("excluded");
+  } else {
+    domainToggleBtn.classList.remove("excluded");
+  }
+}
+
+chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+  if (!tab?.url) return;
+  try {
+    currentHostname = new URL(tab.url).hostname;
+  } catch {
+    return;
+  }
+
+  chrome.storage.sync.get(
+    [STORAGE_AUTO_INTERCEPT, STORAGE_EXCLUDED_DOMAINS],
+    (result) => {
+      // Global toggle — default on
+      const autoOn =
+        typeof result[STORAGE_AUTO_INTERCEPT] === "boolean"
+          ? (result[STORAGE_AUTO_INTERCEPT] as boolean)
+          : true;
+      interceptToggleBtn.setAttribute("aria-checked", String(autoOn));
+
+      // Per-domain exclusion
+      const domains: string[] = Array.isArray(result[STORAGE_EXCLUDED_DOMAINS])
+        ? (result[STORAGE_EXCLUDED_DOMAINS] as string[])
+        : [];
+      updateDomainButton(
+        currentHostname !== null && domains.includes(currentHostname)
+      );
+    }
+  );
+});
+
+interceptToggleBtn.addEventListener("click", () => {
+  const next = interceptToggleBtn.getAttribute("aria-checked") !== "true";
+  interceptToggleBtn.setAttribute("aria-checked", String(next));
+  chrome.storage.sync.set({ [STORAGE_AUTO_INTERCEPT]: next });
+});
+
+domainToggleBtn.addEventListener("click", () => {
+  if (!currentHostname) return;
+  chrome.storage.sync.get([STORAGE_EXCLUDED_DOMAINS], (result) => {
+    const domains: string[] = Array.isArray(result[STORAGE_EXCLUDED_DOMAINS])
+      ? [...(result[STORAGE_EXCLUDED_DOMAINS] as string[])]
+      : [];
+    const idx = domains.indexOf(currentHostname!);
+    if (idx === -1) {
+      domains.push(currentHostname!);
+      updateDomainButton(true);
+    } else {
+      domains.splice(idx, 1);
+      updateDomainButton(false);
+    }
+    chrome.storage.sync.set({ [STORAGE_EXCLUDED_DOMAINS]: domains });
+  });
 });
 
 // ── Actions ────────────────────────────────────────────────────────────

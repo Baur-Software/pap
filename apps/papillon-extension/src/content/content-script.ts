@@ -11,8 +11,52 @@
  */
 
 import { fetchManifest } from "../lib/discovery.js";
+import { resolveInterceptUrl } from "./intercept-logic.js";
+import { STORAGE_AUTO_INTERCEPT, STORAGE_EXCLUDED_DOMAINS } from "../lib/constants.js";
 
 const PAP_SCHEMES = ["pap://", "pap+https://", "pap+wss://"];
+
+// ── Auto-intercept HTTPS links ──────────────────────────────────────────
+
+/** Live-updated from chrome.storage.sync. Default: on. */
+let autoInterceptEnabled = true;
+
+/** Live-updated from chrome.storage.sync. Hostname strings only. */
+let excludedDomains = new Set<string>();
+
+// Load initial values from storage before any click can arrive.
+chrome.storage.sync.get(
+  [STORAGE_AUTO_INTERCEPT, STORAGE_EXCLUDED_DOMAINS],
+  (result) => {
+    if (typeof result[STORAGE_AUTO_INTERCEPT] === "boolean") {
+      autoInterceptEnabled = result[STORAGE_AUTO_INTERCEPT] as boolean;
+    }
+    if (Array.isArray(result[STORAGE_EXCLUDED_DOMAINS])) {
+      excludedDomains = new Set<string>(
+        (result[STORAGE_EXCLUDED_DOMAINS] as unknown[]).filter(
+          (d): d is string => typeof d === "string"
+        )
+      );
+    }
+  }
+);
+
+// Keep in-memory state in sync when the user changes settings in the popup.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync") return;
+  if (STORAGE_AUTO_INTERCEPT in changes) {
+    const next = changes[STORAGE_AUTO_INTERCEPT].newValue;
+    if (typeof next === "boolean") autoInterceptEnabled = next;
+  }
+  if (STORAGE_EXCLUDED_DOMAINS in changes) {
+    const next = changes[STORAGE_EXCLUDED_DOMAINS].newValue;
+    if (Array.isArray(next)) {
+      excludedDomains = new Set<string>(
+        (next as unknown[]).filter((d): d is string => typeof d === "string")
+      );
+    }
+  }
+});
 
 function isPapLink(el: HTMLAnchorElement): boolean {
   const href = el.getAttribute("href");
@@ -46,6 +90,36 @@ function interceptClick(e: MouseEvent) {
   chrome.runtime.sendMessage({
     type: "PAP_LINK_CLICKED",
     uri: href,
+    pageTitle: document.title,
+    pageUrl: window.location.href,
+  });
+}
+
+/**
+ * Auto-intercept plain left-clicks on https:// links and route through PAP.
+ * Guard logic is in resolveInterceptUrl (intercept-logic.ts) for testability.
+ */
+function interceptHttpsClick(e: MouseEvent): void {
+  const link = (e.target as HTMLElement).closest("a") as HTMLAnchorElement | null;
+  const rawHref = link?.getAttribute("href") ?? null;
+  const hasDownload = link?.hasAttribute("download") ?? false;
+
+  const url = resolveInterceptUrl(
+    e,
+    rawHref,
+    hasDownload,
+    document.baseURI,
+    autoInterceptEnabled,
+    excludedDomains
+  );
+  if (!url) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  chrome.runtime.sendMessage({
+    type: "HTTPS_LINK_CLICKED",
+    httpsUrl: url,
     pageTitle: document.title,
     pageUrl: window.location.href,
   });
@@ -85,9 +159,10 @@ observer.observe(document.body, {
   subtree: true,
 });
 
-// ── Click handler ──────────────────────────────────────────────────────
+// ── Click handlers ─────────────────────────────────────────────────────
 
 document.addEventListener("click", interceptClick, true);
+document.addEventListener("click", interceptHttpsClick, true);
 
 // ── Layer 0+1: PAP site discovery ─────────────────────────────────────
 
@@ -154,4 +229,5 @@ if (proto === "https:" || proto === "http:") {
 window.addEventListener("pagehide", () => {
   observer.disconnect();
   document.removeEventListener("click", interceptClick, true);
+  document.removeEventListener("click", interceptHttpsClick, true);
 });

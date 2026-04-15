@@ -97,6 +97,14 @@ export interface PapLinkClicked {
   pageUrl: string;
 }
 
+/** Content script → Service worker: user left-clicked an https:// link (auto-intercept) */
+export interface HttpsLinkClicked {
+  type: "HTTPS_LINK_CLICKED";
+  httpsUrl: string; // original https:// URL, used as fallback
+  pageTitle: string;
+  pageUrl: string;
+}
+
 /** Handshake page → Service worker → Offscreen: start a handshake */
 export interface StartHandshake {
   type: "START_HANDSHAKE";
@@ -207,6 +215,7 @@ export interface PapSiteResponse {
 
 export type ExtensionMessage =
   | PapLinkClicked
+  | HttpsLinkClicked
   | StartHandshake
   | WasmRequest
   | WasmResponse
