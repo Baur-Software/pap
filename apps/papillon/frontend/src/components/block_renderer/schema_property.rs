@@ -93,6 +93,24 @@ pub fn classify_by_property(property_name: &str) -> Option<FieldKind> {
         | "minValue" | "maxValue" | "stepValue"
         | "multipleValues" => Some(FieldKind::Scalar),
 
+        // ── Croissant / ML Dataset vocabulary ────────────────────────────────
+        | "sha256"
+        | "encodingFormat"
+        | "conformsTo"
+        | "dataType"
+        | "subField"
+        | "isEnumeration"
+        | "numberOfExamples"
+        | "splitType"
+        | "proportionType"
+        | "sourceAgent"
+        | "sourceAgentDid"
+        | "fromMemex"
+        | "relevanceScore"
+        | "downloadCount"
+        | "numberOfItems"
+        | "croissantMetadata" => Some(FieldKind::Scalar),
+
         // All other known properties — explicitly scalar so the heuristic
         // doesn't mistakenly promote them (e.g., a field named "timestamp"
         // in a non-temporal context).

@@ -22,6 +22,7 @@ use crate::pages::settings::SettingsPage;
 use crate::service::{PapillonService, TauriService, WebService};
 use crate::state::canvas::CanvasState;
 use crate::state::catalog::CatalogState;
+use crate::state::dataset::DatasetState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::recovery::RecoveryState;
@@ -42,6 +43,7 @@ pub fn App() -> impl IntoView {
     let renderer_state = RendererState::default();
     let catalog_state = CatalogState::default();
     let recovery_state = RecoveryState::default();
+    let dataset_state = DatasetState::default();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);
@@ -50,6 +52,7 @@ pub fn App() -> impl IntoView {
     provide_context(renderer_state);
     provide_context(catalog_state);
     provide_context(recovery_state);
+    provide_context(dataset_state);
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
@@ -228,6 +231,9 @@ pub fn App() -> impl IntoView {
 
                 // Reconnect to local registry after profile switch
                 registry_state.connect_to("pap://local");
+
+                // Dataset: Clear discovery state for the old principal
+                dataset_state.clear_all();
             }
         }
 

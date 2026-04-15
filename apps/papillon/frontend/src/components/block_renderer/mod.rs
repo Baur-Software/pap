@@ -1,3 +1,4 @@
+pub(crate) mod dataset_template;
 pub(crate) mod declarative;
 pub(crate) mod field_classify;
 mod generic;
@@ -95,6 +96,8 @@ pub fn create_default_registry() -> Arc<RendererRegistry> {
     registry.register(Arc::new(templates::QuotationTemplate));
     // Web
     registry.register(Arc::new(templates::WebPageTemplate));
+    // ML / Datasets
+    registry.register(Arc::new(dataset_template::DatasetSearchTemplate));
     registry
 }
 

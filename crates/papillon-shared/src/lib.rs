@@ -1,3 +1,5 @@
+pub mod dataset_types;
+pub use dataset_types::{DatasetDiscoveryState, DatasetResult};
 pub mod events;
 pub mod intent;
 pub mod json_ld_query;

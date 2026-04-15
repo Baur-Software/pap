@@ -72,6 +72,35 @@ const RULES: &[IntentRule] = &[
         agent: "REST Countries",
         strip: &["country ", "countries", "capital of", "population of"],
     },
+    // Dataset discovery — ML/AI datasets via Croissant-compatible agents
+    IntentRule {
+        keywords: &[
+            "dataset",
+            "datasets",
+            "training data",
+            "ml dataset",
+            "benchmark dataset",
+            "find dataset",
+            "data for training",
+            "huggingface dataset",
+            "openml",
+            "croissant",
+        ],
+        starts_with: &["dataset "],
+        action: "schema:DatasetAction",
+        agent: "Dataset Discovery",
+        strip: &[
+            "dataset",
+            "datasets",
+            "find dataset",
+            "training data",
+            "ml dataset",
+            "data for training",
+            "huggingface dataset",
+            "openml",
+            "croissant",
+        ],
+    },
     // arXiv / academic papers
     IntentRule {
         keywords: &[
@@ -419,5 +448,153 @@ mod tests {
         let (action_upper, agent_upper, _) = detect_intent("WEATHER London");
         assert_eq!(action_lower, action_upper);
         assert_eq!(agent_lower, agent_upper);
+    }
+
+    // ── Dataset discovery ──
+
+    #[test]
+    fn detect_dataset_keyword() {
+        let (action, agent, _) = detect_intent("dataset sentiment analysis");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_dataset_prefix() {
+        let (action, agent, _) = detect_intent("dataset imagenet");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_training_data_keyword() {
+        let (action, agent, _) = detect_intent("training data for BERT fine-tuning");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_croissant_keyword() {
+        let (action, agent, _) = detect_intent("find croissant imagenet");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_openml_keyword() {
+        let (action, agent, _) = detect_intent("openml classification benchmark");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_ml_dataset_keyword() {
+        let (action, agent, _) = detect_intent("ml dataset for image classification");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn arxiv_wins_for_paper_queries() {
+        // "paper on X" should still route to arXiv, not dataset discovery.
+        let (action, agent, _) = detect_intent("paper on transformer architecture");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "arXiv Papers");
+    }
+
+    // ── Free Dictionary (previously zero coverage) ──
+
+    #[test]
+    fn detect_define_keyword() {
+        let (action, agent, query) = detect_intent("define photosynthesis");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "Free Dictionary");
+        // Strip removes "define " (with space) leaving the bare word.
+        assert_eq!(query, "photosynthesis");
+    }
+
+    #[test]
+    fn detect_meaning_of() {
+        let (action, agent, query) = detect_intent("meaning of ephemeral");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "Free Dictionary");
+        assert_eq!(query, "ephemeral");
+    }
+
+    #[test]
+    fn detect_definition_of() {
+        let (action, agent, _) = detect_intent("definition of mandate");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "Free Dictionary");
+    }
+
+    // ── Clean-query stripping ──
+
+    #[test]
+    fn dataset_strip_leaves_subject() {
+        // "dataset sentiment analysis" should strip "dataset" leaving the actual query.
+        let (action, _, query) = detect_intent("dataset sentiment analysis");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(query, "sentiment analysis");
+    }
+
+    #[test]
+    fn define_strip_leaves_word() {
+        // "define X" strips "define " (with trailing space) leaving just the word.
+        let (_, _, query) = detect_intent("define photosynthesis");
+        assert_eq!(query, "photosynthesis");
+    }
+
+    #[test]
+    fn weather_strip_leaves_location() {
+        // "weather in Paris" strips "weather" and " in " leaving the location.
+        let (action, _, query) = detect_intent("weather in Paris");
+        assert_eq!(action, "schema:CheckAction");
+        assert_eq!(query, "Paris");
+    }
+
+    // ── Rule ordering conflicts — first-match-wins documentation ──
+
+    #[test]
+    fn dataset_beats_books_in_ordering() {
+        // Dataset rule (tier 1, position 6) fires before Books rule (tier 2, position 11).
+        // "book about X dataset" routes to DatasetAction, not Open Library.
+        let (action, agent, _) = detect_intent("book about machine learning dataset");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn weather_beats_dataset_in_ordering() {
+        // Weather rule (position 2) fires before Dataset rule (position 6).
+        // "weather dataset" routes to weather, not dataset discovery.
+        let (action, agent, _) = detect_intent("weather dataset");
+        assert_eq!(action, "schema:CheckAction");
+        assert_eq!(agent, "Open-Meteo Weather");
+    }
+
+    #[test]
+    fn dataset_beats_arxiv_in_ordering() {
+        // Dataset rule (position 6) fires before arXiv rule (position 7).
+        // "dataset research on transformers" routes to DatasetAction, not arXiv.
+        let (action, agent, _) = detect_intent("dataset research on transformers");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    // ── Previously untested keywords within existing rules ──
+
+    #[test]
+    fn detect_temperature_keyword() {
+        let (action, agent, _) = detect_intent("temperature in Tokyo tomorrow");
+        assert_eq!(action, "schema:CheckAction");
+        assert_eq!(agent, "Open-Meteo Weather");
+    }
+
+    #[test]
+    fn detect_population_of() {
+        let (action, agent, _) = detect_intent("population of France");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "REST Countries");
     }
 }
