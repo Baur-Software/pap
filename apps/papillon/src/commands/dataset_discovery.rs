@@ -22,7 +22,7 @@ use crate::error::PapillonError;
 use crate::handshake;
 use crate::state::AppState;
 use papillon_shared::{
-    BlockEvent, BlockState, CanvasBlock, DatasetDiscoveryState, DatasetResult, PreferenceEngine,
+    BlockEvent, BlockState, BlockUpdate, DatasetDiscoveryState, DatasetResult, PreferenceEngine,
 };
 
 use super::orchestrator::hash_agent_did;
@@ -312,6 +312,17 @@ fn record_aggregate_episode(
 
 // ── Handshake execution ───────────────────────────────────────────────────────
 
+/// Per-agent display context passed into [`run_dataset_handshake`].
+struct HandshakeConfig {
+    block_id: String,
+    prompt_id: String,
+    agent_index: usize,
+    total_agents: usize,
+}
+
+/// Task result type for the parallel JoinSet fan-out.
+type HandshakeTaskResult = (DatasetAgent, Result<Vec<DatasetResult>, String>, i64, f64);
+
 /// Run the full 6-phase PAP handshake for one dataset agent.
 ///
 /// Zero-disclosure agents skip the approval gate and proceed directly.
@@ -320,12 +331,13 @@ async fn run_dataset_handshake(
     app: AppHandle,
     agent: DatasetAgent,
     query: String,
-    block_id: String,
-    prompt_id: String,
+    cfg: HandshakeConfig,
     seed: [u8; 32],
-    agent_index: usize,
-    total_agents: usize,
 ) -> Result<Vec<DatasetResult>, String> {
+    let block_id = cfg.block_id;
+    let prompt_id = cfg.prompt_id;
+    let agent_index = cfg.agent_index;
+    let total_agents = cfg.total_agents;
     let agent_name = agent.name.clone();
     let agent_did = agent.did.clone();
 
@@ -350,7 +362,7 @@ async fn run_dataset_handshake(
         let _ = app_phase.emit(
             "block_updated",
             BlockEvent {
-                block: CanvasBlock {
+                block: BlockUpdate {
                     id: block_id_phase.clone(),
                     prompt_id: prompt_id_phase.clone(),
                     prompt_text: None,
@@ -360,7 +372,6 @@ async fn run_dataset_handshake(
                     },
                     schema_type: None,
                     content: None,
-                    linked_block_ids: Vec::new(),
                     agent_did: None,
                     mandate_expires_at: None,
                     preference_guided: false,
@@ -545,7 +556,7 @@ pub async fn canvas_discover_datasets(
         let _ = app.emit(
             "block_updated",
             BlockEvent {
-                block: CanvasBlock {
+                block: BlockUpdate {
                     id: block_id.clone(),
                     prompt_id: prompt_id.clone(),
                     prompt_text: Some(text.clone()),
@@ -567,7 +578,6 @@ pub async fn canvas_discover_datasets(
                             }
                         ).unwrap_or(json!(null))
                     })),
-                    linked_block_ids: Vec::new(),
                     agent_did: None,
                     mandate_expires_at: None,
                     preference_guided: false,
@@ -586,7 +596,7 @@ pub async fn canvas_discover_datasets(
         let _ = app.emit(
             "block_resolved",
             BlockEvent {
-                block: CanvasBlock {
+                block: BlockUpdate {
                     id: block_id.clone(),
                     prompt_id: prompt_id.clone(),
                     prompt_text: Some(text.clone()),
@@ -597,7 +607,6 @@ pub async fn canvas_discover_datasets(
                     },
                     schema_type: None,
                     content: None,
-                    linked_block_ids: Vec::new(),
                     agent_did: None,
                     mandate_expires_at: None,
                     preference_guided: false,
@@ -618,7 +627,7 @@ pub async fn canvas_discover_datasets(
         let _ = app.emit(
             "block_updated",
             BlockEvent {
-                block: CanvasBlock {
+                block: BlockUpdate {
                     id: block_id.clone(),
                     prompt_id: prompt_id.clone(),
                     prompt_text: Some(text.clone()),
@@ -632,7 +641,6 @@ pub async fn canvas_discover_datasets(
                     },
                     schema_type: None,
                     content: None,
-                    linked_block_ids: Vec::new(),
                     agent_did: None,
                     mandate_expires_at: None,
                     preference_guided: false,
@@ -660,30 +668,23 @@ pub async fn canvas_discover_datasets(
     };
 
     // ── Step 3: Parallel PAP handshakes ──────────────────────────────────────
-    let mut join_set: JoinSet<(DatasetAgent, Result<Vec<DatasetResult>, String>, i64, f64)> =
-        JoinSet::new();
+    let mut join_set: JoinSet<HandshakeTaskResult> = JoinSet::new();
 
     for (idx, agent) in agents.into_iter().enumerate() {
         let q = query.clone();
         let app_clone = app.clone();
-        let block_id_clone = block_id.clone();
-        let prompt_id_clone = prompt_id.clone();
         let pref = preference_scores.get(&agent.name).copied().unwrap_or(0.5);
         let seed = raw_seed;
+        let cfg = HandshakeConfig {
+            block_id: block_id.clone(),
+            prompt_id: prompt_id.clone(),
+            agent_index: idx,
+            total_agents,
+        };
 
         join_set.spawn(async move {
             let agent_start = std::time::Instant::now();
-            let result = run_dataset_handshake(
-                app_clone,
-                agent.clone(),
-                q,
-                block_id_clone,
-                prompt_id_clone,
-                seed,
-                idx,
-                total_agents,
-            )
-            .await;
+            let result = run_dataset_handshake(app_clone, agent.clone(), q, cfg, seed).await;
             let elapsed = agent_start.elapsed().as_millis() as i64;
             (agent, result, elapsed, pref)
         });
@@ -697,7 +698,7 @@ pub async fn canvas_discover_datasets(
             Ok((agent, Ok(mut results), elapsed, pref)) => {
                 // Blend preference score into relevance ranking
                 for r in &mut results {
-                    r.relevance_score = r.relevance_score * (1.0 + 0.3 * pref);
+                    r.relevance_score *= 1.0 + 0.3 * pref;
                     r.source_agent_did = agent.did.clone();
                 }
                 all_results.extend(results.clone());
@@ -711,7 +712,7 @@ pub async fn canvas_discover_datasets(
                 let _ = app.emit(
                     "block_updated",
                     BlockEvent {
-                        block: CanvasBlock {
+                        block: BlockUpdate {
                             id: block_id.clone(),
                             prompt_id: prompt_id.clone(),
                             prompt_text: None,
@@ -725,7 +726,6 @@ pub async fn canvas_discover_datasets(
                             },
                             schema_type: None,
                             content: None,
-                            linked_block_ids: Vec::new(),
                             agent_did: None,
                             mandate_expires_at: None,
                             preference_guided: false,
@@ -771,14 +771,13 @@ pub async fn canvas_discover_datasets(
     let _ = app.emit(
         "block_resolved",
         BlockEvent {
-            block: CanvasBlock {
+            block: BlockUpdate {
                 id: block_id.clone(),
                 prompt_id: prompt_id.clone(),
                 prompt_text: Some(text.clone()),
                 state: block_state,
                 schema_type: Some("DatasetSearchResults".into()),
                 content: Some(content.clone()),
-                linked_block_ids: Vec::new(),
                 agent_did: Some("dataset-discovery-aggregate".to_string()),
                 mandate_expires_at,
                 preference_guided: false,
