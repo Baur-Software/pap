@@ -476,6 +476,7 @@ fn process_prompt_inner<'a>(
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided,
+                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -501,6 +502,7 @@ fn process_prompt_inner<'a>(
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided,
+                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -552,6 +554,7 @@ fn process_prompt_inner<'a>(
                             agent_did: None,
                             mandate_expires_at: None,
                             preference_guided,
+                            auto_expand: false,
                             created_at: now.clone(),
                             updated_at: now,
                         },
@@ -657,6 +660,7 @@ pub async fn canvas_prompt(
                 agent_did: Some(agent_did),
                 mandate_expires_at,
                 preference_guided,
+                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -700,6 +704,7 @@ pub async fn canvas_reshape(
                 agent_did: Some(agent_did),
                 mandate_expires_at,
                 preference_guided,
+                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -780,6 +785,16 @@ pub async fn canvas_plan_prompt(
         config.auto_approve_zero_disclosure
     } && plan.requires_disclosure.is_empty();
 
+    // Widen: also skip the gate when the principal has already approved these
+    // exact scopes for this (action, schema) pair in a prior session.
+    let schema_type_for_pref = plan.returns.first().map(String::as_str).unwrap_or("");
+    let auto_approve = auto_approve
+        || PreferenceEngine::new(state.db.as_ref()).has_approved_scopes(
+            action_type,
+            schema_type_for_pref,
+            &plan.requires_disclosure,
+        );
+
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
         let (schema_type, content, preference_guided, agent_did) =
@@ -802,6 +817,7 @@ pub async fn canvas_plan_prompt(
                     agent_did: Some(agent_did),
                     mandate_expires_at,
                     preference_guided,
+                    auto_expand: false,
                     created_at: now.clone(),
                     updated_at: now,
                 },
@@ -826,6 +842,7 @@ pub async fn canvas_plan_prompt(
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided: false,
+                auto_expand: false,
                 created_at: now.clone(),
                 updated_at: now,
             },
@@ -843,6 +860,15 @@ pub async fn canvas_plan_prompt(
     let approved = receiver.await.unwrap_or(false);
 
     if approved {
+        // Persist the approval so future identical requests skip the gate.
+        PreferenceEngine::new(state.db.as_ref()).save_approved_scopes(
+            action_type,
+            schema_type_for_pref,
+            &hash_agent_did(&resolved.did),
+            &resolved.name,
+            &plan.requires_disclosure,
+        );
+
         // Run the full handshake.
         let (schema_type, content, preference_guided, agent_did) =
             process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
@@ -864,6 +890,7 @@ pub async fn canvas_plan_prompt(
                     agent_did: Some(agent_did),
                     mandate_expires_at,
                     preference_guided,
+                    auto_expand: false,
                     created_at: now.clone(),
                     updated_at: now,
                 },
@@ -890,6 +917,7 @@ pub async fn canvas_plan_prompt(
                     agent_did: None,
                     mandate_expires_at: None,
                     preference_guided: false,
+                    auto_expand: false,
                     created_at: now.clone(),
                     updated_at: now,
                 },

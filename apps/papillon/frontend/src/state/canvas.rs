@@ -103,16 +103,22 @@ fn expand_block_references(text: &str, canvases: &[Canvas]) -> String {
     result
 }
 
-/// If `text` is a `pap://` URI, resolve it using the local catalog.
-/// Returns the resolved text to pass to the backend, or `None` if resolution
-/// failed and the caller should abort dispatch (error already logged).
-fn resolve_prompt_text(text: &str, origin: LinkOrigin) -> Option<String> {
+/// If `text` is a `pap://` URI, resolve it using the local catalog and return
+/// the [`ResolvedUri`] variant so callers can pattern-match on the resolution
+/// type (e.g. to detect `HttpsEndpoint` for browse-mode blocks).
+///
+/// Non-`pap://` text is wrapped in [`ResolvedUri::LocalIntent`] and passed
+/// through unchanged — the backend interprets it as natural language or a bare
+/// URL.
+///
+/// Returns `None` (and logs a warning) only when URI resolution genuinely fails.
+fn resolve_prompt_text(text: &str, origin: LinkOrigin) -> Option<ResolvedUri> {
     let is_pap = text.starts_with("pap://")
         || text.starts_with("pap+https://")
         || text.starts_with("pap+wss://");
 
     if !is_pap {
-        return Some(text.to_string());
+        return Some(ResolvedUri::LocalIntent(text.to_string()));
     }
 
     let catalog_map = use_context::<CatalogState>()
@@ -120,15 +126,22 @@ fn resolve_prompt_text(text: &str, origin: LinkOrigin) -> Option<String> {
         .unwrap_or_default();
 
     match resolve_pap_uri(text, &catalog_map, origin) {
-        Ok(ResolvedUri::LocalIntent(intent)) => Some(intent),
-        Ok(ResolvedUri::Did(uri)) => Some(uri),
-        Ok(ResolvedUri::Registry(uri)) => Some(uri),
-        Ok(ResolvedUri::HttpsEndpoint(url)) => Some(url),
-        Ok(ResolvedUri::WssEndpoint(url)) => Some(url),
+        Ok(resolved) => Some(resolved),
         Err(e) => {
             leptos::logging::warn!("PAP URI resolution failed for {}: {:?}", text, e);
             None
         }
+    }
+}
+
+/// Extract the inner `String` from any [`ResolvedUri`] variant.
+fn resolved_uri_text(r: &ResolvedUri) -> &str {
+    match r {
+        ResolvedUri::LocalIntent(s)
+        | ResolvedUri::Did(s)
+        | ResolvedUri::Registry(s)
+        | ResolvedUri::HttpsEndpoint(s)
+        | ResolvedUri::WssEndpoint(s) => s.as_str(),
     }
 }
 
@@ -208,21 +221,23 @@ impl CanvasState {
             r.truncate(10);
         });
 
-        let resolved = match resolve_prompt_text(&text, LinkOrigin::Principal) {
-            Some(t) => t,
+        let resolved_uri = match resolve_prompt_text(&text, LinkOrigin::Principal) {
+            Some(r) => r,
             None => return,
         };
-        self.dispatch_prompt_inner(text, resolved);
+        self.dispatch_prompt_inner(text, resolved_uri, None);
     }
 
     /// Dispatch a pap:// link that originated from an agent-rendered block.
     /// Resolves under `LinkOrigin::Agent` so special authorities
-    /// (receipt, canvas, settings) are blocked.  The resolved text is then
-    /// dispatched directly to the backend without a second Principal-origin
-    /// resolution pass.
-    pub fn submit_agent_link(&self, url: String) {
-        if let Some(resolved) = resolve_prompt_text(&url, LinkOrigin::Agent) {
-            self.dispatch_prompt_inner(url, resolved);
+    /// (receipt, canvas, settings) are blocked.
+    ///
+    /// `source_block_id` is the block that contained the link — the new block
+    /// is added to its `linked_block_ids` to preserve the JSON-LD navigation
+    /// graph across the browsing session.
+    pub fn submit_agent_link(&self, url: String, source_block_id: Option<String>) {
+        if let Some(resolved_uri) = resolve_prompt_text(&url, LinkOrigin::Agent) {
+            self.dispatch_prompt_inner(url, resolved_uri, source_block_id);
         }
         // On None: error already logged by resolve_prompt_text
     }
@@ -231,7 +246,16 @@ impl CanvasState {
     /// command with the pre-resolved text.  Never runs the URI resolver —
     /// callers are responsible for resolving under the correct `LinkOrigin`
     /// before calling this method.
-    fn dispatch_prompt_inner(&self, display_text: String, resolved_text: String) {
+    ///
+    /// `resolved_uri` carries the resolution type — `HttpsEndpoint` sets
+    /// `auto_expand = true` on the new block (browse mode).
+    /// `source_block_id` links the new block to the block that spawned it.
+    fn dispatch_prompt_inner(
+        &self,
+        display_text: String,
+        resolved_uri: ResolvedUri,
+        source_block_id: Option<String>,
+    ) {
         let canvases = self.canvases;
         let current_id = self.current_canvas_id;
 
@@ -265,8 +289,19 @@ impl CanvasState {
             new_id
         });
 
-        // Extract block references from the display text (original form).
-        let linked_block_ids = extract_block_ids(&display_text);
+        // `auto_expand` is true for browse URLs (HttpsEndpoint) — fills the viewport.
+        let auto_expand = matches!(resolved_uri, ResolvedUri::HttpsEndpoint(_));
+        // Extract the resolved string for the backend handshake.
+        let resolved_text = resolved_uri_text(&resolved_uri).to_string();
+
+        // Extract block references from the display text, then merge in the
+        // source block (the block whose link spawned this one).
+        let mut linked_block_ids = extract_block_ids(&display_text);
+        if let Some(src) = source_block_id {
+            if !linked_block_ids.contains(&src) {
+                linked_block_ids.push(src);
+            }
+        }
 
         // Create a resolving block immediately (optimistic UI)
         let block = CanvasBlock {
@@ -283,6 +318,7 @@ impl CanvasState {
             agent_did: None,
             mandate_expires_at: None,
             preference_guided: false,
+            auto_expand,
             created_at: now_iso(),
             updated_at: now_iso(),
         };
@@ -441,9 +477,9 @@ impl CanvasState {
             .and_then(|b| b.prompt_text.clone())
             .unwrap_or_default();
 
-        // Resolve pap:// URIs on retry too
+        // Resolve pap:// URIs on retry too; extract inner string for backend.
         let original_text = match resolve_prompt_text(&raw_text, LinkOrigin::Principal) {
-            Some(t) => t,
+            Some(r) => resolved_uri_text(&r).to_string(),
             None => {
                 canvases.update(|cs| {
                     if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
@@ -568,9 +604,10 @@ impl CanvasState {
         self.canvases.update(|cs| {
             for canvas in cs.iter_mut() {
                 if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == event_block.id) {
-                    // Preserve prompt_text — backend phase events don't carry it
+                    // Preserve frontend-only fields that backend events don't carry.
                     let prompt_text = b.prompt_text.take();
                     let linked = std::mem::take(&mut b.linked_block_ids);
+                    let auto_expand = b.auto_expand; // set at creation time, never reset by events
                     *b = event_block;
                     if b.prompt_text.is_none() {
                         b.prompt_text = prompt_text;
@@ -578,6 +615,7 @@ impl CanvasState {
                     if b.linked_block_ids.is_empty() {
                         b.linked_block_ids = linked;
                     }
+                    b.auto_expand = auto_expand;
                     canvas.updated_at = now_iso();
                     return;
                 }
@@ -629,6 +667,7 @@ mod tests {
                 created_at: String::new(),
                 updated_at: String::new(),
                 preference_guided: false,
+            auto_expand: false,
             }],
             created_at: String::new(),
             updated_at: String::new(),
@@ -689,6 +728,7 @@ mod tests {
                     created_at: String::new(),
                     updated_at: String::new(),
                     preference_guided: false,
+            auto_expand: false,
                 },
                 CanvasBlock {
                     id: "b".into(),
@@ -703,6 +743,7 @@ mod tests {
                     created_at: String::new(),
                     updated_at: String::new(),
                     preference_guided: false,
+            auto_expand: false,
                 },
             ],
             created_at: String::new(),
