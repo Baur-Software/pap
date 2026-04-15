@@ -11,6 +11,7 @@
  */
 
 import { fetchManifest } from "../lib/discovery.js";
+import { resolveInterceptUrl } from "./intercept-logic.js";
 
 const PAP_SCHEMES = ["pap://", "pap+https://", "pap+wss://"];
 
@@ -98,51 +99,29 @@ function interceptClick(e: MouseEvent) {
 
 /**
  * Auto-intercept plain left-clicks on https:// links and route through PAP.
- *
- * Pass-through conditions (returns early without intercepting):
- *   - Not a left-click (button !== 0)
- *   - Modifier held: Ctrl/Meta (new tab), Shift (new window), Alt (per-click opt-out)
- *   - Synthetic click (isTrusted === false)
- *   - No <a> ancestor found, or href is not https://
- *   - Link has `download` attribute
- *   - Global auto-intercept disabled
- *   - Link hostname is in excludedDomains
+ * Guard logic is in resolveInterceptUrl (intercept-logic.ts) for testability.
  */
 function interceptHttpsClick(e: MouseEvent): void {
-  if (e.button !== 0) return;
-  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-  if (!e.isTrusted) return;
-
   const link = (e.target as HTMLElement).closest("a") as HTMLAnchorElement | null;
-  if (!link) return;
-  if (link.hasAttribute("download")) return;
+  const rawHref = link?.getAttribute("href") ?? null;
+  const hasDownload = link?.hasAttribute("download") ?? false;
 
-  const rawHref = link.getAttribute("href");
-  if (!rawHref) return;
+  const url = resolveInterceptUrl(
+    e,
+    rawHref,
+    hasDownload,
+    document.baseURI,
+    autoInterceptEnabled,
+    excludedDomains
+  );
+  if (!url) return;
 
-  let resolvedUrl: URL;
-  try {
-    resolvedUrl = new URL(rawHref, document.baseURI);
-  } catch {
-    return; // Malformed href — pass through
-  }
-
-  // Only intercept https:// — pap://, pap+https://, http://, etc. are all excluded.
-  if (resolvedUrl.protocol !== "https:") return;
-
-  // Check global toggle
-  if (!autoInterceptEnabled) return;
-
-  // Check per-domain exclusion list
-  if (excludedDomains.has(resolvedUrl.hostname)) return;
-
-  // All guards passed — intercept the click.
   e.preventDefault();
   e.stopPropagation();
 
   chrome.runtime.sendMessage({
     type: "HTTPS_LINK_CLICKED",
-    httpsUrl: resolvedUrl.href,
+    httpsUrl: url,
     pageTitle: document.title,
     pageUrl: window.location.href,
   });
