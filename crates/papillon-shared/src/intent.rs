@@ -72,6 +72,35 @@ const RULES: &[IntentRule] = &[
         agent: "REST Countries",
         strip: &["country ", "countries", "capital of", "population of"],
     },
+    // Dataset discovery — ML/AI datasets via Croissant-compatible agents
+    IntentRule {
+        keywords: &[
+            "dataset",
+            "datasets",
+            "training data",
+            "ml dataset",
+            "benchmark dataset",
+            "find dataset",
+            "data for training",
+            "huggingface dataset",
+            "openml",
+            "croissant",
+        ],
+        starts_with: &["dataset "],
+        action: "schema:DatasetAction",
+        agent: "Dataset Discovery",
+        strip: &[
+            "dataset",
+            "datasets",
+            "find dataset",
+            "training data",
+            "ml dataset",
+            "data for training",
+            "huggingface dataset",
+            "openml",
+            "croissant",
+        ],
+    },
     // arXiv / academic papers
     IntentRule {
         keywords: &[
@@ -419,5 +448,57 @@ mod tests {
         let (action_upper, agent_upper, _) = detect_intent("WEATHER London");
         assert_eq!(action_lower, action_upper);
         assert_eq!(agent_lower, agent_upper);
+    }
+
+    // ── Dataset discovery ──
+
+    #[test]
+    fn detect_dataset_keyword() {
+        let (action, agent, _) = detect_intent("dataset sentiment analysis");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_dataset_prefix() {
+        let (action, agent, _) = detect_intent("dataset imagenet");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_training_data_keyword() {
+        let (action, agent, _) = detect_intent("training data for BERT fine-tuning");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_croissant_keyword() {
+        let (action, agent, _) = detect_intent("find croissant imagenet");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_openml_keyword() {
+        let (action, agent, _) = detect_intent("openml classification benchmark");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn detect_ml_dataset_keyword() {
+        let (action, agent, _) = detect_intent("ml dataset for image classification");
+        assert_eq!(action, "schema:DatasetAction");
+        assert_eq!(agent, "Dataset Discovery");
+    }
+
+    #[test]
+    fn arxiv_wins_for_paper_queries() {
+        // "paper on X" should still route to arXiv, not dataset discovery.
+        let (action, agent, _) = detect_intent("paper on transformer architecture");
+        assert_eq!(action, "schema:SearchAction");
+        assert_eq!(agent, "arXiv Papers");
     }
 }

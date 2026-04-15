@@ -627,6 +627,15 @@ pub async fn canvas_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
+    // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
+    let (action_type_peek, _, _) = detect_intent(&text);
+    if action_type_peek == "schema:DatasetAction" {
+        return crate::commands::dataset_discovery::canvas_discover_datasets(
+            app, state, _canvas_id, prompt_id, block_id, text,
+        )
+        .await;
+    }
+
     let (schema_type, content, preference_guided, agent_did) =
         process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
 
@@ -743,6 +752,14 @@ pub async fn canvas_plan_prompt(
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
     let (action_type, preferred, _query) = detect_intent(&text);
+
+    // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
+    if action_type == "schema:DatasetAction" {
+        return crate::commands::dataset_discovery::canvas_discover_datasets(
+            app, state, _canvas_id, prompt_id, block_id, text,
+        )
+        .await;
+    }
 
     // Resolve agent to build the IntentPlan.
     let resolved = resolve_agent(&state, action_type, preferred, &[]).await?;

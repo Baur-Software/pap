@@ -1,5 +1,6 @@
 pub mod canvas;
 pub mod catalog;
+pub mod dataset;
 pub mod identity;
 pub mod orchestrator;
 pub mod recovery;

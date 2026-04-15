@@ -1,0 +1,34 @@
+schema_version = 1
+version = "0.1.0"
+name = "OpenML Dataset Search"
+provider = "OpenML"
+description = "Search 500K+ benchmark datasets on OpenML with ML quality metrics (instances, features, classes)."
+action = "schema:DatasetAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = """Report dataset name, format, number of instances, features, and classes.
+Identify suitability for classification vs regression vs clustering tasks."""
+subagents = []
+
+[endpoint]
+url_template = "https://api.openml.org/api/v1/json/data/list/data_name/{query}/limit/5/status/active"
+method = "Get"
+response_jsonpath = "$.data.dataset[0].name"
+response_schema_type = "schema:Dataset"
+
+[endpoint.response_mapping]
+"name"           = "$.data.dataset[0].name"
+"identifier"     = "$.data.dataset[0].did"
+"encodingFormat" = "$.data.dataset[0].format"
+"version"        = "$.data.dataset[0].version"
+
+[[configurable_properties]]
+"@type"      = "PropertyValueSpecification"
+valueName    = "results_per_page"
+name         = "Results Per Page"
+description  = "Maximum number of datasets to return per query"
+defaultValue = 5
+minValue     = 1
+maxValue     = 20

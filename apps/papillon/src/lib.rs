@@ -199,6 +199,8 @@ pub fn run() {
             commands::canvas::canvas_retry,
             commands::canvas::canvas_plan_prompt,
             commands::canvas::canvas_approve_block,
+            commands::dataset_discovery::canvas_discover_datasets,
+            commands::dataset_discovery::list_dataset_agents,
             commands::pipeline::run_pipeline,
             commands::templates::get_global_templates,
             commands::templates::get_profile_templates,
