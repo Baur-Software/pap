@@ -12,13 +12,11 @@
 
 import { fetchManifest } from "../lib/discovery.js";
 import { resolveInterceptUrl } from "./intercept-logic.js";
+import { STORAGE_AUTO_INTERCEPT, STORAGE_EXCLUDED_DOMAINS } from "../lib/constants.js";
 
 const PAP_SCHEMES = ["pap://", "pap+https://", "pap+wss://"];
 
 // ── Auto-intercept HTTPS links ──────────────────────────────────────────
-
-const STORAGE_AUTO_INTERCEPT = "autoInterceptHttps";
-const STORAGE_EXCLUDED_DOMAINS = "excludedDomains";
 
 /** Live-updated from chrome.storage.sync. Default: on. */
 let autoInterceptEnabled = true;

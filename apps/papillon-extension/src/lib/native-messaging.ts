@@ -11,7 +11,7 @@
  * offscreen document via @pap/sdk WASM.
  */
 
-const NATIVE_APP_ID = "com.baur_software.papillon";
+export const NATIVE_APP_ID = "com.baur_software.papillon";
 
 export interface NativeHost {
   readonly connected: boolean;

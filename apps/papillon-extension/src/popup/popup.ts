@@ -3,16 +3,21 @@
  */
 
 import type { StateResponse, PapSiteResponse } from "../lib/types.js";
+import { STORAGE_AUTO_INTERCEPT, STORAGE_EXCLUDED_DOMAINS } from "../lib/constants.js";
 
-const principalDidEl = document.getElementById("principal-did")!;
-const sessionCountEl = document.getElementById("session-count")!;
-const nativeStatusEl = document.getElementById("native-status")!;
-const papSiteSectionEl = document.getElementById("pap-site-section")!;
-const papSiteNameEl = document.getElementById("pap-site-name")!;
-const openHandshakeBtn = document.getElementById("open-handshake")!;
-const openSettingsBtn = document.getElementById("open-settings")!;
-const interceptToggleBtn = document.getElementById("intercept-toggle") as HTMLButtonElement;
-const domainToggleBtn = document.getElementById("domain-toggle") as HTMLButtonElement;
+function $<T extends HTMLElement = HTMLElement>(id: string): T {
+  return document.getElementById(id) as T;
+}
+
+const principalDidEl = $("principal-did");
+const sessionCountEl = $("session-count");
+const nativeStatusEl = $("native-status");
+const papSiteSectionEl = $("pap-site-section");
+const papSiteNameEl = $("pap-site-name");
+const openHandshakeBtn = $("open-handshake");
+const openSettingsBtn = $("open-settings");
+const interceptToggleBtn = $<HTMLButtonElement>("intercept-toggle");
+const domainToggleBtn = $<HTMLButtonElement>("domain-toggle");
 
 // ── Load State ─────────────────────────────────────────────────────────
 
@@ -65,9 +70,6 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
 });
 
 // ── Auto-intercept controls ────────────────────────────────────────────
-
-const STORAGE_AUTO_INTERCEPT = "autoInterceptHttps";
-const STORAGE_EXCLUDED_DOMAINS = "excludedDomains";
 
 let currentHostname: string | null = null;
 

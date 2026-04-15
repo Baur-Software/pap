@@ -25,6 +25,25 @@ export interface PapTool {
   method?: string;
 }
 
+// ── Validation limits ─────────────────────────────────────────────────
+
+const MAX_AGENT_ID_LEN = 1_000;
+const MAX_NAME_LEN = 1_000;
+const MAX_VERSION_LEN = 100;
+const MAX_PUBLIC_KEY_LEN = 5_000;
+const MAX_CATEGORIES = 100;
+const MAX_CATEGORY_LEN = 200;
+const MAX_TOOLS = 500;
+const MAX_TOOL_NAME_LEN = 200;
+const MAX_TOOL_DESCRIPTION_LEN = 1_000;
+const MAX_TOOL_ENDPOINT_LEN = 500;
+const MAX_TOOL_METHOD_LEN = 100;
+
+/** Returns true when `val` is a string with length in [minLen, maxLen]. */
+function isValidString(val: unknown, minLen: number, maxLen: number): val is string {
+  return typeof val === "string" && val.length >= minLen && val.length <= maxLen;
+}
+
 // ── Validation ────────────────────────────────────────────────────────
 
 /**
@@ -43,46 +62,38 @@ export function validateManifest(data: unknown): PapManifest | null {
 
   const obj = data as Record<string, unknown>;
 
-  if (typeof obj.agent_id !== "string" || obj.agent_id.length === 0 || obj.agent_id.length > 1000) {
-    return null;
-  }
-  if (typeof obj.name !== "string" || obj.name.length === 0 || obj.name.length > 1000) {
-    return null;
-  }
+  if (!isValidString(obj.agent_id, 1, MAX_AGENT_ID_LEN)) return null;
+  if (!isValidString(obj.name, 1, MAX_NAME_LEN)) return null;
 
   const manifest: PapManifest = {
     agent_id: obj.agent_id,
     name: obj.name,
   };
 
-  if (typeof obj.version === "string" && obj.version.length <= 100) manifest.version = obj.version;
-  if (typeof obj.public_key === "string" && obj.public_key.length <= 5000) manifest.public_key = obj.public_key;
+  if (isValidString(obj.version, 0, MAX_VERSION_LEN)) manifest.version = obj.version;
+  if (isValidString(obj.public_key, 0, MAX_PUBLIC_KEY_LEN)) manifest.public_key = obj.public_key;
+
   if (Array.isArray(obj.categories)) {
     manifest.categories = obj.categories
-      .slice(0, 100) // Max 100 categories
-      .filter((c: unknown) => typeof c === "string" && c.length <= 200)
-      .map((c: unknown) => (c as string));
+      .slice(0, MAX_CATEGORIES)
+      .filter((c): c is string => typeof c === "string" && c.length <= MAX_CATEGORY_LEN);
   }
+
   if (Array.isArray(obj.tools)) {
     manifest.tools = (obj.tools as unknown[])
-      .slice(0, 500) // Max 500 tools
+      .slice(0, MAX_TOOLS)
       .filter((t: unknown) => {
         if (typeof t !== "object" || t === null) return false;
-        const tool = t as Record<string, unknown>;
-        return (
-          typeof tool.name === "string" &&
-          tool.name.length > 0 &&
-          tool.name.length <= 200
-        );
+        return isValidString((t as Record<string, unknown>).name, 1, MAX_TOOL_NAME_LEN);
       })
       .map((t: unknown) => {
         const tool = t as Record<string, unknown>;
         const result: PapTool = { name: tool.name as string };
-        if (typeof tool.description === "string" && tool.description.length <= 1000)
+        if (isValidString(tool.description, 0, MAX_TOOL_DESCRIPTION_LEN))
           result.description = tool.description;
-        if (typeof tool.endpoint === "string" && tool.endpoint.length <= 500)
+        if (isValidString(tool.endpoint, 0, MAX_TOOL_ENDPOINT_LEN))
           result.endpoint = tool.endpoint;
-        if (typeof tool.method === "string" && tool.method.length <= 100)
+        if (isValidString(tool.method, 0, MAX_TOOL_METHOD_LEN))
           result.method = tool.method;
         return result;
       });

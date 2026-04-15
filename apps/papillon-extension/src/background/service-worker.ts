@@ -10,6 +10,7 @@
  */
 
 import { parsePapUri, httpsUrlToPap } from "../lib/uri.js";
+import { NATIVE_APP_ID } from "../lib/native-messaging.js";
 import type { PapManifest } from "../lib/discovery.js";
 import type {
   ExtensionMessage,
@@ -17,6 +18,17 @@ import type {
   StateResponse,
   PapSiteResponse,
 } from "../lib/types.js";
+
+// ── Local constants ─────────────────────────────────────────────────────
+
+/** Badge background color when sessions are active (CSS --gold). */
+const BADGE_COLOR_GOLD = "#f0a030";
+
+/** Badge background color for PAP-capable sites (CSS --purple). */
+const BADGE_COLOR_PURPLE = "#6c5ce7";
+
+/** Context menu item ID for "Open with PAP protection". */
+const CONTEXT_MENU_UPGRADE_ID = "pap-upgrade-link";
 
 // ── State ──────────────────────────────────────────────────────────────
 
@@ -119,15 +131,13 @@ function updateBadge() {
   const count = activeSessions.size;
   if (count > 0) {
     chrome.action.setBadgeText({ text: String(count) });
-    chrome.action.setBadgeBackgroundColor({ color: "#f0a030" }); // --gold
+    chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR_GOLD });
   } else {
     chrome.action.setBadgeText({ text: "" });
   }
 }
 
 // ── Native Messaging ───────────────────────────────────────────────────
-
-const NATIVE_APP_ID = "com.baur_software.papillon";
 
 function connectNative(): chrome.runtime.Port | null {
   try {
@@ -281,7 +291,7 @@ chrome.runtime.onMessage.addListener(
         // overrides per-tab when set; when global clears, per-tab shows through.
         chrome.action.setBadgeText({ text: "PAP", tabId });
         chrome.action.setBadgeBackgroundColor({
-          color: "#6c5ce7", // --purple
+          color: BADGE_COLOR_PURPLE,
           tabId,
         });
         break;
@@ -375,7 +385,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 if (chrome.contextMenus) {
   chrome.contextMenus.onClicked.addListener((info) => {
-    if (info.menuItemId === "pap-upgrade-link" && info.linkUrl) {
+    if (info.menuItemId === CONTEXT_MENU_UPGRADE_ID && info.linkUrl) {
       try {
         const papUri = httpsUrlToPap(info.linkUrl);
         openHandshakeTab(papUri, undefined, undefined, info.linkUrl);
@@ -399,7 +409,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   // Register context menu for HTTPS link upgrade (if API available)
   if (chrome.contextMenus) {
     chrome.contextMenus.create({
-      id: "pap-upgrade-link",
+      id: CONTEXT_MENU_UPGRADE_ID,
       title: "Open with PAP protection",
       contexts: ["link"],
       targetUrlPatterns: ["https://*/*"],
