@@ -89,8 +89,8 @@ pub fn resolve_pap_uri(
         return Ok(ResolvedUri::Did(uri.to_string()));
     }
 
-    // Step 2: catalog name (no dot in authority, not a registry host)
-    if !is_registry_host(authority) {
+    // Step 2: catalog name (no dot in authority, not a local registry host or web domain)
+    if !is_local_registry(authority) && !is_web_domain(authority) {
         if let Some(did) = catalog.get(authority_lower.as_str()) {
             // Reject path traversal before rewriting.
             // Check both literal ".." and common percent-encoded forms.
@@ -107,15 +107,34 @@ pub fn resolve_pap_uri(
         return Err(PapUriError::NotFound(authority_lower));
     }
 
-    // Step 3: registry hostname / localhost / IPv4
+    // Step 3a: external web domain — zero-trust browse via https.
+    //
+    // Registries are federated and discovered at handshake time, not via the
+    // URI scheme. A bare `pap://domain.com` always means "browse this site".
+    if is_web_domain(authority) {
+        let https_url = format!("https://{}{}", authority, path);
+        return Ok(ResolvedUri::HttpsEndpoint(https_url));
+    }
+
+    // Step 3b: localhost / IPv4 / IPv6 — local federated registry peer
+    // (used in development and LAN deployments).
     Ok(ResolvedUri::Registry(uri.to_string()))
 }
 
-fn is_registry_host(authority: &str) -> bool {
-    authority == "localhost"
-        || authority.starts_with('[')
-        || is_ipv4(authority)
-        || authority.contains('.')
+/// Returns true for local/loopback addresses that identify a registry peer
+/// during development or LAN deployment.
+fn is_local_registry(authority: &str) -> bool {
+    // Strip optional port before matching.
+    let host = authority.split(':').next().unwrap_or(authority);
+    host == "localhost" || authority.starts_with('[') || is_ipv4(host)
+}
+
+/// Returns true for external dotted-domain names — these are browsed as web
+/// pages, not treated as registry peers. Registry federation is announced at
+/// handshake time, not encoded in the URI scheme.
+fn is_web_domain(authority: &str) -> bool {
+    let host = authority.split(':').next().unwrap_or(authority);
+    host.contains('.') && !is_ipv4(host) && !host.starts_with('[')
 }
 
 fn is_ipv4(s: &str) -> bool {
@@ -290,21 +309,71 @@ mod tests {
     }
 
     #[test]
-    fn registry_hostname_passthrough() {
-        let uri = "pap://chrysalis.example.com/agents/arxiv/SearchAction";
-        let r = resolve_pap_uri(uri, &empty(), LinkOrigin::Principal).unwrap();
-        assert_eq!(r, ResolvedUri::Registry(uri.into()));
+    fn external_domain_resolves_to_https_endpoint() {
+        // Registries are federated (announced at handshake), not addressed by
+        // URI scheme. pap://domain.com always means "browse this site".
+        let r = resolve_pap_uri(
+            "pap://chrysalis.example.com/page",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::HttpsEndpoint("https://chrysalis.example.com/page".into())
+        );
     }
 
     #[test]
-    fn localhost_is_registry_host() {
+    fn bare_domain_browse() {
+        let r = resolve_pap_uri("pap://ebay.com", &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::HttpsEndpoint("https://ebay.com".into()));
+    }
+
+    #[test]
+    fn domain_with_path_browse() {
+        let r = resolve_pap_uri(
+            "pap://ebay.com/electronics/laptops",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::HttpsEndpoint("https://ebay.com/electronics/laptops".into())
+        );
+    }
+
+    #[test]
+    fn domain_with_port_browse() {
+        let r = resolve_pap_uri(
+            "pap://example.com:8080/path",
+            &empty(),
+            LinkOrigin::Principal,
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ResolvedUri::HttpsEndpoint("https://example.com:8080/path".into())
+        );
+    }
+
+    #[test]
+    fn localhost_is_local_registry() {
         let uri = "pap://localhost/agents/dev/SearchAction";
         let r = resolve_pap_uri(uri, &empty(), LinkOrigin::Principal).unwrap();
         assert_eq!(r, ResolvedUri::Registry(uri.into()));
     }
 
     #[test]
-    fn ipv4_is_registry_host() {
+    fn localhost_with_port_is_local_registry() {
+        let uri = "pap://localhost:8080/agents/dev/SearchAction";
+        let r = resolve_pap_uri(uri, &empty(), LinkOrigin::Principal).unwrap();
+        assert_eq!(r, ResolvedUri::Registry(uri.into()));
+    }
+
+    #[test]
+    fn ipv4_is_local_registry() {
         let uri = "pap://192.168.1.1/agents/local/SearchAction";
         let r = resolve_pap_uri(uri, &empty(), LinkOrigin::Principal).unwrap();
         assert_eq!(r, ResolvedUri::Registry(uri.into()));

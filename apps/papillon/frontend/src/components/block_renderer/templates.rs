@@ -862,3 +862,111 @@ impl BlockRenderer for QuotationTemplate {
         vec!["Quotation"]
     }
 }
+
+// ── Web ───────────────────────────────────────────────────────────────────────
+
+/// WebPage template — browser-tab-style block for web browsing on the canvas.
+///
+/// Rendered when the Web Page Reader agent returns `schema:WebPage` JSON-LD,
+/// which happens whenever the user browses via `pap://domain.com`. The block
+/// shows a URL bar, page title, description, publisher, and body text extract.
+///
+/// The URL bar renders the page URL as a `pap://` link so that clicking it
+/// opens a new browse block via `submit_agent_link()` (LinkOrigin::Agent).
+pub struct WebPageTemplate;
+
+impl BlockRenderer for WebPageTemplate {
+    fn render(&self, content: &Value) -> AnyView {
+        let title = text_field(content, "name");
+        let url = text_field(content, "url");
+        let description = text_field(content, "description");
+        let body_text = text_field(content, "text");
+
+        // Publisher: either a bare string or an object with "name".
+        let publisher = content
+            .get("publisher")
+            .and_then(|p| p.get("name").or(Some(p)))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Author: either a bare string or an object with "name".
+        let author = content
+            .get("author")
+            .and_then(|a| a.get("name").or(Some(a)))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Published date — trim to date part if it includes a time component.
+        let date_raw = text_field(content, "datePublished");
+        let date = if date_raw == "-" {
+            String::new()
+        } else {
+            date_raw
+                .split('T')
+                .next()
+                .unwrap_or(&date_raw)
+                .to_string()
+        };
+
+        // Rewrite the URL to a pap:// link so it routes through submit_agent_link().
+        let pap_url = if url.starts_with("https://") {
+            format!("pap://{}", &url["https://".len()..])
+        } else if url.starts_with("http://") {
+            format!("pap://{}", &url["http://".len()..])
+        } else {
+            url.clone()
+        };
+
+        view! {
+            <div class="typed-webpage">
+                // ── URL bar ───────────────────────────────────────────────────
+                <div class="typed-webpage-bar">
+                    <span class="typed-webpage-favicon" aria-hidden="true">"🌐"</span>
+                    <a class="typed-webpage-url" href=pap_url>{url.clone()}</a>
+                </div>
+                // ── Page body ─────────────────────────────────────────────────
+                <div class="typed-webpage-body">
+                    <h2 class="typed-webpage-title">{title}</h2>
+
+                    // Byline: publisher · author · date
+                    {
+                        let byline_parts: Vec<String> = [
+                            if publisher.is_empty() { None } else { Some(publisher) },
+                            if author.is_empty() { None } else { Some(author) },
+                            if date.is_empty() { None } else { Some(date) },
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .collect();
+
+                        if byline_parts.is_empty() {
+                            view! { <></> }.into_any()
+                        } else {
+                            let byline = byline_parts.join(" \u{00b7} ");
+                            view! { <p class="typed-webpage-byline">{byline}</p> }.into_any()
+                        }
+                    }
+
+                    {if description != "-" && !description.is_empty() {
+                        view! { <p class="typed-webpage-description">{description}</p> }.into_any()
+                    } else {
+                        view! { <></> }.into_any()
+                    }}
+
+                    {if body_text != "-" && !body_text.is_empty() {
+                        view! { <div class="typed-webpage-text">{body_text}</div> }.into_any()
+                    } else {
+                        view! { <></> }.into_any()
+                    }}
+                </div>
+            </div>
+        }
+        .into_any()
+    }
+
+    fn schema_types(&self) -> Vec<&'static str> {
+        vec!["WebPage"]
+    }
+}
