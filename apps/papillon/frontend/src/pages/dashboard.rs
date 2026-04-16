@@ -32,6 +32,13 @@ pub fn DashboardPage() -> impl IntoView {
     let active_agents = move || -> Vec<_> {
         agents.get().into_iter().filter(|a| a.source == "compiled").collect()
     };
+    let catalog_agents = move || -> Vec<_> {
+        agents.get().into_iter().filter(|a| a.source == "catalog").collect()
+    };
+    let catalog_count = move || {
+        agents.get().iter().filter(|a| a.source == "catalog").count()
+    };
+    let catalog_open = RwSignal::new(false);
 
     view! {
         <div class="fleet-page">
@@ -80,6 +87,33 @@ pub fn DashboardPage() -> impl IntoView {
                     >
                         <div class="fleet-loading">"Loading agents\u{2026}"</div>
                     </Show>
+
+                    // ── Catalog agents (TOML-defined, collapsible) ──────────
+                    <Show when=move || { catalog_count() > 0 }>
+                        <div class="fleet-catalog-section">
+                            <div
+                                class="fleet-catalog-header"
+                                on:click=move |_| catalog_open.update(|v| *v = !*v)
+                            >
+                                <span class="fleet-section-title">"CATALOG AGENTS"</span>
+                                <span class="fleet-catalog-count">{move || catalog_count()}</span>
+                                <span class="fleet-catalog-toggle">
+                                    {move || if catalog_open.get() { "▲ COLLAPSE" } else { "▼ SHOW ALL" }}
+                                </span>
+                            </div>
+                            <Show when=move || catalog_open.get()>
+                                <div class="fleet-catalog-grid">
+                                    <For
+                                        each=catalog_agents
+                                        key=|a| a.content_hash.clone()
+                                        children=move |agent| {
+                                            view! { <CatalogRow agent=agent /> }
+                                        }
+                                    />
+                                </div>
+                            </Show>
+                        </div>
+                    </Show>
                 </div>
 
                 <div class="fleet-sidebar">
@@ -100,6 +134,29 @@ pub fn DashboardPage() -> impl IntoView {
                     </div>
                 </div>
             </div>
+        </div>
+    }
+}
+
+/// Compact single-row display for TOML catalog agents.
+#[component]
+fn CatalogRow(agent: AgentInfo) -> impl IntoView {
+    let action = agent
+        .capabilities
+        .first()
+        .map(|s| s.trim_start_matches("schema:").to_string())
+        .unwrap_or_default();
+    let live_class = if agent.live {
+        "fleet-catalog-live"
+    } else {
+        "fleet-catalog-live offline"
+    };
+
+    view! {
+        <div class="fleet-catalog-row">
+            <span class={live_class} title=if agent.live { "handler registered" } else { "handler not loaded" }></span>
+            <span class="fleet-catalog-name" title=agent.name.clone()>{agent.name.clone()}</span>
+            <span class="fleet-catalog-action">{action}</span>
         </div>
     }
 }
