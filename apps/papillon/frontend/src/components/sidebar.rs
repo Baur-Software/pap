@@ -45,18 +45,6 @@ pub fn Sidebar() -> impl IntoView {
                 <IconChip />
             </A>
             <A
-                href="/activity"
-                attr:class=move || {
-                    if location.pathname.get().starts_with("/activity") {
-                        "sidebar-icon active"
-                    } else {
-                        "sidebar-icon"
-                    }
-                }
-            >
-                <IconDatabase />
-            </A>
-            <A
                 href="/receipts"
                 attr:class=move || {
                     if location.pathname.get().starts_with("/receipts") {
@@ -66,7 +54,7 @@ pub fn Sidebar() -> impl IntoView {
                     }
                 }
             >
-                <IconReceipt />
+                <IconHistory />
             </A>
             <div style="flex:1" />
             <A
@@ -129,12 +117,12 @@ fn IconDatabase() -> impl IntoView {
 }
 
 #[component]
-fn IconReceipt() -> impl IntoView {
+fn IconHistory() -> impl IntoView {
     view! {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="9" y1="15" x2="15" y2="15"/>
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
+            <polyline points="12 7 12 12 15 15"/>
         </svg>
     }
 }
