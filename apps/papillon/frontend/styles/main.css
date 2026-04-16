@@ -4627,3 +4627,198 @@ body {
     text-decoration: underline;
     opacity: 0.85;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   WEBPAGE TEMPLATE — browser-tab-style canvas block
+   Rendered by WebPageTemplate for schema:WebPage blocks.
+   ═══════════════════════════════════════════════════════════ */
+
+.typed-webpage {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* URL bar — mimics a browser address bar */
+.typed-webpage-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-xs, 6px);
+    padding: 6px var(--sp-sm, 10px);
+    background: var(--bg-3, #2a2940);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--r-sm, 4px) var(--r-sm, 4px) 0 0;
+}
+
+.typed-webpage-favicon {
+    font-size: 13px;
+    flex-shrink: 0;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+.typed-webpage-url {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--purple, #6c5ce7);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.typed-webpage-url:hover {
+    text-decoration: underline;
+    opacity: 0.85;
+}
+
+/* Page body — title, byline, description, text */
+.typed-webpage-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-sm, 8px);
+    padding: var(--sp-md, 14px) var(--sp-sm, 10px) var(--sp-sm, 10px);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-top: none;
+    border-radius: 0 0 var(--r-sm, 4px) var(--r-sm, 4px);
+}
+
+.typed-webpage-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text-1, #eeeef2);
+    margin: 0;
+}
+
+.typed-webpage-byline {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--text-3, #6a6a80);
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+
+.typed-webpage-description {
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-2, #9494a8);
+    font-style: italic;
+    margin: 0;
+}
+
+/* Body text extract — constrained height, scrollable */
+.typed-webpage-text {
+    font-family: var(--font-body);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-2, #9494a8);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: var(--sp-sm, 8px);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: var(--r-sm, 4px);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FLEET CATALOG — compact list for TOML catalog agents
+   ═══════════════════════════════════════════════════════════ */
+
+.fleet-catalog-section {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: var(--sp-md) var(--sp-lg);
+}
+
+.fleet-catalog-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    margin-bottom: var(--sp-sm);
+    font: var(--text-small);
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+}
+
+.fleet-catalog-toggle {
+    margin-left: auto;
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    transition: opacity 0.15s;
+}
+
+.fleet-catalog-count {
+    background: rgba(108, 92, 231, 0.12);
+    color: var(--purple, #6c5ce7);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.fleet-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 4px;
+    max-height: 380px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.fleet-catalog-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm, 8px);
+    padding: 5px var(--sp-sm, 8px);
+    border-radius: var(--r-sm, 4px);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04);
+    min-width: 0;
+}
+
+.fleet-catalog-row:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.fleet-catalog-live {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: rgba(0,217,166,0.5);
+}
+
+.fleet-catalog-live.offline {
+    background: rgba(255,255,255,0.15);
+}
+
+.fleet-catalog-name {
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--text-1, #eeeef2);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fleet-catalog-action {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3, #6a6a80);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
