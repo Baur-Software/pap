@@ -374,8 +374,10 @@
             peer-to-peer Chrysalis registry.
           </p>
           <p>
-            Employee offboarding, SCIM provisioning, and IdP-backed identity (Okta, Azure AD,
-            Ping) are not in the codebase today.
+            Employee offboarding, SCIM provisioning, and IdP-backed identity are
+            architecturally unnecessary in PAP. Mandate TTL is the offboarding mechanism —
+            access cryptographically expires without any deprovisioning step. There is no
+            central store to revoke access from.
           </p>
           <div class="roadmap-tag">⬡ Roadmap — PAP-ORG profile</div>
         </div>
