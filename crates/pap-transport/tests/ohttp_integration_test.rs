@@ -58,7 +58,11 @@ fn ohttp_hpke_encrypt_decrypt_request() -> Result<(), TransportError> {
 
     // Wire must be longer: 7 (hdr) + 32 (enc key) + plaintext.len() + 16 (GCM tag)
     assert_eq!(wire.len(), 7 + 32 + plaintext.len() + 16);
-    assert_ne!(&wire[39..], plaintext, "ciphertext must differ from plaintext");
+    assert_ne!(
+        &wire[39..],
+        plaintext,
+        "ciphertext must differ from plaintext"
+    );
 
     let (decrypted, _) = server_decryptor.decrypt_request(&wire)?;
     assert_eq!(decrypted, plaintext);
@@ -168,7 +172,10 @@ fn ohttp_passthrough_no_recipient_key() -> Result<(), TransportError> {
     let (wire, resp_ctx) = encryptor.encrypt_request(plaintext)?;
 
     // Passthrough: wire bytes equal plaintext (no OHTTP header)
-    assert_eq!(&wire, plaintext, "passthrough must return plaintext unchanged");
+    assert_eq!(
+        &wire, plaintext,
+        "passthrough must return plaintext unchanged"
+    );
 
     let (decrypted, enc_ctx) = server_decryptor.decrypt_request(&wire)?;
     assert_eq!(decrypted, plaintext);

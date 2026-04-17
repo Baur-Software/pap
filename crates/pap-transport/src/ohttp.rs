@@ -156,7 +156,10 @@ impl OhttpKeyPair {
         let mut public_bytes = [0u8; 32];
         private_bytes.copy_from_slice(sk.to_bytes().as_slice());
         public_bytes.copy_from_slice(pk.to_bytes().as_slice());
-        Self { private_bytes, public_bytes }
+        Self {
+            private_bytes,
+            public_bytes,
+        }
     }
 
     /// Return the 32-byte X25519 public key.
@@ -174,7 +177,10 @@ impl OhttpKeyPair {
         let pk = X25519HkdfSha256::sk_to_pk(&sk);
         let mut public_bytes = [0u8; 32];
         public_bytes.copy_from_slice(pk.to_bytes().as_slice());
-        Self { private_bytes: bytes, public_bytes }
+        Self {
+            private_bytes: bytes,
+            public_bytes,
+        }
     }
 }
 
@@ -278,9 +284,9 @@ impl OhttpResponseDecryptCtx {
         };
         let cipher = Aes128Gcm::new(Key::<Aes128Gcm>::from_slice(&km[..16]));
         let nonce = Nonce::from_slice(&km[16..28]);
-        cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|_| TransportError::OhttpDecryptionFailed("AES-GCM authentication failed".into()))
+        cipher.decrypt(nonce, ciphertext).map_err(|_| {
+            TransportError::OhttpDecryptionFailed("AES-GCM authentication failed".into())
+        })
     }
 }
 
@@ -361,8 +367,9 @@ impl OhttpEncryptor {
         };
 
         let recipient_pk =
-            <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(pub_key_bytes.as_slice())
-                .map_err(|e| TransportError::OhttpEncryptionFailed(format!("invalid recipient key: {e}")))?;
+            <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(pub_key_bytes.as_slice()).map_err(
+                |e| TransportError::OhttpEncryptionFailed(format!("invalid recipient key: {e}")),
+            )?;
 
         let info = request_info(self.config.key_id);
 
@@ -373,7 +380,9 @@ impl OhttpEncryptor {
                 &info,
                 &mut OsRng,
             )
-            .map_err(|e| TransportError::OhttpEncryptionFailed(format!("HPKE setup_sender: {e}")))?;
+            .map_err(|e| {
+                TransportError::OhttpEncryptionFailed(format!("HPKE setup_sender: {e}"))
+            })?;
 
         // Export response key material before sealing (export is sequence-independent).
         // hpke 0.11 API: export(label: &[u8], out: &mut [u8]) -> Result<(), HpkeError>
@@ -396,7 +405,12 @@ impl OhttpEncryptor {
         wire.extend_from_slice(enc_bytes.as_slice());
         wire.extend_from_slice(&ciphertext);
 
-        Ok((wire, OhttpResponseDecryptCtx { key_material: Some(km) }))
+        Ok((
+            wire,
+            OhttpResponseDecryptCtx {
+                key_material: Some(km),
+            },
+        ))
     }
 }
 
@@ -413,7 +427,9 @@ pub struct OhttpServerDecryptor {
 
 impl Clone for OhttpServerDecryptor {
     fn clone(&self) -> Self {
-        Self { keypair: self.keypair.clone() }
+        Self {
+            keypair: self.keypair.clone(),
+        }
     }
 }
 
@@ -427,7 +443,9 @@ impl OhttpServerDecryptor {
 
     /// Create a decryptor with a server HPKE keypair (enables real RFC 9458 OHTTP).
     pub fn new_with_keypair(keypair: OhttpKeyPair) -> Self {
-        Self { keypair: Some(keypair) }
+        Self {
+            keypair: Some(keypair),
+        }
     }
 
     /// Decrypt an OHTTP-encapsulated request.
@@ -458,22 +476,24 @@ impl OhttpServerDecryptor {
         let enc_slice = &wire[OHTTP_HDR_LEN..OHTTP_HDR_LEN + ENCAPPED_KEY_LEN];
         let ciphertext = &wire[MIN_REQUEST_LEN..];
 
-        let enc = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(enc_slice)
-            .map_err(|e| TransportError::OhttpDecryptionFailed(format!("invalid encapped key: {e}")))?;
+        let enc = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(enc_slice).map_err(|e| {
+            TransportError::OhttpDecryptionFailed(format!("invalid encapped key: {e}"))
+        })?;
 
         let sk = <X25519HkdfSha256 as Kem>::PrivateKey::from_bytes(&keypair.private_bytes)
-            .map_err(|e| TransportError::OhttpDecryptionFailed(format!("invalid private key: {e}")))?;
+            .map_err(|e| {
+                TransportError::OhttpDecryptionFailed(format!("invalid private key: {e}"))
+            })?;
 
         let info = request_info(key_id);
 
-        let mut receiver_ctx =
-            hpke::setup_receiver::<AesGcm128, HkdfSha256, X25519HkdfSha256>(
-                &OpModeR::Base,
-                &sk,
-                &enc,
-                &info,
-            )
-            .map_err(|e| TransportError::OhttpDecryptionFailed(format!("HPKE setup_receiver: {e}")))?;
+        let mut receiver_ctx = hpke::setup_receiver::<AesGcm128, HkdfSha256, X25519HkdfSha256>(
+            &OpModeR::Base,
+            &sk,
+            &enc,
+            &info,
+        )
+        .map_err(|e| TransportError::OhttpDecryptionFailed(format!("HPKE setup_receiver: {e}")))?;
 
         // Export response key material before opening (export is sequence-independent).
         // hpke 0.11 API: export(label: &[u8], out: &mut [u8]) -> Result<(), HpkeError>
@@ -482,13 +502,18 @@ impl OhttpServerDecryptor {
             .export(b"PAP OHTTP Response\x00", &mut km)
             .map_err(|e| TransportError::OhttpDecryptionFailed(format!("HPKE export: {e}")))?;
 
-        let plaintext = receiver_ctx
-            .open(ciphertext, b"")
-            .map_err(|_| TransportError::OhttpDecryptionFailed(
+        let plaintext = receiver_ctx.open(ciphertext, b"").map_err(|_| {
+            TransportError::OhttpDecryptionFailed(
                 "HPKE open failed — authentication mismatch or tampered ciphertext".into(),
-            ))?;
+            )
+        })?;
 
-        Ok((plaintext, OhttpResponseEncryptCtx { key_material: Some(km) }))
+        Ok((
+            plaintext,
+            OhttpResponseEncryptCtx {
+                key_material: Some(km),
+            },
+        ))
     }
 }
 
@@ -500,9 +525,7 @@ impl OhttpServerDecryptor {
 /// with the server's HPKE public key populated.
 ///
 /// The service's `ohthpKeyConfig` field must be a base64url-encoded RFC 9458 §5 key config.
-pub fn fetch_key_config(
-    did_doc: &pap_did::DidDocument,
-) -> Result<OhttpConfig, TransportError> {
+pub fn fetch_key_config(did_doc: &pap_did::DidDocument) -> Result<OhttpConfig, TransportError> {
     let service = did_doc
         .service
         .as_ref()
@@ -551,7 +574,10 @@ mod tests {
     #[test]
     fn test_ohttp_config_with_relay() {
         let config = OhttpConfig::new().with_relay(Some("http://relay.example.com".to_string()));
-        assert_eq!(config.relay_url, Some("http://relay.example.com".to_string()));
+        assert_eq!(
+            config.relay_url,
+            Some("http://relay.example.com".to_string())
+        );
     }
 
     #[test]
@@ -581,7 +607,10 @@ mod tests {
         // Encrypt request
         let req_plaintext = b"request body";
         let (wire, resp_decrypt_ctx) = encryptor.encrypt_request(req_plaintext)?;
-        assert!(wire.len() > req_plaintext.len(), "wire must be longer than plaintext");
+        assert!(
+            wire.len() > req_plaintext.len(),
+            "wire must be longer than plaintext"
+        );
         assert_eq!(wire.len(), MIN_REQUEST_LEN + req_plaintext.len() + 16); // +16 = GCM tag
 
         // Decrypt request on server
@@ -643,8 +672,12 @@ mod tests {
         let pub1 = kp1.public_key_bytes();
 
         let config = OhttpConfig::default().with_recipient_public_key(pub1.to_vec());
-        let (wire, _) = OhttpEncryptor::new(config).encrypt_request(b"pk test").unwrap();
-        let (pt, _) = OhttpServerDecryptor::new_with_keypair(kp1c).decrypt_request(&wire).unwrap();
+        let (wire, _) = OhttpEncryptor::new(config)
+            .encrypt_request(b"pk test")
+            .unwrap();
+        let (pt, _) = OhttpServerDecryptor::new_with_keypair(kp1c)
+            .decrypt_request(&wire)
+            .unwrap();
         assert_eq!(pt, b"pk test");
     }
 
@@ -652,7 +685,10 @@ mod tests {
     #[test]
     fn test_ohttp_config_resolve_relay_explicit() {
         let config = OhttpConfig::new().with_relay(Some("https://relay.example.com".to_string()));
-        assert_eq!(config.resolve_relay(), Some("https://relay.example.com".to_string()));
+        assert_eq!(
+            config.resolve_relay(),
+            Some("https://relay.example.com".to_string())
+        );
     }
 
     /// `resolve_relay()` returns `None` when relay_url is None and env var is unset.
@@ -715,7 +751,10 @@ mod tests {
             ohttp_key_config: None,
         }]);
         let result = fetch_key_config(&doc);
-        assert!(matches!(result, Err(TransportError::OhttpEncryptionFailed(_))));
+        assert!(matches!(
+            result,
+            Err(TransportError::OhttpEncryptionFailed(_))
+        ));
     }
 
     /// `fetch_key_config` errors when `ohthpKeyConfig` contains invalid base64url.
@@ -730,7 +769,10 @@ mod tests {
             ohttp_key_config: Some("!!!not-valid-base64!!!".to_string()),
         }]);
         let result = fetch_key_config(&doc);
-        assert!(matches!(result, Err(TransportError::OhttpEncryptionFailed(_))));
+        assert!(matches!(
+            result,
+            Err(TransportError::OhttpEncryptionFailed(_))
+        ));
     }
 
     /// A cloned passthrough `OhttpServerDecryptor` must still act as identity.
@@ -740,6 +782,9 @@ mod tests {
         let cloned = decryptor.clone();
         let payload = b"hello clone";
         let (out, _) = cloned.decrypt_request(payload).unwrap();
-        assert_eq!(out, payload, "cloned passthrough decryptor must return input unchanged");
+        assert_eq!(
+            out, payload,
+            "cloned passthrough decryptor must return input unchanged"
+        );
     }
 }

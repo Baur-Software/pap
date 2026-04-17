@@ -238,10 +238,15 @@ mod tests {
         }]);
         let json = doc.to_json();
         let parsed = DidDocument::from_json(&json).unwrap();
-        let svcs = parsed.service.expect("service field must survive roundtrip");
+        let svcs = parsed
+            .service
+            .expect("service field must survive roundtrip");
         assert_eq!(svcs.len(), 1);
         assert_eq!(svcs[0].service_type, "PAPObliviousHTTP");
-        assert_eq!(svcs[0].ohttp_key_config.as_deref(), Some("dGVzdGtleWNvbmZpZw"));
+        assert_eq!(
+            svcs[0].ohttp_key_config.as_deref(),
+            Some("dGVzdGtleWNvbmZpZw")
+        );
     }
 
     /// A v1.0 DID Document JSON without a `service` key must deserialize to
@@ -260,6 +265,9 @@ mod tests {
             "authentication": ["did:key:ztest#key-1"]
         }"#;
         let doc = DidDocument::from_json(v1_json).unwrap();
-        assert!(doc.service.is_none(), "v1 doc without service field must yield service: None");
+        assert!(
+            doc.service.is_none(),
+            "v1 doc without service field must yield service: None"
+        );
     }
 }

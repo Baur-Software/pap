@@ -211,7 +211,9 @@ async fn handle_execute(
     } else {
         match &state.ohttp_decryptor {
             Some(d) => {
-                let (_, ctx) = d.decrypt_request(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+                let (_, ctx) = d
+                    .decrypt_request(&body)
+                    .map_err(|_| StatusCode::BAD_REQUEST)?;
                 Some(ctx)
             }
             None => None,
