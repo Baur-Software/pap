@@ -44,4 +44,10 @@ pub enum FederationError {
 
     #[error("peer is probationary and cannot vouch: {0}")]
     PeerProbationary(String),
+
+    #[error("vouchers lack diverse trust paths: ancestor {common_ancestor} is shared by {voucher_count} vouchers")]
+    NonDiversePaths {
+        common_ancestor: String,
+        voucher_count: usize,
+    },
 }

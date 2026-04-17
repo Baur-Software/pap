@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use chrono::{DateTime, Utc};
 use pap_did::verify_key_from_did;
@@ -6,7 +6,7 @@ use pap_marketplace::{AgentAdvertisement, MarketplaceRegistry};
 use serde::{Deserialize, Serialize};
 
 use crate::error::FederationError;
-use crate::peer::{PeerStatus, PeerVouch, RegistryPeer};
+use crate::peer::{PeerStatus, PeerTrustSignals, PeerVouch, RegistryPeer};
 
 /// Policy configuration for peer registration with vouch-based admission.
 ///
@@ -27,9 +27,14 @@ pub struct PeerRegistrationPolicy {
     pub min_age_to_vouch_days: u64,
     /// Number of days a newly registered peer remains in probation.
     pub probation_days: u64,
-    /// Whether vouchers must have independent trust paths (not yet enforced,
-    /// reserved for future graph-based analysis).
+    /// Whether vouchers must have independent trust paths.
     pub require_diverse_paths: bool,
+    /// How many hops up the vouch graph to search for common ancestors (D).
+    pub path_diversity_hops: u64,
+    /// Reject if any non-genesis intermediate peer appears in this many or more voucher
+    /// ancestor chains (K). With the default of 2, any single shared intermediate node
+    /// among two or more vouchers causes rejection.
+    pub max_shared_ancestor_vouchers: usize,
 }
 
 impl Default for PeerRegistrationPolicy {
@@ -40,6 +45,8 @@ impl Default for PeerRegistrationPolicy {
             min_age_to_vouch_days: 90,
             probation_days: 60,
             require_diverse_paths: true,
+            path_diversity_hops: 3,
+            max_shared_ancestor_vouchers: 2,
         }
     }
 }
@@ -147,7 +154,30 @@ impl FederatedRegistry {
             }
         }
 
-        // All checks passed -- add peer as probationary
+        // 6. Require diverse trust paths if the policy demands it.
+        if self.policy.require_diverse_paths {
+            let voucher_dids: Vec<String> =
+                vouches.iter().map(|v| v.voucher_did.clone()).collect();
+            self.check_path_diversity(
+                &voucher_dids,
+                self.policy.path_diversity_hops,
+                self.policy.max_shared_ancestor_vouchers,
+            )?;
+        }
+
+        // All checks passed -- persist admitted vouches as graph edges, then add as probationary.
+        // The stored vouches are required for future path-diversity checks on subsequent registrations.
+        match &mut peer.trust_signals {
+            Some(ts) => ts.vouches.extend(vouches.iter().cloned()),
+            None => {
+                peer.trust_signals = Some(PeerTrustSignals {
+                    vouches: vouches.clone(),
+                    tee_attestation: None,
+                    operational_history: None,
+                    domain_verification: None,
+                });
+            }
+        }
         peer.status = PeerStatus::Probationary;
         peer.registered_at = Some(now.to_rfc3339());
         self.peers.push(peer);
@@ -168,6 +198,112 @@ impl FederatedRegistry {
             return duration.num_days().max(0) as u64;
         }
         0
+    }
+
+    /// Build a directed vouch graph from stored peer trust signals.
+    ///
+    /// Returns a map from `vouchee_did` → list of `voucher_did`s extracted
+    /// from each peer's `trust_signals.vouches`. Genesis peers (added via
+    /// `add_peer`) have no entry as a key since no vouch record admits them.
+    fn build_vouch_graph(&self) -> HashMap<String, Vec<String>> {
+        let mut graph: HashMap<String, Vec<String>> = HashMap::new();
+        for peer in &self.peers {
+            if let Some(ts) = &peer.trust_signals {
+                for vouch in &ts.vouches {
+                    graph
+                        .entry(vouch.vouchee_did.clone())
+                        .or_default()
+                        .push(vouch.voucher_did.clone());
+                }
+            }
+        }
+        graph
+    }
+
+    /// BFS ancestor traversal of the vouch graph.
+    ///
+    /// Starting from `start_did`, follows parent edges up to `max_hops` levels.
+    /// Returns all reachable ancestor DIDs including `start_did` at hop 0.
+    /// Cycles are handled safely via the `visited` set.
+    fn ancestors_within_hops(
+        start_did: &str,
+        graph: &HashMap<String, Vec<String>>,
+        max_hops: u64,
+    ) -> HashSet<String> {
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut queue: VecDeque<(String, u64)> = VecDeque::new();
+        queue.push_back((start_did.to_string(), 0));
+        while let Some((current, depth)) = queue.pop_front() {
+            if visited.contains(&current) {
+                continue;
+            }
+            visited.insert(current.clone());
+            if depth < max_hops {
+                if let Some(parents) = graph.get(&current) {
+                    for parent in parents {
+                        if !visited.contains(parent) {
+                            queue.push_back((parent.clone(), depth + 1));
+                        }
+                    }
+                }
+            }
+        }
+        visited
+    }
+
+    /// Check that the candidate's vouchers have independent trust paths.
+    ///
+    /// Builds the vouch graph from stored peer trust signals, then BFS-traverses
+    /// up to `hops` levels from each voucher DID. If any non-genesis peer appears
+    /// as an ancestor in `max_shared` or more voucher chains, returns
+    /// `FederationError::NonDiversePaths`.
+    ///
+    /// Genesis peers (those not present as a vouchee in any stored vouch record)
+    /// are excluded from the count — all paths eventually converge at trust roots
+    /// and counting them would produce false rejections in small networks.
+    fn check_path_diversity(
+        &self,
+        voucher_dids: &[String],
+        hops: u64,
+        max_shared: usize,
+    ) -> Result<(), FederationError> {
+        let graph = self.build_vouch_graph();
+
+        // Genesis set: peers whose DID does not appear as a vouchee in any stored vouch.
+        let genesis: HashSet<&str> = self
+            .peers
+            .iter()
+            .filter(|p| !graph.contains_key(&p.did))
+            .map(|p| p.did.as_str())
+            .collect();
+
+        // Compute ancestor sets for each voucher.
+        let ancestor_chains: Vec<HashSet<String>> = voucher_dids
+            .iter()
+            .map(|v| Self::ancestors_within_hops(v, &graph, hops))
+            .collect();
+
+        // Count how many chains each non-genesis ancestor appears in.
+        let mut ancestor_count: HashMap<String, usize> = HashMap::new();
+        for chain in &ancestor_chains {
+            for ancestor in chain {
+                if !genesis.contains(ancestor.as_str()) {
+                    *ancestor_count.entry(ancestor.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        // Reject if any non-genesis ancestor is shared by >= max_shared chains.
+        for (ancestor, count) in &ancestor_count {
+            if *count >= max_shared {
+                return Err(FederationError::NonDiversePaths {
+                    common_ancestor: ancestor.clone(),
+                    voucher_count: *count,
+                });
+            }
+        }
+
+        Ok(())
     }
 
     /// List known peers.
@@ -326,5 +462,18 @@ impl FederatedRegistry {
 impl Default for FederatedRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+impl FederatedRegistry {
+    /// Promote a peer from Probationary to Active by DID (test-only).
+    ///
+    /// The `peers` field is private; this escape hatch allows tests to graduate
+    /// intermediate peers so they can vouch for subsequent registrations.
+    pub(crate) fn promote_peer_to_active(&mut self, did: &str) {
+        if let Some(p) = self.peers.iter_mut().find(|p| p.did == did) {
+            p.status = PeerStatus::Active;
+        }
     }
 }
