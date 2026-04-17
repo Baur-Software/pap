@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+## [0.8.1] - 2026-04-17
+
+### Added
+
+- **docs**: Public FAQ page (`docs/faq.html`) answering the 10 most common investor and enterprise questions about PAP's trust model, cryptography, Sybil resistance, latency, compliance posture, and Python integration story. Answers are grounded in the actual codebase with source references.
+- **benches**: p99 tail-latency benchmark harness (`benches/benches/p99.rs`) — 2000-sample raw timing runs for the three most latency-sensitive operations (session lifecycle, depth-3 mandate chain verification, receipt co-sign). Produces `target/p99_results.json` for CI consumption.
+- **benches**: p99 regression gate in `check_regression.sh` — reads `target/p99_results.json` against new `p99_ns` baselines in `baseline.json` with a 50% threshold (more variance expected at tail vs p50's 30%).
+
+### Changed
+
+- **docs**: All five doc-site nav bars updated to include FAQ and "Work With Us" links.
+
 ## [0.7.2] - 2026-04-04
 
 ### Added
