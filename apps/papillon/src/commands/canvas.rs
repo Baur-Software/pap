@@ -200,21 +200,34 @@ async fn classify_intent(
         );
     }
 
+    // Universal fallback: when NLU classification cannot run or is not confident,
+    // route to DuckDuckGo web search (no API key, always available) rather than
+    // schema:AskAction which requires a local LLM.
+    macro_rules! nlu_fallback {
+        () => {
+            return (
+                "schema:SearchAction".to_owned(),
+                "DuckDuckGo Search".to_owned(),
+                text.to_owned(),
+            )
+        };
+    }
+
     // Resolve NLU agent — prefer HuggingFace, fall back to LLM classifier
     let Ok(resolved) =
         resolve_agent(state, "schema:AnalyzeAction", "HuggingFace Intent Classifier", &[]).await
     else {
-        return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+        nlu_fallback!();
     };
 
     let principal_kp = {
         let seed_guard = state.principal_seed.read().unwrap();
         let Some(seed) = seed_guard.as_ref() else {
-            return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+            nlu_fallback!();
         };
         match PrincipalKeypair::from_bytes(seed) {
             Ok(kp) => kp,
-            Err(_) => return ("schema:AskAction".to_owned(), String::new(), text.to_owned()),
+            Err(_) => nlu_fallback!(),
         }
     };
 
@@ -232,7 +245,7 @@ async fn classify_intent(
     })
     .await
     else {
-        return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+        nlu_fallback!();
     };
 
     let label = result
@@ -262,7 +275,7 @@ async fn classify_intent(
     };
 
     if confidence < threshold || label.is_empty() || label == "question-answer" {
-        return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+        nlu_fallback!();
     }
 
     let (action_type, preferred_agent) = map_label_to_action(label);
