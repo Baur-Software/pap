@@ -350,8 +350,11 @@
             PAP v0.x is <strong>explicitly consumer-first</strong>. The trust anchor is a
             <strong>device-bound Ed25519 keypair</strong> held by a single human principal
             (<code>crates/pap-did/src/principal.rs</code>). Mandate delegation chains downstream
-            <em>agents</em>, not other principals — there is no native concept of organizational
-            roles, service accounts, or delegated authority hierarchies between humans.
+            <em>agents</em>, not other principals — principal-to-principal hierarchies are
+            intentionally out of scope. Enterprise organizational structure is instead expressed
+            through Chrysalis-hosted agent workloads: a company runs agents in Chrysalis and
+            routes advertisements to principals through normal PAP transport mechanisms, composing
+            org-level orchestration at the agent layer without encoding it into the identity layer.
           </p>
           <p>
             <strong>Key resilience is built in.</strong> The M-of-N social recovery mechanism
