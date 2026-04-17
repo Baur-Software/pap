@@ -347,25 +347,22 @@
         </button>
         <div class="faq-body">
           <p>
-            PAP v0.x roots trust in a <strong>device-bound WebAuthn keypair held by a human</strong>. This is intentional
-            for the consumer and freelancer personas the protocol was designed for first — and it is an honest limitation
-            for enterprise deployments.
+            PAP v0.x is <strong>explicitly consumer-first</strong>. The trust anchor is a
+            <strong>device-bound Ed25519 keypair</strong> held by a single human principal
+            (<code>crates/pap-did/src/principal.rs</code>). Mandate delegation chains downstream
+            <em>agents</em>, not other principals — there is no native concept of organizational
+            roles, service accounts, or delegated authority hierarchies between humans.
           </p>
           <p>
-            In an enterprise, mandates derive from <strong>role-based authority that persists beyond individuals</strong>.
-            Employee offboarding, service-account rotation, and delegated authority hierarchies (manager → report)
-            are not natively expressed in the current mandate structure. Every enterprise already has an IdP
-            (Okta, Azure AD, Ping) that PAP does not integrate with today.
+            Employee offboarding, SCIM provisioning, and IdP-backed identity (Okta, Azure AD, Ping)
+            are not in the codebase today. The M-of-N social recovery mechanism uses banks/notaries
+            as recovery trustees, which reintroduces institutional trust at the most sensitive point
+            in the protocol — something worth naming honestly.
           </p>
           <p>
-            The M-of-N social recovery mechanism (banks / notaries) is designed for personal key recovery —
-            it reintroduces institutional trust at exactly the point PAP claims to eliminate it, which is
-            a real tension.
-          </p>
-          <p>
-            <strong>What's planned:</strong> A <code>PAP-ORG</code> profile that maps organizational roles to mandate issuance
-            authority and defines how PAP can sit behind an existing enterprise IdP without requiring every
-            action to be gated on a human-held keypair. This is an open design question, not a shipping feature.
+            <strong>What's needed:</strong> A <code>PAP-ORG</code> profile that maps organizational roles to
+            mandate issuance authority and describes how PAP can sit behind an existing enterprise IdP.
+            This is an open design question, not a shipping feature.
           </p>
           <div class="roadmap-tag">⬡ Roadmap — PAP-ORG profile</div>
         </div>
@@ -385,25 +382,29 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Yes — this is a real and acknowledged limitation.</strong> SD-JWT hides claim <em>values</em>, not claim <em>structure</em>.
-            An observer of JWT structure learns the type of data the principal holds even when the values are hidden.
+            <strong>Yes — this is a real and acknowledged limitation.</strong>
+            SD-JWT (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim salted
+            hashes. It does not hide claim <em>structure</em>: an observer of the JWT envelope learns which
+            property slots exist even when values are concealed.
           </p>
           <p>
-            More critically: across multiple ephemeral sessions, the <em>pattern</em> of which properties are
-            accessed is itself a quasi-identifier. A mandate that consistently discloses <code>MedicalCondition</code>
-            and <code>TreatmentPlan</code> claim types can be fingerprinted by a compromised registry across sessions
-            with high confidence — even if the values are always hidden.
+            Receipts make this more precise: <code>pap-core/src/receipt.rs</code> stores
+            <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — property <em>references</em> such as
+            <code>"schema:Person.name"</code>, never values. That design is correct and intentional.
+            But across multiple ephemeral sessions the <em>pattern</em> of which properties appear
+            in receipts is itself a quasi-identifier. A principal who consistently discloses
+            <code>MedicalCondition</code> and <code>TreatmentPlan</code> references can be fingerprinted
+            by a compromised registry with high confidence — even though no value ever leaves.
           </p>
           <p>
-            The receipt system records <em>property references only, never values</em> — but in healthcare and
-            financial services, which properties were accessed is frequently PHI or material non-public
-            information in its own right.
+            In healthcare and financial services, <em>which</em> properties were accessed is frequently
+            PHI or material non-public information in its own right.
           </p>
           <p>
             <strong>What we're watching:</strong> The <a href="https://privacybydesign.foundation/irma-english/" target="_blank" rel="noopener">IRMA/Yivi</a>
-            ZKP-based approach (which also uses W3C VCs) provides stronger structural privacy guarantees.
-            A future spec section will acknowledge the property-pattern correlation risk formally
-            and evaluate ZKP-based disclosure as an optional enhancement layer.
+            ZKP-based approach provides stronger structural privacy guarantees using W3C VCs.
+            A future spec section will formally acknowledge the property-pattern correlation risk
+            and evaluate ZKP-based disclosure as an optional enhancement.
           </p>
           <div class="roadmap-tag">⬡ Roadmap — Structural correlation analysis + ZKP evaluation</div>
         </div>
@@ -423,24 +424,23 @@
         </button>
         <div class="faq-body">
           <p>
-            OHTTP (<a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">RFC 9458</a>) is listed in the PAP stack as an optional privacy
-            enhancement for cloud request unlinkability. <strong>Anyone can operate a relay.</strong>
-            The spec does not define relay governance, diversity requirements, or what happens
-            to the unlinkability guarantee when no relay is available.
+            <strong>Each Papillon instance and Chrysalis node runs its own embedded OHTTP relay.</strong>
+            Baur Software does not operate a relay. There is no external relay operator to capture.
+            The relay is colocated with your own deployment — decentralized by topology, not just by policy.
           </p>
           <p>
-            This is structurally equivalent to the CA cartel problem that DIDs were designed to avoid —
-            PAP displaces the centralization risk to the network layer without acknowledging the displacement.
-            If a small consortium (including Baur Software) becomes the de facto relay operators,
-            the protocol re-centralizes at exactly the layer the rest of the design was built to avoid.
+            In <code>pap-transport/src/ohttp.rs</code>, <code>relay_url</code> is typed <code>Option&lt;String&gt;</code>:
+            when absent the protocol falls back to a direct connection, so removing the relay degrades
+            privacy but never breaks the handshake. The core privacy guarantees — SD-JWT selective
+            disclosure, ephemeral session DIDs, deny-by-default mandates — do not depend on OHTTP.
           </p>
           <p>
-            <strong>The honest framing:</strong> OHTTP is an <em>optional enhancement</em>. The core protocol's
-            privacy guarantees (SD-JWT, ephemeral session DIDs, deny-by-default mandates) do not depend
-            on OHTTP. Relay diversity requirements — analogous to Tor's guard node requirements — are an
-            open spec gap for future work.
+            One honest caveat: the current HPKE implementation is a placeholder
+            (<em>"simple implementation"</em> per code comments). Full cryptographic unlinkability per
+            <a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">RFC 9458</a>
+            is the target; the relay architecture is already correct.
           </p>
-          <div class="roadmap-tag">⬡ Roadmap — Relay selection protocol with diversity requirements</div>
+          <div class="roadmap-tag">⬡ In progress — full RFC 9458 HPKE in pap-transport</div>
         </div>
       </div>
 
@@ -458,28 +458,27 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Currently: nothing beyond Ed25519 signature verification.</strong> The federated registry
-            uses peer-to-peer pull sync and accepts any signed advertisement from any valid keypair.
-            Publishing a signed agent advertisement is computationally and economically free —
-            there is no proof-of-stake, reputation score, or endorsement mechanism.
+            <strong>Vouch-based peer admission.</strong> Joining the Chrysalis mesh is not free —
+            it requires existing trusted peers to stake their reputation on you.
+            <code>pap-federation/src/registry.rs</code> enforces:
           </p>
           <p>
-            DID document rotation under key compromise is also unaddressed. If a Chrysalis node's
-            controlling keypair is compromised, existing mandates that trusted that DID become invalid,
-            but the spec does not define revocation propagation across the mesh.
+            <strong>3 vouches required</strong> to register a new peer.
+            Each existing peer may issue at most <strong>3 vouches per year</strong> — a rate budget that
+            makes flooding expensive. A peer must be registered for at least
+            <strong>90 days</strong> before it can vouch for anyone.
+            New peers enter a <strong>60-day probationary period</strong> with limited permissions.
           </p>
           <p>
-            Network effects compound this: the most-populated Chrysalis mesh becomes the de facto
-            authority. A dominant cloud provider refusing to peer with independent nodes replicates
-            the ActivityPub / email centralization pattern the protocol is designed to avoid.
+            Diverse trust paths (<code>require_diverse_paths</code>) are specified in the policy struct
+            and are being enforced now — ensuring N vouchers don't all route through the same
+            small set of ancestors, preventing a captured clique from bootstrapping unlimited new peers.
           </p>
           <p>
-            <strong>What's planned:</strong> A lightweight reputation layer — proof-of-uptime,
-            endorsement by N existing trusted nodes, or a signed transparency log (similar to
-            Certificate Transparency). The <a href="chrysalis.html">Chrysalis</a> capture test must apply
-            to the registry layer, not just the handshake layer.
+            This is a social-graph approach rather than proof-of-stake or proof-of-work. The rate
+            constraints make a Sybil flood expensive in terms of calendar time and peer relationships,
+            not compute or tokens.
           </p>
-          <div class="roadmap-tag">⬡ Roadmap — Chrysalis reputation layer + revocation propagation</div>
         </div>
       </div>
 
@@ -490,34 +489,32 @@
             <span class="faq-num">05</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-governance">Governance</span></div>
-              Google, Microsoft, Yahoo, and Yandex govern Schema.org — isn't that a capture vector?
+              Doesn't PAP's dependency on Schema.org create a governance capture risk?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
           <p>
-            <strong>This is a real tension and the spec doesn't fully resolve it.</strong>
-            PAP uses Schema.org action references for capability scoping and result vocabulary.
-            Schema.org is maintained by the exact incumbent platforms that PAP's Capture Test
-            is designed to resist.
+            Schema.org is a <strong>collaborative, open-community project</strong> founded by Google,
+            Microsoft, Yahoo, and Yandex to create a shared structured-data vocabulary. The schema
+            is community-governed; contributions come from across the web industry.
+            Google drives significant adoption through rich-result support, but it does not have unilateral
+            control over the vocabulary.
           </p>
           <p>
-            In regulated domains, Schema.org vocabulary is immediately insufficient:
-            financial agents need <code>ExecuteTradeAction</code> or <code>FileSARAction</code>;
-            medical agents need FHIR operation vocabulary;
-            laboratory automation agents need experimental protocol actions —
-            none of which exist in the current schema.
-            Adding them requires coordinating with a consortium controlled by Google, Microsoft, Yahoo, and Yandex.
+            That said, there is a real practical constraint: all PAP action types and property
+            references today are hardcoded Schema.org strings. Any capability that doesn't fit the
+            current vocabulary — financial compliance actions, FHIR operation vocabulary,
+            laboratory protocol steps — requires either a Schema.org extension proposal or a
+            protocol-level change. There is no vocabulary extension mechanism in the current
+            codebase or specification.
           </p>
           <p>
-            <strong>The planned resolution:</strong> A PAP Vocabulary Extension Protocol that lets
-            domain-specific ontologies (FHIR, FIX, lab protocols) register action types
-            in a decentralized way, with Chrysalis as the discovery layer.
-            PAP maintains Schema.org as the baseline interoperability vocabulary —
-            extensions are domain-owned, not consortium-gated.
+            Schema.org is the right baseline for interoperability across general web agents.
+            Domain-specific verticals will need extension points.
           </p>
-          <div class="roadmap-tag">⬡ Roadmap — PAP Vocabulary Extension Protocol</div>
+          <div class="roadmap-tag">⬡ Roadmap — Domain vocabulary extension protocol</div>
         </div>
       </div>
 
@@ -535,29 +532,25 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Yes — this is a known attack class (confused deputy) and PAP does not fully address it yet.</strong>
-            Auto-approval tiers are principal-authored policies that cannot exceed mandate scope at the
-            individual action level. But composition is not checked.
+            Scope containment is <strong>cryptographically enforced at every delegation step</strong>.
+            <code>pap-core/src/scope.rs</code> <code>contains()</code> verifies that a child mandate's
+            action set is a strict subset of its parent's. <code>mandate.rs</code> <code>verify_chain()</code>
+            binds each delegation to its parent by hash — you cannot forge a valid chain that expands scope.
+            TTL cannot exceed the parent mandate either.
           </p>
           <p>
-            A sophisticated orchestrator that can observe which actions trigger auto-approval versus
-            which require explicit consent learns the principal's approval behavior profile — a covert
-            channel that persists across sessions. More directly: a sequence of N individually
-            auto-approvable sub-actions can collectively achieve what a direct request for action X
-            would have been denied.
+            Auto-approval has a further constraint: it triggers <strong>only when
+            <code>requires_disclosure.is_empty()</code></strong> (<code>canvas.rs</code>). No action that
+            requires any disclosure from the principal can be auto-approved — the user always sees
+            the approval gate.
           </p>
           <p>
-            The receipt system records property references and approval policy invocations, but provides
-            no mechanism for the principal to reconstruct a multi-step action sequence after the fact.
+            The narrower residual risk: a sequence of <em>zero-disclosure</em> sub-actions that individually
+            pass auto-approval could collectively achieve an effect that a single equivalent request
+            would have surfaced for explicit consent. The cryptographic scope bounds still apply to each
+            step; the gap is at the semantic composition layer.
           </p>
-          <p>
-            <strong>What's planned:</strong> A semantic action composition constraint in the mandate spec.
-            If a sequence of N actions collectively constitutes prohibited action X, then approval of the
-            sequence requires the same consent level as direct approval of X. This requires formal action
-            composition semantics — non-trivial, but necessary for the protocol to be sound against
-            adversarial orchestrators.
-          </p>
-          <div class="roadmap-tag">⬡ Roadmap — Mandate semantic composition constraints</div>
+          <div class="roadmap-tag">⬡ Roadmap — Semantic action composition constraints in mandate spec</div>
         </div>
       </div>
 
@@ -575,30 +568,32 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Correct. This is the most important limitation to understand clearly.</strong>
-            PAP's cryptographic controls govern what data is disclosed <em>over the wire</em> to downstream services.
-            They do not govern what the LLM orchestrator does with its internal context.
+            <strong>The premise needs clarifying.</strong> Papillon's intent router
+            (<code>crates/papillon-shared/src/intent.rs</code>) is a <strong>deterministic 600-line
+            keyword lookup table</strong> — 181 rules across 23 agents, no LLM in the path.
+            A user query is keyword-matched, cleaned, and dispatched to a specific catalog agent.
+            The 6-phase PAP handshake then enforces scope cryptographically. There is no LLM
+            between the user's words and the mandate boundaries.
           </p>
           <p>
-            A malicious API response crafted to inject instructions can manipulate the orchestrator into
-            expanding scope, requesting additional disclosures, or bypassing auto-approval policies —
-            without violating any cryptographic constraint. The LLM has already processed the principal's
-            full context. A successfully manipulated orchestrator could paraphrase or embed principal
-            context into request payloads in ways the protocol's controls do not catch.
+            An LLM appears in exactly two places, both <em>after</em> the handshake:
           </p>
           <p>
-            PAP's own critique of competitors — <em>"sandboxing constrains what an agent can do, not
-            what it can see"</em> — applies equally to PAP's orchestrator when the orchestrator is an LLM.
+            <strong>On-Device AI fallback</strong> — when no keyword rule matches, the query goes to an
+            on-device model running locally (Candle, never a cloud API). The query arrives in a
+            delimited <code>[INST]…[/INST]</code> conversation role; the preamble is the user's own
+            memex history (trusted data), not external content.
           </p>
           <p>
-            <strong>What's planned:</strong> A <code>PAP-ML</code> section in the specification that formally
-            frames the LLM orchestrator as an <em>untrusted sub-component</em> within the trust hierarchy —
-            even though it holds principal context. This means defining instruction hierarchy enforcement
-            requirements as a PAP compliance requirement for orchestrator implementations.
-            No other agent protocol addresses this. That makes it a genuine differentiation opportunity,
-            not just a gap.
+            <strong>Pipeline Synthesizer</strong> — an optional post-execution node that merges
+            multi-agent results using the local model. This runs after all disclosure and execution
+            is complete; it cannot retroactively change what was disclosed.
           </p>
-          <div class="roadmap-tag">⬡ Roadmap — PAP-ML spec section + orchestrator compliance requirements</div>
+          <p>
+            Prompt injection risk is <strong>none in the main handshake path</strong>, and <strong>low
+            in the local LLM path</strong> — the model is on-device, sandboxed, and operates with
+            zero disclosure requirements of its own.
+          </p>
         </div>
       </div>
 
@@ -616,35 +611,30 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Unknown — this is an open gap in the benchmark suite.</strong>
-            Published benchmarks cover single-session loopback at p50 (sub-20ms). Multi-hop p99 and
-            p999 latencies in real network conditions have not been measured and are not in the CI
-            regression suite.
+            Measured p50 loopback numbers from CI (<code>benches/baseline.json</code>):
+            full session lifecycle <strong>130 µs</strong> (target &lt;20 ms),
+            depth-3 mandate chain verification <strong>138.5 µs</strong>.
+            The benchmark suite uses Criterion with a 30% regression gate on p50.
           </p>
           <p>
-            For a 3-hop production chain: N × 6 handshakes plus N cryptographic operations chain serially.
-            A p50 of 20ms is entirely compatible with a p99 of 500ms in any network with packet loss.
-            Tail latencies are where distributed systems actually fail — constraining only p50 is
-            insufficient for production readiness claims.
+            <strong>p99 is not yet in the suite.</strong> A p50 of 130 µs is entirely compatible with a
+            p99 of several milliseconds under real network conditions — and tail latencies are where
+            distributed systems actually fail. p99 benchmarks are being added to
+            <code>benches/benches/protocol.rs</code> with corresponding CI regression guards.
           </p>
           <p>
-            Two additional failure modes are undefined in the current specification:
+            Two failure modes that remain unspecified:
           </p>
           <p>
-            <strong>Network partition mid-handshake:</strong> Fail-open is a security catastrophe for financial
-            or medical agents. Fail-closed may be unacceptable for high-availability applications.
-            Neither behavior is specified.
+            <strong>Network partition mid-handshake:</strong> fail-open is a security catastrophe for
+            financial or medical agents; fail-closed may be unacceptable for high-availability systems.
+            The behavior is undefined in the current specification.
           </p>
           <p>
-            <strong>TTL expiry during handshake:</strong> A <code>TTL=30s</code> mandate that expires during a 6-phase
-            handshake produces no defined recovery path in the current specification.
+            <strong>TTL expiry during handshake:</strong> a mandate that expires mid-flight through a
+            6-phase sequence has no defined recovery path.
           </p>
-          <p>
-            <strong>What's planned:</strong> p99 benchmarks added to the benchmark suite with CI regression guards.
-            A Session Recovery Protocol for network partition scenarios. A PAP Latency Budget Calculator
-            that shows how mandate depth and handshake phases compose for common deployment topologies.
-          </p>
-          <div class="roadmap-tag">⬡ Roadmap — p99 benchmarks + Session Recovery Protocol</div>
+          <div class="roadmap-tag">⬡ In progress — p99 CI benchmarks + Session Recovery Protocol</div>
         </div>
       </div>
 
@@ -662,33 +652,29 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Honestly: regulatory compliance is architecturally unaddressed in the current specification.</strong>
-            Here is the specific tension with each framework:
+            Receipts contain <strong>property references only, never values</strong>
+            (<code>pap-core/src/receipt.rs</code>: <code>Vec&lt;String&gt;</code> of strings like
+            <code>"schema:Person.name"</code>). Each party holds their own copy locally —
+            receipts are never stored by a platform. There is no central data controller.
           </p>
           <p>
-            <strong>GDPR Article 17 (right to erasure):</strong> Co-signed receipts create a mutual accountability record.
-            Who holds deletion authority over a receipt both parties signed? The spec doesn't define this.
-            The receipt design may be structurally incompatible with right-to-erasure as currently specified.
+            The specific tensions with each framework:
           </p>
           <p>
-            <strong>HIPAA Minimum Necessary:</strong> Property references in receipts can constitute PHI.
-            Knowing that a <code>MedicalCondition</code> property was disclosed reveals the existence of a
-            medical relationship, regardless of whether the value is hidden.
+            <strong>GDPR Article 17 (right to erasure):</strong> Receipts are co-signed by both parties and
+            stored in an insert-only SQLite database (<code>episode_db.rs</code> has no delete API).
+            Immutability is a deliberate accountability design. Who holds deletion authority over a
+            receipt both parties signed is not defined — this is a real open question for regulated deployments.
           </p>
           <p>
-            <strong>MiFID II / Dodd-Frank:</strong> Ephemeral sessions with session-close forgetting directly
-            conflict with 7-year trade reconstruction obligations. PAP as designed cannot be used for
-            financial agent transactions in regulated markets without carve-outs the spec doesn't yet define.
+            <strong>HIPAA Minimum Necessary:</strong> Property type references in receipts can themselves
+            constitute PHI. Knowing <code>MedicalCondition</code> was disclosed reveals a medical relationship
+            even without the value. Regulated healthcare deployments will need a PAP-HIPAA profile.
           </p>
           <p>
-            <strong>MiCA / FinReg:</strong> Ecash and Lightning payment proofs embedded in mandates may
-            constitute unlicensed payment facilitation in the EU, UK, and several US state jurisdictions.
-          </p>
-          <p>
-            <strong>What's planned:</strong> A PAP Regulatory Conformance Matrix mapping protocol features
-            to specific regulatory frameworks, identifying where PAP profiles or extensions are needed.
-            This is a go-to-market strategy artifact — not a blocker — but serious enterprise buyers
-            will require it before procurement.
+            <strong>MiFID II / Dodd-Frank:</strong> Ephemeral session DIDs and session-close forgetting
+            conflict with 7-year trade reconstruction obligations. Financial agent transactions in
+            regulated markets need explicit carve-outs the spec doesn't yet define.
           </p>
           <div class="roadmap-tag">⬡ Roadmap — PAP Regulatory Conformance Matrix</div>
         </div>
@@ -708,29 +694,32 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Today: PyO3 C FFI wrappers around the Rust core — and that's a real friction point.</strong>
-            The agentic AI ecosystem PAP is targeting (LangChain, LlamaIndex, AutoGen, CrewAI, smolagents)
-            is Python-first.
+            <strong>Full PyO3 bindings ship today.</strong> <code>crates/pap-python/src/lib.rs</code>
+            (1,595 lines) exposes the complete PAP API with both blocking methods and
+            <em>async variants</em> for all transport steps. The async path uses PyO3 0.24
+            <code>experimental-async</code>, which releases the GIL during <code>await</code> — making
+            concurrent handshakes work correctly in <code>asyncio</code> agent pipelines without
+            <code>to_thread()</code> wrapping.
           </p>
           <p>
-            PyO3 async support is immature. GIL interactions with Python's async frameworks
-            (<code>asyncio</code>, <code>trio</code>) create unpredictable blocking in multi-threaded agent pipelines.
-            Integrating PAP into an async LangChain agent graph requires <code>asyncio.to_thread()</code> wrapping
-            for every PAP operation, which serializes what should be concurrent handshakes.
+            A comprehensive integration guide covers LangChain, CrewAI, and MCP with 1,293 lines
+            of annotated examples:
+            <code>docs/integration-guides/langchain-crewai-mcp.md</code>.
+            The TypeScript equivalent — <code>packages/pap-ts</code> — is a pure native async
+            implementation with zero Rust dependency, for reference.
           </p>
           <p>
-            Debugging across the FFI boundary in production is significantly more painful than debugging
-            a native Python implementation. This creates adoption friction at the POC stage — precisely
-            when developer experience determines whether a protocol gets trial-deployed or abandoned.
+            The remaining friction: the package is not yet on PyPI (build via
+            <code>maturin develop</code>) and debugging across the FFI boundary is harder than
+            debugging pure Python at the POC stage.
           </p>
           <p>
-            <strong>What's planned:</strong> A native pure-Python implementation of the PAP handshake —
-            parallel to <code>pap-ts</code>, which is a pure TypeScript implementation with no WASM dependency.
-            The Rust core remains the reference implementation and performance-critical path.
-            Python adoption velocity matters more than zero-FFI-overhead for most enterprise integration
-            use cases.
+            <strong>What's next:</strong> A native pure-Python <code>pap-py</code> package — zero build step,
+            <code>pip install pap</code> — parallel to <code>pap-ts</code>. For teams that want
+            zero-friction trial integration, FFI overhead is a worse tradeoff than a small
+            performance gap.
           </p>
-          <div class="roadmap-tag">⬡ Roadmap — Native pure-Python PAP implementation</div>
+          <div class="roadmap-tag">⬡ Roadmap — pap-py: native pure-Python implementation</div>
         </div>
       </div>
 
