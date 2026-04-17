@@ -382,19 +382,24 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Yes — this is a real and acknowledged limitation.</strong>
+            <strong>Yes — this is a real and acknowledged limitation, with one important scope note.</strong>
             SD-JWT (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim salted
-            hashes. It does not hide claim <em>structure</em>: an observer of the JWT envelope learns which
-            property slots exist even when values are concealed.
+            hashes. It does not hide claim <em>structure</em>. The <strong>recipient agent</strong> always
+            learns which property slots were disclosed — that is the intent of the handshake.
+            With the current placeholder HPKE in <code>pap-transport/src/ohttp.rs</code>, a passive
+            network observer can also see the structure. Once real OHTTP encryption lands,
+            relay and network observers will be excluded from that set — but the recipient agent
+            is always the intended party and will always see the disclosed schema.
           </p>
           <p>
-            Receipts make this more precise: <code>pap-core/src/receipt.rs</code> stores
+            Receipts sharpen the concern: <code>pap-core/src/receipt.rs</code> stores
             <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — property <em>references</em> such as
             <code>"schema:Person.name"</code>, never values. That design is correct and intentional.
             But across multiple ephemeral sessions the <em>pattern</em> of which properties appear
-            in receipts is itself a quasi-identifier. A principal who consistently discloses
-            <code>MedicalCondition</code> and <code>TreatmentPlan</code> references can be fingerprinted
-            by a compromised registry with high confidence — even though no value ever leaves.
+            in a principal's receipts is itself a quasi-identifier. An agent (or a compromised
+            registry with access to accumulated receipt metadata) that sees a principal
+            consistently disclosing <code>MedicalCondition</code> and <code>TreatmentPlan</code> references
+            can fingerprint them with high confidence — even though no value ever leaves.
           </p>
           <p>
             In healthcare and financial services, <em>which</em> properties were accessed is frequently
