@@ -412,11 +412,12 @@
             Receipts sharpen the concern: <code>pap-core/src/receipt.rs</code> stores
             <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — property <em>references</em> such as
             <code>"schema:Person.name"</code>, never values. That design is correct and intentional.
-            But across multiple ephemeral sessions the <em>pattern</em> of which properties appear
-            in a principal's receipts is itself a quasi-identifier. An agent (or a compromised
-            registry with access to accumulated receipt metadata) that sees a principal
-            consistently disclosing <code>MedicalCondition</code> and <code>TreatmentPlan</code> references
-            can fingerprint them with high confidence — even though no value ever leaves.
+            But the <strong>recipient agent</strong> holds a co-signed receipt after every session.
+            Across multiple sessions, the <em>pattern</em> of which properties a principal discloses
+            to that agent is itself a quasi-identifier — an agent that logs disclosure sets could
+            fingerprint a principal with high confidence even though no value ever leaves.
+            Any other party seeing this pattern would have to breach the encrypted transport or
+            compromise local storage first.
           </p>
           <p>
             In healthcare and financial services, <em>which</em> properties were accessed is frequently
