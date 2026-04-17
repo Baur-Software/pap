@@ -536,13 +536,7 @@ pub extern "C" fn pap_scope_permits(scope: *const PapScope, action: *const c_cha
 #[no_mangle]
 pub extern "C" fn pap_scope_contains(parent: *const PapScope, child: *const PapScope) -> c_int {
     match (unsafe { parent.as_ref() }, unsafe { child.as_ref() }) {
-        (Some(p), Some(c)) => {
-            if p.inner.contains(&c.inner) {
-                1
-            } else {
-                0
-            }
-        }
+        (Some(p), Some(c)) if p.inner.contains(&c.inner) => 1,
         _ => 0,
     }
 }

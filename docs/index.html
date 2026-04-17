@@ -242,6 +242,16 @@
       background: rgba(240,160,48,.1); color: var(--amber);
       border: 1px solid rgba(240,160,48,.2);
     }
+    .product-tag-consulting {
+      background: rgba(108,92,231,.1); color: var(--violet);
+      border: 1px solid rgba(108,92,231,.2);
+    }
+    .product-card-consulting::before {
+      background: linear-gradient(90deg, var(--indigo), var(--violet));
+    }
+    .product-icon-consulting {
+      background: rgba(108,92,231,.12); border: 1px solid rgba(108,92,231,.2);
+    }
     .product-desc {
       font-size: .9rem; color: var(--muted); line-height: 1.65; flex: 1;
     }
@@ -297,6 +307,8 @@
       <li><a href="chrysalis.html"><img src="assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
       <li><a href="extension/">Extension</a></li>
       <li><a href="faq.html">FAQ</a></li>
+      <li><a href="get-pap.html">Work With Us</a></li>
+
     </ul>
     <div class="nav-cta">
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
@@ -380,6 +392,17 @@
         <span class="product-link">Get the extension &#8594;</span>
       </a>
 
+      <a href="get-pap.html" class="product-card product-card-consulting reveal reveal-delay-4">
+        <div class="product-icon product-icon-consulting" aria-hidden="true">&#127881;</div>
+        <span class="product-tag product-tag-consulting">Consulting</span>
+        <div class="product-name">Work With Us</div>
+        <p class="product-desc">
+          PAP is a protocol, not a product you install. We work with your team to evaluate your
+          agentic infrastructure, plan the transition, deliver the implementation, and train your staff.
+        </p>
+        <span class="product-link">See how it works &#8594;</span>
+      </a>
+
     </div>
   </div>
 </section>
@@ -392,6 +415,7 @@
       <div class="footer-links">
         <a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub</a>
         <a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+        <a href="https://baursoftware.com/contact" target="_blank" rel="noopener">Contact</a>
       </div>
     </div>
   </div>
