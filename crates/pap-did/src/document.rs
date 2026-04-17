@@ -3,6 +3,22 @@ use serde::{Deserialize, Serialize};
 use crate::algorithm::SignatureAlgorithm;
 use crate::PrincipalKeypair;
 
+/// A DID Document service endpoint.
+///
+/// PAP uses the `PAPObliviousHTTP` service type to publish the node's HPKE public key
+/// so that clients can encrypt OHTTP requests without out-of-band key distribution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Service {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub service_type: String,
+    #[serde(rename = "serviceEndpoint")]
+    pub service_endpoint: String,
+    /// Base64url-encoded RFC 9458 §5 key config — present only for `PAPObliviousHTTP` services.
+    #[serde(rename = "ohthpKeyConfig", skip_serializing_if = "Option::is_none")]
+    pub ohttp_key_config: Option<String>,
+}
+
 /// W3C DID Document (DID Core 1.0) for a `did:key` identifier.
 /// Contains the public key and verification method. No personal information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,6 +29,9 @@ pub struct DidDocument {
     #[serde(rename = "verificationMethod")]
     pub verification_method: Vec<VerificationMethod>,
     pub authentication: Vec<String>,
+    /// Optional service endpoints (e.g. `PAPObliviousHTTP` for OHTTP key distribution).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<Vec<Service>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +74,7 @@ impl DidDocument {
                 algorithm: SignatureAlgorithm::Ed25519,
             }],
             authentication: vec![key_id],
+            service: None,
         }
     }
 

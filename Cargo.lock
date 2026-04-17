@@ -4797,8 +4797,10 @@ dependencies = [
 name = "pap-transport"
 version = "0.6.0"
 dependencies = [
+ "aes-gcm",
  "axum",
  "axum-server",
+ "base64 0.22.1",
  "chrono",
  "ed25519-dalek",
  "futures-util",
