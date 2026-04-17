@@ -83,11 +83,11 @@ pub fn App() -> impl IntoView {
     };
     provide_context(service.clone());
 
-    // Seed the first canvas if this is a fresh install.
-    // Only in Tauri mode — the backend resolves prompts via IPC. In browser mode
-    // the WASM handshake has no agents to query, so seed would just panic.
-    if bridge::tauri_available() && canvas_state.canvases.get_untracked().is_empty() {
-        canvas_state.seed_first_canvas();
+    // Load persisted canvases from SQLite on startup (Tauri mode only).
+    // `load_from_db` spawns its own async task; it creates a default canvas if
+    // the DB is empty so new installs get a fresh workspace.
+    if bridge::tauri_available() {
+        canvas_state.load_from_db();
     }
 
     // WASM browser startup — initialize identity from IndexedDB

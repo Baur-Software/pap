@@ -213,9 +213,9 @@ async fn classify_intent(
         };
     }
 
-    // Resolve NLU agent — prefer HuggingFace, fall back to LLM classifier
+    // Resolve NLU agent — scoring drives priority, no name hint needed
     let Ok(resolved) =
-        resolve_agent(state, "schema:AnalyzeAction", "HuggingFace Intent Classifier", &[]).await
+        resolve_agent(state, "schema:AnalyzeAction", "", &[]).await
     else {
         nlu_fallback!();
     };
@@ -287,6 +287,8 @@ async fn classify_intent(
 /// - `AgentProfile` EMA statistics (success_rate, avg_quality)
 /// - `PreferenceEngine` schema-type-aware preference score
 /// - A keyword-match bonus for the intent-matched agent name
+/// - Model-substrate signals: local agents that can use the user's configured LLM
+///   are boosted; remote agents missing an API token are penalised
 ///
 /// Preference score contributes up to 30% of the total when the engine has
 /// enough history (≥ 3 sessions).  EMA statistics contribute 40% each on top.
@@ -297,6 +299,8 @@ fn score_agent(
     agent_name: &str,
     action_type: &str,
     schema_type: &str,
+    agent_def: Option<&pap_agents::DynamicAgentDef>,
+    inference_substrate: &papillon_shared::LlmProvider,
 ) -> f64 {
     let agent_did_hash = hash_agent_did(agent_did);
 
@@ -311,7 +315,53 @@ fn score_agent(
         0.0
     };
 
-    match db.get_agent_profile(&agent_did_hash).ok().flatten() {
+    // ── Model-substrate / source signals ─────────────────────────────────
+    let mut substrate_delta: f64 = 0.0;
+
+    if let Some(def) = agent_def {
+        // Agents without an external HTTP endpoint run locally via the LLM substrate.
+        if def.endpoint.is_none() {
+            // Any configured LLM substrate (not None) means this agent can run.
+            if !matches!(inference_substrate, papillon_shared::LlmProvider::None) {
+                substrate_delta += 0.4;
+            }
+            // Fully on-device BuiltIn model — most private, highest bonus.
+            if matches!(inference_substrate, papillon_shared::LlmProvider::BuiltIn { .. }) {
+                substrate_delta += 0.2;
+            }
+        } else {
+            // Agent has an external endpoint — check if it needs auth and has a token.
+            let endpoint = def.endpoint.as_ref().unwrap();
+            let needs_auth = endpoint.headers.contains_key("Authorization");
+            if needs_auth {
+                let api_token_set = db
+                    .get_agent_settings(&agent_did_hash)
+                    .ok()
+                    .and_then(|settings| settings.get("api_token").map(|s| !s.value.is_empty()))
+                    .unwrap_or(false);
+                if !api_token_set {
+                    // Would fail — deprioritize.
+                    substrate_delta -= 0.3;
+                }
+            }
+        }
+
+        // Source bonus/penalty.
+        match def.source {
+            pap_agents::DynamicAgentSource::Catalog => {
+                substrate_delta += 0.1;
+            }
+            pap_agents::DynamicAgentSource::Generated => {
+                substrate_delta -= 0.1;
+            }
+            _ => {}
+        }
+    } else {
+        // No local def found — treat as federated/remote agent.
+        substrate_delta -= 0.1;
+    }
+
+    let base_score = match db.get_agent_profile(&agent_did_hash).ok().flatten() {
         Some(profile) if profile.episode_count >= 3 => {
             // 35% success_rate + 35% avg_quality + 20% preference + 10% keyword
             let base = 0.35 * profile.success_rate + 0.35 * profile.avg_quality;
@@ -337,7 +387,9 @@ fn score_agent(
                 0.4
             }
         }
-    }
+    };
+
+    base_score + substrate_delta
 }
 
 /// Quick quality assessment of a handshake result (0.0 to 1.0).
@@ -384,6 +436,22 @@ pub(crate) async fn resolve_agent(
     preferred_name: &str,
     exclude_agents: &[String],
 ) -> Result<ResolvedAgent, PapillonError> {
+    // Load all local agent defs once for model-substrate / source scoring.
+    // Keyed by agent DID so we can look up quickly per candidate.
+    let agent_defs: std::collections::HashMap<String, pap_agents::DynamicAgentDef> = state
+        .db
+        .load_all_agents()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|d| d.agent_did.clone().map(|did| (did, d)))
+        .collect();
+
+    // Read inference substrate from the orchestrator config for substrate scoring.
+    let inference_substrate = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.inference_substrate.clone()
+    };
+
     // Discover agent — try local registry first, then remote registries.
     let (agent_name, agent_did, requires_disclosure, returns, source_url) = {
         let local = state
@@ -409,6 +477,7 @@ pub(crate) async fn resolve_agent(
                 .map(|a| {
                     // Use first returns type as schema hint for preference scoring
                     let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                    let agent_def = agent_defs.get(&a.provider.did);
                     let s = score_agent(
                         &state.db,
                         &a.provider.did,
@@ -416,6 +485,8 @@ pub(crate) async fn resolve_agent(
                         &a.name,
                         action_type,
                         schema_hint,
+                        agent_def,
+                        &inference_substrate,
                     );
                     (*a, s)
                 })
@@ -455,6 +526,8 @@ pub(crate) async fn resolve_agent(
                         .iter()
                         .map(|a| {
                             let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                            // Remote/federated agents won't be in the local agent_defs map.
+                            let agent_def = agent_defs.get(&a.provider.did);
                             let s = score_agent(
                                 &state.db,
                                 &a.provider.did,
@@ -462,6 +535,8 @@ pub(crate) async fn resolve_agent(
                                 &a.name,
                                 action_type,
                                 schema_hint,
+                                agent_def,
+                                &inference_substrate,
                             );
                             (*a, s)
                         })
@@ -1109,6 +1184,263 @@ pub async fn canvas_approve_block(
             approval_request_id
         ))
     }
+}
+
+// ── Canvas persistence commands ───────────────────────────────────────────
+
+/// List all canvases, most recently updated first.
+#[tauri::command]
+pub async fn canvas_list(
+    state: State<'_, AppState>,
+) -> Result<Vec<papillon_shared::CanvasRecord>, PapillonError> {
+    state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Create a new canvas with the given name and return the new record.
+#[tauri::command]
+pub async fn canvas_create(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<papillon_shared::CanvasRecord, PapillonError> {
+    let now = Utc::now().to_rfc3339();
+    let record = papillon_shared::CanvasRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    state
+        .db
+        .upsert_canvas(&record)
+        .map_err(|e| PapillonError::from(e.0))?;
+    Ok(record)
+}
+
+/// Delete a canvas and all its blocks and messages.
+#[tauri::command]
+pub async fn canvas_delete(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), PapillonError> {
+    state
+        .db
+        .delete_canvas(&id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Rename a canvas (update its name and updated_at).
+#[tauri::command]
+pub async fn canvas_rename(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+) -> Result<(), PapillonError> {
+    // Load the existing canvas to preserve created_at.
+    let mut canvases = state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))?;
+    let existing = canvases
+        .iter_mut()
+        .find(|c| c.id == id)
+        .ok_or_else(|| PapillonError::from(format!("Canvas not found: {id}")))?;
+    let record = papillon_shared::CanvasRecord {
+        id: existing.id.clone(),
+        name,
+        created_at: existing.created_at.clone(),
+        updated_at: Utc::now().to_rfc3339(),
+    };
+    state
+        .db
+        .upsert_canvas(&record)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Create a new block in the given canvas at the specified display order.
+#[tauri::command]
+pub async fn canvas_block_create(
+    state: State<'_, AppState>,
+    canvas_id: String,
+    block_id: String,
+    prompt_text: Option<String>,
+    display_order: i64,
+) -> Result<(), PapillonError> {
+    let now = Utc::now().to_rfc3339();
+    let record = papillon_shared::CanvasBlockRecord {
+        id: block_id,
+        canvas_id,
+        prompt_text,
+        schema_type: None,
+        content_json: None,
+        block_state: "resolving".to_string(),
+        episode_id: None,
+        agent_did: None,
+        mandate_expires_at: None,
+        preference_guided: false,
+        display_order,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    state
+        .db
+        .upsert_canvas_block(&record)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Update a block to the "resolved" state with result data.
+#[tauri::command]
+pub async fn canvas_block_resolve(
+    state: State<'_, AppState>,
+    block_id: String,
+    schema_type: String,
+    content_json: String,
+    episode_id: Option<String>,
+    agent_did: Option<String>,
+    mandate_expires_at: Option<String>,
+) -> Result<(), PapillonError> {
+    // Load existing block to preserve immutable fields.
+    let blocks = state
+        .db
+        .list_canvas_blocks("")
+        .unwrap_or_default();
+    // We need to load by iterating all canvases — use a direct lookup approach.
+    // Since we need the canvas_id, load the block from all canvases by scanning.
+    // Alternatively, do a targeted upsert using the block_id as primary key.
+    // The DB upsert_canvas_block is an UPSERT so we can supply a sentinel canvas_id
+    // and only update the fields we care about. Instead, fetch the current block first.
+    let _ = blocks; // unused — we use a different approach below
+
+    // Build the updated record. We need canvas_id — load by scanning blocks.
+    // Since blocks are keyed by block_id, we look for it across all canvases.
+    let all_canvases = state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))?;
+    let mut found_block: Option<papillon_shared::CanvasBlockRecord> = None;
+    for canvas in &all_canvases {
+        let canvas_blocks = state
+            .db
+            .list_canvas_blocks(&canvas.id)
+            .map_err(|e| PapillonError::from(e.0))?;
+        if let Some(b) = canvas_blocks.into_iter().find(|b| b.id == block_id) {
+            found_block = Some(b);
+            break;
+        }
+    }
+    let existing = found_block
+        .ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
+    let updated = papillon_shared::CanvasBlockRecord {
+        schema_type: Some(schema_type),
+        content_json: Some(content_json),
+        block_state: "resolved".to_string(),
+        episode_id,
+        agent_did,
+        mandate_expires_at,
+        updated_at: Utc::now().to_rfc3339(),
+        ..existing
+    };
+    state
+        .db
+        .upsert_canvas_block(&updated)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Mark a block as failed, storing the failure reason in content_json.
+#[tauri::command]
+pub async fn canvas_block_fail(
+    state: State<'_, AppState>,
+    block_id: String,
+    reason: String,
+) -> Result<(), PapillonError> {
+    let all_canvases = state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))?;
+    let mut found_block: Option<papillon_shared::CanvasBlockRecord> = None;
+    for canvas in &all_canvases {
+        let canvas_blocks = state
+            .db
+            .list_canvas_blocks(&canvas.id)
+            .map_err(|e| PapillonError::from(e.0))?;
+        if let Some(b) = canvas_blocks.into_iter().find(|b| b.id == block_id) {
+            found_block = Some(b);
+            break;
+        }
+    }
+    let existing = found_block
+        .ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
+    let updated = papillon_shared::CanvasBlockRecord {
+        block_state: "failed".to_string(),
+        content_json: Some(serde_json::json!({"reason": reason}).to_string()),
+        updated_at: Utc::now().to_rfc3339(),
+        ..existing
+    };
+    state
+        .db
+        .upsert_canvas_block(&updated)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Delete a single canvas block.
+#[tauri::command]
+pub async fn canvas_block_delete(
+    state: State<'_, AppState>,
+    block_id: String,
+) -> Result<(), PapillonError> {
+    state
+        .db
+        .delete_canvas_block(&block_id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Load all blocks for the given canvas, ordered by display_order.
+#[tauri::command]
+pub async fn canvas_blocks_load(
+    state: State<'_, AppState>,
+    canvas_id: String,
+) -> Result<Vec<papillon_shared::CanvasBlockRecord>, PapillonError> {
+    state
+        .db
+        .list_canvas_blocks(&canvas_id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Append a message to a canvas conversation thread.
+#[tauri::command]
+pub async fn canvas_message_add(
+    state: State<'_, AppState>,
+    canvas_id: String,
+    role: String,
+    content: String,
+    block_id: Option<String>,
+) -> Result<(), PapillonError> {
+    let msg = papillon_shared::CanvasMessageRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        canvas_id,
+        role,
+        content,
+        block_id,
+        created_at: Utc::now().to_rfc3339(),
+    };
+    state
+        .db
+        .insert_canvas_message(&msg)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Load all messages for the given canvas, ordered by created_at.
+#[tauri::command]
+pub async fn canvas_messages_load(
+    state: State<'_, AppState>,
+    canvas_id: String,
+) -> Result<Vec<papillon_shared::CanvasMessageRecord>, PapillonError> {
+    state
+        .db
+        .list_canvas_messages(&canvas_id)
+        .map_err(|e| PapillonError::from(e.0))
 }
 
 #[cfg(test)]

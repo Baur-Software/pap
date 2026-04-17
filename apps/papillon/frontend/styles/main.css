@@ -5535,3 +5535,159 @@ body {
     color: var(--purple);
     border: 1px solid rgba(108,92,231,0.2);
 }
+
+/* ── Canvas flip ─────────────────────────────────────────────────────────── */
+.canvas-flip-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 12px;
+}
+.canvas-flip-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.canvas-flip-container.flipped {
+  transform: rotateY(180deg);
+}
+.canvas-face {
+  position: absolute;
+  width: 100%;
+  min-height: 100%;
+  backface-visibility: hidden;
+}
+.canvas-face.back {
+  transform: rotateY(180deg);
+}
+
+/* ── Block query label ───────────────────────────────────────────────────── */
+.block-query-label {
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  padding: 4px 0 8px 0;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Chat thread ─────────────────────────────────────────────────────────── */
+.canvas-chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+  max-height: 300px;
+  overflow-y: auto;
+}
+.chat-message-user {
+  align-self: flex-end;
+  background: var(--purple, #6c5ce7);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 12px 12px 2px 12px;
+  max-width: 80%;
+  font-size: 13px;
+}
+.chat-message-assistant {
+  align-self: flex-start;
+  background: var(--surface-2, rgba(255,255,255,0.06));
+  color: var(--text-primary, #e5e7eb);
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 2px;
+  max-width: 80%;
+  font-size: 13px;
+}
+.chat-block-link {
+  font-size: 10px;
+  opacity: 0.7;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+.canvas-chat-input {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+}
+.canvas-chat-input input {
+  flex: 1;
+  background: var(--surface-2, rgba(255,255,255,0.06));
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.12));
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-primary, #e5e7eb);
+  font-size: 14px;
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+}
+
+/* ── Canvas flip toggle button ───────────────────────────────────────────── */
+.canvas-flip-toggle {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+  background: var(--surface-2, rgba(255,255,255,0.06));
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.1));
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.canvas-flip-toggle:hover {
+  color: var(--purple, #6c5ce7);
+  border-color: var(--purple, #6c5ce7);
+}
+
+/* ── Workflow pipeline ───────────────────────────────────────────────────── */
+.canvas-workflow-pipeline {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.workflow-empty-state {
+  padding: 24px 16px;
+  color: var(--text-muted, #6b7280);
+  font-size: 13px;
+  text-align: center;
+}
+.workflow-block-card {
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.workflow-block-card .wf-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.workflow-block-card .wf-query {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.workflow-block-card .wf-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+.workflow-block-card .wf-state-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.wf-state-badge.resolved  { background: rgba(46,196,160,0.15); color: #2ec4a0; }
+.wf-state-badge.resolving { background: rgba(240,160,48,0.15);  color: #f0a030; }
+.wf-state-badge.failed    { background: rgba(232,112,106,0.15); color: #e8706a; }
+.wf-state-badge.ghost     { background: rgba(255,255,255,0.06); color: #9ca3af; }

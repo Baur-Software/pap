@@ -1690,3 +1690,44 @@ pub struct RecoveryStatus {
     /// `true` once the user has completed the Shamir shard setup ceremony.
     pub configured: bool,
 }
+
+// ── Canvas persistence types ──────────────────────────────────────────────
+
+/// A named canvas — a persistent, named collection of blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasRecord {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A single block within a canvas, representing one intent → agent → result cycle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasBlockRecord {
+    pub id: String,
+    pub canvas_id: String,
+    pub prompt_text: Option<String>,
+    pub schema_type: Option<String>,
+    pub content_json: Option<String>,
+    pub block_state: String,
+    pub episode_id: Option<String>,
+    pub agent_did: Option<String>,
+    pub mandate_expires_at: Option<String>,
+    pub preference_guided: bool,
+    pub display_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A single message in a canvas conversation thread.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasMessageRecord {
+    pub id: String,
+    pub canvas_id: String,
+    /// "user" or "assistant"
+    pub role: String,
+    pub content: String,
+    pub block_id: Option<String>,
+    pub created_at: String,
+}

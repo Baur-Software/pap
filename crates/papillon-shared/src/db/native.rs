@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
+use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord};
 use pap_agents::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig};
 
 /// Persistent SQLite database for Papillon's experience memory.
@@ -178,6 +179,40 @@ impl NativeDatabase {
                 updated_at     TEXT NOT NULL,
                 PRIMARY KEY (agent_did_hash, value_name)
             );
+
+            CREATE TABLE IF NOT EXISTS canvases (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS canvas_blocks (
+                id                  TEXT PRIMARY KEY,
+                canvas_id           TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
+                prompt_text         TEXT,
+                schema_type         TEXT,
+                content_json        TEXT,
+                block_state         TEXT NOT NULL DEFAULT 'resolving',
+                episode_id          TEXT,
+                agent_did           TEXT,
+                mandate_expires_at  TEXT,
+                preference_guided   INTEGER NOT NULL DEFAULT 0,
+                display_order       INTEGER NOT NULL DEFAULT 0,
+                created_at          TEXT NOT NULL,
+                updated_at          TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_canvas_blocks_canvas ON canvas_blocks(canvas_id, display_order);
+
+            CREATE TABLE IF NOT EXISTS canvas_messages (
+                id          TEXT PRIMARY KEY,
+                canvas_id   TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
+                role        TEXT NOT NULL CHECK(role IN ('user','assistant')),
+                content     TEXT NOT NULL,
+                block_id    TEXT,
+                created_at  TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_canvas_messages_canvas ON canvas_messages(canvas_id, created_at);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -1595,6 +1630,193 @@ impl DatabaseOps for NativeDatabase {
             signals.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
         }
         Ok(signals)
+    }
+
+    // ── Canvas CRUD ───────────────────────────────────────────────────────
+
+    fn upsert_canvas(&self, canvas: &CanvasRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvases (id, name, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 updated_at = excluded.updated_at",
+            params![canvas.id, canvas.name, canvas.created_at, canvas.updated_at],
+        )
+        .map_err(|e| DbError(format!("db upsert canvas: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvases(&self) -> Result<Vec<CanvasRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, created_at, updated_at
+                 FROM canvases
+                 ORDER BY updated_at DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(CanvasRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    created_at: row.get(2)?,
+                    updated_at: row.get(3)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvases: {e}")))?;
+        let mut canvases = Vec::new();
+        for row in rows {
+            canvases.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(canvases)
+    }
+
+    fn delete_canvas(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM canvases WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete canvas: {e}")))?;
+        Ok(())
+    }
+
+    fn upsert_canvas_block(&self, block: &CanvasBlockRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvas_blocks (
+                id, canvas_id, prompt_text, schema_type, content_json,
+                block_state, episode_id, agent_did, mandate_expires_at,
+                preference_guided, display_order, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            ON CONFLICT(id) DO UPDATE SET
+                canvas_id = excluded.canvas_id,
+                prompt_text = excluded.prompt_text,
+                schema_type = excluded.schema_type,
+                content_json = excluded.content_json,
+                block_state = excluded.block_state,
+                episode_id = excluded.episode_id,
+                agent_did = excluded.agent_did,
+                mandate_expires_at = excluded.mandate_expires_at,
+                preference_guided = excluded.preference_guided,
+                display_order = excluded.display_order,
+                updated_at = excluded.updated_at",
+            params![
+                block.id,
+                block.canvas_id,
+                block.prompt_text,
+                block.schema_type,
+                block.content_json,
+                block.block_state,
+                block.episode_id,
+                block.agent_did,
+                block.mandate_expires_at,
+                block.preference_guided as i64,
+                block.display_order,
+                block.created_at,
+                block.updated_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db upsert canvas block: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvas_blocks(&self, canvas_id: &str) -> Result<Vec<CanvasBlockRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, canvas_id, prompt_text, schema_type, content_json,
+                        block_state, episode_id, agent_did, mandate_expires_at,
+                        preference_guided, display_order, created_at, updated_at
+                 FROM canvas_blocks
+                 WHERE canvas_id = ?1
+                 ORDER BY display_order ASC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![canvas_id], |row| {
+                Ok(CanvasBlockRecord {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    prompt_text: row.get(2)?,
+                    schema_type: row.get(3)?,
+                    content_json: row.get(4)?,
+                    block_state: row.get(5)?,
+                    episode_id: row.get(6)?,
+                    agent_did: row.get(7)?,
+                    mandate_expires_at: row.get(8)?,
+                    preference_guided: {
+                        let v: i64 = row.get(9)?;
+                        v != 0
+                    },
+                    display_order: row.get(10)?,
+                    created_at: row.get(11)?,
+                    updated_at: row.get(12)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvas blocks: {e}")))?;
+        let mut blocks = Vec::new();
+        for row in rows {
+            blocks.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(blocks)
+    }
+
+    fn delete_canvas_block(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM canvas_blocks WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete canvas block: {e}")))?;
+        Ok(())
+    }
+
+    fn insert_canvas_message(&self, msg: &CanvasMessageRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvas_messages (id, canvas_id, role, content, block_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                msg.id,
+                msg.canvas_id,
+                msg.role,
+                msg.content,
+                msg.block_id,
+                msg.created_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db insert canvas message: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvas_messages(
+        &self,
+        canvas_id: &str,
+    ) -> Result<Vec<CanvasMessageRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, canvas_id, role, content, block_id, created_at
+                 FROM canvas_messages
+                 WHERE canvas_id = ?1
+                 ORDER BY created_at ASC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![canvas_id], |row| {
+                Ok(CanvasMessageRecord {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    role: row.get(2)?,
+                    content: row.get(3)?,
+                    block_id: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvas messages: {e}")))?;
+        let mut messages = Vec::new();
+        for row in rows {
+            messages.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(messages)
     }
 }
 

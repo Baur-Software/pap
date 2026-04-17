@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 pub use registry::RendererRegistry;
 
-use crate::state::canvas::CanvasState;
+use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::renderer::RendererState;
 
 /// Per-block reactive UI context provided by [`BlockRenderer`].
@@ -139,9 +139,20 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     // Keep old name for the few places below that still use it unchanged.
     let block_class = base_block_class;
 
+    // Which face is currently visible — used to show/hide protocol metadata.
+    let canvas_side = canvas_state.canvas_side;
+    let on_back = move || canvas_side.get() == CanvasSide::Back;
+
+    // Initial prompt text for pre-filling the reprompt input.
+    let prompt_text_init = block.prompt_text.clone().unwrap_or_default();
+
     let on_click = move |_| {
         if is_resolved {
-            block_ctx.show_reprompt.update(|v| *v = !*v);
+            let was_shown = block_ctx.show_reprompt.get_untracked();
+            if !was_shown {
+                block_ctx.reprompt_value.set(prompt_text_init.clone());
+            }
+            block_ctx.show_reprompt.set(!was_shown);
         }
     };
 
@@ -395,42 +406,55 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                             (label, decay_class)
                         });
                     let has_ttl = ttl_display.is_some();
-                    let ttl_label = ttl_display.as_ref().map(|(l, _)| l.clone()).unwrap_or_default();
+                    let ttl_label = StoredValue::new(ttl_display.as_ref().map(|(l, _)| l.clone()).unwrap_or_default());
                     let ttl_decay_class = ttl_display.as_ref().map(|(_, c)| *c).unwrap_or("active");
-                    let ttl_full_class = format!("mandate-ttl {}", ttl_decay_class);
+                    let ttl_full_class = StoredValue::new(format!("mandate-ttl {}", ttl_decay_class));
+
+                    // Prompt text shown above block content as a query label.
+                    let prompt_label = block.prompt_text.clone();
+                    let has_prompt_label = prompt_label.is_some();
 
                     view! {
                         // In-block URL bar: only for browse blocks when expanded.
                         <Show when=move || is_browse && block_ctx.expanded.get()>
                             <BrowseBar current_url=browse_url.clone() />
                         </Show>
+                        // Query label — shown above content on both faces.
+                        <Show when=move || has_prompt_label>
+                            <div class="block-query-label">
+                                {prompt_label.clone().unwrap_or_default()}
+                            </div>
+                        </Show>
                         <div class="block-content">
                             {content_view}
                         </div>
-                        <Show when=move || pref_guided>
-                            <div class="preference-hint" title="Agent selected from your local interaction history — no data left your device">
-                                <span class="preference-hint-icon">"◈"</span>
-                                <span>"Based on your preferences"</span>
-                            </div>
-                        </Show>
-                        <Show when=move || is_zero_disclosure>
-                            <div class="block-zero-disclosure">
-                                <span class="scope-badge zero-disclosure">"zero disclosure"</span>
-                                <span class="block-zd-note">"no data left this device"</span>
-                            </div>
-                        </Show>
-                        <Show when=move || has_ttl>
-                            <div class={ttl_full_class.clone()}>
-                                <span>{ttl_label.clone()}</span>
-                                <button
-                                    class="mandate-ttl-refresh"
-                                    title="Refresh this block in-place"
-                                    on:click=move |e: leptos::ev::MouseEvent| {
-                                        e.stop_propagation();
-                                        canvas_state.retry_block(block_ctx.id.get_value());
-                                    }
-                                >"↺"</button>
-                            </div>
+                        // Protocol metadata — only visible on the back face.
+                        <Show when=on_back>
+                            <Show when=move || pref_guided>
+                                <div class="preference-hint" title="Agent selected from your local interaction history — no data left your device">
+                                    <span class="preference-hint-icon">"◈"</span>
+                                    <span>"Based on your preferences"</span>
+                                </div>
+                            </Show>
+                            <Show when=move || is_zero_disclosure>
+                                <div class="block-zero-disclosure">
+                                    <span class="scope-badge zero-disclosure">"zero disclosure"</span>
+                                    <span class="block-zd-note">"no data left this device"</span>
+                                </div>
+                            </Show>
+                            <Show when=move || has_ttl>
+                                <div class=move || ttl_full_class.get_value()>
+                                    <span>{move || ttl_label.get_value()}</span>
+                                    <button
+                                        class="mandate-ttl-refresh"
+                                        title="Refresh this block in-place"
+                                        on:click=move |e: leptos::ev::MouseEvent| {
+                                            e.stop_propagation();
+                                            canvas_state.retry_block(block_ctx.id.get_value());
+                                        }
+                                    >"↺"</button>
+                                </div>
+                            </Show>
                         </Show>
                         <Show when=move || block_ctx.show_reprompt.get()>
                             <div class="block-reprompt">
