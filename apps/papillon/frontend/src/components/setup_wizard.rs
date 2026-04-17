@@ -81,6 +81,7 @@ pub fn SetupWizard() -> impl IntoView {
             inference_substrate: llm,
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
+            intent_confidence_threshold: 0.35,
         };
 
         spawn_local(async move {
