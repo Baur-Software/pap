@@ -17,7 +17,8 @@ pub use endpoint::EndpointRegistry;
 pub use error::TransportError;
 pub use handler::AgentHandler;
 pub use ohttp::{
-    OhttpConfig, OhttpDecryptor, OhttpEncryptor, OhttpServerDecryptor, OhttpServerEncryptor,
+    fetch_key_config, OhttpConfig, OhttpEncryptor, OhttpKeyConfig, OhttpKeyPair,
+    OhttpResponseDecryptCtx, OhttpResponseEncryptCtx, OhttpServerDecryptor,
 };
 pub use ohttp_client::OhttpClient;
 pub use remote::RemoteAgentHandler;

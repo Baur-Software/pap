@@ -11,7 +11,7 @@ use tokio::net::TcpListener;
 
 use crate::error::TransportError;
 use crate::handler::AgentHandler;
-use crate::ohttp::{OhttpConfig, OhttpServerDecryptor, OhttpServerEncryptor};
+use crate::ohttp::{OhttpConfig, OhttpResponseEncryptCtx, OhttpServerDecryptor};
 
 /// TLS-secured HTTP server for a receiving PAP agent.
 ///
@@ -31,7 +31,7 @@ pub struct AgentServer {
 struct AppState {
     handler: Arc<dyn AgentHandler>,
     ohttp_decryptor: Option<OhttpServerDecryptor>,
-    ohttp_encryptor: Option<OhttpServerEncryptor>,
+    // Response encryption context flows per-request from decrypt_request — no stored encryptor.
 }
 
 impl AgentServer {
@@ -61,15 +61,10 @@ impl AgentServer {
             .ohttp_config
             .as_ref()
             .map(|cfg| OhttpServerDecryptor::new(cfg.clone()));
-        let ohttp_encryptor = self
-            .ohttp_config
-            .as_ref()
-            .map(|cfg| OhttpServerEncryptor::new(cfg.clone()));
 
         let state = AppState {
             handler: self.handler.clone(),
             ohttp_decryptor,
-            ohttp_encryptor,
         };
 
         Router::new()
@@ -104,36 +99,41 @@ impl AgentServer {
 }
 
 /// Decode request body from OHTTP if enabled, otherwise parse as JSON.
-async fn decode_request_body(body: Bytes, state: &AppState) -> Result<ProtocolMessage, StatusCode> {
+///
+/// Returns `(message, response_ctx)` where `response_ctx` must be passed to
+/// `encode_response_body` to ensure the response uses the correct HPKE-derived key.
+async fn decode_request_body(
+    body: Bytes,
+    state: &AppState,
+) -> Result<(ProtocolMessage, Option<OhttpResponseEncryptCtx>), StatusCode> {
     if let Some(ref decryptor) = state.ohttp_decryptor {
-        // Decrypt OHTTP payload
-        let plaintext = decryptor
+        let (plaintext, ctx) = decryptor
             .decrypt_request(&body)
             .map_err(|_| StatusCode::BAD_REQUEST)?;
-        serde_json::from_slice(&plaintext).map_err(|_| StatusCode::BAD_REQUEST)
+        let msg = serde_json::from_slice(&plaintext).map_err(|_| StatusCode::BAD_REQUEST)?;
+        Ok((msg, Some(ctx)))
     } else {
-        // Parse JSON directly
-        serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)
+        let msg = serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+        Ok((msg, None))
     }
 }
 
-/// Encode response message in OHTTP if enabled, otherwise return as JSON.
-fn encode_response_body(msg: ProtocolMessage, state: &AppState) -> Result<Vec<u8>, StatusCode> {
+/// Encode response message in OHTTP if a response context was provided, otherwise as JSON.
+fn encode_response_body(
+    msg: ProtocolMessage,
+    ctx: Option<OhttpResponseEncryptCtx>,
+) -> Result<Vec<u8>, StatusCode> {
     let json = serde_json::to_vec(&msg).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    if let Some(ref encryptor) = state.ohttp_encryptor {
-        // Encrypt with OHTTP
-        encryptor
-            .encrypt_response(&json)
+    if let Some(c) = ctx {
+        c.encrypt_response(&json)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     } else {
-        // Return JSON directly
         Ok(json)
     }
 }
 
 async fn handle_token(State(state): State<AppState>, body: Bytes) -> Result<Vec<u8>, StatusCode> {
-    let msg = decode_request_body(body, &state).await?;
+    let (msg, ctx) = decode_request_body(body, &state).await?;
 
     match msg {
         ProtocolMessage::TokenPresentation { token } => match state.handler.handle_token(token) {
@@ -143,13 +143,13 @@ async fn handle_token(State(state): State<AppState>, body: Bytes) -> Result<Vec<
                     receiver_session_did,
                     attestation: None,
                 };
-                encode_response_body(response, &state)
+                encode_response_body(response, ctx)
             }
             Err(e) => {
                 let response = ProtocolMessage::TokenRejected {
                     reason: e.to_string(),
                 };
-                encode_response_body(response, &state)
+                encode_response_body(response, ctx)
             }
         },
         _ => Err(StatusCode::BAD_REQUEST),
@@ -161,7 +161,7 @@ async fn handle_did_exchange(
     Path(session_id): Path<String>,
     body: Bytes,
 ) -> Result<Vec<u8>, StatusCode> {
-    let msg = decode_request_body(body, &state).await?;
+    let (msg, ctx) = decode_request_body(body, &state).await?;
 
     match msg {
         ProtocolMessage::SessionDidExchange {
@@ -172,7 +172,7 @@ async fn handle_did_exchange(
                 .handle_did_exchange(&session_id, &initiator_session_did)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let response = ProtocolMessage::SessionDidAck;
-            encode_response_body(response, &state)
+            encode_response_body(response, ctx)
         }
         _ => Err(StatusCode::BAD_REQUEST),
     }
@@ -183,7 +183,7 @@ async fn handle_disclosure(
     Path(session_id): Path<String>,
     body: Bytes,
 ) -> Result<Vec<u8>, StatusCode> {
-    let msg = decode_request_body(body, &state).await?;
+    let (msg, ctx) = decode_request_body(body, &state).await?;
 
     match msg {
         ProtocolMessage::DisclosureOffer { disclosures } => {
@@ -192,7 +192,7 @@ async fn handle_disclosure(
                 .handle_disclosure(&session_id, disclosures)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let response = ProtocolMessage::DisclosureAccepted;
-            encode_response_body(response, &state)
+            encode_response_body(response, ctx)
         }
         _ => Err(StatusCode::BAD_REQUEST),
     }
@@ -201,7 +201,25 @@ async fn handle_disclosure(
 async fn handle_execute(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
+    body: Bytes,
 ) -> Result<Vec<u8>, StatusCode> {
+    // Decode the (possibly empty) OHTTP-wrapped body to establish the response context.
+    // The client sends an encrypted empty JSON object; decrypting it gives us the key
+    // material needed to encrypt the execution result response.
+    let ctx = if body.is_empty() {
+        None
+    } else {
+        match &state.ohttp_decryptor {
+            Some(d) => {
+                let (_, ctx) = d
+                    .decrypt_request(&body)
+                    .map_err(|_| StatusCode::BAD_REQUEST)?;
+                Some(ctx)
+            }
+            None => None,
+        }
+    };
+
     // Agent executors use reqwest::blocking::Client, which panics inside a
     // tokio async context.  Offload to spawn_blocking so the blocking I/O
     // runs on a dedicated thread-pool thread.
@@ -212,7 +230,7 @@ async fn handle_execute(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let response = ProtocolMessage::ExecutionResult { result };
-    encode_response_body(response, &state)
+    encode_response_body(response, ctx)
 }
 
 async fn handle_receipt(
@@ -220,7 +238,7 @@ async fn handle_receipt(
     Path(_session_id): Path<String>,
     body: Bytes,
 ) -> Result<Vec<u8>, StatusCode> {
-    let msg = decode_request_body(body, &state).await?;
+    let (msg, ctx) = decode_request_body(body, &state).await?;
 
     match msg {
         ProtocolMessage::ReceiptForCoSign { receipt } => {
@@ -229,7 +247,7 @@ async fn handle_receipt(
                 .co_sign_receipt(receipt)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let response = ProtocolMessage::ReceiptCoSigned { receipt: signed };
-            encode_response_body(response, &state)
+            encode_response_body(response, ctx)
         }
         _ => Err(StatusCode::BAD_REQUEST),
     }
@@ -238,11 +256,20 @@ async fn handle_receipt(
 async fn handle_close(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
+    body: Bytes,
 ) -> Result<Vec<u8>, StatusCode> {
+    // Decode the OHTTP-wrapped close message to establish the response context.
+    let ctx = if body.is_empty() {
+        None
+    } else {
+        let (_, ctx) = decode_request_body(body, &state).await?;
+        ctx
+    };
+
     state
         .handler
         .handle_close(&session_id)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let response = ProtocolMessage::SessionClosed;
-    encode_response_body(response, &state)
+    encode_response_body(response, ctx)
 }

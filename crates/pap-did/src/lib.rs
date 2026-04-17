@@ -26,6 +26,7 @@ mod session;
 
 pub use algorithm::SignatureAlgorithm;
 pub use document::DidDocument;
+pub use document::Service;
 pub use error::DidError;
 pub use principal::PrincipalKeypair;
 pub use principal::{

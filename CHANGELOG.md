@@ -4,6 +4,23 @@
 
 ### Added
 
+- **pap-transport**: Real RFC 9458 Oblivious HTTP with HPKE
+  (DHKEM(X25519, HKDF-SHA256) + HKDF-SHA256 + AES-128-GCM). Relay operators and passive
+  observers can no longer read SD-JWT disclosure structure. Stateful per-request
+  `OhttpResponseDecryptCtx` / `OhttpResponseEncryptCtx` bind each response
+  cryptographically to its corresponding request via HPKE context export. Server keypair
+  management via `OhttpKeyPair` / `OhttpKeyConfig` with RFC 9458 §5 wire format (41 bytes)
+  and DID Document `PAPObliviousHTTP` service publication. Passthrough mode preserved for
+  direct connections when no `recipient_public_key` is configured.
+- **pap-did**: `Service` struct and optional `service` field on `DidDocument` for W3C DID
+  service endpoints (`PAPObliviousHTTP` and others). Backward-compatible with v1.0
+  documents via `#[serde(default)]`.
+- **pap-transport**: 9 unit tests covering OHTTP/HPKE error paths (`from_wire_bytes` too
+  short, request too short, `fetch_key_config` missing/invalid service), `resolve_relay`
+  branches, and `Clone` correctness for `OhttpServerDecryptor`.
+- **pap-did**: 4 unit tests for `Service` JSON serialization, `skip_serializing_if`
+  behavior on optional fields, `DidDocument` service field roundtrip, and backward
+  compat with v1.0 documents lacking a `service` key.
 - **docs**: Public FAQ page (`docs/faq.html`) answering the 10 most common investor and enterprise questions about PAP's trust model, cryptography, Sybil resistance, latency, compliance posture, and Python integration story. Answers are grounded in the actual codebase with source references.
 - **benches**: p99 tail-latency benchmark harness (`benches/benches/p99.rs`) — 2000-sample raw timing runs for the three most latency-sensitive operations (session lifecycle, depth-3 mandate chain verification, receipt co-sign). Produces `target/p99_results.json` for CI consumption.
 - **benches**: p99 regression gate in `check_regression.sh` — reads `target/p99_results.json` against new `p99_ns` baselines in `baseline.json` with a 50% threshold (more variance expected at tail vs p50's 30%).
