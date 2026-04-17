@@ -181,35 +181,50 @@ impl AgentHandler for DynamicAgentHandler {
 
             let response = builder.send();
 
-            if let Ok(resp) = response {
-                if resp.status().is_success() {
-                    if let Ok(json_body) = resp.json::<Value>() {
-                        // Priority 1: Multi-field response_mapping → proper schema.org
-                        if !endpoint.response_mapping.is_empty() {
-                            let mapped = build_mapped_response(
-                                &json_body,
-                                &endpoint.response_mapping,
-                                &endpoint.response_schema_type,
-                            );
-                            let field_count = mapped
-                                .as_object()
-                                .map(|m| m.keys().filter(|k| !k.starts_with('@')).count())
-                                .unwrap_or(0);
-                            if field_count > 0 {
-                                return Ok(mapped);
+            match response {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status.is_success() {
+                        if let Ok(json_body) = resp.json::<Value>() {
+                            // Priority 1: Multi-field response_mapping → proper schema.org
+                            if !endpoint.response_mapping.is_empty() {
+                                let mapped = build_mapped_response(
+                                    &json_body,
+                                    &endpoint.response_mapping,
+                                    &endpoint.response_schema_type,
+                                );
+                                let field_count = mapped
+                                    .as_object()
+                                    .map(|m| m.keys().filter(|k| !k.starts_with('@')).count())
+                                    .unwrap_or(0);
+                                if field_count > 0 {
+                                    return Ok(mapped);
+                                }
+                            }
+
+                            // Priority 2: Legacy single-field extraction with proper wrapping
+                            if let Some(extracted) =
+                                extract_jsonpath(&json_body, &endpoint.response_jsonpath)
+                            {
+                                return Ok(wrap_extracted_value(
+                                    extracted,
+                                    &endpoint.response_schema_type,
+                                ));
                             }
                         }
-
-                        // Priority 2: Legacy single-field extraction with proper wrapping
-                        if let Some(extracted) =
-                            extract_jsonpath(&json_body, &endpoint.response_jsonpath)
-                        {
-                            return Ok(wrap_extracted_value(
-                                extracted,
-                                &endpoint.response_schema_type,
-                            ));
-                        }
+                    } else {
+                        // Non-2xx: surface the error body instead of silently falling through to LLM
+                        let body = resp.text().unwrap_or_default();
+                        return Err(TransportError::ServerError(format!(
+                            "HTTP {}: {}",
+                            status.as_u16(),
+                            body
+                        )));
                     }
+                }
+                Err(e) => {
+                    // Network-level failure (connection refused, timeout, etc.) — fall through to LLM
+                    let _ = e;
                 }
             }
         }
