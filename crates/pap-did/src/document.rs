@@ -186,4 +186,80 @@ mod tests {
     fn from_json_rejects_invalid_json() {
         assert!(DidDocument::from_json("not json {{{").is_err());
     }
+
+    // ------------------------------------------------------------------
+    // Service struct coverage tests
+    // ------------------------------------------------------------------
+
+    /// `Service` serializes and deserializes correctly with all fields populated.
+    #[test]
+    fn service_json_roundtrip() {
+        let svc = Service {
+            id: "did:example:123#ohttp".to_string(),
+            service_type: "PAPObliviousHTTP".to_string(),
+            service_endpoint: "https://relay.example.com/ohttp".to_string(),
+            ohttp_key_config: Some("dGVzdA".to_string()),
+        };
+        let json = serde_json::to_string(&svc).unwrap();
+        let parsed: Service = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.id, svc.id);
+        assert_eq!(parsed.service_type, svc.service_type);
+        assert_eq!(parsed.service_endpoint, svc.service_endpoint);
+        assert_eq!(parsed.ohttp_key_config, svc.ohttp_key_config);
+    }
+
+    /// `#[serde(skip_serializing_if = "Option::is_none")]` — the `ohthpKeyConfig` key
+    /// must be absent from the JSON output when the field is `None`.
+    #[test]
+    fn service_ohttp_key_config_omitted_when_none() {
+        let svc = Service {
+            id: "did:example:123#ohttp".to_string(),
+            service_type: "PAPObliviousHTTP".to_string(),
+            service_endpoint: "https://example.com".to_string(),
+            ohttp_key_config: None,
+        };
+        let json = serde_json::to_string(&svc).unwrap();
+        assert!(
+            !json.contains("ohthpKeyConfig"),
+            "None ohttp_key_config must be absent from JSON, got: {json}"
+        );
+    }
+
+    /// A `DidDocument` with a populated `service` field round-trips through JSON.
+    #[test]
+    fn did_document_with_service_json_roundtrip() {
+        let kp = PrincipalKeypair::generate();
+        let mut doc = DidDocument::from_keypair(&kp);
+        doc.service = Some(vec![Service {
+            id: format!("{}#ohttp", doc.id),
+            service_type: "PAPObliviousHTTP".to_string(),
+            service_endpoint: "https://relay.example.com/ohttp".to_string(),
+            ohttp_key_config: Some("dGVzdGtleWNvbmZpZw".to_string()),
+        }]);
+        let json = doc.to_json();
+        let parsed = DidDocument::from_json(&json).unwrap();
+        let svcs = parsed.service.expect("service field must survive roundtrip");
+        assert_eq!(svcs.len(), 1);
+        assert_eq!(svcs[0].service_type, "PAPObliviousHTTP");
+        assert_eq!(svcs[0].ohttp_key_config.as_deref(), Some("dGVzdGtleWNvbmZpZw"));
+    }
+
+    /// A v1.0 DID Document JSON without a `service` key must deserialize to
+    /// `service: None` — backward compat guaranteed by `#[serde(default)]`.
+    #[test]
+    fn did_document_service_defaults_to_none_on_v1_doc() {
+        let v1_json = r#"{
+            "@context": "https://www.w3.org/ns/did/v1",
+            "id": "did:key:ztest",
+            "verificationMethod": [{
+                "id": "did:key:ztest#key-1",
+                "type": "Ed25519VerificationKey2020",
+                "controller": "did:key:ztest",
+                "publicKeyMultibase": "z1234"
+            }],
+            "authentication": ["did:key:ztest#key-1"]
+        }"#;
+        let doc = DidDocument::from_json(v1_json).unwrap();
+        assert!(doc.service.is_none(), "v1 doc without service field must yield service: None");
+    }
 }

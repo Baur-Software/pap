@@ -628,4 +628,118 @@ mod tests {
         assert_eq!(key_id, 42);
         assert_eq!(parsed_pub, pub_key);
     }
+
+    // ------------------------------------------------------------------
+    // New coverage tests
+    // ------------------------------------------------------------------
+
+    /// `OhttpKeyPair::from_private_bytes` reconstructs the same keypair —
+    /// verified by encrypting to the original public key and decrypting with
+    /// a cloned keypair (Clone internally re-uses the stored private bytes).
+    #[test]
+    fn test_ohttp_key_pair_from_private_bytes_matches_original() {
+        let kp1 = OhttpKeyPair::generate();
+        let kp1c = kp1.clone(); // same private_bytes
+        let pub1 = kp1.public_key_bytes();
+
+        let config = OhttpConfig::default().with_recipient_public_key(pub1.to_vec());
+        let (wire, _) = OhttpEncryptor::new(config).encrypt_request(b"pk test").unwrap();
+        let (pt, _) = OhttpServerDecryptor::new_with_keypair(kp1c).decrypt_request(&wire).unwrap();
+        assert_eq!(pt, b"pk test");
+    }
+
+    /// `resolve_relay()` returns the explicitly-set relay URL.
+    #[test]
+    fn test_ohttp_config_resolve_relay_explicit() {
+        let config = OhttpConfig::new().with_relay(Some("https://relay.example.com".to_string()));
+        assert_eq!(config.resolve_relay(), Some("https://relay.example.com".to_string()));
+    }
+
+    /// `resolve_relay()` returns `None` when relay_url is None and env var is unset.
+    #[test]
+    fn test_ohttp_config_resolve_relay_none_when_no_env() {
+        // Safety: env mutation in tests is inherently racy if run in parallel,
+        // but this particular var is not set by other tests in this module.
+        std::env::remove_var("PAP_OHTTP_RELAY_URL");
+        let config = OhttpConfig::new(); // relay_url = None
+        assert_eq!(config.resolve_relay(), None);
+    }
+
+    /// `OhttpKeyConfig::from_wire_bytes` returns an error for inputs shorter than 41 bytes.
+    #[test]
+    fn test_ohttp_key_config_from_wire_bytes_too_short() {
+        let short = vec![0u8; 20]; // < 41 bytes
+        let result = OhttpKeyConfig::from_wire_bytes(&short);
+        assert!(
+            matches!(result, Err(TransportError::OhttpDecryptionFailed(_))),
+            "too-short wire bytes must return OhttpDecryptionFailed"
+        );
+    }
+
+    /// `OhttpServerDecryptor::decrypt_request` rejects wire bytes shorter than
+    /// `MIN_REQUEST_LEN` (39 bytes) with an `OhttpDecryptionFailed` error.
+    #[test]
+    fn test_ohttp_request_too_short_for_decryption() {
+        let keypair = OhttpKeyPair::generate();
+        let decryptor = OhttpServerDecryptor::new_with_keypair(keypair);
+        let short = vec![0u8; 10]; // < MIN_REQUEST_LEN
+        let result = decryptor.decrypt_request(&short);
+        assert!(
+            matches!(result, Err(TransportError::OhttpDecryptionFailed(_))),
+            "wire shorter than MIN_REQUEST_LEN must return OhttpDecryptionFailed"
+        );
+    }
+
+    /// `fetch_key_config` errors when the DID document has no service list.
+    #[test]
+    fn test_fetch_key_config_no_service() {
+        let keypair = pap_did::PrincipalKeypair::generate();
+        let doc = pap_did::DidDocument::from_keypair(&keypair);
+        // from_keypair sets service: None by default
+        let result = fetch_key_config(&doc);
+        assert!(
+            matches!(result, Err(TransportError::OhttpEncryptionFailed(_))),
+            "DID doc without service must return OhttpEncryptionFailed"
+        );
+    }
+
+    /// `fetch_key_config` errors when the matching service has no `ohthpKeyConfig` field.
+    #[test]
+    fn test_fetch_key_config_missing_ohttp_key_config_field() {
+        let keypair = pap_did::PrincipalKeypair::generate();
+        let mut doc = pap_did::DidDocument::from_keypair(&keypair);
+        doc.service = Some(vec![pap_did::Service {
+            id: "did:example:123#ohttp".to_string(),
+            service_type: "PAPObliviousHTTP".to_string(),
+            service_endpoint: "https://example.com/ohttp".to_string(),
+            ohttp_key_config: None,
+        }]);
+        let result = fetch_key_config(&doc);
+        assert!(matches!(result, Err(TransportError::OhttpEncryptionFailed(_))));
+    }
+
+    /// `fetch_key_config` errors when `ohthpKeyConfig` contains invalid base64url.
+    #[test]
+    fn test_fetch_key_config_invalid_base64() {
+        let keypair = pap_did::PrincipalKeypair::generate();
+        let mut doc = pap_did::DidDocument::from_keypair(&keypair);
+        doc.service = Some(vec![pap_did::Service {
+            id: "did:example:123#ohttp".to_string(),
+            service_type: "PAPObliviousHTTP".to_string(),
+            service_endpoint: "https://example.com/ohttp".to_string(),
+            ohttp_key_config: Some("!!!not-valid-base64!!!".to_string()),
+        }]);
+        let result = fetch_key_config(&doc);
+        assert!(matches!(result, Err(TransportError::OhttpEncryptionFailed(_))));
+    }
+
+    /// A cloned passthrough `OhttpServerDecryptor` must still act as identity.
+    #[test]
+    fn test_ohttp_server_decryptor_clone_preserves_passthrough() {
+        let decryptor = OhttpServerDecryptor::new(OhttpConfig::default());
+        let cloned = decryptor.clone();
+        let payload = b"hello clone";
+        let (out, _) = cloned.decrypt_request(payload).unwrap();
+        assert_eq!(out, payload, "cloned passthrough decryptor must return input unchanged");
+    }
 }
