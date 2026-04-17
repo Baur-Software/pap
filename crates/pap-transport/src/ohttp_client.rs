@@ -9,7 +9,7 @@ use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
 
 use crate::error::TransportError;
-use crate::ohttp::{OhttpConfig, OhttpDecryptor, OhttpEncryptor};
+use crate::ohttp::{OhttpConfig, OhttpEncryptor};
 
 /// HTTP client for OHTTP-wrapped PAP handshake.
 ///
@@ -23,7 +23,6 @@ pub struct OhttpClient {
     relay_url: Option<String>,
     client: reqwest::Client,
     encryptor: OhttpEncryptor,
-    decryptor: OhttpDecryptor,
 }
 
 impl OhttpClient {
@@ -38,8 +37,7 @@ impl OhttpClient {
             origin_url: origin_url.trim_end_matches('/').to_string(),
             relay_url,
             client: reqwest::Client::new(),
-            encryptor: OhttpEncryptor::new(config.clone()),
-            decryptor: OhttpDecryptor::new(config),
+            encryptor: OhttpEncryptor::new(config),
         }
     }
 
@@ -50,8 +48,7 @@ impl OhttpClient {
             origin_url: origin_url.trim_end_matches('/').to_string(),
             relay_url,
             client,
-            encryptor: OhttpEncryptor::new(config.clone()),
-            decryptor: OhttpDecryptor::new(config),
+            encryptor: OhttpEncryptor::new(config),
         }
     }
 
@@ -102,7 +99,7 @@ impl OhttpClient {
         let json_body = serde_json::to_vec(&empty_msg)?;
 
         // Encapsulate the empty message
-        let encrypted_body = self.encryptor.encrypt_request(&json_body)?;
+        let (encrypted_body, response_ctx) = self.encryptor.encrypt_request(&json_body)?;
 
         let url = if let Some(ref relay) = self.relay_url {
             format!("{}/session/{}/execute", relay, session_id)
@@ -123,7 +120,7 @@ impl OhttpClient {
             .await
             .map_err(|e| TransportError::InvalidResponse(e.to_string()))?;
 
-        let json_resp = self.decryptor.decrypt_response(&encrypted_resp)?;
+        let json_resp = response_ctx.decrypt_response(&encrypted_resp)?;
 
         serde_json::from_slice(&json_resp)
             .map_err(|e| TransportError::InvalidResponse(e.to_string()))
@@ -165,8 +162,8 @@ impl OhttpClient {
         // Step 1: Serialize message to JSON
         let json_body = serde_json::to_vec(&msg)?;
 
-        // Step 2: Encapsulate with OHTTP
-        let encrypted_body = self.encryptor.encrypt_request(&json_body)?;
+        // Step 2: Encapsulate with OHTTP — returns wire bytes + per-request response context
+        let (encrypted_body, response_ctx) = self.encryptor.encrypt_request(&json_body)?;
 
         // Step 3: Send to relay (if configured) or origin
         let url = if let Some(ref relay) = self.relay_url {
@@ -191,8 +188,8 @@ impl OhttpClient {
             .await
             .map_err(|e| TransportError::InvalidResponse(e.to_string()))?;
 
-        // Step 5: Decapsulate response
-        let json_resp = self.decryptor.decrypt_response(&encrypted_resp)?;
+        // Step 5: Decapsulate response using the per-request context from step 2
+        let json_resp = response_ctx.decrypt_response(&encrypted_resp)?;
 
         // Step 6: Deserialize response message
         serde_json::from_slice(&json_resp)
