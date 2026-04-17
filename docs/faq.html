@@ -396,7 +396,7 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Yes — this is a real and acknowledged limitation.</strong>
+            <strong>Yes — scoped to the recipient agent and cross-session receipt patterns.</strong>
             SD-JWT (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim
             salted hashes. It does not hide claim <em>structure</em>. Each agent in
             <code>pap-agents</code> declares exactly what it needs via
@@ -404,9 +404,9 @@
             (<code>crates/pap-agents/src/executor.rs</code>) — the orchestrator sends only those
             property slots via SD-JWT selective disclosure, no more. The
             <strong>recipient agent</strong> always learns which property slots were disclosed;
-            that is the intent of the handshake. OHTTP encrypts the transport so relay operators
-            and passive observers are excluded, but the agent endpoint is the intended recipient
-            and will always see the disclosed schema.
+            that is the intent of the handshake. Network-level visibility is not a concern:
+            RFC 9458 OHTTP with real HPKE encrypts the transport, so relay operators and
+            passive observers see nothing.
           </p>
           <p>
             Receipts sharpen the concern: <code>pap-core/src/receipt.rs</code> stores
