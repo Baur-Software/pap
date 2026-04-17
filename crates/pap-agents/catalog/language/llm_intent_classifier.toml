@@ -1,0 +1,12 @@
+schema_version = 1
+version = "0.1.0"
+name = "LLM Intent Classifier"
+provider = "On-Device"
+description = "Uses the configured local LLM to classify user intent and extract a cleaned query. Runs on-device; no network or API token required. Falls back gracefully when no LLM is configured."
+action = "schema:AnalyzeAction"
+object_types = ["schema:Text"]
+requires_disclosure = ["schema:query"]
+returns = ["pap:IntentClassification"]
+source = "Catalog"
+llm_instructions = 'Classify the user query. Pick exactly one label from: web-search, weather, currency-exchange, dictionary, book, tech-news, code-repository, academic-paper, geocode, dataset, recipe, music, film, job-listing, product, question-answer. Also extract the minimal query the target service needs (e.g. for "weather in Paris" extract "Paris"; for "define ephemeral" extract "ephemeral"; for "find react on github" extract "react"). Output ONLY valid JSON, no markdown fences: {"actionType":"weather","cleanedQuery":"Paris","confidence":0.9}'
+subagents = []

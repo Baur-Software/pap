@@ -132,12 +132,141 @@ pub fn get_canvas_state(state: State<'_, AppState>) -> Result<CanvasSummaryState
     })
 }
 
-/// Detect intent from a user prompt.
-/// Returns (action_type, preferred_agent_name, cleaned_query).
+/// Map an NLU label to a schema.org action type and preferred agent name.
+fn map_label_to_action(label: &str) -> (&'static str, &'static str) {
+    match label {
+        "weather" => ("schema:CheckAction", "Open-Meteo Weather"),
+        "currency-exchange" => ("schema:TradeAction", "Frankfurter Exchange"),
+        "dictionary" => ("schema:SearchAction", "Free Dictionary"),
+        "code-repository" => ("schema:SearchAction", "GitHub Repos"),
+        "book" => ("schema:SearchAction", "Open Library Books"),
+        "tech-news" => ("schema:SearchAction", "Hacker News"),
+        "academic-paper" => ("schema:SearchAction", "arXiv Papers"),
+        "geocode" => ("schema:FindAction", "Nominatim Geocoding"),
+        "dataset" => ("schema:DatasetAction", "Dataset Discovery"),
+        "music" => ("schema:SearchAction", "MusicBrainz"),
+        "film" => ("schema:SearchAction", "Open Movie Database"),
+        "job-listing" => ("schema:SearchAction", "Remote OK Jobs"),
+        "recipe" => ("schema:SearchAction", "MealDB Recipes"),
+        "product" => ("schema:SearchAction", "Open Food Facts"),
+        _ => ("schema:SearchAction", "DuckDuckGo Search"),
+    }
+}
+
+/// Classify intent from a user prompt using federation-native NLU agents.
 ///
-/// Delegates to the shared intent table in `papillon_shared::intent`.
-fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
-    papillon_shared::intent::detect_intent(prompt)
+/// Fast path: bare HTTP/HTTPS URLs are routed deterministically to Web Page Reader.
+/// All other prompts trigger a silent PAP handshake with a discovered
+/// `schema:AnalyzeAction` agent (HuggingFace NLU or on-device LLM classifier).
+/// Returns `(action_type, preferred_agent, effective_query)` as owned strings.
+///
+/// Falls back to `("schema:AskAction", "", raw_text)` when no NLU agent is
+/// registered, the handshake fails, or confidence is below the configured threshold.
+async fn classify_intent(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    block_id: &str,
+    text: &str,
+) -> (String, String, String) {
+    // Deterministic fast path: bare HTTP/HTTPS URLs → Web Page Reader
+    let (action, preferred, query) = papillon_shared::intent::detect_intent(text);
+    if action != "schema:AnalyzeAction" {
+        return (action.to_owned(), preferred.to_owned(), query);
+    }
+
+    // Emit phase 0 so the block starts spinning while we classify
+    {
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_updated",
+            BlockEvent {
+                block: BlockUpdate {
+                    id: block_id.to_string(),
+                    prompt_id: String::new(),
+                    prompt_text: None,
+                    state: BlockState::Resolving {
+                        phase: 0,
+                        phase_label: "Detecting intent\u{2026}".into(),
+                    },
+                    schema_type: None,
+                    content: None,
+                    agent_did: None,
+                    mandate_expires_at: None,
+                    preference_guided: false,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+    }
+
+    // Resolve NLU agent — prefer HuggingFace, fall back to LLM classifier
+    let Ok(resolved) =
+        resolve_agent(state, "schema:AnalyzeAction", "HuggingFace Intent Classifier", &[]).await
+    else {
+        return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+    };
+
+    let principal_kp = {
+        let seed_guard = state.principal_seed.read().unwrap();
+        let Some(seed) = seed_guard.as_ref() else {
+            return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+        };
+        match PrincipalKeypair::from_bytes(seed) {
+            Ok(kp) => kp,
+            Err(_) => return ("schema:AskAction".to_owned(), String::new(), text.to_owned()),
+        }
+    };
+
+    let Ok(result) = handshake::execute(handshake::HandshakeParams {
+        handler: resolved.handler,
+        agent_name: &resolved.name,
+        agent_did: &resolved.did,
+        action_type: "schema:AnalyzeAction",
+        query: text,
+        principal_kp: &principal_kp,
+        requires_disclosure: &resolved.requires_disclosure,
+        returns: &resolved.returns,
+        on_phase: Box::new(|_, _| {}),
+        on_fail: Box::new(|_, _| {}),
+    })
+    .await
+    else {
+        return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+    };
+
+    let label = result
+        .content
+        .get("actionType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let confidence = result
+        .content
+        .get("confidence")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+
+    // cleanedQuery: produced by LLM classifiers, absent for HuggingFace.
+    // When present, the capability agent receives the distilled query.
+    let effective_query = result
+        .content
+        .get("cleanedQuery")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(text)
+        .to_owned();
+
+    let threshold = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.intent_confidence_threshold
+    };
+
+    if confidence < threshold || label.is_empty() || label == "question-answer" {
+        return ("schema:AskAction".to_owned(), String::new(), text.to_owned());
+    }
+
+    let (action_type, preferred_agent) = map_label_to_action(label);
+    (action_type.to_owned(), preferred_agent.to_owned(), effective_query)
 }
 
 /// Score an agent candidate using profile history and local preference signals.
@@ -394,14 +523,18 @@ pub(crate) async fn resolve_agent(
 }
 
 /// Discover agent, resolve handler, run handshake, and apply reflection.
+/// Callers must pre-classify intent via `classify_intent` before calling this.
 async fn process_prompt(
     app: &AppHandle,
     state: &State<'_, AppState>,
     prompt_id: &str,
     block_id: &str,
-    text: &str,
+    action_type: &str,
+    preferred: &str,
+    query: &str,
 ) -> Result<(String, serde_json::Value, bool, String), PapillonError> {
-    process_prompt_inner(app, state, prompt_id, block_id, text, &[], 0).await
+    process_prompt_inner(app, state, prompt_id, block_id, action_type, preferred, query, &[], 0)
+        .await
 }
 
 /// Inner implementation with exclusion list and retry budget for reflection.
@@ -416,7 +549,9 @@ fn process_prompt_inner<'a>(
     state: &'a State<'a, AppState>,
     prompt_id: &'a str,
     block_id: &'a str,
-    text: &'a str,
+    action_type: &'a str,
+    preferred: &'a str,
+    query: &'a str,
     exclude_agents: &'a [String],
     retry_count: u8,
 ) -> std::pin::Pin<
@@ -428,8 +563,6 @@ fn process_prompt_inner<'a>(
     >,
 > {
     Box::pin(async move {
-        let (action_type, preferred, query) = detect_intent(text);
-
         let resolved = resolve_agent(state, action_type, preferred, exclude_agents).await?;
         // Capture agent DID before the handshake so it can be threaded into block_resolved.
         let agent_did = resolved.did.clone();
@@ -510,7 +643,7 @@ fn process_prompt_inner<'a>(
             agent_name: &resolved.name,
             agent_did: &resolved.did,
             action_type,
-            query: &query,
+            query,
             principal_kp: &principal_kp,
             requires_disclosure: &resolved.requires_disclosure,
             returns: &resolved.returns,
@@ -560,7 +693,9 @@ fn process_prompt_inner<'a>(
                     state,
                     prompt_id,
                     block_id,
-                    text,
+                    action_type,
+                    preferred,
+                    query,
                     &new_exclude,
                     retry_count + 1,
                 )
@@ -627,9 +762,13 @@ pub async fn canvas_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
+    // Classify intent via federation (NLU agent or LLM classifier).
+    // HTTP URLs are still routed deterministically inside classify_intent.
+    let (action_type, preferred, query) =
+        classify_intent(&app, &state, &block_id, &text).await;
+
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
-    let (action_type_peek, _, _) = detect_intent(&text);
-    if action_type_peek == "schema:DatasetAction" {
+    if action_type == "schema:DatasetAction" {
         return crate::commands::dataset_discovery::canvas_discover_datasets(
             app, state, _canvas_id, prompt_id, block_id, text,
         )
@@ -637,7 +776,8 @@ pub async fn canvas_prompt(
     }
 
     let (schema_type, content, preference_guided, agent_did) =
-        process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+        process_prompt(&app, &state, &prompt_id, &block_id, &action_type, &preferred, &query)
+            .await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -678,8 +818,10 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
+    let (action_type, preferred, query) =
+        classify_intent(&app, &state, &block_id, &text).await;
     let (schema_type, content, preference_guided, agent_did) =
-        process_prompt(&app, &state, "", &block_id, &text).await?;
+        process_prompt(&app, &state, "", &block_id, &action_type, &preferred, &query).await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -751,7 +893,9 @@ pub async fn canvas_plan_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (action_type, preferred, _query) = detect_intent(&text);
+    // Classify intent once — result is reused for plan-building and handshake.
+    let (action_type, preferred, query) =
+        classify_intent(&app, &state, &block_id, &text).await;
 
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
     if action_type == "schema:DatasetAction" {
@@ -762,7 +906,7 @@ pub async fn canvas_plan_prompt(
     }
 
     // Resolve agent to build the IntentPlan.
-    let resolved = resolve_agent(&state, action_type, preferred, &[]).await?;
+    let resolved = resolve_agent(&state, &action_type, &preferred, &[]).await?;
 
     let approval_request_id = uuid::Uuid::new_v4().to_string();
 
@@ -797,7 +941,7 @@ pub async fn canvas_plan_prompt(
     let schema_type_for_pref = plan.returns.first().map(String::as_str).unwrap_or("");
     let auto_approve = auto_approve
         || PreferenceEngine::new(state.db.as_ref()).has_approved_scopes(
-            action_type,
+            &action_type,
             schema_type_for_pref,
             &plan.requires_disclosure,
         );
@@ -805,7 +949,8 @@ pub async fn canvas_plan_prompt(
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
         let (schema_type, content, preference_guided, agent_did) =
-            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+            process_prompt(&app, &state, &prompt_id, &block_id, &action_type, &preferred, &query)
+                .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -865,7 +1010,7 @@ pub async fn canvas_plan_prompt(
     if approved {
         // Persist the approval so future identical requests skip the gate.
         PreferenceEngine::new(state.db.as_ref()).save_approved_scopes(
-            action_type,
+            &action_type,
             schema_type_for_pref,
             &hash_agent_did(&resolved.did),
             &resolved.name,
@@ -874,7 +1019,8 @@ pub async fn canvas_plan_prompt(
 
         // Run the full handshake.
         let (schema_type, content, preference_guided, agent_did) =
-            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+            process_prompt(&app, &state, &prompt_id, &block_id, &action_type, &preferred, &query)
+                .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -956,68 +1102,51 @@ pub async fn canvas_approve_block(
 mod tests {
     use super::*;
 
+    // ── map_label_to_action ────────────────────────────────────
+
     #[test]
-    fn detect_intent_wiki() {
-        let (action, agent, _query) = detect_intent("wikipedia Rust language");
-        assert_eq!(action, "schema:SearchAction");
-        assert_eq!(agent, "Wikipedia Knowledge");
+    fn map_label_to_action_coverage() {
+        // All 14 explicit labels map to non-empty action + agent names.
+        let labels = [
+            "weather",
+            "currency-exchange",
+            "dictionary",
+            "code-repository",
+            "book",
+            "tech-news",
+            "academic-paper",
+            "geocode",
+            "dataset",
+            "music",
+            "film",
+            "job-listing",
+            "recipe",
+            "product",
+        ];
+        for label in &labels {
+            let (action, agent) = map_label_to_action(label);
+            assert!(!action.is_empty(), "action empty for label: {label}");
+            assert!(!agent.is_empty(), "agent empty for label: {label}");
+            assert!(
+                action.starts_with("schema:"),
+                "action not schema: prefixed for label: {label}"
+            );
+        }
     }
 
     #[test]
-    fn detect_intent_search() {
-        let (action, agent, _query) = detect_intent("search for cats");
+    fn map_label_to_action_unknown_falls_back_to_search() {
+        let (action, agent) = map_label_to_action("completely-unknown-intent");
         assert_eq!(action, "schema:SearchAction");
         assert_eq!(agent, "DuckDuckGo Search");
     }
 
     #[test]
-    fn detect_intent_ai_fallback() {
-        let (action, agent, query) = detect_intent("explain quantum computing");
-        assert_eq!(action, "schema:AskAction");
-        assert_eq!(agent, "On-Device AI");
-        assert_eq!(query, "explain quantum computing");
-    }
-
-    #[test]
-    fn detect_intent_weather() {
-        let (action, agent, _query) = detect_intent("weather 48.85,2.35");
-        assert_eq!(action, "schema:CheckAction");
-        assert_eq!(agent, "Open-Meteo Weather");
-    }
-
-    #[test]
-    fn detect_intent_forecast() {
-        let (action, agent, _query) = detect_intent("forecast for tomorrow");
-        assert_eq!(action, "schema:CheckAction");
-        assert_eq!(agent, "Open-Meteo Weather");
-    }
-
-    #[test]
-    fn detect_intent_currency() {
-        let (action, agent, _query) = detect_intent("convert 100 USD EUR");
-        assert_eq!(action, "schema:TradeAction");
-        assert_eq!(agent, "Frankfurter Exchange");
-    }
-
-    #[test]
-    fn detect_intent_geocode() {
-        let (action, agent, _query) = detect_intent("where is Paris");
-        assert_eq!(action, "schema:FindAction");
-        assert_eq!(agent, "Nominatim Geocoding");
-    }
-
-    #[test]
-    fn detect_intent_books() {
-        let (action, agent, _query) = detect_intent("book about rust programming");
+    fn map_label_to_action_question_answer_not_mapped() {
+        // "question-answer" is handled by the confidence check in classify_intent
+        // and never reaches map_label_to_action. But if it did, it falls back.
+        let (action, _) = map_label_to_action("question-answer");
         assert_eq!(action, "schema:SearchAction");
-        assert_eq!(agent, "Open Library Books");
-    }
-
-    #[test]
-    fn detect_intent_hackernews() {
-        let (action, agent, _query) = detect_intent("hacker news rust");
-        assert_eq!(action, "schema:SearchAction");
-        assert_eq!(agent, "Hacker News");
     }
 
     #[test]

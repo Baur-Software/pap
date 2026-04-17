@@ -396,6 +396,10 @@ impl<'a> PreferenceEngine<'a> {
 
 // ── Orchestrator types ──────────────────────────────────────
 
+fn default_confidence_threshold() -> f64 {
+    0.35
+}
+
 /// Orchestrator configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorConfig {
@@ -405,6 +409,11 @@ pub struct OrchestratorConfig {
     pub inference_substrate: LlmProvider,
     pub mandate_ttl_hours: u64,
     pub auto_approve_zero_disclosure: bool,
+    /// Minimum NLU confidence score to accept a classification result.
+    /// Below this threshold, classify_intent() falls back to schema:AskAction.
+    /// Default: 0.35. Range: 0.0–1.0.
+    #[serde(default = "default_confidence_threshold")]
+    pub intent_confidence_threshold: f64,
 }
 
 impl Default for OrchestratorConfig {
@@ -413,6 +422,7 @@ impl Default for OrchestratorConfig {
             inference_substrate: LlmProvider::default(),
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
+            intent_confidence_threshold: default_confidence_threshold(),
         }
     }
 }

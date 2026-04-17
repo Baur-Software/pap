@@ -5,6 +5,14 @@ fn default_agent_version() -> String {
     "0.1.0".into()
 }
 
+fn default_timeout_secs() -> u64 {
+    5
+}
+
+fn default_response_jsonpath() -> String {
+    "$".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicAgentDef {
     pub agent_did: Option<String>,
@@ -44,6 +52,9 @@ pub struct HttpEndpointConfig {
     #[serde(default)]
     pub headers: HashMap<String, String>,
     pub body_template: Option<String>,
+    /// JSONPath for single-field extraction (fallback when `response_mapping` is empty).
+    /// Defaults to `"$"` (full response body) when not specified.
+    #[serde(default = "default_response_jsonpath")]
     pub response_jsonpath: String,
     pub response_schema_type: String,
     /// Schema.org property → JSONPath mapping for multi-field extraction.
@@ -53,6 +64,10 @@ pub struct HttpEndpointConfig {
     /// back to `response_jsonpath` single-value extraction.
     #[serde(default)]
     pub response_mapping: HashMap<String, String>,
+    /// HTTP request timeout in seconds. Defaults to 5.
+    /// Set higher (e.g. 30) for models with cold-start latency.
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -458,6 +473,7 @@ mod tests {
                 response_jsonpath: "$.products[0]".to_string(),
                 response_schema_type: "schema:NutritionInformation".to_string(),
                 response_mapping: HashMap::new(),
+                timeout_secs: 5,
             }),
             llm_instructions: "You are a nutrition lookup assistant.".to_string(),
             subagents: vec![],

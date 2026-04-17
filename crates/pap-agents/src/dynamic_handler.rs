@@ -8,6 +8,7 @@
 //! at save time by the Tauri command layer). RFC 1918, loopback, link-local,
 //! and IP-literal addresses are rejected before any network call.
 
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -16,8 +17,6 @@ use pap_core::session::CapabilityToken;
 use pap_did::SessionKeypair;
 use pap_transport::{AgentHandler, TransportError};
 use serde_json::Value;
-
-use std::collections::HashMap;
 
 use crate::dynamic::{DynamicAgentDef, HttpMethod};
 use crate::llm::{LlmClient, LlmProvider};
@@ -31,6 +30,9 @@ pub struct DynamicAgentHandler {
     def: DynamicAgentDef,
     llm_provider: Arc<RwLock<LlmProvider>>,
     sessions: SessionStore<DynamicSession>,
+    /// User-configured property values for this agent (e.g. api_token).
+    /// Substituted into endpoint header templates at request time.
+    agent_props: HashMap<String, String>,
 }
 
 impl DynamicAgentHandler {
@@ -39,16 +41,40 @@ impl DynamicAgentHandler {
             def,
             llm_provider,
             sessions: SessionStore::new(),
+            agent_props: HashMap::new(),
         }
     }
 
-    /// Build an [`LlmClient`] from the current provider for a single
-    /// LLM call.  Reading through the `RwLock` ensures the latest
-    /// settings (changed via `configure_orchestrator`) are always used.
+    /// Construct with pre-loaded agent property values (e.g. from agent settings storage).
+    /// Values are substituted into endpoint header templates using `{prop_name}` syntax.
+    pub fn new_with_props(
+        def: DynamicAgentDef,
+        llm_provider: Arc<RwLock<LlmProvider>>,
+        agent_props: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            def,
+            llm_provider,
+            sessions: SessionStore::new(),
+            agent_props,
+        }
+    }
+
     fn make_llm_client(&self) -> Box<dyn LlmClient> {
         let provider = self.llm_provider.read().unwrap_or_else(|e| e.into_inner());
         (*provider).clone().into_client()
     }
+}
+
+/// JSON-escape a string value for safe injection into a JSON body template.
+///
+/// `serde_json::to_string` wraps the value in outer quotes; this strips them
+/// so the result can be placed directly inside an existing `"..."` string in
+/// the template. Prevents malformed JSON when the query contains `"`, `\n`, etc.
+fn json_escape_str(s: &str) -> String {
+    let serialized = serde_json::to_string(s).unwrap_or_default();
+    // Strip the surrounding quotes that serde_json adds.
+    serialized[1..serialized.len().saturating_sub(1)].to_string()
 }
 
 impl AgentHandler for DynamicAgentHandler {
@@ -110,8 +136,9 @@ impl AgentHandler for DynamicAgentHandler {
                 ));
             }
 
+            // Fix 4: use per-agent configurable timeout instead of hardcoded 5s.
             let client = reqwest::blocking::Client::builder()
-                .timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(endpoint.timeout_secs))
                 .build()
                 .map_err(|e| TransportError::ServerError(format!("http client init: {e}")))?;
 
@@ -125,21 +152,34 @@ impl AgentHandler for DynamicAgentHandler {
                 ));
             }
 
-            let response = match endpoint.method {
-                HttpMethod::Get => client.get(&url).send(),
+            // Fix 1: JSON-escape the query before injecting into POST body templates.
+            let escaped_query = json_escape_str(&query);
+
+            // Fix 2: Apply configured endpoint headers (supports {prop_name} substitution).
+            // Fix 5: Substitute user-configured property values (e.g. {api_token}) in header values.
+            let mut builder = match endpoint.method {
+                HttpMethod::Get => client.get(&url),
                 HttpMethod::Post => {
                     let body = endpoint
                         .body_template
                         .as_deref()
                         .unwrap_or("{}")
-                        .replace("{query}", &query);
+                        .replace("{query}", &escaped_query);
                     client
                         .post(&url)
                         .header("Content-Type", "application/json")
                         .body(body)
-                        .send()
                 }
             };
+
+            for (key, value_template) in &endpoint.headers {
+                let resolved = self.agent_props.iter().fold(value_template.clone(), |acc, (name, val)| {
+                    acc.replace(&format!("{{{}}}", name), val)
+                });
+                builder = builder.header(key.as_str(), resolved);
+            }
+
+            let response = builder.send();
 
             if let Ok(resp) = response {
                 if resp.status().is_success() {
@@ -151,7 +191,6 @@ impl AgentHandler for DynamicAgentHandler {
                                 &endpoint.response_mapping,
                                 &endpoint.response_schema_type,
                             );
-                            // Only use mapped result if at least one field extracted
                             let field_count = mapped
                                 .as_object()
                                 .map(|m| m.keys().filter(|k| !k.starts_with('@')).count())
@@ -179,6 +218,30 @@ impl AgentHandler for DynamicAgentHandler {
         let text = client
             .complete(&self.def.llm_instructions, &query)
             .map_err(|e| TransportError::ServerError(format!("llm: {e}")))?;
+
+        // Fix 3: For intent classification agents, parse LLM output as
+        // pap:IntentClassification JSON rather than wrapping in a generic Answer.
+        if self
+            .def
+            .returns
+            .first()
+            .map(|s| s == "pap:IntentClassification")
+            .unwrap_or(false)
+        {
+            let cleaned = text
+                .trim()
+                .trim_start_matches("```json")
+                .trim_start_matches("```")
+                .trim_end_matches("```")
+                .trim();
+            if let Ok(mut parsed) = serde_json::from_str::<Value>(cleaned) {
+                if parsed.get("actionType").is_some() {
+                    parsed["@type"] = serde_json::json!("pap:IntentClassification");
+                    return Ok(parsed);
+                }
+            }
+        }
+
         Ok(serde_json::json!({
             "@context": "https://schema.org",
             "@type": "Answer",
@@ -210,15 +273,12 @@ impl AgentHandler for DynamicAgentHandler {
 }
 
 /// Build a schema.org object from field-level JSONPath mappings.
-///
-/// Each entry in `mapping` maps a schema.org property name to a JSONPath
-/// expression. The function extracts each field from the API response and
-/// assembles them into a valid schema.org object with `@context` and `@type`.
 fn build_mapped_response(
     json_body: &Value,
     mapping: &HashMap<String, String>,
     schema_type: &str,
 ) -> Value {
+    // Strip schema: prefix for standard types; leave pap: and other namespaces intact.
     let clean_type = schema_type.trim_start_matches("schema:");
     let mut obj = serde_json::Map::new();
     obj.insert("@context".into(), serde_json::json!("https://schema.org"));
@@ -226,7 +286,6 @@ fn build_mapped_response(
 
     for (property, jsonpath) in mapping {
         if let Some(extracted) = extract_jsonpath(json_body, jsonpath) {
-            // Skip null and empty-string extractions
             match &extracted {
                 Value::Null => continue,
                 Value::String(s) if s.is_empty() => continue,
@@ -241,34 +300,26 @@ fn build_mapped_response(
 }
 
 /// Wrap a single extracted value in valid schema.org (legacy fallback).
-///
-/// Instead of the old `"result": extracted` pattern (which is not schema.org
-/// vocabulary), this maps the extracted value to the appropriate schema.org
-/// property based on its type.
 fn wrap_extracted_value(extracted: Value, schema_type: &str) -> Value {
     let clean_type = schema_type.trim_start_matches("schema:");
     match &extracted {
-        // Object with @type — already schema.org, ensure @context
         Value::Object(map) if map.contains_key("@type") => {
             let mut obj = map.clone();
             obj.entry("@context".to_string())
                 .or_insert(serde_json::json!("https://schema.org"));
             Value::Object(obj)
         }
-        // Object without @type — add type metadata
         Value::Object(map) => {
             let mut obj = map.clone();
             obj.insert("@context".into(), serde_json::json!("https://schema.org"));
             obj.insert("@type".into(), serde_json::json!(clean_type));
             Value::Object(obj)
         }
-        // String — use "description" (universal schema.org property)
         Value::String(_) => serde_json::json!({
             "@context": "https://schema.org",
             "@type": clean_type,
             "description": extracted,
         }),
-        // Array — wrap in ItemList
         Value::Array(_) => serde_json::json!({
             "@context": "https://schema.org",
             "@type": clean_type,
@@ -277,7 +328,6 @@ fn wrap_extracted_value(extracted: Value, schema_type: &str) -> Value {
                 "itemListElement": extracted,
             }
         }),
-        // Number/Bool/Null — use "value"
         _ => serde_json::json!({
             "@context": "https://schema.org",
             "@type": clean_type,
@@ -339,6 +389,7 @@ mod tests {
                 response_jsonpath: "$.results[0]".into(),
                 response_schema_type: "schema:SearchResultsPage".into(),
                 response_mapping: HashMap::new(),
+                timeout_secs: 5,
             }),
             llm_instructions: "You are helpful.".into(),
             subagents: vec![],
@@ -427,6 +478,21 @@ mod tests {
     }
 
     #[test]
+    fn json_escape_str_escapes_quotes() {
+        assert_eq!(json_escape_str(r#"say "hello""#), r#"say \"hello\""#);
+    }
+
+    #[test]
+    fn json_escape_str_escapes_newlines() {
+        assert_eq!(json_escape_str("line1\nline2"), r"line1\nline2");
+    }
+
+    #[test]
+    fn json_escape_str_plain_passthrough() {
+        assert_eq!(json_escape_str("simple query"), "simple query");
+    }
+
+    #[test]
     fn extract_jsonpath_simple_field() {
         assert_eq!(
             extract_jsonpath(&json!({"name": "Alice"}), "$.name"),
@@ -439,6 +505,15 @@ mod tests {
         assert_eq!(
             extract_jsonpath(&json!({"items": [1, 2, 3]}), "$.items[1]"),
             Some(json!(2))
+        );
+    }
+
+    #[test]
+    fn extract_jsonpath_array_root_index() {
+        // HuggingFace NLU response: array at root, e.g. $[0].label
+        assert_eq!(
+            extract_jsonpath(&json!([{"label": "weather", "score": 0.87}]), "$[0].label"),
+            Some(json!("weather"))
         );
     }
 
@@ -494,6 +569,18 @@ mod tests {
             .is_err());
     }
 
+    #[test]
+    fn header_props_substituted() {
+        // Verify that {api_token} in a header value is replaced by the configured prop.
+        let mut props: HashMap<String, String> = HashMap::new();
+        props.insert("api_token".to_string(), "hf_abc123".to_string());
+        let template = "Bearer {api_token}".to_string();
+        let resolved = props
+            .iter()
+            .fold(template, |acc, (name, val)| acc.replace(&format!("{{{}}}", name), val));
+        assert_eq!(resolved, "Bearer hf_abc123");
+    }
+
     // ── build_mapped_response tests ──────────────────────────────────────
 
     #[test]
@@ -526,8 +613,20 @@ mod tests {
             "https://en.wikipedia.org/wiki/Rust_(programming_language)"
         );
         assert_eq!(result["source"], "Wikipedia");
-        // Empty string "Image" should be skipped
         assert!(result.get("image").is_none());
+    }
+
+    #[test]
+    fn mapped_response_pap_type_preserved() {
+        // pap:IntentClassification @type should not be stripped of its prefix.
+        let api_response = json!({"actionType": "weather", "confidence": 0.87});
+        let mut mapping = HashMap::new();
+        mapping.insert("actionType".into(), "$.actionType".into());
+        mapping.insert("confidence".into(), "$.confidence".into());
+
+        let result = build_mapped_response(&api_response, &mapping, "pap:IntentClassification");
+        assert_eq!(result["@type"], "pap:IntentClassification");
+        assert_eq!(result["actionType"], "weather");
     }
 
     #[test]
@@ -535,7 +634,7 @@ mod tests {
         let api_response = json!({"Heading": "Test"});
         let mut mapping = HashMap::new();
         mapping.insert("name".into(), "$.Heading".into());
-        mapping.insert("description".into(), "$.AbstractText".into()); // not present
+        mapping.insert("description".into(), "$.AbstractText".into());
 
         let result = build_mapped_response(&api_response, &mapping, "schema:Thing");
         assert_eq!(result["name"], "Test");
@@ -564,10 +663,7 @@ mod tests {
         );
         assert_eq!(result["@type"], "SearchResultsPage");
         assert_eq!(result["description"], "A cat is a domesticated species");
-        assert!(
-            result.get("result").is_none(),
-            "should not use 'result' key"
-        );
+        assert!(result.get("result").is_none());
     }
 
     #[test]

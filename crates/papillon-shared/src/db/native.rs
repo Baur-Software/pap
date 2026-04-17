@@ -2086,6 +2086,7 @@ mod tests {
                 response_jsonpath: "$.results[*]".to_string(),
                 response_schema_type: "schema:SearchResult".to_string(),
                 response_mapping: std::collections::HashMap::new(),
+                timeout_secs: 5,
             }),
             llm_instructions: "You are a search assistant.".to_string(),
             subagents: vec![],
