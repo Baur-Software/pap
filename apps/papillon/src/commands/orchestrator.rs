@@ -232,11 +232,7 @@ pub async fn download_builtin_model(
         let app_ref = app.clone();
         let mid: std::sync::Arc<str> = model_id.as_str().into();
         crate::inference::download_file(&info.tokenizer_url, &tokenizer_path, move |dl, total| {
-            let pct = if total > 0 {
-                std::cmp::min((dl * 100 / total) as u8, 100)
-            } else {
-                0
-            };
+            let pct = std::cmp::min((dl * 100).checked_div(total).unwrap_or(0) as u8, 100);
             let _ = app_ref.emit(
                 "model_download_progress",
                 ModelDownloadProgress {
@@ -258,11 +254,7 @@ pub async fn download_builtin_model(
         let app_ref = app.clone();
         let mid: std::sync::Arc<str> = model_id.as_str().into();
         crate::inference::download_file(&info.download_url, &model_path, move |dl, total| {
-            let pct = if total > 0 {
-                std::cmp::min((dl * 100 / total) as u8, 100)
-            } else {
-                0
-            };
+            let pct = std::cmp::min((dl * 100).checked_div(total).unwrap_or(0) as u8, 100);
             let _ = app_ref.emit(
                 "model_download_progress",
                 ModelDownloadProgress {
