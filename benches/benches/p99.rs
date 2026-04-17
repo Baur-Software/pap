@@ -212,10 +212,14 @@ fn main() {
 "#
     );
 
-    // Write adjacent to the criterion output directory so check_regression.sh can find it.
-    std::fs::create_dir_all("target").ok();
-    std::fs::write("target/p99_results.json", &json)
-        .expect("failed to write target/p99_results.json");
+    // Write to workspace root target/ so check_regression.sh (run from workspace root) can find it.
+    // env!("CARGO_MANIFEST_DIR") is the benches/ package dir; its parent is the workspace root.
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("bench crate must be inside workspace");
+    let out = workspace_root.join("target").join("p99_results.json");
+    std::fs::create_dir_all(out.parent().unwrap()).ok();
+    std::fs::write(&out, &json).expect("failed to write p99_results.json");
 
-    eprintln!("Wrote target/p99_results.json");
+    eprintln!("Wrote {}", out.display());
 }
