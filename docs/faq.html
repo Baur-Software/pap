@@ -354,15 +354,25 @@
             roles, service accounts, or delegated authority hierarchies between humans.
           </p>
           <p>
-            Employee offboarding, SCIM provisioning, and IdP-backed identity (Okta, Azure AD, Ping)
-            are not in the codebase today. The M-of-N social recovery mechanism uses banks/notaries
-            as recovery trustees, which reintroduces institutional trust at the most sensitive point
-            in the protocol — something worth naming honestly.
+            <strong>Key resilience is built in.</strong> The M-of-N social recovery mechanism
+            (<code>crates/pap-core/src/shamir.rs</code>) lets a principal split their seed into
+            N Shamir shards and distribute them to trustees of their choosing — a family member,
+            notary, lawyer, or an offline hardware key. Any M shards reconstruct the identity;
+            fewer than M reveal nothing (mathematically provable). The default is 2-of-3,
+            fully configurable. Trustees are people the principal selects, not a platform.
           </p>
           <p>
-            <strong>What's needed:</strong> A <code>PAP-ORG</code> profile that maps organizational roles to
-            mandate issuance authority and describes how PAP can sit behind an existing enterprise IdP.
-            This is an open design question, not a shipping feature.
+            <strong>People can advertise themselves.</strong> The social agent catalog
+            (<code>crates/pap-agents/catalog/social/</code>) includes 13 agents that return
+            <code>schema:Person</code> — Mastodon accounts, GitHub profiles, DEV.to, Stack Overflow,
+            and others. Any principal can also publish a signed
+            <code>AgentAdvertisement</code> (<code>pap-marketplace/src/advertisement.rs</code>)
+            typed as <code>schema:Person</code> to make themselves discoverable through the
+            peer-to-peer Chrysalis registry.
+          </p>
+          <p>
+            Employee offboarding, SCIM provisioning, and IdP-backed identity (Okta, Azure AD,
+            Ping) are not in the codebase today.
           </p>
           <div class="roadmap-tag">⬡ Roadmap — PAP-ORG profile</div>
         </div>
@@ -382,14 +392,17 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Yes — this is a real and acknowledged limitation, with one important scope note.</strong>
-            SD-JWT (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim salted
-            hashes. It does not hide claim <em>structure</em>. The <strong>recipient agent</strong> always
-            learns which property slots were disclosed — that is the intent of the handshake.
-            With the current placeholder HPKE in <code>pap-transport/src/ohttp.rs</code>, a passive
-            network observer can also see the structure. Once real OHTTP encryption lands,
-            relay and network observers will be excluded from that set — but the recipient agent
-            is always the intended party and will always see the disclosed schema.
+            <strong>Yes — this is a real and acknowledged limitation.</strong>
+            SD-JWT (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim
+            salted hashes. It does not hide claim <em>structure</em>. Each agent in
+            <code>pap-agents</code> declares exactly what it needs via
+            <code>AgentMeta.requires_disclosure</code>
+            (<code>crates/pap-agents/src/executor.rs</code>) — the orchestrator sends only those
+            property slots via SD-JWT selective disclosure, no more. The
+            <strong>recipient agent</strong> always learns which property slots were disclosed;
+            that is the intent of the handshake. OHTTP encrypts the transport so relay operators
+            and passive observers are excluded, but the agent endpoint is the intended recipient
+            and will always see the disclosed schema.
           </p>
           <p>
             Receipts sharpen the concern: <code>pap-core/src/receipt.rs</code> stores
@@ -440,12 +453,13 @@
             disclosure, ephemeral session DIDs, deny-by-default mandates — do not depend on OHTTP.
           </p>
           <p>
-            One honest caveat: the current HPKE implementation is a placeholder
-            (<em>"simple implementation"</em> per code comments). Full cryptographic unlinkability per
+            The relay uses real
             <a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">RFC 9458</a>
-            is the target; the relay architecture is already correct.
+            HPKE in <code>pap-transport/src/ohttp.rs</code>: DHKEM(X25519, HKDF-SHA256) +
+            HKDF-SHA256 + AES-128-GCM (RFC 9180). Relay operators and passive observers cannot
+            read SD-JWT disclosure structure or query content. The relay architecture is correct
+            and the cryptography is now real.
           </p>
-          <div class="roadmap-tag">⬡ In progress — full RFC 9458 HPKE in pap-transport</div>
         </div>
       </div>
 
