@@ -14,6 +14,7 @@
   },
   "mandate_chain_verify_depth3": {
     "p50_ns": 138500,
+    "p99_ns": 480000,
     "target": "< 5ms"
   },
   "sd_jwt_issue_5claims": {
@@ -26,10 +27,12 @@
   },
   "session_open_full_lifecycle": {
     "p50_ns": 130000,
+    "p99_ns": 500000,
     "target": "< 20ms"
   },
   "receipt_create_cosign": {
     "p50_ns": 56200,
+    "p99_ns": 210000,
     "target": "< 3ms"
   },
   "federation_announce_local": {
