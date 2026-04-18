@@ -167,6 +167,54 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
+   AUTO THEME — follow system preference
+   ═══════════════════════════════════════════════════════════ */
+
+@media (prefers-color-scheme: light) {
+    [data-theme="auto"] {
+        --bg-0: #faf9fc;
+        --bg-1: #f0eff5;
+        --bg-2: #e6e5ee;
+        --bg-3: #d8d7e2;
+        --text-1: #1a1928;
+        --text-2: #5c5b70;
+        --text-3: #8888a0;
+        --border: #d0cfdc;
+        --border-subtle: #e2e1ec;
+
+        --bg-primary: var(--bg-0);
+        --bg-secondary: var(--bg-1);
+        --bg-tertiary: var(--bg-2);
+        --text-primary: var(--text-1);
+        --text-secondary: var(--text-2);
+
+        color-scheme: light;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    [data-theme="auto"] {
+        --bg-0: #0c0b14;
+        --bg-1: #151420;
+        --bg-2: #1f1e2e;
+        --bg-3: #2a2940;
+        --text-1: #eeeef2;
+        --text-2: #9494a8;
+        --text-3: #6a6a80;
+        --border: #2c2b40;
+        --border-subtle: #222136;
+
+        --bg-primary: var(--bg-0);
+        --bg-secondary: var(--bg-1);
+        --bg-tertiary: var(--bg-2);
+        --text-primary: var(--text-1);
+        --text-secondary: var(--text-2);
+
+        color-scheme: dark;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
    RESET & BASE
    ═══════════════════════════════════════════════════════════ */
 

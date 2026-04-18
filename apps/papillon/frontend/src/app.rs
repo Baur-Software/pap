@@ -34,8 +34,9 @@ use papillon_shared::{
 
 #[component]
 pub fn App() -> impl IntoView {
-    // Apply persisted theme on startup
+    // Apply persisted appearance settings on startup
     if let Some(win) = web_sys::window() {
+        // Theme
         let stored_theme = win
             .local_storage()
             .ok()
@@ -46,6 +47,45 @@ pub fn App() -> impl IntoView {
             let _ = doc
                 .document_element()
                 .map(|el| el.set_attribute("data-theme", &stored_theme));
+        }
+
+        // Accent color, font scale, reduce motion, compact density
+        if let (Some(doc), Ok(Some(storage))) = (win.document(), win.local_storage()) {
+            // Accent color
+            if let Ok(Some(accent)) = storage.get_item("papillon_accent") {
+                if let Some(root) = doc
+                    .document_element()
+                    .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+                {
+                    let _ = root.style().set_property("--purple", &accent);
+                }
+            }
+            // Font scale
+            if let Ok(Some(font_size)) = storage.get_item("papillon_font_size") {
+                let scale = match font_size.as_str() {
+                    "small" => "0.9",
+                    "large" => "1.1",
+                    _ => "1.0",
+                };
+                if let Some(root) = doc
+                    .document_element()
+                    .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+                {
+                    let _ = root.style().set_property("--font-scale", scale);
+                }
+            }
+            // Reduce motion
+            if let Ok(Some(reduce_motion)) = storage.get_item("papillon_reduce_motion") {
+                if let Some(root) = doc.document_element() {
+                    let _ = root.set_attribute("data-reduce-motion", &reduce_motion);
+                }
+            }
+            // Compact density
+            if let Ok(Some(compact)) = storage.get_item("papillon_compact") {
+                if let Some(root) = doc.document_element() {
+                    let _ = root.set_attribute("data-compact", &compact);
+                }
+            }
         }
     }
 

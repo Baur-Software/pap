@@ -24,16 +24,22 @@ const VALID_CONFIG = JSON.stringify({
 
 /** Navigate to Settings > Templates tab and wait for content.
  *
- * Uses in-app SPA navigation (sidebar settings link click) so the Leptos router
- * handles the transition without a full page reload — this preserves in-memory mock
- * state (e.g. created templates) across navigation in the same test.
+ * Uses the topbar slide-panel for SPA navigation so that in-memory mock state
+ * (e.g. created templates) is preserved across navigation within the same test.
  */
 async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  await page.locator('a[href="/settings"]').click();
-  await expect(page.locator(".settings-tab", { hasText: "TEMPLATES" })).toBeVisible();
-  await page.locator(".settings-tab", { hasText: "TEMPLATES" }).click();
-  // Wait for the create form to appear (confirms tab content loaded)
-  await expect(page.locator('input[placeholder*="Name"]')).toBeVisible();
+  // If the settings nav is already visible we are already on the settings page;
+  // just click the Templates link directly.
+  const settingsNav = page.locator(".settings-nav");
+  const alreadyOnSettings = await settingsNav.isVisible().catch(() => false);
+  if (!alreadyOnSettings) {
+    // Open the topbar slide panel and navigate to All Settings via SPA link.
+    await page.locator(".topbar-brand").click();
+    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+    await expect(page.locator(".settings-nav")).toBeVisible({ timeout: 5000 });
+  }
+  await page.locator(".settings-nav-link").filter({ hasText: "Templates" }).click();
+  await expect(page.locator(".settings-nav-link.active").filter({ hasText: "Templates" })).toBeVisible();
 }
 
 /** Create a template through the UI form. */
@@ -162,17 +168,17 @@ test.describe("Templates", () => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Verify Templates tab exists and is clickable
-    const templatesTab = page.locator(".settings-tab", { hasText: "TEMPLATES" });
+    // Verify Templates nav link exists and is clickable
+    const templatesTab = page.locator(".settings-nav-link").filter({ hasText: "Templates" });
     await expect(templatesTab).toBeVisible();
     await templatesTab.click();
 
-    // Verify content loaded — the template name input should be visible
-    await expect(page.locator('input[placeholder*="Name"]')).toBeVisible();
+    // Verify active state
+    await expect(page.locator(".settings-nav-link.active").filter({ hasText: "Templates" })).toBeVisible();
 
-    // Verify other tabs still present (GENERAL, IDENTITY)
-    await expect(page.locator(".settings-tab", { hasText: "GENERAL" })).toBeVisible();
-    await expect(page.locator(".settings-tab", { hasText: "IDENTITY" })).toBeVisible();
+    // Verify other nav links still present (Profiles, Identity)
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Profiles" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Identity" })).toBeVisible();
   });
 
   test("JSON validation: reject malformed JSON", async ({ page }) => {
