@@ -112,6 +112,46 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  build-extension:
+    name: Build (browser extension)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "native"
+          cache-on-failure: true
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+      - name: Install wasm-pack
+        run: cargo binstall wasm-pack --no-confirm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install npm dependencies
+        working-directory: apps/papillon-extension
+        run: npm install
+      - name: Build extension WASM
+        working-directory: apps/papillon-extension
+        run: npm run build:wasm
+      - name: Build extension bundle
+        working-directory: apps/papillon-extension
+        run: npm run build
+      - name: Assert dist exists
+        run: |
+          [ -d apps/papillon-extension/dist ] && [ "$(ls -A apps/papillon-extension/dist)" ] \
+            && echo "Extension dist OK" \
+            || { echo "::error::Extension dist missing or empty"; exit 1; }
+
   docker-workspace:
     name: Docker workspace consistency
     runs-on: ubuntu-latest
