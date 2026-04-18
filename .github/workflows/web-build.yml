@@ -36,7 +36,7 @@ jobs:
           workspaces: "apps/papillon/frontend -> target"
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1
+        uses: cargo-bins/cargo-binstall@main
 
       - name: Cache trunk binary
         uses: actions/cache@v5

@@ -131,7 +131,7 @@ jobs:
           shared-key: "native"
           cache-on-failure: true
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1
+        uses: cargo-bins/cargo-binstall@main
       - name: Cache wasm-pack binary
         uses: actions/cache@v5
         with:
@@ -234,7 +234,7 @@ jobs:
           shared-key: "smoke-wasm"
           cache-on-failure: true
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1
+        uses: cargo-bins/cargo-binstall@main
       - name: Cache trunk binary
         uses: actions/cache@v5
         with:
