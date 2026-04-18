@@ -165,14 +165,16 @@ pap/
     pap-credential/       # W3C VC envelope, SD-JWT selective disclosure
     pap-credential-store/ # Encrypted vault for principal seeds, VCs, continuity tokens
     pap-marketplace/      # Agent advertisement, registry, discovery
-    pap-agents/           # Shared agent implementations (AgentExecutor trait)
+    pap-agents/           # AgentExecutor trait + TOML catalog (200+ agents)
     pap-proto/            # Protocol message types and envelope
-    pap-transport/        # HTTP client/server for 6-phase handshake
+    pap-transport/        # HTTP client/server for 6-phase handshake (OHTTP/HPKE)
     pap-federation/       # Cross-registry sync, announce, peer exchange
     pap-webauthn/         # WebAuthn signer abstraction + software fallback
+    pap-tee/              # Trusted Execution Environment attestation + simulation
+    pap-ecash/            # Privacy-preserving payment proofs (ecash / Lightning)
     pap-c/                # C FFI bindings (cdylib + staticlib)
     pap-wasm/             # WebAssembly bindings (@pap/sdk npm package)
-    pap-python/           # Python PyO3 bindings
+    pap-python/           # Python PyO3 bindings (async/await, PEP 561 stubs)
     papillon-shared/      # Shared models between Papillon frontend and backend
   packages/
     pap-ts/               # Pure TypeScript implementation (@pap/core)
@@ -219,7 +221,9 @@ pap/
 
 - `AgentExecutor` trait — Simplified 2-method interface (`meta()` + `execute(query)`) for agent implementations.
 - `SimpleAgent<E>` wrapper — Adapts any `AgentExecutor` into the full 6-phase `AgentHandler` protocol.
-- 14 built-in agents including `CredentialStoreExecutor` for vault operations via Schema.org JSON-LD.
+- `DynamicAgentHandler` — Routes requests to HTTP endpoints or LLM inference; normalizes schema.org JSON-LD responses.
+- TOML catalog — 200+ agents across culture, finance, food, geo, government, health, knowledge, science, search, and sports domains. No code required to add a new agent.
+- `IntentIndex` — Okapi BM25 semantic classifier (~50µs) mapping natural-language prompts to `schema:` action types. Used as the middle tier of the three-level intent routing chain.
 - Shared across Papillon and Chrysalis — agents are defined once, used everywhere.
 
 ### pap-marketplace
@@ -258,7 +262,21 @@ pap/
 
 - PyO3-based Python bindings for all PAP primitives.
 - Full access to DID generation, mandate delegation, and session lifecycle.
+- Native `async/await` support for all 6 `AgentClient` transport methods via PyO3 `experimental-async`.
 - PEP 561 type stubs (`py.typed` + `__init__.pyi`) for IDE autocomplete and static type checking (mypy, pyright, Pylance).
+
+### pap-tee
+
+- `TeeAttestation` — Attestation document envelope for Trusted Execution Environments (AWS Nitro, Azure CVM, Intel TDX).
+- `TeeVerifier` — Verify attestations against expected platform measurements.
+- `TeeSimulator` — Software simulation for development and testing without real TEE hardware.
+- Used by the Hardware-Constrained Principals extension (spec §14.4).
+
+### pap-ecash
+
+- Privacy-preserving payment proof primitives using blind RSA signatures.
+- `EcashToken` — Unlinkable ecash token that can be attached to a `Mandate.payment_proof`.
+- Integrates with the Lightning Network for off-chain settlement without linking payer identity.
 
 ### @pap/core (packages/pap-ts)
 
