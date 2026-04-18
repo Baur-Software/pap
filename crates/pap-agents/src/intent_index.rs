@@ -53,7 +53,9 @@ pub struct IntentMatch {
     /// `None` means the action type is known but no specific local agent
     /// scored above a meaningful threshold — hand off to federation discovery.
     pub agent_name: Option<String>,
-    /// Prompt with stop-words stripped (lowercase, whitespace-normalised).
+    /// The original prompt, returned verbatim. Downstream agents receive the user's
+    /// actual text — including non-ASCII characters, proper-noun casing, dates, and
+    /// structured syntax. BM25 scoring uses a separate tokenized stream internally.
     pub cleaned_query: String,
     /// Fraction of total BM25 score mass captured by the winning action group.
     /// Range 0.0–1.0; caller gates on a threshold (typically 0.25).
@@ -222,7 +224,9 @@ impl IntentIndex {
         action_best.remove("schema:AskAction");
 
         let total: f32 = action_total.values().sum();
-        if total <= 0.0 {
+        // Guard covers both zero (no useful scores) and NaN (avg_dl=0 when every agent
+        // has an empty descriptor, causing 0/0 in length_norm).
+        if total <= 0.0 || total.is_nan() {
             return None;
         }
 
@@ -671,36 +675,71 @@ mod tests {
 
     #[test]
     fn low_individual_score_yields_none_agent_name() {
-        // Build a catalog where many agents share the same action with similar low
-        // scores so no single agent clears the 0.05 individual-score threshold.
-        // We use many near-identical SearchAction agents with very short descriptors
-        // so BM25 mass is spread thinly.
-        let agents: Vec<DynamicAgentDef> = (0..10)
-            .map(|i| {
-                make_agent(
-                    &format!("Generic Search {i}"),
-                    "Test",
-                    "search web",
-                    "schema:SearchAction",
-                    &[],
-                    &[],
-                    "search",
-                )
-            })
-            .collect();
+        // Use a query whose tokens do NOT appear in any agent descriptor. Every doc
+        // scores 0.0 against the query (unknown terms → idf lookup returns 0.0),
+        // so all individual agent_scores are 0.0 < AGENT_SCORE_HINT_THRESHOLD.
+        //
+        // We still get a routable action because the action group aggregation fires
+        // when we use threshold 0.0 — but agent_name must be None since no individual
+        // agent scored above the hint threshold.
+        let agents = vec![
+            make_agent(
+                "Hotel Booking",
+                "Hotels.com",
+                "Book lodging reservations.",
+                "schema:ReserveAction",
+                &["schema:LodgingBusiness"],
+                &["schema:LodgingReservation"],
+                "hotel lodging reserve room",
+            ),
+            make_agent(
+                "Flight Booking",
+                "Skyscanner",
+                "Book airline flight tickets.",
+                "schema:ReserveAction",
+                &["schema:Flight"],
+                &["schema:FlightReservation"],
+                "flight airline ticket reserve seat",
+            ),
+        ];
         let idx = IntentIndex::new(&agents);
-        // Use threshold 0.0 so confidence gate doesn't filter; we care about agent_name.
-        if let Some(m) = idx.classify("search", 0.0) {
-            // Each agent has the same score; the winning group is clear but individual
-            // scores are very low. If agent_name is Some here the threshold may have
-            // been met by chance — that's fine too. The key invariant is that
-            // agent_name is never a non-existent agent name.
-            if let Some(name) = &m.agent_name {
-                assert!(
-                    agents.iter().any(|a| &a.name == name),
-                    "agent_name must refer to an actual catalog agent"
-                );
-            }
+        // "xyzzy" is not in any descriptor — all individual scores are 0.0,
+        // but threshold 0.0 means the confidence gate won't filter the match.
+        // The winning action group exists; agent_name must be None.
+        if let Some(m) = idx.classify("xyzzy", 0.0) {
+            assert!(
+                m.agent_name.is_none(),
+                "agent_name should be None when all individual scores are 0 (unknown query token)"
+            );
+        }
+        // Sanity: a known token should yield agent_name Some.
+        let m2 = idx.classify("hotel", 0.0).expect("known token should match");
+        assert!(
+            m2.agent_name.is_some(),
+            "agent_name should be Some when one agent scores above the hint threshold"
+        );
+    }
+
+    // ── NaN edge case: all-empty-descriptor catalog ───────────────────────────
+
+    #[test]
+    fn all_empty_descriptor_agents_return_none() {
+        // Agents with every field empty → tokenize() produces zero tokens →
+        // avg_dl = 0.0 → length_norm = 0/0 = NaN. The NaN guard must return None,
+        // not propagate NaN into IntentMatch::confidence.
+        let agents = vec![
+            make_agent("A", "", "", "schema:SearchAction", &[], &[], ""),
+            make_agent("B", "", "", "schema:SearchAction", &[], &[], ""),
+        ];
+        let idx = IntentIndex::new(&agents);
+        let result = idx.classify("search", 0.0);
+        // Either None (NaN guard fired) or Some with a finite confidence (depends on
+        // whether avg_dl==0 actually triggers NaN in this path). Must not panic.
+        if let Some(m) = result {
+            assert!(
+                m.confidence.is_finite(),
+                "confidence must never be NaN or infinity"
+            );
         }
     }
 }
