@@ -9,19 +9,19 @@ test.beforeEach(async ({ page }) => {
 // ── Top Bar & App Shell ──────────────────────────────────────
 
 test.describe("App shell", () => {
-  test("renders top bar with brand icon and status dot", async ({ page }) => {
+  test("renders top bar with brand icon and workflow toggle", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(page.locator(".topbar")).toBeVisible();
     await expect(page.locator(".topbar-brand-icon")).toBeVisible();
-    await expect(page.locator(".topbar-dot")).toBeVisible();
+    await expect(page.locator(".canvas-flip-toggle")).toBeVisible();
   });
 
-  test("shows orchestrator status dot in top bar", async ({ page }) => {
+  test("shows workflow toggle button in top bar right zone", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Mock returns "Ready" → topbar renders .topbar-dot.ready (no text, colour only)
-    await expect(page.locator(".topbar-dot.ready")).toBeVisible();
+    // Status dot replaced by canvas flip-toggle; default label is "⟳ Workflow"
+    await expect(page.locator(".canvas-flip-toggle")).toContainText("Workflow");
   });
 
   test("shows settings link in sidebar", async ({ page }) => {

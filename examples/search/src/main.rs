@@ -24,7 +24,7 @@ use pap_marketplace::{AgentAdvertisement, MarketplaceRegistry};
 
 fn main() {
     println!("=== PAP Search Example ===");
-    println!("Principal Agent Protocol v0.1 — End-to-end PoC\n");
+    println!("Principal Agent Protocol v0.8 — End-to-end PoC\n");
 
     // ─── Step 1: Principal Setup ────────────────────────────────────
     println!("Step 1: Principal generates keypair and DID document");
