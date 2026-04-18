@@ -116,11 +116,10 @@ impl IntentIndex {
                 let len = tokens.len();
                 // Pre-build the term-frequency map once at index time so classify()
                 // can borrow it directly instead of re-allocating per query.
-                let tf: HashMap<String, usize> =
-                    tokens.iter().fold(HashMap::new(), |mut m, t| {
-                        *m.entry(t.clone()).or_insert(0) += 1;
-                        m
-                    });
+                let tf: HashMap<String, usize> = tokens.iter().fold(HashMap::new(), |mut m, t| {
+                    *m.entry(t.clone()).or_insert(0) += 1;
+                    m
+                });
                 AgentDescriptor {
                     name: a.name.clone(),
                     action: a.action.clone(),
@@ -295,7 +294,10 @@ mod tests {
             requires_disclosure: vec![],
             returns: returns.iter().map(|s| s.to_string()).collect(),
             endpoint: Some(HttpEndpointConfig {
-                url_template: format!("https://example.com/api/{}", name.to_lowercase().replace(' ', "-")),
+                url_template: format!(
+                    "https://example.com/api/{}",
+                    name.to_lowercase().replace(' ', "-")
+                ),
                 method: HttpMethod::Get,
                 headers: Default::default(),
                 body_template: None,
@@ -427,7 +429,9 @@ mod tests {
     #[test]
     fn weather_in_tokyo_routes_to_check_action() {
         let idx = IntentIndex::new(&test_catalog());
-        let m = idx.classify("weather in Tokyo", 0.25).expect("should match");
+        let m = idx
+            .classify("weather in Tokyo", 0.25)
+            .expect("should match");
         assert_eq!(m.action, "schema:CheckAction");
         assert_eq!(m.agent_name.as_deref(), Some("Open-Meteo Weather"));
     }
@@ -526,7 +530,9 @@ mod tests {
         // cleaned_query must be the original prompt — downstream agents receive the
         // user's actual text, not a tokenized or lowercased derivative.
         let upper_prompt = "WEATHER IN TOKYO";
-        let m = idx.classify(upper_prompt, 0.25).expect("uppercase should match");
+        let m = idx
+            .classify(upper_prompt, 0.25)
+            .expect("uppercase should match");
         assert_eq!(
             m.cleaned_query, upper_prompt,
             "cleaned_query must equal the original prompt verbatim"
@@ -557,9 +563,14 @@ mod tests {
             "weather forecast temperature humidity wind",
         )];
         let idx = IntentIndex::new(&agents);
-        let m = idx.classify("weather in Paris", 0.25).expect("single agent should match");
+        let m = idx
+            .classify("weather in Paris", 0.25)
+            .expect("single agent should match");
         assert_eq!(m.action, "schema:CheckAction");
-        assert_eq!(m.confidence, 1.0, "sole action group must capture 100% of mass");
+        assert_eq!(
+            m.confidence, 1.0,
+            "sole action group must capture 100% of mass"
+        );
     }
 
     // ── P5: llm_instructions > 200 chars — safe truncation, no panic ─────────
@@ -580,7 +591,10 @@ mod tests {
         )];
         let idx = IntentIndex::new(&agents); // must not panic
         let result = idx.classify("weather forecast", 0.0);
-        assert!(result.is_some(), "should still match with long instructions");
+        assert!(
+            result.is_some(),
+            "should still match with long instructions"
+        );
     }
 
     /// Regression: UTF-8 multi-byte character at the 200-char boundary must
@@ -615,8 +629,8 @@ mod tests {
             "Test",
             "Minimal agent with no types declared.",
             "schema:SearchAction",
-            &[],     // empty object_types
-            &[],     // empty returns
+            &[], // empty object_types
+            &[], // empty returns
             "search web pages internet",
         )];
         let idx = IntentIndex::new(&agents);
@@ -713,7 +727,9 @@ mod tests {
             );
         }
         // Sanity: a known token should yield agent_name Some.
-        let m2 = idx.classify("hotel", 0.0).expect("known token should match");
+        let m2 = idx
+            .classify("hotel", 0.0)
+            .expect("known token should match");
         assert!(
             m2.agent_name.is_some(),
             "agent_name should be Some when one agent scores above the hint threshold"

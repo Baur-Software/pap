@@ -41,6 +41,7 @@ pub use dynamic::{
 pub use dynamic_handler::DynamicAgentHandler;
 pub use executor::{AgentExecutor, AgentMeta};
 pub use group_chat::GroupChatRoom;
+pub use intent_index::{IntentIndex, IntentMatch};
 #[cfg(feature = "candle")]
 pub use llm::BuiltInLlmClient;
 pub use llm::ExternalLlmClient;
@@ -52,5 +53,4 @@ pub use registry::{build_agents, AgentSet};
 pub use selection::{
     AgentSelector, AgentSelectorFactory, HistoricalProfile, MemoryInformedSelector, RandomSelector,
 };
-pub use intent_index::{IntentIndex, IntentMatch};
 pub use simple::SimpleAgent;
