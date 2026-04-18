@@ -52,14 +52,14 @@ test.describe("Web standalone: app shell", () => {
     await expect(page.locator(".canvas-flip-toggle")).toContainText("Workflow");
   });
 
-  test("navigation menu opens and shows links", async ({ page }) => {
+  test("navigation panel opens and shows links", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
     await page.locator(".topbar-brand").click();
-    await expect(page.locator(".menu-dropdown")).toBeVisible();
-    await expect(page.locator(".menu-dropdown >> text=Browse Registries")).toBeVisible();
-    await expect(page.locator(".menu-dropdown >> text=Settings")).toBeVisible();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" })).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" })).toBeVisible();
   });
 });
 
@@ -88,18 +88,22 @@ test.describe("Web standalone: canvas page", () => {
 // Navigate via sidebar settings link — http-server has no SPA fallback.
 
 test.describe("Web standalone: settings page", () => {
-  test("renders all settings tabs", async ({ page }) => {
+  test("renders settings left nav with all sections", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator('a[href="/settings"]').click();
 
-    await expect(page.locator(".settings-tab")).toHaveCount(6);
-    await expect(page.locator(".settings-tab").nth(0)).toHaveText("GENERAL");
-    await expect(page.locator(".settings-tab").nth(1)).toHaveText("PROFILES");
-    await expect(page.locator(".settings-tab").nth(2)).toHaveText("TEMPLATES");
-    await expect(page.locator(".settings-tab").nth(3)).toHaveText("IDENTITY");
-    await expect(page.locator(".settings-tab").nth(4)).toHaveText("ADVANCED");
-    await expect(page.locator(".settings-tab").nth(5)).toHaveText("MANDATES");
+    // Navigate to settings via slide panel
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" }).click();
+
+    await expect(page.locator(".settings-nav")).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Profiles" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Identity" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Model" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Access Control" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
 
   test("tabs are clickable and switch content", async ({ page }) => {

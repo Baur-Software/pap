@@ -24,19 +24,21 @@ test.describe("App shell", () => {
     await expect(page.locator(".canvas-flip-toggle")).toContainText("Workflow");
   });
 
-  test("shows settings link in sidebar", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-    await expect(page.locator('a[href="/settings"]')).toBeVisible();
-  });
-
-  test("brand button opens canvas dropdown and shows nav items", async ({ page }) => {
+  test("brand button opens slide panel with nav items", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await expect(page.locator(".menu-dropdown")).toBeVisible();
-    await expect(page.locator("text=Browse Registries")).toBeVisible();
-    await expect(page.locator(".menu-dropdown >> text=Settings")).toBeVisible();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
+    await expect(page.locator(".panel-section-label").first()).toContainText("Canvases");
+  });
+
+  test("slide panel shows navigate and settings sections", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await page.locator(".topbar-brand").click();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" })).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" })).toBeVisible();
   });
 
   test("shows status bar footer", async ({ page }) => {
