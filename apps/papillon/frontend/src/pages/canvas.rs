@@ -190,10 +190,21 @@ fn CanvasChatThread() -> impl IntoView {
         }
     };
 
+    // Only show messages belonging to the currently active canvas.
+    let active_messages = move || {
+        let active_id = canvas_state.current_canvas_id.get();
+        canvas_state
+            .canvas_messages
+            .get()
+            .into_iter()
+            .filter(|m| active_id.as_deref() == Some(m.canvas_id.as_str()))
+            .collect::<Vec<_>>()
+    };
+
     view! {
         <div class="canvas-chat-thread">
             <For
-                each=move || canvas_state.canvas_messages.get()
+                each=active_messages
                 key=|msg| msg.id.clone()
                 children=move |msg| {
                     let is_user = msg.role == "user";

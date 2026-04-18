@@ -777,7 +777,7 @@ impl CanvasState {
                 }
             };
 
-            let canvas_id: String = if records.is_empty() {
+            let active_canvas_id: String = if records.is_empty() {
                 // Create a default canvas.
                 match crate::bridge::invoke::<_, CanvasRecord>(
                     "canvas_create",
@@ -803,36 +803,39 @@ impl CanvasState {
                     }
                 }
             } else {
-                // Use the first (most recent) canvas; ensure it's in the reactive store.
-                let rec = &records[0];
-                let id = rec.id.clone();
-                let now = rec.created_at.clone();
-                let canvas = Canvas {
-                    id: id.clone(),
-                    name: rec.name.clone(),
-                    blocks: Vec::new(),
-                    created_at: now.clone(),
-                    updated_at: now,
-                };
+                // Load ALL canvases into the reactive store so the sidebar is complete.
                 canvases.update(|cs| {
-                    if !cs.iter().any(|c| c.id == id) {
-                        cs.push(canvas);
+                    for rec in &records {
+                        if cs.iter().any(|c| c.id == rec.id) {
+                            continue;
+                        }
+                        let now = rec.created_at.clone();
+                        cs.push(Canvas {
+                            id: rec.id.clone(),
+                            name: rec.name.clone(),
+                            blocks: Vec::new(),
+                            created_at: now.clone(),
+                            updated_at: now,
+                        });
                     }
                 });
+                // Activate the first (most recent) canvas if none is already active.
+                let first_id = records[0].id.clone();
                 if current_canvas_id.get_untracked().is_none() {
-                    current_canvas_id.set(Some(id.clone()));
+                    current_canvas_id.set(Some(first_id.clone()));
                 }
-                id
+                first_id
             };
 
-            // 2. Load blocks for the active canvas.
+            // 2. Load blocks for the active canvas only (lazy — blocks for other
+            //    canvases are loaded on demand when the user switches to them).
             match crate::bridge::invoke::<_, Vec<papillon_shared::types::CanvasBlockRecord>>(
                 "canvas_blocks_load",
-                &serde_json::json!({ "canvasId": canvas_id }),
+                &serde_json::json!({ "canvasId": active_canvas_id }),
             ).await {
                 Ok(block_records) => {
                     canvases.update(|cs| {
-                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == active_canvas_id) {
                             for rec in block_records {
                                 if canvas.blocks.iter().any(|b| b.id == rec.id) {
                                     continue;
@@ -872,16 +875,32 @@ impl CanvasState {
                 }
             }
 
-            // 3. Load messages for the active canvas.
-            match crate::bridge::invoke::<_, Vec<CanvasMessageRecord>>(
-                "canvas_messages_load",
-                &serde_json::json!({ "canvasId": canvas_id }),
-            ).await {
-                Ok(msgs) => {
-                    canvas_messages.set(msgs);
-                }
-                Err(e) => {
-                    leptos::logging::warn!("canvas_messages_load failed: {}", e);
+            // 3. Load messages for ALL canvases so the per-canvas filter in
+            //    CanvasChatThread has complete data regardless of which canvas
+            //    is active.  Messages are keyed by id so we skip duplicates.
+            let all_canvas_ids: Vec<String> = canvases
+                .get_untracked()
+                .iter()
+                .map(|c| c.id.clone())
+                .collect();
+
+            for cid in all_canvas_ids {
+                match crate::bridge::invoke::<_, Vec<CanvasMessageRecord>>(
+                    "canvas_messages_load",
+                    &serde_json::json!({ "canvasId": cid }),
+                ).await {
+                    Ok(msgs) => {
+                        canvas_messages.update(|store| {
+                            for msg in msgs {
+                                if !store.iter().any(|m| m.id == msg.id) {
+                                    store.push(msg);
+                                }
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        leptos::logging::warn!("canvas_messages_load failed for {}: {}", cid, e);
+                    }
                 }
             }
         });
