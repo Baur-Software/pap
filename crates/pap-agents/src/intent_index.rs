@@ -162,6 +162,10 @@ impl IntentIndex {
     ///
     /// Returns `Some(IntentMatch)` when `confidence >= threshold`, `None` otherwise.
     /// Caller falls through to on-device/federation NLU on `None`.
+    ///
+    /// `IntentMatch::cleaned_query` is the original `prompt` unchanged — downstream
+    /// agents receive the user's actual text, not a tokenized/lowercased derivative.
+    /// BM25 scoring uses a separate token stream internally.
     pub fn classify(&self, prompt: &str, threshold: f32) -> Option<IntentMatch> {
         if self.docs.is_empty() {
             return None;
@@ -172,7 +176,9 @@ impl IntentIndex {
             return None;
         }
 
-        let cleaned_query = query_tokens.join(" ");
+        // Preserve the original prompt for downstream agents — tokenization would corrupt
+        // non-ASCII characters, proper-noun casing, dates, and structured syntax.
+        let cleaned_query = prompt.to_owned();
 
         // BM25 score for each document — uses pre-built tf maps (zero allocations per doc).
         let scores: Vec<f32> = self
@@ -224,6 +230,12 @@ impl IntentIndex {
         let (&best_action, &best_group_score) = action_total
             .iter()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))?;
+
+        // Guard against malformed or adversarially-crafted agent catalog entries.
+        // All routable actions must be valid schema.org action URIs.
+        if !best_action.starts_with("schema:") || best_action.len() <= 7 {
+            return None;
+        }
 
         let confidence = best_group_score / total;
 
@@ -505,17 +517,26 @@ mod tests {
     }
 
     #[test]
-    fn cleaned_query_is_lowercase_whitespace_normalised() {
+    fn cleaned_query_preserves_original_prompt() {
         let idx = IntentIndex::new(&test_catalog());
-        let upper = idx.classify("WEATHER IN TOKYO", 0.25);
-        let lower = idx.classify("weather in tokyo", 0.25);
-        assert!(upper.is_some(), "uppercase should match");
-        assert!(lower.is_some(), "lowercase should match");
+        // cleaned_query must be the original prompt — downstream agents receive the
+        // user's actual text, not a tokenized or lowercased derivative.
+        let upper_prompt = "WEATHER IN TOKYO";
+        let m = idx.classify(upper_prompt, 0.25).expect("uppercase should match");
         assert_eq!(
-            upper.unwrap().cleaned_query,
-            lower.unwrap().cleaned_query,
-            "cleaned_query must be case-insensitive"
+            m.cleaned_query, upper_prompt,
+            "cleaned_query must equal the original prompt verbatim"
         );
+        // Non-ASCII must survive intact — no tokenizer corruption.
+        let non_ascii = "weather in São Paulo";
+        let idx2 = IntentIndex::new(&test_catalog());
+        let m2 = idx2.classify(non_ascii, 0.25);
+        if let Some(m2) = m2 {
+            assert_eq!(m2.cleaned_query, non_ascii);
+        }
+        // Routing is case-insensitive (both should match if query is recognizable).
+        let lower = idx.classify("weather in tokyo", 0.25);
+        assert!(lower.is_some(), "lowercase should also match");
     }
 
     // ── P3: single-agent catalog ──────────────────────────────────────────────
