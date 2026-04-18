@@ -173,9 +173,12 @@ impl AgentHandler for DynamicAgentHandler {
             };
 
             for (key, value_template) in &endpoint.headers {
-                let resolved = self.agent_props.iter().fold(value_template.clone(), |acc, (name, val)| {
-                    acc.replace(&format!("{{{}}}", name), val)
-                });
+                let resolved = self
+                    .agent_props
+                    .iter()
+                    .fold(value_template.clone(), |acc, (name, val)| {
+                        acc.replace(&format!("{{{}}}", name), val)
+                    });
                 builder = builder.header(key.as_str(), resolved);
             }
 
@@ -590,9 +593,9 @@ mod tests {
         let mut props: HashMap<String, String> = HashMap::new();
         props.insert("api_token".to_string(), "hf_abc123".to_string());
         let template = "Bearer {api_token}".to_string();
-        let resolved = props
-            .iter()
-            .fold(template, |acc, (name, val)| acc.replace(&format!("{{{}}}", name), val));
+        let resolved = props.iter().fold(template, |acc, (name, val)| {
+            acc.replace(&format!("{{{}}}", name), val)
+        });
         assert_eq!(resolved, "Bearer hf_abc123");
     }
 

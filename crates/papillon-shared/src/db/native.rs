@@ -1787,10 +1787,7 @@ impl DatabaseOps for NativeDatabase {
         Ok(())
     }
 
-    fn list_canvas_messages(
-        &self,
-        canvas_id: &str,
-    ) -> Result<Vec<CanvasMessageRecord>, DbError> {
+    fn list_canvas_messages(&self, canvas_id: &str) -> Result<Vec<CanvasMessageRecord>, DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let mut stmt = conn
             .prepare(

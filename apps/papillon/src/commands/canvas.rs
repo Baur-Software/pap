@@ -214,9 +214,7 @@ async fn classify_intent(
     }
 
     // Resolve NLU agent — scoring drives priority, no name hint needed
-    let Ok(resolved) =
-        resolve_agent(state, "schema:AnalyzeAction", "", &[]).await
-    else {
+    let Ok(resolved) = resolve_agent(state, "schema:AnalyzeAction", "", &[]).await else {
         nlu_fallback!();
     };
 
@@ -279,7 +277,11 @@ async fn classify_intent(
     }
 
     let (action_type, preferred_agent) = map_label_to_action(label);
-    (action_type.to_owned(), preferred_agent.to_owned(), effective_query)
+    (
+        action_type.to_owned(),
+        preferred_agent.to_owned(),
+        effective_query,
+    )
 }
 
 /// Score an agent candidate using profile history and local preference signals.
@@ -326,7 +328,10 @@ fn score_agent(
                 substrate_delta += 0.4;
             }
             // Fully on-device BuiltIn model — most private, highest bonus.
-            if matches!(inference_substrate, papillon_shared::LlmProvider::BuiltIn { .. }) {
+            if matches!(
+                inference_substrate,
+                papillon_shared::LlmProvider::BuiltIn { .. }
+            ) {
                 substrate_delta += 0.2;
             }
         } else {
@@ -621,8 +626,18 @@ async fn process_prompt(
     preferred: &str,
     query: &str,
 ) -> Result<(String, serde_json::Value, bool, String), PapillonError> {
-    process_prompt_inner(app, state, prompt_id, block_id, action_type, preferred, query, &[], 0)
-        .await
+    process_prompt_inner(
+        app,
+        state,
+        prompt_id,
+        block_id,
+        action_type,
+        preferred,
+        query,
+        &[],
+        0,
+    )
+    .await
 }
 
 /// Inner implementation with exclusion list and retry budget for reflection.
@@ -852,8 +867,7 @@ pub async fn canvas_prompt(
 ) -> Result<serde_json::Value, PapillonError> {
     // Classify intent via federation (NLU agent or LLM classifier).
     // HTTP URLs are still routed deterministically inside classify_intent.
-    let (action_type, preferred, query) =
-        classify_intent(&app, &state, &block_id, &text).await;
+    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
 
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
     if action_type == "schema:DatasetAction" {
@@ -863,9 +877,16 @@ pub async fn canvas_prompt(
         .await;
     }
 
-    let (schema_type, content, preference_guided, agent_did) =
-        process_prompt(&app, &state, &prompt_id, &block_id, &action_type, &preferred, &query)
-            .await?;
+    let (schema_type, content, preference_guided, agent_did) = process_prompt(
+        &app,
+        &state,
+        &prompt_id,
+        &block_id,
+        &action_type,
+        &preferred,
+        &query,
+    )
+    .await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -906,10 +927,17 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (action_type, preferred, query) =
-        classify_intent(&app, &state, &block_id, &text).await;
-    let (schema_type, content, preference_guided, agent_did) =
-        process_prompt(&app, &state, "", &block_id, &action_type, &preferred, &query).await?;
+    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
+    let (schema_type, content, preference_guided, agent_did) = process_prompt(
+        &app,
+        &state,
+        "",
+        &block_id,
+        &action_type,
+        &preferred,
+        &query,
+    )
+    .await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -982,8 +1010,7 @@ pub async fn canvas_plan_prompt(
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
     // Classify intent once — result is reused for plan-building and handshake.
-    let (action_type, preferred, query) =
-        classify_intent(&app, &state, &block_id, &text).await;
+    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
 
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
     if action_type == "schema:DatasetAction" {
@@ -1036,9 +1063,16 @@ pub async fn canvas_plan_prompt(
 
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
-        let (schema_type, content, preference_guided, agent_did) =
-            process_prompt(&app, &state, &prompt_id, &block_id, &action_type, &preferred, &query)
-                .await?;
+        let (schema_type, content, preference_guided, agent_did) = process_prompt(
+            &app,
+            &state,
+            &prompt_id,
+            &block_id,
+            &action_type,
+            &preferred,
+            &query,
+        )
+        .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -1106,9 +1140,16 @@ pub async fn canvas_plan_prompt(
         );
 
         // Run the full handshake.
-        let (schema_type, content, preference_guided, agent_did) =
-            process_prompt(&app, &state, &prompt_id, &block_id, &action_type, &preferred, &query)
-                .await?;
+        let (schema_type, content, preference_guided, agent_did) = process_prompt(
+            &app,
+            &state,
+            &prompt_id,
+            &block_id,
+            &action_type,
+            &preferred,
+            &query,
+        )
+        .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -1221,10 +1262,7 @@ pub async fn canvas_create(
 
 /// Delete a canvas and all its blocks and messages.
 #[tauri::command]
-pub async fn canvas_delete(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<(), PapillonError> {
+pub async fn canvas_delete(state: State<'_, AppState>, id: String) -> Result<(), PapillonError> {
     state
         .db
         .delete_canvas(&id)
@@ -1302,10 +1340,7 @@ pub async fn canvas_block_resolve(
     mandate_expires_at: Option<String>,
 ) -> Result<(), PapillonError> {
     // Load existing block to preserve immutable fields.
-    let blocks = state
-        .db
-        .list_canvas_blocks("")
-        .unwrap_or_default();
+    let blocks = state.db.list_canvas_blocks("").unwrap_or_default();
     // We need to load by iterating all canvases — use a direct lookup approach.
     // Since we need the canvas_id, load the block from all canvases by scanning.
     // Alternatively, do a targeted upsert using the block_id as primary key.
@@ -1330,8 +1365,8 @@ pub async fn canvas_block_resolve(
             break;
         }
     }
-    let existing = found_block
-        .ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
+    let existing =
+        found_block.ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
     let updated = papillon_shared::CanvasBlockRecord {
         schema_type: Some(schema_type),
         content_json: Some(content_json),
@@ -1370,8 +1405,8 @@ pub async fn canvas_block_fail(
             break;
         }
     }
-    let existing = found_block
-        .ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
+    let existing =
+        found_block.ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
     let updated = papillon_shared::CanvasBlockRecord {
         block_state: "failed".to_string(),
         content_json: Some(serde_json::json!({"reason": reason}).to_string()),
