@@ -72,6 +72,7 @@ pub fn RecoverySetup() -> impl IntoView {
             // the user is not stuck.  On failure the DB flag is not set and the
             // prompt will appear again on next launch, which is acceptable.
             recovery.setup_complete.set(true);
+            recovery.needs_renewal.set(false);
             recovery.show_setup.set(false);
             step.set(1);
             recovery.shards.set(Vec::new());
@@ -97,6 +98,16 @@ pub fn RecoverySetup() -> impl IntoView {
                         <div class="setup-boot-line">"> Shamir M-of-N secret sharing over GF(2^8)"</div>
                         <div class="setup-boot-line">"> Spec §13.5 — no central authority"</div>
                     </div>
+
+                    // Renewal notice — shown only when the previous ceremony was used in recovery.
+                    <Show when=move || recovery.needs_renewal.get()>
+                        <div style="background: var(--surface); border: 1px solid var(--gold); padding: 0.75rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                            <span style="color: var(--gold);">"> RENEWAL_REQUIRED"</span>
+                            " — your previous shards were used in a recovery. "
+                            "The old shards are now spent and must be replaced. "
+                            "Complete this ceremony to distribute a fresh set to your trustees."
+                        </div>
+                    </Show>
 
                     // Step indicator
                     <div class="setup-step-strip">
