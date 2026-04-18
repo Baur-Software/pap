@@ -19,55 +19,115 @@ use templates_tab::TemplatesTab;
 
 #[component]
 pub fn SettingsPage() -> impl IntoView {
-    let active_tab = RwSignal::new("general".to_string());
+    let active_tab = RwSignal::new("profiles".to_string());
 
     view! {
-        <div class="settings-page">
-            <div class="settings-tab-bar">
+        <div class="settings-page settings-layout">
+
+            // ── Left nav ──
+            <nav class="settings-nav">
+
+                <div class="settings-nav-group-label">"Account"</div>
                 <button
-                    class=move || if active_tab.get() == "general" { "settings-tab active" } else { "settings-tab" }
-                    on:click=move |_| active_tab.set("general".into())
-                >"GENERAL"</button>
-                <button
-                    class=move || if active_tab.get() == "profiles" { "settings-tab active" } else { "settings-tab" }
+                    class=move || if active_tab.get() == "profiles" { "settings-nav-link active" } else { "settings-nav-link" }
                     on:click=move |_| active_tab.set("profiles".into())
-                >"PROFILES"</button>
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </span>
+                    "Profiles"
+                </button>
                 <button
-                    class=move || if active_tab.get() == "templates" { "settings-tab active" } else { "settings-tab" }
-                    on:click=move |_| active_tab.set("templates".into())
-                >"TEMPLATES"</button>
-                <button
-                    class=move || if active_tab.get() == "identity" { "settings-tab active" } else { "settings-tab" }
+                    class=move || if active_tab.get() == "identity" { "settings-nav-link active" } else { "settings-nav-link" }
                     on:click=move |_| active_tab.set("identity".into())
-                >"IDENTITY"</button>
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </span>
+                    "Identity"
+                </button>
+
+                <div class="settings-nav-divider" />
+                <div class="settings-nav-group-label">"AI"</div>
                 <button
-                    class=move || if active_tab.get() == "advanced" { "settings-tab active" } else { "settings-tab" }
+                    class=move || if active_tab.get() == "model" { "settings-nav-link active" } else { "settings-nav-link" }
+                    on:click=move |_| active_tab.set("model".into())
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                    </span>
+                    "Model"
+                </button>
+                <button
+                    class=move || if active_tab.get() == "templates" { "settings-nav-link active" } else { "settings-nav-link" }
+                    on:click=move |_| active_tab.set("templates".into())
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </span>
+                    "Templates"
+                </button>
+
+                <div class="settings-nav-divider" />
+                <div class="settings-nav-group-label">"Security"</div>
+                <button
+                    class=move || if active_tab.get() == "access-control" { "settings-nav-link active" } else { "settings-nav-link" }
+                    on:click=move |_| active_tab.set("access-control".into())
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </span>
+                    "Access Control"
+                </button>
+                <button
+                    class=move || if active_tab.get() == "advanced" { "settings-nav-link active" } else { "settings-nav-link" }
                     on:click=move |_| active_tab.set("advanced".into())
-                >"ADVANCED"</button>
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </span>
+                    "Advanced"
+                </button>
+
+                <div class="settings-nav-divider" />
+                <div class="settings-nav-group-label">"Appearance"</div>
                 <button
-                    class=move || if active_tab.get() == "mandates" { "settings-tab active" } else { "settings-tab" }
-                    on:click=move |_| active_tab.set("mandates".into())
-                >"MANDATES"</button>
+                    class=move || if active_tab.get() == "appearance" { "settings-nav-link active" } else { "settings-nav-link" }
+                    on:click=move |_| active_tab.set("appearance".into())
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    </span>
+                    "Appearance"
+                </button>
+
+            </nav>
+
+            // ── Content ──
+            <div class="settings-content">
+                <Show when=move || active_tab.get() == "profiles">
+                    <ProfilesTab />
+                </Show>
+                <Show when=move || active_tab.get() == "identity">
+                    <IdentityTab />
+                </Show>
+                <Show when=move || active_tab.get() == "model">
+                    <GeneralTab />
+                </Show>
+                <Show when=move || active_tab.get() == "templates">
+                    <TemplatesTab />
+                </Show>
+                <Show when=move || active_tab.get() == "access-control">
+                    <MandateBuilderTab />
+                </Show>
+                <Show when=move || active_tab.get() == "advanced">
+                    <AdvancedTab />
+                </Show>
+                <Show when=move || active_tab.get() == "appearance">
+                    <AppearanceTab />
+                </Show>
             </div>
 
-            <Show when=move || active_tab.get() == "general">
-                <GeneralTab />
-            </Show>
-            <Show when=move || active_tab.get() == "profiles">
-                <ProfilesTab />
-            </Show>
-            <Show when=move || active_tab.get() == "templates">
-                <TemplatesTab />
-            </Show>
-            <Show when=move || active_tab.get() == "identity">
-                <IdentityTab />
-            </Show>
-            <Show when=move || active_tab.get() == "advanced">
-                <AdvancedTab />
-            </Show>
-            <Show when=move || active_tab.get() == "mandates">
-                <MandateBuilderTab />
-            </Show>
         </div>
     }
 }
@@ -1499,6 +1559,230 @@ fn MandateBuilderTab() -> impl IntoView {
                 <div class="mandate-preview-note">
                     "Mandates are co-signed by the principal and scoped by TTL. "
                     "This preview shows the unsigned structure."
+                </div>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn AppearanceTab() -> impl IntoView {
+    // Read initial values from localStorage / current data-theme
+    let stored_theme = web_sys::window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|s| s.get_item("papillon_theme").ok().flatten())
+        .unwrap_or_else(|| "dark".to_string());
+
+    let stored_accent = web_sys::window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|s| s.get_item("papillon_accent").ok().flatten())
+        .unwrap_or_else(|| "#6c5ce7".to_string());
+
+    let stored_font_size = web_sys::window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|s| s.get_item("papillon_font_size").ok().flatten())
+        .unwrap_or_else(|| "medium".to_string());
+
+    let stored_reduce_motion = web_sys::window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|s| s.get_item("papillon_reduce_motion").ok().flatten())
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    let stored_compact = web_sys::window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|s| s.get_item("papillon_compact").ok().flatten())
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    let theme         = RwSignal::new(stored_theme);
+    let accent        = RwSignal::new(stored_accent);
+    let font_size     = RwSignal::new(stored_font_size);
+    let reduce_motion = RwSignal::new(stored_reduce_motion);
+    let compact       = RwSignal::new(stored_compact);
+
+    // Helpers
+    let apply_theme = move |t: &'static str| {
+        theme.set(t.to_string());
+        if let Some(win) = web_sys::window() {
+            if let Some(doc) = win.document() {
+                let _ = doc.document_element().map(|el| el.set_attribute("data-theme", t));
+            }
+            if let Ok(Some(s)) = win.local_storage() {
+                let _ = s.set_item("papillon_theme", t);
+            }
+        }
+    };
+
+    let apply_accent = move |color: &'static str| {
+        accent.set(color.to_string());
+        if let Some(win) = web_sys::window() {
+            if let Some(doc) = win.document() {
+                let style = doc.document_element()
+                    .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+                    .map(|el| el.style());
+                if let Some(style) = style {
+                    let _ = style.set_property("--purple", color);
+                }
+            }
+            if let Ok(Some(s)) = win.local_storage() {
+                let _ = s.set_item("papillon_accent", color);
+            }
+        }
+    };
+
+    let apply_font_size = move |size: &'static str| {
+        let scale = match size { "small" => "0.9", "large" => "1.1", _ => "1.0" };
+        font_size.set(size.to_string());
+        if let Some(win) = web_sys::window() {
+            if let Some(doc) = win.document() {
+                let style = doc.document_element()
+                    .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+                    .map(|el| el.style());
+                if let Some(style) = style {
+                    let _ = style.set_property("--font-scale", scale);
+                }
+            }
+            if let Ok(Some(s)) = win.local_storage() {
+                let _ = s.set_item("papillon_font_size", size);
+            }
+        }
+    };
+
+    let toggle_reduce_motion = move |_| {
+        let next = !reduce_motion.get_untracked();
+        reduce_motion.set(next);
+        if let Some(win) = web_sys::window() {
+            if let Some(doc) = win.document() {
+                let _ = doc.document_element()
+                    .map(|el| el.set_attribute("data-reduce-motion", if next { "true" } else { "false" }));
+            }
+            if let Ok(Some(s)) = win.local_storage() {
+                let _ = s.set_item("papillon_reduce_motion", if next { "true" } else { "false" });
+            }
+        }
+    };
+
+    let toggle_compact = move |_| {
+        let next = !compact.get_untracked();
+        compact.set(next);
+        if let Some(win) = web_sys::window() {
+            if let Some(doc) = win.document() {
+                let _ = doc.document_element()
+                    .map(|el| el.set_attribute("data-compact", if next { "true" } else { "false" }));
+            }
+            if let Ok(Some(s)) = win.local_storage() {
+                let _ = s.set_item("papillon_compact", if next { "true" } else { "false" });
+            }
+        }
+    };
+
+    view! {
+        <div class="settings-section-title">"Appearance"</div>
+        <p class="settings-section-desc">"Customize how Papillon looks. Changes apply immediately."</p>
+
+        <div class="settings-group">
+            // Theme
+            <div class="settings-row">
+                <div class="settings-row-label">
+                    <strong>"Theme"</strong>
+                    <span>"Light or dark interface, or follow your system preference"</span>
+                </div>
+                <div class="settings-row-control">
+                    <div class="appearance-theme-pills">
+                        <button
+                            class=move || if theme.get() == "light" { "appearance-theme-pill active" } else { "appearance-theme-pill" }
+                            on:click=move |_| apply_theme("light")
+                        >"Light"</button>
+                        <button
+                            class=move || if theme.get() == "dark" { "appearance-theme-pill active" } else { "appearance-theme-pill" }
+                            on:click=move |_| apply_theme("dark")
+                        >"Dark"</button>
+                        <button
+                            class=move || if theme.get() == "auto" { "appearance-theme-pill active" } else { "appearance-theme-pill" }
+                            on:click=move |_| apply_theme("auto")
+                        >"Auto"</button>
+                    </div>
+                </div>
+            </div>
+
+            // Accent color
+            <div class="settings-row">
+                <div class="settings-row-label">
+                    <strong>"Accent color"</strong>
+                    <span>"Used for active states, highlights, and interactive elements"</span>
+                </div>
+                <div class="settings-row-control">
+                    <div class="appearance-swatches">
+                        <button class=move || if accent.get() == "#6c5ce7" { "appearance-swatch active" } else { "appearance-swatch" }
+                            style="background:#6c5ce7" title="Purple (default)" on:click=move |_| apply_accent("#6c5ce7") />
+                        <button class=move || if accent.get() == "#00b894" { "appearance-swatch active" } else { "appearance-swatch" }
+                            style="background:#00b894" title="Teal" on:click=move |_| apply_accent("#00b894") />
+                        <button class=move || if accent.get() == "#e8706a" { "appearance-swatch active" } else { "appearance-swatch" }
+                            style="background:#e8706a" title="Coral" on:click=move |_| apply_accent("#e8706a") />
+                        <button class=move || if accent.get() == "#fdcb6e" { "appearance-swatch active" } else { "appearance-swatch" }
+                            style="background:#fdcb6e" title="Gold" on:click=move |_| apply_accent("#fdcb6e") />
+                        <button class=move || if accent.get() == "#74b9ff" { "appearance-swatch active" } else { "appearance-swatch" }
+                            style="background:#74b9ff" title="Blue" on:click=move |_| apply_accent("#74b9ff") />
+                    </div>
+                </div>
+            </div>
+
+            // Font size
+            <div class="settings-row">
+                <div class="settings-row-label">
+                    <strong>"Font size"</strong>
+                    <span>"Base interface text size"</span>
+                </div>
+                <div class="settings-row-control">
+                    <select
+                        class="appearance-select"
+                        on:change=move |e| {
+                            let val = event_target_value(&e);
+                            match val.as_str() {
+                                "small" => apply_font_size("small"),
+                                "large" => apply_font_size("large"),
+                                _ => apply_font_size("medium"),
+                            }
+                        }
+                        prop:value=move || font_size.get()
+                    >
+                        <option value="small">"Small"</option>
+                        <option value="medium">"Medium"</option>
+                        <option value="large">"Large"</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            // Reduce motion
+            <div class="settings-row">
+                <div class="settings-row-label">
+                    <strong>"Reduce motion"</strong>
+                    <span>"Disable slide and fade animations"</span>
+                </div>
+                <div class="settings-row-control">
+                    <button
+                        class=move || if reduce_motion.get() { "appearance-toggle on" } else { "appearance-toggle" }
+                        on:click=toggle_reduce_motion
+                        aria-label="Toggle reduce motion"
+                    />
+                </div>
+            </div>
+
+            // Compact density
+            <div class="settings-row">
+                <div class="settings-row-label">
+                    <strong>"Compact density"</strong>
+                    <span>"Tighter spacing throughout the interface"</span>
+                </div>
+                <div class="settings-row-control">
+                    <button
+                        class=move || if compact.get() { "appearance-toggle on" } else { "appearance-toggle" }
+                        on:click=toggle_compact
+                        aria-label="Toggle compact density"
+                    />
                 </div>
             </div>
         </div>
