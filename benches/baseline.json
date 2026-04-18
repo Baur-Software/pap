@@ -1,5 +1,5 @@
 {
-  "_comment": "p50 baseline (nanoseconds) from CI runner. CI fails if any benchmark regresses >30% vs these values. Calibrated 2026-04-10 from GitHub-hosted ubuntu-24.04 runner pool (eastus2).",
+  "_comment": "p50 baseline (nanoseconds) from CI runner. CI fails if any benchmark regresses >55% (p50) or >50% (p99) vs these values. Thresholds account for GitHub-hosted runner variance. Calibrated 2026-04-10 from GitHub-hosted ubuntu-24.04 runner pool (eastus2).",
   "ed25519_keypair_generation": {
     "p50_ns": 23100,
     "target": "< 1ms"

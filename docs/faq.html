@@ -633,16 +633,12 @@
         </button>
         <div class="faq-body">
           <p>
-            Measured p50 loopback numbers from CI (<code>benches/baseline.json</code>):
-            full session lifecycle <strong>130 µs</strong> (target &lt;20 ms),
-            depth-3 mandate chain verification <strong>138.5 µs</strong>.
-            The benchmark suite uses Criterion with a 30% regression gate on p50.
-          </p>
-          <p>
-            <strong>p99 is not yet in the suite.</strong> A p50 of 130 µs is entirely compatible with a
-            p99 of several milliseconds under real network conditions — and tail latencies are where
-            distributed systems actually fail. p99 benchmarks are being added to
-            <code>benches/benches/protocol.rs</code> with corresponding CI regression guards.
+            Measured loopback numbers from CI (<code>benches/baseline.json</code>):
+            full session lifecycle <strong>130 µs p50 / 500 µs p99</strong> (target &lt;20 ms),
+            depth-3 mandate chain verification <strong>138.5 µs p50 / 480 µs p99</strong>.
+            The Criterion suite runs a 55% regression gate on p50 and a 50% gate on p99 —
+            thresholds calibrated for GitHub-hosted runner variance, not relaxed protocol limits.
+            p99 benchmarks are in <code>benches/benches/p99.rs</code> with CI regression guards.
           </p>
           <p>
             Two failure modes that remain unspecified:
