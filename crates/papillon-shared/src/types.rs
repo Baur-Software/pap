@@ -461,6 +461,17 @@ pub struct SetupState {
 
 // ── Canvas block types ────────────────────────────────────
 
+/// A suggested follow-up action shown in the Canvas Guide block.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GuideSuggestion {
+    /// Display label shown as a pill button.
+    pub label: String,
+    /// Prompt text to prefill into the topbar when clicked (text-only suggestion).
+    pub prompt_template: String,
+    /// If set, clicking runs this saved pipeline ID directly.
+    pub saved_pipeline_id: Option<String>,
+}
+
 /// The state of a canvas block during the PAP handshake lifecycle.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum BlockState {
@@ -490,6 +501,15 @@ pub enum BlockState {
     Outcome {
         /// Block IDs of the agent blocks that contributed to this outcome.
         provenance_block_ids: Vec<String>,
+    },
+    /// Auto-generated canvas context block.
+    /// Pinned at position 0 with stable id = "guide-{canvas_id}".
+    /// Updated in place whenever another block resolves.
+    Guide {
+        /// Summary sentence: "N results from {agents} covering {types}".
+        summary: String,
+        /// 3–5 suggested follow-up actions.
+        suggestions: Vec<GuideSuggestion>,
     },
 }
 

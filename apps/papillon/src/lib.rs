@@ -210,6 +210,7 @@ pub fn run() {
             commands::canvas::canvas_blocks_load,
             commands::canvas::canvas_message_add,
             commands::canvas::canvas_messages_load,
+            commands::canvas::canvas_generate_guide,
             commands::dataset_discovery::canvas_discover_datasets,
             commands::dataset_discovery::list_dataset_agents,
             commands::pipeline::run_pipeline,

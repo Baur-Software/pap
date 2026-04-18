@@ -156,8 +156,9 @@ fn SourceChip(block: CanvasBlock) -> impl IntoView {
                                 .into_iter()
                                 .map(|t| {
                                     let name = t.template_name.clone();
+                                    let name2 = name.clone();
                                     view! {
-                                        <option value={name.clone()}>{name}</option>
+                                        <option value={name}>{name2}</option>
                                     }
                                 })
                                 .collect::<Vec<_>>()

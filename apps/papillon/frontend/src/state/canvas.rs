@@ -715,8 +715,14 @@ impl CanvasState {
     /// When the block transitions to Resolved or Failed, calls the
     /// corresponding Tauri persistence command (canvas_block_resolve /
     /// canvas_block_fail) via spawn_local — fire-and-forget, errors logged.
+    ///
+    /// When a canvas reaches 2+ resolved blocks, triggers `canvas_generate_guide`
+    /// and upserts the Guide block at position 0.
     pub fn apply_block_event(&self, update: BlockUpdate) {
         let current_id = self.current_canvas_id;
+        let canvases = self.canvases;
+        let mut guide_canvas_id: Option<String> = None;
+
         self.canvases.update(|cs| {
             for canvas in cs.iter_mut() {
                 if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == update.id) {
@@ -786,11 +792,132 @@ impl CanvasState {
                         _ => {}
                     }
 
+                    // After a block resolves, check whether we should trigger a Guide refresh.
+                    // Guard: only trigger when the new state is Resolved or Outcome.
+                    if matches!(&update.state, BlockState::Resolved | BlockState::Outcome { .. }) {
+                        // Count resolved blocks on this canvas, excluding Guide blocks.
+                        let resolved_count = canvas.blocks.iter()
+                            .filter(|b| {
+                                !b.id.starts_with("guide-")
+                                    && matches!(b.state, BlockState::Resolved | BlockState::Outcome { .. })
+                            })
+                            .count();
+                        if resolved_count >= 2 {
+                            guide_canvas_id = Some(canvas.id.clone());
+                        }
+                    }
+
                     return;
                 }
             }
         });
         let _ = current_id;
+
+        // Trigger guide generation outside the borrow of canvases.
+        if let Some(cid) = guide_canvas_id {
+            let guide_id = format!("guide-{}", cid);
+            let cid_clone = cid.clone();
+
+            // Collect summaries from resolved blocks (excluding guide blocks themselves).
+            #[derive(serde::Serialize)]
+            struct GuideSummaryPayload {
+                schema_type: String,
+                agent_name: String,
+                snippet: String,
+            }
+
+            let summaries: Vec<GuideSummaryPayload> = canvases
+                .get_untracked()
+                .iter()
+                .find(|c| c.id == cid)
+                .map(|c| {
+                    c.blocks.iter()
+                        .filter(|b| {
+                            !b.id.starts_with("guide-")
+                                && matches!(b.state, BlockState::Resolved | BlockState::Outcome { .. })
+                        })
+                        .map(|b| GuideSummaryPayload {
+                            schema_type: b.schema_type.clone().unwrap_or_default(),
+                            agent_name: b.agent_did.as_deref()
+                                .map(|d| {
+                                    // Use last 8 chars of DID as a display name fallback.
+                                    if d.len() > 8 { d[d.len()-8..].to_string() } else { d.to_string() }
+                                })
+                                .unwrap_or_else(|| "Agent".to_string()),
+                            snippet: b.content.as_ref()
+                                .and_then(|c| c.get("result"))
+                                .and_then(|r| r.as_str())
+                                .map(|s| s.chars().take(80).collect::<String>())
+                                .unwrap_or_default(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            spawn_local(async move {
+                if !crate::bridge::tauri_available() {
+                    return;
+                }
+
+                #[derive(serde::Deserialize)]
+                struct GuidePayload {
+                    block_id: String,
+                    summary: String,
+                    suggestions: Vec<papillon_shared::GuideSuggestion>,
+                }
+
+                let result = crate::bridge::invoke::<_, GuidePayload>(
+                    "canvas_generate_guide",
+                    &serde_json::json!({
+                        "canvasId": cid_clone,
+                        "resolvedBlockSummaries": summaries,
+                    }),
+                ).await;
+
+                if let Ok(payload) = result {
+                    let guide_block_id = payload.block_id.clone();
+                    canvases.update(|cs| {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid_clone) {
+                            // Upsert: update existing Guide block or prepend a new one.
+                            if let Some(existing) = canvas.blocks.iter_mut()
+                                .find(|b| b.id == guide_block_id)
+                            {
+                                existing.state = BlockState::Guide {
+                                    summary: payload.summary.clone(),
+                                    suggestions: payload.suggestions.clone(),
+                                };
+                                existing.updated_at = now_iso();
+                            } else {
+                                let now = now_iso();
+                                let guide_block = CanvasBlock {
+                                    id: guide_block_id,
+                                    prompt_id: String::new(),
+                                    prompt_text: None,
+                                    state: BlockState::Guide {
+                                        summary: payload.summary,
+                                        suggestions: payload.suggestions,
+                                    },
+                                    schema_type: None,
+                                    content: None,
+                                    linked_block_ids: Vec::new(),
+                                    agent_did: None,
+                                    mandate_expires_at: None,
+                                    preference_guided: false,
+                                    auto_expand: false,
+                                    created_at: now.clone(),
+                                    updated_at: now,
+                                };
+                                // Prepend at position 0.
+                                canvas.blocks.insert(0, guide_block);
+                            }
+                            canvas.updated_at = now_iso();
+                        }
+                    });
+                }
+            });
+
+            let _ = guide_id; // suppress unused warning
+        }
     }
 
     /// Load the active canvas and its blocks/messages from the SQLite DB.

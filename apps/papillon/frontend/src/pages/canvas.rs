@@ -244,7 +244,7 @@ fn CanvasBackFace() -> impl IntoView {
         <div class="canvas-back-face">
             // Tab bar
             <div class="back-face-tabs" role="tablist">
-                {["sources", "build", "history"].map(|tab| {
+                {["sources", "build", "history"].iter().map(|&tab| {
                     view! {
                         <button
                             class="back-face-tab"
@@ -317,6 +317,7 @@ fn CanvasWorkflowPipeline() -> impl IntoView {
                             papillon_shared::BlockState::Ghost { .. } => "ghost",
                             papillon_shared::BlockState::AwaitingApproval { .. } => "resolving",
                             papillon_shared::BlockState::Outcome { .. } => "resolved",
+                            papillon_shared::BlockState::Guide { .. } => "guide",
                         };
                         let badge_class = format!("wf-state-badge {}", state_label);
                         let query = block.prompt_text.clone().unwrap_or_else(|| block_id.clone());

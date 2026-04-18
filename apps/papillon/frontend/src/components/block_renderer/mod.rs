@@ -131,6 +131,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         });
     }
 
+    // Guide blocks are not user-resolvable — they are system meta-blocks.
     let is_resolved = matches!(
         block.state,
         BlockState::Resolved | BlockState::Outcome { .. }
@@ -148,6 +149,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         BlockState::Resolved => "canvas-block",
         BlockState::Failed { .. } => "canvas-block failed",
         BlockState::Outcome { .. } => "canvas-block outcome",
+        BlockState::Guide { .. } => "canvas-block guide-block",
     };
 
     // Keep old name for the few places below that still use it unchanged.
@@ -504,6 +506,41 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                                 {format!("Failed at phase {}: {}", phase, reason)}
                             </span>
                             <button class="btn-retry" on:click=on_retry>"Retry"</button>
+                        </div>
+                    }.into_any()
+                }
+                BlockState::Guide { summary, suggestions } => {
+                    let summary_text = summary.clone();
+                    let suggestions_clone = suggestions.clone();
+                    let canvas_state_guide = canvas_state;
+                    view! {
+                        <div class="guide-header">
+                            <span class="guide-icon">"✦"</span>
+                            <p class="guide-summary">{summary_text}</p>
+                        </div>
+                        <div class="guide-suggestions">
+                            {suggestions_clone.into_iter().map(|s| {
+                                let cs = canvas_state_guide;
+                                let pt = s.prompt_template.clone();
+                                let pid = s.saved_pipeline_id.clone();
+                                let label = s.label.clone();
+                                let label_btn = s.label.clone();
+                                view! {
+                                    <button
+                                        class="guide-suggestion-pill"
+                                        on:click=move |_| {
+                                            if pid.is_some() {
+                                                // TODO: invoke run_saved_pipeline — wire up in follow-on.
+                                                // For now, prefill the label as a prompt.
+                                                cs.prefill_prompt.set(Some(label.clone()));
+                                            } else {
+                                                cs.prefill_prompt.set(Some(pt.clone()));
+                                            }
+                                            cs.focus_prompt.update(|n| *n += 1);
+                                        }
+                                    >{label_btn}</button>
+                                }
+                            }).collect::<Vec<_>>()}
                         </div>
                     }.into_any()
                 }
