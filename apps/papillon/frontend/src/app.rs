@@ -34,6 +34,21 @@ use papillon_shared::{
 
 #[component]
 pub fn App() -> impl IntoView {
+    // Apply persisted theme on startup
+    if let Some(win) = web_sys::window() {
+        let stored_theme = win
+            .local_storage()
+            .ok()
+            .flatten()
+            .and_then(|s| s.get_item("papillon_theme").ok().flatten())
+            .unwrap_or_else(|| "dark".to_string());
+        if let Some(doc) = win.document() {
+            let _ = doc
+                .document_element()
+                .map(|el| el.set_attribute("data-theme", &stored_theme));
+        }
+    }
+
     let identity_state = IdentityState::default();
     let registry_state = RegistryState::default();
     let orchestrator_state = OrchestratorState::default();
