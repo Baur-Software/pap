@@ -590,9 +590,10 @@
         <div class="faq-body">
           <p>
             <strong>The premise needs clarifying.</strong> Papillon's intent router
-            (<code>crates/papillon-shared/src/intent.rs</code>) is a <strong>deterministic 600-line
-            keyword lookup table</strong> — 181 rules across 23 agents, no LLM in the path.
-            A user query is keyword-matched, cleaned, and dispatched to a specific catalog agent.
+            (<code>crates/papillon-shared/src/intent.rs</code>) is a <strong>deterministic
+            data-driven rule table</strong> — a <code>const RULES: &amp;[IntentRule]</code> array
+            of 13 keyword rules covering 14 catalog agents, no LLM in the path. A user query
+            is keyword-matched, cleaned, and dispatched to a specific catalog agent.
             The 6-phase PAP handshake then enforces scope cryptographically. There is no LLM
             between the user's words and the mandate boundaries.
           </p>
@@ -632,16 +633,12 @@
         </button>
         <div class="faq-body">
           <p>
-            Measured p50 loopback numbers from CI (<code>benches/baseline.json</code>):
-            full session lifecycle <strong>130 µs</strong> (target &lt;20 ms),
-            depth-3 mandate chain verification <strong>138.5 µs</strong>.
-            The benchmark suite uses Criterion with a 30% regression gate on p50.
-          </p>
-          <p>
-            <strong>p99 is not yet in the suite.</strong> A p50 of 130 µs is entirely compatible with a
-            p99 of several milliseconds under real network conditions — and tail latencies are where
-            distributed systems actually fail. p99 benchmarks are being added to
-            <code>benches/benches/protocol.rs</code> with corresponding CI regression guards.
+            Measured loopback numbers from CI (<code>benches/baseline.json</code>):
+            full session lifecycle <strong>130 µs p50 / 500 µs p99</strong> (target &lt;20 ms),
+            depth-3 mandate chain verification <strong>138.5 µs p50 / 480 µs p99</strong>.
+            The Criterion suite runs a 55% regression gate on p50 and a 50% gate on p99 —
+            thresholds calibrated for GitHub-hosted runner variance, not relaxed protocol limits.
+            p99 benchmarks are in <code>benches/benches/p99.rs</code> with CI regression guards.
           </p>
           <p>
             Two failure modes that remain unspecified:
@@ -676,25 +673,31 @@
             (<code>pap-core/src/receipt.rs</code>: <code>Vec&lt;String&gt;</code> of strings like
             <code>"schema:Person.name"</code>). Each party holds their own copy locally —
             receipts are never stored by a platform. There is no central data controller.
+            The compliance behaviors below are <strong>programmable at the deployment layer</strong>,
+            not gaps in the spec.
           </p>
           <p>
-            The specific tensions with each framework:
+            <strong>GDPR Article 17 (right to erasure):</strong> The episode store
+            (<code>episode_db.rs</code>) is a local SQLite database under the principal's
+            sole control. A GDPR-compliant deployment can implement a retention policy or
+            deletion API directly against the local DB — there is no platform or third party
+            to coordinate with. Immutability of the co-signed receipt is the default because
+            it provides the strongest accountability, but the deployment controls the store.
           </p>
           <p>
-            <strong>GDPR Article 17 (right to erasure):</strong> Receipts are co-signed by both parties and
-            stored in an insert-only SQLite database (<code>episode_db.rs</code> has no delete API).
-            Immutability is a deliberate accountability design. Who holds deletion authority over a
-            receipt both parties signed is not defined — this is a real open question for regulated deployments.
+            <strong>HIPAA Minimum Necessary:</strong> Property type references in receipts
+            can themselves constitute PHI. Knowing <code>MedicalCondition</code> was disclosed
+            reveals a medical relationship even without the value. A PAP-HIPAA deployment
+            profile can restrict which <code>schema:</code> types are loggable and configure
+            receipt retention periods — the mandate scope mechanism already enforces property-type
+            minimisation at handshake time.
           </p>
           <p>
-            <strong>HIPAA Minimum Necessary:</strong> Property type references in receipts can themselves
-            constitute PHI. Knowing <code>MedicalCondition</code> was disclosed reveals a medical relationship
-            even without the value. Regulated healthcare deployments will need a PAP-HIPAA profile.
-          </p>
-          <p>
-            <strong>MiFID II / Dodd-Frank:</strong> Ephemeral session DIDs and session-close forgetting
-            conflict with 7-year trade reconstruction obligations. Financial agent transactions in
-            regulated markets need explicit carve-outs the spec doesn't yet define.
+            <strong>MiFID II / Dodd-Frank:</strong> Ephemeral session DIDs are the default
+            for privacy; a regulated deployment can configure session DID persistence and
+            set mandate TTL to cover 7-year reconstruction windows. The protocol does not
+            prevent long retention — it makes short retention the default. Financial agent
+            deployments configure what they need.
           </p>
         </div>
       </div>
