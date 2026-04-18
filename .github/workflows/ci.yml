@@ -23,7 +23,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       e2e: ${{ steps.filter.outputs.e2e }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -46,7 +46,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -60,7 +60,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -76,7 +76,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -90,7 +90,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -106,7 +106,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -120,7 +120,7 @@ jobs:
       always() &&
       (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -131,16 +131,16 @@ jobs:
           shared-key: "native"
           cache-on-failure: true
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
+        uses: cargo-bins/cargo-binstall@v1
       - name: Cache wasm-pack binary
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/bin/wasm-pack
           key: wasm-pack-${{ runner.os }}-${{ hashFiles('crates/pap-wasm/Cargo.lock') }}
           restore-keys: wasm-pack-${{ runner.os }}-
       - name: Install wasm-pack
         run: cargo binstall wasm-pack --no-confirm
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
       - name: Install npm dependencies
@@ -166,7 +166,7 @@ jobs:
       always() &&
       (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -198,7 +198,7 @@ jobs:
       always() &&
       (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -213,7 +213,7 @@ jobs:
     name: Docker workspace consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate Dockerfile workspace members
         run: bash ci/check-docker-workspace.sh
 
@@ -225,7 +225,7 @@ jobs:
       always() &&
       (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -234,9 +234,9 @@ jobs:
           shared-key: "smoke-wasm"
           cache-on-failure: true
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
+        uses: cargo-bins/cargo-binstall@v1
       - name: Cache trunk binary
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/bin/trunk
           key: trunk-${{ runner.os }}-${{ hashFiles('apps/papillon/frontend/Cargo.lock') }}
@@ -246,7 +246,7 @@ jobs:
       - name: Build frontend (release WASM)
         run: cd apps/papillon/frontend && trunk build --release
       - name: Upload frontend dist artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: papillon-frontend-dist
           path: apps/papillon/frontend/dist/
@@ -263,7 +263,7 @@ jobs:
       pull-requests: write
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev python3
       - uses: dtolnay/rust-toolchain@stable
@@ -314,7 +314,7 @@ jobs:
 
       - name: Upload benchmark baseline
         if: (success() || failure()) && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-baseline
           path: benches/baseline.json
@@ -323,7 +323,7 @@ jobs:
       # On PRs: post benchmark summary as a comment
       - name: Post benchmark summary on PR
         if: github.event_name == 'pull_request' && (success() || failure())
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -368,7 +368,7 @@ jobs:
     # TODO: add JDK 21 matrix (strategy.matrix.java: [17, 21]) once
     # the Gradle build is validated against JDK 21 on all platforms.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
@@ -389,11 +389,11 @@ jobs:
           fi
       - name: Verify native library exists
         run: ls -lh target/debug/$LIB_NAME
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.10'
       - name: Run Java integration tests
@@ -409,18 +409,18 @@ jobs:
       (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true') &&
       needs.build-wasm.result == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Download frontend dist artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: papillon-frontend-dist
           path: apps/papillon/frontend/dist/
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -436,7 +436,7 @@ jobs:
         run: npx playwright test tests/smoke.spec.ts --workers=1
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-test-results
           path: |
@@ -455,16 +455,16 @@ jobs:
     env:
       CHRYSALIS_PORT: "7890"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev curl
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Chrysalis registry image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/registry/Dockerfile
@@ -501,12 +501,12 @@ jobs:
           curl -sf http://localhost:$CHRYSALIS_PORT/federation/identity | head -c 200
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: playwright-cache-tier2
         with:
           path: ~/.cache/ms-playwright
@@ -535,7 +535,7 @@ jobs:
 
       - name: Upload Tier 2 test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chrysalis-tier2-results
           path: |
@@ -552,20 +552,20 @@ jobs:
       (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true') &&
       needs.build-wasm.result == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Download frontend dist artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: papillon-frontend-dist
           path: apps/papillon/frontend/dist/
 
       # ── Node.js + Playwright ──────────────────────────────────────────────
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
@@ -578,9 +578,9 @@ jobs:
 
       # ── Chrysalis CI image (lean SSR-only build, no WASM bundle) ──────────
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: Build Chrysalis CI image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: e2e/Dockerfile.ci-chrysalis
@@ -620,7 +620,7 @@ jobs:
         run: docker logs chrysalis-ci || true
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chrysalis-e2e-results
           path: |
