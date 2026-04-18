@@ -8,7 +8,9 @@ use std::sync::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
-use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord, PipelineInfo, SavedPipeline};
+use crate::types::{
+    CanvasBlockRecord, CanvasMessageRecord, CanvasRecord, PipelineInfo, SavedPipeline,
+};
 use pap_agents::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig};
 
 /// Persistent SQLite database for Papillon's experience memory.
@@ -1865,14 +1867,13 @@ impl DatabaseOps for NativeDatabase {
         let rows = stmt
             .query_map([], |row| {
                 let pipeline_json: String = row.get(3)?;
-                let pipeline: PipelineInfo =
-                    serde_json::from_str(&pipeline_json).map_err(|e| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            3,
-                            rusqlite::types::Type::Text,
-                            Box::new(e),
-                        )
-                    })?;
+                let pipeline: PipelineInfo = serde_json::from_str(&pipeline_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
                 Ok(SavedPipeline {
                     id: row.get(0)?,
                     name: row.get(1)?,

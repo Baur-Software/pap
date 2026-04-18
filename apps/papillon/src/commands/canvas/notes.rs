@@ -44,7 +44,11 @@ pub async fn canvas_create_note(
         id: block_id.clone(),
         prompt_id: block_id,
         prompt_text: Some(title.clone()),
-        state: BlockState::Note { title, content, editing: false },
+        state: BlockState::Note {
+            title,
+            content,
+            editing: false,
+        },
         schema_type: Some("Note".to_string()),
         content: Some(content_json),
         linked_block_ids: vec![],
@@ -96,7 +100,11 @@ pub async fn canvas_update_note(
         id: block_id.clone(),
         prompt_id: block_id.clone(),
         prompt_text: Some(title.clone()),
-        state: BlockState::Note { title: title.clone(), content: content.clone(), editing: false },
+        state: BlockState::Note {
+            title: title.clone(),
+            content: content.clone(),
+            editing: false,
+        },
         schema_type: Some("Note".to_string()),
         content: Some(content_json.clone()),
         agent_did: None,
@@ -105,13 +113,22 @@ pub async fn canvas_update_note(
         created_at: now.clone(),
         updated_at: now.clone(),
     };
-    let _ = app.emit("block_updated", BlockEvent { block: block_update });
+    let _ = app.emit(
+        "block_updated",
+        BlockEvent {
+            block: block_update,
+        },
+    );
 
     Ok(CanvasBlock {
         id: block_id.clone(),
         prompt_id: block_id,
         prompt_text: Some(title.clone()),
-        state: BlockState::Note { title, content, editing: false },
+        state: BlockState::Note {
+            title,
+            content,
+            editing: false,
+        },
         schema_type: Some("Note".to_string()),
         content: Some(content_json),
         linked_block_ids: vec![],

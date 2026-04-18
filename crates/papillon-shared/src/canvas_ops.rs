@@ -245,7 +245,10 @@ mod citation_tests {
         let segments = segment_with_citations(text);
         assert_eq!(segments.len(), 2);
         assert_eq!(segments[0], TextSegment::Citation { index: 1 });
-        assert_eq!(segments[1], TextSegment::Plain(" starts with a citation".into()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Plain(" starts with a citation".into())
+        );
     }
 
     #[test]

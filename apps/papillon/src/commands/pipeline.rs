@@ -142,7 +142,8 @@ fn synthesis_system_prompt(format: &SynthesisFormat, initial_query: &str) -> Str
         "You are a synthesis assistant. The user asked: \"{}\"\n\n\
          Agent results (numbered):\n\
          {{}}\n\n{instruction}\n\nFocus on what the user actually wanted to know.",
-        initial_query, instruction = instruction
+        initial_query,
+        instruction = instruction
     )
 }
 
@@ -270,9 +271,7 @@ pub async fn run_pipeline(
                                 .map(|nc| format!("User note: {}", nc))
                                 .unwrap_or_default()
                         } else {
-                            d.get("result")
-                                .map(|r| r.to_string())
-                                .unwrap_or_default()
+                            d.get("result").map(|r| r.to_string()).unwrap_or_default()
                         }
                     })
                     .filter(|s| !s.is_empty())
@@ -733,7 +732,11 @@ mod tests {
         let pipeline = PipelineInfo {
             id: "p-unique".into(),
             name: "Unique IDs".into(),
-            nodes: vec![make_node("alpha"), make_node("beta"), make_synthesizer_node("synth")],
+            nodes: vec![
+                make_node("alpha"),
+                make_node("beta"),
+                make_synthesizer_node("synth"),
+            ],
             edges: vec![make_edge("alpha", "synth"), make_edge("beta", "synth")],
             created_at: String::new(),
         };
@@ -744,7 +747,11 @@ mod tests {
             .collect();
         // All block IDs must be distinct.
         let unique: std::collections::HashSet<_> = block_ids.iter().collect();
-        assert_eq!(unique.len(), block_ids.len(), "block IDs must be unique per node");
+        assert_eq!(
+            unique.len(),
+            block_ids.len(),
+            "block IDs must be unique per node"
+        );
     }
 
     #[test]
@@ -769,9 +776,15 @@ mod tests {
     fn format_schema_types_are_distinct() {
         use std::collections::HashSet;
         let types: HashSet<_> = [
-            SynthesisFormat::FreeText, SynthesisFormat::BriefingDoc,
-            SynthesisFormat::Faq, SynthesisFormat::Timeline, SynthesisFormat::Outline,
-        ].iter().map(format_schema_type).collect();
+            SynthesisFormat::FreeText,
+            SynthesisFormat::BriefingDoc,
+            SynthesisFormat::Faq,
+            SynthesisFormat::Timeline,
+            SynthesisFormat::Outline,
+        ]
+        .iter()
+        .map(format_schema_type)
+        .collect();
         assert_eq!(types.len(), 5);
     }
 

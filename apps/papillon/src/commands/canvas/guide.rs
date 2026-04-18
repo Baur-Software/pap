@@ -36,7 +36,11 @@ pub async fn canvas_generate_guide(
     let summary = format!(
         "{} result{} from {} covering {}",
         resolved_block_summaries.len(),
-        if resolved_block_summaries.len() == 1 { "" } else { "s" },
+        if resolved_block_summaries.len() == 1 {
+            ""
+        } else {
+            "s"
+        },
         agent_names.join(", "),
         schema_types.join(", "),
     );
@@ -45,26 +49,53 @@ pub async fn canvas_generate_guide(
     let mut suggestions: Vec<GuideSuggestion> = Vec::new();
     for schema_type in &schema_types {
         match *schema_type {
-            "SearchResult" | "SearchResultsPage" =>
-                suggestions.push(GuideSuggestion { label: "Research Further".into(), prompt_template: "Research further: ".into(), saved_pipeline_id: None, synthesis_format: None }),
-            "NewsArticle" =>
-                suggestions.push(GuideSuggestion { label: "Briefing Doc".into(), prompt_template: "Summarize these news articles into a briefing".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::BriefingDoc) }),
-            "ScholarlyArticle" =>
-                suggestions.push(GuideSuggestion { label: "Key Findings".into(), prompt_template: "What are the key findings from these papers?".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Faq) }),
-            "WeatherForecast" =>
-                suggestions.push(GuideSuggestion { label: "Pack List".into(), prompt_template: "What should I pack for this weather?".into(), saved_pipeline_id: None, synthesis_format: None }),
-            "Product" =>
-                suggestions.push(GuideSuggestion { label: "Compare".into(), prompt_template: "Compare these products on price and quality".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Outline) }),
-            "VisualArtwork" =>
-                suggestions.push(GuideSuggestion { label: "Artist Info".into(), prompt_template: "Tell me more about the artist behind these works".into(), saved_pipeline_id: None, synthesis_format: None }),
+            "SearchResult" | "SearchResultsPage" => suggestions.push(GuideSuggestion {
+                label: "Research Further".into(),
+                prompt_template: "Research further: ".into(),
+                saved_pipeline_id: None,
+                synthesis_format: None,
+            }),
+            "NewsArticle" => suggestions.push(GuideSuggestion {
+                label: "Briefing Doc".into(),
+                prompt_template: "Summarize these news articles into a briefing".into(),
+                saved_pipeline_id: None,
+                synthesis_format: Some(SynthesisFormat::BriefingDoc),
+            }),
+            "ScholarlyArticle" => suggestions.push(GuideSuggestion {
+                label: "Key Findings".into(),
+                prompt_template: "What are the key findings from these papers?".into(),
+                saved_pipeline_id: None,
+                synthesis_format: Some(SynthesisFormat::Faq),
+            }),
+            "WeatherForecast" => suggestions.push(GuideSuggestion {
+                label: "Pack List".into(),
+                prompt_template: "What should I pack for this weather?".into(),
+                saved_pipeline_id: None,
+                synthesis_format: None,
+            }),
+            "Product" => suggestions.push(GuideSuggestion {
+                label: "Compare".into(),
+                prompt_template: "Compare these products on price and quality".into(),
+                saved_pipeline_id: None,
+                synthesis_format: Some(SynthesisFormat::Outline),
+            }),
+            "VisualArtwork" => suggestions.push(GuideSuggestion {
+                label: "Artist Info".into(),
+                prompt_template: "Tell me more about the artist behind these works".into(),
+                saved_pipeline_id: None,
+                synthesis_format: None,
+            }),
             _ => {}
         }
     }
 
     // 3. Load saved pipelines and surface compatible ones
-    let saved = state.db.list_saved_pipelines()
+    let saved = state
+        .db
+        .list_saved_pipelines()
         .map_err(|e| PapillonError::from(e.0))?;
-    for pipeline in saved.iter().take(2) { // cap at 2 pipeline suggestions
+    for pipeline in saved.iter().take(2) {
+        // cap at 2 pipeline suggestions
         suggestions.push(GuideSuggestion {
             label: pipeline.name.clone(),
             prompt_template: String::new(),
@@ -122,18 +153,42 @@ mod guide_tests {
         let mut suggestions: Vec<GuideSuggestion> = Vec::new();
         for schema_type in &schema_types {
             match *schema_type {
-                "SearchResult" | "SearchResultsPage" =>
-                    suggestions.push(GuideSuggestion { label: "Research Further".into(), prompt_template: "Research further: ".into(), saved_pipeline_id: None, synthesis_format: None }),
-                "NewsArticle" =>
-                    suggestions.push(GuideSuggestion { label: "Briefing Doc".into(), prompt_template: "Summarize these news articles into a briefing".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::BriefingDoc) }),
-                "ScholarlyArticle" =>
-                    suggestions.push(GuideSuggestion { label: "Key Findings".into(), prompt_template: "What are the key findings from these papers?".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Faq) }),
-                "WeatherForecast" =>
-                    suggestions.push(GuideSuggestion { label: "Pack List".into(), prompt_template: "What should I pack for this weather?".into(), saved_pipeline_id: None, synthesis_format: None }),
-                "Product" =>
-                    suggestions.push(GuideSuggestion { label: "Compare".into(), prompt_template: "Compare these products on price and quality".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Outline) }),
-                "VisualArtwork" =>
-                    suggestions.push(GuideSuggestion { label: "Artist Info".into(), prompt_template: "Tell me more about the artist behind these works".into(), saved_pipeline_id: None, synthesis_format: None }),
+                "SearchResult" | "SearchResultsPage" => suggestions.push(GuideSuggestion {
+                    label: "Research Further".into(),
+                    prompt_template: "Research further: ".into(),
+                    saved_pipeline_id: None,
+                    synthesis_format: None,
+                }),
+                "NewsArticle" => suggestions.push(GuideSuggestion {
+                    label: "Briefing Doc".into(),
+                    prompt_template: "Summarize these news articles into a briefing".into(),
+                    saved_pipeline_id: None,
+                    synthesis_format: Some(SynthesisFormat::BriefingDoc),
+                }),
+                "ScholarlyArticle" => suggestions.push(GuideSuggestion {
+                    label: "Key Findings".into(),
+                    prompt_template: "What are the key findings from these papers?".into(),
+                    saved_pipeline_id: None,
+                    synthesis_format: Some(SynthesisFormat::Faq),
+                }),
+                "WeatherForecast" => suggestions.push(GuideSuggestion {
+                    label: "Pack List".into(),
+                    prompt_template: "What should I pack for this weather?".into(),
+                    saved_pipeline_id: None,
+                    synthesis_format: None,
+                }),
+                "Product" => suggestions.push(GuideSuggestion {
+                    label: "Compare".into(),
+                    prompt_template: "Compare these products on price and quality".into(),
+                    saved_pipeline_id: None,
+                    synthesis_format: Some(SynthesisFormat::Outline),
+                }),
+                "VisualArtwork" => suggestions.push(GuideSuggestion {
+                    label: "Artist Info".into(),
+                    prompt_template: "Tell me more about the artist behind these works".into(),
+                    saved_pipeline_id: None,
+                    synthesis_format: None,
+                }),
                 _ => {}
             }
         }
@@ -161,15 +216,30 @@ mod guide_tests {
         ];
         let (summary, suggestions) = build_summary_and_suggestions(&summaries);
 
-        assert!(summary.contains("2 results"), "summary should mention count: {}", summary);
-        assert!(summary.contains("Hacker News"), "summary should mention agent: {}", summary);
-        assert!(summary.contains("NewsArticle"), "summary should mention schema type: {}", summary);
+        assert!(
+            summary.contains("2 results"),
+            "summary should mention count: {}",
+            summary
+        );
+        assert!(
+            summary.contains("Hacker News"),
+            "summary should mention agent: {}",
+            summary
+        );
+        assert!(
+            summary.contains("NewsArticle"),
+            "summary should mention schema type: {}",
+            summary
+        );
 
         // NewsArticle should map to "Briefing Doc" suggestion
         assert!(
             suggestions.iter().any(|s| s.label == "Briefing Doc"),
             "expected Briefing Doc suggestion for NewsArticle, got: {:?}",
-            suggestions.iter().map(|s| s.label.as_str()).collect::<Vec<_>>()
+            suggestions
+                .iter()
+                .map(|s| s.label.as_str())
+                .collect::<Vec<_>>()
         );
     }
 
@@ -191,7 +261,10 @@ mod guide_tests {
         let (_summary, suggestions) = build_summary_and_suggestions(&summaries);
 
         // Count how many "Pack List" suggestions there are — should be exactly 1
-        let pack_list_count = suggestions.iter().filter(|s| s.label == "Pack List").count();
+        let pack_list_count = suggestions
+            .iter()
+            .filter(|s| s.label == "Pack List")
+            .count();
         assert_eq!(
             pack_list_count, 1,
             "duplicate suggestions should be deduped, got {} Pack List entries",
@@ -243,12 +316,36 @@ mod guide_tests {
     fn guide_caps_suggestions_at_five() {
         // All known schema types in one canvas — verify the cap.
         let summaries = vec![
-            GuideBlockSummary { schema_type: "SearchResultsPage".into(), agent_name: "DDG".into(), snippet: "".into() },
-            GuideBlockSummary { schema_type: "NewsArticle".into(), agent_name: "HN".into(), snippet: "".into() },
-            GuideBlockSummary { schema_type: "ScholarlyArticle".into(), agent_name: "arXiv".into(), snippet: "".into() },
-            GuideBlockSummary { schema_type: "WeatherForecast".into(), agent_name: "Meteo".into(), snippet: "".into() },
-            GuideBlockSummary { schema_type: "Product".into(), agent_name: "OFacts".into(), snippet: "".into() },
-            GuideBlockSummary { schema_type: "VisualArtwork".into(), agent_name: "ArtInst".into(), snippet: "".into() },
+            GuideBlockSummary {
+                schema_type: "SearchResultsPage".into(),
+                agent_name: "DDG".into(),
+                snippet: "".into(),
+            },
+            GuideBlockSummary {
+                schema_type: "NewsArticle".into(),
+                agent_name: "HN".into(),
+                snippet: "".into(),
+            },
+            GuideBlockSummary {
+                schema_type: "ScholarlyArticle".into(),
+                agent_name: "arXiv".into(),
+                snippet: "".into(),
+            },
+            GuideBlockSummary {
+                schema_type: "WeatherForecast".into(),
+                agent_name: "Meteo".into(),
+                snippet: "".into(),
+            },
+            GuideBlockSummary {
+                schema_type: "Product".into(),
+                agent_name: "OFacts".into(),
+                snippet: "".into(),
+            },
+            GuideBlockSummary {
+                schema_type: "VisualArtwork".into(),
+                agent_name: "ArtInst".into(),
+                snippet: "".into(),
+            },
         ];
         let (_summary, suggestions) = build_summary_and_suggestions(&summaries);
         assert!(

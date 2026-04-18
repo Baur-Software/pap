@@ -8,11 +8,11 @@
 //! - `wasm`: Uses sql.js (web)
 //! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
+#[cfg(feature = "native")]
+use crate::types::PipelineInfo;
 use crate::types::Template;
 #[cfg(feature = "native")]
 use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord, SavedPipeline};
-#[cfg(feature = "native")]
-use crate::types::PipelineInfo;
 #[cfg(feature = "native")]
 use pap_agents::DynamicAgentDef;
 use serde::{Deserialize, Serialize};
