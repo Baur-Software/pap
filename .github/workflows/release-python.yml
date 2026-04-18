@@ -37,23 +37,24 @@ jobs:
             TAG_VERSION="0.0.0-dev"
           fi
 
-          TOML_VERSION=$(python3 -c "
+          CARGO_VERSION=$(python3 -c "
           import re
-          with open('crates/pap-python/pyproject.toml') as f:
+          with open('Cargo.toml') as f:
               content = f.read()
-          match = re.search(r'^version\s*=\s*\"(.+?)\"', content, re.MULTILINE)
+          # Read from [workspace.package] section
+          match = re.search(r'\[workspace\.package\].*?^version\s*=\s*\"(.+?)\"', content, re.MULTILINE | re.DOTALL)
           print(match.group(1))
           ")
 
-          echo "Tag version:  ${TAG_VERSION}"
-          echo "TOML version: ${TOML_VERSION}"
+          echo "Tag version:   ${TAG_VERSION}"
+          echo "Cargo version: ${CARGO_VERSION}"
 
-          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${TOML_VERSION}" ]]; then
-            echo "::error::Tag version (${TAG_VERSION}) does not match pyproject.toml (${TOML_VERSION})"
+          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${CARGO_VERSION}" ]]; then
+            echo "::error::Tag version (${TAG_VERSION}) does not match Cargo.toml workspace version (${CARGO_VERSION})"
             exit 1
           fi
 
-          echo "version=${TOML_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${CARGO_VERSION}" >> "$GITHUB_OUTPUT"
 
   # ── 2. Build wheels ────────────────────────────────────────────────────────
   build-wheels:
