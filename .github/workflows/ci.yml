@@ -15,6 +15,33 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'crates/**'
+              - 'apps/**'
+              - 'examples/**'
+              - 'benches/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            e2e:
+              - 'e2e/**'
+              - 'apps/papillon/frontend/**'
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+
   check:
     name: Check
     runs-on: ubuntu-latest
