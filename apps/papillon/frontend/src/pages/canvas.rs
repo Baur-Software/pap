@@ -94,30 +94,10 @@ pub fn CanvasPage() -> impl IntoView {
 
     let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
 
-    let toggle_side = move |_| {
-        canvas_state.canvas_side.update(|s| {
-            *s = if *s == CanvasSide::Front {
-                CanvasSide::Back
-            } else {
-                CanvasSide::Front
-            };
-        });
-    };
-
     view! {
         <HitlGate />
 
         <div class="canvas-page">
-            // Flip toggle button — sits above the flipper container.
-            <div class="canvas-flip-toggle-row">
-                <button
-                    class="canvas-flip-toggle"
-                    on:click=toggle_side
-                >
-                    {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
-                </button>
-            </div>
-
             // Flip container.
             <div
                 class="canvas-flip-container"
