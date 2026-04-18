@@ -2704,4 +2704,210 @@ mod tests {
         let agents = db.load_all_agents().unwrap();
         assert_eq!(agents[0].version, "1.2.3");
     }
+
+    // ── Canvas persistence ───────────────────────────────────────────────
+
+    fn sample_canvas(id: &str) -> CanvasRecord {
+        CanvasRecord {
+            id: id.to_string(),
+            name: format!("Canvas {id}"),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_canvas_block(id: &str, canvas_id: &str, order: i64) -> CanvasBlockRecord {
+        CanvasBlockRecord {
+            id: id.to_string(),
+            canvas_id: canvas_id.to_string(),
+            prompt_text: Some(format!("query for {id}")),
+            schema_type: Some("schema:SearchAction".to_string()),
+            content_json: None,
+            block_state: "resolving".to_string(),
+            episode_id: None,
+            agent_did: None,
+            mandate_expires_at: None,
+            preference_guided: false,
+            display_order: order,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_canvas_message(
+        id: &str,
+        canvas_id: &str,
+        role: &str,
+        ts_suffix: &str,
+    ) -> CanvasMessageRecord {
+        CanvasMessageRecord {
+            id: id.to_string(),
+            canvas_id: canvas_id.to_string(),
+            role: role.to_string(),
+            content: format!("message content {id}"),
+            block_id: None,
+            created_at: format!("2026-01-01T00:00:{ts_suffix}Z"),
+        }
+    }
+
+    #[test]
+    fn canvas_upsert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-2")).unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 2);
+        assert!(canvases.iter().any(|c| c.id == "c-1"));
+        assert!(canvases.iter().any(|c| c.id == "c-2"));
+    }
+
+    #[test]
+    fn canvas_upsert_updates_name() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        let mut updated = sample_canvas("c-1");
+        updated.name = "Renamed Canvas".to_string();
+        db.upsert_canvas(&updated).unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 1);
+        assert_eq!(canvases[0].name, "Renamed Canvas");
+    }
+
+    #[test]
+    fn canvas_delete_removes_canvas() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-2")).unwrap();
+        db.delete_canvas("c-1").unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 1);
+        assert_eq!(canvases[0].id, "c-2");
+    }
+
+    #[test]
+    fn canvas_block_upsert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].id, "b-1");
+        assert_eq!(blocks[0].prompt_text.as_deref(), Some("query for b-1"));
+    }
+
+    #[test]
+    fn canvas_block_upsert_updates_state() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        let mut resolved = sample_canvas_block("b-1", "c-1", 0);
+        resolved.block_state = "resolved".to_string();
+        resolved.content_json = Some(r#"{"@type":"SearchResult"}"#.to_string());
+        db.upsert_canvas_block(&resolved).unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].block_state, "resolved");
+        assert!(blocks[0].content_json.is_some());
+    }
+
+    #[test]
+    fn canvas_blocks_ordered_by_display_order() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-3", "c-1", 2))
+            .unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-2", "c-1", 1))
+            .unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks[0].id, "b-1");
+        assert_eq!(blocks[1].id, "b-2");
+        assert_eq!(blocks[2].id, "b-3");
+    }
+
+    #[test]
+    fn canvas_block_delete() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.delete_canvas_block("b-1").unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert!(blocks.is_empty());
+    }
+
+    #[test]
+    fn canvas_delete_cascades_to_blocks_and_messages() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        // Delete the canvas — blocks and messages should cascade
+        db.delete_canvas("c-1").unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert!(
+            blocks.is_empty(),
+            "blocks should cascade-delete with canvas"
+        );
+        assert!(
+            msgs.is_empty(),
+            "messages should cascade-delete with canvas"
+        );
+    }
+
+    #[test]
+    fn canvas_message_insert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-1", "assistant", "02"))
+            .unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[1].role, "assistant");
+    }
+
+    #[test]
+    fn canvas_messages_ordered_chronologically() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        // Insert in reverse order
+        db.insert_canvas_message(&sample_canvas_message("m-3", "c-1", "user", "03"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-1", "user", "02"))
+            .unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0].id, "m-1");
+        assert_eq!(msgs[1].id, "m-2");
+        assert_eq!(msgs[2].id, "m-3");
+    }
+
+    #[test]
+    fn canvas_messages_scoped_to_canvas() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-a")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-b")).unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-a", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-b", "user", "01"))
+            .unwrap();
+        let msgs_a = db.list_canvas_messages("c-a").unwrap();
+        let msgs_b = db.list_canvas_messages("c-b").unwrap();
+        assert_eq!(msgs_a.len(), 1);
+        assert_eq!(msgs_b.len(), 1);
+        assert_eq!(msgs_a[0].id, "m-1");
+        assert_eq!(msgs_b[0].id, "m-2");
+    }
 }

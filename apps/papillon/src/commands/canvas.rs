@@ -294,6 +294,7 @@ async fn classify_intent(
 ///
 /// Preference score contributes up to 30% of the total when the engine has
 /// enough history (≥ 3 sessions).  EMA statistics contribute 40% each on top.
+#[allow(clippy::too_many_arguments)]
 fn score_agent(
     db: &crate::db::Database,
     agent_did: &str,
@@ -334,9 +335,8 @@ fn score_agent(
             ) {
                 substrate_delta += 0.2;
             }
-        } else {
+        } else if let Some(endpoint) = &def.endpoint {
             // Agent has an external endpoint — check if it needs auth and has a token.
-            let endpoint = def.endpoint.as_ref().unwrap();
             let needs_auth = endpoint.headers.contains_key("Authorization");
             if needs_auth {
                 let api_token_set = db
@@ -646,7 +646,7 @@ async fn process_prompt(
 /// Returns `(schema_type, content, preference_guided, agent_did)` where `preference_guided`
 /// is `true` when the PreferenceEngine had meaningful history that influenced
 /// agent selection, and `agent_did` is the DID of the resolved agent.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn process_prompt_inner<'a>(
     app: &'a AppHandle,
     state: &'a State<'a, AppState>,
