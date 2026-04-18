@@ -56,12 +56,10 @@ pub fn TopBar() -> impl IntoView {
         </header>
 
         // Backdrop — click to close
-        <Show when=move || menu_open.get()>
-            <div
-                class=move || if menu_open.get() { "slide-panel-backdrop open" } else { "slide-panel-backdrop" }
-                on:click=close_menu
-            />
-        </Show>
+        <div
+            class=move || if menu_open.get() { "slide-panel-backdrop open" } else { "slide-panel-backdrop" }
+            on:click=close_menu
+        />
 
         // Slide-in panel
         <div class=move || if menu_open.get() { "slide-panel open" } else { "slide-panel" }>
@@ -76,6 +74,7 @@ pub fn TopBar() -> impl IntoView {
                         let cid_switch = canvas.id.clone();
                         let cid_delete = canvas.id.clone();
                         let cid_class  = canvas.id.clone();
+                        let cid_dot    = canvas.id.clone();
                         view! {
                             <div
                                 class=move || if active_id().as_deref() == Some(&cid_class) {
@@ -88,7 +87,7 @@ pub fn TopBar() -> impl IntoView {
                                     menu_open.set(false);
                                 }
                             >
-                                <div class=move || if active_id().as_deref() == Some(&canvas.id) {
+                                <div class=move || if active_id().as_deref() == Some(&cid_dot) {
                                     "panel-canvas-dot active"
                                 } else {
                                     "panel-canvas-dot"
