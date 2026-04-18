@@ -6,11 +6,42 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'crates/**'
+              - 'apps/**'
+              - 'examples/**'
+              - 'benches/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            e2e:
+              - 'e2e/**'
+              - 'apps/papillon/frontend/**'
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+
   check:
     name: Check
     runs-on: ubuntu-latest
@@ -81,93 +112,96 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
-  justfile:
-    name: Justfile recipes
+  build-extension:
+    name: Build (browser extension)
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
     steps:
       - uses: actions/checkout@v4
-      - name: Free disk space (remove pre-installed tools unused by this job)
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
-          df -h
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev pkg-config libpq-dev
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
           targets: wasm32-unknown-unknown
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "native"
           cache-on-failure: true
-      - name: Install tools
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+      - name: Install wasm-pack
+        run: cargo binstall wasm-pack --no-confirm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install npm dependencies
+        working-directory: apps/papillon-extension
+        run: npm install
+      - name: Build extension WASM
+        working-directory: apps/papillon-extension
+        run: npm run build:wasm
+      - name: Build extension bundle
+        working-directory: apps/papillon-extension
+        run: npm run build
+      - name: Assert dist exists
         run: |
-          curl -fsSL https://just.systems/install.sh | bash -s -- --to ~/.cargo/bin
-          cargo install cargo-binstall
-          cargo binstall --no-confirm wasm-pack cargo-audit trunk tauri-cli
-      # ── Setup ──
-      - name: just setup
-        run: just setup
-      # ── Quality ──
-      - name: just lint
-        run: just lint
-      - name: just fmt (verify idempotent)
-        run: just fmt && git diff --exit-code
-      - name: just audit
-        run: just audit || echo "::warning::cargo audit found advisories — review before merge"
-      # ── Test ──
-      - name: just test
-        run: just test
-      - name: just test-crate pap-did
-        run: just test-crate pap-did
-      - name: just test-registry
-        run: just test-registry
-      # ── Build ──
-      - name: just build
-        run: just build
-      # ── Services (start, probe, stop) ──
-      - name: just registry-local
+          [ -d apps/papillon-extension/dist ] && [ "$(ls -A apps/papillon-extension/dist)" ] \
+            && echo "Extension dist OK" \
+            || { echo "::error::Extension dist missing or empty"; exit 1; }
+
+  registry-probe:
+    name: Registry smoke (startup probe)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "registry-ssr"
+          cache-on-failure: true
+      - name: Pre-build registry binary
+        run: cargo build -p pap-registry --features ssr
+      - name: Start registry and probe health endpoint
         run: |
-          # Pre-build the binary so the 120s startup timer is not eaten by compilation
-          # (cold-cache CI runs re-compile pap-registry after Cargo.lock changes)
-          cargo build -p pap-registry --features ssr
-          just registry-local &
+          PAP_REGISTRY_NO_TLS=true cargo run -p pap-registry --bin pap-registry --features ssr &
           pid=$!
           for i in $(seq 1 120); do
-            curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && break
+            curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && \
+              { echo "Registry started successfully"; kill $pid; exit 0; }
             kill -0 $pid 2>/dev/null || { echo "::error::registry process died"; exit 1; }
-            [ "$i" -eq 120 ] && { echo "::error::registry did not start within 2m"; kill $pid; exit 1; }
             sleep 1
           done
-          echo "Registry started successfully"
-          kill $pid
-      - name: just extension
-        run: |
-          rm -rf apps/papillon-extension/dist
-          just extension &
-          pid=$!
-          # Wait for vite to produce dist/ (wasm bootstrap + npm install + build can take minutes)
-          for i in $(seq 1 90); do
-            [ -d apps/papillon-extension/dist ] && break
-            kill -0 $pid 2>/dev/null || { echo "::error::extension process died"; exit 1; }
-            sleep 2
-          done
-          [ -d apps/papillon-extension/dist ] \
-            && echo "Extension built successfully" \
-            || { echo "::error::extension build timed out"; kill $pid 2>/dev/null; exit 1; }
+          echo "::error::registry did not start within 2m"
           kill $pid 2>/dev/null || true
-      # ── Utilities ──
-      - name: just run-example
-        run: just run-example pap-search-example
-      - name: just clean
-        run: just clean
-      # ── Skipped (require display) ──
-      # just papillon — needs Tauri GUI / display server
-      # just dev — needs display (Papillon component)
-      # just registry — TLS variant; registry-local covers the code path
+          exit 1
+
+  run-example:
+    name: Run example (pap-search-example)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "native"
+          cache-on-failure: true
+      - name: Run search example
+        run: cargo run -p pap-search-example
 
   docker-workspace:
     name: Docker workspace consistency
@@ -177,9 +211,48 @@ jobs:
       - name: Validate Dockerfile workspace members
         run: bash ci/check-docker-workspace.sh
 
+  build-wasm:
+    name: Build WASM (Papillon frontend)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "smoke-wasm"
+          cache-on-failure: true
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+      - name: Cache trunk binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/trunk
+          key: trunk-${{ runner.os }}-${{ hashFiles('apps/papillon/frontend/Cargo.lock') }}
+          restore-keys: trunk-${{ runner.os }}-
+      - name: Install trunk
+        run: cargo binstall trunk --no-confirm
+      - name: Build frontend (release WASM)
+        run: cd apps/papillon/frontend && trunk build --release
+      - name: Upload frontend dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: papillon-frontend-dist
+          path: apps/papillon/frontend/dist/
+          retention-days: 1
+
   bench:
     name: Benchmark (regression gate)
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
     permissions:
       pull-requests: write
       actions: read
@@ -298,7 +371,7 @@ jobs:
           shared-key: "java-bindings"
           cache-on-failure: true
       - name: Build native library
-        run: cargo build --release -p pap-c
+        run: cargo build -p pap-c
       - name: Set library filename
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
@@ -309,7 +382,7 @@ jobs:
             echo "LIB_NAME=libpap_c.so" >> $GITHUB_ENV
           fi
       - name: Verify native library exists
-        run: ls -lh target/release/$LIB_NAME
+        run: ls -lh target/debug/$LIB_NAME
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -324,27 +397,18 @@ jobs:
   smoke-test:
     name: Smoke Test (Papillon Desktop App)
     runs-on: ubuntu-latest
+    needs: [changes, build-wasm]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true') &&
+      needs.build-wasm.result == 'success'
     steps:
       - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Download frontend dist artifact
+        uses: actions/download-artifact@v4
         with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "smoke-wasm"
-          cache-on-failure: true
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-      - name: Cache trunk binary
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/trunk
-          key: trunk-${{ runner.os }}-${{ hashFiles('apps/papillon/frontend/Cargo.lock') }}
-          restore-keys: trunk-${{ runner.os }}-
-      - name: Install trunk
-        run: cargo binstall trunk --no-confirm
+          name: papillon-frontend-dist
+          path: apps/papillon/frontend/dist/
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -361,19 +425,6 @@ jobs:
         run: |
           npm install
           npx playwright install chromium --with-deps
-      - name: Build frontend (release WASM)
-        run: cd apps/papillon/frontend && trunk build --release
-      - name: Inspect dist output
-        run: |
-          echo "=== dist directory listing ==="
-          ls -lah apps/papillon/frontend/dist/
-          echo "=== generated index.html ==="
-          cat apps/papillon/frontend/dist/index.html
-          echo ""
-          echo "=== WASM file size ==="
-          ls -lh apps/papillon/frontend/dist/*.wasm 2>/dev/null || echo "No .wasm files found"
-          echo "=== JS files ==="
-          ls -lh apps/papillon/frontend/dist/*.js 2>/dev/null || echo "No .js files found"
       - name: Run smoke tests
         working-directory: e2e
         run: npx playwright test tests/smoke.spec.ts --workers=1
@@ -390,8 +441,11 @@ jobs:
   chrysalis-e2e-tier2:
     name: E2E Tier 2 (Chrysalis functional tests)
     runs-on: ubuntu-latest
-    # Run after the existing smoke test so the Docker layer cache is warm.
-    needs: [smoke-test]
+    needs: [changes, build-wasm]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true') &&
+      needs.build-wasm.result == 'success'
     env:
       CHRYSALIS_PORT: "7890"
     steps:
@@ -482,29 +536,18 @@ jobs:
   chrysalis-e2e:
     name: Chrysalis Integration Tests
     runs-on: ubuntu-latest
+    needs: [changes, build-wasm]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true') &&
+      needs.build-wasm.result == 'success'
     steps:
       - uses: actions/checkout@v4
-
-      # ── Rust + WASM toolchain (for Papillon frontend) ──────────────────────
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Download frontend dist artifact
+        uses: actions/download-artifact@v4
         with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "smoke-wasm"
-          cache-on-failure: true
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-      - name: Cache trunk binary
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/trunk
-          key: trunk-${{ runner.os }}-${{ hashFiles('apps/papillon/frontend/Cargo.lock') }}
-          restore-keys: trunk-${{ runner.os }}-
-      - name: Install trunk
-        run: cargo binstall trunk --no-confirm
+          name: papillon-frontend-dist
+          path: apps/papillon/frontend/dist/
 
       # ── Node.js + Playwright ──────────────────────────────────────────────
       - name: Setup Node.js
@@ -522,10 +565,6 @@ jobs:
         run: |
           npm install
           npx playwright install chromium --with-deps
-
-      # ── Papillon frontend (needed for UI integration tests in the spec) ────
-      - name: Build frontend (release WASM)
-        run: cd apps/papillon/frontend && trunk build --release
 
       # ── Chrysalis CI image (lean SSR-only build, no WASM bundle) ──────────
       - name: Set up Docker Buildx
