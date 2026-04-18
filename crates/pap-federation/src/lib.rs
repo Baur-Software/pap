@@ -687,6 +687,8 @@ mod tests {
             min_age_to_vouch_days: 0,
             probation_days: 30,
             require_diverse_paths: false,
+            path_diversity_hops: 3,
+            max_shared_ancestor_vouchers: 2,
         };
         let mut registry = FederatedRegistry::with_policy(policy);
 
@@ -735,6 +737,8 @@ mod tests {
         assert_eq!(policy.min_age_to_vouch_days, 90);
         assert_eq!(policy.probation_days, 60);
         assert!(policy.require_diverse_paths);
+        assert_eq!(policy.path_diversity_hops, 3);
+        assert_eq!(policy.max_shared_ancestor_vouchers, 2);
     }
 
     #[test]
@@ -745,6 +749,8 @@ mod tests {
             min_age_to_vouch_days: 180,
             probation_days: 90,
             require_diverse_paths: false,
+            path_diversity_hops: 5,
+            max_shared_ancestor_vouchers: 3,
         };
         let json = serde_json::to_string(&policy).unwrap();
         let restored: PeerRegistrationPolicy = serde_json::from_str(&json).unwrap();
@@ -1080,5 +1086,174 @@ mod tests {
         let results = registry.query_local_latest("schema:SearchAction");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].version, "0.2.0");
+    }
+
+    // =========================================================================
+    // require_diverse_paths tests
+    // =========================================================================
+
+    /// Coordinated cluster attack: all three vouchers share a single intermediate
+    /// ancestor (admin). Registration must be rejected with NonDiversePaths.
+    ///
+    /// Graph:  genesis --vouches--> admin --vouches--> peer_a, peer_b, peer_c
+    ///         peer_a, peer_b, peer_c --vouch--> candidate
+    #[test]
+    fn coordinated_cluster_rejected() {
+        let policy = registry::PeerRegistrationPolicy {
+            min_vouches: 1,
+            vouch_budget_per_year: 10,
+            min_age_to_vouch_days: 0,
+            probation_days: 60,
+            require_diverse_paths: true,
+            path_diversity_hops: 3,
+            max_shared_ancestor_vouchers: 2,
+        };
+        let mut registry = FederatedRegistry::with_policy(policy);
+
+        let now = chrono::Utc::now();
+
+        // Genesis peer: added directly (trust root, no vouchers needed).
+        let genesis_key = make_keypair();
+        let genesis_did = did_from_key(&genesis_key);
+        let mut genesis_peer = RegistryPeer::new(&genesis_did, "https://genesis.example.com");
+        genesis_peer.status = PeerStatus::Active;
+        genesis_peer.registered_at = Some((now - chrono::Duration::days(200)).to_rfc3339());
+        registry.add_peer(genesis_peer);
+
+        // Admin peer: registered via genesis vouch, then promoted to Active.
+        let admin_key = make_keypair();
+        let admin_did = did_from_key(&admin_key);
+        let admin_peer = RegistryPeer::new(&admin_did, "https://admin.example.com");
+        let admin_vouch = vec![PeerVouch::sign(
+            &genesis_did,
+            &admin_did,
+            "2026-01-01T00:00:00Z",
+            "bootstrap",
+            &genesis_key,
+        )];
+        registry
+            .register_peer_with_vouches(admin_peer, admin_vouch, now)
+            .unwrap();
+        registry.promote_peer_to_active(&admin_did);
+
+        // Leaf peers peer_a, peer_b, peer_c: each vouched only by admin.
+        let mut leaf_peers: Vec<(ed25519_dalek::SigningKey, String)> = Vec::new();
+        for i in 0..3usize {
+            let leaf_key = make_keypair();
+            let leaf_did = did_from_key(&leaf_key);
+            let leaf_peer = RegistryPeer::new(&leaf_did, format!("https://leaf{i}.example.com"));
+            let vouch = vec![PeerVouch::sign(
+                &admin_did,
+                &leaf_did,
+                "2026-02-01T00:00:00Z",
+                "direct",
+                &admin_key,
+            )];
+            registry
+                .register_peer_with_vouches(leaf_peer, vouch, now)
+                .unwrap();
+            registry.promote_peer_to_active(&leaf_did);
+            leaf_peers.push((leaf_key, leaf_did));
+        }
+
+        // Candidate: vouched by all three leaves (which all trace through admin).
+        let cand_key = make_keypair();
+        let cand_did = did_from_key(&cand_key);
+        let cand_peer = RegistryPeer::new(&cand_did, "https://candidate.example.com");
+        let vouches: Vec<PeerVouch> = leaf_peers
+            .iter()
+            .map(|(k, d)| PeerVouch::sign(d, &cand_did, "2026-03-01T00:00:00Z", "direct", k))
+            .collect();
+
+        let result = registry.register_peer_with_vouches(cand_peer, vouches, now);
+        assert!(result.is_err(), "expected rejection of coordinated cluster");
+        match result.unwrap_err() {
+            FederationError::NonDiversePaths {
+                common_ancestor,
+                voucher_count,
+            } => {
+                assert_eq!(
+                    common_ancestor, admin_did,
+                    "shared ancestor should be the admin node"
+                );
+                assert!(
+                    voucher_count >= 2,
+                    "at least 2 vouchers must share the common ancestor"
+                );
+            }
+            other => panic!("expected NonDiversePaths, got: {other}"),
+        }
+    }
+
+    /// Diverse graph: each voucher traces to a distinct genesis peer.
+    /// Registration must succeed.
+    ///
+    /// Graph:  genesis_0 --> leaf_0 \
+    ///         genesis_1 --> leaf_1  >-- candidate
+    ///         genesis_2 --> leaf_2 /
+    #[test]
+    fn diverse_paths_accepted() {
+        let policy = registry::PeerRegistrationPolicy {
+            min_vouches: 1,
+            vouch_budget_per_year: 10,
+            min_age_to_vouch_days: 0,
+            probation_days: 60,
+            require_diverse_paths: true,
+            path_diversity_hops: 3,
+            max_shared_ancestor_vouchers: 2,
+        };
+        let mut registry = FederatedRegistry::with_policy(policy);
+
+        let now = chrono::Utc::now();
+
+        // Three independent genesis → leaf chains.
+        let mut leaf_peers: Vec<(ed25519_dalek::SigningKey, String)> = Vec::new();
+        for i in 0..3usize {
+            let genesis_key = make_keypair();
+            let genesis_did = did_from_key(&genesis_key);
+            let mut genesis_peer =
+                RegistryPeer::new(&genesis_did, format!("https://genesis{i}.example.com"));
+            genesis_peer.status = PeerStatus::Active;
+            genesis_peer.registered_at = Some((now - chrono::Duration::days(200)).to_rfc3339());
+            registry.add_peer(genesis_peer);
+
+            let leaf_key = make_keypair();
+            let leaf_did = did_from_key(&leaf_key);
+            let leaf_peer = RegistryPeer::new(&leaf_did, format!("https://leaf{i}.example.com"));
+            let vouch = vec![PeerVouch::sign(
+                &genesis_did,
+                &leaf_did,
+                "2026-01-01T00:00:00Z",
+                "bootstrap",
+                &genesis_key,
+            )];
+            registry
+                .register_peer_with_vouches(leaf_peer, vouch, now)
+                .unwrap();
+            registry.promote_peer_to_active(&leaf_did);
+            leaf_peers.push((leaf_key, leaf_did));
+        }
+
+        // Candidate vouched by all three independent leaves.
+        let cand_key = make_keypair();
+        let cand_did = did_from_key(&cand_key);
+        let cand_peer = RegistryPeer::new(&cand_did, "https://candidate.example.com");
+        let vouches: Vec<PeerVouch> = leaf_peers
+            .iter()
+            .map(|(k, d)| PeerVouch::sign(d, &cand_did, "2026-03-01T00:00:00Z", "direct", k))
+            .collect();
+
+        let result = registry.register_peer_with_vouches(cand_peer, vouches, now);
+        assert!(
+            result.is_ok(),
+            "expected diverse-path registration to succeed, got: {:?}",
+            result.unwrap_err()
+        );
+        let registered = registry
+            .peers()
+            .iter()
+            .find(|p| p.did == cand_did)
+            .expect("candidate not found in registry");
+        assert_eq!(registered.status, PeerStatus::Probationary);
     }
 }
