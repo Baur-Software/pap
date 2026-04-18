@@ -1202,7 +1202,16 @@ mod tests {
         )
         .unwrap();
 
-        // Same proof → same hash every call
+        // Hash must be stable across a serde round-trip (tests real determinism,
+        // not just two calls on the same in-memory struct).
+        let json = serde_json::to_string(&proof).unwrap();
+        let proof2: RecoveryProof = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            proof.hash(),
+            proof2.hash(),
+            "hash must be identical after a JSON round-trip"
+        );
+        // Also verify calling hash() twice on the same instance is consistent.
         assert_eq!(proof.hash(), proof.hash());
     }
 

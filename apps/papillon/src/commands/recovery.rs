@@ -292,7 +292,16 @@ pub fn reconstruct_from_shards(
 
     // Old shards are now spent — mark this ceremony as requiring renewal so
     // the frontend prompts the principal to distribute fresh shards.
-    revoke_current_ceremony(&*state.db)?;
+    // Non-fatal: the identity is already installed at this point. A DB failure
+    // writing the revocation marker must not surface as a recovery failure to
+    // the caller — the principal is logged in regardless. The missing marker
+    // means the wizard won't auto-open on next launch, but the principal can
+    // still re-run it manually. Log and continue.
+    if let Err(e) = revoke_current_ceremony(&*state.db) {
+        tracing::warn!(
+            "reconstruct_from_shards: failed to write revocation marker (non-fatal): {e}"
+        );
+    }
 
     Ok(RecoveryReconstructResult {
         did,
