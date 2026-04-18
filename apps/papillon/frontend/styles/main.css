@@ -1244,6 +1244,9 @@ body {
     grid-row: 1;
 }
 
+/* .app-sidebar intentionally placed at grid-column:1/grid-row:2 alongside .app-main.
+   The Sidebar component has been removed from the DOM; this rule is kept as dead code
+   until the sidebar.rs file deletion is committed. */
 .app-sidebar {
     grid-column: 1;
     grid-row: 2;
@@ -1549,7 +1552,7 @@ body {
     border: 1px solid var(--border);
     border-radius: 0 0 var(--r-md) 0;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    z-index: 200;
+    z-index: 210;
     padding: var(--sp-xs) 0;
 }
 
@@ -1632,7 +1635,7 @@ body {
 .menu-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 199;
+    z-index: 209;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1674,7 +1677,7 @@ body {
 
 .slide-panel-backdrop.open {
     opacity: 1;
-    pointer-events: all;
+    pointer-events: auto;
 }
 
 .panel-body {
@@ -5053,7 +5056,7 @@ body {
    right of the sidebar, mirroring the main layout grid exactly. */
 .canvas-block--expanded {
     position: fixed;
-    inset: var(--topbar-height, 36px) 0 0 var(--sidebar-width, 64px);
+    inset: var(--topbar-height, 36px) 0 0 0;
     z-index: 200;
     max-width: none;
     border-radius: 0;
