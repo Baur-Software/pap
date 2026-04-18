@@ -4,21 +4,7 @@ All notable changes to the Python SDK will be documented in this file.
 
 ## [Unreleased]
 
-### Added
-- Comprehensive README with API reference and examples
-- Python SDK status documentation
-- Type hints in docstrings
-
-### Changed
-- **SECURITY:** Upgraded pyo3 from 0.22.6 to 0.24+ (fixes RUSTSEC-2025-0020)
-- Migrated all deprecated PyO3 0.24 APIs (`get_type_bound` → `get_type`)
-- Improved error messages in exception hierarchy
-
-### Fixed
-- All compiler warnings eliminated (5 → 0)
-- PyO3 buffer overflow vulnerability patched
-
-## [0.1.0] - Not Yet Released
+## [0.8.2] - 2026-04-18
 
 ### Added
 - Initial Python bindings for PAP protocol
@@ -31,6 +17,18 @@ All notable changes to the Python SDK will be documented in this file.
 - Transaction receipts with co-signing
 - Comprehensive test suite (511 lines, 50+ tests)
 - Maturin build system with abi3 support
+- Comprehensive README with API reference and examples
+- Python SDK status documentation
+- Type hints in docstrings
+
+### Changed
+- **SECURITY:** Upgraded pyo3 from 0.22.6 to 0.24+ (fixes RUSTSEC-2025-0020)
+- Migrated all deprecated PyO3 0.24 APIs (`get_type_bound` → `get_type`)
+- Improved error messages in exception hierarchy
+
+### Fixed
+- All compiler warnings eliminated (5 → 0)
+- PyO3 buffer overflow vulnerability patched
 
 ### Security
 - Ed25519 signatures for all operations
