@@ -175,13 +175,19 @@ async fn classify_intent(
     }
 
     // Level 2: BM25 semantic index — ~50µs, no network, no spinner needed.
-    // Maps user prompts to schema:* action types using the agent catalog as corpus.
+    // Built from the current canvas's agent DB so it reflects approved agents.
+    // agent_name is a hint only; downstream resolve_agent applies disclosure
+    // scoring so no agent is forced without proper permission evaluation.
     // Falls through to Level 3 when confidence < 0.25 or catalog is empty.
-    if let Some(m) = state.intent_index.classify(text, 0.25) {
-        let preferred_agent = m
-            .agent_name
-            .unwrap_or_else(|| "DuckDuckGo Search".to_owned());
-        return (m.action, preferred_agent, m.cleaned_query);
+    {
+        let agents = state.db.load_all_agents().unwrap_or_default();
+        let intent_index = pap_agents::IntentIndex::new(&agents);
+        if let Some(m) = intent_index.classify(text, 0.25) {
+            // Empty string means "no forced agent" — resolve_agent selects
+            // the best candidate by disclosure scope and profile history.
+            let preferred_agent = m.agent_name.unwrap_or_default();
+            return (m.action, preferred_agent, m.cleaned_query);
+        }
     }
 
     // Level 3: federation NLU — emit phase 0 spinner while the slower path runs
