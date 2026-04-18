@@ -8,6 +8,7 @@ use crate::bridge;
 use crate::service::PapillonService;
 use crate::state::catalog::CatalogState;
 use crate::state::registry::RegistryState;
+pub use papillon_shared::{filter_messages_by_canvas, merge_canvases_from_records, merge_messages_dedup};
 
 /// Which face of the canvas flipper is visible.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -804,21 +805,7 @@ impl CanvasState {
                 }
             } else {
                 // Load ALL canvases into the reactive store so the sidebar is complete.
-                canvases.update(|cs| {
-                    for rec in &records {
-                        if cs.iter().any(|c| c.id == rec.id) {
-                            continue;
-                        }
-                        let now = rec.created_at.clone();
-                        cs.push(Canvas {
-                            id: rec.id.clone(),
-                            name: rec.name.clone(),
-                            blocks: Vec::new(),
-                            created_at: now.clone(),
-                            updated_at: now,
-                        });
-                    }
-                });
+                canvases.update(|cs| merge_canvases_from_records(cs, &records));
                 // Activate the first (most recent) canvas if none is already active.
                 let first_id = records[0].id.clone();
                 if current_canvas_id.get_untracked().is_none() {
@@ -890,13 +877,7 @@ impl CanvasState {
                     &serde_json::json!({ "canvasId": cid }),
                 ).await {
                     Ok(msgs) => {
-                        canvas_messages.update(|store| {
-                            for msg in msgs {
-                                if !store.iter().any(|m| m.id == msg.id) {
-                                    store.push(msg);
-                                }
-                            }
-                        });
+                        canvas_messages.update(|store| merge_messages_dedup(store, msgs));
                     }
                     Err(e) => {
                         leptos::logging::warn!("canvas_messages_load failed for {}: {}", cid, e);
@@ -1147,4 +1128,5 @@ mod tests {
         let body: String = input.chars().take(40).collect();
         assert!(result.starts_with(&body));
     }
+
 }

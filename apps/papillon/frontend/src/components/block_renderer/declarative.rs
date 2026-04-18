@@ -209,6 +209,7 @@ impl BlockRenderer for DeclarativeRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use papillon_shared::FieldMapping;
 
     fn sample_template_config() -> TemplateConfig {
         TemplateConfig {
