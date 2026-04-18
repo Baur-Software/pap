@@ -267,5 +267,8 @@ pub fn get_recovery_status(state: State<'_, AppState>) -> Result<RecoveryStatus,
         .map_err(|e| PapillonError::from(e.to_string()))?
         .map(|v| v == "1")
         .unwrap_or(false);
-    Ok(RecoveryStatus { configured })
+    Ok(RecoveryStatus {
+        configured,
+        needs_renewal: false,
+    })
 }

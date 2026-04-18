@@ -1634,6 +1634,30 @@ mod tests {
         assert_eq!(config2.mandate_ttl_hours, 2);
         assert!(config2.auto_approve_zero_disclosure);
     }
+
+    #[test]
+    fn recovery_status_needs_renewal_roundtrip_json() {
+        let status = RecoveryStatus {
+            configured: true,
+            needs_renewal: true,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        let back: RecoveryStatus = serde_json::from_str(&json).unwrap();
+        assert!(back.configured);
+        assert!(back.needs_renewal);
+    }
+
+    #[test]
+    fn recovery_status_needs_renewal_defaults_false_from_old_json() {
+        // Simulate JSON from a version that lacks needs_renewal.
+        let json = r#"{"configured":true}"#;
+        let back: RecoveryStatus = serde_json::from_str(json).unwrap();
+        assert!(back.configured);
+        assert!(
+            !back.needs_renewal,
+            "needs_renewal must default to false for backward compat"
+        );
+    }
 }
 
 // ── Shamir Secret Sharing recovery types ────────────────────
@@ -1689,6 +1713,11 @@ pub struct RecoveryReconstructResult {
 pub struct RecoveryStatus {
     /// `true` once the user has completed the Shamir shard setup ceremony.
     pub configured: bool,
+    /// `true` when the current shard ceremony was used in a recovery and the
+    /// principal must re-distribute fresh shards before the old ones can be
+    /// reused by an attacker who collected M of them.
+    #[serde(default)]
+    pub needs_renewal: bool,
 }
 
 // ── Canvas persistence types ──────────────────────────────────────────────
