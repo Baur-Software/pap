@@ -1,5 +1,32 @@
 ## [Unreleased]
 
+## [0.8.2] - 2026-04-18
+
+### Added
+
+- **pap-agents**: BM25 semantic intent classifier (`IntentIndex`) — pure-Rust Okapi BM25
+  (k1=1.5, b=0.75) over the agent catalog. Classify any natural-language prompt to a
+  `schema:` action type in ~50µs with no network, no LLM, no external dependencies.
+  Per-agent confidence hint (`IntentMatch::agent_name`) for local catalog pre-selection;
+  falls back to federation discovery when below threshold.
+- **pap-agents**: `IntentIndex::new(agents)` and `IntentIndex::classify(prompt, threshold)`
+  re-exported from the crate root for downstream consumers.
+- **docs**: FAQ Q7 updated to describe the three-level intent routing chain:
+  URL fast path (~0µs) → BM25 semantic index (~50µs) → on-device AI fallback (~100ms),
+  with a revised prompt-injection analysis for each level.
+- **tests**: 18 unit tests for the BM25 classifier covering routing by action type, action
+  group aggregation, confidence gating, AskAction exclusion, Unicode tokenization, UTF-8
+  boundary safety, empty/single-agent catalogs, and agent-score hint threshold.
+
+### Changed
+
+- **canvas**: Intent routing wired as a three-level chain — `classify_intent()` now inserts
+  BM25 semantic scoring between the existing URL fast path and the on-device AI fallback.
+  Prompts that match a catalog agent with ≥25% BM25 confidence mass are routed directly,
+  bypassing the ~100ms AI path. Unmatched prompts fall through unchanged.
+- **canvas**: DB errors on agent catalog load are now logged via `eprintln!` instead of
+  silently swallowed; routing falls through to Level 3 on catalog unavailability.
+
 ## [0.8.1] - 2026-04-17
 
 ### Added
