@@ -291,4 +291,113 @@ mod tests {
         assert_eq!(ns.mandate_count(), 0);
         assert_eq!(ns.revocation_count(), 0);
     }
+
+    /// Revoking a DID that has no registered mandate still succeeds and marks the
+    /// DID as revoked — the registry doesn't require a prior mandate to be present.
+    #[test]
+    fn process_revocation_with_no_registered_mandate_still_revokes_did() {
+        let mut notary_set = NotarySet::new();
+        let old_key = make_keypair();
+        let old_did = did_from_key(&old_key);
+        let new_key = make_keypair();
+        let new_did = did_from_key(&new_key);
+
+        // No mandate registered for old_did — revocation should still be accepted.
+        assert!(notary_set.query(&old_did).is_none());
+
+        let mut proof = RevocationProof {
+            old_principal_did: old_did.clone(),
+            new_principal_did: new_did,
+            recovery_proof_hash: "test_hash".into(),
+            revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
+            signature: None,
+        };
+        proof.sign(&new_key).unwrap();
+
+        let revoked_did = notary_set.process_revocation(&proof).unwrap();
+        assert_eq!(revoked_did, old_did);
+        assert!(notary_set.is_revoked(&old_did));
+        assert_eq!(notary_set.revocation_count(), 1);
+        // Mandate count unchanged (was 0 before, still 0)
+        assert_eq!(notary_set.mandate_count(), 0);
+    }
+
+    /// Revoking the same DID twice is idempotent — the second revocation succeeds
+    /// (no duplicate-error) and the DID remains in the revoked set once.
+    #[test]
+    fn process_revocation_twice_is_idempotent() {
+        let mut notary_set = NotarySet::new();
+        let old_key = make_keypair();
+        let old_did = did_from_key(&old_key);
+        let new_key = make_keypair();
+        let new_did = did_from_key(&new_key);
+
+        let mut proof = RevocationProof {
+            old_principal_did: old_did.clone(),
+            new_principal_did: new_did.clone(),
+            recovery_proof_hash: "test_hash".into(),
+            revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
+            signature: None,
+        };
+        proof.sign(&new_key).unwrap();
+
+        notary_set.process_revocation(&proof).unwrap();
+        assert_eq!(notary_set.revocation_count(), 1);
+
+        // Build a second revocation proof with the same old DID.
+        let mut proof2 = RevocationProof {
+            old_principal_did: old_did.clone(),
+            new_principal_did: new_did,
+            recovery_proof_hash: "test_hash_2".into(),
+            revoked_at: chrono::Utc::now(),
+            algorithm: pap_did::SignatureAlgorithm::default(),
+            signature: None,
+        };
+        proof2.sign(&new_key).unwrap();
+
+        // Second revocation must also succeed (idempotent insert into HashSet).
+        notary_set.process_revocation(&proof2).unwrap();
+        assert!(notary_set.is_revoked(&old_did));
+        // HashSet deduplication: count must remain 1.
+        assert_eq!(notary_set.revocation_count(), 1);
+    }
+
+    /// After all registered mandates are revoked via revocation proofs, `all_mandates`
+    /// returns an empty slice.
+    #[test]
+    fn all_mandates_is_empty_after_all_principals_revoked() {
+        let mut notary_set = NotarySet::new();
+        let key1 = make_keypair();
+        let key2 = make_keypair();
+        let did1 = did_from_key(&key1);
+        let did2 = did_from_key(&key2);
+        let new_key = make_keypair();
+        let new_did = did_from_key(&new_key);
+
+        notary_set.register(make_signed_mandate(&key1)).unwrap();
+        notary_set.register(make_signed_mandate(&key2)).unwrap();
+        assert_eq!(notary_set.all_mandates().len(), 2);
+
+        // Revoke both.
+        for old_did in [did1, did2] {
+            let mut proof = RevocationProof {
+                old_principal_did: old_did,
+                new_principal_did: new_did.clone(),
+                recovery_proof_hash: "hash".into(),
+                revoked_at: chrono::Utc::now(),
+                algorithm: pap_did::SignatureAlgorithm::default(),
+                signature: None,
+            };
+            proof.sign(&new_key).unwrap();
+            notary_set.process_revocation(&proof).unwrap();
+        }
+
+        assert!(
+            notary_set.all_mandates().is_empty(),
+            "all_mandates must be empty after every principal is revoked"
+        );
+        assert_eq!(notary_set.revocation_count(), 2);
+    }
 }

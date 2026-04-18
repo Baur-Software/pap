@@ -392,4 +392,68 @@ mod tests {
             .unwrap_or(false);
         assert!(configured, "recovery_shards_configured must be set to 1");
     }
+
+    /// `configured=false` with a revoked ceremony: `needs_renewal` is true even
+    /// when `recovery_shards_configured` has never been set to "1".
+    #[test]
+    fn recovery_status_from_db_needs_renewal_without_configured_flag() {
+        let db = make_db();
+        // No "recovery_shards_configured" key — configured defaults to false.
+        db.set_setting("recovery_ceremony_revoked_at", "2026-04-18T00:00:00Z")
+            .unwrap();
+        let status = recovery_status_from_db(&*db).expect("status");
+        assert!(!status.configured, "configured should be false");
+        assert!(
+            status.needs_renewal,
+            "needs_renewal must be true even when configured=false"
+        );
+    }
+
+    /// An empty-string value for `recovery_ceremony_revoked_at` must NOT be
+    /// treated as a revocation — it is the sentinel used by
+    /// `complete_recovery_ceremony` to clear the revocation marker.
+    #[test]
+    fn recovery_status_from_db_empty_string_revoked_at_is_not_revoked() {
+        let db = make_db();
+        db.set_setting("recovery_shards_configured", "1").unwrap();
+        // Simulate the sentinel written by `complete_recovery_ceremony`.
+        db.set_setting("recovery_ceremony_revoked_at", "").unwrap();
+        let status = recovery_status_from_db(&*db).expect("status");
+        assert!(status.configured);
+        assert!(
+            !status.needs_renewal,
+            "empty-string revoked_at must be treated as absent (not revoked)"
+        );
+    }
+
+    /// Calling `revoke_current_ceremony` twice overwrites the first timestamp.
+    /// Both calls must succeed and the resulting value must still be a non-empty
+    /// ISO timestamp.
+    #[test]
+    fn revoke_current_ceremony_called_twice_overwrites_first_timestamp() {
+        let db = make_db();
+        revoke_current_ceremony(&*db).expect("first revoke should succeed");
+        let first_ts = db
+            .get_setting("recovery_ceremony_revoked_at")
+            .unwrap()
+            .unwrap();
+        assert!(!first_ts.is_empty());
+
+        // Small delay is not practical in unit tests; both timestamps will be
+        // from the same second. We just need to verify the second call does not
+        // error and leaves a valid (non-empty) timestamp.
+        revoke_current_ceremony(&*db).expect("second revoke should succeed");
+        let second_ts = db
+            .get_setting("recovery_ceremony_revoked_at")
+            .unwrap()
+            .unwrap();
+        assert!(
+            !second_ts.is_empty(),
+            "second revoke must leave a non-empty timestamp"
+        );
+        assert!(
+            second_ts.starts_with("20"),
+            "second timestamp should look like an ISO timestamp, got: {second_ts}"
+        );
+    }
 }
