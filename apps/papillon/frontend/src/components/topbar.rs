@@ -4,21 +4,23 @@ use leptos_router::components::A;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
-use crate::state::canvas::CanvasState;
+use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::catalog::CatalogState;
-use crate::state::orchestrator::OrchestratorState;
-use papillon_shared::OrchestratorStatus;
 
 #[component]
 pub fn TopBar() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let orchestrator = expect_context::<OrchestratorState>();
     let menu_open = RwSignal::new(false);
 
-    let status_class = move || match orchestrator.status.get() {
-        OrchestratorStatus::Ready => "topbar-dot ready",
-        OrchestratorStatus::Downloading { .. } => "topbar-dot working",
-        _ => "topbar-dot agents-only",
+    let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
+    let toggle_side = move |_: leptos::ev::MouseEvent| {
+        canvas_state.canvas_side.update(|s| {
+            *s = if *s == CanvasSide::Front {
+                CanvasSide::Back
+            } else {
+                CanvasSide::Front
+            };
+        });
     };
 
     let toggle_menu = move |_: leptos::ev::MouseEvent| {
@@ -44,9 +46,14 @@ pub fn TopBar() -> impl IntoView {
                 <TopbarPrompt />
             </div>
 
-            // Right zone — subtle status dot only
+            // Right zone — workflow toggle button
             <div class="topbar-end">
-                <div class=status_class title="Orchestrator status" />
+                <button
+                    class="canvas-flip-toggle"
+                    on:click=toggle_side
+                >
+                    {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
+                </button>
             </div>
         </header>
 

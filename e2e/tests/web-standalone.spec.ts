@@ -43,12 +43,13 @@ test.describe("Web standalone: app shell", () => {
     await expect(statusBar).toContainText("Agents only");
   });
 
-  test("top bar shows agents-only orchestrator status dot", async ({ page }) => {
+  test("top bar shows workflow toggle button", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Browser mode: Unconfigured → topbar shows .topbar-dot.agents-only (colour dot, no text)
-    await expect(page.locator(".topbar-dot.agents-only")).toBeVisible();
+    // Status dot replaced by the canvas flip-toggle button in the topbar right zone
+    await expect(page.locator(".canvas-flip-toggle")).toBeVisible();
+    await expect(page.locator(".canvas-flip-toggle")).toContainText("Workflow");
   });
 
   test("navigation menu opens and shows links", async ({ page }) => {
