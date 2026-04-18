@@ -283,7 +283,11 @@ pub fn App() -> impl IntoView {
             if let Ok(status) =
                 bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await
             {
-                if !status.configured {
+                if status.needs_renewal {
+                    // Old shards are spent — principal must issue new ones.
+                    recovery_state.needs_renewal.set(true);
+                    recovery_state.show_setup.set(true);
+                } else if !status.configured {
                     recovery_state.show_setup.set(true);
                 }
             }

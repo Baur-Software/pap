@@ -958,4 +958,430 @@ mod tests {
         assert_eq!(req.new_principal_did, "did:key:znew");
         assert_eq!(req.recovery_mandate_hash, "mandate-hash-xyz");
     }
+
+    // ── RecoveryRequest serde ─────────────────────────────────────────────────
+
+    #[test]
+    fn recovery_request_roundtrip_json() {
+        let req = RecoveryRequest::new(
+            "did:key:zold".into(),
+            "did:key:znew".into(),
+            "mandate-hash-abc".into(),
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        let back: RecoveryRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.old_principal_did, req.old_principal_did);
+        assert_eq!(back.new_principal_did, req.new_principal_did);
+        assert_eq!(back.recovery_mandate_hash, req.recovery_mandate_hash);
+        // Timestamp must survive the round-trip
+        assert_eq!(back.requested_at.timestamp(), req.requested_at.timestamp());
+    }
+
+    // ── RecoveryMandate serde ─────────────────────────────────────────────────
+
+    #[test]
+    fn recovery_mandate_roundtrip_json_unsigned() {
+        let mandate = RecoveryMandate::new(
+            "did:key:zprincipal".into(),
+            1,
+            vec!["did:key:znotary1".into()],
+        )
+        .unwrap();
+        let json = serde_json::to_string(&mandate).unwrap();
+        // unsigned mandates must NOT emit a "signature" field
+        assert!(
+            !json.contains("\"signature\""),
+            "unsigned mandate must omit signature field, got: {json}"
+        );
+        let back: RecoveryMandate = serde_json::from_str(&json).unwrap();
+        assert!(back.signature.is_none());
+        assert_eq!(back.threshold, 1);
+    }
+
+    #[test]
+    fn recovery_mandate_roundtrip_json_signed() {
+        let key = make_keypair();
+        let mut mandate =
+            RecoveryMandate::new(did_from_key(&key), 1, vec!["did:key:znotary1".into()]).unwrap();
+        mandate.sign(&key).unwrap();
+
+        let json = serde_json::to_string(&mandate).unwrap();
+        let back: RecoveryMandate = serde_json::from_str(&json).unwrap();
+        assert!(back.signature.is_some());
+        // Signature must still verify after round-trip
+        assert!(back.verify(&key.verifying_key()).is_ok());
+    }
+
+    // ── PartialRecoverySignature edge cases ───────────────────────────────────
+
+    #[test]
+    fn partial_signature_rejects_wrong_mandate_hash_in_request() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let notary_key = make_keypair();
+        let notary_did = did_from_key(&notary_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did.clone(), 1, vec![notary_did.clone()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        // Request references a *different* (wrong) mandate hash
+        let request = RecoveryRequest::new(
+            principal_did,
+            did_from_key(&make_keypair()),
+            "wrong-mandate-hash".into(),
+        );
+
+        let result = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary_did,
+            &notary_key,
+            &principal_key.verifying_key(),
+        );
+        assert!(
+            matches!(result, Err(PapError::RecoveryError(ref s)) if s.contains("wrong recovery mandate")),
+            "expected wrong-mandate-hash error, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn partial_signature_rejects_mismatched_principal_in_request() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let notary_key = make_keypair();
+        let notary_did = did_from_key(&notary_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did.clone(), 1, vec![notary_did.clone()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        // Request claims a *different* old_principal_did
+        let request = RecoveryRequest::new(
+            "did:key:zdifferent_principal".into(), // wrong
+            did_from_key(&make_keypair()),
+            mandate.hash(),
+        );
+
+        let result = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary_did,
+            &notary_key,
+            &principal_key.verifying_key(),
+        );
+        assert!(
+            matches!(result, Err(PapError::RecoveryError(ref s)) if s.contains("principal does not match")),
+            "expected principal-mismatch error, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn partial_signature_verify_with_wrong_notary_key_fails() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let notary_key = make_keypair();
+        let notary_did = did_from_key(&notary_key);
+        let wrong_key = make_keypair();
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did.clone(), 1, vec![notary_did.clone()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        let request =
+            RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+        let ps = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary_did,
+            &notary_key,
+            &principal_key.verifying_key(),
+        )
+        .unwrap();
+
+        // Verify against the *wrong* key — must fail
+        let result = ps.verify(&request, &wrong_key.verifying_key());
+        assert!(
+            matches!(result, Err(PapError::VerificationFailed)),
+            "expected VerificationFailed, got: {result:?}"
+        );
+    }
+
+    // ── RecoveryProof::verify (standalone, after assemble) ───────────────────
+
+    #[test]
+    fn recovery_proof_verify_standalone() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let notary1_key = make_keypair();
+        let notary1_did = did_from_key(&notary1_key);
+        let notary2_key = make_keypair();
+        let notary2_did = did_from_key(&notary2_key);
+
+        let mut mandate = RecoveryMandate::new(
+            principal_did.clone(),
+            2,
+            vec![notary1_did.clone(), notary2_did.clone()],
+        )
+        .unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        let request =
+            RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+        let ps1 = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary1_did,
+            &notary1_key,
+            &principal_key.verifying_key(),
+        )
+        .unwrap();
+        let ps2 = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary2_did,
+            &notary2_key,
+            &principal_key.verifying_key(),
+        )
+        .unwrap();
+
+        let notary_keys = vec![
+            (notary1_did, notary1_key.verifying_key()),
+            (notary2_did, notary2_key.verifying_key()),
+        ];
+
+        let proof = RecoveryProof::assemble(
+            request,
+            mandate,
+            vec![ps1, ps2],
+            &principal_key.verifying_key(),
+            &notary_keys,
+        )
+        .unwrap();
+
+        // The standalone verify must also pass (separate call from assemble)
+        assert!(
+            proof
+                .verify(&principal_key.verifying_key(), &notary_keys)
+                .is_ok(),
+            "standalone verify must pass for a correctly assembled proof"
+        );
+    }
+
+    #[test]
+    fn recovery_proof_hash_is_deterministic() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let notary_key = make_keypair();
+        let notary_did = did_from_key(&notary_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did.clone(), 1, vec![notary_did.clone()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        let request =
+            RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+        let ps = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary_did,
+            &notary_key,
+            &principal_key.verifying_key(),
+        )
+        .unwrap();
+
+        let proof = RecoveryProof::assemble(
+            request,
+            mandate,
+            vec![ps],
+            &principal_key.verifying_key(),
+            &[(notary_did, notary_key.verifying_key())],
+        )
+        .unwrap();
+
+        // Hash must be stable across a serde round-trip (tests real determinism,
+        // not just two calls on the same in-memory struct).
+        let json = serde_json::to_string(&proof).unwrap();
+        let proof2: RecoveryProof = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            proof.hash(),
+            proof2.hash(),
+            "hash must be identical after a JSON round-trip"
+        );
+        // Also verify calling hash() twice on the same instance is consistent.
+        assert_eq!(proof.hash(), proof.hash());
+    }
+
+    #[test]
+    fn recovery_proof_assemble_rejects_outsider_signer() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let notary_key = make_keypair();
+        let notary_did = did_from_key(&notary_key);
+        let outsider_key = make_keypair();
+        let outsider_did = did_from_key(&outsider_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did.clone(), 1, vec![notary_did.clone()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        let request =
+            RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+        // Build a PartialRecoverySignature manually for an outsider —
+        // can't go through PartialRecoverySignature::sign (it rejects outsiders),
+        // so we construct it directly.
+        let outsider_sig_bytes = outsider_key.sign(&request.canonical_bytes());
+        use base64::Engine;
+        let outsider_ps = PartialRecoverySignature {
+            notary_did: outsider_did.clone(),
+            signature: base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(outsider_sig_bytes.to_bytes()),
+            signed_at: Utc::now(),
+            algorithm: SignatureAlgorithm::default(),
+        };
+
+        let result = RecoveryProof::assemble(
+            request,
+            mandate,
+            vec![outsider_ps],
+            &principal_key.verifying_key(),
+            &[(outsider_did, outsider_key.verifying_key())],
+        );
+        assert!(
+            matches!(result, Err(PapError::NotaryNotInSet(_))),
+            "expected NotaryNotInSet for outsider signer, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn recovery_proof_assemble_rejects_missing_notary_key() {
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let notary_key = make_keypair();
+        let notary_did = did_from_key(&notary_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did.clone(), 1, vec![notary_did.clone()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        let request =
+            RecoveryRequest::new(principal_did, did_from_key(&make_keypair()), mandate.hash());
+
+        let ps = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary_did,
+            &notary_key,
+            &principal_key.verifying_key(),
+        )
+        .unwrap();
+
+        // Pass an empty notary_keys slice — the key for the signer is absent
+        let result = RecoveryProof::assemble(
+            request,
+            mandate,
+            vec![ps],
+            &principal_key.verifying_key(),
+            &[], // no keys provided
+        );
+        assert!(
+            matches!(result, Err(PapError::RecoveryError(ref s)) if s.contains("no verifying key")),
+            "expected missing-key error, got: {result:?}"
+        );
+    }
+
+    // ── RevocationProof serde ─────────────────────────────────────────────────
+
+    #[test]
+    fn revocation_proof_roundtrip_json() {
+        let new_key = make_keypair();
+        let mut proof = RevocationProof {
+            old_principal_did: "did:key:zold".into(),
+            new_principal_did: did_from_key(&new_key),
+            recovery_proof_hash: "hash-xyz".into(),
+            revoked_at: Utc::now(),
+            algorithm: SignatureAlgorithm::default(),
+            signature: None,
+        };
+        proof.sign(&new_key).unwrap();
+
+        let json = serde_json::to_string(&proof).unwrap();
+        let back: RevocationProof = serde_json::from_str(&json).unwrap();
+        assert!(back.signature.is_some());
+        assert!(back.verify(&new_key.verifying_key()).is_ok());
+        assert_eq!(back.old_principal_did, "did:key:zold");
+    }
+
+    #[test]
+    fn revocation_proof_verify_with_tampered_signature_fails() {
+        let new_key = make_keypair();
+        let mut proof = RevocationProof {
+            old_principal_did: "did:key:zold".into(),
+            new_principal_did: did_from_key(&new_key),
+            recovery_proof_hash: "hash-xyz".into(),
+            revoked_at: Utc::now(),
+            algorithm: SignatureAlgorithm::default(),
+            signature: None,
+        };
+        proof.sign(&new_key).unwrap();
+
+        // Flip a byte in the signature
+        if let Some(ref mut sig) = proof.signature {
+            let mut bytes = sig.clone().into_bytes();
+            bytes[10] ^= 0xFF;
+            *sig = String::from_utf8_lossy(&bytes).into_owned();
+        }
+
+        assert!(proof.verify(&new_key.verifying_key()).is_err());
+    }
+
+    #[test]
+    fn revocation_proof_from_recovery_proof_carries_correct_dids() {
+        // Build a minimal 1-of-1 proof to derive a RevocationProof from
+        let principal_key = make_keypair();
+        let principal_did = did_from_key(&principal_key);
+        let new_principal_key = make_keypair();
+        let new_principal_did = did_from_key(&new_principal_key);
+        let notary_key = make_keypair();
+        let notary_did = did_from_key(&notary_key);
+
+        let mut mandate =
+            RecoveryMandate::new(principal_did.clone(), 1, vec![notary_did.clone()]).unwrap();
+        mandate.sign(&principal_key).unwrap();
+
+        let request = RecoveryRequest::new(
+            principal_did.clone(),
+            new_principal_did.clone(),
+            mandate.hash(),
+        );
+
+        let ps = PartialRecoverySignature::sign(
+            &mandate,
+            &request,
+            &notary_did,
+            &notary_key,
+            &principal_key.verifying_key(),
+        )
+        .unwrap();
+
+        let proof = RecoveryProof::assemble(
+            request,
+            mandate,
+            vec![ps],
+            &principal_key.verifying_key(),
+            &[(notary_did, notary_key.verifying_key())],
+        )
+        .unwrap();
+
+        let revocation = RevocationProof::from_recovery_proof(&proof);
+        assert_eq!(revocation.old_principal_did, principal_did);
+        assert_eq!(revocation.new_principal_did, new_principal_did);
+        assert_eq!(revocation.recovery_proof_hash, proof.hash());
+        // Unsigned initially
+        assert!(revocation.signature.is_none());
+    }
 }
