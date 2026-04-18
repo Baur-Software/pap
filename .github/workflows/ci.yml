@@ -348,8 +348,11 @@ jobs:
   chrysalis-e2e-tier2:
     name: E2E Tier 2 (Chrysalis functional tests)
     runs-on: ubuntu-latest
-    # Run after the existing smoke test so the Docker layer cache is warm.
-    needs: [smoke-test]
+    needs: [changes, build-wasm]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true') &&
+      needs.build-wasm.result == 'success'
     env:
       CHRYSALIS_PORT: "7890"
     steps:
