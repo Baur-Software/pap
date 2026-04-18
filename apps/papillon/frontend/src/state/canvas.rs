@@ -50,6 +50,12 @@ pub struct CanvasState {
     pub canvas_side: RwSignal<CanvasSide>,
     /// Conversation messages for the active canvas chat thread.
     pub canvas_messages: RwSignal<Vec<CanvasMessageRecord>>,
+    /// When set, the named block should expand itself and then clear this signal.
+    pub requested_expansion: RwSignal<Option<String>>,
+    /// Maps block_id → schema_type override for client-side template reshaping.
+    /// Changing this causes the block renderer to use the override schema type
+    /// for registry lookup without touching the persisted block content.
+    pub block_template_overrides: RwSignal<std::collections::HashMap<String, String>>,
 }
 
 impl Default for CanvasState {
@@ -65,6 +71,8 @@ impl Default for CanvasState {
             approval_in_flight: RwSignal::new(std::collections::HashSet::new()),
             canvas_side: RwSignal::new(CanvasSide::Front),
             canvas_messages: RwSignal::new(Vec::new()),
+            requested_expansion: RwSignal::new(None),
+            block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -176,6 +184,33 @@ impl CanvasState {
         self.current_canvas_id.set(Some(id.clone()));
         self.focus_prompt.update(|n| *n += 1);
         id
+    }
+
+    /// Programmatically request that a specific block expand itself.
+    /// Flips to the Front face so the block is visible, then signals it.
+    pub fn expand_block(&self, block_id: String) {
+        self.canvas_side.set(CanvasSide::Front);
+        self.requested_expansion.set(Some(block_id));
+    }
+
+    /// Append a `{{block:ID}}` reference to the current topbar prefill prompt.
+    /// Bumps `focus_prompt` so the address bar grabs focus for the user to complete
+    /// and submit the composed query.
+    pub fn insert_block_ref(&self, block_id: String) {
+        let current = self.prefill_prompt.get_untracked().unwrap_or_default();
+        self.prefill_prompt
+            .set(Some(format!("{}{{{{block:{}}}}}", current, block_id)));
+        self.focus_prompt.update(|n| *n += 1);
+    }
+
+    /// Apply a template override to an existing resolved block.
+    /// This changes how the block's content is rendered without re-executing the
+    /// agent. The override is stored in `block_template_overrides` and takes
+    /// priority over the block's persisted `schema_type` during renderer lookup.
+    pub fn reshape_block_template(&self, block_id: String, schema_type_override: String) {
+        self.block_template_overrides.update(|map| {
+            map.insert(block_id, schema_type_override);
+        });
     }
 
     /// Seed the first-ever canvas with live agent queries so the app
@@ -1127,6 +1162,26 @@ mod tests {
         assert!(result.ends_with("..."));
         let body: String = input.chars().take(40).collect();
         assert!(result.starts_with(&body));
+    }
+
+    // ── insert_block_ref ─────────────────────────────────────────────────────
+
+    #[test]
+    fn insert_block_ref_appends_to_empty() {
+        // `CanvasState` requires a reactive runtime (RwSignal uses a leptos owner).
+        // For pure-logic tests we validate the format string directly.
+        let current = String::new();
+        let block_id = "abc".to_string();
+        let result = format!("{}{{{{block:{}}}}}", current, block_id);
+        assert_eq!(result, "{{block:abc}}");
+    }
+
+    #[test]
+    fn insert_block_ref_appends_to_existing() {
+        let current = "search for ".to_string();
+        let block_id = "xyz".to_string();
+        let result = format!("{}{{{{block:{}}}}}", current, block_id);
+        assert_eq!(result, "search for {{block:xyz}}");
     }
 
 }

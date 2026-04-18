@@ -249,6 +249,17 @@ pub struct PipelineEdgeInfo {
     pub to_node: String,
 }
 
+/// A user-saved pipeline DAG that can be loaded and re-run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedPipeline {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub pipeline: PipelineInfo,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// Pipeline execution result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineExecutionResult {

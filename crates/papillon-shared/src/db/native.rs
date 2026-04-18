@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
-use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord};
+use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord, PipelineInfo, SavedPipeline};
 use pap_agents::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig};
 
 /// Persistent SQLite database for Papillon's experience memory.
@@ -213,6 +213,16 @@ impl NativeDatabase {
                 created_at  TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_canvas_messages_canvas ON canvas_messages(canvas_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS saved_pipelines (
+                id            TEXT PRIMARY KEY,
+                name          TEXT NOT NULL,
+                description   TEXT NOT NULL DEFAULT '',
+                pipeline_json TEXT NOT NULL,
+                created_at    TEXT NOT NULL,
+                updated_at    TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_pipelines_name ON saved_pipelines(name);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -1815,6 +1825,77 @@ impl DatabaseOps for NativeDatabase {
         }
         Ok(messages)
     }
+
+    // ── Saved Pipeline CRUD ───────────────────────────────────────────────
+
+    fn upsert_saved_pipeline(
+        &self,
+        id: &str,
+        name: &str,
+        description: &str,
+        pipeline: &PipelineInfo,
+    ) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let pipeline_json = serde_json::to_string(pipeline)
+            .map_err(|e| DbError(format!("serialize pipeline: {e}")))?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO saved_pipelines (id, name, description, pipeline_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET
+                 name          = excluded.name,
+                 description   = excluded.description,
+                 pipeline_json = excluded.pipeline_json,
+                 updated_at    = excluded.updated_at",
+            params![id, name, description, pipeline_json, now, now],
+        )
+        .map_err(|e| DbError(format!("db upsert saved_pipeline: {e}")))?;
+        Ok(())
+    }
+
+    fn list_saved_pipelines(&self) -> Result<Vec<SavedPipeline>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, description, pipeline_json, created_at, updated_at
+                 FROM saved_pipelines
+                 ORDER BY created_at DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                let pipeline_json: String = row.get(3)?;
+                let pipeline: PipelineInfo =
+                    serde_json::from_str(&pipeline_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            3,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?;
+                Ok(SavedPipeline {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    pipeline,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query saved_pipelines: {e}")))?;
+        let mut pipelines = Vec::new();
+        for row in rows {
+            pipelines.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(pipelines)
+    }
+
+    fn delete_saved_pipeline(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM saved_pipelines WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete saved_pipeline: {e}")))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -2909,5 +2990,102 @@ mod tests {
         assert_eq!(msgs_b.len(), 1);
         assert_eq!(msgs_a[0].id, "m-1");
         assert_eq!(msgs_b[0].id, "m-2");
+    }
+
+    // ── Saved Pipeline tests ──────────────────────────────────────────────
+
+    fn sample_pipeline_info(id: &str) -> crate::types::PipelineInfo {
+        crate::types::PipelineInfo {
+            id: id.to_string(),
+            name: format!("Pipeline {id}"),
+            nodes: vec![
+                crate::types::PipelineNodeInfo {
+                    id: "n-1".to_string(),
+                    agent_hash: "hash-a".to_string(),
+                    agent_name: "Agent A".to_string(),
+                    action_type: "schema:SearchAction".to_string(),
+                    node_type: crate::types::PipelineNodeType::Agent,
+                    position_x: 0.0,
+                    position_y: 0.0,
+                },
+                crate::types::PipelineNodeInfo {
+                    id: "n-2".to_string(),
+                    agent_hash: "hash-b".to_string(),
+                    agent_name: "Agent B".to_string(),
+                    action_type: "schema:SearchAction".to_string(),
+                    node_type: crate::types::PipelineNodeType::Agent,
+                    position_x: 200.0,
+                    position_y: 0.0,
+                },
+            ],
+            edges: vec![crate::types::PipelineEdgeInfo {
+                from_node: "n-1".to_string(),
+                to_node: "n-2".to_string(),
+            }],
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn saved_pipeline_upsert_and_list() {
+        let db = test_db();
+        let pipeline = sample_pipeline_info("pipe-1");
+
+        db.upsert_saved_pipeline("sp-1", "My Pipeline", "A test pipeline", &pipeline)
+            .unwrap();
+
+        let list = db.list_saved_pipelines().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, "sp-1");
+        assert_eq!(list[0].name, "My Pipeline");
+        assert_eq!(list[0].description, "A test pipeline");
+        assert_eq!(list[0].pipeline.nodes.len(), 2);
+        assert_eq!(list[0].pipeline.edges.len(), 1);
+        assert_eq!(list[0].pipeline.nodes[0].agent_name, "Agent A");
+    }
+
+    #[test]
+    fn saved_pipeline_update_name() {
+        let db = test_db();
+        let pipeline = sample_pipeline_info("pipe-1");
+
+        db.upsert_saved_pipeline("sp-1", "Original Name", "desc", &pipeline)
+            .unwrap();
+
+        // Upsert again with the same id but a different name — should update.
+        db.upsert_saved_pipeline("sp-1", "Updated Name", "new desc", &pipeline)
+            .unwrap();
+
+        let list = db.list_saved_pipelines().unwrap();
+        assert_eq!(list.len(), 1, "upsert must not insert duplicate rows");
+        assert_eq!(list[0].name, "Updated Name");
+        assert_eq!(list[0].description, "new desc");
+    }
+
+    #[test]
+    fn saved_pipeline_delete() {
+        let db = test_db();
+        let pipeline = sample_pipeline_info("pipe-1");
+
+        db.upsert_saved_pipeline("sp-1", "Pipeline A", "", &pipeline)
+            .unwrap();
+        db.upsert_saved_pipeline("sp-2", "Pipeline B", "", &pipeline)
+            .unwrap();
+
+        let before = db.list_saved_pipelines().unwrap();
+        assert_eq!(before.len(), 2);
+
+        db.delete_saved_pipeline("sp-1").unwrap();
+
+        let after = db.list_saved_pipelines().unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].id, "sp-2");
+    }
+
+    #[test]
+    fn saved_pipeline_delete_nonexistent_is_noop() {
+        let db = test_db();
+        // Deleting an id that does not exist must not error.
+        db.delete_saved_pipeline("does-not-exist").unwrap();
     }
 }

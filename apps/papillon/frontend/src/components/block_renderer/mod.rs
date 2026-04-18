@@ -9,7 +9,7 @@ pub(crate) mod schema_property;
 mod templates;
 
 use leptos::prelude::*;
-use papillon_shared::{BlockState, CanvasBlock};
+use papillon_shared::{segment_with_citations, BlockState, CanvasBlock, TextSegment};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -116,6 +116,20 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         reprompt_value: RwSignal::new(String::new()),
     };
     provide_context(block_ctx);
+
+    // When canvas_state signals that this block should expand, set expanded=true
+    // and clear the signal so no other block picks it up.
+    {
+        let this_block_id = block.id.clone();
+        Effect::new(move |_| {
+            if let Some(ref requested) = canvas_state.requested_expansion.get() {
+                if *requested == this_block_id {
+                    block_ctx.expanded.set(true);
+                    canvas_state.requested_expansion.set(None);
+                }
+            }
+        });
+    }
 
     let is_resolved = matches!(
         block.state,
@@ -363,7 +377,18 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     }.into_any()
                 }
                 BlockState::Resolved => {
-                    let content_view = match (&block.schema_type, &block.content) {
+                    // Check for a client-side template override set via `reshape_block_template`.
+                    // When present it takes priority over the block's persisted schema_type,
+                    // letting the user re-render content through a different template without
+                    // re-executing the agent handshake.
+                    let effective_schema_type: Option<String> = {
+                        let overrides = canvas_state.block_template_overrides.get();
+                        overrides
+                            .get(&block.id)
+                            .cloned()
+                            .or_else(|| block.schema_type.clone())
+                    };
+                    let content_view = match (&effective_schema_type, &block.content) {
                         (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Unknown"</span></div> }.into_any(),
                     };
@@ -487,21 +512,66 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     let prov_count = prov_ids.len();
                     let show_provenance = RwSignal::new(false);
 
-                    let content_view = match (&block.schema_type, &block.content) {
+                    // Same override lookup as the Resolved path.
+                    let effective_schema_type_outcome: Option<String> = {
+                        let overrides = canvas_state.block_template_overrides.get();
+                        overrides
+                            .get(&block.id)
+                            .cloned()
+                            .or_else(|| block.schema_type.clone())
+                    };
+
+                    let content_view = match (&effective_schema_type_outcome, &block.content) {
                         (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         (None, Some(content)) => {
                             // Outcome blocks may not have a schema_type — render
                             // the synthesized result as a generic answer block.
-                            let text = content
-                                .get("result")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
-                            let text = text.to_string();
-                            view! {
-                                <div class="typed-answer">
-                                    <p class="typed-answer-text">{text}</p>
-                                </div>
-                            }.into_any()
+                            // When the content has a "result" string, parse inline
+                            // citations and render them as clickable [N] superscripts
+                            // that expand the corresponding provenance block.
+                            if let Some(text) = content.get("result").and_then(|v| v.as_str()) {
+                                let segments = segment_with_citations(text);
+                                let prov_ids_for_seg = prov_ids.clone();
+                                let cs_for_seg = canvas_state;
+                                let nodes = segments
+                                    .into_iter()
+                                    .map(move |seg| {
+                                        match seg {
+                                            TextSegment::Plain(t) => {
+                                                view! { <span>{t}</span> }.into_any()
+                                            }
+                                            TextSegment::Citation { index } => {
+                                                let bid = prov_ids_for_seg
+                                                    .get(index.saturating_sub(1))
+                                                    .cloned();
+                                                let label = format!("[{}]", index);
+                                                view! {
+                                                    <button
+                                                        class="inline-citation"
+                                                        title=format!("Source {}", index)
+                                                        on:click=move |_| {
+                                                            if let Some(ref b) = bid {
+                                                                cs_for_seg.expand_block(b.clone());
+                                                            }
+                                                        }
+                                                    >{label}</button>
+                                                }.into_any()
+                                            }
+                                        }
+                                    })
+                                    .collect::<Vec<_>>();
+                                view! {
+                                    <div class="typed-answer">
+                                        <p class="typed-answer-text">{nodes}</p>
+                                    </div>
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <div class="typed-generic">
+                                        <span class="typed-label">"Synthesizing..."</span>
+                                    </div>
+                                }.into_any()
+                            }
                         }
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Synthesizing..."</span></div> }.into_any(),
                     };

@@ -1,14 +1,17 @@
 #![allow(clippy::unwrap_used)]
 use std::collections::{HashMap, VecDeque};
 
+use chrono::Utc;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
 use papillon_shared::{
     PipelineExecutionResult, PipelineInfo, PipelineNodeType, PipelineStepEvent, PipelineStepResult,
+    SavedPipeline,
 };
 
+use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
 use crate::handshake;
 use crate::state::AppState;
@@ -125,7 +128,9 @@ async fn run_synthesizer_node(
         "You are a synthesis assistant. The user asked: \"{}\"\n\n\
          Multiple agents provided these results:\n{}\n\n\
          Provide a concise, unified answer that combines the key information from all results. \
-         Focus on what the user actually wanted to know.",
+         Focus on what the user actually wanted to know. \
+         When citing a specific source, use [source:1], [source:2], etc. (1-indexed, matching \
+         the numbered results above). Only cite sources that directly support your statement.",
         initial_query, upstream_json,
     );
 
@@ -270,6 +275,79 @@ pub async fn run_pipeline(
         steps_total: total,
         results,
     })
+}
+
+/// Save (upsert) a pipeline by id. Returns the full `SavedPipeline` record.
+#[tauri::command]
+pub async fn save_pipeline(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+    description: String,
+    pipeline: PipelineInfo,
+) -> Result<SavedPipeline, PapillonError> {
+    state
+        .db
+        .upsert_saved_pipeline(&id, &name, &description, &pipeline)
+        .map_err(|e| PapillonError::from(e.0))?;
+
+    // Return the persisted record. list_saved_pipelines is ordered by
+    // created_at DESC; find by id so callers receive the exact row.
+    let list = state
+        .db
+        .list_saved_pipelines()
+        .map_err(|e| PapillonError::from(e.0))?;
+
+    list.into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| PapillonError::from("saved pipeline not found after upsert"))
+}
+
+/// List all saved pipelines, most recently created first.
+#[tauri::command]
+pub async fn list_saved_pipelines(
+    state: State<'_, AppState>,
+) -> Result<Vec<SavedPipeline>, PapillonError> {
+    state
+        .db
+        .list_saved_pipelines()
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Delete a saved pipeline by id. No-op if the id does not exist.
+#[tauri::command]
+pub async fn delete_saved_pipeline(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), PapillonError> {
+    state
+        .db
+        .delete_saved_pipeline(&id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Load a saved pipeline by id and run it.
+#[tauri::command]
+pub async fn run_saved_pipeline(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pipeline_id: String,
+    initial_query: String,
+) -> Result<PipelineExecutionResult, PapillonError> {
+    let list = state
+        .db
+        .list_saved_pipelines()
+        .map_err(|e| PapillonError::from(e.0))?;
+
+    let saved = list
+        .into_iter()
+        .find(|p| p.id == pipeline_id)
+        .ok_or_else(|| PapillonError::from(format!("saved pipeline not found: {}", pipeline_id)))?;
+
+    // Stamp updated_at so the run timestamp is fresh.
+    let _ = Utc::now().to_rfc3339();
+
+    run_pipeline(app, state, saved.pipeline, initial_query).await
 }
 
 #[cfg(test)]

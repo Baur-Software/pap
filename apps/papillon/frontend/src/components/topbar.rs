@@ -288,6 +288,35 @@ fn TopbarPrompt() -> impl IntoView {
                     selected_idx.set(None);
                 }
                 on:keydown=on_keydown
+                on:dragover=|e: web_sys::DragEvent| {
+                    // Required to allow the subsequent drop event to fire.
+                    e.prevent_default();
+                }
+                on:drop=move |e: web_sys::DragEvent| {
+                    e.prevent_default();
+                    if let Some(dt) = e.data_transfer() {
+                        if let Ok(text) = dt.get_data("text/plain") {
+                            if text.contains("{{block:") {
+                                // Parse block ID from "{{block:ID}}" and use
+                                // insert_block_ref so the prefill signal is updated
+                                // reactively (same path as agent-tile clicks).
+                                let id_start = text.find("{{block:").map(|i| i + 8);
+                                let id_end = text.find("}}");
+                                if let (Some(s), Some(e_idx)) = (id_start, id_end) {
+                                    if s < e_idx {
+                                        let block_id = text[s..e_idx].to_string();
+                                        canvas_state.insert_block_ref(block_id);
+                                        return;
+                                    }
+                                }
+                                // Fallback: append the raw reference text to the
+                                // current input value when ID parsing fails.
+                                let current = input_value.get();
+                                input_value.set(format!("{}{}", current, text));
+                            }
+                        }
+                    }
+                }
             />
             <Show when=move || show_pap_suggestions.get()>
                 <div class="topbar-suggestions">

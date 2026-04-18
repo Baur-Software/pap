@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::components::block_renderer::BlockRenderer;
+use crate::components::source_panel::SourcePanel;
 use crate::state::canvas::{filter_messages_by_canvas, CanvasSide, CanvasState};
 
 // ── Canvas outcome synthesis types (mirrors Tauri backend) ────────────────
@@ -143,9 +144,9 @@ pub fn CanvasPage() -> impl IntoView {
                     <CanvasChatThread />
                 </div>
 
-                // Back face: workflow pipeline.
+                // Back face: three-tab panel — Sources / Build / History.
                 <div class="canvas-face back">
-                    <CanvasWorkflowPipeline />
+                    <CanvasBackFace />
                 </div>
             </div>
         </div>
@@ -225,6 +226,56 @@ fn CanvasChatThread() -> impl IntoView {
                 on:input=move |e| input_value.set(event_target_value(&e))
                 on:keydown=on_keydown
             />
+        </div>
+    }
+}
+
+/// Back-face container with three tabs: Sources, Build, History.
+///
+/// - **Sources** — `SourcePanel`: all resolved blocks as draggable reference chips.
+/// - **Build**   — placeholder until the Pipeline Builder lands.
+/// - **History** — the existing `CanvasWorkflowPipeline` block list (moved here).
+#[component]
+fn CanvasBackFace() -> impl IntoView {
+    // "sources" | "build" | "history"
+    let active_tab: RwSignal<&'static str> = RwSignal::new("sources");
+
+    view! {
+        <div class="canvas-back-face">
+            // Tab bar
+            <div class="back-face-tabs" role="tablist">
+                {["sources", "build", "history"].map(|tab| {
+                    view! {
+                        <button
+                            class="back-face-tab"
+                            class:back-face-tab--active=move || active_tab.get() == tab
+                            role="tab"
+                            on:click=move |_| active_tab.set(tab)
+                        >
+                            {match tab {
+                                "sources" => "Sources",
+                                "build"   => "Build",
+                                _         => "History",
+                            }}
+                        </button>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
+
+            // Tab panels
+            <div class="back-face-panel">
+                <Show when=move || active_tab.get() == "sources">
+                    <SourcePanel />
+                </Show>
+                <Show when=move || active_tab.get() == "build">
+                    <div class="build-coming-soon">
+                        "Pipeline Builder coming soon"
+                    </div>
+                </Show>
+                <Show when=move || active_tab.get() == "history">
+                    <CanvasWorkflowPipeline />
+                </Show>
+            </div>
         </div>
     }
 }
