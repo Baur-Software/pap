@@ -4,7 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::components::block_renderer::BlockRenderer;
-use crate::state::canvas::{CanvasSide, CanvasState};
+use crate::state::canvas::{filter_messages_by_canvas, CanvasSide, CanvasState};
 
 // ── Canvas outcome synthesis types (mirrors Tauri backend) ────────────────
 
@@ -190,10 +190,19 @@ fn CanvasChatThread() -> impl IntoView {
         }
     };
 
+    // Only show messages belonging to the currently active canvas.
+    let active_messages = move || {
+        let active_id = canvas_state.current_canvas_id.get();
+        filter_messages_by_canvas(
+            &canvas_state.canvas_messages.get(),
+            active_id.as_deref(),
+        )
+    };
+
     view! {
         <div class="canvas-chat-thread">
             <For
-                each=move || canvas_state.canvas_messages.get()
+                each=active_messages
                 key=|msg| msg.id.clone()
                 children=move |msg| {
                     let is_user = msg.role == "user";
