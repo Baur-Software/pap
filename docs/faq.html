@@ -589,22 +589,36 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>The premise needs clarifying.</strong> Papillon's intent router
-            (<code>crates/papillon-shared/src/intent.rs</code>) is a <strong>deterministic
-            data-driven rule table</strong> — a <code>const RULES: &amp;[IntentRule]</code> array
-            of 13 keyword rules covering 14 catalog agents, no LLM in the path. A user query
-            is keyword-matched, cleaned, and dispatched to a specific catalog agent.
-            The 6-phase PAP handshake then enforces scope cryptographically. There is no LLM
-            between the user's words and the mandate boundaries.
+            <strong>The premise needs clarifying.</strong> Papillon's intent router is a
+            <strong>three-level deterministic chain</strong> — no LLM is in the path until
+            the optional third level:
+          </p>
+          <ol style="margin: 0.75em 0 0.75em 1.5em; line-height: 1.8">
+            <li><strong>URL fast path</strong> (~0 µs) — <code>papillon-shared/src/intent.rs</code>
+                detects <code>pap://</code>, <code>pap+https://</code>, and HTTPS URLs and dispatches
+                them directly without touching the semantic layers.</li>
+            <li><strong>BM25 semantic index</strong> (~50 µs) — <code>pap-agents/src/intent_index.rs</code>
+                scores the user query against every agent's catalog descriptor using Okapi BM25
+                (k1 = 1.5, b = 0.75, pure Rust, zero external deps). Scores are summed per
+                <code>schema:</code> action group; the winning group drives routing, and the
+                highest-scoring individual agent within that group becomes the preferred local agent.
+                No network, no model weights.</li>
+            <li><strong>On-Device AI fallback</strong> (~100 ms) — when BM25 confidence is below
+                threshold, the query goes to a local model (Candle, never a cloud API). The query
+                arrives in a delimited <code>[INST]…[/INST]</code> conversation role; the preamble
+                is the user's own memex history (trusted data), not external content.</li>
+          </ol>
+          <p>
+            The 6-phase PAP handshake enforces scope cryptographically after routing.
+            Prompt injection has <strong>no effect on levels 1 or 2</strong> — they are
+            deterministic programs, not generation models. Level 3 uses an on-device,
+            sandboxed model with zero disclosure requirements of its own.
           </p>
           <p>
             An LLM appears in exactly two places, both <em>after</em> the handshake:
           </p>
           <p>
-            <strong>On-Device AI fallback</strong> — when no keyword rule matches, the query goes to an
-            on-device model running locally (Candle, never a cloud API). The query arrives in a
-            delimited <code>[INST]…[/INST]</code> conversation role; the preamble is the user's own
-            memex history (trusted data), not external content.
+            <strong>On-Device AI fallback</strong> — described above as level 3.
           </p>
           <p>
             <strong>Pipeline Synthesizer</strong> — an optional post-execution node that merges
