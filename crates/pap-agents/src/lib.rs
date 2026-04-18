@@ -26,6 +26,7 @@ pub mod dynamic;
 pub mod dynamic_handler;
 pub mod executor;
 pub mod group_chat;
+pub mod intent_index;
 pub mod llm;
 pub mod registry;
 pub mod selection;
@@ -51,4 +52,5 @@ pub use registry::{build_agents, AgentSet};
 pub use selection::{
     AgentSelector, AgentSelectorFactory, HistoricalProfile, MemoryInformedSelector, RandomSelector,
 };
+pub use intent_index::{IntentIndex, IntentMatch};
 pub use simple::SimpleAgent;

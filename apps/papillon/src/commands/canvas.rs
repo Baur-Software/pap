@@ -168,12 +168,23 @@ async fn classify_intent(
     block_id: &str,
     text: &str,
 ) -> (String, String, String) {
-    // Deterministic fast path: bare HTTP/HTTPS URLs → Web Page Reader
+    // Level 1: deterministic fast path — bare HTTP/HTTPS URLs → Web Page Reader
     let (action, preferred, query) = papillon_shared::intent::detect_intent(text);
     if action != "schema:AnalyzeAction" {
         return (action.to_owned(), preferred.to_owned(), query);
     }
 
+    // Level 2: BM25 semantic index — ~50µs, no network, no spinner needed.
+    // Maps user prompts to schema:* action types using the agent catalog as corpus.
+    // Falls through to Level 3 when confidence < 0.25 or catalog is empty.
+    if let Some(m) = state.intent_index.classify(text, 0.25) {
+        let preferred_agent = m
+            .agent_name
+            .unwrap_or_else(|| "DuckDuckGo Search".to_owned());
+        return (m.action, preferred_agent, m.cleaned_query);
+    }
+
+    // Level 3: federation NLU — emit phase 0 spinner while the slower path runs
     // Emit phase 0 so the block starts spinning while we classify
     {
         let now = Utc::now().to_rfc3339();

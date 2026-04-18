@@ -98,6 +98,9 @@ pub struct AppState {
     /// The user's advertised TraitBeacon Schema.org Person document.
     /// Persisted to settings DB under key `"trait_beacon_profile"`.
     pub trait_beacon_profile: Arc<RwLock<serde_json::Value>>,
+    /// BM25 semantic intent index — level 2 of the 3-level routing chain.
+    /// Built at startup from all DB agents; shared across threads via Arc.
+    pub intent_index: Arc<pap_agents::IntentIndex>,
 }
 
 impl AppState {
@@ -154,6 +157,7 @@ impl AppState {
             // Share the same watch sender so background threads can push context updates.
             context_tx: self.context_tx.clone(),
             trait_beacon_profile: self.trait_beacon_profile.clone(),
+            intent_index: self.intent_index.clone(),
         }
     }
 
@@ -244,14 +248,15 @@ impl AppState {
         ));
 
         // ── Register all DB agents (catalog + user_created + generated) ───────────
-        {
-            let db_agents = db.load_all_agents().unwrap_or_default();
-            for def in db_agents {
-                if let Err(e) = agent_set.register_dynamic(&def, shared_llm_provider.clone()) {
-                    eprintln!("Failed to register agent '{}': {e}", def.name);
-                }
+        let db_agents = db.load_all_agents().unwrap_or_default();
+        for def in &db_agents {
+            if let Err(e) = agent_set.register_dynamic(def, shared_llm_provider.clone()) {
+                eprintln!("Failed to register agent '{}': {e}", def.name);
             }
         }
+
+        // ── BM25 semantic intent index (level 2 of the 3-level routing chain) ─────
+        let intent_index = Arc::new(pap_agents::IntentIndex::new(&db_agents));
 
         let local_registry = Arc::new(Mutex::new(agent_set.registry));
 
@@ -446,6 +451,7 @@ impl AppState {
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
             context_tx,
             trait_beacon_profile,
+            intent_index,
         }
     }
 
