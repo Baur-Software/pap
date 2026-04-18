@@ -132,6 +132,12 @@ jobs:
           cache-on-failure: true
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
+      - name: Cache wasm-pack binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-pack
+          key: wasm-pack-${{ runner.os }}-${{ hashFiles('crates/pap-wasm/Cargo.lock') }}
+          restore-keys: wasm-pack-${{ runner.os }}-
       - name: Install wasm-pack
         run: cargo binstall wasm-pack --no-confirm
       - uses: actions/setup-node@v4
@@ -458,12 +464,16 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Chrysalis registry image
-        run: |
-          docker build \
-            -f apps/registry/Dockerfile \
-            --target runtime \
-            -t pap-registry:ci \
-            .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/registry/Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: pap-registry:ci
+          cache-from: type=gha,scope=pap-registry-ci
+          cache-to: type=gha,scope=pap-registry-ci,mode=max
 
       - name: Start Chrysalis registry (no-TLS, plain HTTP)
         run: |
