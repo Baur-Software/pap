@@ -1115,11 +1115,9 @@ mod tests {
         // Genesis peer: added directly (trust root, no vouchers needed).
         let genesis_key = make_keypair();
         let genesis_did = did_from_key(&genesis_key);
-        let mut genesis_peer =
-            RegistryPeer::new(&genesis_did, "https://genesis.example.com");
+        let mut genesis_peer = RegistryPeer::new(&genesis_did, "https://genesis.example.com");
         genesis_peer.status = PeerStatus::Active;
-        genesis_peer.registered_at =
-            Some((now - chrono::Duration::days(200)).to_rfc3339());
+        genesis_peer.registered_at = Some((now - chrono::Duration::days(200)).to_rfc3339());
         registry.add_peer(genesis_peer);
 
         // Admin peer: registered via genesis vouch, then promoted to Active.
@@ -1143,8 +1141,7 @@ mod tests {
         for i in 0..3usize {
             let leaf_key = make_keypair();
             let leaf_did = did_from_key(&leaf_key);
-            let leaf_peer =
-                RegistryPeer::new(&leaf_did, format!("https://leaf{i}.example.com"));
+            let leaf_peer = RegistryPeer::new(&leaf_did, format!("https://leaf{i}.example.com"));
             let vouch = vec![PeerVouch::sign(
                 &admin_did,
                 &leaf_did,
@@ -1165,9 +1162,7 @@ mod tests {
         let cand_peer = RegistryPeer::new(&cand_did, "https://candidate.example.com");
         let vouches: Vec<PeerVouch> = leaf_peers
             .iter()
-            .map(|(k, d)| {
-                PeerVouch::sign(d, &cand_did, "2026-03-01T00:00:00Z", "direct", k)
-            })
+            .map(|(k, d)| PeerVouch::sign(d, &cand_did, "2026-03-01T00:00:00Z", "direct", k))
             .collect();
 
         let result = registry.register_peer_with_vouches(cand_peer, vouches, now);
@@ -1219,14 +1214,12 @@ mod tests {
             let mut genesis_peer =
                 RegistryPeer::new(&genesis_did, format!("https://genesis{i}.example.com"));
             genesis_peer.status = PeerStatus::Active;
-            genesis_peer.registered_at =
-                Some((now - chrono::Duration::days(200)).to_rfc3339());
+            genesis_peer.registered_at = Some((now - chrono::Duration::days(200)).to_rfc3339());
             registry.add_peer(genesis_peer);
 
             let leaf_key = make_keypair();
             let leaf_did = did_from_key(&leaf_key);
-            let leaf_peer =
-                RegistryPeer::new(&leaf_did, format!("https://leaf{i}.example.com"));
+            let leaf_peer = RegistryPeer::new(&leaf_did, format!("https://leaf{i}.example.com"));
             let vouch = vec![PeerVouch::sign(
                 &genesis_did,
                 &leaf_did,
@@ -1247,9 +1240,7 @@ mod tests {
         let cand_peer = RegistryPeer::new(&cand_did, "https://candidate.example.com");
         let vouches: Vec<PeerVouch> = leaf_peers
             .iter()
-            .map(|(k, d)| {
-                PeerVouch::sign(d, &cand_did, "2026-03-01T00:00:00Z", "direct", k)
-            })
+            .map(|(k, d)| PeerVouch::sign(d, &cand_did, "2026-03-01T00:00:00Z", "direct", k))
             .collect();
 
         let result = registry.register_peer_with_vouches(cand_peer, vouches, now);

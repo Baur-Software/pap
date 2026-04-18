@@ -156,8 +156,7 @@ impl FederatedRegistry {
 
         // 6. Require diverse trust paths if the policy demands it.
         if self.policy.require_diverse_paths {
-            let voucher_dids: Vec<String> =
-                vouches.iter().map(|v| v.voucher_did.clone()).collect();
+            let voucher_dids: Vec<String> = vouches.iter().map(|v| v.voucher_did.clone()).collect();
             self.check_path_diversity(
                 &voucher_dids,
                 self.policy.path_diversity_hops,
