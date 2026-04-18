@@ -15,7 +15,7 @@ use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
 use crate::handshake;
 use crate::state::AppState;
-use papillon_shared::{BlockEvent, BlockState, BlockUpdate, GuideSuggestion, IntentPlan, PreferenceEngine};
+use papillon_shared::{BlockEvent, BlockState, BlockUpdate, GuideSuggestion, IntentPlan, PreferenceEngine, SynthesisFormat};
 
 use super::orchestrator::hash_agent_did;
 
@@ -1564,17 +1564,17 @@ pub async fn canvas_generate_guide(
     for schema_type in &schema_types {
         match *schema_type {
             "SearchResult" | "SearchResultsPage" =>
-                suggestions.push(GuideSuggestion { label: "Research Further".into(), prompt_template: "Research further: ".into(), saved_pipeline_id: None }),
+                suggestions.push(GuideSuggestion { label: "Research Further".into(), prompt_template: "Research further: ".into(), saved_pipeline_id: None, synthesis_format: None }),
             "NewsArticle" =>
-                suggestions.push(GuideSuggestion { label: "Briefing Doc".into(), prompt_template: "Summarize these news articles into a briefing".into(), saved_pipeline_id: None }),
+                suggestions.push(GuideSuggestion { label: "Briefing Doc".into(), prompt_template: "Summarize these news articles into a briefing".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::BriefingDoc) }),
             "ScholarlyArticle" =>
-                suggestions.push(GuideSuggestion { label: "Key Findings".into(), prompt_template: "What are the key findings from these papers?".into(), saved_pipeline_id: None }),
+                suggestions.push(GuideSuggestion { label: "Key Findings".into(), prompt_template: "What are the key findings from these papers?".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Faq) }),
             "WeatherForecast" =>
-                suggestions.push(GuideSuggestion { label: "Pack List".into(), prompt_template: "What should I pack for this weather?".into(), saved_pipeline_id: None }),
+                suggestions.push(GuideSuggestion { label: "Pack List".into(), prompt_template: "What should I pack for this weather?".into(), saved_pipeline_id: None, synthesis_format: None }),
             "Product" =>
-                suggestions.push(GuideSuggestion { label: "Compare".into(), prompt_template: "Compare these products on price and quality".into(), saved_pipeline_id: None }),
+                suggestions.push(GuideSuggestion { label: "Compare".into(), prompt_template: "Compare these products on price and quality".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Outline) }),
             "VisualArtwork" =>
-                suggestions.push(GuideSuggestion { label: "Artist Info".into(), prompt_template: "Tell me more about the artist behind these works".into(), saved_pipeline_id: None }),
+                suggestions.push(GuideSuggestion { label: "Artist Info".into(), prompt_template: "Tell me more about the artist behind these works".into(), saved_pipeline_id: None, synthesis_format: None }),
             _ => {}
         }
     }
@@ -1587,6 +1587,7 @@ pub async fn canvas_generate_guide(
             label: pipeline.name.clone(),
             prompt_template: String::new(),
             saved_pipeline_id: Some(pipeline.id.clone()),
+            synthesis_format: None,
         });
     }
 
@@ -1599,6 +1600,141 @@ pub async fn canvas_generate_guide(
         summary,
         suggestions,
     })
+}
+
+/// Create a new user-authored note block on a canvas.
+#[tauri::command]
+pub async fn canvas_create_note(
+    state: tauri::State<'_, AppState>,
+    canvas_id: String,
+    title: String,
+    content: String,
+) -> Result<papillon_shared::CanvasBlock, PapillonError> {
+    use chrono::Utc;
+    use papillon_shared::{BlockState, CanvasBlock, CanvasBlockRecord};
+
+    let block_id = format!("note-{}", uuid::Uuid::new_v4());
+    let now = Utc::now().to_rfc3339();
+    let content_json = serde_json::json!({
+        "@type": "Note",
+        "title": title,
+        "note_content": content,
+    });
+    let content_json_str = serde_json::to_string(&content_json).ok();
+
+    let record = CanvasBlockRecord {
+        id: block_id.clone(),
+        canvas_id: canvas_id.clone(),
+        prompt_text: Some(title.clone()),
+        schema_type: Some("Note".to_string()),
+        content_json: content_json_str,
+        block_state: "note".to_string(),
+        episode_id: None,
+        agent_did: None,
+        mandate_expires_at: None,
+        preference_guided: false,
+        display_order: 9999,
+        created_at: now.clone(),
+        updated_at: now.clone(),
+    };
+    state.db.upsert_canvas_block(&record)?;
+
+    Ok(CanvasBlock {
+        id: block_id.clone(),
+        prompt_id: block_id,
+        prompt_text: Some(title.clone()),
+        state: BlockState::Note { title, content, editing: false },
+        schema_type: Some("Note".to_string()),
+        content: Some(content_json),
+        linked_block_ids: vec![],
+        agent_did: None,
+        mandate_expires_at: None,
+        preference_guided: false,
+        auto_expand: false,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+/// Update a user note block's title and content.
+#[tauri::command]
+pub async fn canvas_update_note(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    canvas_id: String,
+    block_id: String,
+    title: String,
+    content: String,
+) -> Result<papillon_shared::CanvasBlock, PapillonError> {
+    use chrono::Utc;
+    use papillon_shared::{BlockEvent, BlockState, BlockUpdate, CanvasBlock, CanvasBlockRecord};
+
+    let now = Utc::now().to_rfc3339();
+    let content_json = serde_json::json!({
+        "@type": "Note",
+        "title": title,
+        "note_content": content,
+    });
+    let content_json_str = serde_json::to_string(&content_json).ok();
+
+    let record = CanvasBlockRecord {
+        id: block_id.clone(),
+        canvas_id,
+        prompt_text: Some(title.clone()),
+        schema_type: Some("Note".to_string()),
+        content_json: content_json_str,
+        block_state: "note".to_string(),
+        episode_id: None,
+        agent_did: None,
+        mandate_expires_at: None,
+        preference_guided: false,
+        display_order: 0,
+        created_at: now.clone(),
+        updated_at: now.clone(),
+    };
+    state.db.upsert_canvas_block(&record)?;
+
+    let block_update = BlockUpdate {
+        id: block_id.clone(),
+        prompt_id: block_id.clone(),
+        prompt_text: Some(title.clone()),
+        state: BlockState::Note { title: title.clone(), content: content.clone(), editing: false },
+        schema_type: Some("Note".to_string()),
+        content: Some(content_json.clone()),
+        agent_did: None,
+        mandate_expires_at: None,
+        preference_guided: false,
+        created_at: now.clone(),
+        updated_at: now.clone(),
+    };
+    let _ = app.emit("block_updated", BlockEvent { block: block_update });
+
+    Ok(CanvasBlock {
+        id: block_id.clone(),
+        prompt_id: block_id,
+        prompt_text: Some(title.clone()),
+        state: BlockState::Note { title, content, editing: false },
+        schema_type: Some("Note".to_string()),
+        content: Some(content_json),
+        linked_block_ids: vec![],
+        agent_did: None,
+        mandate_expires_at: None,
+        preference_guided: false,
+        auto_expand: false,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+/// Delete a user note block.
+#[tauri::command]
+pub async fn canvas_delete_note(
+    state: tauri::State<'_, AppState>,
+    _canvas_id: String,
+    block_id: String,
+) -> Result<(), PapillonError> {
+    state.db.delete_canvas_block(&block_id)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1891,17 +2027,17 @@ mod guide_tests {
         for schema_type in &schema_types {
             match *schema_type {
                 "SearchResult" | "SearchResultsPage" =>
-                    suggestions.push(GuideSuggestion { label: "Research Further".into(), prompt_template: "Research further: ".into(), saved_pipeline_id: None }),
+                    suggestions.push(GuideSuggestion { label: "Research Further".into(), prompt_template: "Research further: ".into(), saved_pipeline_id: None, synthesis_format: None }),
                 "NewsArticle" =>
-                    suggestions.push(GuideSuggestion { label: "Briefing Doc".into(), prompt_template: "Summarize these news articles into a briefing".into(), saved_pipeline_id: None }),
+                    suggestions.push(GuideSuggestion { label: "Briefing Doc".into(), prompt_template: "Summarize these news articles into a briefing".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::BriefingDoc) }),
                 "ScholarlyArticle" =>
-                    suggestions.push(GuideSuggestion { label: "Key Findings".into(), prompt_template: "What are the key findings from these papers?".into(), saved_pipeline_id: None }),
+                    suggestions.push(GuideSuggestion { label: "Key Findings".into(), prompt_template: "What are the key findings from these papers?".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Faq) }),
                 "WeatherForecast" =>
-                    suggestions.push(GuideSuggestion { label: "Pack List".into(), prompt_template: "What should I pack for this weather?".into(), saved_pipeline_id: None }),
+                    suggestions.push(GuideSuggestion { label: "Pack List".into(), prompt_template: "What should I pack for this weather?".into(), saved_pipeline_id: None, synthesis_format: None }),
                 "Product" =>
-                    suggestions.push(GuideSuggestion { label: "Compare".into(), prompt_template: "Compare these products on price and quality".into(), saved_pipeline_id: None }),
+                    suggestions.push(GuideSuggestion { label: "Compare".into(), prompt_template: "Compare these products on price and quality".into(), saved_pipeline_id: None, synthesis_format: Some(SynthesisFormat::Outline) }),
                 "VisualArtwork" =>
-                    suggestions.push(GuideSuggestion { label: "Artist Info".into(), prompt_template: "Tell me more about the artist behind these works".into(), saved_pipeline_id: None }),
+                    suggestions.push(GuideSuggestion { label: "Artist Info".into(), prompt_template: "Tell me more about the artist behind these works".into(), saved_pipeline_id: None, synthesis_format: None }),
                 _ => {}
             }
         }
@@ -1992,6 +2128,7 @@ mod guide_tests {
             label: "Research Further".into(),
             prompt_template: "Research further: ".into(),
             saved_pipeline_id: Some("pipe-123".into()),
+            synthesis_format: None,
         };
         let json = serde_json::to_string(&suggestion).unwrap();
         let back: GuideSuggestion = serde_json::from_str(&json).unwrap();

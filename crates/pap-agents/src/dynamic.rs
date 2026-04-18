@@ -228,6 +228,20 @@ pub fn is_local_llm_url(url: &str) -> bool {
 }
 
 impl DynamicAgentDef {
+    /// Return the top-level category of this agent derived from its `catalog_path`.
+    ///
+    /// The category is the first path component before the first `/` in
+    /// `catalog_path` (e.g. `"search"` from `"search/duckduckgo.toml"`).
+    /// Returns `"general"` when `catalog_path` is `None`, empty, or has no
+    /// path separator.
+    pub fn category(&self) -> &str {
+        self.catalog_path
+            .as_deref()
+            .and_then(|p| p.split('/').next())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("general")
+    }
+
     /// Build a signed [`pap_marketplace::AgentAdvertisement`] using a deterministic
     /// Ed25519 keypair derived from this agent's name via SHA-256.
     ///
@@ -548,6 +562,58 @@ mod tests {
             let back: DynamicAgentSource = serde_json::from_str(&json).unwrap();
             assert_eq!(src, back);
         }
+    }
+
+    // ── category() tests ───────────────────────────────────────────────────────
+
+    fn minimal_def(catalog_path: Option<&str>) -> DynamicAgentDef {
+        DynamicAgentDef {
+            agent_did: None,
+            schema_version: 1,
+            version: "0.1.0".into(),
+            name: "Test".into(),
+            provider: "Test".into(),
+            description: "test".into(),
+            action: "schema:SearchAction".into(),
+            object_types: vec![],
+            requires_disclosure: vec![],
+            returns: vec![],
+            endpoint: None,
+            llm_instructions: String::new(),
+            subagents: vec![],
+            source: DynamicAgentSource::Catalog,
+            operator_key_seed: None,
+            published_to: vec![],
+            catalog_path: catalog_path.map(ToOwned::to_owned),
+            configurable_properties: vec![],
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn category_from_search_path() {
+        let def = minimal_def(Some("search/duckduckgo.toml"));
+        assert_eq!(def.category(), "search");
+    }
+
+    #[test]
+    fn category_from_arts_path() {
+        let def = minimal_def(Some("arts/music_search.toml"));
+        assert_eq!(def.category(), "arts");
+    }
+
+    #[test]
+    fn category_none_catalog_path_returns_general() {
+        let def = minimal_def(None);
+        assert_eq!(def.category(), "general");
+    }
+
+    #[test]
+    fn category_user_created_none_returns_general() {
+        let mut def = minimal_def(None);
+        def.source = DynamicAgentSource::UserCreated;
+        assert_eq!(def.category(), "general");
     }
 
     // ── is_local_llm_url tests ─────────────────────────────────────────────────

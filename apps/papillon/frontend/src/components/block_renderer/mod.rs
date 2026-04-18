@@ -12,6 +12,7 @@ use leptos::prelude::*;
 use papillon_shared::{segment_with_citations, BlockState, CanvasBlock, TextSegment};
 use serde_json::Value;
 use std::sync::Arc;
+use wasm_bindgen_futures::spawn_local;
 
 pub use registry::RendererRegistry;
 
@@ -150,6 +151,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         BlockState::Failed { .. } => "canvas-block failed",
         BlockState::Outcome { .. } => "canvas-block outcome",
         BlockState::Guide { .. } => "canvas-block guide-block",
+        BlockState::Note { .. } => "canvas-block note-block",
     };
 
     // Keep old name for the few places below that still use it unchanged.
@@ -523,24 +525,127 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                                 let cs = canvas_state_guide;
                                 let pt = s.prompt_template.clone();
                                 let pid = s.saved_pipeline_id.clone();
-                                let label = s.label.clone();
                                 let label_btn = s.label.clone();
                                 view! {
                                     <button
                                         class="guide-suggestion-pill"
                                         on:click=move |_| {
-                                            if pid.is_some() {
-                                                // TODO: invoke run_saved_pipeline — wire up in follow-on.
-                                                // For now, prefill the label as a prompt.
-                                                cs.prefill_prompt.set(Some(label.clone()));
+                                            if let Some(ref pipeline_id) = pid {
+                                                // Run the saved pipeline directly, emitting block
+                                                // events to the current canvas so the front face
+                                                // shows live progress.
+                                                let canvas_id = cs.current_canvas_id.get_untracked();
+                                                let pid_clone = pipeline_id.clone();
+                                                let query_clone = pt.clone();
+                                                cs.canvas_side.set(CanvasSide::Front);
+                                                spawn_local(async move {
+                                                    #[derive(serde::Serialize)]
+                                                    #[serde(rename_all = "camelCase")]
+                                                    struct RunArgs {
+                                                        pipeline_id: String,
+                                                        initial_query: String,
+                                                        canvas_id: Option<String>,
+                                                    }
+                                                    let args = RunArgs {
+                                                        pipeline_id: pid_clone,
+                                                        initial_query: query_clone,
+                                                        canvas_id,
+                                                    };
+                                                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                                                        "run_saved_pipeline",
+                                                        &args,
+                                                    )
+                                                    .await;
+                                                });
                                             } else {
                                                 cs.prefill_prompt.set(Some(pt.clone()));
+                                                cs.focus_prompt.update(|n| *n += 1);
                                             }
-                                            cs.focus_prompt.update(|n| *n += 1);
                                         }
                                     >{label_btn}</button>
                                 }
                             }).collect::<Vec<_>>()}
+                        </div>
+                    }.into_any()
+                }
+                BlockState::Note { title, content, .. } => {
+                    let (is_editing, set_editing) = create_signal(false);
+                    let (edit_title, set_edit_title) = create_signal(title.clone());
+                    let (edit_content, set_edit_content) = create_signal(content.clone());
+                    let block_id_note = block.id.clone();
+                    let canvas_id_note = canvas_state.current_canvas_id.get_untracked().unwrap_or_default();
+
+                    view! {
+                        <div class="note-header">
+                            <span class="note-icon">"✏"</span>
+                            <Show
+                                when=move || !is_editing.get()
+                                fallback=move || view! {
+                                    <input
+                                        class="note-title-input"
+                                        prop:value=edit_title
+                                        on:input=move |e| set_edit_title.set(event_target_value(&e))
+                                    />
+                                }.into_any()
+                            >
+                                <span class="note-title">{edit_title}</span>
+                            </Show>
+                            <div class="note-actions">
+                                <Show when=move || !is_editing.get()>
+                                    <button class="note-edit-btn"
+                                        on:click=move |_| set_editing.set(true)>
+                                        "Edit"
+                                    </button>
+                                </Show>
+                                <Show when=move || is_editing.get()>
+                                    <button class="note-save-btn" on:click={
+                                        let bid = block_id_note.clone();
+                                        let cid = canvas_id_note.clone();
+                                        move |_| {
+                                            let t = edit_title.get_untracked();
+                                            let c = edit_content.get_untracked();
+                                            let bid2 = bid.clone();
+                                            let cid2 = cid.clone();
+                                            spawn_local(async move {
+                                                #[derive(serde::Serialize)]
+                                                #[serde(rename_all = "camelCase")]
+                                                struct NoteArgs { canvas_id: String, block_id: String, title: String, content: String }
+                                                let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                                                    "canvas_update_note",
+                                                    &NoteArgs { canvas_id: cid2, block_id: bid2, title: t, content: c },
+                                                ).await;
+                                            });
+                                            set_editing.set(false);
+                                        }
+                                    }>"Save"</button>
+                                    <button class="note-cancel-btn"
+                                        on:click=move |_| set_editing.set(false)>
+                                        "Cancel"
+                                    </button>
+                                </Show>
+                            </div>
+                        </div>
+                        <div class="note-body">
+                            <Show
+                                when=move || is_editing.get()
+                                fallback=move || {
+                                    let lines = edit_content.get();
+                                    view! {
+                                        <div class="note-content-view">
+                                            {lines.lines()
+                                                .map(|l| view! { <p>{l.to_string()}</p> })
+                                                .collect::<Vec<_>>()}
+                                        </div>
+                                    }.into_any()
+                                }
+                            >
+                                <textarea
+                                    class="note-content-input"
+                                    rows="6"
+                                    prop:value=edit_content
+                                    on:input=move |e| set_edit_content.set(event_target_value(&e))
+                                />
+                            </Show>
                         </div>
                     }.into_any()
                 }

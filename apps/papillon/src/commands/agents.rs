@@ -33,6 +33,7 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
         published_to: def.published_to.clone(),
         // Callers that need live=false (DB-only agents) override this after construction.
         live: true,
+        category: def.category().to_string(),
     }
 }
 
@@ -89,6 +90,9 @@ pub async fn list_local_agents(
                     .unwrap_or_else(|| "compiled".to_owned()),
                 published_to: db_def.map(|d| d.published_to.clone()).unwrap_or_default(),
                 live: true,
+                category: db_def
+                    .map(|d| d.category().to_string())
+                    .unwrap_or_else(|| "general".to_owned()),
             }
         })
         .collect();

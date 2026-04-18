@@ -213,6 +213,33 @@ impl CanvasState {
         });
     }
 
+    /// Create a new user-authored note block on the current canvas.
+    pub fn create_note(&self, title: String, content: String) {
+        let canvas_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+        let canvases = self.canvases;
+        spawn_local(async move {
+            #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
+            struct NoteArgs { canvas_id: String, title: String, content: String }
+            match crate::bridge::invoke::<_, CanvasBlock>(
+                "canvas_create_note",
+                &NoteArgs { canvas_id: canvas_id.clone(), title, content },
+            ).await {
+                Ok(block) => {
+                    canvases.update(|cs| {
+                        if let Some(c) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                            c.blocks.push(block);
+                        }
+                    });
+                }
+                Err(e) => leptos::logging::error!("create_note: {:?}", e),
+            }
+        });
+    }
+
     /// Seed the first-ever canvas with live agent queries so the app
     /// opens with real content resolving through the handshake pipeline.
     ///
@@ -991,6 +1018,23 @@ impl CanvasState {
                                 }
                                 let state = if rec.block_state == "resolved" {
                                     BlockState::Resolved
+                                } else if rec.block_state == "note" {
+                                    let parsed: Option<serde_json::Value> = rec.content_json
+                                        .as_deref()
+                                        .and_then(|s| serde_json::from_str(s).ok());
+                                    BlockState::Note {
+                                        title: parsed.as_ref()
+                                            .and_then(|v| v.get("title"))
+                                            .and_then(|t| t.as_str())
+                                            .unwrap_or("")
+                                            .to_string(),
+                                        content: parsed.as_ref()
+                                            .and_then(|v| v.get("note_content"))
+                                            .and_then(|t| t.as_str())
+                                            .unwrap_or("")
+                                            .to_string(),
+                                        editing: false,
+                                    }
                                 } else if rec.block_state.starts_with("failed") {
                                     BlockState::Failed { phase: 6, reason: rec.block_state.clone() }
                                 } else {

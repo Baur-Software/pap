@@ -3007,6 +3007,7 @@ mod tests {
                     node_type: crate::types::PipelineNodeType::Agent,
                     position_x: 0.0,
                     position_y: 0.0,
+                    format: Default::default(),
                 },
                 crate::types::PipelineNodeInfo {
                     id: "n-2".to_string(),
@@ -3016,6 +3017,7 @@ mod tests {
                     node_type: crate::types::PipelineNodeType::Agent,
                     position_x: 200.0,
                     position_y: 0.0,
+                    format: Default::default(),
                 },
             ],
             edges: vec![crate::types::PipelineEdgeInfo {

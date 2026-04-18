@@ -24,7 +24,7 @@ pub fn SourcePanel() -> impl IntoView {
                 c.blocks
                     .into_iter()
                     .filter(|b| {
-                        matches!(b.state, BlockState::Resolved | BlockState::Outcome { .. })
+                        matches!(b.state, BlockState::Resolved | BlockState::Outcome { .. } | BlockState::Note { .. })
                     })
                     .collect::<Vec<_>>()
             })
@@ -58,20 +58,29 @@ fn SourceChip(block: CanvasBlock) -> impl IntoView {
     let block_id_for_drag = block_id.clone();
     let block_id_for_reshape = block_id.clone();
 
-    // Extract a human-readable agent name from block content, falling back to
-    // the short block ID when no agent name is embedded in the JSON-LD envelope.
-    let agent_name = block
-        .content
-        .as_ref()
-        .and_then(|c| c.get("agent").and_then(|a| a.as_str()))
-        .unwrap_or_else(|| {
-            if block_id.len() > 8 {
-                &block_id[..8]
-            } else {
-                &block_id
-            }
-        })
-        .to_string();
+    // For Note blocks show the note title with a pencil prefix.
+    // For agent blocks extract the agent name from the JSON-LD envelope.
+    let is_note = matches!(&block.state, BlockState::Note { .. });
+    let agent_name = if is_note {
+        block.content
+            .as_ref()
+            .and_then(|c| c.get("title").and_then(|t| t.as_str()))
+            .map(|t| format!("✏ {}", t))
+            .unwrap_or_else(|| "✏ Note".to_string())
+    } else {
+        block
+            .content
+            .as_ref()
+            .and_then(|c| c.get("agent").and_then(|a| a.as_str()))
+            .unwrap_or_else(|| {
+                if block_id.len() > 8 {
+                    &block_id[..8]
+                } else {
+                    &block_id
+                }
+            })
+            .to_string()
+    };
 
     let schema_type = block
         .schema_type

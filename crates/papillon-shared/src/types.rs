@@ -172,6 +172,12 @@ pub struct AgentInfo {
     /// but cannot be invoked or resolved via `pap://` catalog URIs.
     #[serde(default)]
     pub live: bool,
+    /// Top-level category derived from the agent's catalog path
+    /// (e.g. `"search"`, `"travel"`, `"food"`).
+    /// Defaults to `"general"` for compiled agents and user-created agents
+    /// with no catalog path.
+    #[serde(default)]
+    pub category: String,
 }
 
 /// Federation peer information.
@@ -214,6 +220,18 @@ pub struct PipelineInfo {
     pub created_at: String,
 }
 
+/// Output format for an on-device synthesizer node.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SynthesisFormat {
+    #[default]
+    FreeText,
+    BriefingDoc,
+    Faq,
+    Timeline,
+    Outline,
+}
+
 /// The type of a pipeline node — either a remote agent or an on-device synthesizer.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -240,6 +258,9 @@ pub struct PipelineNodeInfo {
     pub node_type: PipelineNodeType,
     pub position_x: f64,
     pub position_y: f64,
+    /// Output format for synthesizer nodes. Ignored for agent nodes.
+    #[serde(default)]
+    pub format: SynthesisFormat,
 }
 
 /// An edge in a pipeline (data flow between agents).
@@ -470,6 +491,10 @@ pub struct GuideSuggestion {
     pub prompt_template: String,
     /// If set, clicking runs this saved pipeline ID directly.
     pub saved_pipeline_id: Option<String>,
+    /// Preferred synthesis format when this suggestion triggers a pipeline run.
+    /// `None` means use the pipeline's own default.
+    #[serde(default)]
+    pub synthesis_format: Option<SynthesisFormat>,
 }
 
 /// The state of a canvas block during the PAP handshake lifecycle.
@@ -510,6 +535,17 @@ pub enum BlockState {
         summary: String,
         /// 3–5 suggested follow-up actions.
         suggestions: Vec<GuideSuggestion>,
+    },
+    /// A user-authored note block. Content is principal-owned, not agent-produced.
+    /// Can be referenced via {{block:ID}} in prompts and fed into pipeline synthesizers.
+    Note {
+        /// Note title shown in the block header.
+        title: String,
+        /// Content authored by the user.
+        content: String,
+        /// Frontend-only edit mode flag. Not persisted to DB columns.
+        #[serde(default)]
+        editing: bool,
     },
 }
 
@@ -1465,6 +1501,7 @@ mod tests {
                 node_type: PipelineNodeType::default(),
                 position_x: 100.0,
                 position_y: 200.0,
+                format: Default::default(),
             }],
             edges: vec![PipelineEdgeInfo {
                 from_node: "n-1".into(),
