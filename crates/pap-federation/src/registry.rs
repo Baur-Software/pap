@@ -31,9 +31,9 @@ pub struct PeerRegistrationPolicy {
     pub require_diverse_paths: bool,
     /// How many hops up the vouch graph to search for common ancestors (D).
     pub path_diversity_hops: u64,
-    /// Reject if any non-genesis intermediate peer appears in this many or more voucher
-    /// ancestor chains (K). With the default of 2, any single shared intermediate node
-    /// among two or more vouchers causes rejection.
+    /// Reject if any non-genesis, non-voucher intermediate peer appears in this many or
+    /// more voucher ancestor chains (K). Minimum useful value: 1 (reject any shared
+    /// intermediate). Default: 2. Higher values allow more ancestry overlap.
     pub max_shared_ancestor_vouchers: usize,
 }
 
@@ -282,24 +282,33 @@ impl FederatedRegistry {
             .map(|v| Self::ancestors_within_hops(v, &graph, hops))
             .collect();
 
-        // Count how many chains each non-genesis ancestor appears in.
+        // Count how many chains each non-genesis, non-voucher intermediate appears in.
+        // Voucher DIDs are excluded because each voucher naturally appears in its own BFS
+        // result (depth 0); counting them would make K=1 reject all non-genesis vouchers.
+        let voucher_set: HashSet<&str> = voucher_dids.iter().map(|s| s.as_str()).collect();
         let mut ancestor_count: HashMap<String, usize> = HashMap::new();
         for chain in &ancestor_chains {
             for ancestor in chain {
-                if !genesis.contains(ancestor.as_str()) {
+                if !genesis.contains(ancestor.as_str()) && !voucher_set.contains(ancestor.as_str())
+                {
                     *ancestor_count.entry(ancestor.clone()).or_insert(0) += 1;
                 }
             }
         }
 
-        // Reject if any non-genesis ancestor is shared by >= max_shared chains.
-        for (ancestor, count) in &ancestor_count {
-            if *count >= max_shared {
-                return Err(FederationError::NonDiversePaths {
-                    common_ancestor: ancestor.clone(),
-                    voucher_count: *count,
-                });
-            }
+        // Deterministic error: pick the most-shared violating ancestor (highest count,
+        // then lexicographically smallest DID for stable output on ties).
+        let violating = ancestor_count
+            .iter()
+            .filter(|(_, &count)| count >= max_shared)
+            .max_by(|(a_did, &a_count), (b_did, &b_count)| {
+                a_count.cmp(&b_count).then_with(|| b_did.cmp(a_did))
+            });
+        if let Some((ancestor, count)) = violating {
+            return Err(FederationError::NonDiversePaths {
+                common_ancestor: ancestor.clone(),
+                voucher_count: *count,
+            });
         }
 
         Ok(())
