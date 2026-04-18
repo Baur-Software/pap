@@ -19,11 +19,22 @@ use crate::DynamicAgentDef;
 const K1: f32 = 1.5;
 const B: f32 = 0.75;
 
+/// Maximum characters of `llm_instructions` included in the BM25 document descriptor.
+/// Truncated at a char boundary to prevent UTF-8 panics.
+const LLM_INSTRUCTIONS_CHAR_CAP: usize = 200;
+
+/// Minimum BM25 score for an individual agent to be returned as a hint via
+/// `IntentMatch::agent_name`. Agents below this threshold indicate that the winning
+/// action group won on aggregate, not because any single local agent was a confident match.
+const AGENT_SCORE_HINT_THRESHOLD: f32 = 0.05;
+
 struct AgentDescriptor {
     name: String,
     action: String,
     tokens: Vec<String>,
     len: usize,
+    /// Pre-computed term-frequency map: avoids re-building a HashMap per scoring call.
+    tf: HashMap<String, usize>,
 }
 
 /// BM25 index over the agent catalog.
@@ -51,13 +62,15 @@ pub struct IntentMatch {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/// Builds the BM25 document string for an agent:
+/// `name + provider + description + first LLM_INSTRUCTIONS_CHAR_CAP chars of
+/// llm_instructions + object_types + returns`.
+/// Truncation is char-boundary–safe to prevent UTF-8 panics.
 fn build_descriptor(agent: &DynamicAgentDef) -> String {
-    // Use char boundary–safe truncation: slicing at a byte offset can panic on
-    // multi-byte UTF-8 characters that straddle the boundary.
     let cap = agent
         .llm_instructions
         .char_indices()
-        .nth(200)
+        .nth(LLM_INSTRUCTIONS_CHAR_CAP)
         .map(|(i, _)| i)
         .unwrap_or(agent.llm_instructions.len());
     let instructions = &agent.llm_instructions[..cap];
@@ -99,11 +112,19 @@ impl IntentIndex {
             .map(|a| {
                 let tokens = tokenize(&build_descriptor(a));
                 let len = tokens.len();
+                // Pre-build the term-frequency map once at index time so classify()
+                // can borrow it directly instead of re-allocating per query.
+                let tf: HashMap<String, usize> =
+                    tokens.iter().fold(HashMap::new(), |mut m, t| {
+                        *m.entry(t.clone()).or_insert(0) += 1;
+                        m
+                    });
                 AgentDescriptor {
                     name: a.name.clone(),
                     action: a.action.clone(),
                     tokens,
                     len,
+                    tf,
                 }
             })
             .collect();
@@ -153,20 +174,13 @@ impl IntentIndex {
 
         let cleaned_query = query_tokens.join(" ");
 
-        // BM25 score for each document.
+        // BM25 score for each document — uses pre-built tf maps (zero allocations per doc).
         let scores: Vec<f32> = self
             .docs
             .iter()
             .map(|doc| {
                 let dl = doc.len as f32;
                 let length_norm = K1 * (1.0 - B + B * dl / self.avg_dl);
-
-                // Term frequency map for this document.
-                let tf_map: HashMap<&str, usize> =
-                    doc.tokens.iter().fold(HashMap::new(), |mut m, t| {
-                        *m.entry(t.as_str()).or_insert(0) += 1;
-                        m
-                    });
 
                 query_tokens
                     .iter()
@@ -175,7 +189,7 @@ impl IntentIndex {
                         if idf <= 0.0 {
                             return 0.0;
                         }
-                        let tf = *tf_map.get(term.as_str()).unwrap_or(&0) as f32;
+                        let tf = *doc.tf.get(term.as_str()).unwrap_or(&0) as f32;
                         idf * (tf * (K1 + 1.0)) / (tf + length_norm)
                     })
                     .sum()
@@ -222,7 +236,7 @@ impl IntentIndex {
         // Return a local agent hint only when it has a non-trivial individual score.
         // Agents with near-zero scores indicate the action group won on aggregate
         // rather than because any single agent is a confident match.
-        let agent_name = if agent_score > 0.05 {
+        let agent_name = if agent_score > AGENT_SCORE_HINT_THRESHOLD {
             Some(best_agent_name.to_owned())
         } else {
             None
