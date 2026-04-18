@@ -241,7 +241,7 @@ jobs:
           shared-key: "java-bindings"
           cache-on-failure: true
       - name: Build native library
-        run: cargo build --release -p pap-c
+        run: cargo build -p pap-c
       - name: Set library filename
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
@@ -252,7 +252,7 @@ jobs:
             echo "LIB_NAME=libpap_c.so" >> $GITHUB_ENV
           fi
       - name: Verify native library exists
-        run: ls -lh target/release/$LIB_NAME
+        run: ls -lh target/debug/$LIB_NAME
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
