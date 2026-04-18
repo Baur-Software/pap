@@ -53,7 +53,9 @@ fn complete_recovery_ceremony(
 ) -> Result<(), PapillonError> {
     db.set_setting("recovery_shards_configured", "1")
         .map_err(|e| PapillonError::from(e.to_string()))?;
-    // Clear the revocation marker — new shards have been distributed.
+    // Clear the revocation marker by writing an empty string (empty-string-as-deletion
+    // convention: `get_setting` callers treat `Some("")` the same as `None`).
+    // A future `delete_setting` method on DatabaseOps would be cleaner here.
     db.set_setting("recovery_ceremony_revoked_at", "")
         .map_err(|e| PapillonError::from(e.to_string()))
 }
@@ -321,7 +323,7 @@ mod tests {
     fn make_db() -> Arc<crate::db::Database> {
         Arc::new(
             crate::db::Database::open_memory()
-                .map_err(|e| PapillonError::from(e.0))
+                .map_err(PapillonError::from)
                 .expect("in-memory db"),
         )
     }
