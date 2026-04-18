@@ -19,6 +19,10 @@ use papillon_shared::{BlockEvent, BlockState, BlockUpdate, IntentPlan, Preferenc
 
 use super::orchestrator::hash_agent_did;
 
+/// BM25 confidence threshold for Level 2 intent routing.
+/// Queries below this threshold fall through to the Level 3 on-device / federation NLU path.
+const INTENT_CONFIDENCE_THRESHOLD: f32 = 0.25;
+
 // ── Canvas State Types ─────────────────────────────────────────────────────
 
 /// A synthesized summary of a single completed agent interaction episode.
@@ -168,13 +172,32 @@ async fn classify_intent(
     block_id: &str,
     text: &str,
 ) -> (String, String, String) {
-    // Deterministic fast path: bare HTTP/HTTPS URLs → Web Page Reader
+    // Level 1: deterministic fast path — bare HTTP/HTTPS URLs → Web Page Reader
     let (action, preferred, query) = papillon_shared::intent::detect_intent(text);
     if action != "schema:AnalyzeAction" {
         return (action.to_owned(), preferred.to_owned(), query);
     }
 
-    // Emit phase 0 so the block starts spinning while we classify
+    // Level 2: BM25 semantic index — ~50µs scoring, no network, no spinner needed.
+    // Built from the current canvas's agent DB so it reflects approved agents.
+    // agent_name is a hint only; downstream resolve_agent applies disclosure
+    // scoring so no agent is forced without proper permission evaluation.
+    // Falls through to Level 3 when confidence < INTENT_CONFIDENCE_THRESHOLD or catalog is empty.
+    {
+        let agents = state.db.load_all_agents().unwrap_or_else(|e| {
+            eprintln!("[classify_intent] agent catalog unavailable, skipping BM25: {e}");
+            vec![]
+        });
+        let intent_index = pap_agents::IntentIndex::new(&agents);
+        if let Some(m) = intent_index.classify(text, INTENT_CONFIDENCE_THRESHOLD) {
+            // Empty string means "no forced agent" — resolve_agent selects
+            // the best candidate by disclosure scope and profile history.
+            let preferred_agent = m.agent_name.unwrap_or_default();
+            return (m.action, preferred_agent, m.cleaned_query);
+        }
+    }
+
+    // Level 3: federation NLU — emit phase 0 spinner while the slower path runs
     {
         let now = Utc::now().to_rfc3339();
         let _ = app.emit(

@@ -244,12 +244,10 @@ impl AppState {
         ));
 
         // ── Register all DB agents (catalog + user_created + generated) ───────────
-        {
-            let db_agents = db.load_all_agents().unwrap_or_default();
-            for def in db_agents {
-                if let Err(e) = agent_set.register_dynamic(&def, shared_llm_provider.clone()) {
-                    eprintln!("Failed to register agent '{}': {e}", def.name);
-                }
+        let db_agents = db.load_all_agents().unwrap_or_default();
+        for def in &db_agents {
+            if let Err(e) = agent_set.register_dynamic(def, shared_llm_provider.clone()) {
+                eprintln!("Failed to register agent '{}': {e}", def.name);
             }
         }
 
