@@ -175,13 +175,14 @@ jobs:
           PAP_REGISTRY_NO_TLS=true cargo run -p pap-registry --bin pap-registry --features ssr &
           pid=$!
           for i in $(seq 1 120); do
-            curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && break
+            curl -sf http://localhost:7890/federation/identity >/dev/null 2>&1 && \
+              { echo "Registry started successfully"; kill $pid; exit 0; }
             kill -0 $pid 2>/dev/null || { echo "::error::registry process died"; exit 1; }
-            [ "$i" -eq 120 ] && { echo "::error::registry did not start within 2m"; kill $pid; exit 1; }
             sleep 1
           done
-          echo "Registry started successfully"
-          kill $pid
+          echo "::error::registry did not start within 2m"
+          kill $pid 2>/dev/null || true
+          exit 1
 
   run-example:
     name: Run example (pap-search-example)
