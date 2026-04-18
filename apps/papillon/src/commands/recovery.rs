@@ -1,4 +1,5 @@
 use base64::Engine;
+use chrono::Utc;
 use tauri::State;
 
 use crate::db::prelude::DatabaseOps;
@@ -9,6 +10,53 @@ use pap_did::PrincipalKeypair;
 use papillon_shared::{
     RecoveryReconstructResult, RecoverySetupResult, RecoveryShardInfo, RecoveryStatus,
 };
+
+/// Write the revocation marker for the current shard ceremony.
+///
+/// Called at the tail of `reconstruct_from_shards` so that the old shards are
+/// considered spent — any attacker who collected M shards can no longer use
+/// them on a fresh device once the principal has distributed new ones.
+fn revoke_current_ceremony(db: &dyn crate::db::prelude::DatabaseOps) -> Result<(), PapillonError> {
+    let ts = Utc::now().to_rfc3339();
+    db.set_setting("recovery_ceremony_revoked_at", &ts)
+        .map_err(|e| PapillonError::from(e.to_string()))
+}
+
+/// Read recovery status from the DB (extracted for testability).
+fn recovery_status_from_db(
+    db: &dyn crate::db::prelude::DatabaseOps,
+) -> Result<papillon_shared::RecoveryStatus, PapillonError> {
+    let configured = db
+        .get_setting("recovery_shards_configured")
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
+    let needs_renewal = db
+        .get_setting("recovery_ceremony_revoked_at")
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
+
+    Ok(papillon_shared::RecoveryStatus {
+        configured,
+        needs_renewal,
+    })
+}
+
+/// Persist the ceremony-complete flag and clear any pending revocation marker.
+///
+/// Called by `mark_recovery_complete` so that after the principal distributes
+/// fresh shards the `needs_renewal` flag is cleared.
+fn complete_recovery_ceremony(
+    db: &dyn crate::db::prelude::DatabaseOps,
+) -> Result<(), PapillonError> {
+    db.set_setting("recovery_shards_configured", "1")
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    // Clear the revocation marker — new shards have been distributed.
+    db.set_setting("recovery_ceremony_revoked_at", "")
+        .map_err(|e| PapillonError::from(e.to_string()))
+}
 
 /// Create M-of-N Shamir shards from the current principal's seed.
 ///
@@ -240,6 +288,10 @@ pub fn reconstruct_from_shards(
         *backed_up = true;
     }
 
+    // Old shards are now spent — mark this ceremony as requiring renewal so
+    // the frontend prompts the principal to distribute fresh shards.
+    revoke_current_ceremony(&*state.db)?;
+
     Ok(RecoveryReconstructResult {
         did,
         public_key_b64: pub_key_b64,
@@ -252,23 +304,90 @@ pub fn reconstruct_from_shards(
 /// The flag survives app restarts so the post-onboarding prompt is not shown again.
 #[tauri::command]
 pub fn mark_recovery_complete(state: State<'_, AppState>) -> Result<(), PapillonError> {
-    state
-        .db
-        .set_setting("recovery_shards_configured", "1")
-        .map_err(|e| PapillonError::from(e.to_string()))
+    complete_recovery_ceremony(&*state.db)
 }
 
 /// Return whether the principal has previously completed the Shamir recovery ceremony.
 #[tauri::command]
 pub fn get_recovery_status(state: State<'_, AppState>) -> Result<RecoveryStatus, PapillonError> {
-    let configured = state
-        .db
-        .get_setting("recovery_shards_configured")
-        .map_err(|e| PapillonError::from(e.to_string()))?
-        .map(|v| v == "1")
-        .unwrap_or(false);
-    Ok(RecoveryStatus {
-        configured,
-        needs_renewal: false, // TODO(task-2): read recovery_ceremony_revoked_at from DB
-    })
+    recovery_status_from_db(&*state.db)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn make_db() -> Arc<crate::db::Database> {
+        Arc::new(
+            crate::db::Database::open_memory()
+                .map_err(|e| PapillonError::from(e.0))
+                .expect("in-memory db"),
+        )
+    }
+
+    #[test]
+    fn revoke_current_ceremony_sets_timestamp() {
+        let db = make_db();
+        revoke_current_ceremony(&*db).expect("revoke should succeed");
+        let val = db
+            .get_setting("recovery_ceremony_revoked_at")
+            .expect("db read")
+            .expect("should be set");
+        assert!(!val.is_empty(), "revocation timestamp must be non-empty");
+        assert!(
+            val.starts_with("20"),
+            "should look like an ISO timestamp, got: {val}"
+        );
+    }
+
+    #[test]
+    fn recovery_status_from_db_needs_renewal_when_revoked() {
+        let db = make_db();
+        db.set_setting("recovery_shards_configured", "1").unwrap();
+        db.set_setting("recovery_ceremony_revoked_at", "2026-04-18T00:00:00Z")
+            .unwrap();
+        let status = recovery_status_from_db(&*db).expect("status");
+        assert!(status.configured);
+        assert!(
+            status.needs_renewal,
+            "needs_renewal must be true when revoked_at is set"
+        );
+    }
+
+    #[test]
+    fn recovery_status_from_db_no_renewal_when_not_revoked() {
+        let db = make_db();
+        db.set_setting("recovery_shards_configured", "1").unwrap();
+        // No revoked_at key set
+        let status = recovery_status_from_db(&*db).expect("status");
+        assert!(status.configured);
+        assert!(
+            !status.needs_renewal,
+            "needs_renewal must be false when no revocation"
+        );
+    }
+
+    #[test]
+    fn complete_recovery_ceremony_clears_revocation_timestamp() {
+        let db = make_db();
+        db.set_setting("recovery_ceremony_revoked_at", "2026-04-18T00:00:00Z")
+            .unwrap();
+        complete_recovery_ceremony(&*db).expect("complete should succeed");
+        let val = db
+            .get_setting("recovery_ceremony_revoked_at")
+            .expect("db read");
+        let is_cleared = val.map(|v| v.is_empty()).unwrap_or(true);
+        assert!(
+            is_cleared,
+            "revocation timestamp must be cleared after renewal"
+        );
+        // Should also have set configured flag
+        let configured = db
+            .get_setting("recovery_shards_configured")
+            .unwrap()
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        assert!(configured, "recovery_shards_configured must be set to 1");
+    }
 }
