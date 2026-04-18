@@ -590,9 +590,10 @@
         <div class="faq-body">
           <p>
             <strong>The premise needs clarifying.</strong> Papillon's intent router
-            (<code>crates/papillon-shared/src/intent.rs</code>) is a <strong>deterministic 600-line
-            keyword lookup table</strong> — 181 rules across 23 agents, no LLM in the path.
-            A user query is keyword-matched, cleaned, and dispatched to a specific catalog agent.
+            (<code>crates/papillon-shared/src/intent.rs</code>) is a <strong>deterministic
+            data-driven rule table</strong> — a <code>const RULES: &amp;[IntentRule]</code> array
+            of 13 keyword rules covering 14 catalog agents, no LLM in the path. A user query
+            is keyword-matched, cleaned, and dispatched to a specific catalog agent.
             The 6-phase PAP handshake then enforces scope cryptographically. There is no LLM
             between the user's words and the mandate boundaries.
           </p>
