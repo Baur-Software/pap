@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ — Principal Agent Protocol</title>
+  <meta name="description" content="Honest answers to the hardest technical and enterprise questions about PAP — trust model, cryptography, governance, latency, compliance, and developer experience." />
+  <meta property="og:title" content="FAQ — Principal Agent Protocol" />
+  <meta property="og:description" content="10 hard questions about PAP, answered honestly. Trust model, cryptographic limitations, enterprise identity, regulatory compliance, and Python integration." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="FAQ — Principal Agent Protocol" />
+  <meta name="twitter:description" content="10 hard questions about PAP, answered honestly." />
+  <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0c0b14;
+      --surface:   #151420;
+      --surface2:  #1f1e2e;
+      --border:    #2c2b40;
+      --border2:   #353455;
+      --indigo:    #6c5ce7;
+      --violet:    #8b7ff5;
+      --teal:      #2ec4a0;
+      --amber:     #f0a030;
+      --coral:     #e17055;
+      --text:      #eeeef2;
+      --muted:     #9494a8;
+      --faint:     #6a6a80;
+      --radius:    8px;
+      --radius-lg: 12px;
+      scroll-behavior: smooth;
+    }
+    html { font-size: 16px; }
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    ::selection { background: rgba(108,92,231,.35); }
+    a { color: var(--indigo); text-decoration: none; }
+    a:hover { color: var(--violet); }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    .container-md { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+    .gradient-text {
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .gh-icon { width: 18px; height: 18px; fill: currentColor; }
+
+    /* ─── Nav ─────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(12,11,20,.85);
+      backdrop-filter: blur(16px) saturate(1.5);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 24px;
+      height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text);
+    }
+    .nav-logo img { height: 32px; width: auto; }
+    .nav-wordmark {
+      font-family: 'Satoshi', sans-serif; font-weight: 700; font-size: 1.1rem;
+      letter-spacing: -.02em;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 8px; list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted); font-size: .9rem; font-weight: 500;
+      padding: 6px 12px; border-radius: var(--radius);
+      transition: all .15s ease;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .nav-links a[aria-current="page"] { color: var(--text); }
+    .nav-link-icon {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
+    .nav-cta { display: flex; align-items: center; gap: 10px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; border-radius: var(--radius);
+      font-size: .9rem; font-weight: 600;
+      transition: all .15s ease; cursor: pointer; border: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-outline {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border2);
+    }
+    .btn-outline:hover { border-color: var(--indigo); color: var(--indigo); transform: translateY(-1px); }
+    @media (max-width: 768px) { .nav-links { display: none; } }
+
+    /* ─── Hero ────────────────────────────────────────────────────────── */
+    .hero {
+      padding: 140px 0 72px; text-align: center; position: relative;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    }
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      top: -10%; left: 50%; transform: translateX(-50%);
+      width: 700px; height: 700px;
+      background: radial-gradient(ellipse at center,
+        rgba(108,92,231,.09) 0%,
+        rgba(139,127,245,.04) 40%,
+        transparent 70%);
+    }
+    .hero .container { position: relative; z-index: 1; }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.25);
+      border-radius: 99px; padding: 6px 16px;
+      font-size: .78rem; font-weight: 600; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--violet);
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-family: 'Satoshi', sans-serif;
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      font-weight: 900; letter-spacing: -.03em;
+      line-height: 1.1; margin-bottom: 20px;
+    }
+    .hero-sub {
+      font-size: 1.1rem; color: var(--muted); max-width: 560px;
+      margin: 0 auto 12px; line-height: 1.65;
+    }
+    .hero-note {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .75rem; color: var(--faint);
+    }
+
+    /* ─── Category filter pills ───────────────────────────────────────── */
+    .filter-row {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      justify-content: center; margin-bottom: 40px;
+    }
+    .filter-pill {
+      padding: 5px 14px; border-radius: 99px;
+      font-size: .78rem; font-weight: 600; letter-spacing: .04em;
+      cursor: pointer; border: 1px solid transparent;
+      transition: all .15s ease; background: var(--surface);
+      border-color: var(--border); color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+    }
+    .filter-pill:hover { border-color: var(--border2); color: var(--text); }
+    .filter-pill.active { color: var(--text); }
+    .filter-pill[data-cat="all"].active { border-color: var(--border2); background: var(--surface2); }
+    .filter-pill[data-cat="trust"].active      { border-color: rgba(108,92,231,.4); background: rgba(108,92,231,.08); color: var(--violet); }
+    .filter-pill[data-cat="crypto"].active     { border-color: rgba(46,196,160,.4); background: rgba(46,196,160,.08); color: var(--teal); }
+    .filter-pill[data-cat="governance"].active { border-color: rgba(240,160,48,.4); background: rgba(240,160,48,.08); color: var(--amber); }
+    .filter-pill[data-cat="latency"].active    { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
+    .filter-pill[data-cat="compliance"].active { border-color: rgba(225,112,85,.4); background: rgba(225,112,85,.08); color: var(--coral); }
+    .filter-pill[data-cat="dx"].active         { border-color: rgba(46,196,160,.4); background: rgba(46,196,160,.08); color: var(--teal); }
+
+    /* ─── FAQ accordion ───────────────────────────────────────────────── */
+    .faq-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 80px; }
+    .faq-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+      transition: border-color .2s ease;
+    }
+    .faq-item:hover { border-color: var(--border2); }
+    .faq-item.open { border-color: var(--border2); }
+
+    /* left accent bar by category */
+    .faq-item[data-cat="trust"]      { border-left: 3px solid rgba(108,92,231,.5); }
+    .faq-item[data-cat="crypto"]     { border-left: 3px solid rgba(46,196,160,.5); }
+    .faq-item[data-cat="governance"] { border-left: 3px solid rgba(240,160,48,.5); }
+    .faq-item[data-cat="latency"]    { border-left: 3px solid rgba(139,127,245,.5); }
+    .faq-item[data-cat="compliance"] { border-left: 3px solid rgba(225,112,85,.5); }
+    .faq-item[data-cat="dx"]         { border-left: 3px solid rgba(46,196,160,.5); }
+
+    .faq-q {
+      width: 100%; display: flex; align-items: flex-start; gap: 16px;
+      padding: 20px 24px; background: transparent; border: none; cursor: pointer;
+      text-align: left; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 1rem; font-weight: 600;
+      line-height: 1.4;
+    }
+    .faq-q:focus-visible { outline: 2px solid var(--indigo); outline-offset: -2px; }
+    .faq-q-left { display: flex; align-items: flex-start; gap: 14px; flex: 1; }
+    .faq-num {
+      min-width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.2);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace; font-size: .72rem; font-weight: 700;
+      color: var(--violet); flex-shrink: 0; margin-top: 1px;
+    }
+    .faq-q-text { flex: 1; }
+    .faq-badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 10px; border-radius: 99px;
+      font-size: .68rem; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; margin-bottom: 4px;
+    }
+    .badge-trust      { background: rgba(108,92,231,.12); color: var(--violet); }
+    .badge-crypto     { background: rgba(46,196,160,.12); color: var(--teal); }
+    .badge-governance { background: rgba(240,160,48,.12); color: var(--amber); }
+    .badge-latency    { background: rgba(139,127,245,.12); color: var(--violet); }
+    .badge-compliance { background: rgba(225,112,85,.12); color: var(--coral); }
+    .badge-dx         { background: rgba(46,196,160,.12); color: var(--teal); }
+
+    .faq-chevron {
+      width: 20px; height: 20px; flex-shrink: 0; margin-top: 4px;
+      color: var(--faint); transition: transform .25s ease;
+    }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+
+    .faq-body {
+      max-height: 0; overflow: hidden;
+      transition: max-height .35s ease, padding .25s ease;
+      padding: 0 24px 0 66px;
+    }
+    .faq-item.open .faq-body { max-height: 600px; padding: 0 24px 24px 66px; }
+
+    .faq-body p { color: var(--muted); font-size: .93rem; line-height: 1.75; margin-bottom: 12px; }
+    .faq-body p:last-child { margin-bottom: 0; }
+    .faq-body strong { color: var(--text); font-weight: 600; }
+    .faq-body code {
+      font-family: 'JetBrains Mono', monospace; font-size: .82em;
+      background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 4px;
+      color: var(--teal);
+    }
+    .faq-body a { color: var(--indigo); }
+    .faq-body a:hover { color: var(--violet); }
+    .roadmap-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: .75rem; font-weight: 600; letter-spacing: .04em;
+      color: var(--amber); background: rgba(240,160,48,.1);
+      border: 1px solid rgba(240,160,48,.2);
+      border-radius: 6px; padding: 3px 9px; margin-top: 10px;
+    }
+
+    /* ─── Footer ──────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border); padding: 40px 0;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      text-align: center;
+    }
+    .footer-wordmark {
+      font-family: 'Satoshi', sans-serif; font-weight: 700; font-size: 1rem;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .footer-links { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+    .footer-links a { font-size: .85rem; color: var(--muted); transition: color .15s; }
+    .footer-links a:hover { color: var(--text); }
+    .footer-copy { font-size: .8rem; color: var(--faint); font-family: 'JetBrains Mono', monospace; }
+
+    /* ─── Reveal animations ───────────────────────────────────────────── */
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .5s ease, transform .5s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    .reveal-delay-1 { transition-delay: .05s; }
+    .reveal-delay-2 { transition-delay: .1s; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Nav ────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo" aria-label="Baur Software">
+      <img src="assets/images/papillon-icon.png" alt="" />
+      <span class="nav-wordmark">Baur Software</span>
+    </a>
+    <ul class="nav-links" role="list">
+      <li><a href="pap/"><span class="nav-link-icon">pap://</span> PAP</a></li>
+      <li><a href="papillon/"><img src="assets/images/papillon-icon.png" alt="" class="nav-link-icon-img" /> Papillon</a></li>
+      <li><a href="chrysalis.html"><img src="assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
+      <li><a href="extension/">Extension</a></li>
+      <li><a href="faq.html" aria-current="page">FAQ</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
+        <svg class="gh-icon" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Hero ────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="container">
+    <div class="hero-eyebrow">Hard questions, honest answers</div>
+    <h1>Frequently Asked<br /><span class="gradient-text">Questions</span></h1>
+    <p class="hero-sub">
+      Every protocol has real limitations. PAP's are documented here, alongside what's
+      currently implemented, what's on the roadmap, and where the open design questions live.
+    </p>
+    <p class="hero-note">10 questions · reviewed April 2026</p>
+  </div>
+</section>
+
+<!-- ─── FAQ ─────────────────────────────────────────────────────────────── -->
+<main>
+  <div class="container-md">
+
+    <!-- Category filter -->
+    <div class="filter-row reveal">
+      <button class="filter-pill active" data-cat="all">All</button>
+      <button class="filter-pill" data-cat="trust">Trust Model</button>
+      <button class="filter-pill" data-cat="crypto">Cryptography</button>
+      <button class="filter-pill" data-cat="governance">Governance</button>
+      <button class="filter-pill" data-cat="latency">Latency</button>
+      <button class="filter-pill" data-cat="compliance">Compliance</button>
+      <button class="filter-pill" data-cat="dx">Developer UX</button>
+    </div>
+
+    <div class="faq-list" id="faq-list">
+
+      <!-- 1 -->
+      <div class="faq-item reveal" data-cat="trust">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">01</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              What is the enterprise identity story — RBAC, SAML, OIDC integration?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            PAP v0.x is <strong>explicitly consumer-first</strong>. The trust anchor is a
+            <strong>device-bound Ed25519 keypair</strong> held by a single human principal
+            (<code>crates/pap-did/src/principal.rs</code>). Mandate delegation chains downstream
+            <em>agents</em>, not other principals — principal-to-principal hierarchies are
+            intentionally out of scope. Enterprise organizational structure is instead expressed
+            through Chrysalis-hosted agent workloads: a company runs agents in Chrysalis and
+            routes advertisements to principals through normal PAP transport mechanisms, composing
+            org-level orchestration at the agent layer without encoding it into the identity layer.
+          </p>
+          <p>
+            <strong>Key resilience is built in.</strong> The M-of-N social recovery mechanism
+            (<code>crates/pap-core/src/shamir.rs</code>) lets a principal split their seed into
+            N Shamir shards and distribute them to trustees of their choosing — a family member,
+            notary, lawyer, or an offline hardware key. Any M shards reconstruct the identity;
+            fewer than M reveal nothing (mathematically provable). The default is 2-of-3,
+            fully configurable. Trustees are people the principal selects, not a platform.
+          </p>
+          <p>
+            <strong>People can advertise themselves.</strong> The social agent catalog
+            (<code>crates/pap-agents/catalog/social/</code>) includes 13 agents that return
+            <code>schema:Person</code> — Mastodon accounts, GitHub profiles, DEV.to, Stack Overflow,
+            and others. Any principal can also publish a signed
+            <code>AgentAdvertisement</code> (<code>pap-marketplace/src/advertisement.rs</code>)
+            typed as <code>schema:Person</code> to make themselves discoverable through the
+            peer-to-peer Chrysalis registry.
+          </p>
+          <p>
+            Employee offboarding, SCIM provisioning, and IdP-backed identity are
+            architecturally unnecessary in PAP. Mandate TTL is the offboarding mechanism —
+            access cryptographically expires without any deprovisioning step. There is no
+            central store to revoke access from.
+          </p>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="crypto">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">02</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-crypto">Cryptography</span></div>
+              Do property reference patterns constitute quasi-identifiers even when values are hidden?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>Yes — scoped to the recipient agent and cross-session receipt patterns.</strong>
+            SD-JWT (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim
+            salted hashes. It does not hide claim <em>structure</em>. Each agent in
+            <code>pap-agents</code> declares exactly what it needs via
+            <code>AgentMeta.requires_disclosure</code>
+            (<code>crates/pap-agents/src/executor.rs</code>) — the orchestrator sends only those
+            property slots via SD-JWT selective disclosure, no more. The
+            <strong>recipient agent</strong> always learns which property slots were disclosed;
+            that is the intent of the handshake. Network-level visibility is not a concern:
+            RFC 9458 OHTTP with real HPKE encrypts the transport, so relay operators and
+            passive observers see nothing.
+          </p>
+          <p>
+            Receipts sharpen the concern: <code>pap-core/src/receipt.rs</code> stores
+            <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — property <em>references</em> such as
+            <code>"schema:Person.name"</code>, never values. That design is correct and intentional.
+            But the <strong>recipient agent</strong> holds a co-signed receipt after every session.
+            Across multiple sessions, the <em>pattern</em> of which properties a principal discloses
+            to that agent is itself a quasi-identifier — an agent that logs disclosure sets could
+            fingerprint a principal with high confidence even though no value ever leaves.
+            Any other party seeing this pattern would have to breach the encrypted transport or
+            compromise local storage first.
+          </p>
+          <p>
+            In healthcare and financial services, <em>which</em> properties were accessed is frequently
+            PHI or material non-public information in its own right.
+          </p>
+          <p>
+            <strong>What we're watching:</strong> The <a href="https://privacybydesign.foundation/irma-english/" target="_blank" rel="noopener">IRMA/Yivi</a>
+            ZKP-based approach provides stronger structural privacy guarantees using W3C VCs.
+            A future spec section will formally acknowledge the property-pattern correlation risk
+            and evaluate ZKP-based disclosure as an optional enhancement.
+          </p>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="governance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">03</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-governance">Governance</span></div>
+              Who operates OHTTP relays, and is there a recentralization risk?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>Each Papillon instance and Chrysalis node runs its own embedded OHTTP relay.</strong>
+            Baur Software does not operate a relay. There is no external relay operator to capture.
+            The relay is colocated with your own deployment — decentralized by topology, not just by policy.
+          </p>
+          <p>
+            In <code>pap-transport/src/ohttp.rs</code>, <code>relay_url</code> is typed <code>Option&lt;String&gt;</code>:
+            when absent the protocol falls back to a direct connection, so removing the relay degrades
+            privacy but never breaks the handshake. The core privacy guarantees — SD-JWT selective
+            disclosure, ephemeral session DIDs, deny-by-default mandates — do not depend on OHTTP.
+          </p>
+          <p>
+            The relay uses real
+            <a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">RFC 9458</a>
+            HPKE in <code>pap-transport/src/ohttp.rs</code>: DHKEM(X25519, HKDF-SHA256) +
+            HKDF-SHA256 + AES-128-GCM (RFC 9180). Relay operators and passive observers cannot
+            read SD-JWT disclosure structure or query content. The relay architecture is correct
+            and the cryptography is now real.
+          </p>
+        </div>
+      </div>
+
+      <!-- 4 -->
+      <div class="faq-item reveal" data-cat="governance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">04</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-governance">Governance</span></div>
+              What stops a Sybil flood of signed agent advertisements in Chrysalis?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>Vouch-based peer admission.</strong> Joining the Chrysalis mesh is not free —
+            it requires existing trusted peers to stake their reputation on you.
+            <code>pap-federation/src/registry.rs</code> enforces:
+          </p>
+          <p>
+            <strong>3 vouches required</strong> to register a new peer.
+            Each existing peer may issue at most <strong>3 vouches per year</strong> — a rate budget that
+            makes flooding expensive. A peer must be registered for at least
+            <strong>90 days</strong> before it can vouch for anyone.
+            New peers enter a <strong>60-day probationary period</strong> with limited permissions.
+          </p>
+          <p>
+            Diverse trust paths (<code>require_diverse_paths</code>) are specified in the policy struct
+            and are being enforced now — ensuring N vouchers don't all route through the same
+            small set of ancestors, preventing a captured clique from bootstrapping unlimited new peers.
+          </p>
+          <p>
+            This is a social-graph approach rather than proof-of-stake or proof-of-work. The rate
+            constraints make a Sybil flood expensive in terms of calendar time and peer relationships,
+            not compute or tokens.
+          </p>
+        </div>
+      </div>
+
+      <!-- 5 -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="governance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">05</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-governance">Governance</span></div>
+              Doesn't PAP's dependency on Schema.org create a governance capture risk?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            Schema.org is a <strong>collaborative, open-community project</strong> founded by Google,
+            Microsoft, Yahoo, and Yandex to create a shared structured-data vocabulary. The schema
+            is community-governed; contributions come from across the web industry.
+            Google drives significant adoption through rich-result support, but it does not have unilateral
+            control over the vocabulary.
+          </p>
+          <p>
+            That said, there is a real practical constraint: all PAP action types and property
+            references today are hardcoded Schema.org strings. Any capability that doesn't fit the
+            current vocabulary — financial compliance actions, FHIR operation vocabulary,
+            laboratory protocol steps — requires either a Schema.org extension proposal or a
+            protocol-level change. There is no vocabulary extension mechanism in the current
+            codebase or specification.
+          </p>
+          <p>
+            Schema.org is the right baseline for interoperability across general web agents.
+            Domain-specific verticals will need extension points.
+          </p>
+        </div>
+      </div>
+
+      <!-- 6 -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="trust">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">06</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              Can an adversarial agent decompose a prohibited action into auto-approvable micro-actions?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            Scope containment is <strong>cryptographically enforced at every delegation step</strong>.
+            <code>pap-core/src/scope.rs</code> <code>contains()</code> verifies that a child mandate's
+            action set is a strict subset of its parent's. <code>mandate.rs</code> <code>verify_chain()</code>
+            binds each delegation to its parent by hash — you cannot forge a valid chain that expands scope.
+            TTL cannot exceed the parent mandate either.
+          </p>
+          <p>
+            Auto-approval has a further constraint: it triggers <strong>only when
+            <code>requires_disclosure.is_empty()</code></strong> (<code>canvas.rs</code>). No action that
+            requires any disclosure from the principal can be auto-approved — the user always sees
+            the approval gate.
+          </p>
+          <p>
+            The narrower residual risk: a sequence of <em>zero-disclosure</em> sub-actions that individually
+            pass auto-approval could collectively achieve an effect that a single equivalent request
+            would have surfaced for explicit consent. The cryptographic scope bounds still apply to each
+            step; the gap is at the semantic composition layer.
+          </p>
+        </div>
+      </div>
+
+      <!-- 7 -->
+      <div class="faq-item reveal" data-cat="trust">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">07</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              Doesn't prompt injection bypass all your cryptographic controls?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>The premise needs clarifying.</strong> Papillon's intent router
+            (<code>crates/papillon-shared/src/intent.rs</code>) is a <strong>deterministic 600-line
+            keyword lookup table</strong> — 181 rules across 23 agents, no LLM in the path.
+            A user query is keyword-matched, cleaned, and dispatched to a specific catalog agent.
+            The 6-phase PAP handshake then enforces scope cryptographically. There is no LLM
+            between the user's words and the mandate boundaries.
+          </p>
+          <p>
+            An LLM appears in exactly two places, both <em>after</em> the handshake:
+          </p>
+          <p>
+            <strong>On-Device AI fallback</strong> — when no keyword rule matches, the query goes to an
+            on-device model running locally (Candle, never a cloud API). The query arrives in a
+            delimited <code>[INST]…[/INST]</code> conversation role; the preamble is the user's own
+            memex history (trusted data), not external content.
+          </p>
+          <p>
+            <strong>Pipeline Synthesizer</strong> — an optional post-execution node that merges
+            multi-agent results using the local model. This runs after all disclosure and execution
+            is complete; it cannot retroactively change what was disclosed.
+          </p>
+          <p>
+            Prompt injection risk is <strong>none in the main handshake path</strong>, and <strong>low
+            in the local LLM path</strong> — the model is on-device, sandboxed, and operates with
+            zero disclosure requirements of its own.
+          </p>
+        </div>
+      </div>
+
+      <!-- 8 -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="latency">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">08</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-latency">Latency</span></div>
+              What are real-world p99 latencies in a 3-hop production chain?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            Measured p50 loopback numbers from CI (<code>benches/baseline.json</code>):
+            full session lifecycle <strong>130 µs</strong> (target &lt;20 ms),
+            depth-3 mandate chain verification <strong>138.5 µs</strong>.
+            The benchmark suite uses Criterion with a 30% regression gate on p50.
+          </p>
+          <p>
+            <strong>p99 is not yet in the suite.</strong> A p50 of 130 µs is entirely compatible with a
+            p99 of several milliseconds under real network conditions — and tail latencies are where
+            distributed systems actually fail. p99 benchmarks are being added to
+            <code>benches/benches/protocol.rs</code> with corresponding CI regression guards.
+          </p>
+          <p>
+            Two failure modes that remain unspecified:
+          </p>
+          <p>
+            <strong>Network partition mid-handshake:</strong> fail-open is a security catastrophe for
+            financial or medical agents; fail-closed may be unacceptable for high-availability systems.
+            The behavior is undefined in the current specification.
+          </p>
+          <p>
+            <strong>TTL expiry during handshake:</strong> a mandate that expires mid-flight through a
+            6-phase sequence has no defined recovery path.
+          </p>
+        </div>
+      </div>
+
+      <!-- 9 -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="compliance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">09</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-compliance">Compliance</span></div>
+              How does PAP handle GDPR Article 17, HIPAA, and MiFID II?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            Receipts contain <strong>property references only, never values</strong>
+            (<code>pap-core/src/receipt.rs</code>: <code>Vec&lt;String&gt;</code> of strings like
+            <code>"schema:Person.name"</code>). Each party holds their own copy locally —
+            receipts are never stored by a platform. There is no central data controller.
+          </p>
+          <p>
+            The specific tensions with each framework:
+          </p>
+          <p>
+            <strong>GDPR Article 17 (right to erasure):</strong> Receipts are co-signed by both parties and
+            stored in an insert-only SQLite database (<code>episode_db.rs</code> has no delete API).
+            Immutability is a deliberate accountability design. Who holds deletion authority over a
+            receipt both parties signed is not defined — this is a real open question for regulated deployments.
+          </p>
+          <p>
+            <strong>HIPAA Minimum Necessary:</strong> Property type references in receipts can themselves
+            constitute PHI. Knowing <code>MedicalCondition</code> was disclosed reveals a medical relationship
+            even without the value. Regulated healthcare deployments will need a PAP-HIPAA profile.
+          </p>
+          <p>
+            <strong>MiFID II / Dodd-Frank:</strong> Ephemeral session DIDs and session-close forgetting
+            conflict with 7-year trade reconstruction obligations. Financial agent transactions in
+            regulated markets need explicit carve-outs the spec doesn't yet define.
+          </p>
+        </div>
+      </div>
+
+      <!-- 10 -->
+      <div class="faq-item reveal" data-cat="dx">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">10</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-dx">Developer UX</span></div>
+              What is the Python integration story for LangChain and CrewAI?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>Full PyO3 bindings ship today.</strong> <code>crates/pap-python/src/lib.rs</code>
+            (1,595 lines) exposes the complete PAP API with both blocking methods and
+            <em>async variants</em> for all transport steps. The async path uses PyO3 0.24
+            <code>experimental-async</code>, which releases the GIL during <code>await</code> — making
+            concurrent handshakes work correctly in <code>asyncio</code> agent pipelines without
+            <code>to_thread()</code> wrapping.
+          </p>
+          <p>
+            A comprehensive integration guide covers LangChain, CrewAI, and MCP with 1,293 lines
+            of annotated examples:
+            <code>docs/integration-guides/langchain-crewai-mcp.md</code>.
+            The TypeScript equivalent — <code>packages/pap-ts</code> — is a pure native async
+            implementation with zero Rust dependency, for reference.
+          </p>
+          <p>
+            The remaining friction: the package is not yet on PyPI (build via
+            <code>maturin develop</code>) and debugging across the FFI boundary is harder than
+            debugging pure Python at the POC stage.
+          </p>
+          <p>
+            <strong>What's next:</strong> A native pure-Python <code>pap-py</code> package — zero build step,
+            <code>pip install pap</code> — parallel to <code>pap-ts</code>. For teams that want
+            zero-friction trial integration, FFI overhead is a worse tradeoff than a small
+            performance gap.
+          </p>
+        </div>
+      </div>
+
+    </div><!-- /faq-list -->
+
+  </div><!-- /container-md -->
+</main>
+
+<!-- ─── Footer ───────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-wordmark">Baur Software</div>
+  <div class="footer-links">
+    <a href="pap/">PAP Protocol</a>
+    <a href="papillon/">Papillon</a>
+    <a href="chrysalis.html">Chrysalis</a>
+    <a href="extension/">Extension</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/Baur-Software/pap" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/Baur-Software/pap/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+  </div>
+  <p class="footer-copy">© 2026 Baur Software. Open-source forever.</p>
+</footer>
+
+<script>
+  /* ─── Accordion ────────────────────────────────────────────────────────── */
+  document.querySelectorAll('.faq-q').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.faq-item');
+      const isOpen = item.classList.contains('open');
+      // Close all
+      document.querySelectorAll('.faq-item.open').forEach(el => {
+        el.classList.remove('open');
+        el.querySelector('.faq-q').setAttribute('aria-expanded', 'false');
+      });
+      // Open clicked if it was closed
+      if (!isOpen) {
+        item.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+
+  /* ─── Category filter ──────────────────────────────────────────────────── */
+  document.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      const cat = pill.dataset.cat;
+      document.querySelectorAll('.faq-item').forEach(item => {
+        if (cat === 'all' || item.dataset.cat === cat) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+          // Close hidden items
+          item.classList.remove('open');
+          item.querySelector('.faq-q').setAttribute('aria-expanded', 'false');
+        }
+      });
+    });
+  });
+
+  /* ─── Reveal on scroll ─────────────────────────────────────────────────── */
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
