@@ -135,9 +135,27 @@ curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -
 | `just lint` | Format check + clippy (same as CI) |
 | `just test` | Run all workspace tests |
 | `just test-registry` | Registry tests with SSR features |
-| `just run-example pap-search-example` | Run any protocol example |
+| `just run-example <name>` | Run a protocol example (see Protocol Examples below) |
 
 Run `just --list` for all available recipes.
+
+## Protocol Examples
+
+Runnable examples demonstrating each protocol surface. All examples run locally — no external services required unless noted.
+
+```bash
+just run-example pap-search-example                      # 6-phase handshake, loopback
+just run-example pap-travel-booking-example              # SD-JWT selective disclosure + marketplace
+just run-example pap-delegation-chain-example            # Multi-hop mandate delegation
+just run-example pap-credential-lifecycle-example        # VC issuance, selective disclosure, expiry
+just run-example pap-protocol-envelope-example           # JWS signing and envelope verification
+just run-example pap-selective-disclosure-decay-example  # Mandate decay state machine
+just run-example pap-payment-example                     # Ecash token attachment to mandates
+just run-example pap-webauthn-ceremony-example           # WebAuthn signer integration
+just run-example pap-networked-search-example            # Requires running registry (just registry-local)
+just run-example pap-federated-discovery-example         # Requires running registry (just registry-local)
+just run-example tee-attestation                         # TEE attestation simulation
+```
 
 ## Protocol Stack
 
