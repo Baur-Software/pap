@@ -9,7 +9,6 @@ use std::sync::Arc;
 use crate::bridge;
 use crate::components::recovery_setup::RecoverySetup;
 use crate::components::setup_wizard::SetupWizard;
-use crate::components::sidebar::Sidebar;
 use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
@@ -335,7 +334,6 @@ pub fn App() -> impl IntoView {
         <Router>
             <div class="app-shell-canvas">
                 <TopBar />
-                <Sidebar />
                 <main class="app-main">
                     <Routes fallback=|| "Page not found.">
                         <Route path=path!("/") view=CanvasPage />
