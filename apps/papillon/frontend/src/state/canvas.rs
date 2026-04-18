@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use papillon_shared::types::{CanvasMessageRecord, CanvasRecord};
 use papillon_shared::{resolve_pap_uri, LinkOrigin, ResolvedUri};
 use papillon_shared::{BlockState, BlockUpdate, Canvas, CanvasBlock};
 use wasm_bindgen_futures::spawn_local;
@@ -7,6 +8,13 @@ use crate::bridge;
 use crate::service::PapillonService;
 use crate::state::catalog::CatalogState;
 use crate::state::registry::RegistryState;
+
+/// Which face of the canvas flipper is visible.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CanvasSide {
+    Front,
+    Back,
+}
 
 /// A pending Human-in-the-Loop gate request.
 #[derive(Clone, Debug)]
@@ -37,6 +45,10 @@ pub struct CanvasState {
     pub hitl_pending: RwSignal<Option<HitlRequest>>,
     /// Tracks block IDs for which an approval invoke is in-flight (prevents double-submit).
     pub approval_in_flight: RwSignal<std::collections::HashSet<String>>,
+    /// Which face of the canvas flip container is visible.
+    pub canvas_side: RwSignal<CanvasSide>,
+    /// Conversation messages for the active canvas chat thread.
+    pub canvas_messages: RwSignal<Vec<CanvasMessageRecord>>,
 }
 
 impl Default for CanvasState {
@@ -50,6 +62,8 @@ impl Default for CanvasState {
             prefill_prompt: RwSignal::new(None),
             hitl_pending: RwSignal::new(None),
             approval_in_flight: RwSignal::new(std::collections::HashSet::new()),
+            canvas_side: RwSignal::new(CanvasSide::Front),
+            canvas_messages: RwSignal::new(Vec::new()),
         }
     }
 }
@@ -303,6 +317,9 @@ impl CanvasState {
             }
         }
 
+        // Save a copy of the display text for persistence before it is moved.
+        let display_text_for_persist = display_text.clone();
+
         // Create a resolving block immediately (optimistic UI)
         let block = CanvasBlock {
             id: generate_id(),
@@ -338,6 +355,62 @@ impl CanvasState {
 
         // Fire backend command with expanded text
         let cid = canvas_id.clone();
+
+        // Persist the new block and the user message to the DB (fire-and-forget).
+        {
+            let block_id_db = block_id.clone();
+            let canvas_id_db = canvas_id.clone();
+            let prompt_db = display_text_for_persist.clone();
+            let display_order = canvases.get_untracked()
+                .iter()
+                .find(|c| c.id == canvas_id_db)
+                .map(|c| c.blocks.len() as i64)
+                .unwrap_or(0);
+            spawn_local(async move {
+                if crate::bridge::tauri_available() {
+                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                        "canvas_block_create",
+                        &serde_json::json!({
+                            "canvasId": canvas_id_db,
+                            "blockId": block_id_db,
+                            "promptText": prompt_db,
+                            "displayOrder": display_order,
+                        }),
+                    ).await;
+                }
+            });
+        }
+        // Add user message to the chat thread.
+        {
+            let canvas_messages = self.canvas_messages;
+            let canvas_id_msg = canvas_id.clone();
+            let display_text_msg = display_text_for_persist.clone();
+            let block_id_msg = block_id.clone();
+            let msg_id = generate_id();
+            let now = now_iso();
+            let record = CanvasMessageRecord {
+                id: msg_id,
+                canvas_id: canvas_id_msg.clone(),
+                role: "user".to_string(),
+                content: display_text_msg.clone(),
+                block_id: Some(block_id_msg.clone()),
+                created_at: now,
+            };
+            canvas_messages.update(|ms| ms.push(record));
+            spawn_local(async move {
+                if crate::bridge::tauri_available() {
+                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                        "canvas_message_add",
+                        &serde_json::json!({
+                            "canvasId": canvas_id_msg,
+                            "role": "user",
+                            "content": display_text_msg,
+                            "blockId": block_id_msg,
+                        }),
+                    ).await;
+                }
+            });
+        }
 
         // Capture Leptos contexts now (in the component scope) — spawn_local
         // runs outside reactive ownership so expect_context would panic there.
@@ -602,27 +675,250 @@ impl CanvasState {
     /// backend-owned fields. Frontend-only fields (`linked_block_ids`,
     /// `auto_expand`) are structurally absent from `BlockUpdate` and
     /// are therefore never touched — no save/restore needed.
+    ///
+    /// When the block transitions to Resolved or Failed, calls the
+    /// corresponding Tauri persistence command (canvas_block_resolve /
+    /// canvas_block_fail) via spawn_local — fire-and-forget, errors logged.
     pub fn apply_block_event(&self, update: BlockUpdate) {
+        let current_id = self.current_canvas_id;
         self.canvases.update(|cs| {
             for canvas in cs.iter_mut() {
                 if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == update.id) {
                     // Apply backend-owned fields directly.
-                    b.prompt_id = update.prompt_id;
-                    b.state = update.state;
-                    b.schema_type = update.schema_type;
-                    b.content = update.content;
-                    b.agent_did = update.agent_did;
-                    b.mandate_expires_at = update.mandate_expires_at;
+                    b.prompt_id = update.prompt_id.clone();
+                    b.state = update.state.clone();
+                    b.schema_type = update.schema_type.clone();
+                    b.content = update.content.clone();
+                    b.agent_did = update.agent_did.clone();
+                    b.mandate_expires_at = update.mandate_expires_at.clone();
                     b.preference_guided = update.preference_guided;
-                    b.created_at = update.created_at;
-                    b.updated_at = update.updated_at;
+                    b.created_at = update.created_at.clone();
+                    b.updated_at = update.updated_at.clone();
                     // Only overwrite prompt_text when the event carries one.
-                    if let Some(pt) = update.prompt_text {
+                    if let Some(pt) = update.prompt_text.clone() {
                         b.prompt_text = Some(pt);
                     }
                     canvas.updated_at = now_iso();
+
+                    // Persist resolved/failed state to DB (Tauri path only).
+                    let block_id = b.id.clone();
+                    let canvas_id = canvas.id.clone();
+                    match &update.state {
+                        BlockState::Resolved => {
+                            let schema_type = update.schema_type.clone().unwrap_or_default();
+                            let content_json = update.content.as_ref()
+                                .map(|c| c.to_string())
+                                .unwrap_or_default();
+                            let episode_id: Option<String> = update.content.as_ref()
+                                .and_then(|c| c.get("episode_id"))
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            let agent_did = update.agent_did.clone();
+                            let mandate_expires_at = update.mandate_expires_at.clone();
+                            spawn_local(async move {
+                                if crate::bridge::tauri_available() {
+                                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                                        "canvas_block_resolve",
+                                        &serde_json::json!({
+                                            "blockId": block_id,
+                                            "schemaType": schema_type,
+                                            "contentJson": content_json,
+                                            "episodeId": episode_id,
+                                            "agentDid": agent_did,
+                                            "mandateExpiresAt": mandate_expires_at,
+                                        }),
+                                    ).await;
+                                    let _ = canvas_id; // used by closure
+                                }
+                            });
+                        }
+                        BlockState::Failed { reason, .. } => {
+                            let reason = reason.clone();
+                            spawn_local(async move {
+                                if crate::bridge::tauri_available() {
+                                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                                        "canvas_block_fail",
+                                        &serde_json::json!({
+                                            "blockId": block_id,
+                                            "reason": reason,
+                                        }),
+                                    ).await;
+                                    let _ = canvas_id;
+                                }
+                            });
+                        }
+                        _ => {}
+                    }
+
                     return;
                 }
+            }
+        });
+        let _ = current_id;
+    }
+
+    /// Load the active canvas and its blocks/messages from the SQLite DB.
+    /// Creates a default canvas if none exist. No-op when Tauri is unavailable.
+    pub fn load_from_db(&self) {
+        if !crate::bridge::tauri_available() {
+            return;
+        }
+        let canvases = self.canvases;
+        let current_canvas_id = self.current_canvas_id;
+        let canvas_messages = self.canvas_messages;
+
+        spawn_local(async move {
+            // 1. List canvases (or create one).
+            let records: Vec<CanvasRecord> = match crate::bridge::invoke_no_args("canvas_list").await {
+                Ok(r) => r,
+                Err(e) => {
+                    leptos::logging::warn!("canvas_list failed: {}", e);
+                    return;
+                }
+            };
+
+            let canvas_id: String = if records.is_empty() {
+                // Create a default canvas.
+                match crate::bridge::invoke::<_, CanvasRecord>(
+                    "canvas_create",
+                    &serde_json::json!({ "name": "My Canvas" }),
+                ).await {
+                    Ok(r) => {
+                        let id = r.id.clone();
+                        let now = r.created_at.clone();
+                        let canvas = Canvas {
+                            id: id.clone(),
+                            name: r.name,
+                            blocks: Vec::new(),
+                            created_at: now.clone(),
+                            updated_at: now,
+                        };
+                        canvases.update(|cs| cs.push(canvas));
+                        current_canvas_id.set(Some(id.clone()));
+                        id
+                    }
+                    Err(e) => {
+                        leptos::logging::warn!("canvas_create failed: {}", e);
+                        return;
+                    }
+                }
+            } else {
+                // Use the first (most recent) canvas; ensure it's in the reactive store.
+                let rec = &records[0];
+                let id = rec.id.clone();
+                let now = rec.created_at.clone();
+                let canvas = Canvas {
+                    id: id.clone(),
+                    name: rec.name.clone(),
+                    blocks: Vec::new(),
+                    created_at: now.clone(),
+                    updated_at: now,
+                };
+                canvases.update(|cs| {
+                    if !cs.iter().any(|c| c.id == id) {
+                        cs.push(canvas);
+                    }
+                });
+                if current_canvas_id.get_untracked().is_none() {
+                    current_canvas_id.set(Some(id.clone()));
+                }
+                id
+            };
+
+            // 2. Load blocks for the active canvas.
+            match crate::bridge::invoke::<_, Vec<papillon_shared::types::CanvasBlockRecord>>(
+                "canvas_blocks_load",
+                &serde_json::json!({ "canvasId": canvas_id }),
+            ).await {
+                Ok(block_records) => {
+                    canvases.update(|cs| {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                            for rec in block_records {
+                                if canvas.blocks.iter().any(|b| b.id == rec.id) {
+                                    continue;
+                                }
+                                let state = if rec.block_state == "resolved" {
+                                    BlockState::Resolved
+                                } else if rec.block_state.starts_with("failed") {
+                                    BlockState::Failed { phase: 6, reason: rec.block_state.clone() }
+                                } else {
+                                    BlockState::Resolving { phase: 1, phase_label: "Loading...".into() }
+                                };
+                                let content: Option<serde_json::Value> = rec.content_json
+                                    .as_deref()
+                                    .and_then(|s| serde_json::from_str(s).ok());
+                                let block = CanvasBlock {
+                                    id: rec.id,
+                                    prompt_id: String::new(),
+                                    prompt_text: rec.prompt_text,
+                                    state,
+                                    schema_type: rec.schema_type,
+                                    content,
+                                    linked_block_ids: Vec::new(),
+                                    agent_did: rec.agent_did,
+                                    mandate_expires_at: rec.mandate_expires_at,
+                                    preference_guided: rec.preference_guided,
+                                    auto_expand: false,
+                                    created_at: rec.created_at,
+                                    updated_at: rec.updated_at,
+                                };
+                                canvas.blocks.push(block);
+                            }
+                        }
+                    });
+                }
+                Err(e) => {
+                    leptos::logging::warn!("canvas_blocks_load failed: {}", e);
+                }
+            }
+
+            // 3. Load messages for the active canvas.
+            match crate::bridge::invoke::<_, Vec<CanvasMessageRecord>>(
+                "canvas_messages_load",
+                &serde_json::json!({ "canvasId": canvas_id }),
+            ).await {
+                Ok(msgs) => {
+                    canvas_messages.set(msgs);
+                }
+                Err(e) => {
+                    leptos::logging::warn!("canvas_messages_load failed: {}", e);
+                }
+            }
+        });
+    }
+
+    /// Record a chat message in both the reactive store and the DB.
+    pub fn add_message(&self, role: &str, content: &str, block_id: Option<String>) {
+        let msg_id = generate_id();
+        let now = now_iso();
+        let canvas_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+
+        let record = CanvasMessageRecord {
+            id: msg_id.clone(),
+            canvas_id: canvas_id.clone(),
+            role: role.to_string(),
+            content: content.to_string(),
+            block_id: block_id.clone(),
+            created_at: now.clone(),
+        };
+        self.canvas_messages.update(|ms| ms.push(record));
+
+        let role = role.to_string();
+        let content = content.to_string();
+        spawn_local(async move {
+            if crate::bridge::tauri_available() {
+                let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                    "canvas_message_add",
+                    &serde_json::json!({
+                        "canvasId": canvas_id,
+                        "role": role,
+                        "content": content,
+                        "blockId": block_id,
+                    }),
+                ).await;
             }
         });
     }

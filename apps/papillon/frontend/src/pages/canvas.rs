@@ -4,7 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::components::block_renderer::BlockRenderer;
-use crate::state::canvas::CanvasState;
+use crate::state::canvas::{CanvasSide, CanvasState};
 
 // ── Canvas outcome synthesis types (mirrors Tauri backend) ────────────────
 
@@ -92,45 +92,247 @@ pub fn CanvasPage() -> impl IntoView {
         rendered
     };
 
+    let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
+
+    let toggle_side = move |_| {
+        canvas_state.canvas_side.update(|s| {
+            *s = if *s == CanvasSide::Front {
+                CanvasSide::Back
+            } else {
+                CanvasSide::Front
+            };
+        });
+    };
+
     view! {
         <HitlGate />
 
         <div class="canvas-page">
-            <div class="canvas-stream">
-                <Show
-                    when=has_blocks
-                    fallback=move || view! { <CanvasEmptyState /> }
+            // Flip toggle button — sits above the flipper container.
+            <div class="canvas-flip-toggle-row">
+                <button
+                    class="canvas-flip-toggle"
+                    on:click=toggle_side
                 >
-                    <For
-                        each=grouped_blocks
-                        key=|g| match g {
-                            BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
-                            BlockGroup::Linked(bs) => bs
-                                .iter()
-                                .map(|b| format!("{}@{}", b.id, b.updated_at))
-                                .collect::<Vec<_>>()
-                                .join("-"),
-                        }
-                        children=move |group| {
-                            match group {
-                                BlockGroup::Single(block) => {
-                                    view! { <BlockRenderer block=block /> }.into_any()
-                                }
-                                BlockGroup::Linked(blocks) => {
-                                    view! {
-                                        <div class="block-group">
-                                            {blocks.into_iter().map(|block| {
-                                                view! { <BlockRenderer block=block /> }
-                                            }).collect::<Vec<_>>()}
-                                        </div>
-                                    }
-                                    .into_any()
-                                }
-                            }
-                        }
-                    />
-                </Show>
+                    {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
+                </button>
             </div>
+
+            // Flip container.
+            <div
+                class="canvas-flip-container"
+                class:flipped=is_back
+            >
+                // Front face: rendered blocks + chat thread.
+                <div class="canvas-face front">
+                    <div class="canvas-stream">
+                        <Show
+                            when=has_blocks
+                            fallback=move || view! { <CanvasEmptyState /> }
+                        >
+                            <For
+                                each=grouped_blocks
+                                key=|g| match g {
+                                    BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
+                                    BlockGroup::Linked(bs) => bs
+                                        .iter()
+                                        .map(|b| format!("{}@{}", b.id, b.updated_at))
+                                        .collect::<Vec<_>>()
+                                        .join("-"),
+                                }
+                                children=move |group| {
+                                    match group {
+                                        BlockGroup::Single(block) => {
+                                            view! { <BlockRenderer block=block /> }.into_any()
+                                        }
+                                        BlockGroup::Linked(blocks) => {
+                                            view! {
+                                                <div class="block-group">
+                                                    {blocks.into_iter().map(|block| {
+                                                        view! { <BlockRenderer block=block /> }
+                                                    }).collect::<Vec<_>>()}
+                                                </div>
+                                            }
+                                            .into_any()
+                                        }
+                                    }
+                                }
+                            />
+                        </Show>
+                    </div>
+                    <CanvasChatThread />
+                </div>
+
+                // Back face: workflow pipeline.
+                <div class="canvas-face back">
+                    <CanvasWorkflowPipeline />
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// Chat thread component — shows conversation messages and a simple input.
+#[component]
+fn CanvasChatThread() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let input_value = RwSignal::new(String::new());
+
+    let on_keydown = move |e: leptos::ev::KeyboardEvent| {
+        if e.key() == "Enter" {
+            let text = input_value.get();
+            let trimmed = text.trim().to_string();
+            if !trimmed.is_empty() {
+                canvas_state.submit_prompt(trimmed.clone());
+                canvas_state.add_message("user", &trimmed, None);
+                input_value.set(String::new());
+            }
+        }
+    };
+
+    view! {
+        <div class="canvas-chat-thread">
+            <For
+                each=move || canvas_state.canvas_messages.get()
+                key=|msg| msg.id.clone()
+                children=move |msg| {
+                    let is_user = msg.role == "user";
+                    let cls = if is_user { "chat-message-user" } else { "chat-message-assistant" };
+                    let content = msg.content.clone();
+                    let block_id = msg.block_id.clone();
+                    view! {
+                        <div class=cls>
+                            {content}
+                            {move || {
+                                if !is_user {
+                                    if let Some(ref bid) = block_id {
+                                        let bid_short = if bid.len() > 8 {
+                                            format!("{}...", &bid[..8])
+                                        } else {
+                                            bid.clone()
+                                        };
+                                        view! {
+                                            <span class="chat-block-link">
+                                                {format!(" \u{2192} block:{}", bid_short)}
+                                            </span>
+                                        }.into_any()
+                                    } else {
+                                        view! { <span /> }.into_any()
+                                    }
+                                } else {
+                                    view! { <span /> }.into_any()
+                                }
+                            }}
+                        </div>
+                    }
+                }
+            />
+        </div>
+        <div class="canvas-chat-input">
+            <input
+                type="text"
+                placeholder="Ask anything..."
+                prop:value=move || input_value.get()
+                on:input=move |e| input_value.set(event_target_value(&e))
+                on:keydown=on_keydown
+            />
+        </div>
+    }
+}
+
+/// Workflow pipeline — lists all blocks as workflow cards on the back face.
+#[component]
+fn CanvasWorkflowPipeline() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+
+    let blocks = move || {
+        canvas_state
+            .current_canvas()
+            .map(|c| c.blocks)
+            .unwrap_or_default()
+    };
+
+    let has_blocks = move || !blocks().is_empty();
+
+    view! {
+        <div class="canvas-workflow-pipeline">
+            <Show
+                when=has_blocks
+                fallback=move || view! {
+                    <div class="workflow-empty-state">
+                        "No blocks yet. Switch to Rendered view and submit a prompt."
+                    </div>
+                }
+            >
+                <For
+                    each=blocks
+                    key=|b| format!("{}@{}", b.id, b.updated_at)
+                    children=move |block| {
+                        let block_id = block.id.clone();
+                        let block_id_retry = block_id.clone();
+                        let state_label = match &block.state {
+                            papillon_shared::BlockState::Resolved => "resolved",
+                            papillon_shared::BlockState::Resolving { .. } => "resolving",
+                            papillon_shared::BlockState::Failed { .. } => "failed",
+                            papillon_shared::BlockState::Ghost { .. } => "ghost",
+                            papillon_shared::BlockState::AwaitingApproval { .. } => "resolving",
+                            papillon_shared::BlockState::Outcome { .. } => "resolved",
+                        };
+                        let badge_class = format!("wf-state-badge {}", state_label);
+                        let query = block.prompt_text.clone().unwrap_or_else(|| block_id.clone());
+                        let schema = block.schema_type.clone().unwrap_or_default();
+                        let agent = block.agent_did.clone().unwrap_or_default();
+                        let agent_short = if agent.len() > 20 {
+                            format!("{}...", &agent[..20])
+                        } else {
+                            agent.clone()
+                        };
+                        let expires = block.mandate_expires_at.clone().unwrap_or_default();
+                        let has_agent = !agent.is_empty();
+                        let has_expires = !expires.is_empty();
+                        let id_short = if block_id.len() > 8 {
+                            format!("{}...", &block_id[..8])
+                        } else {
+                            block_id.clone()
+                        };
+                        view! {
+                            <div class="workflow-block-card">
+                                <div class="wf-header-row">
+                                    <span class="wf-meta">{id_short}</span>
+                                    {move || {
+                                        if !schema.is_empty() {
+                                            view! {
+                                                <span class="wf-meta">
+                                                    {format!(" \u{00b7} {}", schema.trim_start_matches("schema:"))}
+                                                </span>
+                                            }.into_any()
+                                        } else {
+                                            view! { <span /> }.into_any()
+                                        }
+                                    }}
+                                    <span class=badge_class>{state_label}</span>
+                                </div>
+                                <div class="wf-query">{query}</div>
+                                <Show when=move || has_agent>
+                                    <div class="wf-meta">{agent_short.clone()}</div>
+                                </Show>
+                                <Show when=move || has_expires>
+                                    <div class="wf-meta">{format!("expires {}", &expires[..16.min(expires.len())])}</div>
+                                </Show>
+                                <button
+                                    class="btn-retry"
+                                    on:click=move |e: leptos::ev::MouseEvent| {
+                                        e.stop_propagation();
+                                        canvas_state.retry_block(block_id_retry.clone());
+                                    }
+                                >
+                                    "Re-run"
+                                </button>
+                            </div>
+                        }
+                    }
+                />
+            </Show>
         </div>
     }
 }

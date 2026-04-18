@@ -173,6 +173,7 @@ fn GeneralTab() -> impl IntoView {
             inference_substrate: provider,
             mandate_ttl_hours: orchestrator.config.get().mandate_ttl_hours,
             auto_approve_zero_disclosure: orchestrator.config.get().auto_approve_zero_disclosure,
+            intent_confidence_threshold: orchestrator.config.get().intent_confidence_threshold,
         };
 
         spawn_local(async move {

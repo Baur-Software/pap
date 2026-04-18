@@ -10,6 +10,8 @@
 
 use crate::types::Template;
 #[cfg(feature = "native")]
+use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord};
+#[cfg(feature = "native")]
 use pap_agents::DynamicAgentDef;
 use serde::{Deserialize, Serialize};
 
@@ -288,6 +290,40 @@ pub trait DatabaseOps: Send + Sync {
         action_type: &str,
         schema_type: &str,
     ) -> Result<Vec<PreferenceSignal>, DbError>;
+
+    // ── Canvas CRUD (native only) ─────────────────────────────────────────
+
+    /// Insert or update a canvas record.
+    #[cfg(feature = "native")]
+    fn upsert_canvas(&self, canvas: &CanvasRecord) -> Result<(), DbError>;
+
+    /// List all canvases, ordered by updated_at descending.
+    #[cfg(feature = "native")]
+    fn list_canvases(&self) -> Result<Vec<CanvasRecord>, DbError>;
+
+    /// Delete a canvas and all its blocks and messages (CASCADE).
+    #[cfg(feature = "native")]
+    fn delete_canvas(&self, id: &str) -> Result<(), DbError>;
+
+    /// Insert or update a canvas block record.
+    #[cfg(feature = "native")]
+    fn upsert_canvas_block(&self, block: &CanvasBlockRecord) -> Result<(), DbError>;
+
+    /// List all blocks for a canvas, ordered by display_order ascending.
+    #[cfg(feature = "native")]
+    fn list_canvas_blocks(&self, canvas_id: &str) -> Result<Vec<CanvasBlockRecord>, DbError>;
+
+    /// Delete a single canvas block by ID.
+    #[cfg(feature = "native")]
+    fn delete_canvas_block(&self, id: &str) -> Result<(), DbError>;
+
+    /// Insert a canvas message.
+    #[cfg(feature = "native")]
+    fn insert_canvas_message(&self, msg: &CanvasMessageRecord) -> Result<(), DbError>;
+
+    /// List all messages for a canvas, ordered by created_at ascending.
+    #[cfg(feature = "native")]
+    fn list_canvas_messages(&self, canvas_id: &str) -> Result<Vec<CanvasMessageRecord>, DbError>;
 }
 
 /// A preference signal recording which agent was selected for a given

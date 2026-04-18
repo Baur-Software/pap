@@ -396,6 +396,10 @@ impl<'a> PreferenceEngine<'a> {
 
 // ── Orchestrator types ──────────────────────────────────────
 
+fn default_confidence_threshold() -> f64 {
+    0.35
+}
+
 /// Orchestrator configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorConfig {
@@ -405,6 +409,11 @@ pub struct OrchestratorConfig {
     pub inference_substrate: LlmProvider,
     pub mandate_ttl_hours: u64,
     pub auto_approve_zero_disclosure: bool,
+    /// Minimum NLU confidence score to accept a classification result.
+    /// Below this threshold, classify_intent() falls back to schema:AskAction.
+    /// Default: 0.35. Range: 0.0–1.0.
+    #[serde(default = "default_confidence_threshold")]
+    pub intent_confidence_threshold: f64,
 }
 
 impl Default for OrchestratorConfig {
@@ -413,6 +422,7 @@ impl Default for OrchestratorConfig {
             inference_substrate: LlmProvider::default(),
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
+            intent_confidence_threshold: default_confidence_threshold(),
         }
     }
 }
@@ -1679,4 +1689,45 @@ pub struct RecoveryReconstructResult {
 pub struct RecoveryStatus {
     /// `true` once the user has completed the Shamir shard setup ceremony.
     pub configured: bool,
+}
+
+// ── Canvas persistence types ──────────────────────────────────────────────
+
+/// A named canvas — a persistent, named collection of blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasRecord {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A single block within a canvas, representing one intent → agent → result cycle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasBlockRecord {
+    pub id: String,
+    pub canvas_id: String,
+    pub prompt_text: Option<String>,
+    pub schema_type: Option<String>,
+    pub content_json: Option<String>,
+    pub block_state: String,
+    pub episode_id: Option<String>,
+    pub agent_did: Option<String>,
+    pub mandate_expires_at: Option<String>,
+    pub preference_guided: bool,
+    pub display_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A single message in a canvas conversation thread.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasMessageRecord {
+    pub id: String,
+    pub canvas_id: String,
+    /// "user" or "assistant"
+    pub role: String,
+    pub content: String,
+    pub block_id: Option<String>,
+    pub created_at: String,
 }

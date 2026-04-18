@@ -132,12 +132,156 @@ pub fn get_canvas_state(state: State<'_, AppState>) -> Result<CanvasSummaryState
     })
 }
 
-/// Detect intent from a user prompt.
-/// Returns (action_type, preferred_agent_name, cleaned_query).
+/// Map an NLU label to a schema.org action type and preferred agent name.
+fn map_label_to_action(label: &str) -> (&'static str, &'static str) {
+    match label {
+        "weather" => ("schema:CheckAction", "Open-Meteo Weather"),
+        "currency-exchange" => ("schema:TradeAction", "Frankfurter Exchange"),
+        "dictionary" => ("schema:SearchAction", "Free Dictionary"),
+        "code-repository" => ("schema:SearchAction", "GitHub Repos"),
+        "book" => ("schema:SearchAction", "Open Library Books"),
+        "tech-news" => ("schema:SearchAction", "Hacker News"),
+        "academic-paper" => ("schema:SearchAction", "arXiv Papers"),
+        "geocode" => ("schema:FindAction", "Nominatim Geocoding"),
+        "dataset" => ("schema:DatasetAction", "Dataset Discovery"),
+        "music" => ("schema:SearchAction", "MusicBrainz"),
+        "film" => ("schema:SearchAction", "Open Movie Database"),
+        "job-listing" => ("schema:SearchAction", "Remote OK Jobs"),
+        "recipe" => ("schema:SearchAction", "MealDB Recipes"),
+        "product" => ("schema:SearchAction", "Open Food Facts"),
+        _ => ("schema:SearchAction", "DuckDuckGo Search"),
+    }
+}
+
+/// Classify intent from a user prompt using federation-native NLU agents.
 ///
-/// Delegates to the shared intent table in `papillon_shared::intent`.
-fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
-    papillon_shared::intent::detect_intent(prompt)
+/// Fast path: bare HTTP/HTTPS URLs are routed deterministically to Web Page Reader.
+/// All other prompts trigger a silent PAP handshake with a discovered
+/// `schema:AnalyzeAction` agent (HuggingFace NLU or on-device LLM classifier).
+/// Returns `(action_type, preferred_agent, effective_query)` as owned strings.
+///
+/// Falls back to `("schema:AskAction", "", raw_text)` when no NLU agent is
+/// registered, the handshake fails, or confidence is below the configured threshold.
+async fn classify_intent(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    block_id: &str,
+    text: &str,
+) -> (String, String, String) {
+    // Deterministic fast path: bare HTTP/HTTPS URLs → Web Page Reader
+    let (action, preferred, query) = papillon_shared::intent::detect_intent(text);
+    if action != "schema:AnalyzeAction" {
+        return (action.to_owned(), preferred.to_owned(), query);
+    }
+
+    // Emit phase 0 so the block starts spinning while we classify
+    {
+        let now = Utc::now().to_rfc3339();
+        let _ = app.emit(
+            "block_updated",
+            BlockEvent {
+                block: BlockUpdate {
+                    id: block_id.to_string(),
+                    prompt_id: String::new(),
+                    prompt_text: None,
+                    state: BlockState::Resolving {
+                        phase: 0,
+                        phase_label: "Detecting intent\u{2026}".into(),
+                    },
+                    schema_type: None,
+                    content: None,
+                    agent_did: None,
+                    mandate_expires_at: None,
+                    preference_guided: false,
+                    created_at: now.clone(),
+                    updated_at: now,
+                },
+            },
+        );
+    }
+
+    // Universal fallback: when NLU classification cannot run or is not confident,
+    // route to DuckDuckGo web search (no API key, always available) rather than
+    // schema:AskAction which requires a local LLM.
+    macro_rules! nlu_fallback {
+        () => {
+            return (
+                "schema:SearchAction".to_owned(),
+                "DuckDuckGo Search".to_owned(),
+                text.to_owned(),
+            )
+        };
+    }
+
+    // Resolve NLU agent — scoring drives priority, no name hint needed
+    let Ok(resolved) = resolve_agent(state, "schema:AnalyzeAction", "", &[]).await else {
+        nlu_fallback!();
+    };
+
+    let principal_kp = {
+        let seed_guard = state.principal_seed.read().unwrap();
+        let Some(seed) = seed_guard.as_ref() else {
+            nlu_fallback!();
+        };
+        match PrincipalKeypair::from_bytes(seed) {
+            Ok(kp) => kp,
+            Err(_) => nlu_fallback!(),
+        }
+    };
+
+    let Ok(result) = handshake::execute(handshake::HandshakeParams {
+        handler: resolved.handler,
+        agent_name: &resolved.name,
+        agent_did: &resolved.did,
+        action_type: "schema:AnalyzeAction",
+        query: text,
+        principal_kp: &principal_kp,
+        requires_disclosure: &resolved.requires_disclosure,
+        returns: &resolved.returns,
+        on_phase: Box::new(|_, _| {}),
+        on_fail: Box::new(|_, _| {}),
+    })
+    .await
+    else {
+        nlu_fallback!();
+    };
+
+    let label = result
+        .content
+        .get("actionType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let confidence = result
+        .content
+        .get("confidence")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+
+    // cleanedQuery: produced by LLM classifiers, absent for HuggingFace.
+    // When present, the capability agent receives the distilled query.
+    let effective_query = result
+        .content
+        .get("cleanedQuery")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(text)
+        .to_owned();
+
+    let threshold = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.intent_confidence_threshold
+    };
+
+    if confidence < threshold || label.is_empty() || label == "question-answer" {
+        nlu_fallback!();
+    }
+
+    let (action_type, preferred_agent) = map_label_to_action(label);
+    (
+        action_type.to_owned(),
+        preferred_agent.to_owned(),
+        effective_query,
+    )
 }
 
 /// Score an agent candidate using profile history and local preference signals.
@@ -145,9 +289,12 @@ fn detect_intent(prompt: &str) -> (&'static str, &'static str, String) {
 /// - `AgentProfile` EMA statistics (success_rate, avg_quality)
 /// - `PreferenceEngine` schema-type-aware preference score
 /// - A keyword-match bonus for the intent-matched agent name
+/// - Model-substrate signals: local agents that can use the user's configured LLM
+///   are boosted; remote agents missing an API token are penalised
 ///
 /// Preference score contributes up to 30% of the total when the engine has
 /// enough history (≥ 3 sessions).  EMA statistics contribute 40% each on top.
+#[allow(clippy::too_many_arguments)]
 fn score_agent(
     db: &crate::db::Database,
     agent_did: &str,
@@ -155,6 +302,8 @@ fn score_agent(
     agent_name: &str,
     action_type: &str,
     schema_type: &str,
+    agent_def: Option<&pap_agents::DynamicAgentDef>,
+    inference_substrate: &papillon_shared::LlmProvider,
 ) -> f64 {
     let agent_did_hash = hash_agent_did(agent_did);
 
@@ -169,7 +318,55 @@ fn score_agent(
         0.0
     };
 
-    match db.get_agent_profile(&agent_did_hash).ok().flatten() {
+    // ── Model-substrate / source signals ─────────────────────────────────
+    let mut substrate_delta: f64 = 0.0;
+
+    if let Some(def) = agent_def {
+        // Agents without an external HTTP endpoint run locally via the LLM substrate.
+        if def.endpoint.is_none() {
+            // Any configured LLM substrate (not None) means this agent can run.
+            if !matches!(inference_substrate, papillon_shared::LlmProvider::None) {
+                substrate_delta += 0.4;
+            }
+            // Fully on-device BuiltIn model — most private, highest bonus.
+            if matches!(
+                inference_substrate,
+                papillon_shared::LlmProvider::BuiltIn { .. }
+            ) {
+                substrate_delta += 0.2;
+            }
+        } else if let Some(endpoint) = &def.endpoint {
+            // Agent has an external endpoint — check if it needs auth and has a token.
+            let needs_auth = endpoint.headers.contains_key("Authorization");
+            if needs_auth {
+                let api_token_set = db
+                    .get_agent_settings(&agent_did_hash)
+                    .ok()
+                    .and_then(|settings| settings.get("api_token").map(|s| !s.value.is_empty()))
+                    .unwrap_or(false);
+                if !api_token_set {
+                    // Would fail — deprioritize.
+                    substrate_delta -= 0.3;
+                }
+            }
+        }
+
+        // Source bonus/penalty.
+        match def.source {
+            pap_agents::DynamicAgentSource::Catalog => {
+                substrate_delta += 0.1;
+            }
+            pap_agents::DynamicAgentSource::Generated => {
+                substrate_delta -= 0.1;
+            }
+            _ => {}
+        }
+    } else {
+        // No local def found — treat as federated/remote agent.
+        substrate_delta -= 0.1;
+    }
+
+    let base_score = match db.get_agent_profile(&agent_did_hash).ok().flatten() {
         Some(profile) if profile.episode_count >= 3 => {
             // 35% success_rate + 35% avg_quality + 20% preference + 10% keyword
             let base = 0.35 * profile.success_rate + 0.35 * profile.avg_quality;
@@ -195,7 +392,9 @@ fn score_agent(
                 0.4
             }
         }
-    }
+    };
+
+    base_score + substrate_delta
 }
 
 /// Quick quality assessment of a handshake result (0.0 to 1.0).
@@ -242,6 +441,22 @@ pub(crate) async fn resolve_agent(
     preferred_name: &str,
     exclude_agents: &[String],
 ) -> Result<ResolvedAgent, PapillonError> {
+    // Load all local agent defs once for model-substrate / source scoring.
+    // Keyed by agent DID so we can look up quickly per candidate.
+    let agent_defs: std::collections::HashMap<String, pap_agents::DynamicAgentDef> = state
+        .db
+        .load_all_agents()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|d| d.agent_did.clone().map(|did| (did, d)))
+        .collect();
+
+    // Read inference substrate from the orchestrator config for substrate scoring.
+    let inference_substrate = {
+        let cfg = state.orchestrator_config.read().unwrap();
+        cfg.inference_substrate.clone()
+    };
+
     // Discover agent — try local registry first, then remote registries.
     let (agent_name, agent_did, requires_disclosure, returns, source_url) = {
         let local = state
@@ -267,6 +482,7 @@ pub(crate) async fn resolve_agent(
                 .map(|a| {
                     // Use first returns type as schema hint for preference scoring
                     let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                    let agent_def = agent_defs.get(&a.provider.did);
                     let s = score_agent(
                         &state.db,
                         &a.provider.did,
@@ -274,6 +490,8 @@ pub(crate) async fn resolve_agent(
                         &a.name,
                         action_type,
                         schema_hint,
+                        agent_def,
+                        &inference_substrate,
                     );
                     (*a, s)
                 })
@@ -313,6 +531,8 @@ pub(crate) async fn resolve_agent(
                         .iter()
                         .map(|a| {
                             let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                            // Remote/federated agents won't be in the local agent_defs map.
+                            let agent_def = agent_defs.get(&a.provider.did);
                             let s = score_agent(
                                 &state.db,
                                 &a.provider.did,
@@ -320,6 +540,8 @@ pub(crate) async fn resolve_agent(
                                 &a.name,
                                 action_type,
                                 schema_hint,
+                                agent_def,
+                                &inference_substrate,
                             );
                             (*a, s)
                         })
@@ -394,14 +616,28 @@ pub(crate) async fn resolve_agent(
 }
 
 /// Discover agent, resolve handler, run handshake, and apply reflection.
+/// Callers must pre-classify intent via `classify_intent` before calling this.
 async fn process_prompt(
     app: &AppHandle,
     state: &State<'_, AppState>,
     prompt_id: &str,
     block_id: &str,
-    text: &str,
+    action_type: &str,
+    preferred: &str,
+    query: &str,
 ) -> Result<(String, serde_json::Value, bool, String), PapillonError> {
-    process_prompt_inner(app, state, prompt_id, block_id, text, &[], 0).await
+    process_prompt_inner(
+        app,
+        state,
+        prompt_id,
+        block_id,
+        action_type,
+        preferred,
+        query,
+        &[],
+        0,
+    )
+    .await
 }
 
 /// Inner implementation with exclusion list and retry budget for reflection.
@@ -410,13 +646,15 @@ async fn process_prompt(
 /// Returns `(schema_type, content, preference_guided, agent_did)` where `preference_guided`
 /// is `true` when the PreferenceEngine had meaningful history that influenced
 /// agent selection, and `agent_did` is the DID of the resolved agent.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn process_prompt_inner<'a>(
     app: &'a AppHandle,
     state: &'a State<'a, AppState>,
     prompt_id: &'a str,
     block_id: &'a str,
-    text: &'a str,
+    action_type: &'a str,
+    preferred: &'a str,
+    query: &'a str,
     exclude_agents: &'a [String],
     retry_count: u8,
 ) -> std::pin::Pin<
@@ -428,8 +666,6 @@ fn process_prompt_inner<'a>(
     >,
 > {
     Box::pin(async move {
-        let (action_type, preferred, query) = detect_intent(text);
-
         let resolved = resolve_agent(state, action_type, preferred, exclude_agents).await?;
         // Capture agent DID before the handshake so it can be threaded into block_resolved.
         let agent_did = resolved.did.clone();
@@ -510,7 +746,7 @@ fn process_prompt_inner<'a>(
             agent_name: &resolved.name,
             agent_did: &resolved.did,
             action_type,
-            query: &query,
+            query,
             principal_kp: &principal_kp,
             requires_disclosure: &resolved.requires_disclosure,
             returns: &resolved.returns,
@@ -560,7 +796,9 @@ fn process_prompt_inner<'a>(
                     state,
                     prompt_id,
                     block_id,
-                    text,
+                    action_type,
+                    preferred,
+                    query,
                     &new_exclude,
                     retry_count + 1,
                 )
@@ -627,17 +865,28 @@ pub async fn canvas_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
+    // Classify intent via federation (NLU agent or LLM classifier).
+    // HTTP URLs are still routed deterministically inside classify_intent.
+    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
+
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
-    let (action_type_peek, _, _) = detect_intent(&text);
-    if action_type_peek == "schema:DatasetAction" {
+    if action_type == "schema:DatasetAction" {
         return crate::commands::dataset_discovery::canvas_discover_datasets(
             app, state, _canvas_id, prompt_id, block_id, text,
         )
         .await;
     }
 
-    let (schema_type, content, preference_guided, agent_did) =
-        process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+    let (schema_type, content, preference_guided, agent_did) = process_prompt(
+        &app,
+        &state,
+        &prompt_id,
+        &block_id,
+        &action_type,
+        &preferred,
+        &query,
+    )
+    .await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -678,8 +927,17 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (schema_type, content, preference_guided, agent_did) =
-        process_prompt(&app, &state, "", &block_id, &text).await?;
+    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
+    let (schema_type, content, preference_guided, agent_did) = process_prompt(
+        &app,
+        &state,
+        "",
+        &block_id,
+        &action_type,
+        &preferred,
+        &query,
+    )
+    .await?;
 
     // Auto-generate template if none exists for this schema type.
     maybe_auto_generate_template(&state, &schema_type, &content);
@@ -751,7 +1009,8 @@ pub async fn canvas_plan_prompt(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (action_type, preferred, _query) = detect_intent(&text);
+    // Classify intent once — result is reused for plan-building and handshake.
+    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
 
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
     if action_type == "schema:DatasetAction" {
@@ -762,7 +1021,7 @@ pub async fn canvas_plan_prompt(
     }
 
     // Resolve agent to build the IntentPlan.
-    let resolved = resolve_agent(&state, action_type, preferred, &[]).await?;
+    let resolved = resolve_agent(&state, &action_type, &preferred, &[]).await?;
 
     let approval_request_id = uuid::Uuid::new_v4().to_string();
 
@@ -797,15 +1056,23 @@ pub async fn canvas_plan_prompt(
     let schema_type_for_pref = plan.returns.first().map(String::as_str).unwrap_or("");
     let auto_approve = auto_approve
         || PreferenceEngine::new(state.db.as_ref()).has_approved_scopes(
-            action_type,
+            &action_type,
             schema_type_for_pref,
             &plan.requires_disclosure,
         );
 
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
-        let (schema_type, content, preference_guided, agent_did) =
-            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+        let (schema_type, content, preference_guided, agent_did) = process_prompt(
+            &app,
+            &state,
+            &prompt_id,
+            &block_id,
+            &action_type,
+            &preferred,
+            &query,
+        )
+        .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -865,7 +1132,7 @@ pub async fn canvas_plan_prompt(
     if approved {
         // Persist the approval so future identical requests skip the gate.
         PreferenceEngine::new(state.db.as_ref()).save_approved_scopes(
-            action_type,
+            &action_type,
             schema_type_for_pref,
             &hash_agent_did(&resolved.did),
             &resolved.name,
@@ -873,8 +1140,16 @@ pub async fn canvas_plan_prompt(
         );
 
         // Run the full handshake.
-        let (schema_type, content, preference_guided, agent_did) =
-            process_prompt(&app, &state, &prompt_id, &block_id, &text).await?;
+        let (schema_type, content, preference_guided, agent_did) = process_prompt(
+            &app,
+            &state,
+            &prompt_id,
+            &block_id,
+            &action_type,
+            &preferred,
+            &query,
+        )
+        .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -952,72 +1227,306 @@ pub async fn canvas_approve_block(
     }
 }
 
+// ── Canvas persistence commands ───────────────────────────────────────────
+
+/// List all canvases, most recently updated first.
+#[tauri::command]
+pub async fn canvas_list(
+    state: State<'_, AppState>,
+) -> Result<Vec<papillon_shared::CanvasRecord>, PapillonError> {
+    state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Create a new canvas with the given name and return the new record.
+#[tauri::command]
+pub async fn canvas_create(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<papillon_shared::CanvasRecord, PapillonError> {
+    let now = Utc::now().to_rfc3339();
+    let record = papillon_shared::CanvasRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    state
+        .db
+        .upsert_canvas(&record)
+        .map_err(|e| PapillonError::from(e.0))?;
+    Ok(record)
+}
+
+/// Delete a canvas and all its blocks and messages.
+#[tauri::command]
+pub async fn canvas_delete(state: State<'_, AppState>, id: String) -> Result<(), PapillonError> {
+    state
+        .db
+        .delete_canvas(&id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Rename a canvas (update its name and updated_at).
+#[tauri::command]
+pub async fn canvas_rename(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+) -> Result<(), PapillonError> {
+    // Load the existing canvas to preserve created_at.
+    let mut canvases = state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))?;
+    let existing = canvases
+        .iter_mut()
+        .find(|c| c.id == id)
+        .ok_or_else(|| PapillonError::from(format!("Canvas not found: {id}")))?;
+    let record = papillon_shared::CanvasRecord {
+        id: existing.id.clone(),
+        name,
+        created_at: existing.created_at.clone(),
+        updated_at: Utc::now().to_rfc3339(),
+    };
+    state
+        .db
+        .upsert_canvas(&record)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Create a new block in the given canvas at the specified display order.
+#[tauri::command]
+pub async fn canvas_block_create(
+    state: State<'_, AppState>,
+    canvas_id: String,
+    block_id: String,
+    prompt_text: Option<String>,
+    display_order: i64,
+) -> Result<(), PapillonError> {
+    let now = Utc::now().to_rfc3339();
+    let record = papillon_shared::CanvasBlockRecord {
+        id: block_id,
+        canvas_id,
+        prompt_text,
+        schema_type: None,
+        content_json: None,
+        block_state: "resolving".to_string(),
+        episode_id: None,
+        agent_did: None,
+        mandate_expires_at: None,
+        preference_guided: false,
+        display_order,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    state
+        .db
+        .upsert_canvas_block(&record)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Update a block to the "resolved" state with result data.
+#[tauri::command]
+pub async fn canvas_block_resolve(
+    state: State<'_, AppState>,
+    block_id: String,
+    schema_type: String,
+    content_json: String,
+    episode_id: Option<String>,
+    agent_did: Option<String>,
+    mandate_expires_at: Option<String>,
+) -> Result<(), PapillonError> {
+    // Load existing block to preserve immutable fields.
+    let blocks = state.db.list_canvas_blocks("").unwrap_or_default();
+    // We need to load by iterating all canvases — use a direct lookup approach.
+    // Since we need the canvas_id, load the block from all canvases by scanning.
+    // Alternatively, do a targeted upsert using the block_id as primary key.
+    // The DB upsert_canvas_block is an UPSERT so we can supply a sentinel canvas_id
+    // and only update the fields we care about. Instead, fetch the current block first.
+    let _ = blocks; // unused — we use a different approach below
+
+    // Build the updated record. We need canvas_id — load by scanning blocks.
+    // Since blocks are keyed by block_id, we look for it across all canvases.
+    let all_canvases = state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))?;
+    let mut found_block: Option<papillon_shared::CanvasBlockRecord> = None;
+    for canvas in &all_canvases {
+        let canvas_blocks = state
+            .db
+            .list_canvas_blocks(&canvas.id)
+            .map_err(|e| PapillonError::from(e.0))?;
+        if let Some(b) = canvas_blocks.into_iter().find(|b| b.id == block_id) {
+            found_block = Some(b);
+            break;
+        }
+    }
+    let existing =
+        found_block.ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
+    let updated = papillon_shared::CanvasBlockRecord {
+        schema_type: Some(schema_type),
+        content_json: Some(content_json),
+        block_state: "resolved".to_string(),
+        episode_id,
+        agent_did,
+        mandate_expires_at,
+        updated_at: Utc::now().to_rfc3339(),
+        ..existing
+    };
+    state
+        .db
+        .upsert_canvas_block(&updated)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Mark a block as failed, storing the failure reason in content_json.
+#[tauri::command]
+pub async fn canvas_block_fail(
+    state: State<'_, AppState>,
+    block_id: String,
+    reason: String,
+) -> Result<(), PapillonError> {
+    let all_canvases = state
+        .db
+        .list_canvases()
+        .map_err(|e| PapillonError::from(e.0))?;
+    let mut found_block: Option<papillon_shared::CanvasBlockRecord> = None;
+    for canvas in &all_canvases {
+        let canvas_blocks = state
+            .db
+            .list_canvas_blocks(&canvas.id)
+            .map_err(|e| PapillonError::from(e.0))?;
+        if let Some(b) = canvas_blocks.into_iter().find(|b| b.id == block_id) {
+            found_block = Some(b);
+            break;
+        }
+    }
+    let existing =
+        found_block.ok_or_else(|| PapillonError::from(format!("Block not found: {block_id}")))?;
+    let updated = papillon_shared::CanvasBlockRecord {
+        block_state: "failed".to_string(),
+        content_json: Some(serde_json::json!({"reason": reason}).to_string()),
+        updated_at: Utc::now().to_rfc3339(),
+        ..existing
+    };
+    state
+        .db
+        .upsert_canvas_block(&updated)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Delete a single canvas block.
+#[tauri::command]
+pub async fn canvas_block_delete(
+    state: State<'_, AppState>,
+    block_id: String,
+) -> Result<(), PapillonError> {
+    state
+        .db
+        .delete_canvas_block(&block_id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Load all blocks for the given canvas, ordered by display_order.
+#[tauri::command]
+pub async fn canvas_blocks_load(
+    state: State<'_, AppState>,
+    canvas_id: String,
+) -> Result<Vec<papillon_shared::CanvasBlockRecord>, PapillonError> {
+    state
+        .db
+        .list_canvas_blocks(&canvas_id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Append a message to a canvas conversation thread.
+#[tauri::command]
+pub async fn canvas_message_add(
+    state: State<'_, AppState>,
+    canvas_id: String,
+    role: String,
+    content: String,
+    block_id: Option<String>,
+) -> Result<(), PapillonError> {
+    let msg = papillon_shared::CanvasMessageRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        canvas_id,
+        role,
+        content,
+        block_id,
+        created_at: Utc::now().to_rfc3339(),
+    };
+    state
+        .db
+        .insert_canvas_message(&msg)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Load all messages for the given canvas, ordered by created_at.
+#[tauri::command]
+pub async fn canvas_messages_load(
+    state: State<'_, AppState>,
+    canvas_id: String,
+) -> Result<Vec<papillon_shared::CanvasMessageRecord>, PapillonError> {
+    state
+        .db
+        .list_canvas_messages(&canvas_id)
+        .map_err(|e| PapillonError::from(e.0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // ── map_label_to_action ────────────────────────────────────
+
     #[test]
-    fn detect_intent_wiki() {
-        let (action, agent, _query) = detect_intent("wikipedia Rust language");
-        assert_eq!(action, "schema:SearchAction");
-        assert_eq!(agent, "Wikipedia Knowledge");
+    fn map_label_to_action_coverage() {
+        // All 14 explicit labels map to non-empty action + agent names.
+        let labels = [
+            "weather",
+            "currency-exchange",
+            "dictionary",
+            "code-repository",
+            "book",
+            "tech-news",
+            "academic-paper",
+            "geocode",
+            "dataset",
+            "music",
+            "film",
+            "job-listing",
+            "recipe",
+            "product",
+        ];
+        for label in &labels {
+            let (action, agent) = map_label_to_action(label);
+            assert!(!action.is_empty(), "action empty for label: {label}");
+            assert!(!agent.is_empty(), "agent empty for label: {label}");
+            assert!(
+                action.starts_with("schema:"),
+                "action not schema: prefixed for label: {label}"
+            );
+        }
     }
 
     #[test]
-    fn detect_intent_search() {
-        let (action, agent, _query) = detect_intent("search for cats");
+    fn map_label_to_action_unknown_falls_back_to_search() {
+        let (action, agent) = map_label_to_action("completely-unknown-intent");
         assert_eq!(action, "schema:SearchAction");
         assert_eq!(agent, "DuckDuckGo Search");
     }
 
     #[test]
-    fn detect_intent_ai_fallback() {
-        let (action, agent, query) = detect_intent("explain quantum computing");
-        assert_eq!(action, "schema:AskAction");
-        assert_eq!(agent, "On-Device AI");
-        assert_eq!(query, "explain quantum computing");
-    }
-
-    #[test]
-    fn detect_intent_weather() {
-        let (action, agent, _query) = detect_intent("weather 48.85,2.35");
-        assert_eq!(action, "schema:CheckAction");
-        assert_eq!(agent, "Open-Meteo Weather");
-    }
-
-    #[test]
-    fn detect_intent_forecast() {
-        let (action, agent, _query) = detect_intent("forecast for tomorrow");
-        assert_eq!(action, "schema:CheckAction");
-        assert_eq!(agent, "Open-Meteo Weather");
-    }
-
-    #[test]
-    fn detect_intent_currency() {
-        let (action, agent, _query) = detect_intent("convert 100 USD EUR");
-        assert_eq!(action, "schema:TradeAction");
-        assert_eq!(agent, "Frankfurter Exchange");
-    }
-
-    #[test]
-    fn detect_intent_geocode() {
-        let (action, agent, _query) = detect_intent("where is Paris");
-        assert_eq!(action, "schema:FindAction");
-        assert_eq!(agent, "Nominatim Geocoding");
-    }
-
-    #[test]
-    fn detect_intent_books() {
-        let (action, agent, _query) = detect_intent("book about rust programming");
+    fn map_label_to_action_question_answer_not_mapped() {
+        // "question-answer" is handled by the confidence check in classify_intent
+        // and never reaches map_label_to_action. But if it did, it falls back.
+        let (action, _) = map_label_to_action("question-answer");
         assert_eq!(action, "schema:SearchAction");
-        assert_eq!(agent, "Open Library Books");
-    }
-
-    #[test]
-    fn detect_intent_hackernews() {
-        let (action, agent, _query) = detect_intent("hacker news rust");
-        assert_eq!(action, "schema:SearchAction");
-        assert_eq!(agent, "Hacker News");
     }
 
     #[test]

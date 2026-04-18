@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
+use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord};
 use pap_agents::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig};
 
 /// Persistent SQLite database for Papillon's experience memory.
@@ -178,6 +179,40 @@ impl NativeDatabase {
                 updated_at     TEXT NOT NULL,
                 PRIMARY KEY (agent_did_hash, value_name)
             );
+
+            CREATE TABLE IF NOT EXISTS canvases (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS canvas_blocks (
+                id                  TEXT PRIMARY KEY,
+                canvas_id           TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
+                prompt_text         TEXT,
+                schema_type         TEXT,
+                content_json        TEXT,
+                block_state         TEXT NOT NULL DEFAULT 'resolving',
+                episode_id          TEXT,
+                agent_did           TEXT,
+                mandate_expires_at  TEXT,
+                preference_guided   INTEGER NOT NULL DEFAULT 0,
+                display_order       INTEGER NOT NULL DEFAULT 0,
+                created_at          TEXT NOT NULL,
+                updated_at          TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_canvas_blocks_canvas ON canvas_blocks(canvas_id, display_order);
+
+            CREATE TABLE IF NOT EXISTS canvas_messages (
+                id          TEXT PRIMARY KEY,
+                canvas_id   TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
+                role        TEXT NOT NULL CHECK(role IN ('user','assistant')),
+                content     TEXT NOT NULL,
+                block_id    TEXT,
+                created_at  TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_canvas_messages_canvas ON canvas_messages(canvas_id, created_at);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -1596,6 +1631,190 @@ impl DatabaseOps for NativeDatabase {
         }
         Ok(signals)
     }
+
+    // ── Canvas CRUD ───────────────────────────────────────────────────────
+
+    fn upsert_canvas(&self, canvas: &CanvasRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvases (id, name, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 updated_at = excluded.updated_at",
+            params![canvas.id, canvas.name, canvas.created_at, canvas.updated_at],
+        )
+        .map_err(|e| DbError(format!("db upsert canvas: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvases(&self) -> Result<Vec<CanvasRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, created_at, updated_at
+                 FROM canvases
+                 ORDER BY updated_at DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(CanvasRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    created_at: row.get(2)?,
+                    updated_at: row.get(3)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvases: {e}")))?;
+        let mut canvases = Vec::new();
+        for row in rows {
+            canvases.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(canvases)
+    }
+
+    fn delete_canvas(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM canvases WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete canvas: {e}")))?;
+        Ok(())
+    }
+
+    fn upsert_canvas_block(&self, block: &CanvasBlockRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvas_blocks (
+                id, canvas_id, prompt_text, schema_type, content_json,
+                block_state, episode_id, agent_did, mandate_expires_at,
+                preference_guided, display_order, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            ON CONFLICT(id) DO UPDATE SET
+                canvas_id = excluded.canvas_id,
+                prompt_text = excluded.prompt_text,
+                schema_type = excluded.schema_type,
+                content_json = excluded.content_json,
+                block_state = excluded.block_state,
+                episode_id = excluded.episode_id,
+                agent_did = excluded.agent_did,
+                mandate_expires_at = excluded.mandate_expires_at,
+                preference_guided = excluded.preference_guided,
+                display_order = excluded.display_order,
+                updated_at = excluded.updated_at",
+            params![
+                block.id,
+                block.canvas_id,
+                block.prompt_text,
+                block.schema_type,
+                block.content_json,
+                block.block_state,
+                block.episode_id,
+                block.agent_did,
+                block.mandate_expires_at,
+                block.preference_guided as i64,
+                block.display_order,
+                block.created_at,
+                block.updated_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db upsert canvas block: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvas_blocks(&self, canvas_id: &str) -> Result<Vec<CanvasBlockRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, canvas_id, prompt_text, schema_type, content_json,
+                        block_state, episode_id, agent_did, mandate_expires_at,
+                        preference_guided, display_order, created_at, updated_at
+                 FROM canvas_blocks
+                 WHERE canvas_id = ?1
+                 ORDER BY display_order ASC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![canvas_id], |row| {
+                Ok(CanvasBlockRecord {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    prompt_text: row.get(2)?,
+                    schema_type: row.get(3)?,
+                    content_json: row.get(4)?,
+                    block_state: row.get(5)?,
+                    episode_id: row.get(6)?,
+                    agent_did: row.get(7)?,
+                    mandate_expires_at: row.get(8)?,
+                    preference_guided: {
+                        let v: i64 = row.get(9)?;
+                        v != 0
+                    },
+                    display_order: row.get(10)?,
+                    created_at: row.get(11)?,
+                    updated_at: row.get(12)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvas blocks: {e}")))?;
+        let mut blocks = Vec::new();
+        for row in rows {
+            blocks.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(blocks)
+    }
+
+    fn delete_canvas_block(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM canvas_blocks WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete canvas block: {e}")))?;
+        Ok(())
+    }
+
+    fn insert_canvas_message(&self, msg: &CanvasMessageRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvas_messages (id, canvas_id, role, content, block_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                msg.id,
+                msg.canvas_id,
+                msg.role,
+                msg.content,
+                msg.block_id,
+                msg.created_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db insert canvas message: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvas_messages(&self, canvas_id: &str) -> Result<Vec<CanvasMessageRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, canvas_id, role, content, block_id, created_at
+                 FROM canvas_messages
+                 WHERE canvas_id = ?1
+                 ORDER BY created_at ASC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![canvas_id], |row| {
+                Ok(CanvasMessageRecord {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    role: row.get(2)?,
+                    content: row.get(3)?,
+                    block_id: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvas messages: {e}")))?;
+        let mut messages = Vec::new();
+        for row in rows {
+            messages.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(messages)
+    }
 }
 
 #[cfg(test)]
@@ -2086,6 +2305,7 @@ mod tests {
                 response_jsonpath: "$.results[*]".to_string(),
                 response_schema_type: "schema:SearchResult".to_string(),
                 response_mapping: std::collections::HashMap::new(),
+                timeout_secs: 5,
             }),
             llm_instructions: "You are a search assistant.".to_string(),
             subagents: vec![],
@@ -2483,5 +2703,211 @@ mod tests {
         db.insert_agent(&def).unwrap();
         let agents = db.load_all_agents().unwrap();
         assert_eq!(agents[0].version, "1.2.3");
+    }
+
+    // ── Canvas persistence ───────────────────────────────────────────────
+
+    fn sample_canvas(id: &str) -> CanvasRecord {
+        CanvasRecord {
+            id: id.to_string(),
+            name: format!("Canvas {id}"),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_canvas_block(id: &str, canvas_id: &str, order: i64) -> CanvasBlockRecord {
+        CanvasBlockRecord {
+            id: id.to_string(),
+            canvas_id: canvas_id.to_string(),
+            prompt_text: Some(format!("query for {id}")),
+            schema_type: Some("schema:SearchAction".to_string()),
+            content_json: None,
+            block_state: "resolving".to_string(),
+            episode_id: None,
+            agent_did: None,
+            mandate_expires_at: None,
+            preference_guided: false,
+            display_order: order,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_canvas_message(
+        id: &str,
+        canvas_id: &str,
+        role: &str,
+        ts_suffix: &str,
+    ) -> CanvasMessageRecord {
+        CanvasMessageRecord {
+            id: id.to_string(),
+            canvas_id: canvas_id.to_string(),
+            role: role.to_string(),
+            content: format!("message content {id}"),
+            block_id: None,
+            created_at: format!("2026-01-01T00:00:{ts_suffix}Z"),
+        }
+    }
+
+    #[test]
+    fn canvas_upsert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-2")).unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 2);
+        assert!(canvases.iter().any(|c| c.id == "c-1"));
+        assert!(canvases.iter().any(|c| c.id == "c-2"));
+    }
+
+    #[test]
+    fn canvas_upsert_updates_name() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        let mut updated = sample_canvas("c-1");
+        updated.name = "Renamed Canvas".to_string();
+        db.upsert_canvas(&updated).unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 1);
+        assert_eq!(canvases[0].name, "Renamed Canvas");
+    }
+
+    #[test]
+    fn canvas_delete_removes_canvas() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-2")).unwrap();
+        db.delete_canvas("c-1").unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 1);
+        assert_eq!(canvases[0].id, "c-2");
+    }
+
+    #[test]
+    fn canvas_block_upsert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].id, "b-1");
+        assert_eq!(blocks[0].prompt_text.as_deref(), Some("query for b-1"));
+    }
+
+    #[test]
+    fn canvas_block_upsert_updates_state() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        let mut resolved = sample_canvas_block("b-1", "c-1", 0);
+        resolved.block_state = "resolved".to_string();
+        resolved.content_json = Some(r#"{"@type":"SearchResult"}"#.to_string());
+        db.upsert_canvas_block(&resolved).unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].block_state, "resolved");
+        assert!(blocks[0].content_json.is_some());
+    }
+
+    #[test]
+    fn canvas_blocks_ordered_by_display_order() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-3", "c-1", 2))
+            .unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-2", "c-1", 1))
+            .unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks[0].id, "b-1");
+        assert_eq!(blocks[1].id, "b-2");
+        assert_eq!(blocks[2].id, "b-3");
+    }
+
+    #[test]
+    fn canvas_block_delete() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.delete_canvas_block("b-1").unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert!(blocks.is_empty());
+    }
+
+    #[test]
+    fn canvas_delete_cascades_to_blocks_and_messages() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        // Delete the canvas — blocks and messages should cascade
+        db.delete_canvas("c-1").unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert!(
+            blocks.is_empty(),
+            "blocks should cascade-delete with canvas"
+        );
+        assert!(
+            msgs.is_empty(),
+            "messages should cascade-delete with canvas"
+        );
+    }
+
+    #[test]
+    fn canvas_message_insert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-1", "assistant", "02"))
+            .unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[1].role, "assistant");
+    }
+
+    #[test]
+    fn canvas_messages_ordered_chronologically() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        // Insert in reverse order
+        db.insert_canvas_message(&sample_canvas_message("m-3", "c-1", "user", "03"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-1", "user", "02"))
+            .unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0].id, "m-1");
+        assert_eq!(msgs[1].id, "m-2");
+        assert_eq!(msgs[2].id, "m-3");
+    }
+
+    #[test]
+    fn canvas_messages_scoped_to_canvas() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-a")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-b")).unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-a", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-b", "user", "01"))
+            .unwrap();
+        let msgs_a = db.list_canvas_messages("c-a").unwrap();
+        let msgs_b = db.list_canvas_messages("c-b").unwrap();
+        assert_eq!(msgs_a.len(), 1);
+        assert_eq!(msgs_b.len(), 1);
+        assert_eq!(msgs_a[0].id, "m-1");
+        assert_eq!(msgs_b[0].id, "m-2");
     }
 }

@@ -1,0 +1,34 @@
+schema_version = 1
+version = "0.1.0"
+name = "HuggingFace Intent Classifier"
+provider = "Hugging Face"
+description = "Zero-shot intent classification via MoritzLaurer/deberta-v3-large-zeroshot-v2. Classifies natural-language prompts into schema.org action types. Requires a free HuggingFace account token (hf.co/settings/tokens)."
+action = "schema:AnalyzeAction"
+object_types = ["schema:Text"]
+requires_disclosure = ["schema:query"]
+returns = ["pap:IntentClassification"]
+source = "Catalog"
+llm_instructions = ""
+subagents = []
+
+[endpoint]
+url_template = "https://router.huggingface.co/hf-inference/models/MoritzLaurer/deberta-v3-large-zeroshot-v2"
+method = "Post"
+body_template = '{"inputs":"{query}","parameters":{"candidate_labels":["web-search","weather","currency-exchange","dictionary","book","tech-news","code-repository","academic-paper","geocode","dataset","recipe","music","film","job-listing","product","question-answer"],"hypothesis_template":"This text is a request for {}"}}'
+response_schema_type = "pap:IntentClassification"
+timeout_secs = 30
+
+[endpoint.headers]
+"Authorization" = "Bearer {api_token}"
+"Content-Type" = "application/json"
+
+[endpoint.response_mapping]
+"actionType"  = "$[0].label"
+"confidence"  = "$[0].score"
+
+[[configurable_properties]]
+"@type"       = "PropertyValueSpecification"
+valueName     = "api_token"
+name          = "API Token"
+description   = "HuggingFace token (free at hf.co/settings/tokens). Required — the Inference Providers router no longer accepts unauthenticated requests."
+defaultValue  = ""
