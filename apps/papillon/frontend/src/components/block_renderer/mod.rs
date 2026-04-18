@@ -9,9 +9,10 @@ pub(crate) mod schema_property;
 mod templates;
 
 use leptos::prelude::*;
-use papillon_shared::{BlockState, CanvasBlock};
+use papillon_shared::{segment_with_citations, BlockState, TextSegment};
 use serde_json::Value;
 use std::sync::Arc;
+use wasm_bindgen_futures::spawn_local;
 
 pub use registry::RendererRegistry;
 
@@ -102,59 +103,56 @@ pub fn create_default_registry() -> Arc<RendererRegistry> {
 }
 
 /// Render a single canvas block based on its state and JSON-LD @type.
+///
+/// Accepts a `block_id` string and subscribes to that block's state via a
+/// [`Memo`] — so only updates to *this* block cause a re-render.  Sibling
+/// block phase ticks no longer invalidate this component.
+///
+/// The `BlockContext` signals (`expanded`, `show_reprompt`, `reprompt_value`)
+/// are initialised once from the block's data at mount time and survive
+/// subsequent phase updates without being reset.
 #[component]
-pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
+pub fn BlockRenderer(block_id: String) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let renderer_state = expect_context::<RendererState>();
 
     let registry = renderer_state.registry.with_value(|r| Arc::clone(r));
 
+    // Stable memo: only re-fires when this block's data actually changes.
+    let block_memo = canvas_state.block_signal(block_id.clone());
+
+    // Initialise local per-block signals from the first (mount-time) block value.
+    // These are intentionally NOT reactive — they hold user interaction state that
+    // must survive block phase updates.
+    let initial_auto_expand = block_memo.get_untracked()
+        .map(|b| b.auto_expand)
+        .unwrap_or(false);
+
     let block_ctx = BlockContext {
-        id: StoredValue::new(block.id.clone()),
-        expanded: RwSignal::new(block.auto_expand),
+        id: StoredValue::new(block_id.clone()),
+        expanded: RwSignal::new(initial_auto_expand),
         show_reprompt: RwSignal::new(false),
         reprompt_value: RwSignal::new(String::new()),
     };
     provide_context(block_ctx);
 
-    let is_resolved = matches!(
-        block.state,
-        BlockState::Resolved | BlockState::Outcome { .. }
-    );
-
-    // Browse-mode expansion: browse blocks fill the canvas viewport by default.
-    // All resolved blocks support manual expand/collapse via the toggle button.
-    let is_browse = block.auto_expand;
-    let browse_url = block.prompt_text.clone().unwrap_or_default();
-
-    let base_block_class = match &block.state {
-        BlockState::Ghost { .. } => "canvas-block ghost",
-        BlockState::AwaitingApproval { .. } => "canvas-block awaiting-approval",
-        BlockState::Resolving { .. } => "canvas-block resolving",
-        BlockState::Resolved => "canvas-block",
-        BlockState::Failed { .. } => "canvas-block failed",
-        BlockState::Outcome { .. } => "canvas-block outcome",
-    };
-
-    // Keep old name for the few places below that still use it unchanged.
-    let block_class = base_block_class;
+    // When canvas_state signals that this block should expand, set expanded=true
+    // and clear the signal so no other block picks it up.
+    {
+        let this_block_id = block_id.clone();
+        Effect::new(move |_| {
+            if let Some(ref requested) = canvas_state.requested_expansion.get() {
+                if *requested == this_block_id {
+                    block_ctx.expanded.set(true);
+                    canvas_state.requested_expansion.set(None);
+                }
+            }
+        });
+    }
 
     // Which face is currently visible — used to show/hide protocol metadata.
     let canvas_side = canvas_state.canvas_side;
     let on_back = move || canvas_side.get() == CanvasSide::Back;
-
-    // Initial prompt text for pre-filling the reprompt input.
-    let prompt_text_init = block.prompt_text.clone().unwrap_or_default();
-
-    let on_click = move |_| {
-        if is_resolved {
-            let was_shown = block_ctx.show_reprompt.get_untracked();
-            if !was_shown {
-                block_ctx.reprompt_value.set(prompt_text_init.clone());
-            }
-            block_ctx.show_reprompt.set(!was_shown);
-        }
-    };
 
     let on_reprompt_keydown = move |e: leptos::ev::KeyboardEvent| {
         if e.key() == "Enter" {
@@ -174,13 +172,57 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         canvas_state.retry_block(block_ctx.id.get_value());
     };
 
+    // The outer div class and all inner content are driven by the reactive memo.
+    // When block_memo re-fires (because updated_at or state changed), only this
+    // block's subtree is re-evaluated — not the entire canvas.
     view! {
+        {move || {
+            let block = match block_memo.get() {
+                Some(b) => b,
+                None => return view! { <div class="canvas-block canvas-block--missing" /> }.into_any(),
+            };
+
+            // Guide blocks are not user-resolvable — they are system meta-blocks.
+            let is_resolved = matches!(
+                block.state,
+                BlockState::Resolved | BlockState::Outcome { .. }
+            );
+
+            // Browse-mode expansion: browse blocks fill the canvas viewport by default.
+            let is_browse = block.auto_expand;
+            let browse_url = block.prompt_text.clone().unwrap_or_default();
+
+            let block_class = match &block.state {
+                BlockState::Ghost { .. } => "canvas-block ghost",
+                BlockState::AwaitingApproval { .. } => "canvas-block awaiting-approval",
+                BlockState::Resolving { .. } => "canvas-block resolving",
+                BlockState::Resolved => "canvas-block",
+                BlockState::Failed { .. } => "canvas-block failed",
+                BlockState::Outcome { .. } => "canvas-block outcome",
+                BlockState::Guide { .. } => "canvas-block guide-block",
+                BlockState::Note { .. } => "canvas-block note-block",
+            };
+
+            let prompt_text_init = block.prompt_text.clone().unwrap_or_default();
+
+            let on_click = move |_| {
+                if is_resolved {
+                    let was_shown = block_ctx.show_reprompt.get_untracked();
+                    if !was_shown {
+                        block_ctx.reprompt_value.set(prompt_text_init.clone());
+                    }
+                    block_ctx.show_reprompt.set(!was_shown);
+                }
+            };
+
+            let block_class_owned = block_class.to_string();
+            view! {
         <div
             class=move || {
                 if is_resolved && block_ctx.expanded.get() {
-                    format!("{} canvas-block--expanded", block_class)
+                    format!("{} canvas-block--expanded", block_class_owned)
                 } else {
-                    block_class.to_string()
+                    block_class_owned.clone()
                 }
             }
             role="article"
@@ -363,7 +405,18 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                     }.into_any()
                 }
                 BlockState::Resolved => {
-                    let content_view = match (&block.schema_type, &block.content) {
+                    // Check for a client-side template override set via `reshape_block_template`.
+                    // When present it takes priority over the block's persisted schema_type,
+                    // letting the user re-render content through a different template without
+                    // re-executing the agent handshake.
+                    let effective_schema_type: Option<String> = {
+                        let overrides = canvas_state.block_template_overrides.get();
+                        overrides
+                            .get(&block.id)
+                            .cloned()
+                            .or_else(|| block.schema_type.clone())
+                    };
+                    let content_view = match (&effective_schema_type, &block.content) {
                         (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Unknown"</span></div> }.into_any(),
                     };
@@ -482,26 +535,209 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                         </div>
                     }.into_any()
                 }
+                BlockState::Guide { summary, suggestions } => {
+                    let summary_text = summary.clone();
+                    let suggestions_clone = suggestions.clone();
+                    let canvas_state_guide = canvas_state;
+                    view! {
+                        <div class="guide-header">
+                            <span class="guide-icon">"✦"</span>
+                            <p class="guide-summary">{summary_text}</p>
+                        </div>
+                        <div class="guide-suggestions">
+                            {suggestions_clone.into_iter().map(|s| {
+                                let cs = canvas_state_guide;
+                                let pt = s.prompt_template.clone();
+                                let pid = s.saved_pipeline_id.clone();
+                                let label_btn = s.label.clone();
+                                view! {
+                                    <button
+                                        class="guide-suggestion-pill"
+                                        on:click=move |_| {
+                                            if let Some(ref pipeline_id) = pid {
+                                                // Run the saved pipeline directly, emitting block
+                                                // events to the current canvas so the front face
+                                                // shows live progress.
+                                                let canvas_id = cs.current_canvas_id.get_untracked();
+                                                let pid_clone = pipeline_id.clone();
+                                                let query_clone = pt.clone();
+                                                cs.canvas_side.set(CanvasSide::Front);
+                                                spawn_local(async move {
+                                                    #[derive(serde::Serialize)]
+                                                    #[serde(rename_all = "camelCase")]
+                                                    struct RunArgs {
+                                                        pipeline_id: String,
+                                                        initial_query: String,
+                                                        canvas_id: Option<String>,
+                                                    }
+                                                    let args = RunArgs {
+                                                        pipeline_id: pid_clone,
+                                                        initial_query: query_clone,
+                                                        canvas_id,
+                                                    };
+                                                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                                                        "run_saved_pipeline",
+                                                        &args,
+                                                    )
+                                                    .await;
+                                                });
+                                            } else {
+                                                cs.prefill_prompt.set(Some(pt.clone()));
+                                                cs.focus_prompt.update(|n| *n += 1);
+                                            }
+                                        }
+                                    >{label_btn}</button>
+                                }
+                            }).collect::<Vec<_>>()}
+                        </div>
+                    }.into_any()
+                }
+                BlockState::Note { title, content, .. } => {
+                    let (is_editing, set_editing) = create_signal(false);
+                    let (edit_title, set_edit_title) = create_signal(title.clone());
+                    let (edit_content, set_edit_content) = create_signal(content.clone());
+                    let block_id_note = block.id.clone();
+                    let canvas_id_note = canvas_state.current_canvas_id.get_untracked().unwrap_or_default();
+
+                    view! {
+                        <div class="note-header">
+                            <span class="note-icon">"✏"</span>
+                            <Show
+                                when=move || !is_editing.get()
+                                fallback=move || view! {
+                                    <input
+                                        class="note-title-input"
+                                        prop:value=edit_title
+                                        on:input=move |e| set_edit_title.set(event_target_value(&e))
+                                    />
+                                }.into_any()
+                            >
+                                <span class="note-title">{edit_title}</span>
+                            </Show>
+                            <div class="note-actions">
+                                <Show when=move || !is_editing.get()>
+                                    <button class="note-edit-btn"
+                                        on:click=move |_| set_editing.set(true)>
+                                        "Edit"
+                                    </button>
+                                </Show>
+                                <Show when=move || is_editing.get()>
+                                    <button class="note-save-btn" on:click={
+                                        let bid = block_id_note.clone();
+                                        let cid = canvas_id_note.clone();
+                                        move |_| {
+                                            let t = edit_title.get_untracked();
+                                            let c = edit_content.get_untracked();
+                                            let bid2 = bid.clone();
+                                            let cid2 = cid.clone();
+                                            spawn_local(async move {
+                                                #[derive(serde::Serialize)]
+                                                #[serde(rename_all = "camelCase")]
+                                                struct NoteArgs { canvas_id: String, block_id: String, title: String, content: String }
+                                                let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                                                    "canvas_update_note",
+                                                    &NoteArgs { canvas_id: cid2, block_id: bid2, title: t, content: c },
+                                                ).await;
+                                            });
+                                            set_editing.set(false);
+                                        }
+                                    }>"Save"</button>
+                                    <button class="note-cancel-btn"
+                                        on:click=move |_| set_editing.set(false)>
+                                        "Cancel"
+                                    </button>
+                                </Show>
+                            </div>
+                        </div>
+                        <div class="note-body">
+                            <Show
+                                when=move || is_editing.get()
+                                fallback=move || {
+                                    let lines = edit_content.get();
+                                    view! {
+                                        <div class="note-content-view">
+                                            {lines.lines()
+                                                .map(|l| view! { <p>{l.to_string()}</p> })
+                                                .collect::<Vec<_>>()}
+                                        </div>
+                                    }.into_any()
+                                }
+                            >
+                                <textarea
+                                    class="note-content-input"
+                                    rows="6"
+                                    prop:value=edit_content
+                                    on:input=move |e| set_edit_content.set(event_target_value(&e))
+                                />
+                            </Show>
+                        </div>
+                    }.into_any()
+                }
                 BlockState::Outcome { provenance_block_ids } => {
                     let prov_ids = provenance_block_ids.clone();
                     let prov_count = prov_ids.len();
                     let show_provenance = RwSignal::new(false);
 
-                    let content_view = match (&block.schema_type, &block.content) {
+                    // Same override lookup as the Resolved path.
+                    let effective_schema_type_outcome: Option<String> = {
+                        let overrides = canvas_state.block_template_overrides.get();
+                        overrides
+                            .get(&block.id)
+                            .cloned()
+                            .or_else(|| block.schema_type.clone())
+                    };
+
+                    let content_view = match (&effective_schema_type_outcome, &block.content) {
                         (Some(t), Some(content)) => render_typed_content(t, content, &registry, block.agent_did.as_deref()),
                         (None, Some(content)) => {
                             // Outcome blocks may not have a schema_type — render
                             // the synthesized result as a generic answer block.
-                            let text = content
-                                .get("result")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
-                            let text = text.to_string();
-                            view! {
-                                <div class="typed-answer">
-                                    <p class="typed-answer-text">{text}</p>
-                                </div>
-                            }.into_any()
+                            // When the content has a "result" string, parse inline
+                            // citations and render them as clickable [N] superscripts
+                            // that expand the corresponding provenance block.
+                            if let Some(text) = content.get("result").and_then(|v| v.as_str()) {
+                                let segments = segment_with_citations(text);
+                                let prov_ids_for_seg = prov_ids.clone();
+                                let cs_for_seg = canvas_state;
+                                let nodes = segments
+                                    .into_iter()
+                                    .map(move |seg| {
+                                        match seg {
+                                            TextSegment::Plain(t) => {
+                                                view! { <span>{t}</span> }.into_any()
+                                            }
+                                            TextSegment::Citation { index } => {
+                                                let bid = prov_ids_for_seg
+                                                    .get(index.saturating_sub(1))
+                                                    .cloned();
+                                                let label = format!("[{}]", index);
+                                                view! {
+                                                    <button
+                                                        class="inline-citation"
+                                                        title=format!("Source {}", index)
+                                                        on:click=move |_| {
+                                                            if let Some(ref b) = bid {
+                                                                cs_for_seg.expand_block(b.clone());
+                                                            }
+                                                        }
+                                                    >{label}</button>
+                                                }.into_any()
+                                            }
+                                        }
+                                    })
+                                    .collect::<Vec<_>>();
+                                view! {
+                                    <div class="typed-answer">
+                                        <p class="typed-answer-text">{nodes}</p>
+                                    </div>
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <div class="typed-generic">
+                                        <span class="typed-label">"Synthesizing..."</span>
+                                    </div>
+                                }.into_any()
+                            }
                         }
                         _ => view! { <div class="typed-generic"><span class="typed-label">"Synthesizing..."</span></div> }.into_any(),
                     };
@@ -547,6 +783,8 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                 }
             }}
         </div>
+        }.into_any()
+    }}
     }
 }
 

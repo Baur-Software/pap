@@ -1,7 +1,15 @@
 pub mod address_bar;
 pub mod block_renderer;
+pub mod canvas_back_face;
+pub mod canvas_chat_thread;
+pub mod canvas_empty_state;
+pub mod canvas_workflow_pipeline;
+pub mod hitl_gate;
+pub mod outcome_summary;
+pub mod pipeline_builder_tab;
 pub mod profile_avatar;
 pub mod recovery_setup;
 pub mod registry;
 pub mod setup_wizard;
+pub mod source_panel;
 pub mod topbar;

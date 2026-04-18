@@ -8,9 +8,11 @@
 //! - `wasm`: Uses sql.js (web)
 //! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
+#[cfg(feature = "native")]
+use crate::types::PipelineInfo;
 use crate::types::Template;
 #[cfg(feature = "native")]
-use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord};
+use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord, SavedPipeline};
 #[cfg(feature = "native")]
 use pap_agents::DynamicAgentDef;
 use serde::{Deserialize, Serialize};
@@ -324,6 +326,26 @@ pub trait DatabaseOps: Send + Sync {
     /// List all messages for a canvas, ordered by created_at ascending.
     #[cfg(feature = "native")]
     fn list_canvas_messages(&self, canvas_id: &str) -> Result<Vec<CanvasMessageRecord>, DbError>;
+
+    // ── Saved Pipeline CRUD (native only) ────────────────────────────────────
+
+    /// Upsert a saved pipeline (insert or replace by id).
+    #[cfg(feature = "native")]
+    fn upsert_saved_pipeline(
+        &self,
+        id: &str,
+        name: &str,
+        description: &str,
+        pipeline: &PipelineInfo,
+    ) -> Result<(), DbError>;
+
+    /// List all saved pipelines ordered by created_at DESC.
+    #[cfg(feature = "native")]
+    fn list_saved_pipelines(&self) -> Result<Vec<SavedPipeline>, DbError>;
+
+    /// Delete a saved pipeline by id. No-op if not found.
+    #[cfg(feature = "native")]
+    fn delete_saved_pipeline(&self, id: &str) -> Result<(), DbError>;
 }
 
 /// A preference signal recording which agent was selected for a given

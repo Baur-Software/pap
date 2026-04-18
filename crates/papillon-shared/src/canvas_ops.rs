@@ -56,6 +56,237 @@ pub fn merge_canvases_from_records(store: &mut Vec<Canvas>, records: &[CanvasRec
     }
 }
 
+/// A parsed inline citation marker from synthesized outcome text.
+/// Represents a single `[source:N]` occurrence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineCitation {
+    /// 1-indexed source number.
+    pub index: usize,
+    /// Byte offset of `[` in the original text.
+    pub start: usize,
+    /// Byte offset just past `]` in the original text.
+    pub end: usize,
+}
+
+/// A segment of synthesized text, either plain prose or a citation marker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TextSegment {
+    Plain(String),
+    Citation { index: usize },
+}
+
+/// Parse all `[source:N]` markers from synthesized text.
+/// Returns markers in order of appearance.
+/// Uses regex-free manual scan (no `regex` crate dependency).
+pub fn parse_inline_citations(text: &str) -> Vec<InlineCitation> {
+    let mut citations = Vec::new();
+    let prefix = "[source:";
+    let prefix_len = prefix.len();
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut pos = 0;
+
+    while pos + prefix_len < len {
+        // Find the next occurrence of '[source:'
+        if &text[pos..pos + prefix_len] != prefix {
+            pos += 1;
+            continue;
+        }
+
+        // pos points to '[', digits start at pos + prefix_len
+        let digit_start = pos + prefix_len;
+        let mut digit_end = digit_start;
+
+        // Consume ASCII digits only
+        while digit_end < len && bytes[digit_end].is_ascii_digit() {
+            digit_end += 1;
+        }
+
+        // Must have at least one digit and be immediately followed by ']'
+        if digit_end > digit_start && digit_end < len && bytes[digit_end] == b']' {
+            let number_str = &text[digit_start..digit_end];
+            // Safe to unwrap — we only consumed ASCII digits above
+            if let Ok(index) = number_str.parse::<usize>() {
+                let end = digit_end + 1; // byte past ']'
+                citations.push(InlineCitation {
+                    index,
+                    start: pos,
+                    end,
+                });
+                pos = end;
+                continue;
+            }
+        }
+
+        // Not a valid citation — advance past the '[' and keep scanning
+        pos += 1;
+    }
+
+    citations
+}
+
+/// Segment text into alternating Plain and Citation runs.
+/// Out-of-bounds indices (e.g., [source:0] or [source:999]) are kept as
+/// `Citation` variants — the caller decides validity.
+/// Empty plain strings are omitted.
+pub fn segment_with_citations(text: &str) -> Vec<TextSegment> {
+    let citations = parse_inline_citations(text);
+    let mut segments = Vec::new();
+    let mut cursor = 0usize;
+
+    for cite in &citations {
+        // Plain text before this citation
+        if cursor < cite.start {
+            let plain = text[cursor..cite.start].to_string();
+            if !plain.is_empty() {
+                segments.push(TextSegment::Plain(plain));
+            }
+        }
+        segments.push(TextSegment::Citation { index: cite.index });
+        cursor = cite.end;
+    }
+
+    // Trailing plain text after the last citation
+    if cursor < text.len() {
+        let plain = text[cursor..].to_string();
+        if !plain.is_empty() {
+            segments.push(TextSegment::Plain(plain));
+        }
+    }
+
+    segments
+}
+
+#[cfg(test)]
+mod citation_tests {
+    use super::*;
+
+    #[test]
+    fn parse_citations_empty() {
+        let result = parse_inline_citations("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_citations_no_markers() {
+        let result = parse_inline_citations("just plain text with no sources");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_citations_single() {
+        let result = parse_inline_citations("The sky is blue [source:1].");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].index, 1);
+        // Verify start points at '[' and end points past ']'
+        let text = "The sky is blue [source:1].";
+        assert_eq!(&text[result[0].start..result[0].end], "[source:1]");
+    }
+
+    #[test]
+    fn parse_citations_multiple() {
+        let text = "Fact one [source:1] and fact two [source:2].";
+        let result = parse_inline_citations(text);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].index, 1);
+        assert_eq!(result[1].index, 2);
+    }
+
+    #[test]
+    fn parse_citations_multi_digit_index() {
+        let text = "See [source:12] for details.";
+        let result = parse_inline_citations(text);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].index, 12);
+    }
+
+    #[test]
+    fn parse_citations_ignores_malformed() {
+        // [source:] — no digits
+        // [source: 1] — space before digit
+        // [SOURCE:1] — uppercase
+        // [source:1 — no closing bracket
+        let text = "[source:] hello [source: 1] world [SOURCE:1] and [source:1";
+        let result = parse_inline_citations(text);
+        assert!(result.is_empty(), "expected no matches, got: {:?}", result);
+    }
+
+    #[test]
+    fn parse_citations_returns_in_order_of_appearance() {
+        let text = "[source:3] then [source:1] then [source:2]";
+        let result = parse_inline_citations(text);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].index, 3);
+        assert_eq!(result[1].index, 1);
+        assert_eq!(result[2].index, 2);
+    }
+
+    #[test]
+    fn segment_no_citations() {
+        let segments = segment_with_citations("plain text only");
+        assert_eq!(segments, vec![TextSegment::Plain("plain text only".into())]);
+    }
+
+    #[test]
+    fn segment_interleaved() {
+        let text = "Before [source:1] middle [source:2] after";
+        let segments = segment_with_citations(text);
+        assert_eq!(segments.len(), 5);
+        assert_eq!(segments[0], TextSegment::Plain("Before ".into()));
+        assert_eq!(segments[1], TextSegment::Citation { index: 1 });
+        assert_eq!(segments[2], TextSegment::Plain(" middle ".into()));
+        assert_eq!(segments[3], TextSegment::Citation { index: 2 });
+        assert_eq!(segments[4], TextSegment::Plain(" after".into()));
+    }
+
+    #[test]
+    fn segment_leading_citation() {
+        let text = "[source:1] starts with a citation";
+        let segments = segment_with_citations(text);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0], TextSegment::Citation { index: 1 });
+        assert_eq!(
+            segments[1],
+            TextSegment::Plain(" starts with a citation".into())
+        );
+    }
+
+    #[test]
+    fn segment_trailing_citation() {
+        let text = "text ending with [source:3]";
+        let segments = segment_with_citations(text);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0], TextSegment::Plain("text ending with ".into()));
+        assert_eq!(segments[1], TextSegment::Citation { index: 3 });
+    }
+
+    #[test]
+    fn segment_out_of_bounds_index_is_safe() {
+        // [source:99] being out-of-bounds for a 2-item provenance list is
+        // handled by the caller, not here. We produce Citation{99} safely.
+        let segments = segment_with_citations("[source:99] text");
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0], TextSegment::Citation { index: 99 });
+        assert_eq!(segments[1], TextSegment::Plain(" text".into()));
+    }
+
+    #[test]
+    fn segment_empty_plains_omitted() {
+        // Adjacent citations produce no empty Plain segments between them.
+        let text = "[source:1][source:2]";
+        let segments = segment_with_citations(text);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0], TextSegment::Citation { index: 1 });
+        assert_eq!(segments[1], TextSegment::Citation { index: 2 });
+    }
+
+    #[test]
+    fn segment_empty_string() {
+        let segments = segment_with_citations("");
+        assert!(segments.is_empty());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -17,6 +17,30 @@ pub enum CanvasSide {
     Back,
 }
 
+/// Typed canvas lifecycle events emitted by [`CanvasState::apply_block_event`]
+/// and note mutation methods. Components can subscribe to `last_event` instead
+/// of the full `canvases` vec to react to specific event types without triggering
+/// unnecessary re-renders from unrelated block updates.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CanvasEvent {
+    /// A block moved from one Resolving phase to the next.
+    BlockPhaseChanged { block_id: String, phase: u8, phase_label: String },
+    /// A block reached `BlockState::Resolved`.
+    BlockResolved { block_id: String, schema_type: Option<String> },
+    /// A block reached `BlockState::Failed`.
+    BlockFailed { block_id: String, reason: String },
+    /// A block became `BlockState::Outcome` (synthesized multi-agent result).
+    BlockOutcome { block_id: String },
+    /// A Guide block was upserted after 2+ blocks resolved.
+    GuideRefreshed { canvas_id: String },
+    /// A Note block was created, updated, or deleted.
+    NoteChanged { block_id: String },
+    /// A new non-guide block was inserted into a canvas.
+    BlockCreated { block_id: String, canvas_id: String },
+    /// A block was deleted from a canvas.
+    BlockDeleted { block_id: String, canvas_id: String },
+}
+
 /// A pending Human-in-the-Loop gate request.
 #[derive(Clone, Debug)]
 pub struct HitlRequest {
@@ -50,6 +74,16 @@ pub struct CanvasState {
     pub canvas_side: RwSignal<CanvasSide>,
     /// Conversation messages for the active canvas chat thread.
     pub canvas_messages: RwSignal<Vec<CanvasMessageRecord>>,
+    /// When set, the named block should expand itself and then clear this signal.
+    pub requested_expansion: RwSignal<Option<String>>,
+    /// Maps block_id → schema_type override for client-side template reshaping.
+    /// Changing this causes the block renderer to use the override schema type
+    /// for registry lookup without touching the persisted block content.
+    pub block_template_overrides: RwSignal<std::collections::HashMap<String, String>>,
+    /// The most recent typed event emitted by block lifecycle mutations.
+    /// Components can subscribe to this instead of the full `canvases` vec
+    /// to react to specific event types without unnecessary re-renders.
+    pub last_event: RwSignal<Option<CanvasEvent>>,
 }
 
 impl Default for CanvasState {
@@ -65,6 +99,9 @@ impl Default for CanvasState {
             approval_in_flight: RwSignal::new(std::collections::HashSet::new()),
             canvas_side: RwSignal::new(CanvasSide::Front),
             canvas_messages: RwSignal::new(Vec::new()),
+            requested_expansion: RwSignal::new(None),
+            block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
+            last_event: RwSignal::new(None),
         }
     }
 }
@@ -178,6 +215,65 @@ impl CanvasState {
         id
     }
 
+    /// Programmatically request that a specific block expand itself.
+    /// Flips to the Front face so the block is visible, then signals it.
+    pub fn expand_block(&self, block_id: String) {
+        self.canvas_side.set(CanvasSide::Front);
+        self.requested_expansion.set(Some(block_id));
+    }
+
+    /// Append a `{{block:ID}}` reference to the current topbar prefill prompt.
+    /// Bumps `focus_prompt` so the address bar grabs focus for the user to complete
+    /// and submit the composed query.
+    pub fn insert_block_ref(&self, block_id: String) {
+        let current = self.prefill_prompt.get_untracked().unwrap_or_default();
+        self.prefill_prompt
+            .set(Some(format!("{}{{{{block:{}}}}}", current, block_id)));
+        self.focus_prompt.update(|n| *n += 1);
+    }
+
+    /// Apply a template override to an existing resolved block.
+    /// This changes how the block's content is rendered without re-executing the
+    /// agent. The override is stored in `block_template_overrides` and takes
+    /// priority over the block's persisted `schema_type` during renderer lookup.
+    pub fn reshape_block_template(&self, block_id: String, schema_type_override: String) {
+        self.block_template_overrides.update(|map| {
+            map.insert(block_id, schema_type_override);
+        });
+    }
+
+    /// Create a new user-authored note block on the current canvas.
+    pub fn create_note(&self, title: String, content: String) {
+        let canvas_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+        let canvases = self.canvases;
+        let self_signal = *self;
+        spawn_local(async move {
+            #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
+            struct NoteArgs { canvas_id: String, title: String, content: String }
+            match crate::bridge::invoke::<_, CanvasBlock>(
+                "canvas_create_note",
+                &NoteArgs { canvas_id: canvas_id.clone(), title, content },
+            ).await {
+                Ok(block) => {
+                    let block_id = block.id.clone();
+                    canvases.update(|cs| {
+                        if let Some(c) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                            c.blocks.push(block);
+                        }
+                    });
+                    self_signal.last_event.set(Some(CanvasEvent::NoteChanged {
+                        block_id,
+                    }));
+                }
+                Err(e) => leptos::logging::error!("create_note: {:?}", e),
+            }
+        });
+    }
+
     /// Seed the first-ever canvas with live agent queries so the app
     /// opens with real content resolving through the handshake pipeline.
     ///
@@ -225,6 +321,46 @@ impl CanvasState {
     pub fn current_canvas(&self) -> Option<Canvas> {
         let id = self.current_canvas_id.get()?;
         self.canvases.get().into_iter().find(|c| c.id == id)
+    }
+
+    /// Returns a `Memo` that yields the block list for the currently active canvas.
+    /// Only re-fires when the active canvas's blocks change — not when other canvases
+    /// change or when `current_canvas_id` itself switches (structural vs. content change).
+    ///
+    /// Use in place of the `move || canvas_state.current_canvas().map(|c| c.blocks)`
+    /// closure pattern so that only actual block mutations cause downstream re-runs.
+    pub fn current_canvas_blocks(&self) -> Memo<Vec<CanvasBlock>> {
+        let canvases = self.canvases;
+        let current_id = self.current_canvas_id;
+        Memo::new(move |_| {
+            let id = current_id.get();
+            canvases
+                .get()
+                .into_iter()
+                .find(|c| Some(c.id.clone()) == id)
+                .map(|c| c.blocks)
+                .unwrap_or_default()
+        })
+    }
+
+    /// Returns a `Memo` that yields `Some(CanvasBlock)` for the given block ID
+    /// whenever that block's data changes, or `None` if the block no longer exists.
+    ///
+    /// Leptos's `Memo` compares the previous and new values via `PartialEq` before
+    /// notifying subscribers — so if an unrelated block changes but *this* block's
+    /// data is unchanged, no re-render is triggered for the subscriber.
+    ///
+    /// Use in `BlockRenderer` so that only updates to *this* block's `updated_at`
+    /// (or any other field) cause its subtree to re-evaluate.
+    pub fn block_signal(&self, block_id: String) -> Memo<Option<CanvasBlock>> {
+        let canvases = self.canvases;
+        Memo::new(move |_| {
+            canvases
+                .get()
+                .into_iter()
+                .flat_map(|c| c.blocks.into_iter())
+                .find(|b| b.id == block_id)
+        })
     }
 
     /// Submit a new prompt — creates blocks via the backend.
@@ -680,8 +816,14 @@ impl CanvasState {
     /// When the block transitions to Resolved or Failed, calls the
     /// corresponding Tauri persistence command (canvas_block_resolve /
     /// canvas_block_fail) via spawn_local — fire-and-forget, errors logged.
+    ///
+    /// When a canvas reaches 2+ resolved blocks, triggers `canvas_generate_guide`
+    /// and upserts the Guide block at position 0.
     pub fn apply_block_event(&self, update: BlockUpdate) {
         let current_id = self.current_canvas_id;
+        let canvases = self.canvases;
+        let mut guide_canvas_id: Option<String> = None;
+
         self.canvases.update(|cs| {
             for canvas in cs.iter_mut() {
                 if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == update.id) {
@@ -751,11 +893,164 @@ impl CanvasState {
                         _ => {}
                     }
 
+                    // After a block resolves, check whether we should trigger a Guide refresh.
+                    // Guard: only trigger when the new state is Resolved or Outcome.
+                    if matches!(&update.state, BlockState::Resolved | BlockState::Outcome { .. }) {
+                        // Count resolved blocks on this canvas, excluding Guide blocks.
+                        let resolved_count = canvas.blocks.iter()
+                            .filter(|b| {
+                                !b.id.starts_with("guide-")
+                                    && matches!(b.state, BlockState::Resolved | BlockState::Outcome { .. })
+                            })
+                            .count();
+                        if resolved_count >= 2 {
+                            guide_canvas_id = Some(canvas.id.clone());
+                        }
+                    }
+
                     return;
                 }
             }
         });
         let _ = current_id;
+
+        // Emit a typed event so fine-grained subscribers can react without reading
+        // the full canvases vec. Uses `PartialEq` on `CanvasEvent` — if the same
+        // event fires twice in a row (e.g. phase 2 → phase 2 on retry), the memo
+        // won't re-notify but that is the correct behaviour (no change occurred).
+        let typed_event = match &update.state {
+            BlockState::Resolving { phase, phase_label } => Some(CanvasEvent::BlockPhaseChanged {
+                block_id: update.id.clone(),
+                phase: *phase,
+                phase_label: phase_label.clone(),
+            }),
+            BlockState::Resolved => Some(CanvasEvent::BlockResolved {
+                block_id: update.id.clone(),
+                schema_type: update.schema_type.clone(),
+            }),
+            BlockState::Failed { reason, .. } => Some(CanvasEvent::BlockFailed {
+                block_id: update.id.clone(),
+                reason: reason.clone(),
+            }),
+            BlockState::Outcome { .. } => Some(CanvasEvent::BlockOutcome {
+                block_id: update.id.clone(),
+            }),
+            _ => None,
+        };
+        if let Some(evt) = typed_event {
+            self.last_event.set(Some(evt));
+        }
+
+        // Trigger guide generation outside the borrow of canvases.
+        if let Some(cid) = guide_canvas_id {
+            let guide_id = format!("guide-{}", cid);
+            let cid_clone = cid.clone();
+
+            // Collect summaries from resolved blocks (excluding guide blocks themselves).
+            #[derive(serde::Serialize)]
+            struct GuideSummaryPayload {
+                schema_type: String,
+                agent_name: String,
+                snippet: String,
+            }
+
+            let summaries: Vec<GuideSummaryPayload> = canvases
+                .get_untracked()
+                .iter()
+                .find(|c| c.id == cid)
+                .map(|c| {
+                    c.blocks.iter()
+                        .filter(|b| {
+                            !b.id.starts_with("guide-")
+                                && matches!(b.state, BlockState::Resolved | BlockState::Outcome { .. })
+                        })
+                        .map(|b| GuideSummaryPayload {
+                            schema_type: b.schema_type.clone().unwrap_or_default(),
+                            agent_name: b.agent_did.as_deref()
+                                .map(|d| {
+                                    // Use last 8 chars of DID as a display name fallback.
+                                    if d.len() > 8 { d[d.len()-8..].to_string() } else { d.to_string() }
+                                })
+                                .unwrap_or_else(|| "Agent".to_string()),
+                            snippet: b.content.as_ref()
+                                .and_then(|c| c.get("result"))
+                                .and_then(|r| r.as_str())
+                                .map(|s| s.chars().take(80).collect::<String>())
+                                .unwrap_or_default(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let self_signal = *self;
+            spawn_local(async move {
+                if !crate::bridge::tauri_available() {
+                    return;
+                }
+
+                #[derive(serde::Deserialize)]
+                struct GuidePayload {
+                    block_id: String,
+                    summary: String,
+                    suggestions: Vec<papillon_shared::GuideSuggestion>,
+                }
+
+                let result = crate::bridge::invoke::<_, GuidePayload>(
+                    "canvas_generate_guide",
+                    &serde_json::json!({
+                        "canvasId": cid_clone,
+                        "resolvedBlockSummaries": summaries,
+                    }),
+                ).await;
+
+                if let Ok(payload) = result {
+                    let guide_block_id = payload.block_id.clone();
+                    canvases.update(|cs| {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid_clone) {
+                            // Upsert: update existing Guide block or prepend a new one.
+                            if let Some(existing) = canvas.blocks.iter_mut()
+                                .find(|b| b.id == guide_block_id)
+                            {
+                                existing.state = BlockState::Guide {
+                                    summary: payload.summary.clone(),
+                                    suggestions: payload.suggestions.clone(),
+                                };
+                                existing.updated_at = now_iso();
+                            } else {
+                                let now = now_iso();
+                                let guide_block = CanvasBlock {
+                                    id: guide_block_id,
+                                    prompt_id: String::new(),
+                                    prompt_text: None,
+                                    state: BlockState::Guide {
+                                        summary: payload.summary,
+                                        suggestions: payload.suggestions,
+                                    },
+                                    schema_type: None,
+                                    content: None,
+                                    linked_block_ids: Vec::new(),
+                                    agent_did: None,
+                                    mandate_expires_at: None,
+                                    preference_guided: false,
+                                    auto_expand: false,
+                                    created_at: now.clone(),
+                                    updated_at: now,
+                                };
+                                // Prepend at position 0.
+                                canvas.blocks.insert(0, guide_block);
+                            }
+                            canvas.updated_at = now_iso();
+                        }
+                    });
+                    // Notify subscribers that a Guide block was upserted.
+                    self_signal.last_event.set(Some(CanvasEvent::GuideRefreshed {
+                        canvas_id: cid_clone.clone(),
+                    }));
+                }
+            });
+
+            let _ = guide_id; // suppress unused warning
+        }
     }
 
     /// Load the active canvas and its blocks/messages from the SQLite DB.
@@ -829,6 +1124,23 @@ impl CanvasState {
                                 }
                                 let state = if rec.block_state == "resolved" {
                                     BlockState::Resolved
+                                } else if rec.block_state == "note" {
+                                    let parsed: Option<serde_json::Value> = rec.content_json
+                                        .as_deref()
+                                        .and_then(|s| serde_json::from_str(s).ok());
+                                    BlockState::Note {
+                                        title: parsed.as_ref()
+                                            .and_then(|v| v.get("title"))
+                                            .and_then(|t| t.as_str())
+                                            .unwrap_or("")
+                                            .to_string(),
+                                        content: parsed.as_ref()
+                                            .and_then(|v| v.get("note_content"))
+                                            .and_then(|t| t.as_str())
+                                            .unwrap_or("")
+                                            .to_string(),
+                                        editing: false,
+                                    }
                                 } else if rec.block_state.starts_with("failed") {
                                     BlockState::Failed { phase: 6, reason: rec.block_state.clone() }
                                 } else {
@@ -1127,6 +1439,26 @@ mod tests {
         assert!(result.ends_with("..."));
         let body: String = input.chars().take(40).collect();
         assert!(result.starts_with(&body));
+    }
+
+    // ── insert_block_ref ─────────────────────────────────────────────────────
+
+    #[test]
+    fn insert_block_ref_appends_to_empty() {
+        // `CanvasState` requires a reactive runtime (RwSignal uses a leptos owner).
+        // For pure-logic tests we validate the format string directly.
+        let current = String::new();
+        let block_id = "abc".to_string();
+        let result = format!("{}{{{{block:{}}}}}", current, block_id);
+        assert_eq!(result, "{{block:abc}}");
+    }
+
+    #[test]
+    fn insert_block_ref_appends_to_existing() {
+        let current = "search for ".to_string();
+        let block_id = "xyz".to_string();
+        let result = format!("{}{{{{block:{}}}}}", current, block_id);
+        assert_eq!(result, "search for {{block:xyz}}");
     }
 
 }
