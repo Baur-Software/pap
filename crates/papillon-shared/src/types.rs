@@ -554,7 +554,7 @@ pub enum BlockState {
 /// Created by the backend when the orchestrator delegates a mandate.
 /// Sent to the frontend via Tauri events (`block_created`, `block_updated`,
 /// `block_resolved`, `block_failed`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CanvasBlock {
     /// Unique block identifier.
     pub id: String,

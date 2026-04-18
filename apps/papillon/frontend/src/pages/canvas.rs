@@ -12,18 +12,15 @@ use crate::state::canvas::{CanvasSide, CanvasState};
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
 
-    let blocks = move || {
-        canvas_state
-            .current_canvas()
-            .map(|c| c.blocks)
-            .unwrap_or_default()
-    };
+    // Use a Memo so grouped_blocks only rebuilds when the active canvas's blocks
+    // actually change — not when unrelated canvases or signals fire.
+    let blocks = canvas_state.current_canvas_blocks();
 
-    let has_blocks = move || !blocks().is_empty();
+    let has_blocks = move || !blocks.get().is_empty();
 
     // Group blocks by semantic links for rendering
     let grouped_blocks = move || {
-        let all_blocks = blocks();
+        let all_blocks = blocks.get();
         let mut rendered: Vec<BlockGroup> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -82,13 +79,13 @@ pub fn CanvasPage() -> impl IntoView {
                                 children=move |group| {
                                     match group {
                                         BlockGroup::Single(block) => {
-                                            view! { <BlockRenderer block=block /> }.into_any()
+                                            view! { <BlockRenderer block_id=block.id /> }.into_any()
                                         }
                                         BlockGroup::Linked(blocks) => {
                                             view! {
                                                 <div class="block-group">
                                                     {blocks.into_iter().map(|block| {
-                                                        view! { <BlockRenderer block=block /> }
+                                                        view! { <BlockRenderer block_id=block.id /> }
                                                     }).collect::<Vec<_>>()}
                                                 </div>
                                             }

@@ -9,7 +9,7 @@ pub(crate) mod schema_property;
 mod templates;
 
 use leptos::prelude::*;
-use papillon_shared::{segment_with_citations, BlockState, CanvasBlock, TextSegment};
+use papillon_shared::{segment_with_citations, BlockState, TextSegment};
 use serde_json::Value;
 use std::sync::Arc;
 use wasm_bindgen_futures::spawn_local;
@@ -103,16 +103,34 @@ pub fn create_default_registry() -> Arc<RendererRegistry> {
 }
 
 /// Render a single canvas block based on its state and JSON-LD @type.
+///
+/// Accepts a `block_id` string and subscribes to that block's state via a
+/// [`Memo`] — so only updates to *this* block cause a re-render.  Sibling
+/// block phase ticks no longer invalidate this component.
+///
+/// The `BlockContext` signals (`expanded`, `show_reprompt`, `reprompt_value`)
+/// are initialised once from the block's data at mount time and survive
+/// subsequent phase updates without being reset.
 #[component]
-pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
+pub fn BlockRenderer(block_id: String) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let renderer_state = expect_context::<RendererState>();
 
     let registry = renderer_state.registry.with_value(|r| Arc::clone(r));
 
+    // Stable memo: only re-fires when this block's data actually changes.
+    let block_memo = canvas_state.block_signal(block_id.clone());
+
+    // Initialise local per-block signals from the first (mount-time) block value.
+    // These are intentionally NOT reactive — they hold user interaction state that
+    // must survive block phase updates.
+    let initial_auto_expand = block_memo.get_untracked()
+        .map(|b| b.auto_expand)
+        .unwrap_or(false);
+
     let block_ctx = BlockContext {
-        id: StoredValue::new(block.id.clone()),
-        expanded: RwSignal::new(block.auto_expand),
+        id: StoredValue::new(block_id.clone()),
+        expanded: RwSignal::new(initial_auto_expand),
         show_reprompt: RwSignal::new(false),
         reprompt_value: RwSignal::new(String::new()),
     };
@@ -121,7 +139,7 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
     // When canvas_state signals that this block should expand, set expanded=true
     // and clear the signal so no other block picks it up.
     {
-        let this_block_id = block.id.clone();
+        let this_block_id = block_id.clone();
         Effect::new(move |_| {
             if let Some(ref requested) = canvas_state.requested_expansion.get() {
                 if *requested == this_block_id {
@@ -132,47 +150,9 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         });
     }
 
-    // Guide blocks are not user-resolvable — they are system meta-blocks.
-    let is_resolved = matches!(
-        block.state,
-        BlockState::Resolved | BlockState::Outcome { .. }
-    );
-
-    // Browse-mode expansion: browse blocks fill the canvas viewport by default.
-    // All resolved blocks support manual expand/collapse via the toggle button.
-    let is_browse = block.auto_expand;
-    let browse_url = block.prompt_text.clone().unwrap_or_default();
-
-    let base_block_class = match &block.state {
-        BlockState::Ghost { .. } => "canvas-block ghost",
-        BlockState::AwaitingApproval { .. } => "canvas-block awaiting-approval",
-        BlockState::Resolving { .. } => "canvas-block resolving",
-        BlockState::Resolved => "canvas-block",
-        BlockState::Failed { .. } => "canvas-block failed",
-        BlockState::Outcome { .. } => "canvas-block outcome",
-        BlockState::Guide { .. } => "canvas-block guide-block",
-        BlockState::Note { .. } => "canvas-block note-block",
-    };
-
-    // Keep old name for the few places below that still use it unchanged.
-    let block_class = base_block_class;
-
     // Which face is currently visible — used to show/hide protocol metadata.
     let canvas_side = canvas_state.canvas_side;
     let on_back = move || canvas_side.get() == CanvasSide::Back;
-
-    // Initial prompt text for pre-filling the reprompt input.
-    let prompt_text_init = block.prompt_text.clone().unwrap_or_default();
-
-    let on_click = move |_| {
-        if is_resolved {
-            let was_shown = block_ctx.show_reprompt.get_untracked();
-            if !was_shown {
-                block_ctx.reprompt_value.set(prompt_text_init.clone());
-            }
-            block_ctx.show_reprompt.set(!was_shown);
-        }
-    };
 
     let on_reprompt_keydown = move |e: leptos::ev::KeyboardEvent| {
         if e.key() == "Enter" {
@@ -192,13 +172,57 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
         canvas_state.retry_block(block_ctx.id.get_value());
     };
 
+    // The outer div class and all inner content are driven by the reactive memo.
+    // When block_memo re-fires (because updated_at or state changed), only this
+    // block's subtree is re-evaluated — not the entire canvas.
     view! {
+        {move || {
+            let block = match block_memo.get() {
+                Some(b) => b,
+                None => return view! { <div class="canvas-block canvas-block--missing" /> }.into_any(),
+            };
+
+            // Guide blocks are not user-resolvable — they are system meta-blocks.
+            let is_resolved = matches!(
+                block.state,
+                BlockState::Resolved | BlockState::Outcome { .. }
+            );
+
+            // Browse-mode expansion: browse blocks fill the canvas viewport by default.
+            let is_browse = block.auto_expand;
+            let browse_url = block.prompt_text.clone().unwrap_or_default();
+
+            let block_class = match &block.state {
+                BlockState::Ghost { .. } => "canvas-block ghost",
+                BlockState::AwaitingApproval { .. } => "canvas-block awaiting-approval",
+                BlockState::Resolving { .. } => "canvas-block resolving",
+                BlockState::Resolved => "canvas-block",
+                BlockState::Failed { .. } => "canvas-block failed",
+                BlockState::Outcome { .. } => "canvas-block outcome",
+                BlockState::Guide { .. } => "canvas-block guide-block",
+                BlockState::Note { .. } => "canvas-block note-block",
+            };
+
+            let prompt_text_init = block.prompt_text.clone().unwrap_or_default();
+
+            let on_click = move |_| {
+                if is_resolved {
+                    let was_shown = block_ctx.show_reprompt.get_untracked();
+                    if !was_shown {
+                        block_ctx.reprompt_value.set(prompt_text_init.clone());
+                    }
+                    block_ctx.show_reprompt.set(!was_shown);
+                }
+            };
+
+            let block_class_owned = block_class.to_string();
+            view! {
         <div
             class=move || {
                 if is_resolved && block_ctx.expanded.get() {
-                    format!("{} canvas-block--expanded", block_class)
+                    format!("{} canvas-block--expanded", block_class_owned)
                 } else {
-                    block_class.to_string()
+                    block_class_owned.clone()
                 }
             }
             role="article"
@@ -759,6 +783,8 @@ pub fn BlockRenderer(block: CanvasBlock) -> impl IntoView {
                 }
             }}
         </div>
+        }.into_any()
+    }}
     }
 }
 

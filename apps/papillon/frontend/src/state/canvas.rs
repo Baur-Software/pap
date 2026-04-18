@@ -17,6 +17,30 @@ pub enum CanvasSide {
     Back,
 }
 
+/// Typed canvas lifecycle events emitted by [`CanvasState::apply_block_event`]
+/// and note mutation methods. Components can subscribe to `last_event` instead
+/// of the full `canvases` vec to react to specific event types without triggering
+/// unnecessary re-renders from unrelated block updates.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CanvasEvent {
+    /// A block moved from one Resolving phase to the next.
+    BlockPhaseChanged { block_id: String, phase: u8, phase_label: String },
+    /// A block reached `BlockState::Resolved`.
+    BlockResolved { block_id: String, schema_type: Option<String> },
+    /// A block reached `BlockState::Failed`.
+    BlockFailed { block_id: String, reason: String },
+    /// A block became `BlockState::Outcome` (synthesized multi-agent result).
+    BlockOutcome { block_id: String },
+    /// A Guide block was upserted after 2+ blocks resolved.
+    GuideRefreshed { canvas_id: String },
+    /// A Note block was created, updated, or deleted.
+    NoteChanged { block_id: String },
+    /// A new non-guide block was inserted into a canvas.
+    BlockCreated { block_id: String, canvas_id: String },
+    /// A block was deleted from a canvas.
+    BlockDeleted { block_id: String, canvas_id: String },
+}
+
 /// A pending Human-in-the-Loop gate request.
 #[derive(Clone, Debug)]
 pub struct HitlRequest {
@@ -56,6 +80,10 @@ pub struct CanvasState {
     /// Changing this causes the block renderer to use the override schema type
     /// for registry lookup without touching the persisted block content.
     pub block_template_overrides: RwSignal<std::collections::HashMap<String, String>>,
+    /// The most recent typed event emitted by block lifecycle mutations.
+    /// Components can subscribe to this instead of the full `canvases` vec
+    /// to react to specific event types without unnecessary re-renders.
+    pub last_event: RwSignal<Option<CanvasEvent>>,
 }
 
 impl Default for CanvasState {
@@ -73,6 +101,7 @@ impl Default for CanvasState {
             canvas_messages: RwSignal::new(Vec::new()),
             requested_expansion: RwSignal::new(None),
             block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
+            last_event: RwSignal::new(None),
         }
     }
 }
@@ -220,6 +249,7 @@ impl CanvasState {
             None => return,
         };
         let canvases = self.canvases;
+        let self_signal = *self;
         spawn_local(async move {
             #[derive(serde::Serialize)]
             #[serde(rename_all = "camelCase")]
@@ -229,11 +259,15 @@ impl CanvasState {
                 &NoteArgs { canvas_id: canvas_id.clone(), title, content },
             ).await {
                 Ok(block) => {
+                    let block_id = block.id.clone();
                     canvases.update(|cs| {
                         if let Some(c) = cs.iter_mut().find(|c| c.id == canvas_id) {
                             c.blocks.push(block);
                         }
                     });
+                    self_signal.last_event.set(Some(CanvasEvent::NoteChanged {
+                        block_id,
+                    }));
                 }
                 Err(e) => leptos::logging::error!("create_note: {:?}", e),
             }
@@ -287,6 +321,46 @@ impl CanvasState {
     pub fn current_canvas(&self) -> Option<Canvas> {
         let id = self.current_canvas_id.get()?;
         self.canvases.get().into_iter().find(|c| c.id == id)
+    }
+
+    /// Returns a `Memo` that yields the block list for the currently active canvas.
+    /// Only re-fires when the active canvas's blocks change — not when other canvases
+    /// change or when `current_canvas_id` itself switches (structural vs. content change).
+    ///
+    /// Use in place of the `move || canvas_state.current_canvas().map(|c| c.blocks)`
+    /// closure pattern so that only actual block mutations cause downstream re-runs.
+    pub fn current_canvas_blocks(&self) -> Memo<Vec<CanvasBlock>> {
+        let canvases = self.canvases;
+        let current_id = self.current_canvas_id;
+        Memo::new(move |_| {
+            let id = current_id.get();
+            canvases
+                .get()
+                .into_iter()
+                .find(|c| Some(c.id.clone()) == id)
+                .map(|c| c.blocks)
+                .unwrap_or_default()
+        })
+    }
+
+    /// Returns a `Memo` that yields `Some(CanvasBlock)` for the given block ID
+    /// whenever that block's data changes, or `None` if the block no longer exists.
+    ///
+    /// Leptos's `Memo` compares the previous and new values via `PartialEq` before
+    /// notifying subscribers — so if an unrelated block changes but *this* block's
+    /// data is unchanged, no re-render is triggered for the subscriber.
+    ///
+    /// Use in `BlockRenderer` so that only updates to *this* block's `updated_at`
+    /// (or any other field) cause its subtree to re-evaluate.
+    pub fn block_signal(&self, block_id: String) -> Memo<Option<CanvasBlock>> {
+        let canvases = self.canvases;
+        Memo::new(move |_| {
+            canvases
+                .get()
+                .into_iter()
+                .flat_map(|c| c.blocks.into_iter())
+                .find(|b| b.id == block_id)
+        })
     }
 
     /// Submit a new prompt — creates blocks via the backend.
@@ -840,6 +914,33 @@ impl CanvasState {
         });
         let _ = current_id;
 
+        // Emit a typed event so fine-grained subscribers can react without reading
+        // the full canvases vec. Uses `PartialEq` on `CanvasEvent` — if the same
+        // event fires twice in a row (e.g. phase 2 → phase 2 on retry), the memo
+        // won't re-notify but that is the correct behaviour (no change occurred).
+        let typed_event = match &update.state {
+            BlockState::Resolving { phase, phase_label } => Some(CanvasEvent::BlockPhaseChanged {
+                block_id: update.id.clone(),
+                phase: *phase,
+                phase_label: phase_label.clone(),
+            }),
+            BlockState::Resolved => Some(CanvasEvent::BlockResolved {
+                block_id: update.id.clone(),
+                schema_type: update.schema_type.clone(),
+            }),
+            BlockState::Failed { reason, .. } => Some(CanvasEvent::BlockFailed {
+                block_id: update.id.clone(),
+                reason: reason.clone(),
+            }),
+            BlockState::Outcome { .. } => Some(CanvasEvent::BlockOutcome {
+                block_id: update.id.clone(),
+            }),
+            _ => None,
+        };
+        if let Some(evt) = typed_event {
+            self.last_event.set(Some(evt));
+        }
+
         // Trigger guide generation outside the borrow of canvases.
         if let Some(cid) = guide_canvas_id {
             let guide_id = format!("guide-{}", cid);
@@ -881,6 +982,7 @@ impl CanvasState {
                 })
                 .unwrap_or_default();
 
+            let self_signal = *self;
             spawn_local(async move {
                 if !crate::bridge::tauri_available() {
                     return;
@@ -940,6 +1042,10 @@ impl CanvasState {
                             canvas.updated_at = now_iso();
                         }
                     });
+                    // Notify subscribers that a Guide block was upserted.
+                    self_signal.last_event.set(Some(CanvasEvent::GuideRefreshed {
+                        canvas_id: cid_clone.clone(),
+                    }));
                 }
             });
 
