@@ -72,8 +72,17 @@ test.describe("Canvas page", () => {
   test("address bar shows pap:// suggestion buttons when typing pap://", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Suggestions appear only when user types "pap://" prefix
-    await page.locator(".topbar-address-input").fill("pap://");
+    // Navigate to browse via slide panel — the app auto-connects to pap://local on startup
+    // which calls list_agents and populates the catalog state
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
+    // Agents are auto-loaded — verify catalog is populated before testing suggestions
+    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 10000 });
+    // Address bar is in the topbar — catalog now has entries from auto-connect.
+    // The suggestion list only shows when there is a non-empty prefix after pap://,
+    // so type pap://d to match "duckduckgo search" from the local catalog.
+    await page.locator(".topbar-address-input").fill("pap://d");
     await expect(page.locator(".palette-suggestion").first()).toBeVisible({ timeout: 10000 });
   });
 
@@ -119,21 +128,25 @@ test.describe("Activity page", () => {
 // ── Settings Page ────────────────────────────────────────────
 
 test.describe("Settings page", () => {
-  test("renders six tabs", async ({ page }) => {
+  test("renders settings nav with all sections", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".settings-tab")).toHaveCount(6);
-    await expect(page.locator(".settings-tab").nth(0)).toHaveText("GENERAL");
-    await expect(page.locator(".settings-tab").nth(1)).toHaveText("PROFILES");
-    await expect(page.locator(".settings-tab").nth(2)).toHaveText("TEMPLATES");
-    await expect(page.locator(".settings-tab").nth(3)).toHaveText("IDENTITY");
-    await expect(page.locator(".settings-tab").nth(4)).toHaveText("ADVANCED");
-    await expect(page.locator(".settings-tab").nth(5)).toHaveText("MANDATES");
+    // Settings page uses a left-nav layout (settings-nav-link), not horizontal tabs
+    await expect(page.locator(".settings-nav")).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Profiles" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Identity" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Model" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Access Control" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
 
-  test("General tab shows inference substrate config", async ({ page }) => {
+  test("Model nav shows inference substrate config", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
+    // Click Model nav link to show the inference substrate section
+    await page.locator(".settings-nav-link").filter({ hasText: "Model" }).click();
     await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
     // Provider select is the first select on the page
     await expect(page.locator("select").first()).toBeVisible();
@@ -144,7 +157,7 @@ test.describe("Settings page", () => {
   }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(3).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
 
     // Should show backup warning (key not backed up)
     await expect(page.locator(".backup-warning")).toBeVisible();
@@ -163,7 +176,7 @@ test.describe("Settings page", () => {
   test("Export key shows seed and clears backup warning", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(3).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     await expect(page.locator(".backup-warning")).toBeVisible();
 
     // Click export
@@ -182,7 +195,7 @@ test.describe("Settings page", () => {
   test("Add Successor form works", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(3).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
 
     // Wait for Identity tab content
     await expect(page.locator("text=Designated Successors")).toBeVisible();
@@ -214,19 +227,23 @@ test.describe("Settings page", () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("switching tabs works", async ({ page }) => {
+  test("switching nav links works", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Start on General
+    // Default is Profiles — nav is visible
+    await expect(page.locator(".settings-nav")).toBeVisible();
+
+    // Switch to Model — shows INFERENCE_SUBSTRATE
+    await page.locator(".settings-nav-link").filter({ hasText: "Model" }).click();
     await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
 
-    // Switch to Identity
-    await page.locator(".settings-tab").nth(3).click();
+    // Switch to Identity — shows Export Key button
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     await expect(page.locator("text=Export Key")).toBeVisible();
 
-    // Switch to Advanced
-    await page.locator(".settings-tab").nth(4).click();
+    // Switch to Advanced — shows Registry Browser
+    await page.locator(".settings-nav-link").filter({ hasText: "Advanced" }).click();
     await expect(page.locator("text=Registry Browser")).toBeVisible();
   });
 });
@@ -237,12 +254,12 @@ test.describe("Agent discovery workflow", () => {
   test("loads agent registry with 3 builtin agents", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Navigate to browse registries
+    // Navigate to browse registries via slide panel ("Browse Agents" link)
     await page.locator(".topbar-brand").click();
-    await page.locator("text=Browse Registries").click();
-    // Should show registry page
-    await expect(page.locator("text=Browse Registries")).toBeVisible({ timeout: 5000 });
-    // Should show agents (at least 3 from mock)
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    // Should show registry page heading
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
+    // App auto-connects to pap://local on startup — agents are already loaded
     await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
   });
 
@@ -250,10 +267,11 @@ test.describe("Agent discovery workflow", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator("text=Browse Registries").click();
-    // Wait for first agent card
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
+    // App auto-connects to pap://local on startup — wait for agent cards
     await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
-    // Check agent card contains expected fields
+    // Check agent card contains expected fields from the mock (DuckDuckGo Search)
     const firstCard = page.locator(".agent-card").first();
     await expect(firstCard).toContainText("DuckDuckGo Search");
     await expect(firstCard).toContainText("SearchAction");
@@ -263,7 +281,10 @@ test.describe("Agent discovery workflow", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator("text=Browse Registries").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
+    // App auto-connects to pap://local on startup — wait for agent cards
+    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
     // Click first agent card
     await page.locator(".agent-card").first().click();
     // Should show agent detail view
@@ -416,7 +437,7 @@ test.describe("Settings management and persistence", () => {
   test("successors can be added and persisted", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(1).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     // Verify empty state
     let successors = await page.evaluate(() => {
       return window.__TAURI__.core.invoke("list_successors");

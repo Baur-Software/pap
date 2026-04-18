@@ -106,33 +106,39 @@ test.describe("Web standalone: settings page", () => {
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
 
-  test("tabs are clickable and switch content", async ({ page }) => {
+  test("nav links are clickable and switch content", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator('a[href="/settings"]').click();
+    // Navigate to settings via the slide panel (direct link click is inside the panel)
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" }).click();
 
-    // Start on General — should show INFERENCE_SUBSTRATE heading
+    // Default tab is Profiles — settings nav should be visible
+    await expect(page.locator(".settings-nav")).toBeVisible();
+
+    // Switch to Model tab — should show INFERENCE_SUBSTRATE heading
+    await page.locator(".settings-nav-link").filter({ hasText: "Model" }).click();
     await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
 
-    // Switch to Identity tab — General content should disappear
-    await page.locator(".settings-tab").nth(3).click();
+    // Switch to Identity tab — Model content should disappear
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     await expect(page.locator("text=INFERENCE_SUBSTRATE")).not.toBeVisible();
 
     // Switch to Advanced tab — shows Registry Browser
-    await page.locator(".settings-tab").nth(4).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Advanced" }).click();
     await expect(page.locator("text=Registry Browser")).toBeVisible();
   });
 });
 
 // ── Browse Page ──────────────────────────────────────────────
-// Navigate via brand dropdown — http-server has no SPA fallback.
+// Navigate via the slide panel (brand button → Browse Agents link).
 
 test.describe("Web standalone: browse page", () => {
   test("shows registry browser heading", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator(".menu-dropdown >> text=Browse Registries").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
 
     await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
   });
@@ -141,7 +147,7 @@ test.describe("Web standalone: browse page", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator(".menu-dropdown >> text=Browse Registries").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
 
     // Registry is not connected → shows quickstart to connect
     await expect(
@@ -201,18 +207,19 @@ test.describe("Web standalone: graceful degradation", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Navigate to settings via sidebar link
-    await page.locator('a[href="/settings"]').click();
-    await expect(page.locator(".settings-tab").first()).toBeVisible();
-
-    // Navigate to browse via brand dropdown
+    // Navigate to settings via slide panel
     await page.locator(".topbar-brand").click();
-    await page.locator(".menu-dropdown >> text=Browse Registries").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" }).click();
+    await expect(page.locator(".settings-nav")).toBeVisible();
+
+    // Navigate to browse via slide panel
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
     await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
 
-    // Back to home via brand dropdown
-    await page.locator(".topbar-brand").click();
-    await page.locator(".menu-dropdown >> text=New Canvas").click();
+    // Back to home canvas page via direct navigation
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
     await expect(page.locator(".canvas-page")).toBeVisible();
 
     expect(errors).toHaveLength(0);
