@@ -269,6 +269,6 @@ pub fn get_recovery_status(state: State<'_, AppState>) -> Result<RecoveryStatus,
         .unwrap_or(false);
     Ok(RecoveryStatus {
         configured,
-        needs_renewal: false,
+        needs_renewal: false, // TODO(task-2): read recovery_ceremony_revoked_at from DB
     })
 }
