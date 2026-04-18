@@ -196,6 +196,8 @@ pap/
     papillon-shared/      # Shared models between Papillon frontend and backend
   packages/
     pap-ts/               # Pure TypeScript implementation (@pap/core)
+    chrysalis-cli/        # CLI for federated registry management
+    papillon-cli/         # CLI for canvas and mandate operations
   apps/
     registry/             # Hostable federated PAP registry (Axum + Leptos SSR, SQLite/Postgres)
     papillon/             # Desktop reference implementation (Tauri)
