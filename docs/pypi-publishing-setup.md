@@ -29,11 +29,12 @@ The Python SDK version tracks the Rust workspace (`Cargo.toml` `[workspace.packa
 To release, bump the workspace version and push a matching tag:
 
 ```bash
-# 1. Bump version in Cargo.toml [workspace.package] (e.g. 0.6.0 → 0.7.0)
-# 2. Update crates/pap-python/CHANGELOG.md with the new version and date
-# 3. Commit, then tag:
-git tag python-v0.6.0
-git push origin python-v0.6.0
+# 1. Bump version in VERSION file (e.g. 0.8.2 → 0.9.0)
+# 2. Update Cargo.toml [workspace.package] version to match
+# 3. Update crates/pap-python/CHANGELOG.md with the new version and date
+# 4. Commit, then tag:
+git tag python-v0.8.2
+git push origin python-v0.8.2
 ```
 
 The workflow will:
@@ -53,4 +54,4 @@ the build matrix works before a real release.
 ## 5. Verify after tagging
 
 - https://pypi.org/project/pap-protocol/
-- `pip install pap-protocol==0.6.0`
+- `pip install pap-protocol==0.8.2`

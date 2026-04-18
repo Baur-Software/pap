@@ -37,24 +37,17 @@ jobs:
             TAG_VERSION="0.0.0-dev"
           fi
 
-          CARGO_VERSION=$(python3 -c "
-          import re
-          with open('Cargo.toml') as f:
-              content = f.read()
-          # Read from [workspace.package] section
-          match = re.search(r'\[workspace\.package\].*?^version\s*=\s*\"(.+?)\"', content, re.MULTILINE | re.DOTALL)
-          print(match.group(1))
-          ")
+          FILE_VERSION=$(cat VERSION)
 
-          echo "Tag version:   ${TAG_VERSION}"
-          echo "Cargo version: ${CARGO_VERSION}"
+          echo "Tag version:  ${TAG_VERSION}"
+          echo "File version: ${FILE_VERSION}"
 
-          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${CARGO_VERSION}" ]]; then
-            echo "::error::Tag version (${TAG_VERSION}) does not match Cargo.toml workspace version (${CARGO_VERSION})"
+          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${FILE_VERSION}" ]]; then
+            echo "::error::Tag version (${TAG_VERSION}) does not match VERSION file (${FILE_VERSION})"
             exit 1
           fi
 
-          echo "version=${CARGO_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${FILE_VERSION}" >> "$GITHUB_OUTPUT"
 
   # ── 2. Build wheels ────────────────────────────────────────────────────────
   build-wheels:

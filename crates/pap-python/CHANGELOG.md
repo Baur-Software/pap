@@ -4,7 +4,7 @@ All notable changes to the Python SDK will be documented in this file.
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-04-18
+## [0.8.2] - 2026-04-18
 
 ### Added
 - Initial Python bindings for PAP protocol
