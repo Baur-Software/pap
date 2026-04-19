@@ -43,7 +43,7 @@ pub async fn create_profile(
     state
         .profiles
         .write()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .push(profile_metadata.clone());
 
     Ok(profile_metadata)
