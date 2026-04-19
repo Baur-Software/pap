@@ -6,11 +6,13 @@ use crate::bridge;
 use crate::components::profile_avatar::ProfileAvatar;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
+use crate::state::recovery::RecoveryState;
 
 mod templates_tab;
 use papillon_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
-    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, SuccessorDesignation,
+    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RecoverySetupResult, RecoveryStatus,
+    SuccessorDesignation,
 };
 use templates_tab::TemplatesTab;
 
@@ -77,6 +79,15 @@ pub fn SettingsPage() -> impl IntoView {
                     "Privacy"
                 </button>
                 <button
+                    class=move || if active_tab.get() == "recovery" { "settings-nav-link active" } else { "settings-nav-link" }
+                    on:click=move |_| active_tab.set("recovery".into())
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                    </span>
+                    "Recovery"
+                </button>
+                <button
                     class=move || if active_tab.get() == "advanced" { "settings-nav-link active" } else { "settings-nav-link" }
                     on:click=move |_| active_tab.set("advanced".into())
                 >
@@ -116,6 +127,9 @@ pub fn SettingsPage() -> impl IntoView {
                 </Show>
                 <Show when=move || active_tab.get() == "access-control">
                     <MandateBuilderTab />
+                </Show>
+                <Show when=move || active_tab.get() == "recovery">
+                    <RecoveryTab />
                 </Show>
                 <Show when=move || active_tab.get() == "advanced">
                     <AdvancedTab />
@@ -1640,6 +1654,261 @@ fn MandateBuilderTab() -> impl IntoView {
                 </Show>
             </div>
         </div>
+    }
+}
+
+#[component]
+fn RecoveryTab() -> impl IntoView {
+    let recovery = expect_context::<RecoveryState>();
+
+    // step: 0 = status, 1 = configure M/N + generate, 2 = distribute shards
+    let step = RwSignal::new(0u8);
+    let status = RwSignal::new(None::<RecoveryStatus>);
+    let m_input = RwSignal::new(2u8);
+    let n_input = RwSignal::new(3u8);
+    let shard_cursor = RwSignal::new(0usize);
+
+    Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
+        spawn_local(async move {
+            if let Ok(s) = bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await {
+                status.set(Some(s));
+            }
+        });
+    });
+
+    let generate = move |_| {
+        let m = m_input.get();
+        let n = n_input.get();
+        if m == 0 || m > n {
+            recovery.error.set(Some(format!("Threshold {m} must be ≥ 1 and ≤ total {n}")));
+            return;
+        }
+        recovery.error.set(None);
+        recovery.generating.set(true);
+        spawn_local(async move {
+            match bridge::invoke::<serde_json::Value, RecoverySetupResult>(
+                "create_recovery_shards",
+                &serde_json::json!({ "threshold": m, "total": n }),
+            )
+            .await
+            {
+                Ok(result) => {
+                    recovery.threshold.set(m);
+                    recovery.total.set(n);
+                    recovery.shards.set(result.shards);
+                    recovery.manifest_json.set(result.manifest_json);
+                    recovery.generating.set(false);
+                    shard_cursor.set(0);
+                    step.set(2);
+                }
+                Err(e) => {
+                    recovery.error.set(Some(format!("Generation failed: {e}")));
+                    recovery.generating.set(false);
+                }
+            }
+        });
+    };
+
+    // Called when the last shard is advanced past — persists completion and returns to status.
+    let finish = move || {
+        spawn_local(async move {
+            let _ = bridge::invoke_no_args::<()>("mark_recovery_complete").await;
+            recovery.setup_complete.set(true);
+            recovery.needs_renewal.set(false);
+            recovery.shards.set(Vec::new());
+            recovery.manifest_json.set(String::new());
+            if let Ok(s) = bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await {
+                status.set(Some(s));
+            }
+            step.set(0);
+        });
+    };
+
+    view! {
+        <div class="settings-section-title">"Social Recovery"</div>
+        <p class="settings-section-desc">
+            "Distribute encrypted key shards to trusted contacts. Any M-of-N holders can reconstruct your identity if you lose this device."
+        </p>
+
+        // ── Step 0: Status ────────────────────────────────────────────────────
+        <Show when=move || step.get() == 0>
+            <div class="card">
+                {move || match status.get() {
+                    None if bridge::tauri_available() => view! {
+                        <p style="font-size: 12px; color: var(--text-secondary);">"Loading\u{2026}"</p>
+                    }.into_any(),
+                    None => view! {
+                        <p style="font-size: 12px; color: var(--text-secondary);">"Not available in browser mode."</p>
+                    }.into_any(),
+                    Some(ref s) if s.configured && !s.needs_renewal => view! {
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: #00b894; flex-shrink: 0;" />
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 500;">"Recovery configured"</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                                        {format!("{} of {} shards", recovery.threshold.get(), recovery.total.get())}
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                class="btn"
+                                style="background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px;"
+                                on:click=move |_| step.set(1)
+                            >"Redistribute"</button>
+                        </div>
+                    }.into_any(),
+                    Some(ref s) if s.needs_renewal => view! {
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: #fdcb6e; flex-shrink: 0;" />
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 500;">"Shards need renewal"</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Previous shards were spent in a recovery ceremony."</div>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" style="font-size: 12px;" on:click=move |_| step.set(1)>"Renew"</button>
+                        </div>
+                    }.into_any(),
+                    _ => view! {
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--error); flex-shrink: 0;" />
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 500;">"Not configured"</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Losing this device means losing your identity permanently."</div>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" style="font-size: 12px;" on:click=move |_| step.set(1)>"Set up"</button>
+                        </div>
+                    }.into_any(),
+                }}
+            </div>
+        </Show>
+
+        // ── Step 1: Configure M / N ───────────────────────────────────────────
+        <Show when=move || step.get() == 1>
+            <div class="card" style="margin-bottom: 16px;">
+                <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 16px;">"Configure recovery shards"</h3>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                    "Your key is split into N shards. Any M trustees can cooperate to reconstruct it. "
+                    "Individual shards reveal nothing — the guarantee is mathematical."
+                </p>
+                <div style="display: flex; gap: 24px; align-items: flex-end; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); margin-bottom: 6px;">"THRESHOLD (M)"</label>
+                        <input
+                            type="number" min="1" max="255"
+                            style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; width: 80px;"
+                            prop:value=move || m_input.get().to_string()
+                            on:input=move |ev| { if let Ok(v) = event_target_value(&ev).parse::<u8>() { m_input.set(v); } }
+                        />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); margin-bottom: 6px;">"TOTAL SHARDS (N)"</label>
+                        <input
+                            type="number" min="1" max="255"
+                            style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; width: 80px;"
+                            prop:value=move || n_input.get().to_string()
+                            on:input=move |ev| { if let Ok(v) = event_target_value(&ev).parse::<u8>() { n_input.set(v); } }
+                        />
+                    </div>
+                    <p style="font-size: 12px; color: var(--purple); margin: 0 0 10px;">
+                        {move || format!("{} of {} required", m_input.get(), n_input.get())}
+                    </p>
+                </div>
+                <Show when=move || recovery.error.get().is_some()>
+                    <p style="font-size: 12px; color: var(--error); margin-bottom: 8px;">
+                        {move || recovery.error.get().unwrap_or_default()}
+                    </p>
+                </Show>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary);"
+                    on:click=move |_| { recovery.error.set(None); step.set(0); }
+                >"Cancel"</button>
+                <button class="btn btn-primary" disabled=move || recovery.generating.get() on:click=generate>
+                    {move || if recovery.generating.get() { "Generating\u{2026}" } else { "Generate Shards" }}
+                </button>
+            </div>
+        </Show>
+
+        // ── Step 2: Distribute shards one at a time ───────────────────────────
+        // Only one shard JSON in the DOM at a time — prevents extensions from
+        // harvesting all shards in a single sweep.
+        <Show when=move || step.get() == 2>
+            {move || {
+                let shards = recovery.shards.get();
+                let cursor = shard_cursor.get();
+                let total = shards.len();
+                if total == 0 {
+                    return view! { <p style="font-size: 12px; color: var(--text-secondary);">"No shards generated."</p> }.into_any();
+                }
+                let shard = &shards[cursor];
+                let idx = shard.index;
+                let shard_json = shard.shard_json.clone();
+                let copy_json = shard.shard_json.clone();
+                let is_last = cursor + 1 >= total;
+                let finish_clone = finish.clone();
+                view! {
+                    <div class="card">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <h3 style="font-size: 13px; font-weight: 600; margin: 0;">
+                                {format!("Shard {} — trustee {}", cursor + 1, idx)}
+                            </h3>
+                            <span style="font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);">
+                                {format!("{} / {}", cursor + 1, total)}
+                            </span>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">
+                            "Copy this JSON and deliver it to the trustee. It won't be shown again."
+                        </p>
+                        <textarea
+                            readonly=true rows="5"
+                            style="width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: 11px; resize: none; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;"
+                        >{shard_json}</textarea>
+                        <div style="display: flex; gap: 8px; margin-top: 10px; align-items: center;">
+                            <button
+                                class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px;"
+                                on:click=move |_| {
+                                    let json = copy_json.clone();
+                                    spawn_local(async move {
+                                        if let Some(w) = web_sys::window() {
+                                            let _ = w.navigator().clipboard().write_text(&json);
+                                        }
+                                    });
+                                }
+                            >"Copy"</button>
+                            <button
+                                class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px;"
+                                on:click=move |_| {
+                                    recovery.shards.set(Vec::new());
+                                    recovery.manifest_json.set(String::new());
+                                    step.set(1);
+                                }
+                            >"Regenerate"</button>
+                            <div style="flex: 1;" />
+                            {if is_last {
+                                view! {
+                                    <button class="btn btn-primary" style="font-size: 12px;"
+                                        on:click=move |_| finish_clone()
+                                    >"Done"</button>
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <button class="btn btn-primary" style="font-size: 12px;"
+                                        on:click=move |_| shard_cursor.set(cursor + 1)
+                                    >{format!("Next ({}/{})", cursor + 2, total)}</button>
+                                }.into_any()
+                            }}
+                        </div>
+                    </div>
+                }.into_any()
+            }}
+        </Show>
     }
 }
 
