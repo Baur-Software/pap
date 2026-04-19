@@ -646,6 +646,7 @@
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius-lg); padding: 20px;
       transition: all .2s ease;
+      text-decoration: none; color: inherit; display: block;
     }
     .crate-card:hover {
       border-color: rgba(99,102,241,.3);
@@ -1173,47 +1174,51 @@
     <div class="reveal" style="margin-bottom: 40px;">
       <div class="section-label">Crate Structure</div>
       <h2 class="section-title" id="crates-heading">
-        <span class="gradient-text">9 focused crates.</span><br />
+        <span class="gradient-text">10 focused crates.</span><br />
         Six language SDKs.
       </h2>
     </div>
     <div class="crates-grid">
-      <div class="crate-card reveal">
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-did" class="crate-card reveal" target="_blank" rel="noopener">
         <div class="crate-name">pap-did</div>
         <div class="crate-desc">Ed25519 keypair generation, <code>did:key</code> derivation, DID documents, ephemeral session keys.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-1">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-core" class="crate-card reveal reveal-delay-1" target="_blank" rel="noopener">
         <div class="crate-name">pap-core</div>
         <div class="crate-desc">Mandate issuance, hierarchical delegation, scope enforcement, session state machine, receipts, decay states.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-2">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-credential" class="crate-card reveal reveal-delay-2" target="_blank" rel="noopener">
         <div class="crate-name">pap-credential</div>
         <div class="crate-desc">W3C Verifiable Credential envelope, SD-JWT selective disclosure. Over-disclosure structurally prevented.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-3">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-marketplace" class="crate-card reveal reveal-delay-3" target="_blank" rel="noopener">
         <div class="crate-name">pap-marketplace</div>
         <div class="crate-desc">Signed JSON-LD agent advertisements, marketplace registry, disclosure-based filtering.</div>
-      </div>
-      <div class="crate-card reveal">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-proto" class="crate-card reveal" target="_blank" rel="noopener">
         <div class="crate-name">pap-proto</div>
         <div class="crate-desc">Protocol message types and typed envelope serialization for the 6-phase handshake.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-1">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-transport" class="crate-card reveal reveal-delay-1" target="_blank" rel="noopener">
         <div class="crate-name">pap-transport</div>
         <div class="crate-desc">Axum HTTP client/server driving the 6-phase session handshake. A thin wrapper — doesn't change the trust model.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-2">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-federation" class="crate-card reveal reveal-delay-2" target="_blank" rel="noopener">
         <div class="crate-name">pap-federation</div>
         <div class="crate-desc">Federated registry with cross-registry sync, announce, peer discovery, and content-hash dedup.</div>
-      </div>
-      <div class="crate-card reveal reveal-delay-3">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-webauthn" class="crate-card reveal reveal-delay-3" target="_blank" rel="noopener">
         <div class="crate-name">pap-webauthn</div>
         <div class="crate-desc">WebAuthn signer abstraction with software fallback and mock authenticator for testing.</div>
-      </div>
-      <div class="crate-card reveal" style="border-color: rgba(245,158,11,.3);">
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-bluefield" class="crate-card reveal" style="border-color: rgba(20,184,166,.25);" target="_blank" rel="noopener">
+        <div class="crate-name" style="color: var(--teal);">pap-bluefield</div>
+        <div class="crate-desc">RDMA transport over NVIDIA BlueField DPU. ≈2&thinsp;µs round-trips, hardware Ed25519 via DOCA, kernel bypass.</div>
+      </a>
+      <a href="https://github.com/Baur-Software/pap/tree/main/crates/pap-python" class="crate-card reveal reveal-delay-1" style="border-color: rgba(245,158,11,.3);" target="_blank" rel="noopener">
         <div class="crate-name" style="color: var(--amber);">pap-python</div>
         <div class="crate-desc">Python bindings via PyO3. <code>pip install pap</code>. Full mandate chain, delegation, and verification from Python.</div>
-      </div>
+      </a>
     </div>
   </div>
 </section>
