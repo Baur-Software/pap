@@ -11,7 +11,8 @@ use crate::state::recovery::RecoveryState;
 mod templates_tab;
 use papillon_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
-    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RecoveryStatus, SuccessorDesignation,
+    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RecoverySetupResult, RecoveryStatus,
+    SuccessorDesignation,
 };
 use templates_tab::TemplatesTab;
 
@@ -1659,9 +1660,17 @@ fn MandateBuilderTab() -> impl IntoView {
 #[component]
 fn RecoveryTab() -> impl IntoView {
     let recovery = expect_context::<RecoveryState>();
+
+    // Wizard step: 0 = status overview, 1 = intro, 2 = configure, 3 = distribute, 4 = done
+    let step = RwSignal::new(0u8);
     let status = RwSignal::new(None::<RecoveryStatus>);
 
-    // Load recovery status on mount
+    // Step 2 inputs
+    let m_input = RwSignal::new(2u8);
+    let n_input = RwSignal::new(3u8);
+    let shard_cursor = RwSignal::new(0usize);
+
+    // Load recovery status on mount and reset to overview
     Effect::new(move || {
         if !bridge::tauri_available() {
             return;
@@ -1673,8 +1682,52 @@ fn RecoveryTab() -> impl IntoView {
         });
     });
 
-    let open_wizard = move |_| {
-        recovery.show_setup.set(true);
+    let generate = move |_| {
+        let m = m_input.get();
+        let n = n_input.get();
+        if m == 0 || m > n {
+            recovery.error.set(Some(format!("Threshold {m} must be ≥ 1 and ≤ total {n}")));
+            return;
+        }
+        recovery.error.set(None);
+        recovery.generating.set(true);
+        spawn_local(async move {
+            match bridge::invoke::<serde_json::Value, RecoverySetupResult>(
+                "create_recovery_shards",
+                &serde_json::json!({ "threshold": m, "total": n }),
+            )
+            .await
+            {
+                Ok(result) => {
+                    recovery.threshold.set(m);
+                    recovery.total.set(n);
+                    recovery.shards.set(result.shards);
+                    recovery.manifest_json.set(result.manifest_json);
+                    recovery.generating.set(false);
+                    shard_cursor.set(0);
+                    step.set(3);
+                }
+                Err(e) => {
+                    recovery.error.set(Some(format!("Generation failed: {e}")));
+                    recovery.generating.set(false);
+                }
+            }
+        });
+    };
+
+    let mark_done = move |_| {
+        spawn_local(async move {
+            let _ = bridge::invoke_no_args::<()>("mark_recovery_complete").await;
+            recovery.setup_complete.set(true);
+            recovery.needs_renewal.set(false);
+            recovery.shards.set(Vec::new());
+            recovery.manifest_json.set(String::new());
+            // Refresh status and return to overview
+            if let Ok(s) = bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await {
+                status.set(Some(s));
+            }
+            step.set(0);
+        });
     };
 
     view! {
@@ -1683,69 +1736,263 @@ fn RecoveryTab() -> impl IntoView {
             "Distribute encrypted key shards to trusted contacts. Any M-of-N holders can reconstruct your identity if you lose access to this device."
         </p>
 
-        <div class="card" style="margin-bottom: 16px;">
-            // Status row
-            {move || {
-                let s = status.get();
-                match s {
-                    None if bridge::tauri_available() => view! {
-                        <p style="font-size: 12px; color: var(--text-secondary);">"Loading\u{2026}"</p>
-                    }.into_any(),
-                    None => view! {
-                        <p style="font-size: 12px; color: var(--text-secondary);">"Not available in browser mode."</p>
-                    }.into_any(),
-                    Some(st) if st.configured && !st.needs_renewal => view! {
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
-                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #00b894; flex-shrink: 0;" />
-                            <div>
-                                <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">"Recovery configured"</div>
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Shards have been distributed. You can redistribute at any time."</div>
-                            </div>
-                        </div>
-                        <button class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary);" on:click=open_wizard>
-                            "Redistribute Shards"
-                        </button>
-                    }.into_any(),
-                    Some(st) if st.needs_renewal => view! {
-                        <div style="background: rgba(253, 203, 110, 0.08); border: 1px solid rgba(253, 203, 110, 0.4); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
-                            <div style="font-size: 13px; font-weight: 600; color: #fdcb6e; margin-bottom: 4px;">"Shards need renewal"</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">"Your previous shards were used in a recovery ceremony. Distribute fresh shards so your contacts can help you again in the future."</div>
-                        </div>
-                        <button class="btn btn-primary" on:click=open_wizard>
-                            "Renew Shards"
-                        </button>
-                    }.into_any(),
-                    _ => view! {
-                        <div style="background: rgba(255, 107, 107, 0.06); border: 1px solid rgba(255, 107, 107, 0.25); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
-                            <div style="font-size: 13px; font-weight: 600; color: var(--error); margin-bottom: 4px;">"Not configured"</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">"Without recovery shards, losing this device means losing your identity permanently."</div>
-                        </div>
-                        <button class="btn btn-primary" on:click=open_wizard>
-                            "Set Up Recovery"
-                        </button>
-                    }.into_any(),
-                }
-            }}
-        </div>
+        // ── Step 0: Status overview ───────────────────────────────────────────
+        <Show when=move || step.get() == 0>
+            // Renewal banner
+            <Show when=move || recovery.needs_renewal.get()>
+                <div style="background: rgba(253, 203, 110, 0.08); border: 1px solid rgba(253, 203, 110, 0.4); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                    <div style="font-size: 13px; font-weight: 600; color: #fdcb6e; margin-bottom: 4px;">"Shards need renewal"</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">"Your previous shards were used in a recovery. Distribute a fresh set so your trustees can help again."</div>
+                </div>
+            </Show>
 
-        // How it works explainer
-        <div class="card">
-            <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 8px; font-family: var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary);">"How it works"</h3>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <div style="display: flex; gap: 10px; align-items: flex-start;">
-                    <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108, 92, 231, 0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"01"</span>
-                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Your identity key is split into N encrypted shards using Shamir Secret Sharing."</p>
-                </div>
-                <div style="display: flex; gap: 10px; align-items: flex-start;">
-                    <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108, 92, 231, 0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"02"</span>
-                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Each shard goes to a different trusted contact \u{2014} bank, notary, family member, or lawyer."</p>
-                </div>
-                <div style="display: flex; gap: 10px; align-items: flex-start;">
-                    <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108, 92, 231, 0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"03"</span>
-                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Any M-of-N holders can reconstruct your key. Individual shards reveal nothing."</p>
+            <div class="card" style="margin-bottom: 16px;">
+                {move || {
+                    let s = status.get();
+                    match s {
+                        None if bridge::tauri_available() => view! {
+                            <p style="font-size: 12px; color: var(--text-secondary);">"Loading\u{2026}"</p>
+                        }.into_any(),
+                        None => view! {
+                            <p style="font-size: 12px; color: var(--text-secondary);">"Not available in browser mode."</p>
+                        }.into_any(),
+                        Some(ref st) if st.configured && !st.needs_renewal => view! {
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: #00b894; flex-shrink: 0;" />
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 500;">"Recovery configured"</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Shards have been distributed. You can redistribute at any time."</div>
+                                </div>
+                            </div>
+                            <button
+                                class="btn"
+                                style="background: var(--bg-tertiary); color: var(--text-secondary);"
+                                on:click=move |_| step.set(1)
+                            >"Redistribute Shards"</button>
+                        }.into_any(),
+                        _ => view! {
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                                <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--error); flex-shrink: 0;" />
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 500;">"Not configured"</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Without recovery shards, losing this device means losing your identity permanently."</div>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" on:click=move |_| step.set(1)>
+                                {move || if recovery.needs_renewal.get() { "Renew Shards" } else { "Set Up Recovery" }}
+                            </button>
+                        }.into_any(),
+                    }
+                }}
+            </div>
+
+            // How it works
+            <div class="card">
+                <h3 style="font-size: 11px; font-weight: 600; margin-bottom: 12px; font-family: var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary);">"How it works"</h3>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108,92,231,0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"01"</span>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Your identity key is split into N shards using Shamir Secret Sharing over GF(2^8)."</p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108,92,231,0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"02"</span>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Each shard goes to a different trusted contact — bank, notary, family member, or lawyer."</p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108,92,231,0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"03"</span>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Any M-of-N holders can reconstruct your key. Fewer than M shards reveal nothing."</p>
+                    </div>
                 </div>
             </div>
-        </div>
+        </Show>
+
+        // ── Step 1: Introduction ──────────────────────────────────────────────
+        <Show when=move || step.get() == 1>
+            <div class="card" style="margin-bottom: 16px;">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">"About social recovery"</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">
+                    "If your device is lost, no one can recover your identity without your key. "
+                    "This setup splits your key into N shards distributed to N trustees. "
+                    "Any M trustees can cooperate to reconstruct your identity."
+                </p>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">
+                    "Trustees never see your full key — they only hold one shard. "
+                    "Fewer than M shards reveal nothing mathematically."
+                </p>
+                <p style="font-size: 13px; color: var(--text-secondary);">
+                    "Suitable trustees: a bank's safety deposit contact, a notary, a trusted family member, "
+                    "a lawyer, or a hardware key in a separate location."
+                </p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button
+                    class="btn"
+                    style="background: var(--bg-tertiary); color: var(--text-secondary);"
+                    on:click=move |_| step.set(0)
+                >"Cancel"</button>
+                <button class="btn btn-primary" on:click=move |_| step.set(2)>"Continue"</button>
+            </div>
+        </Show>
+
+        // ── Step 2: Configure M and N ─────────────────────────────────────────
+        <Show when=move || step.get() == 2>
+            <div class="card" style="margin-bottom: 16px;">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 16px;">"Configure shards"</h3>
+                <div class="setup-inputs">
+                    <label style="font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono);">"THRESHOLD (M) — minimum shards needed to recover"</label>
+                    <input
+                        type="number"
+                        min="1"
+                        max="255"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; width: 120px;"
+                        prop:value=move || m_input.get().to_string()
+                        on:input=move |ev| {
+                            if let Ok(v) = event_target_value(&ev).parse::<u8>() { m_input.set(v); }
+                        }
+                    />
+                    <label style="font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); margin-top: 12px;">"TOTAL SHARDS (N) — number of trustees"</label>
+                    <input
+                        type="number"
+                        min="1"
+                        max="255"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; width: 120px;"
+                        prop:value=move || n_input.get().to_string()
+                        on:input=move |ev| {
+                            if let Ok(v) = event_target_value(&ev).parse::<u8>() { n_input.set(v); }
+                        }
+                    />
+                </div>
+                <p style="font-size: 12px; color: var(--purple); margin-top: 12px;">
+                    {move || format!("Any {} of {} trustees can reconstruct your identity", m_input.get(), n_input.get())}
+                </p>
+                <Show when=move || recovery.error.get().is_some()>
+                    <p style="font-size: 12px; color: var(--error); margin-top: 8px;">
+                        {move || recovery.error.get().unwrap_or_default()}
+                    </p>
+                </Show>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button
+                    class="btn"
+                    style="background: var(--bg-tertiary); color: var(--text-secondary);"
+                    on:click=move |_| step.set(1)
+                >"Back"</button>
+                <button
+                    class="btn btn-primary"
+                    disabled=move || recovery.generating.get()
+                    on:click=generate
+                >
+                    {move || if recovery.generating.get() { "Generating\u{2026}" } else { "Generate Shards" }}
+                </button>
+            </div>
+        </Show>
+
+        // ── Step 3: Distribute shards one at a time ───────────────────────────
+        // Only one shard is in the DOM at a time — prevents extensions or devtools
+        // from harvesting all shards in a single sweep.
+        <Show when=move || step.get() == 3>
+            {move || {
+                let shards = recovery.shards.get();
+                let cursor = shard_cursor.get();
+                let total = shards.len();
+                if total == 0 {
+                    return view! { <p style="font-size: 12px; color: var(--text-secondary);">"No shards generated."</p> }.into_any();
+                }
+                let shard = &shards[cursor];
+                let idx = shard.index;
+                let shard_json = shard.shard_json.clone();
+                let copy_json = shard.shard_json.clone();
+                let is_last = cursor + 1 >= total;
+                view! {
+                    <div class="card" style="margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin: 0;">
+                                {format!("Shard {} of {}", idx, total)}
+                            </h3>
+                            <span style="font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono);">
+                                {format!("{}/{}", cursor + 1, total)}
+                            </span>
+                        </div>
+                        <p style="font-size: 12px; color: #fdcb6e; margin-bottom: 12px;">
+                            "Save this shard securely before advancing. Previous shards are not shown again."
+                        </p>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                            {format!("Deliver to trustee {idx}. They should store this JSON somewhere safe.")}
+                        </p>
+                        <div style="position: relative;">
+                            <textarea
+                                readonly=true
+                                rows="5"
+                                style="width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: 11px; resize: none; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;"
+                            >
+                                {shard_json}
+                            </textarea>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center;">
+                            <button
+                                class="btn"
+                                style="background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px;"
+                                on:click=move |_| {
+                                    let json = copy_json.clone();
+                                    spawn_local(async move {
+                                        if let Some(window) = web_sys::window() {
+                                            let _ = window.navigator().clipboard().write_text(&json);
+                                        }
+                                    });
+                                }
+                            >"Copy JSON"</button>
+                            <button
+                                class="btn"
+                                style="background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px;"
+                                on:click=move |_| {
+                                    recovery.shards.set(Vec::new());
+                                    recovery.manifest_json.set(String::new());
+                                    step.set(2);
+                                }
+                            >"Regenerate"</button>
+                            <div style="flex: 1;" />
+                            {if is_last {
+                                view! {
+                                    <button class="btn btn-primary" on:click=move |_| step.set(4)>
+                                        "All distributed \u{2192}"
+                                    </button>
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <button
+                                        class="btn btn-primary"
+                                        on:click=move |_| shard_cursor.set(cursor + 1)
+                                    >
+                                        {format!("Next shard ({}/{}) \u{2192}", cursor + 2, total)}
+                                    </button>
+                                }.into_any()
+                            }}
+                        </div>
+                    </div>
+                }.into_any()
+            }}
+        </Show>
+
+        // ── Step 4: Confirmation ──────────────────────────────────────────────
+        <Show when=move || step.get() == 4>
+            <div class="card" style="margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #00b894; flex-shrink: 0;" />
+                    <h3 style="font-size: 14px; font-weight: 600; margin: 0;">"Recovery configured"</h3>
+                </div>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">
+                    {move || format!(
+                        "{} of {} shards required to reconstruct your identity.",
+                        recovery.threshold.get(),
+                        recovery.total.get()
+                    )}
+                </p>
+                <p style="font-size: 12px; color: #00b894; margin-bottom: 0;">
+                    "Your principal identity is now recoverable via your trustees."
+                </p>
+            </div>
+            <button class="btn btn-primary" on:click=mark_done>"Done"</button>
+        </Show>
     }
 }
 

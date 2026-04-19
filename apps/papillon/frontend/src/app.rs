@@ -7,7 +7,7 @@ use wasm_bindgen_futures::spawn_local;
 use std::sync::Arc;
 
 use crate::bridge;
-use crate::components::recovery_setup::RecoverySetup;
+
 use crate::components::setup_wizard::SetupWizard;
 use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
@@ -379,7 +379,6 @@ pub fn App() -> impl IntoView {
                 </footer>
             </div>
             <SetupWizard />
-            <RecoverySetup />
         </Router>
     }
 }
