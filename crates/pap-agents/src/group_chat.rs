@@ -23,6 +23,7 @@ use std::sync::{Arc, RwLock};
 
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
+use pap_did::SessionKeypair;
 use pap_transport::handler::AgentHandler;
 use pap_transport::TransportError;
 use tokio::sync::mpsc;
@@ -86,19 +87,26 @@ impl GroupChatRoom {
 }
 
 impl AgentHandler for GroupChatRoom {
-    /// Phase 1: accept any valid token targeting this room's DID.
+    /// Phase 1: validate that the token targets this room's DID, then return
+    /// a fresh ephemeral session DID derived from a real Ed25519 keypair.
     ///
-    /// In production, validate `token.target_did == self.room_id` and
-    /// verify the token signature against the issuer's principal DID.
-    /// Here we accept all tokens and generate an ephemeral session DID.
+    /// Returns `TransportError::HandlerError` if `token.target_did` does not
+    /// match `self.room_id`, preventing identity-spoofing attacks.
     fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
+        // Validate the token targets this room — reject mismatched tokens.
+        if token.target_did != self.room_id {
+            return Err(TransportError::HandlerError(format!(
+                "token target_did '{}' does not match room_id '{}'",
+                token.target_did, self.room_id
+            )));
+        }
+
         let session_id = uuid::Uuid::new_v4().to_string();
-        // Ephemeral session DID for this room leg. Uses did:pap: method to avoid
-        // confusion with valid did:key values, which require a real public key.
-        // TODO(ISS-900): generate a real Ed25519 ephemeral key pair here and return
-        // the correct did:key multibase encoding.
-        let room_session_did = format!("did:pap:room-session:{}", &session_id[..8]);
-        let _ = token; // TODO(ISS-900): validate token.target_did == self.room_id
+        // Generate a real Ed25519 ephemeral keypair for this room leg.
+        // The DID is derived from the public key in did:key multibase encoding,
+        // matching the same derivation used by pap_did::SessionKeypair.
+        let ephemeral = SessionKeypair::generate();
+        let room_session_did = ephemeral.did();
         Ok((session_id, room_session_did))
     }
 
@@ -176,6 +184,63 @@ impl AgentHandler for GroupChatRoom {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Duration, Utc};
+    use pap_core::session::CapabilityToken;
+    use pap_did::PrincipalKeypair;
+
+    /// Build a signed CapabilityToken for the given target DID.
+    fn make_token(target_did: &str) -> CapabilityToken {
+        let issuer = PrincipalKeypair::generate();
+        let issuer_did = issuer.did();
+        let mut token = CapabilityToken::mint(
+            target_did.to_string(),
+            "schema:JoinAction".into(),
+            issuer_did,
+            Utc::now() + Duration::hours(1),
+        );
+        token.sign(issuer.signing_key()).unwrap();
+        token
+    }
+
+    #[test]
+    fn handle_token_returns_real_did_key() {
+        let room = GroupChatRoom::new("did:key:zRoom1", "Test Room");
+        let token = make_token("did:key:zRoom1");
+        let (session_id, did) = room.handle_token(token).unwrap();
+        assert!(!session_id.is_empty(), "session_id must be non-empty");
+        assert!(
+            did.starts_with("did:key:"),
+            "ephemeral DID must be a valid did:key, got: {did}"
+        );
+    }
+
+    #[test]
+    fn handle_token_generates_unique_dids() {
+        let room = GroupChatRoom::new("did:key:zRoom1", "Test Room");
+        let (_, did1) = room.handle_token(make_token("did:key:zRoom1")).unwrap();
+        let (_, did2) = room.handle_token(make_token("did:key:zRoom1")).unwrap();
+        assert_ne!(
+            did1, did2,
+            "each call must produce a unique ephemeral keypair"
+        );
+    }
+
+    #[test]
+    fn handle_token_rejects_wrong_target_did() {
+        let room = GroupChatRoom::new("did:key:zRoom1", "Test Room");
+        // Token targets a different DID — must be rejected.
+        let token = make_token("did:key:zSomeOtherRoom");
+        let err = room.handle_token(token).unwrap_err();
+        match err {
+            TransportError::HandlerError(msg) => {
+                assert!(
+                    msg.contains("does not match"),
+                    "error message should describe mismatch, got: {msg}"
+                );
+            }
+            other => panic!("expected HandlerError, got: {other:?}"),
+        }
+    }
 
     #[test]
     fn room_add_remove_member() {
