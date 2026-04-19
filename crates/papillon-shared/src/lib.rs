@@ -36,6 +36,17 @@ pub mod personal_context;
 #[cfg(feature = "native")]
 pub use personal_context::PersonalContext;
 
+/// WASM-safe local agent registry backed by IndexedDB.
+///
+/// Compiled when the `wasm` feature is enabled (both in browser WASM builds and
+/// in native test runs with `--features wasm`).  Provides
+/// [`wasm_registry::WasmAgentRegistry`] which mirrors what the desktop
+/// `AppState::with_db()` does for catalog seeding and agent discovery.
+#[cfg(feature = "wasm")]
+pub mod wasm_registry;
+#[cfg(feature = "wasm")]
+pub use wasm_registry::{WasmAgentRegistry, WasmDynamicAgentDef};
+
 pub use events::*;
 pub use json_ld_query::JsonLdQuery;
 pub use template_gen::generate_template_from_json_ld;

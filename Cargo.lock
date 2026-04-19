@@ -4929,12 +4929,18 @@ name = "papillon-shared"
 version = "0.8.2"
 dependencies = [
  "chrono",
+ "ed25519-dalek",
  "js-sys",
  "pap-agents",
+ "pap-did",
+ "pap-federation",
+ "pap-marketplace",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
+ "toml 0.8.23",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
