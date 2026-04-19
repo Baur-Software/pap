@@ -950,44 +950,47 @@ fn IdentityTab() -> impl IntoView {
 
 #[component]
 fn AdvancedTab() -> impl IntoView {
-    let ohttp_enabled = RwSignal::new(false);
-    let advertise_agents = RwSignal::new(false);
-
     view! {
         <div>
             <div class="card" style="margin-bottom: 16px;">
                 <h3 style="font-size: 14px; margin-bottom: 4px;">"Network Privacy"</h3>
                 <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                    "Configure how this node participates in the PAP network."
+                    "Configure how this node participates in the network."
                 </p>
 
-                // OHTTP relay
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                // OHTTP relay — planned for v0.8.0, not yet wired to backend
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); opacity: 0.5;">
                     <div style="flex: 1; padding-right: 24px;">
-                        <div style="font-size: 13px; font-weight: 500;">"OHTTP relay"</div>
+                        <div style="font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                            "OHTTP relay"
+                            <span style="font-size: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text-secondary);">"v0.8.0"</span>
+                        </div>
                         <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                            "Run an Oblivious HTTP relay on this node. Hides the origin of requests from registry operators \u{2014} even your IP isn't visible to agents you query."
+                            "Hides your IP from registry operators. Coming in a future release."
                         </div>
                     </div>
                     <button
-                        class=move || if ohttp_enabled.get() { "appearance-toggle on" } else { "appearance-toggle" }
-                        on:click=move |_| ohttp_enabled.update(|v| *v = !*v)
-                        aria-label="Toggle OHTTP relay"
+                        class="appearance-toggle"
+                        disabled=true
+                        aria-label="OHTTP relay — coming soon"
                     />
                 </div>
 
-                // Advertise custom agents
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0;">
+                // Advertise custom agents — planned for v0.8.0, not yet wired to backend
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; opacity: 0.5;">
                     <div style="flex: 1; padding-right: 24px;">
-                        <div style="font-size: 13px; font-weight: 500;">"Advertise my agents"</div>
+                        <div style="font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                            "Advertise my agents"
+                            <span style="font-size: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text-secondary);">"v0.8.0"</span>
+                        </div>
                         <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                            "Publish agents you've created to the local registry so other devices on your network can discover and use them."
+                            "Publish custom agents to the local registry. Coming in a future release."
                         </div>
                     </div>
                     <button
-                        class=move || if advertise_agents.get() { "appearance-toggle on" } else { "appearance-toggle" }
-                        on:click=move |_| advertise_agents.update(|v| *v = !*v)
-                        aria-label="Toggle advertise agents"
+                        class="appearance-toggle"
+                        disabled=true
+                        aria-label="Advertise agents — coming soon"
                     />
                 </div>
             </div>
@@ -1388,13 +1391,10 @@ fn ProfilesTab() -> impl IntoView {
 
     view! {
         <div class="settings-section-title">"Profiles"</div>
-        <p class="settings-section-desc">"Each profile has its own identity and workspace. Switch between them from here."</p>
+        <p class="settings-section-desc">"Each profile has its own identity and workspace."</p>
 
         <div class="card" style="margin-bottom: 16px;">
             <h3 style="font-size: 14px; margin-bottom: 12px;">"Manage Profiles"</h3>
-            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                "Each profile has its own identity and workspace. Switch between them anytime."
-            </p>
 
             // Profile list
             <div style="margin-bottom: 20px;">
@@ -1423,7 +1423,9 @@ fn ProfilesTab() -> impl IntoView {
                                         "Active"
                                     </span>
                                 </Show>
-                                <Show when=move || !is_active>
+                                // Switch is only available in Tauri — the web build
+                                // has no backend IPC path for profile switching.
+                                <Show when=move || !is_active && crate::bridge::tauri_available()>
                                     <button
                                         class="btn"
                                         style="padding: 4px 10px; font-size: 11px; background: var(--bg-secondary); color: var(--text-primary);"
