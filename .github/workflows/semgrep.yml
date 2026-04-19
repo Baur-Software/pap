@@ -1,0 +1,67 @@
+name: Semgrep Security Scan
+
+# Replaces CodeQL. Runs the same trigger paths; outputs SARIF to the
+# GitHub Security tab. Requires SEMGREP_APP_TOKEN secret (generate at
+# https://semgrep.dev/orgs/-/settings/tokens). Without the token,
+# semgrep ci still runs with the default OSS ruleset — no platform
+# features (triage, policies) but scanning still works.
+#
+# Known false positives (previously suppressed in .github/codeql/codeql-config.yml):
+#   - [0u8; 32] zero-init buffers immediately filled by a CSPRNG — not hard-coded secrets
+#   - Test fixture passwords inside #[cfg(test)] blocks — intentional, non-production values
+# If Semgrep surfaces these, suppress with a `# nosemgrep` comment on the relevant line.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.rs'
+      - '**.toml'
+      - '**.py'
+      - '**.ts'
+      - '**.tsx'
+      - '**.js'
+      - '**.jsx'
+      - '.github/workflows/semgrep.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.rs'
+      - '**.toml'
+      - '**.py'
+      - '**.ts'
+      - '**.tsx'
+      - '**.js'
+      - '**.jsx'
+      - '.github/workflows/semgrep.yml'
+  schedule:
+    - cron: '0 3 * * 1'  # Weekly Monday 3am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: semgrep ci --sarif --output semgrep.sarif
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        # continue-on-error so SARIF upload still runs even if findings exist
+        continue-on-error: true
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
