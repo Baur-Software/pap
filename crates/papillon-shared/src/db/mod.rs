@@ -346,6 +346,24 @@ pub trait DatabaseOps: Send + Sync {
     /// Delete a saved pipeline by id. No-op if not found.
     #[cfg(feature = "native")]
     fn delete_saved_pipeline(&self, id: &str) -> Result<(), DbError>;
+
+    // ── Dynamic Agent Def CRUD (available on all targets) ────────────────────
+    // Uses a (name, json_string) interface to avoid a hard dependency on
+    // pap-agents in the wasm feature set.  Callers are responsible for
+    // serialising/deserialising the JSON string to/from their preferred type.
+
+    /// Insert or replace a dynamic agent definition, keyed by name.
+    /// `json` must be a valid JSON string representing the full definition.
+    fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError>;
+
+    /// Return the raw JSON strings for all stored agent definitions.
+    fn list_agent_defs(&self) -> Result<Vec<String>, DbError>;
+
+    /// Return the raw JSON string for a single agent definition, or `None`.
+    fn get_agent_def(&self, name: &str) -> Result<Option<String>, DbError>;
+
+    /// Remove an agent definition by name.  No-op if the name is not found.
+    fn delete_agent_def(&self, name: &str) -> Result<(), DbError>;
 }
 
 /// A preference signal recording which agent was selected for a given

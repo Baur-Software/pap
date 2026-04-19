@@ -16,7 +16,7 @@ uuid = { workspace = true }
 # Database abstraction - feature gated
 rusqlite = { version = "0.32", features = ["bundled", "serde_json"], optional = true }
 
-# WASM/IndexedDB dependencies - feature gated
+# WASM/IndexedDB browser-binding dependencies - feature gated
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = [
@@ -29,14 +29,42 @@ web-sys = { version = "0.3", optional = true, features = [
 ] }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 
+# WasmAgentRegistry dependencies — WASM-compatible crates that also compile on
+# native (for tests).  Tied to the `wasm` feature rather than a target gate so
+# that `cargo test -p papillon-shared --features wasm` works without a browser.
+#
+# pap-agents is intentionally absent: it has unconditional reqwest::blocking +
+# tokio deps that do not compile for wasm32-unknown-unknown.
+pap-marketplace = { workspace = true, optional = true }
+# Use default-features=false so pap-federation's native server/TLS code is
+# excluded.  On real wasm32 builds the "wasm" feature is added explicitly.
+pap-federation = { workspace = true, default-features = false, optional = true }
+pap-did = { workspace = true, optional = true }
+ed25519-dalek = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+# getrandom with `js` feature is required for wasm32-unknown-unknown so that
+# rand/ed25519-dalek can generate random numbers via the Web Crypto API.
+getrandom = { workspace = true, optional = true }
+
 [dev-dependencies]
 tempfile = "3"
+
+[build-dependencies]
+toml = { workspace = true }
+serde_json = { workspace = true }
 
 # Feature flags
 [features]
 default = ["native"]
 native = ["rusqlite", "pap-agents"]
-wasm = ["wasm-bindgen", "js-sys", "web-sys", "wasm-bindgen-futures", "uuid/js"]
+wasm = [
+    "wasm-bindgen", "js-sys", "web-sys", "wasm-bindgen-futures", "uuid/js",
+    # WasmAgentRegistry deps — included here so tests run under `--features wasm`
+    # on native as well as in actual wasm32 browser builds.
+    "pap-marketplace", "pap-federation", "pap-did", "ed25519-dalek", "sha2",
+    # getrandom/js enables Web Crypto API for random number generation on wasm32
+    "getrandom/js",
+]
 
 [lints]
 workspace = true

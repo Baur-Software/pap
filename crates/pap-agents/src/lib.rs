@@ -33,6 +33,8 @@ pub mod selection;
 pub mod session_store;
 mod simple;
 
+#[cfg(target_arch = "wasm32")]
+pub use catalog::default_catalog;
 pub use catalog::load_catalog;
 pub use dynamic::{
     is_local_llm_url, is_safe_url, DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig,
