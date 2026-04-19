@@ -168,6 +168,13 @@ pub fn App() -> impl IntoView {
 
             // No backend orchestrator in browser mode
             orchestrator.status.set(OrchestratorStatus::Unconfigured);
+
+            // Auto-connect to the local dev registry so agents are available
+            // in the Browse page and for canvas workflow resolution.
+            // Uses pap+http:// which translates to http:// for the no-TLS dev registry.
+            // In production WASM builds this would point to pap+https://registry.papillon.sh
+            // or be derived from window.location / a build-time env var.
+            registry_state.connect_to("pap+http://localhost:7890");
         });
     }
 
