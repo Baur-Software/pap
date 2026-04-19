@@ -84,8 +84,12 @@ impl AgentHandler for DemoHandler {
         ))
     }
 
-    fn handle_did_exchange(&self, sid: &str, did: &str) -> Result<(), TransportError> {
-        println!("[server] phase 2 — DID exchange  sid={sid}  initiator_did={did}");
+    fn handle_did_exchange(&self, sid: &str, _did: &str) -> Result<(), TransportError> {
+        // Log only the session prefix — never log DIDs or session IDs in full.
+        println!(
+            "[server] phase 2 — DID exchange  sid={}…",
+            &sid[..sid.len().min(8)]
+        );
         Ok(())
     }
 
@@ -95,14 +99,18 @@ impl AgentHandler for DemoHandler {
         disclosures: Vec<serde_json::Value>,
     ) -> Result<(), TransportError> {
         println!(
-            "[server] phase 3 — disclosures  sid={sid}  n={}",
+            "[server] phase 3 — disclosures  sid={}…  n={}",
+            &sid[..sid.len().min(8)],
             disclosures.len()
         );
         Ok(())
     }
 
     fn execute(&self, sid: &str) -> Result<serde_json::Value, TransportError> {
-        println!("[server] phase 4 — execute  sid={sid}");
+        println!(
+            "[server] phase 4 — execute  sid={}…",
+            &sid[..sid.len().min(8)]
+        );
         Ok(serde_json::json!({
             "@context": "https://schema.org",
             "@type":    "SearchResultsPage",
@@ -112,15 +120,15 @@ impl AgentHandler for DemoHandler {
     }
 
     fn co_sign_receipt(&self, r: TransactionReceipt) -> Result<TransactionReceipt, TransportError> {
-        println!(
-            "[server] phase 5 — co-signing receipt  session={}",
-            r.session_id
-        );
+        println!("[server] phase 5 — co-signing receipt");
         Ok(r)
     }
 
     fn handle_close(&self, sid: &str) -> Result<(), TransportError> {
-        println!("[server] phase 6 — session closed  sid={sid}");
+        println!(
+            "[server] phase 6 — session closed  sid={}…",
+            &sid[..sid.len().min(8)]
+        );
         Ok(())
     }
 }
@@ -244,13 +252,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let session_id = match client.present_token(token).await? {
-        ProtocolMessage::TokenAccepted {
-            session_id,
-            receiver_session_did,
-            ..
-        } => {
+        ProtocolMessage::TokenAccepted { session_id, .. } => {
             println!(
-                "[client] phase 1 — accepted  session={session_id}  receiver={receiver_session_did}"
+                "[client] phase 1 — accepted  session={}…",
+                &session_id[..session_id.len().min(8)]
             );
             session_id
         }
@@ -299,11 +304,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     match client.exchange_receipt(receipt).await? {
-        ProtocolMessage::ReceiptCoSigned { receipt } => {
-            println!(
-                "[client] phase 5 — co-signed  session={}",
-                receipt.session_id
-            );
+        ProtocolMessage::ReceiptCoSigned { .. } => {
+            println!("[client] phase 5 — receipt co-signed");
         }
         other => return Err(format!("phase 5: unexpected reply {other:?}").into()),
     }
