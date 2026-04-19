@@ -13,6 +13,7 @@ papillon-shared = { path = "../../../crates/papillon-shared", default-features =
 pap-did = { path = "../../../crates/pap-did", features = ["wasm"] }
 pap-core = { path = "../../../crates/pap-core" }
 pap-proto = { path = "../../../crates/pap-proto", features = ["wasm"] }
+pap-marketplace = { path = "../../../crates/pap-marketplace" }
 ed25519-dalek = { version = "2", features = ["rand_core", "zeroize"] }
 leptos = { version = "0.8", features = ["csr"] }
 leptos_router = "0.8"

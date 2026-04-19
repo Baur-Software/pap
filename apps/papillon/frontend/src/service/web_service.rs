@@ -2,20 +2,24 @@
 //!
 //! This implementation provides a fallback for running Papillon in a pure
 //! WebAssembly environment without Tauri. It delegates to WebIdentityService
-//! for identity/profile management (Ed25519 keypairs in IndexedDB) and returns
-//! stub errors for operations that require backend compute.
+//! for identity/profile management (Ed25519 keypairs in IndexedDB) and wires
+//! agent/registry operations to `WasmAgentRegistry` backed by IndexedDB.
 //!
 //! # Design
 //!
 //! - **Identity & profiles**: Backed by `WebIdentityService` using `pap-did`
 //!   for Ed25519 keypair generation and IndexedDB for seed persistence
+//! - **Registry**: Backed by `WasmAgentRegistry` (IndexedDB) with the default
+//!   catalog seeded on first open
 //! - **Stub implementations**: Operations requiring backend logic (orchestrator,
-//!   registry discovery, scenario execution) return errors or sensible defaults
+//!   scenario execution) return errors or sensible defaults
 //! - **No IPC overhead**: Direct database access provides lower latency
 
 use std::sync::Mutex;
 
 use pap_did::PrincipalKeypair;
+#[cfg(feature = "wasm")]
+use papillon_shared::WasmAgentRegistry;
 
 use super::web_identity::WebIdentityService;
 use super::{AgentProfileInfo, PapillonService};
@@ -25,22 +29,62 @@ use papillon_shared::{
 };
 use serde_json::Value;
 
+/// The built-in local registry URL recognised as "this device's registry".
+#[cfg(feature = "wasm")]
+const LOCAL_REGISTRY_URL: &str = "pap://local";
+
 /// Service implementation for pure WASM environments with IndexedDB.
 ///
-/// Holds a `WebIdentityService` for identity/profile management. Uses
-/// `std::sync::Mutex` (not `RefCell`) to satisfy `Send + Sync` bounds
-/// required by `PapillonService`. This is safe because WASM is
-/// single-threaded — the mutex never actually contends.
+/// Holds a `WebIdentityService` for identity/profile management and a
+/// `WasmAgentRegistry` for local agent storage. Uses `std::sync::Mutex`
+/// (not `RefCell`) to satisfy `Send + Sync` bounds required by
+/// `PapillonService`. This is safe because WASM is single-threaded —
+/// the mutex never actually contends.
 pub struct WebService {
     identity: Mutex<WebIdentityService>,
+    #[cfg(feature = "wasm")]
+    registry: Mutex<WasmAgentRegistry>,
 }
 
 impl WebService {
-    /// Initialize the web service by loading profiles from IndexedDB.
+    /// Initialize the web service by loading profiles from IndexedDB and
+    /// seeding the default agent catalog.
     pub async fn new() -> Result<Self, String> {
         let identity = WebIdentityService::load().await?;
+
+        #[cfg(feature = "wasm")]
+        let registry = {
+            // On real wasm32 targets, open() awaits the IndexedDB promise.
+            // On native (--features wasm tests), new_empty() provides a
+            // synchronous in-memory alternative that is used instead.
+            #[cfg(target_arch = "wasm32")]
+            let mut reg = WasmAgentRegistry::open("papillon-agents")
+                .await
+                .map_err(|e| format!("Failed to open agent registry: {e}"))?;
+
+            #[cfg(not(target_arch = "wasm32"))]
+            let mut reg = WasmAgentRegistry::new_empty("papillon-agents")
+                .map_err(|e| format!("Failed to create agent registry: {e}"))?;
+
+            // seed_default_catalog is async on wasm32, sync on native.
+            // Both paths are handled via cfg — the return value (seeded count)
+            // is discarded; failures are soft-errors logged by the registry.
+            #[cfg(target_arch = "wasm32")]
+            reg.seed_default_catalog()
+                .await
+                .map_err(|e| format!("Failed to seed agent catalog: {e}"))?;
+
+            #[cfg(not(target_arch = "wasm32"))]
+            reg.seed_default_catalog()
+                .map_err(|e| format!("Failed to seed agent catalog: {e}"))?;
+
+            reg
+        };
+
         Ok(Self {
             identity: Mutex::new(identity),
+            #[cfg(feature = "wasm")]
+            registry: Mutex::new(registry),
         })
     }
 
@@ -48,7 +92,42 @@ impl WebService {
     pub fn empty() -> Self {
         Self {
             identity: Mutex::new(WebIdentityService::empty()),
+            #[cfg(feature = "wasm")]
+            registry: Mutex::new(
+                WasmAgentRegistry::new_empty("papillon-agents-empty")
+                    .unwrap_or_else(|_| {
+                        // new_empty can only fail if the in-memory DB itself can't be
+                        // created — essentially unreachable. Fall back silently.
+                        WasmAgentRegistry::new_empty("papillon-agents-fallback")
+                            .expect("fallback empty registry must succeed")
+                    }),
+            ),
         }
+    }
+}
+
+/// Convert an `AgentAdvertisement` into the frontend-facing `AgentInfo` DTO.
+///
+/// Mirrors the `ad_to_info` helper in `apps/papillon/src/commands/registry.rs`
+/// for the Tauri path, keeping the two representations in sync.
+#[cfg(feature = "wasm")]
+fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
+    AgentInfo {
+        name: ad.name.clone(),
+        provider_name: ad.provider.name.clone(),
+        provider_did: ad.provider.did.clone(),
+        capabilities: ad.capability.clone(),
+        object_types: ad.object_types.clone(),
+        requires_disclosure: ad.requires_disclosure.clone(),
+        returns: ad.returns.clone(),
+        content_hash: ad.hash(),
+        endpoint: None,
+        agent_did: None,
+        source: "catalog".to_owned(),
+        published_to: vec![],
+        // Catalog agents are seeded locally and are directly invocable.
+        live: true,
+        category: "general".to_owned(),
     }
 }
 
@@ -152,14 +231,52 @@ impl PapillonService for WebService {
     // REGISTRY & AGENTS
     // ============================================================================
 
-    async fn navigate_registry(&self, _url: &str) -> Result<RegistryInfo, String> {
-        // Registry discovery requires network access and TOFU bootstrap.
-        Err("WebService: navigate_registry not yet implemented (requires network)".into())
+    async fn navigate_registry(&self, url: &str) -> Result<RegistryInfo, String> {
+        #[cfg(feature = "wasm")]
+        {
+            let registry = self
+                .registry
+                .lock()
+                .map_err(|e| format!("registry lock: {e}"))?;
+            return Ok(RegistryInfo {
+                url: if url.is_empty() || url == LOCAL_REGISTRY_URL {
+                    LOCAL_REGISTRY_URL.to_owned()
+                } else {
+                    url.to_owned()
+                },
+                agent_count: registry.agent_count(),
+                // WASM runs locally — no federation peers.
+                peer_count: 0,
+            });
+        }
+        #[cfg(not(feature = "wasm"))]
+        {
+            let _ = url;
+            Err("WebService: navigate_registry requires wasm feature".into())
+        }
     }
 
-    async fn list_registry_agents(&self, _registry_url: &str) -> Result<Vec<AgentInfo>, String> {
-        // Requires network access to fetch agents from registry.
-        Err("WebService: list_registry_agents not yet implemented (requires network)".into())
+    async fn list_registry_agents(&self, registry_url: &str) -> Result<Vec<AgentInfo>, String> {
+        #[cfg(feature = "wasm")]
+        {
+            let registry = self
+                .registry
+                .lock()
+                .map_err(|e| format!("registry lock: {e}"))?;
+            // If the caller passes a schema: action prefix, filter by action;
+            // otherwise return all agents in the local catalog.
+            let ads = if registry_url.starts_with("schema:") {
+                registry.query_by_action(registry_url)
+            } else {
+                registry.list_agents()
+            };
+            return Ok(ads.iter().map(ad_to_info).collect());
+        }
+        #[cfg(not(feature = "wasm"))]
+        {
+            let _ = registry_url;
+            Err("WebService: list_registry_agents requires wasm feature".into())
+        }
     }
 
     // ============================================================================
@@ -213,6 +330,10 @@ impl PapillonService for WebService {
                 identity.switch_profile(&first.id).await?;
             }
         }
+
+        // The registry catalog was seeded in new(). initialize() is called
+        // post-construction, so no additional seeding is required here.
+
         Ok(())
     }
 
