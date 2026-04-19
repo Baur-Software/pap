@@ -6,12 +6,12 @@
   <title>FAQ — Principal Agent Protocol</title>
   <meta name="description" content="Honest answers to the hardest technical and enterprise questions about PAP — trust model, cryptography, governance, latency, compliance, and developer experience." />
   <meta property="og:title" content="FAQ — Principal Agent Protocol" />
-  <meta property="og:description" content="10 hard questions about PAP, answered honestly. Trust model, cryptographic limitations, enterprise identity, regulatory compliance, and Python integration." />
+  <meta property="og:description" content="13 hard questions about PAP, answered honestly. Trust model, cryptographic limitations, enterprise identity, regulatory compliance, and Python integration." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="FAQ — Principal Agent Protocol" />
-  <meta name="twitter:description" content="10 hard questions about PAP, answered honestly." />
+  <meta name="twitter:description" content="13 hard questions about PAP, answered honestly." />
   <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -173,6 +173,7 @@
     .filter-pill[data-cat="latency"].active    { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
     .filter-pill[data-cat="compliance"].active { border-color: rgba(225,112,85,.4); background: rgba(225,112,85,.08); color: var(--coral); }
     .filter-pill[data-cat="dx"].active         { border-color: rgba(46,196,160,.4); background: rgba(46,196,160,.08); color: var(--teal); }
+    .filter-pill[data-cat="enterprise"].active { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
 
     /* ─── FAQ accordion ───────────────────────────────────────────────── */
     .faq-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 80px; }
@@ -191,6 +192,7 @@
     .faq-item[data-cat="latency"]    { border-left: 3px solid rgba(139,127,245,.5); }
     .faq-item[data-cat="compliance"] { border-left: 3px solid rgba(225,112,85,.5); }
     .faq-item[data-cat="dx"]         { border-left: 3px solid rgba(46,196,160,.5); }
+    .faq-item[data-cat="enterprise"] { border-left: 3px solid rgba(139,127,245,.5); }
 
     .faq-q {
       width: 100%; display: flex; align-items: flex-start; gap: 16px;
@@ -221,6 +223,7 @@
     .badge-latency    { background: rgba(139,127,245,.12); color: var(--violet); }
     .badge-compliance { background: rgba(225,112,85,.12); color: var(--coral); }
     .badge-dx         { background: rgba(46,196,160,.12); color: var(--teal); }
+    .badge-enterprise { background: rgba(139,127,245,.12); color: var(--violet); }
 
     .faq-chevron {
       width: 20px; height: 20px; flex-shrink: 0; margin-top: 4px;
@@ -233,7 +236,7 @@
       transition: max-height .35s ease, padding .25s ease;
       padding: 0 24px 0 66px;
     }
-    .faq-item.open .faq-body { max-height: 600px; padding: 0 24px 24px 66px; }
+    .faq-item.open .faq-body { max-height: 1600px; padding: 0 24px 24px 66px; }
 
     .faq-body p { color: var(--muted); font-size: .93rem; line-height: 1.75; margin-bottom: 12px; }
     .faq-body p:last-child { margin-bottom: 0; }
@@ -313,7 +316,7 @@
       Every protocol has real limitations. PAP's are documented here, alongside what's
       currently implemented, what's on the roadmap, and where the open design questions live.
     </p>
-    <p class="hero-note">10 questions · reviewed April 2026</p>
+    <p class="hero-note">13 questions · reviewed April 2026</p>
   </div>
 </section>
 
@@ -330,6 +333,7 @@
       <button class="filter-pill" data-cat="latency">Latency</button>
       <button class="filter-pill" data-cat="compliance">Compliance</button>
       <button class="filter-pill" data-cat="dx">Developer UX</button>
+      <button class="filter-pill" data-cat="enterprise">Enterprise</button>
     </div>
 
     <div class="faq-list" id="faq-list">
@@ -755,6 +759,198 @@
             <code>pip install pap</code> — parallel to <code>pap-ts</code>. For teams that want
             zero-friction trial integration, FFI overhead is a worse tradeoff than a small
             performance gap.
+          </p>
+        </div>
+      </div>
+
+      <!-- 11 -->
+      <div class="faq-item reveal" data-cat="enterprise">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">11</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
+              You've cryptographically secured the disclosure layer. How do you prevent the model itself from being the attack surface?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>The LLM touches exactly one function in the PAP stack.</strong> The
+            <code>LlmClient</code> trait in <code>crates/pap-agents/src/llm.rs</code> exposes two methods:
+            <code>classify_intent(text, candidate_actions)</code> and <code>complete(system, user)</code>.
+            That's the entire surface. The model receives the user's query string and a pre-computed list
+            of allowed <code>schema:*Action</code> strings. It does not receive — and cannot request —
+            mandate contents, scope, TTL, session DIDs, disclosure sets, or the principal's keypair.
+          </p>
+          <p>
+            <strong>Its output is validated before use.</strong> The return value of
+            <code>classify_intent</code> must match one of the strings in <code>candidate_actions</code>.
+            A hallucinated action that isn't on the list is discarded. The model controls which
+            catalog agent handles the query. It cannot alter the mandate that governs what that agent
+            is allowed to do — mandates are signed by the principal's device-bound Ed25519 key,
+            which the model never sees.
+          </p>
+          <p>
+            <strong>The four canonical LLM attack paths:</strong>
+            <strong>Prompt injection</strong> — succeeds only at routing the query to the wrong catalog
+            agent; it cannot forge the Ed25519 signature that authorizes scope. <strong>Context
+            exfiltration</strong> — the model only receives query text, never the mandate or session keys.
+            <strong>Session correlation</strong> — each session generates a fresh ephemeral DID discarded
+            at close; the model sees the query text, never the session DID. <strong>Scope escalation</strong>
+            — child mandates are cryptographically constrained to a subset of their parent's scope
+            (<code>Scope::deny_all()</code> baseline, <code>contains()</code> enforcement);
+            no model output can extend this.
+          </p>
+          <p>
+            <strong>The default is on-device.</strong> <code>LlmProvider::BuiltIn</code> runs inference
+            locally via Candle — no network call, no external endpoint, no logs leaving the device.
+            External providers (Mistral, Ollama, OpenAI-compatible) require the user to explicitly
+            configure an API key and endpoint URL. Even with an external provider, only query text
+            travels to the endpoint. For deployments requiring network-layer query privacy,
+            OHTTP (RFC 9458) with real HPKE decouples the IP address from the request content.
+          </p>
+          <p>
+            <strong>The LLM is also optional.</strong> The full 6-phase PAP handshake executes
+            deterministically via URL fast-path and BM25 semantic index without any model.
+            Setting <code>LlmProvider::None</code> gives a fully functional, cryptographically
+            sound protocol runtime. The model enhances intent resolution for ambiguous queries;
+            it gates no security decision.
+          </p>
+        </div>
+      </div>
+
+      <!-- 12 -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="enterprise">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">12</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
+              Our CISO won't deploy an agent framework without Okta / Azure AD integration. Does PAP have a SAML bridge?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>The IdP question carries a centralized assumption PAP is designed to make
+            unnecessary.</strong> Okta and Azure AD solve a hub-and-spoke problem: a central
+            authority that decides who gets access to what. PAP inverts this. Agents protect
+            themselves — they advertise what they require, principals present cryptographically
+            scoped mandates, and the protocol enforces access at the edge without any central
+            authority in the loop.
+          </p>
+          <p>
+            <strong>The PAP-native pattern for enterprise agent access control:</strong>
+            An enterprise runs agents on Chrysalis. Each agent declares its
+            <code>requires_disclosure</code> — the minimum SD-JWT claims it needs to execute
+            (e.g. <code>schema:Organization.schema:memberOf</code> to verify employment, or
+            a <code>schema:Role</code> claim scoped to a department). A principal's orchestrator
+            presents only those claims via selective disclosure
+            (<code>crates/pap-credential/src/sd_jwt.rs</code>); the agent verifies the
+            claim against its policy and either accepts the mandate or rejects it. No IdP
+            is in the path. No central session store. The agent is the access control point.
+          </p>
+          <p>
+            <strong>For value exchange between agents, ecash receipts replace
+            identity-gated permissions.</strong> Instead of "does this principal have the
+            Analyst role in Okta?", access is structured as "does this principal hold a valid
+            payment proof for this action?" The ecash system (<code>crates/pap-ecash/</code>)
+            issues blind-signed RFC 9474 RSABSSA-SHA384-PSS tokens — the agent validates
+            the token without learning who holds it, and the receipt proves the exchange
+            occurred without linking it to an identity. This is more privacy-preserving
+            than role-based access and eliminates the revocation problem entirely: a spent
+            token is simply gone.
+          </p>
+          <p>
+            <strong>What security teams actually need</strong> is answered by the protocol, not
+            by an IdP bridge: access policy is encoded in mandate scope
+            (<code>Scope::deny_all()</code> baseline, cryptographically enforced containment);
+            audit trail is the co-signed receipt chain (property references, never values,
+            held by both parties locally); revocation is TTL decay
+            (<code>Active → Degraded → ReadOnly → Suspended</code>) with no deprovisioning
+            step required. The threat model of "who has a live session token?" doesn't apply
+            to a system where every mandate expires by design.
+          </p>
+        </div>
+      </div>
+
+      <!-- 13 -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="enterprise">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">13</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
+              We're a regulated financial institution / healthcare system. Walk me through how PAP operates inside our compliance framework.
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>Most enterprise software achieves compliance by adding controls on top of a
+            general-purpose system.</strong> PAP's compliance properties are protocol invariants —
+            they hold because of cryptographic enforcement, not configuration. Here is what that
+            means per framework.
+          </p>
+          <p>
+            <strong>HIPAA — Minimum Necessary Rule:</strong> Every agent session uses Selective
+            Disclosure JWT (<code>crates/pap-credential/src/sd_jwt.rs</code>) for claim-level
+            cryptographic hiding. The mandate's <code>DisclosureSet</code>
+            (<code>crates/pap-core/src/scope.rs</code>) specifies exactly which
+            <code>schema:</code> properties an agent may receive. An agent requesting <code>schema:SSN</code> when the mandate permits
+            only <code>schema:dateOfBirth</code> is filtered out by the marketplace before any
+            session is established — the over-disclosure attempt never reaches the transport layer.
+            For no-retention requirements, set <code>no_retention: true</code> on disclosure
+            entries; the session can be backed by a Trusted Execution Environment
+            (<code>crates/pap-tee/</code>) — the TEE provides enclave measurement attestation
+            that the session ran in an isolated environment, making the retention commitment
+            auditable and binding rather than contractual-only. Audit trail: co-signed receipts in
+            <code>pap-core/src/receipt.rs</code> record property type references
+            (<code>"schema:Person.schema:dateOfBirth"</code>), never values — satisfying
+            §164.312(b) while being safer than access logs containing real data.
+          </p>
+          <p>
+            <strong>GDPR — Purpose Limitation and Erasure:</strong> A PAP mandate is
+            structured, machine-enforceable consent: the principal signs which agent may act,
+            which actions it may take (<code>Scope::deny_all()</code> baseline), which properties
+            it may see, and for how long. Non-renewal of a mandate initiates the decay state
+            machine (<code>Active → Degraded → ReadOnly → Suspended</code>): access cryptographically
+            expires without any deprovisioning step. The episode store
+            (<code>papillon-shared/src/episode_db.rs</code>) is a local SQLite database under
+            the principal's sole control — no platform coordinates erasure. Portability: PAP uses
+            no central registry; the principal's <code>did:key</code> is self-sovereign and moves
+            to any compatible orchestrator.
+          </p>
+          <p>
+            <strong>PCI-DSS — Access Control and Payment Privacy:</strong>
+            Mandate scope containment is cryptographically enforced at every delegation step
+            (<code>Scope::contains()</code> in <code>pap-core/src/scope.rs</code>); a child mandate
+            cannot exceed its parent's scope or TTL regardless of configuration. For payment
+            agents (<code>schema:PayAction</code>), mandates carry payment proofs from the ecash
+            system (<code>crates/pap-ecash/</code>) using RFC 9474 RSABSSA-SHA384-PSS blind signatures —
+            the vendor cannot link the signing operation to the redemption, and receipts store
+            only a commitment hash, never amounts or card data.
+          </p>
+          <p>
+            <strong>SOC2 Type II in summary:</strong> CC3.1 (access control) — deny-by-default
+            scope, TTL bounds. CC6.1 (logical controls) — ephemeral session keys, automatic
+            credential expiry. CC7.1 (audit records) — immutable co-signed receipts. Privacy
+            use limitation — <code>no_retention</code> flag enforces purpose limitation at
+            protocol level, with optional TEE attestation for stronger assurance. These map
+            to protocol mechanisms, not to policy documents that can drift.
+          </p>
+          <p>
+            Pre-built catalog agents exist for both verticals: healthcare agents cover FDA FAERS,
+            ClinicalTrials, PubMed, and MedlinePlus
+            (<code>crates/pap-agents/catalog/health/</code>); finance agents cover Nasdaq, ECB,
+            Treasury, and World Bank data (<code>crates/pap-agents/catalog/finance/</code>).
+            All public-data agents require zero personal disclosure
+            (<code>requires_disclosure: []</code>), giving you a no-PHI-exposure baseline to
+            build from.
           </p>
         </div>
       </div>
