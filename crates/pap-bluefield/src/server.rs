@@ -152,6 +152,7 @@ fn dispatch<H: AgentHandler>(
 
         // ── Phase 5: Receipt co-signing ───────────────────────────────────
         ProtocolMessage::ReceiptForCoSign { receipt } => {
+            let _sid = require_session(session_id)?;
             let signed = handler
                 .co_sign_receipt(receipt)
                 .map_err(|e| BluefieldError::ProtocolError(e.to_string()))?;
@@ -316,6 +317,28 @@ mod tests {
                 initiator_session_did: "did:key:zX".into(),
             },
         );
+        assert!(resp.is_err());
+    }
+
+    #[test]
+    fn phase5_requires_established_session() {
+        let h = handler();
+        let mut sid: Option<String> = None; // no session yet
+        let receipt = TransactionReceipt {
+            session_id: "s-orphan".into(),
+            action: "https://schema.org/SearchAction".into(),
+            initiating_agent_did: "did:key:zInit".into(),
+            receiving_agent_did: "did:key:zPass".into(),
+            disclosed_by_initiator: vec![],
+            disclosed_by_receiver: vec![],
+            executed: "ok".into(),
+            returned: "ok".into(),
+            payment_proof_commitment: None,
+            timestamp: chrono::Utc::now(),
+            signatures: vec![],
+            attestations: vec![],
+        };
+        let resp = dispatch(&h, &mut sid, ProtocolMessage::ReceiptForCoSign { receipt });
         assert!(resp.is_err());
     }
 

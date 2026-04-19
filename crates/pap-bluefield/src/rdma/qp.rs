@@ -107,8 +107,23 @@ impl QueuePair {
             ));
         }
 
-        let send_buf = RegisteredBuffer::alloc(pd, FRAME_BUF_SIZE)?;
-        let recv_buf = RegisteredBuffer::alloc(pd, FRAME_BUF_SIZE)?;
+        let send_buf = RegisteredBuffer::alloc(pd, FRAME_BUF_SIZE).map_err(|e| {
+            unsafe {
+                ibv_destroy_qp(qp);
+                ibv_destroy_cq(recv_cq);
+                ibv_destroy_cq(send_cq);
+            }
+            e
+        })?;
+        let recv_buf = RegisteredBuffer::alloc(pd, FRAME_BUF_SIZE).map_err(|e| {
+            // send_buf's Drop will call ibv_dereg_mr; destroy qp+cqs manually.
+            unsafe {
+                ibv_destroy_qp(qp);
+                ibv_destroy_cq(recv_cq);
+                ibv_destroy_cq(send_cq);
+            }
+            e
+        })?;
 
         // Derive a random PSN.
         let psn: u32 = uuid::Uuid::new_v4().as_u128() as u32;
