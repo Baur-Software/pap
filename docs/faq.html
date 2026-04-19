@@ -898,17 +898,19 @@
           </p>
           <p>
             <strong>HIPAA — Minimum Necessary Rule:</strong> Every agent session uses Selective
-            Disclosure JWT (<code>crates/pap-credential/src/sd_jwt.rs</code>). The mandate's
-            <code>DisclosureSet</code> specifies exactly which <code>schema:</code> properties an
-            agent may receive. An agent requesting <code>schema:SSN</code> when the mandate permits
+            Disclosure JWT (<code>crates/pap-credential/src/sd_jwt.rs</code>) for claim-level
+            cryptographic hiding. The mandate's <code>DisclosureSet</code>
+            (<code>crates/pap-core/src/scope.rs</code>) specifies exactly which
+            <code>schema:</code> properties an agent may receive. An agent requesting <code>schema:SSN</code> when the mandate permits
             only <code>schema:dateOfBirth</code> is filtered out by the marketplace before any
             session is established — the over-disclosure attempt never reaches the transport layer.
             For no-retention requirements, set <code>no_retention: true</code> on disclosure
             entries; the session can be backed by a Trusted Execution Environment
-            (<code>crates/pap-tee/</code>) for cryptographic deletion enforcement, or
-            contractual-only assurance otherwise. Audit trail: co-signed receipts in
+            (<code>crates/pap-tee/</code>) — the TEE provides enclave measurement attestation
+            that the session ran in an isolated environment, making the retention commitment
+            auditable and binding rather than contractual-only. Audit trail: co-signed receipts in
             <code>pap-core/src/receipt.rs</code> record property type references
-            (<code>"schema:Patient.schema:dateOfBirth"</code>), never values — satisfying
+            (<code>"schema:Person.schema:dateOfBirth"</code>), never values — satisfying
             §164.312(b) while being safer than access logs containing real data.
           </p>
           <p>
@@ -929,15 +931,16 @@
             (<code>Scope::contains()</code> in <code>pap-core/src/scope.rs</code>); a child mandate
             cannot exceed its parent's scope or TTL regardless of configuration. For payment
             agents (<code>schema:PayAction</code>), mandates carry payment proofs from the ecash
-            system (<code>crates/pap-ecash/</code>) using RFC 9474 RSABSSA-PSS blind signatures —
+            system (<code>crates/pap-ecash/</code>) using RFC 9474 RSABSSA-SHA384-PSS blind signatures —
             the vendor cannot link the signing operation to the redemption, and receipts store
             only a commitment hash, never amounts or card data.
           </p>
           <p>
             <strong>SOC2 Type II in summary:</strong> CC3.1 (access control) — deny-by-default
             scope, TTL bounds. CC6.1 (logical controls) — ephemeral session keys, automatic
-            credential expiry. CC7.1 (audit records) — immutable co-signed receipts. A1.2
-            (privacy) — <code>no_retention</code> flag with TEE attestation option. These map
+            credential expiry. CC7.1 (audit records) — immutable co-signed receipts. Privacy
+            use limitation — <code>no_retention</code> flag enforces purpose limitation at
+            protocol level, with optional TEE attestation for stronger assurance. These map
             to protocol mechanisms, not to policy documents that can drift.
           </p>
           <p>
