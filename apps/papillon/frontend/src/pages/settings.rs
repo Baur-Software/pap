@@ -3,10 +3,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
-use crate::components::address_bar::AddressBar;
 use crate::components::profile_avatar::ProfileAvatar;
-use crate::components::registry::agent_detail::AgentDetail;
-use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 
@@ -957,19 +954,50 @@ fn IdentityTab() -> impl IntoView {
 
 #[component]
 fn AdvancedTab() -> impl IntoView {
+    let ohttp_enabled = RwSignal::new(false);
+    let advertise_agents = RwSignal::new(false);
+
     view! {
         <div>
+            <div class="card" style="margin-bottom: 16px;">
+                <h3 style="font-size: 14px; margin-bottom: 4px;">"Network Privacy"</h3>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                    "Configure how this node participates in the PAP network."
+                </p>
+
+                // OHTTP relay
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                    <div style="flex: 1; padding-right: 24px;">
+                        <div style="font-size: 13px; font-weight: 500;">"OHTTP relay"</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                            "Run an Oblivious HTTP relay on this node. Hides the origin of requests from registry operators \u{2014} even your IP isn't visible to agents you query."
+                        </div>
+                    </div>
+                    <button
+                        class=move || if ohttp_enabled.get() { "appearance-toggle on" } else { "appearance-toggle" }
+                        on:click=move |_| ohttp_enabled.update(|v| *v = !*v)
+                        aria-label="Toggle OHTTP relay"
+                    />
+                </div>
+
+                // Advertise custom agents
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0;">
+                    <div style="flex: 1; padding-right: 24px;">
+                        <div style="font-size: 13px; font-weight: 500;">"Advertise my agents"</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                            "Publish agents you've created to the local registry so other devices on your network can discover and use them."
+                        </div>
+                    </div>
+                    <button
+                        class=move || if advertise_agents.get() { "appearance-toggle on" } else { "appearance-toggle" }
+                        on:click=move |_| advertise_agents.update(|v| *v = !*v)
+                        aria-label="Toggle advertise agents"
+                    />
+                </div>
+            </div>
+
             <ThisNodeCard />
             <SavedRegistriesCard />
-            <div class="card" style="margin-bottom: 16px;">
-                <h3 style="font-size: 14px; margin-bottom: 12px;">"Registry Browser"</h3>
-                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
-                    "Navigate PAP registries directly using protocol URLs."
-                </p>
-                <AddressBar />
-            </div>
-            <RegistryBrowser />
-            <AgentDetail />
         </div>
     }
 }
@@ -1457,109 +1485,60 @@ fn ProfilesTab() -> impl IntoView {
 
 #[component]
 fn MandateBuilderTab() -> impl IntoView {
-    let scope_input = RwSignal::new(String::new());
     let ttl_hours = RwSignal::new(8u32);
     let auto_approve_zero = RwSignal::new(true);
     let principal_did = RwSignal::new(String::new());
 
-    let preview_json = move || {
-        let scope: Vec<String> = scope_input
-            .get()
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        serde_json::to_string_pretty(&serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Mandate",
-            "scope": scope,
-            "ttl_hours": ttl_hours.get(),
-            "auto_approve_zero_disclosure": auto_approve_zero.get(),
-            "principal": if principal_did.get().is_empty() {
-                serde_json::Value::Null
-            } else {
-                serde_json::Value::String(principal_did.get())
-            }
-        }))
-        .unwrap_or_default()
-    };
-
     view! {
-        <div class="mandate-builder">
-            <div class="mandate-form-col">
-                <div class="mandate-section">
-                    <div class="mandate-section-label">"SCOPE_OBJECTIVES"</div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label">"ACTION_TYPES"</label>
-                        <input
-                            class="mandate-input"
-                            type="text"
-                            placeholder="schema:SearchAction, schema:ReadAction"
-                            prop:value=move || scope_input.get()
-                            on:input=move |ev| scope_input.set(event_target_value(&ev))
-                        />
-                        <div class="mandate-field-hint">"Comma-separated Schema.org action types"</div>
-                    </div>
-                </div>
+        <div class="card" style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                "Privacy Defaults"
+            </h3>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                "Control how much information agents can request from you. These are your default boundaries \u{2014} you'll always be asked before anything is shared."
+            </p>
 
-                <div class="mandate-section">
-                    <div class="mandate-section-label">"CONSTRAINTS"</div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label">"TTL_HOURS"</label>
-                        <input
-                            class="mandate-input mandate-input-narrow"
-                            type="number"
-                            min="1"
-                            max="720"
-                            prop:value=move || ttl_hours.get().to_string()
-                            on:input=move |ev| {
-                                if let Ok(v) = event_target_value(&ev).parse::<u32>() {
-                                    ttl_hours.set(v);
-                                }
-                            }
-                        />
-                    </div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label mandate-field-row">
-                            <input
-                                type="checkbox"
-                                class="mandate-checkbox"
-                                prop:checked=move || auto_approve_zero.get()
-                                on:change=move |ev| {
-                                    if let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
-                                        auto_approve_zero.set(input.checked());
-                                    }
-                                }
-                            />
-                            "AUTO_APPROVE_ZERO_DISCLOSURE"
-                        </label>
-                        <div class="mandate-field-hint">"Allow agents to run without requesting any personal data"</div>
-                    </div>
+            // Setting 1: Session duration
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                <div>
+                    <div style="font-size: 13px; font-weight: 500;">"Session duration"</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"How long an agent can act on your behalf before re-authorization is required"</div>
                 </div>
-
-                <div class="mandate-section">
-                    <div class="mandate-section-label">"DELEGATION_TARGET"</div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label">"PRINCIPAL_DID"</label>
-                        <input
-                            class="mandate-input"
-                            type="text"
-                            placeholder="did:key:z6Mk..."
-                            prop:value=move || principal_did.get()
-                            on:input=move |ev| principal_did.set(event_target_value(&ev))
-                        />
-                        <div class="mandate-field-hint">"Leave empty for self-mandate"</div>
-                    </div>
-                </div>
+                <select style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text-primary); font-size: 13px;"
+                    prop:value=move || ttl_hours.get().to_string()
+                    on:change=move |ev| { if let Ok(v) = event_target_value(&ev).parse::<u32>() { ttl_hours.set(v); } }
+                >
+                    <option value="1">"1 hour"</option>
+                    <option value="8">"8 hours"</option>
+                    <option value="24">"1 day"</option>
+                    <option value="168">"1 week"</option>
+                </select>
             </div>
 
-            <div class="mandate-preview-col">
-                <div class="mandate-section-label">"MANDATE_PREVIEW"</div>
-                <pre class="mandate-preview-code">{preview_json}</pre>
-                <div class="mandate-preview-note">
-                    "Mandates are co-signed by the principal and scoped by TTL. "
-                    "This preview shows the unsigned structure."
+            // Setting 2: Zero-disclosure auto-approve
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                <div style="flex: 1; padding-right: 24px;">
+                    <div style="font-size: 13px; font-weight: 500;">"Skip approval for read-only agents"</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Agents that don't request any personal data run without a confirmation prompt"</div>
                 </div>
+                <button
+                    class=move || if auto_approve_zero.get() { "appearance-toggle on" } else { "appearance-toggle" }
+                    on:click=move |_| auto_approve_zero.update(|v| *v = !*v)
+                    aria-label="Toggle auto-approve zero disclosure"
+                />
+            </div>
+
+            // Setting 3: Delegate to another device/person (advanced)
+            <div style="padding: 12px 0;">
+                <div style="font-size: 13px; font-weight: 500; margin-bottom: 4px;">"Delegate to another device"</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">"Advanced: allow another device or person you trust to act on your behalf. Leave empty to use only this device."</div>
+                <input
+                    type="text"
+                    placeholder="did:key:z6Mk... (optional)"
+                    prop:value=move || principal_did.get()
+                    on:input=move |ev| principal_did.set(event_target_value(&ev))
+                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; font-family: var(--font-mono);"
+                />
             </div>
         </div>
     }
