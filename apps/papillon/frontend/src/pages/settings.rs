@@ -3,10 +3,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
-use crate::components::address_bar::AddressBar;
 use crate::components::profile_avatar::ProfileAvatar;
-use crate::components::registry::agent_detail::AgentDetail;
-use crate::components::registry::browser::RegistryBrowser;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 
@@ -22,7 +19,7 @@ pub fn SettingsPage() -> impl IntoView {
     let active_tab = RwSignal::new("profiles".to_string());
 
     view! {
-        <div class="settings-page settings-layout">
+        <div class="settings-layout">
 
             // ── Left nav ──
             <nav class="settings-nav">
@@ -56,7 +53,7 @@ pub fn SettingsPage() -> impl IntoView {
                     <span class="settings-nav-icon">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
                     </span>
-                    "Model"
+                    "Orchestrator"
                 </button>
                 <button
                     class=move || if active_tab.get() == "templates" { "settings-nav-link active" } else { "settings-nav-link" }
@@ -69,7 +66,7 @@ pub fn SettingsPage() -> impl IntoView {
                 </button>
 
                 <div class="settings-nav-divider" />
-                <div class="settings-nav-group-label">"Security"</div>
+                <div class="settings-nav-group-label">"Privacy"</div>
                 <button
                     class=move || if active_tab.get() == "access-control" { "settings-nav-link active" } else { "settings-nav-link" }
                     on:click=move |_| active_tab.set("access-control".into())
@@ -77,7 +74,7 @@ pub fn SettingsPage() -> impl IntoView {
                     <span class="settings-nav-icon">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </span>
-                    "Access Control"
+                    "Privacy"
                 </button>
                 <button
                     class=move || if active_tab.get() == "advanced" { "settings-nav-link active" } else { "settings-nav-link" }
@@ -298,49 +295,41 @@ fn GeneralTab() -> impl IntoView {
                         <span style=move || format!("color: {}; font-family: var(--font-mono); font-size: 11px;", orch_status_color())>{move || orch_status_text()}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
-                        <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"MANDATE TTL"</span>
-                        <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 11px;">"1h per execution (renewable, bounded)"</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
-                        <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"AUTO-APPROVE"</span>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                            <input
-                                type="checkbox"
-                                prop:checked=move || orchestrator.config.get().auto_approve_zero_disclosure
-                                on:change=move |ev| {
-                                    use web_sys::HtmlInputElement;
-                                    use wasm_bindgen::JsCast;
-                                    let checked = ev.target()
-                                        .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
-                                        .map(|el| el.checked())
-                                        .unwrap_or(false);
-                                    let mut cfg = orchestrator.config.get();
-                                    cfg.auto_approve_zero_disclosure = checked;
-                                    let cfg_clone = cfg.clone();
-                                    spawn_local(async move {
-                                        let _ = bridge::invoke::<serde_json::Value, OrchestratorConfig>(
-                                            "configure_orchestrator",
-                                            &serde_json::json!({ "config": cfg_clone }),
-                                        ).await;
-                                    });
-                                    orchestrator.config.set(cfg);
+                        <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; min-width: 100px;">"SESSION TTL"</span>
+                        <span style=move || format!("color: var(--text-primary); font-family: var(--font-mono); font-size: 11px;")>
+                            {move || {
+                                let h = orchestrator.config.get().mandate_ttl_hours;
+                                match h {
+                                    1 => "1h per execution".to_string(),
+                                    8 => "8h per execution".to_string(),
+                                    24 => "24h per execution".to_string(),
+                                    168 => "7d per execution".to_string(),
+                                    n => format!("{n}h per execution"),
                                 }
-                            />
-                            <span style="font-size: 11px; color: var(--text-secondary);">"Skip approval for zero-disclosure requests"</span>
-                        </label>
+                            }}
+                        </span>
+                        <a
+                            href="#"
+                            style="font-size: 10px; color: var(--purple); text-decoration: none; margin-left: 4px;"
+                            on:click=move |ev| {
+                                ev.prevent_default();
+                                // Signal handled by parent — nav to Privacy tab not possible here,
+                                // so we do nothing; user can click Privacy in nav.
+                            }
+                        >"Change in Privacy"</a>
                     </div>
                 </div>
             </div>
 
             // ── Inference Substrate (optional) ────────────────────────
             <h3 style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; font-family: var(--font-mono);">
-                "INFERENCE_SUBSTRATE"
+                "AI Model"
                 <span style="font-size: 10px; color: var(--text-tertiary); margin-left: 8px; text-transform: none; letter-spacing: 0;">"optional"</span>
             </h3>
             <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                "Synthesizes natural-language answers from structured agent data. "
-                "PAP routing works without it. Sending queries to an external provider "
-                "shares your query context with that provider."
+                "Turns structured agent data into plain-language answers. "
+                "Papillon works without one. Using an external provider "
+                "sends your questions to that company."
             </p>
             <select
                 style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px; margin-bottom: 16px;"
@@ -473,9 +462,9 @@ fn GeneralTab() -> impl IntoView {
                         "Security disclosure"
                     </p>
                     <p style="font-size: 12px; color: var(--text-secondary);">
-                        "The orchestrator has full context over your tokens, keys, and agent actions. "
-                        "Sending prompts to an external API discloses this context to the provider. "
-                        "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
+                        "Papillon has full context over your activity and permissions. "
+                        "Sending prompts to an external AI service shares that context with the provider. "
+                        "Your interactions are no longer private to your device."
                     </p>
                 </div>
             </Show>
@@ -577,13 +566,12 @@ fn GeneralTab() -> impl IntoView {
                     </span>
                 </Show>
             </div>
-            <SessionInfoSection />
         </div>
     }
 }
 
 #[component]
-fn SessionInfoSection() -> impl IntoView {
+fn SessionDiagnosticsCard() -> impl IntoView {
     use crate::state::canvas::CanvasState;
     let canvas_state = expect_context::<CanvasState>();
     let orchestrator = expect_context::<OrchestratorState>();
@@ -611,13 +599,16 @@ fn SessionInfoSection() -> impl IntoView {
     };
 
     view! {
-        <div class="settings-session-section">
+        <div class="card" style="margin-bottom: 16px;">
             <button
                 class="settings-session-toggle"
                 on:click=move |_| expanded.update(|v| *v = !*v)
             >
-                <span>"INTENT_MEMORY"</span>
-                <span>{move || if expanded.get() { "▲" } else { "▼" }}</span>
+                <div>
+                    <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">"Session diagnostics"</span>
+                    <span style="font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); margin-left: 8px;">"INTENT_MEMORY"</span>
+                </div>
+                <span style="color: var(--text-tertiary);">{move || if expanded.get() { "▲" } else { "▼" }}</span>
             </button>
             <Show when=move || expanded.get()>
                 <div class="settings-session-body">
@@ -789,11 +780,11 @@ fn IdentityTab() -> impl IntoView {
                 {move || identity.info.get().map(|info| view! {
                     <div>
                         <div style="margin-bottom: 8px;">
-                            <span style="color: var(--text-secondary); font-size: 12px;">"DID: "</span>
+                            <span style="color: var(--text-secondary); font-size: 12px;">"Identity key: "</span>
                             <code style="font-size: 12px; word-break: break-all;">{info.did}</code>
                         </div>
                         <div>
-                            <span style="color: var(--text-secondary); font-size: 12px;">"Public Key: "</span>
+                            <span style="color: var(--text-secondary); font-size: 12px;">"Public key: "</span>
                             <code style="font-size: 12px; word-break: break-all;">{info.public_key_b64}</code>
                         </div>
                     </div>
@@ -801,7 +792,9 @@ fn IdentityTab() -> impl IntoView {
             </Show>
 
             <div style="display: flex; gap: 8px; margin-top: 16px;">
-                <button class="btn btn-primary" on:click=handle_export>"Export Key"</button>
+                <button class="btn btn-primary" on:click=handle_export>
+                    {move || if identity.info.get().is_some() { "Export Key" } else { "Generate & Export Key" }}
+                </button>
                 <button class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary);"
                     on:click=move |_| show_import.update(|v| *v = !*v)
                 >"Import Key"</button>
@@ -832,7 +825,7 @@ fn IdentityTab() -> impl IntoView {
                     "This will replace your current identity."
                 </p>
                 <input
-                    type="text"
+                    type="password"
                     style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace; margin-bottom: 8px;"
                     placeholder="Paste base64url seed..."
                     prop:value=move || import_input.get()
@@ -959,17 +952,52 @@ fn IdentityTab() -> impl IntoView {
 fn AdvancedTab() -> impl IntoView {
     view! {
         <div>
+            <div class="card" style="margin-bottom: 16px;">
+                <h3 style="font-size: 14px; margin-bottom: 4px;">"Network Privacy"</h3>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                    "Configure how this node participates in the network."
+                </p>
+
+                // OHTTP relay — planned for v0.8.0, not yet wired to backend
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); opacity: 0.5;">
+                    <div style="flex: 1; padding-right: 24px;">
+                        <div style="font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                            "OHTTP relay"
+                            <span style="font-size: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text-secondary);">"v0.8.0"</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                            "Hides your IP from registry operators. Coming in a future release."
+                        </div>
+                    </div>
+                    <button
+                        class="appearance-toggle"
+                        disabled=true
+                        aria-label="OHTTP relay — coming soon"
+                    />
+                </div>
+
+                // Advertise custom agents — planned for v0.8.0, not yet wired to backend
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; opacity: 0.5;">
+                    <div style="flex: 1; padding-right: 24px;">
+                        <div style="font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                            "Advertise my agents"
+                            <span style="font-size: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text-secondary);">"v0.8.0"</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                            "Publish custom agents to the local registry. Coming in a future release."
+                        </div>
+                    </div>
+                    <button
+                        class="appearance-toggle"
+                        disabled=true
+                        aria-label="Advertise agents — coming soon"
+                    />
+                </div>
+            </div>
+
             <ThisNodeCard />
             <SavedRegistriesCard />
-            <div class="card" style="margin-bottom: 16px;">
-                <h3 style="font-size: 14px; margin-bottom: 12px;">"Registry Browser"</h3>
-                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
-                    "Navigate PAP registries directly using protocol URLs."
-                </p>
-                <AddressBar />
-            </div>
-            <RegistryBrowser />
-            <AgentDetail />
+            <SessionDiagnosticsCard />
         </div>
     }
 }
@@ -1278,6 +1306,7 @@ fn ProfilesTab() -> impl IntoView {
     let create_error = RwSignal::new(None::<String>);
     let create_success = RwSignal::new(false);
     let delete_confirm_profile_id = RwSignal::new(None::<String>);
+    let switch_error = RwSignal::new(None::<String>);
 
     let create_profile = move |_| {
         let name = new_profile_name.get();
@@ -1333,12 +1362,39 @@ fn ProfilesTab() -> impl IntoView {
         });
     };
 
+    let switch_profile = move |profile_id: String| {
+        switch_error.set(None);
+        spawn_local(async move {
+            match bridge::invoke::<serde_json::Value, papillon_shared::IdentityInfo>(
+                "switch_profile",
+                &serde_json::json!({ "profile_id": profile_id }),
+            )
+            .await
+            {
+                Ok(info) => {
+                    identity.info.set(Some(info));
+                    // Reload profiles list to update active flag
+                    if let Ok(profiles) = bridge::invoke_no_args::<Vec<_>>("list_profiles").await {
+                        identity.profiles.set(profiles);
+                    }
+                }
+                Err(e) => {
+                    switch_error.set(Some(if e.contains("Tauri IPC") {
+                        "Could not switch profile \u{2014} backend unavailable.".to_string()
+                    } else {
+                        format!("Switch failed: {e}")
+                    }));
+                }
+            }
+        });
+    };
+
     view! {
+        <div class="settings-section-title">"Profiles"</div>
+        <p class="settings-section-desc">"Each profile has its own identity and workspace."</p>
+
         <div class="card" style="margin-bottom: 16px;">
             <h3 style="font-size: 14px; margin-bottom: 12px;">"Manage Profiles"</h3>
-            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                "Each profile has its own identity and workspace. Switch between them anytime."
-            </p>
 
             // Profile list
             <div style="margin-bottom: 20px;">
@@ -1347,6 +1403,7 @@ fn ProfilesTab() -> impl IntoView {
                     key=|p| p.id.clone()
                     children=move |profile| {
                         let profile_id_for_delete = profile.id.clone();
+                        let profile_id_for_switch = StoredValue::new(profile.id.clone());
                         let is_active = profile.active;
                         let profile_name = profile.name.clone();
                         let created = profile.created_at.clone();
@@ -1363,8 +1420,19 @@ fn ProfilesTab() -> impl IntoView {
                                 </div>
                                 <Show when=move || is_active>
                                     <span style="font-size: 11px; background: var(--teal); color: white; padding: 2px 8px; border-radius: 4px;">
-                                        "✓ Active"
+                                        "Active"
                                     </span>
+                                </Show>
+                                // Switch is only available in Tauri — the web build
+                                // has no backend IPC path for profile switching.
+                                <Show when=move || !is_active && crate::bridge::tauri_available()>
+                                    <button
+                                        class="btn"
+                                        style="padding: 4px 10px; font-size: 11px; background: var(--bg-secondary); color: var(--text-primary);"
+                                        on:click=move |_| switch_profile(profile_id_for_switch.get_value())
+                                    >
+                                        "Switch"
+                                    </button>
                                 </Show>
                                 <button
                                     class="btn"
@@ -1383,6 +1451,13 @@ fn ProfilesTab() -> impl IntoView {
                     }
                 />
             </div>
+
+            // Switch error
+            <Show when=move || switch_error.get().is_some()>
+                <div style="font-size: 12px; color: var(--error); margin-bottom: 8px;">
+                    {move || switch_error.get().unwrap_or_default()}
+                </div>
+            </Show>
 
             // Create new profile
             <div style="border-top: 1px solid var(--border); padding-top: 16px;">
@@ -1429,7 +1504,7 @@ fn ProfilesTab() -> impl IntoView {
                                 "Delete Profile?"
                             </h3>
                             <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-                                "Are you sure you want to delete \"" {profile_name.clone()} "\"? This cannot be undone. Episodes tied to this profile won't be deleted."
+                                "This deletes \"" {profile_name.clone()} "\" and its keypair permanently. Episodes recorded under this profile remain in the memex but will no longer be associated with an active identity. This cannot be undone."
                             </p>
                             <div style="display: flex; gap: 8px; justify-content: flex-end;">
                                 <button
@@ -1457,109 +1532,112 @@ fn ProfilesTab() -> impl IntoView {
 
 #[component]
 fn MandateBuilderTab() -> impl IntoView {
-    let scope_input = RwSignal::new(String::new());
-    let ttl_hours = RwSignal::new(8u32);
+    let orchestrator = expect_context::<OrchestratorState>();
+    let ttl_hours = RwSignal::new(8u64);
     let auto_approve_zero = RwSignal::new(true);
     let principal_did = RwSignal::new(String::new());
+    let saved_msg = RwSignal::new(false);
+    let save_error = RwSignal::new(None::<String>);
 
-    let preview_json = move || {
-        let scope: Vec<String> = scope_input
-            .get()
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        serde_json::to_string_pretty(&serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Mandate",
-            "scope": scope,
-            "ttl_hours": ttl_hours.get(),
-            "auto_approve_zero_disclosure": auto_approve_zero.get(),
-            "principal": if principal_did.get().is_empty() {
-                serde_json::Value::Null
-            } else {
-                serde_json::Value::String(principal_did.get())
+    // Initialize from current config
+    Effect::new(move || {
+        let cfg = orchestrator.config.get();
+        ttl_hours.set(cfg.mandate_ttl_hours);
+        auto_approve_zero.set(cfg.auto_approve_zero_disclosure);
+    });
+
+    let save = move |_| {
+        saved_msg.set(false);
+        save_error.set(None);
+        let cfg = OrchestratorConfig {
+            inference_substrate: orchestrator.config.get().inference_substrate.clone(),
+            mandate_ttl_hours: ttl_hours.get(),
+            auto_approve_zero_disclosure: auto_approve_zero.get(),
+            intent_confidence_threshold: orchestrator.config.get().intent_confidence_threshold,
+        };
+        spawn_local(async move {
+            match bridge::invoke::<serde_json::Value, OrchestratorConfig>(
+                "configure_orchestrator",
+                &serde_json::json!({ "config": cfg }),
+            )
+            .await
+            {
+                Ok(saved_cfg) => {
+                    orchestrator.config.set(saved_cfg);
+                    saved_msg.set(true);
+                }
+                Err(e) => {
+                    save_error.set(Some(if e.contains("Tauri IPC") {
+                        "Could not save \u{2014} backend unavailable.".to_string()
+                    } else {
+                        format!("Save failed: {e}")
+                    }));
+                }
             }
-        }))
-        .unwrap_or_default()
+        });
     };
 
     view! {
-        <div class="mandate-builder">
-            <div class="mandate-form-col">
-                <div class="mandate-section">
-                    <div class="mandate-section-label">"SCOPE_OBJECTIVES"</div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label">"ACTION_TYPES"</label>
-                        <input
-                            class="mandate-input"
-                            type="text"
-                            placeholder="schema:SearchAction, schema:ReadAction"
-                            prop:value=move || scope_input.get()
-                            on:input=move |ev| scope_input.set(event_target_value(&ev))
-                        />
-                        <div class="mandate-field-hint">"Comma-separated Schema.org action types"</div>
-                    </div>
-                </div>
+        <div class="card" style="margin-bottom: 16px;">
+            <h3 style="font-size: 14px; margin-bottom: 8px;">"Privacy Defaults"</h3>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                "Control how much information agents can request from you. These are your default boundaries \u{2014} you'll always be asked before anything is shared."
+            </p>
 
-                <div class="mandate-section">
-                    <div class="mandate-section-label">"CONSTRAINTS"</div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label">"TTL_HOURS"</label>
-                        <input
-                            class="mandate-input mandate-input-narrow"
-                            type="number"
-                            min="1"
-                            max="720"
-                            prop:value=move || ttl_hours.get().to_string()
-                            on:input=move |ev| {
-                                if let Ok(v) = event_target_value(&ev).parse::<u32>() {
-                                    ttl_hours.set(v);
-                                }
-                            }
-                        />
-                    </div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label mandate-field-row">
-                            <input
-                                type="checkbox"
-                                class="mandate-checkbox"
-                                prop:checked=move || auto_approve_zero.get()
-                                on:change=move |ev| {
-                                    if let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
-                                        auto_approve_zero.set(input.checked());
-                                    }
-                                }
-                            />
-                            "AUTO_APPROVE_ZERO_DISCLOSURE"
-                        </label>
-                        <div class="mandate-field-hint">"Allow agents to run without requesting any personal data"</div>
-                    </div>
+            // Session duration
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                <div>
+                    <div style="font-size: 13px; font-weight: 500;">"Session duration"</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"How long an agent can act on your behalf before re-authorization is required"</div>
                 </div>
-
-                <div class="mandate-section">
-                    <div class="mandate-section-label">"DELEGATION_TARGET"</div>
-                    <div class="mandate-field">
-                        <label class="mandate-field-label">"PRINCIPAL_DID"</label>
-                        <input
-                            class="mandate-input"
-                            type="text"
-                            placeholder="did:key:z6Mk..."
-                            prop:value=move || principal_did.get()
-                            on:input=move |ev| principal_did.set(event_target_value(&ev))
-                        />
-                        <div class="mandate-field-hint">"Leave empty for self-mandate"</div>
-                    </div>
-                </div>
+                <select style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text-primary); font-size: 13px;"
+                    prop:value=move || ttl_hours.get().to_string()
+                    on:change=move |ev| { if let Ok(v) = event_target_value(&ev).parse::<u64>() { ttl_hours.set(v); } }
+                >
+                    <option value="1">"1 hour"</option>
+                    <option value="8">"8 hours"</option>
+                    <option value="24">"1 day"</option>
+                    <option value="168">"1 week"</option>
+                </select>
             </div>
 
-            <div class="mandate-preview-col">
-                <div class="mandate-section-label">"MANDATE_PREVIEW"</div>
-                <pre class="mandate-preview-code">{preview_json}</pre>
-                <div class="mandate-preview-note">
-                    "Mandates are co-signed by the principal and scoped by TTL. "
-                    "This preview shows the unsigned structure."
+            // Zero-disclosure auto-approve
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                <div style="flex: 1; padding-right: 24px;">
+                    <div style="font-size: 13px; font-weight: 500;">"Skip approval for read-only agents"</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Agents that don't request any personal data run without a confirmation prompt"</div>
                 </div>
+                <button
+                    class=move || if auto_approve_zero.get() { "appearance-toggle on" } else { "appearance-toggle" }
+                    on:click=move |_| auto_approve_zero.update(|v| *v = !*v)
+                    aria-label="Toggle auto-approve zero disclosure"
+                />
+            </div>
+
+            // Delegate to another device (advanced)
+            <div style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+                <div style="font-size: 13px; font-weight: 500; margin-bottom: 4px;">"Delegate to another device"</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">"Advanced: allow another device or person you trust to act on your behalf. Leave empty to use only this device."</div>
+                <input
+                    type="text"
+                    placeholder="did:key:z6Mk... (optional)"
+                    prop:value=move || principal_did.get()
+                    on:input=move |ev| principal_did.set(event_target_value(&ev))
+                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; font-family: var(--font-mono);"
+                />
+            </div>
+
+            // Save row
+            <div style="display: flex; align-items: center; gap: 12px; padding-top: 16px;">
+                <button class="btn btn-primary" on:click=save>"Save"</button>
+                <Show when=move || saved_msg.get()>
+                    <span style="font-size: 12px; color: var(--success);">"Saved!"</span>
+                </Show>
+                <Show when=move || save_error.get().is_some()>
+                    <span style="font-size: 12px; color: var(--error);">
+                        {move || save_error.get().unwrap_or_default()}
+                    </span>
+                </Show>
             </div>
         </div>
     }

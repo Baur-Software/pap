@@ -73,8 +73,7 @@ pub fn HitlGate() -> impl IntoView {
                             </div>
 
                             <div class="hitl-footnote">
-                                "This action requires your explicit authorization. "
-                                "PAP protocol v1 \u{2014} Zero-trust principal gate."
+                                "Your explicit approval is required before any data moves."
                             </div>
                         </div>
                     </div>
