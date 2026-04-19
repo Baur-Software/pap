@@ -6,12 +6,12 @@
   <title>FAQ — Principal Agent Protocol</title>
   <meta name="description" content="Honest answers to the hardest technical and enterprise questions about PAP — trust model, cryptography, governance, latency, compliance, and developer experience." />
   <meta property="og:title" content="FAQ — Principal Agent Protocol" />
-  <meta property="og:description" content="10 hard questions about PAP, answered honestly. Trust model, cryptographic limitations, enterprise identity, regulatory compliance, and Python integration." />
+  <meta property="og:description" content="13 hard questions about PAP, answered honestly. Trust model, cryptographic limitations, enterprise identity, regulatory compliance, and Python integration." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="FAQ — Principal Agent Protocol" />
-  <meta name="twitter:description" content="10 hard questions about PAP, answered honestly." />
+  <meta name="twitter:description" content="13 hard questions about PAP, answered honestly." />
   <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -173,6 +173,7 @@
     .filter-pill[data-cat="latency"].active    { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
     .filter-pill[data-cat="compliance"].active { border-color: rgba(225,112,85,.4); background: rgba(225,112,85,.08); color: var(--coral); }
     .filter-pill[data-cat="dx"].active         { border-color: rgba(46,196,160,.4); background: rgba(46,196,160,.08); color: var(--teal); }
+    .filter-pill[data-cat="enterprise"].active { border-color: rgba(99,102,241,.4); background: rgba(99,102,241,.08); color: #818cf8; }
 
     /* ─── FAQ accordion ───────────────────────────────────────────────── */
     .faq-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 80px; }
@@ -191,6 +192,7 @@
     .faq-item[data-cat="latency"]    { border-left: 3px solid rgba(139,127,245,.5); }
     .faq-item[data-cat="compliance"] { border-left: 3px solid rgba(225,112,85,.5); }
     .faq-item[data-cat="dx"]         { border-left: 3px solid rgba(46,196,160,.5); }
+    .faq-item[data-cat="enterprise"] { border-left: 3px solid rgba(99,102,241,.5); }
 
     .faq-q {
       width: 100%; display: flex; align-items: flex-start; gap: 16px;
@@ -221,6 +223,7 @@
     .badge-latency    { background: rgba(139,127,245,.12); color: var(--violet); }
     .badge-compliance { background: rgba(225,112,85,.12); color: var(--coral); }
     .badge-dx         { background: rgba(46,196,160,.12); color: var(--teal); }
+    .badge-enterprise { background: rgba(99,102,241,.12); color: #818cf8; }
 
     .faq-chevron {
       width: 20px; height: 20px; flex-shrink: 0; margin-top: 4px;
@@ -233,7 +236,7 @@
       transition: max-height .35s ease, padding .25s ease;
       padding: 0 24px 0 66px;
     }
-    .faq-item.open .faq-body { max-height: 600px; padding: 0 24px 24px 66px; }
+    .faq-item.open .faq-body { max-height: 1600px; padding: 0 24px 24px 66px; }
 
     .faq-body p { color: var(--muted); font-size: .93rem; line-height: 1.75; margin-bottom: 12px; }
     .faq-body p:last-child { margin-bottom: 0; }
@@ -313,7 +316,7 @@
       Every protocol has real limitations. PAP's are documented here, alongside what's
       currently implemented, what's on the roadmap, and where the open design questions live.
     </p>
-    <p class="hero-note">10 questions · reviewed April 2026</p>
+    <p class="hero-note">13 questions · reviewed April 2026</p>
   </div>
 </section>
 
@@ -330,6 +333,7 @@
       <button class="filter-pill" data-cat="latency">Latency</button>
       <button class="filter-pill" data-cat="compliance">Compliance</button>
       <button class="filter-pill" data-cat="dx">Developer UX</button>
+      <button class="filter-pill" data-cat="enterprise">Enterprise</button>
     </div>
 
     <div class="faq-list" id="faq-list">
