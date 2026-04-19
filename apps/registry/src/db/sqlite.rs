@@ -302,6 +302,31 @@ impl SqliteStore {
             .await?;
         Ok(())
     }
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+
+    pub async fn load_setting(&self, key: &str) -> Result<Option<String>> {
+        let row = sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key = ?")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|(v,)| v))
+    }
+
+    pub async fn save_setting(&self, key: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO settings (key, value, updated_at)
+             VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+             ON CONFLICT(key) DO UPDATE SET
+                 value = excluded.value,
+                 updated_at = excluded.updated_at",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -462,6 +487,43 @@ mod tests {
     async fn identity_load_empty_returns_none() {
         let s = in_memory_store().await;
         assert!(s.load_identity().await.unwrap().is_none());
+    }
+
+    // ── Settings ──────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn setting_load_missing_returns_none() {
+        let s = in_memory_store().await;
+        assert!(s.load_setting("nonexistent").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn setting_save_and_load_roundtrip() {
+        let s = in_memory_store().await;
+        s.save_setting("cors_allowed_origins", "https://example.com")
+            .await
+            .unwrap();
+        let v = s.load_setting("cors_allowed_origins").await.unwrap();
+        assert_eq!(v.as_deref(), Some("https://example.com"));
+    }
+
+    #[tokio::test]
+    async fn setting_save_updates_existing() {
+        let s = in_memory_store().await;
+        s.save_setting("cors_allowed_origins", "https://first.example.com")
+            .await
+            .unwrap();
+        s.save_setting(
+            "cors_allowed_origins",
+            "https://first.example.com,https://second.example.com",
+        )
+        .await
+        .unwrap();
+        let v = s.load_setting("cors_allowed_origins").await.unwrap();
+        assert_eq!(
+            v.as_deref(),
+            Some("https://first.example.com,https://second.example.com")
+        );
     }
 
     #[tokio::test]

@@ -514,7 +514,7 @@ fn percent_decode(s: &str) -> Result<String, Response> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, RwLock};
 
     use axum::body::Body;
     use axum::http::{header, Request, StatusCode};
@@ -548,6 +548,7 @@ mod tests {
             admin_token: token.map(str::to_owned),
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         router().with_state(state)
     }
@@ -736,6 +737,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -790,6 +792,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -841,6 +844,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -906,6 +910,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 2,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -1049,6 +1054,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 1,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 

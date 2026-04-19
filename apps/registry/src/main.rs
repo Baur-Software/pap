@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::Context as _;
 
@@ -8,6 +8,8 @@ use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+use pap_registry::state::SETTING_CORS_ORIGINS;
+
 use tower_http::services::ServeDir;
 use tracing::info;
 
@@ -196,12 +198,32 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    // ── CORS allowlist — loaded from DB, seeded from config on first boot ────
+    let cors_origins_raw = match store.load_setting(SETTING_CORS_ORIGINS).await? {
+        Some(v) if !v.is_empty() => v,
+        _ => {
+            let default = config.default_cors_origins();
+            store.save_setting(SETTING_CORS_ORIGINS, &default).await?;
+            info!("CORS: seeded allowed origins from config: {}", default);
+            default
+        }
+    };
+    let cors_origins: Vec<String> = cors_origins_raw
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect();
+    info!("CORS: allowed origins = {:?}", cors_origins);
+    let cors_allowed_origins: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(cors_origins));
+
     let app_state = AppState::new(
         registry.clone(),
         store.clone(),
         node_did.clone(),
         &config,
         cert_fingerprint.clone(),
+        cors_allowed_origins.clone(),
     );
 
     // ── Leptos configuration ──────────────────────────────────────────────────
@@ -226,31 +248,20 @@ async fn main() -> anyhow::Result<()> {
     let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
         .with_state(leptos_options);
 
-    // CORS policy — resolved at startup from PAP_REGISTRY_ALLOWED_ORIGINS.
+    // CORS policy — reads the live allowlist from `AppState` on every request
+    // so changes made via the Settings UI take effect without a server restart.
     //
-    // Default: localhost only (safe for local-dev, breaks nothing when no env
-    // var is set).  Set PAP_REGISTRY_ALLOWED_ORIGINS to a comma-separated list
-    // of exact origin strings for production, or to "*" to restore an open
-    // policy on fully-trusted networks.
+    // The default allowlist (localhost only) is seeded from config on first
+    // boot and stored in the `settings` DB table.  Operators can update it
+    // via the admin Settings page.
     let cors = {
-        use pap_registry::config::AllowedOrigins;
-        let allow_origin: AllowOrigin = match &config.allowed_origins {
-            AllowedOrigins::Any => {
-                tracing::warn!(
-                    "CORS: allow_origin(Any) is active — all origins permitted. \
-                     Set PAP_REGISTRY_ALLOWED_ORIGINS to restrict access."
-                );
-                AllowOrigin::any()
-            }
-            AllowedOrigins::List(origins) => {
-                info!("CORS: allowed origins = {:?}", origins);
-                let headers: Vec<axum::http::HeaderValue> = origins
-                    .iter()
-                    .filter_map(|o| o.parse().ok())
-                    .collect();
-                AllowOrigin::list(headers)
-            }
-        };
+        let origins_ref = cors_allowed_origins.clone();
+        let allow_origin = AllowOrigin::predicate(move |origin, _req| {
+            let list = origins_ref.read().unwrap_or_else(|e| e.into_inner());
+            list.iter().any(|allowed| {
+                origin.as_bytes() == allowed.as_bytes()
+            })
+        });
         CorsLayer::new()
             .allow_origin(allow_origin)
             .allow_methods(Any)

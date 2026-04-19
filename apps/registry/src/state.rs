@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use pap_federation::registry::FederatedRegistry;
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,9 @@ impl SyncEventLog {
 
 // ── AppState ───────────────────────────────────────────────────────────────
 
+/// The settings key used to persist the CORS origin allowlist.
+pub const SETTING_CORS_ORIGINS: &str = "cors_allowed_origins";
+
 /// Shared application state passed into all route handlers.
 #[derive(Clone)]
 pub struct AppState {
@@ -61,6 +64,11 @@ pub struct AppState {
     pub max_ads_per_principal: usize,
     /// In-memory per-peer sync event log.
     pub sync_log: SyncEventLog,
+    /// Live CORS origin allowlist — persisted in the `settings` table and
+    /// updated at runtime without restarting the server.
+    /// Each entry is an exact origin string, e.g. `"https://app.example.com"`.
+    /// An empty list means allow nothing (safe default until seeded).
+    pub cors_allowed_origins: Arc<RwLock<Vec<String>>>,
 }
 
 impl AppState {
@@ -70,6 +78,7 @@ impl AppState {
         node_did: String,
         config: &Config,
         cert_fingerprint: String,
+        cors_allowed_origins: Arc<RwLock<Vec<String>>>,
     ) -> Self {
         Self {
             registry,
@@ -80,6 +89,7 @@ impl AppState {
             admin_token: config.admin_token.clone(),
             max_ads_per_principal: config.max_ads_per_principal,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins,
         }
     }
 
@@ -116,6 +126,7 @@ mod tests {
             admin_token: token.map(str::to_owned),
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         }
     }
 
