@@ -835,44 +835,44 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Not built in today — and here's why that's the right architecture.</strong>
-            PAP uses <code>did:key</code> Ed25519 keypairs as its sole identity primitive
-            (<code>crates/pap-did/src/principal.rs</code>). There is no SAML assertion parser,
-            no OIDC relying party, and no LDAP connector in the codebase. This is intentional:
-            enterprise IdP and PAP answer different questions.
+            <strong>If your first instinct is IdP integration, you're importing a centralized
+            assumption PAP is designed to make unnecessary.</strong> Okta and Azure AD solve a
+            hub-and-spoke problem: a central authority that decides who gets access to what.
+            PAP inverts this. Agents protect themselves — they advertise what they require,
+            principals present cryptographically scoped mandates, and the protocol enforces
+            access at the edge without any central authority in the loop.
           </p>
           <p>
-            <strong>IdP answers: "Is this human allowed to access this resource?"</strong>
-            It issues tokens representing an authenticated session. PAP answers: "Is this agent
-            authorized to act on this human's behalf, with exactly this scope, for exactly this
-            long?" These are complementary layers. A PAP Gateway bridges them: it validates your
-            OIDC or SAML token against your existing IdP, maps the user's roles to a PAP mandate
-            scope, and issues a cryptographically signed mandate that the PAP orchestrator treats
-            normally. The bridge is ~100 lines of Rust using <code>pap-core</code>,
-            <code>pap-did</code>, and any standard OIDC validation library.
+            <strong>The PAP-native pattern for enterprise agent access control:</strong>
+            Your company runs agents on Chrysalis. Each agent declares its
+            <code>requires_disclosure</code> — the minimum SD-JWT claims it needs to execute
+            (e.g. <code>schema:Organization.schema:memberOf</code> to verify employment, or
+            a <code>schema:Role</code> claim scoped to a department). A principal's orchestrator
+            presents only those claims via selective disclosure
+            (<code>crates/pap-credential/src/sd_jwt.rs</code>); the agent verifies the
+            claim against its policy and either accepts the mandate or rejects it. No IdP
+            is in the path. No central session store. The agent is the access control point.
           </p>
           <p>
-            The result: your IdP remains the authority for human identity. PAP is the authority
-            for agent delegation. A deprovisioned Okta user's token fails at the gateway —
-            no mandate is issued. A mandate's TTL enforces automatic expiry without requiring
-            active deprovisioning. These are independent, non-competing trust roots: compromising
-            the IdP does not give an attacker active-mandate agent access, and a PAP mandate
-            breach doesn't expose IdP credentials.
+            <strong>For value exchange between agents, use ecash receipts rather than
+            identity-gated permissions.</strong> Instead of "does this principal have the
+            Analyst role in Okta?", structure access as "does this principal hold a valid
+            payment proof for this action?" The ecash system (<code>crates/pap-ecash/</code>)
+            issues blind-signed RFC 9474 RSABSSA-SHA384-PSS tokens — the agent validates
+            the token without learning who holds it, and the receipt proves the exchange
+            occurred without linking it to an identity. This is more privacy-preserving
+            than role-based access and eliminates the revocation problem entirely: a spent
+            token is simply gone.
           </p>
           <p>
-            <strong>For your CISO's specific concerns:</strong> "Can we enforce access policies?"
-            — Yes, via role-to-scope mapping at the gateway. "Can we see who accessed what?"
-            — Yes; co-signed receipts log property type references (e.g. <code>schema:Person.schema:email</code>
-            was permitted), never values, providing a forensically richer and PII-safer audit
-            trail than standard access logs. "Can we revoke access?" — Yes; TTL expiry is
-            automatic. Mandate decay (<code>Active → Degraded → ReadOnly → Suspended</code>)
-            enforces revocation without administrator action.
-          </p>
-          <p>
-            <strong>What's on the roadmap:</strong> An open-source PAP Gateway reference
-            implementation (OIDC→PAP mandate bridge), a SCIM provisioning adapter for role-sync,
-            and an Okta marketplace app. If your enterprise deployment is on a timeline,
-            the SDK surface is available today.
+            <strong>What your CISO actually needs</strong> is answered by the protocol, not
+            by an IdP bridge: access policy is encoded in mandate scope
+            (<code>Scope::deny_all()</code> baseline, cryptographically enforced containment);
+            audit trail is the co-signed receipt chain (property references, never values,
+            held by both parties locally); revocation is TTL decay
+            (<code>Active → Degraded → ReadOnly → Suspended</code>) with no deprovisioning
+            step required. The threat model your CISO is used to — "who has a live session
+            token?" — doesn't apply to a system where every mandate expires by design.
           </p>
         </div>
       </div>
