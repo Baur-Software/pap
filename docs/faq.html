@@ -877,6 +877,81 @@
         </div>
       </div>
 
+      <!-- 13 -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="enterprise">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">13</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
+              We're a regulated financial institution / healthcare system. Walk me through how PAP operates inside our compliance framework.
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>Most enterprise software achieves compliance by adding controls on top of a
+            general-purpose system.</strong> PAP's compliance properties are protocol invariants —
+            they hold because of cryptographic enforcement, not configuration. Here is what that
+            means per framework.
+          </p>
+          <p>
+            <strong>HIPAA — Minimum Necessary Rule:</strong> Every agent session uses Selective
+            Disclosure JWT (<code>crates/pap-credential/src/sd_jwt.rs</code>). The mandate's
+            <code>DisclosureSet</code> specifies exactly which <code>schema:</code> properties an
+            agent may receive. An agent requesting <code>schema:SSN</code> when the mandate permits
+            only <code>schema:dateOfBirth</code> is filtered out by the marketplace before any
+            session is established — the over-disclosure attempt never reaches the transport layer.
+            For no-retention requirements, set <code>no_retention: true</code> on disclosure
+            entries; the session can be backed by a Trusted Execution Environment
+            (<code>crates/pap-tee/</code>) for cryptographic deletion enforcement, or
+            contractual-only assurance otherwise. Audit trail: co-signed receipts in
+            <code>pap-core/src/receipt.rs</code> record property type references
+            (<code>"schema:Patient.schema:dateOfBirth"</code>), never values — satisfying
+            §164.312(b) while being safer than access logs containing real data.
+          </p>
+          <p>
+            <strong>GDPR — Purpose Limitation and Erasure:</strong> A PAP mandate is
+            structured, machine-enforceable consent: the principal signs which agent may act,
+            which actions it may take (<code>Scope::deny_all()</code> baseline), which properties
+            it may see, and for how long. Non-renewal of a mandate initiates the decay state
+            machine (<code>Active → Degraded → ReadOnly → Suspended</code>): access cryptographically
+            expires without any deprovisioning step. The episode store
+            (<code>papillon-shared/src/episode_db.rs</code>) is a local SQLite database under
+            the principal's sole control — no platform coordinates erasure. Portability: PAP uses
+            no central registry; the principal's <code>did:key</code> is self-sovereign and moves
+            to any compatible orchestrator.
+          </p>
+          <p>
+            <strong>PCI-DSS — Access Control and Payment Privacy:</strong>
+            Mandate scope containment is cryptographically enforced at every delegation step
+            (<code>Scope::contains()</code> in <code>pap-core/src/scope.rs</code>); a child mandate
+            cannot exceed its parent's scope or TTL regardless of configuration. For payment
+            agents (<code>schema:PayAction</code>), mandates carry payment proofs from the ecash
+            system (<code>crates/pap-ecash/</code>) using RFC 9474 RSABSSA-PSS blind signatures —
+            the vendor cannot link the signing operation to the redemption, and receipts store
+            only a commitment hash, never amounts or card data.
+          </p>
+          <p>
+            <strong>SOC2 Type II in summary:</strong> CC3.1 (access control) — deny-by-default
+            scope, TTL bounds. CC6.1 (logical controls) — ephemeral session keys, automatic
+            credential expiry. CC7.1 (audit records) — immutable co-signed receipts. A1.2
+            (privacy) — <code>no_retention</code> flag with TEE attestation option. These map
+            to protocol mechanisms, not to policy documents that can drift.
+          </p>
+          <p>
+            Pre-built catalog agents exist for both verticals: healthcare agents cover FDA FAERS,
+            ClinicalTrials, PubMed, and MedlinePlus
+            (<code>crates/pap-agents/catalog/health/</code>); finance agents cover Nasdaq, ECB,
+            Treasury, and World Bank data (<code>crates/pap-agents/catalog/finance/</code>).
+            All public-data agents require zero personal disclosure
+            (<code>requires_disclosure: []</code>), giving you a no-PHI-exposure baseline to
+            build from.
+          </p>
+        </div>
+      </div>
+
     </div><!-- /faq-list -->
 
   </div><!-- /container-md -->
