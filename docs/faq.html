@@ -593,16 +593,30 @@
             control over the vocabulary.
           </p>
           <p>
-            That said, there is a real practical constraint: all PAP action types and property
-            references today are hardcoded Schema.org strings. Any capability that doesn't fit the
-            current vocabulary — financial compliance actions, FHIR operation vocabulary,
-            laboratory protocol steps — requires either a Schema.org extension proposal or a
-            protocol-level change. There is no vocabulary extension mechanism in the current
-            codebase or specification.
+            <strong>The protocol is not locked to Schema.org.</strong>
+            <code>ScopeAction.action</code> in <code>crates/pap-core/src/scope.rs</code> is a
+            plain string — any namespace-prefixed URI is valid. Spec §17.6 reserves three
+            prefixes: <code>schema:</code> (Schema.org, standard interoperability baseline),
+            <code>operator:</code> (implementation-defined, for agent operator custom vocabulary),
+            and <code>pap:</code> (reserved for PAP specification extensions). A financial
+            compliance action, a FHIR operation, or a laboratory protocol step can be expressed
+            as <code>operator:FhirReadAction</code> or <code>pap:ClinicalTrialEnrollAction</code>
+            without touching Schema.org at all.
           </p>
           <p>
-            Schema.org is the right baseline for interoperability across general web agents.
-            Domain-specific verticals will need extension points.
+            <code>crates/pap-core/src/extensions.rs</code> implements spec sections 9.1–9.4:
+            Continuity Tokens (cross-session encrypted state, §9.3) and Auto-Approval Policies
+            (§9.4) are the first shipped protocol-level extensions. The <code>conditions</code>
+            field in <code>ScopeAction</code> is an opaque JSON map for arbitrary
+            protocol-level constraints not representable in Schema.org. Dynamic agent definitions
+            (<code>crates/pap-agents/src/dynamic.rs</code>) accept any action and return-type
+            strings, so custom-vocabulary agents ship without a spec change.
+          </p>
+          <p>
+            The governance capture risk is real for the <em>interoperability layer</em> —
+            agents that want to be universally discoverable benefit from Schema.org alignment.
+            Agents targeting a specific vertical or operator deployment can use the
+            <code>operator:</code> namespace freely. Schema.org is the default, not the ceiling.
           </p>
         </div>
       </div>
