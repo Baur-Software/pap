@@ -379,6 +379,7 @@ pub fn App() -> impl IntoView {
                 </footer>
             </div>
             <SetupWizard />
+            <RecoverySetup />
         </Router>
     }
 }

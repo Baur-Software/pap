@@ -6,11 +6,12 @@ use crate::bridge;
 use crate::components::profile_avatar::ProfileAvatar;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
+use crate::state::recovery::RecoveryState;
 
 mod templates_tab;
 use papillon_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
-    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, SuccessorDesignation,
+    OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RecoveryStatus, SuccessorDesignation,
 };
 use templates_tab::TemplatesTab;
 
@@ -77,6 +78,15 @@ pub fn SettingsPage() -> impl IntoView {
                     "Privacy"
                 </button>
                 <button
+                    class=move || if active_tab.get() == "recovery" { "settings-nav-link active" } else { "settings-nav-link" }
+                    on:click=move |_| active_tab.set("recovery".into())
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                    </span>
+                    "Recovery"
+                </button>
+                <button
                     class=move || if active_tab.get() == "advanced" { "settings-nav-link active" } else { "settings-nav-link" }
                     on:click=move |_| active_tab.set("advanced".into())
                 >
@@ -116,6 +126,9 @@ pub fn SettingsPage() -> impl IntoView {
                 </Show>
                 <Show when=move || active_tab.get() == "access-control">
                     <MandateBuilderTab />
+                </Show>
+                <Show when=move || active_tab.get() == "recovery">
+                    <RecoveryTab />
                 </Show>
                 <Show when=move || active_tab.get() == "advanced">
                     <AdvancedTab />
@@ -1638,6 +1651,99 @@ fn MandateBuilderTab() -> impl IntoView {
                         {move || save_error.get().unwrap_or_default()}
                     </span>
                 </Show>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn RecoveryTab() -> impl IntoView {
+    let recovery = expect_context::<RecoveryState>();
+    let status = RwSignal::new(None::<RecoveryStatus>);
+
+    // Load recovery status on mount
+    Effect::new(move || {
+        if !bridge::tauri_available() {
+            return;
+        }
+        spawn_local(async move {
+            if let Ok(s) = bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await {
+                status.set(Some(s));
+            }
+        });
+    });
+
+    let open_wizard = move |_| {
+        recovery.show_setup.set(true);
+    };
+
+    view! {
+        <div class="settings-section-title">"Social Recovery"</div>
+        <p class="settings-section-desc">
+            "Distribute encrypted key shards to trusted contacts. Any M-of-N holders can reconstruct your identity if you lose access to this device."
+        </p>
+
+        <div class="card" style="margin-bottom: 16px;">
+            // Status row
+            {move || {
+                let s = status.get();
+                match s {
+                    None if bridge::tauri_available() => view! {
+                        <p style="font-size: 12px; color: var(--text-secondary);">"Loading\u{2026}"</p>
+                    }.into_any(),
+                    None => view! {
+                        <p style="font-size: 12px; color: var(--text-secondary);">"Not available in browser mode."</p>
+                    }.into_any(),
+                    Some(st) if st.configured && !st.needs_renewal => view! {
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #00b894; flex-shrink: 0;" />
+                            <div>
+                                <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">"Recovery configured"</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">"Shards have been distributed. You can redistribute at any time."</div>
+                            </div>
+                        </div>
+                        <button class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary);" on:click=open_wizard>
+                            "Redistribute Shards"
+                        </button>
+                    }.into_any(),
+                    Some(st) if st.needs_renewal => view! {
+                        <div style="background: rgba(253, 203, 110, 0.08); border: 1px solid rgba(253, 203, 110, 0.4); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                            <div style="font-size: 13px; font-weight: 600; color: #fdcb6e; margin-bottom: 4px;">"Shards need renewal"</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">"Your previous shards were used in a recovery ceremony. Distribute fresh shards so your contacts can help you again in the future."</div>
+                        </div>
+                        <button class="btn btn-primary" on:click=open_wizard>
+                            "Renew Shards"
+                        </button>
+                    }.into_any(),
+                    _ => view! {
+                        <div style="background: rgba(255, 107, 107, 0.06); border: 1px solid rgba(255, 107, 107, 0.25); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                            <div style="font-size: 13px; font-weight: 600; color: var(--error); margin-bottom: 4px;">"Not configured"</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">"Without recovery shards, losing this device means losing your identity permanently."</div>
+                        </div>
+                        <button class="btn btn-primary" on:click=open_wizard>
+                            "Set Up Recovery"
+                        </button>
+                    }.into_any(),
+                }
+            }}
+        </div>
+
+        // How it works explainer
+        <div class="card">
+            <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 8px; font-family: var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary);">"How it works"</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; gap: 10px; align-items: flex-start;">
+                    <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108, 92, 231, 0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"01"</span>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Your identity key is split into N encrypted shards using Shamir Secret Sharing."</p>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: flex-start;">
+                    <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108, 92, 231, 0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"02"</span>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Each shard goes to a different trusted contact \u{2014} bank, notary, family member, or lawyer."</p>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: flex-start;">
+                    <span style="font-size: 10px; font-family: var(--font-mono); color: var(--purple); background: rgba(108, 92, 231, 0.12); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px;">"03"</span>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">"Any M-of-N holders can reconstruct your key. Individual shards reveal nothing."</p>
+                </div>
             </div>
         </div>
     }
