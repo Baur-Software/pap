@@ -67,16 +67,23 @@ impl WebService {
                 .map_err(|e| format!("Failed to create agent registry: {e}"))?;
 
             // seed_default_catalog is async on wasm32, sync on native.
-            // Both paths are handled via cfg — the return value (seeded count)
-            // is discarded; failures are soft-errors logged by the registry.
+            // Seeding failure is a soft-error — the registry remains usable
+            // (empty) and the user can still interact with the app.
             #[cfg(target_arch = "wasm32")]
-            reg.seed_default_catalog()
-                .await
-                .map_err(|e| format!("Failed to seed agent catalog: {e}"))?;
+            if let Err(e) = reg.seed_default_catalog().await {
+                web_sys::console::warn_1(
+                    &format!(
+                        "WebService: catalog seeding failed (continuing with empty registry): {e}"
+                    )
+                    .into(),
+                );
+            }
 
             #[cfg(not(target_arch = "wasm32"))]
-            reg.seed_default_catalog()
-                .map_err(|e| format!("Failed to seed agent catalog: {e}"))?;
+            if let Err(_e) = reg.seed_default_catalog() {
+                // Suppress unused-variable warning in tests; the failure is non-fatal.
+                let _ = ();
+            }
 
             reg
         };
@@ -94,13 +101,10 @@ impl WebService {
             identity: Mutex::new(WebIdentityService::empty()),
             #[cfg(feature = "wasm")]
             registry: Mutex::new(
+                // new_empty can only fail if the in-memory DB itself can't be
+                // created — essentially unreachable on any supported platform.
                 WasmAgentRegistry::new_empty("papillon-agents-empty")
-                    .unwrap_or_else(|_| {
-                        // new_empty can only fail if the in-memory DB itself can't be
-                        // created — essentially unreachable. Fall back silently.
-                        WasmAgentRegistry::new_empty("papillon-agents-fallback")
-                            .expect("fallback empty registry must succeed")
-                    }),
+                    .expect("in-memory registry must succeed"),
             ),
         }
     }
@@ -123,6 +127,9 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
         content_hash: ad.hash(),
         endpoint: None,
         agent_did: None,
+        // "catalog" is the correct value for agents seeded from the embedded catalog.
+        // Note: the Tauri registry.rs ad_to_info currently uses "" — that's a known gap
+        // in the native implementation, not the correct behavior.
         source: "catalog".to_owned(),
         published_to: vec![],
         // Catalog agents are seeded locally and are directly invocable.
@@ -234,26 +241,28 @@ impl PapillonService for WebService {
     async fn navigate_registry(&self, url: &str) -> Result<RegistryInfo, String> {
         #[cfg(feature = "wasm")]
         {
+            // WASM supports only the local registry; remote federation is not yet implemented.
+            // Return an error for any non-local URL rather than silently serving local data.
+            const LOCAL_URLS: &[&str] = &["", "pap://local", "local"];
+            if !LOCAL_URLS.iter().any(|&u| u == url.trim()) {
+                return Err(format!(
+                    "WebService: remote registry navigation not supported in WASM \
+                     (url: '{url}'); only the local agent catalog is available"
+                ));
+            }
             let registry = self
                 .registry
                 .lock()
                 .map_err(|e| format!("registry lock: {e}"))?;
             return Ok(RegistryInfo {
-                url: if url.is_empty() || url == LOCAL_REGISTRY_URL {
-                    LOCAL_REGISTRY_URL.to_owned()
-                } else {
-                    url.to_owned()
-                },
+                url: LOCAL_REGISTRY_URL.to_owned(),
                 agent_count: registry.agent_count(),
                 // WASM runs locally — no federation peers.
                 peer_count: 0,
             });
         }
         #[cfg(not(feature = "wasm"))]
-        {
-            let _ = url;
-            Err("WebService: navigate_registry requires wasm feature".into())
-        }
+        Err("WebService: navigate_registry not available without wasm feature".into())
     }
 
     async fn list_registry_agents(&self, registry_url: &str) -> Result<Vec<AgentInfo>, String> {
@@ -263,8 +272,9 @@ impl PapillonService for WebService {
                 .registry
                 .lock()
                 .map_err(|e| format!("registry lock: {e}"))?;
-            // If the caller passes a schema: action prefix, filter by action;
-            // otherwise return all agents in the local catalog.
+            // NOTE: `registry_url` is overloaded here: if it starts with "schema:", it is treated
+            // as a Schema.org action type for capability filtering; otherwise it is treated as a
+            // registry URL (only "pap://local" or empty is supported in WASM).
             let ads = if registry_url.starts_with("schema:") {
                 registry.query_by_action(registry_url)
             } else {
