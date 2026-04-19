@@ -168,6 +168,10 @@ pub fn App() -> impl IntoView {
 
             // No backend orchestrator in browser mode
             orchestrator.status.set(OrchestratorStatus::Unconfigured);
+
+            // Browser mode has no embedded registry — the user connects to
+            // one from the Browse page (standalone registry app or remote).
+            // Nothing to auto-connect to here.
         });
     }
 

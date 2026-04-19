@@ -96,7 +96,7 @@ pub fn OutcomeSummary() -> impl IntoView {
                         };
                         view! {
                             <div class="outcome-principal">
-                                <span class="outcome-key">"DID"</span>
+                                <span class="outcome-key">"You"</span>
                                 <span class="outcome-did">{did_short}</span>
                             </div>
                             <div class="outcome-stats">

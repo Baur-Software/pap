@@ -884,7 +884,7 @@ fn render_leaf_field(key: &str, val: &Value, kind: &FieldKind, parent_css: &str)
                             let confirmed = web_sys::window()
                                 .and_then(|w| {
                                     w.confirm_with_message(
-                                        &format!("Activate PAP link?\n{}", safe_url),
+                                        &format!("Open with Papillon?\n{}", safe_url),
                                     )
                                     .ok()
                                 })

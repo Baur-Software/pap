@@ -51,7 +51,7 @@ pub fn AgentDetail() -> impl IntoView {
                     </div>
 
                     <div class="card">
-                        <h4 style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">"Disclosure Requirements"</h4>
+                        <h4 style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">"What this agent will see"</h4>
                         <div style={if has_disclosure { "font-size: 12px; color: var(--warning);" } else { "font-size: 12px; color: var(--success);" }}>
                             {disclosure_text}
                         </div>
