@@ -222,6 +222,25 @@ fn detect_gguf_arch(gguf: &gguf_file::Content) -> String {
         .unwrap_or_else(|| "llama".to_string())
 }
 
+/// Remap `gemma4.*` metadata keys to `gemma3.*` so the quantized_gemma3 loader
+/// (which probes only ["gemma3", "gemma2", "gemma", "gemma-embedding"]) can find
+/// them. Gemma 4 and Gemma 3 share the same transformer architecture.
+fn remap_gemma4_metadata(mut gguf: gguf_file::Content) -> gguf_file::Content {
+    let gemma4_keys: Vec<String> = gguf
+        .metadata
+        .keys()
+        .filter(|k| k.starts_with("gemma4."))
+        .cloned()
+        .collect();
+    for key in gemma4_keys {
+        if let Some(val) = gguf.metadata.remove(&key) {
+            let new_key = format!("gemma3{}", &key["gemma4".len()..]);
+            gguf.metadata.insert(new_key, val);
+        }
+    }
+    gguf
+}
+
 /// Load a downloaded GGUF model into memory, ready for inference.
 pub fn load_model(model_path: &Path, tokenizer_path: &Path) -> Result<LoadedModel, String> {
     let device = Device::Cpu;
@@ -232,6 +251,13 @@ pub fn load_model(model_path: &Path, tokenizer_path: &Path) -> Result<LoadedMode
     let arch = detect_gguf_arch(&gguf);
 
     let model = if arch.contains("gemma") {
+        // quantized_gemma3 probes ["gemma3", "gemma2", "gemma", "gemma-embedding"] but not
+        // "gemma4". Remap metadata keys so the loader finds them.
+        let gguf = if arch == "gemma4" {
+            remap_gemma4_metadata(gguf)
+        } else {
+            gguf
+        };
         let weights = quantized_gemma3::ModelWeights::from_gguf(gguf, &mut file, &device)
             .map_err(|e| format!("Load weights ({arch}): {e}"))?;
         ModelBackend::Gemma3(weights)
@@ -357,14 +383,20 @@ impl ChatTemplate {
 /// Build the tool-calling prompt that the orchestrator uses to decompose
 /// a user query into PAP actions.
 pub fn build_orchestrator_prompt(user_query: &str, available_tools: &[ToolDef]) -> String {
-    build_orchestrator_prompt_with_template(user_query, available_tools, ChatTemplate::Llama)
+    build_orchestrator_prompt_with_template(user_query, available_tools, ChatTemplate::Llama, None)
 }
 
-/// Build the tool-calling prompt with an explicit chat template.
+/// Build the tool-calling prompt with an explicit chat template and optional
+/// personal-context preamble.
+///
+/// When `context` is `Some(s)` and non-empty the preamble is prepended before
+/// the `"You are a PAP orchestrator…"` instruction so the model can factor in
+/// the user's history and declared traits when decomposing the query into tools.
 pub fn build_orchestrator_prompt_with_template(
     user_query: &str,
     available_tools: &[ToolDef],
     template: ChatTemplate,
+    context: Option<&str>,
 ) -> String {
     let tools_json: Vec<String> = available_tools
         .iter()
@@ -376,11 +408,18 @@ pub fn build_orchestrator_prompt_with_template(
         })
         .collect();
 
-    let body = format!(
+    let orchestrator_instruction = format!(
         "You are a PAP orchestrator. Given a user query, decompose it into one or more tool calls.\n\nAvailable tools:\n[\n{tools}\n]\n\nRespond with a JSON array of tool calls. Each entry must have \"tool\" and \"query\" fields.\nExample: [{{\"tool\": \"web_search\", \"query\": \"best restaurants in Paris\"}}]\n\nUser query: {query}",
         tools = tools_json.join(",\n"),
         query = user_query,
     );
+
+    // Prepend personal context when available so the orchestrator can use the
+    // user's history and traits to select and phrase tool calls more precisely.
+    let body = match context {
+        Some(ctx) if !ctx.is_empty() => format!("{ctx}\n\n{orchestrator_instruction}"),
+        _ => orchestrator_instruction,
+    };
 
     match template {
         ChatTemplate::Llama => format!("[INST] {body} [/INST]"),
@@ -499,10 +538,39 @@ mod tests {
 
     #[test]
     fn prompt_gemma_template_uses_turn_tags() {
-        let prompt = build_orchestrator_prompt_with_template("test", &[], ChatTemplate::Gemma);
+        let prompt =
+            build_orchestrator_prompt_with_template("test", &[], ChatTemplate::Gemma, None);
         assert!(prompt.starts_with("<start_of_turn>user\n"));
         assert!(prompt.contains("<end_of_turn>"));
         assert!(prompt.ends_with("<start_of_turn>model\n"));
+    }
+
+    #[test]
+    fn prompt_with_context_prepends_preamble() {
+        let ctx = "[PAP PERSONAL CONTEXT]\n{\"recentEpisodes\":[]}\n[END PAP CONTEXT]";
+        let prompt = build_orchestrator_prompt_with_template(
+            "find flights",
+            &[],
+            ChatTemplate::Llama,
+            Some(ctx),
+        );
+        let preamble_pos = prompt
+            .find("[PAP PERSONAL CONTEXT]")
+            .expect("preamble present");
+        let instruction_pos = prompt
+            .find("You are a PAP orchestrator")
+            .expect("instruction present");
+        assert!(
+            preamble_pos < instruction_pos,
+            "preamble must precede orchestrator instruction"
+        );
+    }
+
+    #[test]
+    fn prompt_with_empty_context_skips_preamble() {
+        let prompt =
+            build_orchestrator_prompt_with_template("test", &[], ChatTemplate::Llama, Some(""));
+        assert!(!prompt.contains("[PAP PERSONAL CONTEXT]"));
     }
 
     #[test]
@@ -539,6 +607,81 @@ mod tests {
         let prompt = build_orchestrator_prompt("test", &[]);
         assert!(prompt.contains(r#""tool""#));
         assert!(prompt.contains(r#""query""#));
+    }
+
+    // ── remap_gemma4_metadata ────────────────────────────────
+
+    #[test]
+    fn remap_gemma4_metadata_renames_keys() {
+        use candle_core::quantized::gguf_file;
+        use std::collections::HashMap;
+
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "gemma4.attention.head_count".to_string(),
+            gguf_file::Value::U32(8),
+        );
+        metadata.insert("gemma4.block_count".to_string(), gguf_file::Value::U32(18));
+        metadata.insert(
+            "general.architecture".to_string(),
+            gguf_file::Value::String("gemma4".into()),
+        );
+        let gguf = gguf_file::Content {
+            magic: gguf_file::VersionedMagic::GgufV3,
+            metadata,
+            tensor_infos: HashMap::new(),
+            tensor_data_offset: 0,
+        };
+
+        let remapped = remap_gemma4_metadata(gguf);
+        assert!(
+            remapped
+                .metadata
+                .contains_key("gemma3.attention.head_count"),
+            "gemma4.attention.head_count should be remapped to gemma3.*"
+        );
+        assert!(
+            remapped.metadata.contains_key("gemma3.block_count"),
+            "gemma4.block_count should be remapped to gemma3.*"
+        );
+        assert!(
+            !remapped
+                .metadata
+                .contains_key("gemma4.attention.head_count"),
+            "original gemma4.* key should be removed"
+        );
+        // Non-gemma4 keys should be untouched
+        assert!(remapped.metadata.contains_key("general.architecture"));
+    }
+
+    #[test]
+    fn remap_gemma4_metadata_leaves_non_gemma4_unchanged() {
+        use candle_core::quantized::gguf_file;
+        use std::collections::HashMap;
+
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "gemma3.attention.head_count".to_string(),
+            gguf_file::Value::U32(8),
+        );
+        metadata.insert(
+            "general.architecture".to_string(),
+            gguf_file::Value::String("gemma3".into()),
+        );
+        let gguf = gguf_file::Content {
+            magic: gguf_file::VersionedMagic::GgufV3,
+            metadata,
+            tensor_infos: HashMap::new(),
+            tensor_data_offset: 0,
+        };
+
+        let remapped = remap_gemma4_metadata(gguf);
+        assert!(remapped
+            .metadata
+            .contains_key("gemma3.attention.head_count"));
+        assert!(!remapped
+            .metadata
+            .contains_key("gemma4.attention.head_count"));
     }
 
     // ── ModelManager ────────────────────────────────────────

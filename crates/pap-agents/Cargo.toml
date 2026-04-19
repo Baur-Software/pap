@@ -28,12 +28,17 @@ url = "2"
 uuid = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 # On-device inference (feature-gated so WASM builds can opt out)
 candle-core = { workspace = true, optional = true }
 candle-transformers = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
+
+[build-dependencies]
+toml = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 pap-credential-store = { workspace = true, features = ["testing"] }

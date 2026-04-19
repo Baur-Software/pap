@@ -1,10 +1,26 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn default_agent_version() -> String {
+    "0.1.0".into()
+}
+
+fn default_timeout_secs() -> u64 {
+    5
+}
+
+fn default_response_jsonpath() -> String {
+    "$".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicAgentDef {
     pub agent_did: Option<String>,
     pub schema_version: u32,
+    /// Semantic version of this agent (e.g. "1.0.0").
+    /// Included in advertisement signature — setting overrides are pinned to this.
+    #[serde(default = "default_agent_version")]
+    pub version: String,
     pub name: String,
     pub provider: String,
     pub description: String,
@@ -21,6 +37,10 @@ pub struct DynamicAgentDef {
     pub published_to: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_path: Option<String>,
+    /// Configurable properties advertised as schema.org PropertyValueSpecification.
+    /// Flows into AgentAdvertisement for federation — remote registries serve these.
+    #[serde(default)]
+    pub configurable_properties: Vec<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -32,8 +52,22 @@ pub struct HttpEndpointConfig {
     #[serde(default)]
     pub headers: HashMap<String, String>,
     pub body_template: Option<String>,
+    /// JSONPath for single-field extraction (fallback when `response_mapping` is empty).
+    /// Defaults to `"$"` (full response body) when not specified.
+    #[serde(default = "default_response_jsonpath")]
     pub response_jsonpath: String,
     pub response_schema_type: String,
+    /// Schema.org property → JSONPath mapping for multi-field extraction.
+    ///
+    /// When present, the agent extracts each field from the API response and
+    /// builds a proper schema.org object. When absent/empty (default), falls
+    /// back to `response_jsonpath` single-value extraction.
+    #[serde(default)]
+    pub response_mapping: HashMap<String, String>,
+    /// HTTP request timeout in seconds. Defaults to 5.
+    /// Set higher (e.g. 30) for models with cold-start latency.
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -155,6 +189,94 @@ pub fn is_safe_url(url: &str) -> bool {
     }
 
     true
+}
+
+/// Validate that a URL is acceptable for a **user-configured local LLM** endpoint.
+///
+/// This is a superset of [`is_safe_url`] that additionally permits plain-HTTP
+/// connections to the loopback interface (`localhost` and `127.0.0.1`).
+/// Ollama and other local inference servers run on `http://localhost` by default
+/// and cannot be switched to HTTPS without substantial user effort.
+///
+/// **Scope:** Use ONLY for the Ollama / local-LLM endpoint that the user
+/// configures in Papillon's settings.  All other outbound endpoints (catalog
+/// agents, dynamic agents, registry federation) must continue to use
+/// [`is_safe_url`] which requires HTTPS + a public hostname.
+///
+/// # Security note
+/// Allowing `http://localhost` is safe because the destination is the same
+/// machine as the app.  Requests never leave the device, so there is no
+/// plaintext leakage risk.  The RFC 1918 / link-local blocks remain in effect —
+/// only the two loopback identifiers are whitelisted.
+pub fn is_local_llm_url(url: &str) -> bool {
+    // HTTPS public-hostname URLs are always accepted.
+    if is_safe_url(url) {
+        return true;
+    }
+    // Additionally accept http://localhost[:<port>][/path] and
+    // http://127.0.0.1[:<port>][/path].
+    let rest = match url.strip_prefix("http://") {
+        Some(r) => r,
+        None => return false,
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+    let host = match authority.rfind(':') {
+        Some(i) => &authority[..i],
+        None => authority,
+    };
+    host == "localhost" || host == "127.0.0.1"
+}
+
+impl DynamicAgentDef {
+    /// Return the top-level category of this agent derived from its `catalog_path`.
+    ///
+    /// The category is the first path component before the first `/` in
+    /// `catalog_path` (e.g. `"search"` from `"search/duckduckgo.toml"`).
+    /// Returns `"general"` when `catalog_path` is `None`, empty, or has no
+    /// path separator.
+    pub fn category(&self) -> &str {
+        self.catalog_path
+            .as_deref()
+            .and_then(|p| p.split('/').next())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("general")
+    }
+
+    /// Build a signed [`pap_marketplace::AgentAdvertisement`] using a deterministic
+    /// Ed25519 keypair derived from this agent's name via SHA-256.
+    ///
+    /// The same name always produces the same operator DID and content hash, making
+    /// this suitable for idempotent catalog installs and first-boot registry seeding.
+    pub fn to_signed_advertisement(&self) -> Result<pap_marketplace::AgentAdvertisement, String> {
+        use ed25519_dalek::SigningKey;
+        use pap_did::public_key_to_did;
+        use sha2::{Digest, Sha256};
+
+        let seed_bytes: [u8; 32] = Sha256::digest(self.name.as_bytes()).into();
+        let signing_key = SigningKey::from_bytes(&seed_bytes);
+        let operator_did = public_key_to_did(&signing_key.verifying_key());
+
+        let mut ad = pap_marketplace::AgentAdvertisement::new(
+            &self.name,
+            &self.provider,
+            &operator_did,
+            vec![self.action.clone()],
+            self.object_types.clone(),
+            self.requires_disclosure.clone(),
+            self.returns.clone(),
+        );
+        ad.ttl_min = 3600;
+        if !self.version.is_empty() {
+            ad = ad.with_version(&self.version);
+        }
+        if !self.configurable_properties.is_empty() {
+            ad = ad.with_configurable_properties(self.configurable_properties.clone());
+        }
+
+        ad.sign(&signing_key)
+            .map_err(|e| format!("Failed to sign '{}': {e}", self.name))?;
+        Ok(ad)
+    }
 }
 
 #[cfg(test)]
@@ -347,6 +469,7 @@ mod tests {
         let def = DynamicAgentDef {
             agent_did: Some("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK".to_string()),
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Open Food Facts".to_string(),
             provider: "Open Food Facts".to_string(),
             description: "Look up nutritional data for food products".to_string(),
@@ -363,6 +486,8 @@ mod tests {
                 body_template: None,
                 response_jsonpath: "$.products[0]".to_string(),
                 response_schema_type: "schema:NutritionInformation".to_string(),
+                response_mapping: HashMap::new(),
+                timeout_secs: 5,
             }),
             llm_instructions: "You are a nutrition lookup assistant.".to_string(),
             subagents: vec![],
@@ -370,6 +495,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: Some("food/open_food_facts.toml".to_string()),
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         };
@@ -393,6 +519,7 @@ mod tests {
         let def = DynamicAgentDef {
             agent_did: None,
             schema_version: 1,
+            version: "0.1.0".into(),
             name: "Test".to_string(),
             provider: "Test".to_string(),
             description: "test".to_string(),
@@ -407,6 +534,7 @@ mod tests {
             operator_key_seed: None,
             published_to: vec![],
             catalog_path: None,
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         };
@@ -434,5 +562,101 @@ mod tests {
             let back: DynamicAgentSource = serde_json::from_str(&json).unwrap();
             assert_eq!(src, back);
         }
+    }
+
+    // ── category() tests ───────────────────────────────────────────────────────
+
+    fn minimal_def(catalog_path: Option<&str>) -> DynamicAgentDef {
+        DynamicAgentDef {
+            agent_did: None,
+            schema_version: 1,
+            version: "0.1.0".into(),
+            name: "Test".into(),
+            provider: "Test".into(),
+            description: "test".into(),
+            action: "schema:SearchAction".into(),
+            object_types: vec![],
+            requires_disclosure: vec![],
+            returns: vec![],
+            endpoint: None,
+            llm_instructions: String::new(),
+            subagents: vec![],
+            source: DynamicAgentSource::Catalog,
+            operator_key_seed: None,
+            published_to: vec![],
+            catalog_path: catalog_path.map(ToOwned::to_owned),
+            configurable_properties: vec![],
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn category_from_search_path() {
+        let def = minimal_def(Some("search/duckduckgo.toml"));
+        assert_eq!(def.category(), "search");
+    }
+
+    #[test]
+    fn category_from_arts_path() {
+        let def = minimal_def(Some("arts/music_search.toml"));
+        assert_eq!(def.category(), "arts");
+    }
+
+    #[test]
+    fn category_none_catalog_path_returns_general() {
+        let def = minimal_def(None);
+        assert_eq!(def.category(), "general");
+    }
+
+    #[test]
+    fn category_user_created_none_returns_general() {
+        let mut def = minimal_def(None);
+        def.source = DynamicAgentSource::UserCreated;
+        assert_eq!(def.category(), "general");
+    }
+
+    // ── is_local_llm_url tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn local_llm_localhost_with_port_accepted() {
+        assert!(is_local_llm_url("http://localhost:11434"));
+        assert!(is_local_llm_url("http://localhost:11434/api/chat"));
+        assert!(is_local_llm_url(
+            "http://localhost:8080/v1/chat/completions"
+        ));
+    }
+
+    #[test]
+    fn local_llm_loopback_ipv4_accepted() {
+        assert!(is_local_llm_url("http://127.0.0.1:11434"));
+        assert!(is_local_llm_url("http://127.0.0.1:11434/api/generate"));
+    }
+
+    #[test]
+    fn local_llm_https_public_still_accepted() {
+        assert!(is_local_llm_url(
+            "https://api.openai.com/v1/chat/completions"
+        ));
+        assert!(is_local_llm_url("https://llm.example.com/v1"));
+    }
+
+    #[test]
+    fn local_llm_rejects_rfc1918() {
+        assert!(!is_local_llm_url("http://192.168.1.100:11434"));
+        assert!(!is_local_llm_url("http://10.0.0.1:11434"));
+        assert!(!is_local_llm_url("http://172.16.0.1:11434"));
+    }
+
+    #[test]
+    fn local_llm_rejects_http_public() {
+        assert!(!is_local_llm_url("http://example.com/api"));
+        assert!(!is_local_llm_url("http://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn local_llm_rejects_no_scheme() {
+        assert!(!is_local_llm_url("localhost:11434"));
+        assert!(!is_local_llm_url("127.0.0.1:11434"));
     }
 }

@@ -63,83 +63,11 @@ impl BlockRenderer for HotelTemplate {
     }
 }
 
-/// SearchResultsPage / SearchAction template — list of search results.
-///
-/// All agents return schema.org JSON-LD with `mainEntity.itemListElement`.
-/// Individual items vary by type (NewsArticle uses `headline`, SearchResult
-/// uses `name`, Article uses `name`, etc.) so we try multiple field names.
-pub struct SearchTemplate;
-
-impl SearchTemplate {
-    /// Extract the best display title from a schema.org item.
-    fn item_title(item: &Value) -> String {
-        item.get("headline")
-            .or_else(|| item.get("name"))
-            .or_else(|| item.get("title"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("-")
-            .to_string()
-    }
-
-    /// Extract description/snippet text from a schema.org item.
-    fn item_description(item: &Value) -> String {
-        item.get("description")
-            .or_else(|| item.get("snippet"))
-            .or_else(|| item.get("abstract"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string()
-    }
-
-    /// Extract items from the JSON-LD content.
-    /// Schema.org path: `mainEntity.itemListElement`
-    fn extract_items(content: &Value) -> Vec<Value> {
-        // Schema.org: mainEntity.itemListElement
-        content
-            .get("mainEntity")
-            .and_then(|me| me.get("itemListElement"))
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default()
-    }
-}
-
-impl BlockRenderer for SearchTemplate {
-    fn render(&self, content: &Value) -> AnyView {
-        let items = Self::extract_items(content);
-
-        let rendered = items
-            .into_iter()
-            .map(|item| {
-                let title = Self::item_title(&item);
-                let url = item
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let description = Self::item_description(&item);
-                view! {
-                    <div class="typed-search-item">
-                        <span class="typed-search-title">{title}</span>
-                        <span class="typed-search-url">{url}</span>
-                        <span class="typed-search-snippet">{description}</span>
-                    </div>
-                }
-            })
-            .collect::<Vec<_>>();
-
-        view! {
-            <div class="typed-search-results">
-                {rendered}
-            </div>
-        }
-        .into_any()
-    }
-
-    fn schema_types(&self) -> Vec<&'static str> {
-        vec!["SearchResultsPage", "SearchAction"]
-    }
-}
+// SearchTemplate removed — SearchResultsPage and SearchAction are handled by
+// the generic composite renderer via flatten_to_entries(). The generic renderer
+// classifies each schema.org property by kind (URL, text, number, etc.) and
+// renders them without type-specific hardcoding. Custom rendering for specific
+// agents or types should use DeclarativeRenderer (dynamic templates) instead.
 
 /// Answer template — on-device AI response rendered as a paragraph.
 pub struct AnswerTemplate;
@@ -932,5 +860,113 @@ impl BlockRenderer for QuotationTemplate {
 
     fn schema_types(&self) -> Vec<&'static str> {
         vec!["Quotation"]
+    }
+}
+
+// ── Web ───────────────────────────────────────────────────────────────────────
+
+/// WebPage template — browser-tab-style block for web browsing on the canvas.
+///
+/// Rendered when the Web Page Reader agent returns `schema:WebPage` JSON-LD,
+/// which happens whenever the user browses via `pap://domain.com`. The block
+/// shows a URL bar, page title, description, publisher, and body text extract.
+///
+/// The URL bar renders the page URL as a `pap://` link so that clicking it
+/// opens a new browse block via `submit_agent_link()` (LinkOrigin::Agent).
+pub struct WebPageTemplate;
+
+impl BlockRenderer for WebPageTemplate {
+    fn render(&self, content: &Value) -> AnyView {
+        let title = text_field(content, "name");
+        let url = text_field(content, "url");
+        let description = text_field(content, "description");
+        let body_text = text_field(content, "text");
+
+        // Publisher: either a bare string or an object with "name".
+        let publisher = content
+            .get("publisher")
+            .and_then(|p| p.get("name").or(Some(p)))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Author: either a bare string or an object with "name".
+        let author = content
+            .get("author")
+            .and_then(|a| a.get("name").or(Some(a)))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Published date — trim to date part if it includes a time component.
+        let date_raw = text_field(content, "datePublished");
+        let date = if date_raw == "-" {
+            String::new()
+        } else {
+            date_raw
+                .split('T')
+                .next()
+                .unwrap_or(&date_raw)
+                .to_string()
+        };
+
+        // Rewrite the URL to a pap:// link so it routes through submit_agent_link().
+        let pap_url = if url.starts_with("https://") {
+            format!("pap://{}", &url["https://".len()..])
+        } else if url.starts_with("http://") {
+            format!("pap://{}", &url["http://".len()..])
+        } else {
+            url.clone()
+        };
+
+        view! {
+            <div class="typed-webpage">
+                // ── URL bar ───────────────────────────────────────────────────
+                <div class="typed-webpage-bar">
+                    <span class="typed-webpage-favicon" aria-hidden="true">"🌐"</span>
+                    <a class="typed-webpage-url" href=pap_url>{url.clone()}</a>
+                </div>
+                // ── Page body ─────────────────────────────────────────────────
+                <div class="typed-webpage-body">
+                    <h2 class="typed-webpage-title">{title}</h2>
+
+                    // Byline: publisher · author · date
+                    {
+                        let byline_parts: Vec<String> = [
+                            if publisher.is_empty() { None } else { Some(publisher) },
+                            if author.is_empty() { None } else { Some(author) },
+                            if date.is_empty() { None } else { Some(date) },
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .collect();
+
+                        if byline_parts.is_empty() {
+                            view! { <></> }.into_any()
+                        } else {
+                            let byline = byline_parts.join(" \u{00b7} ");
+                            view! { <p class="typed-webpage-byline">{byline}</p> }.into_any()
+                        }
+                    }
+
+                    {if description != "-" && !description.is_empty() {
+                        view! { <p class="typed-webpage-description">{description}</p> }.into_any()
+                    } else {
+                        view! { <></> }.into_any()
+                    }}
+
+                    {if body_text != "-" && !body_text.is_empty() {
+                        view! { <div class="typed-webpage-text">{body_text}</div> }.into_any()
+                    } else {
+                        view! { <></> }.into_any()
+                    }}
+                </div>
+            </div>
+        }
+        .into_any()
+    }
+
+    fn schema_types(&self) -> Vec<&'static str> {
+        vec!["WebPage"]
     }
 }

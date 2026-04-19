@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod canvas;
 pub mod chat;
+pub mod dataset_discovery;
 pub mod episodes;
 pub mod health;
 pub mod identity;
@@ -10,5 +11,6 @@ pub mod pipeline;
 pub mod profiles;
 pub mod recovery;
 pub mod registry;
+pub mod settings_vocab;
 pub mod templates;
 pub mod webauthn;

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Cycling Segments"
 provider = "Strava API"
 description = "Find cycling and running segments with leaderboard data via Strava."

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "TVmaze Show Search"
 provider = "TVmaze"
 description = "Search TV shows, get episode guides, cast bios, and schedule data via TVmaze."
@@ -18,3 +19,11 @@ url_template = "https://api.tvmaze.com/search/shows?q={query}"
 method = "Get"
 response_jsonpath = "$.0.show.name"
 response_schema_type = "schema:TVSeries"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

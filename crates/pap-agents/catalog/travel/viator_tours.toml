@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Viator Tours and Activities"
 provider = "Viator / TripAdvisor"
 description = "Search tours, activities, and experiences worldwide via Viator."
@@ -15,3 +16,11 @@ url_template = "https://api.viator.com/partner/v1/taxonomy/destinations?destId={
 method = "Get"
 response_jsonpath = "$.data[0].destinationName"
 response_schema_type = "schema:TouristAttraction"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

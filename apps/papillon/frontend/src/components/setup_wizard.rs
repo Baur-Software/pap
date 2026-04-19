@@ -81,6 +81,7 @@ pub fn SetupWizard() -> impl IntoView {
             inference_substrate: llm,
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
+            intent_confidence_threshold: 0.35,
         };
 
         spawn_local(async move {
@@ -284,11 +285,11 @@ pub fn SetupWizard() -> impl IntoView {
                     // Security warning for HTTP providers
                     <Show when=move || selected_provider.get() == "ollama" || selected_provider.get() == "openai" || selected_provider.get() == "huggingface">
                         <div class="setup-sec-warning">
-                            <p class="setup-sec-warning-label">"SECURITY_DISCLOSURE"</p>
+                            <p class="setup-sec-warning-label">"Heads up"</p>
                             <p class="setup-sec-warning-body">
-                                "The orchestrator has full context over your tokens, keys, and agent actions. "
-                                "Sending prompts to an external API discloses this context to the provider. "
-                                "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
+                                "Papillon has full context over your activity and permissions. "
+                                "Sending prompts to an external AI service shares that context with the provider. "
+                                "Your interactions are no longer private to your device."
                             </p>
                         </div>
                     </Show>

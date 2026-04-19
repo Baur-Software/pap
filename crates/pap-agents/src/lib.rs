@@ -26,19 +26,24 @@ pub mod dynamic;
 pub mod dynamic_handler;
 pub mod executor;
 pub mod group_chat;
+pub mod intent_index;
 pub mod llm;
 pub mod registry;
 pub mod selection;
 pub mod session_store;
 mod simple;
 
+#[cfg(target_arch = "wasm32")]
+pub use catalog::default_catalog;
 pub use catalog::load_catalog;
 pub use dynamic::{
-    is_safe_url, DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig, HttpMethod,
+    is_local_llm_url, is_safe_url, DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig,
+    HttpMethod,
 };
 pub use dynamic_handler::DynamicAgentHandler;
 pub use executor::{AgentExecutor, AgentMeta};
 pub use group_chat::GroupChatRoom;
+pub use intent_index::{IntentIndex, IntentMatch};
 #[cfg(feature = "candle")]
 pub use llm::BuiltInLlmClient;
 pub use llm::ExternalLlmClient;

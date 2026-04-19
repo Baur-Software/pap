@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Google Places Search"
 provider = "Google"
 description = "Search places and businesses via Google Places API."
@@ -15,3 +16,11 @@ url_template = "https://maps.googleapis.com/maps/api/place/textsearch/json?query
 method = "Get"
 response_jsonpath = "$.results[0].name"
 response_schema_type = "schema:LocalBusiness"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

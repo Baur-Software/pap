@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Stack Overflow User Search"
 provider = "Stack Exchange"
 description = "Search Stack Overflow user profiles and contribution statistics."
@@ -15,3 +16,19 @@ url_template = "https://api.stackexchange.com/2.3/users?inname={query}&site=stac
 method = "Get"
 response_jsonpath = "$.items[0].display_name"
 response_schema_type = "schema:Person"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "sort_by"
+name = "Sort Order"
+description = "How to order results"
+defaultValue = "reputation"
+valuePattern = "reputation|relevance|recent|popular"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

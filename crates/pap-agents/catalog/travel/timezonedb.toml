@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "TimezoneDB"
 provider = "TimezoneDB"
 description = "Look up timezone information for any city or country including UTC offset and DST."
@@ -18,3 +19,11 @@ url_template = "https://api.timezonedb.com/v2.1/get-time-zone?key=DEMO&format=js
 method = "Get"
 response_jsonpath = "$.zoneName"
 response_schema_type = "schema:Event"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "open_now"
+name = "Open Now"
+description = "Only show currently open venues"
+defaultValue = false

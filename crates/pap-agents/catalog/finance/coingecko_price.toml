@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "CoinGecko Simple Price"
 provider = "CoinGecko"
 description = "Get simple cryptocurrency prices in any currency via CoinGecko simple price endpoint."

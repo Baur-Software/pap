@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "npm Package Search"
 provider = "npm / npmjs.com"
 description = "Search npm packages with download stats, dependencies, and maintainer info."
@@ -18,3 +19,20 @@ url_template = "https://registry.npmjs.org/-/v1/search?text={query}&size=5"
 method = "Get"
 response_jsonpath = "$.objects[0].package.name"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

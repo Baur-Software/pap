@@ -8,7 +8,11 @@
 //! - `wasm`: Uses sql.js (web)
 //! - `wasm` + IndexedDB: Wraps WasmDatabase with browser persistence
 
+#[cfg(feature = "native")]
+use crate::types::PipelineInfo;
 use crate::types::Template;
+#[cfg(feature = "native")]
+use crate::types::{CanvasBlockRecord, CanvasMessageRecord, CanvasRecord, SavedPipeline};
 #[cfg(feature = "native")]
 use pap_agents::DynamicAgentDef;
 use serde::{Deserialize, Serialize};
@@ -190,6 +194,30 @@ pub trait DatabaseOps: Send + Sync {
     /// Returns the number of episodes compressed and deleted.
     fn apply_retention_policy(&self) -> Result<RetentionStats, DbError>;
 
+    // ── Agent Settings (per-agent local overrides) ─────────────────────
+
+    /// Store a per-agent setting override pinned to the agent's current version.
+    /// The key is (agent_did_hash, value_name). `value` is a JSON-encoded string.
+    /// `agent_version` is the semver of the agent when the override was configured.
+    fn set_agent_setting(
+        &self,
+        agent_did_hash: &str,
+        value_name: &str,
+        value: &str,
+        agent_version: &str,
+    ) -> Result<(), DbError>;
+
+    /// Retrieve all setting overrides for a specific agent.
+    /// Returns a map of value_name → (value, agent_version) so callers can
+    /// detect stale overrides when the agent has bumped its version.
+    fn get_agent_settings(
+        &self,
+        agent_did_hash: &str,
+    ) -> Result<std::collections::HashMap<String, AgentSettingOverride>, DbError>;
+
+    /// Delete a single agent setting (reset to default from advertisement).
+    fn delete_agent_setting(&self, agent_did_hash: &str, value_name: &str) -> Result<(), DbError>;
+
     // ── Agent Management (native only) ───────────────────────────────────
     // pap-agents pulls in reqwest::blocking → tokio → mio which does not compile
     // for wasm32-unknown-unknown. These methods are only available in the native build.
@@ -264,6 +292,78 @@ pub trait DatabaseOps: Send + Sync {
         action_type: &str,
         schema_type: &str,
     ) -> Result<Vec<PreferenceSignal>, DbError>;
+
+    // ── Canvas CRUD (native only) ─────────────────────────────────────────
+
+    /// Insert or update a canvas record.
+    #[cfg(feature = "native")]
+    fn upsert_canvas(&self, canvas: &CanvasRecord) -> Result<(), DbError>;
+
+    /// List all canvases, ordered by updated_at descending.
+    #[cfg(feature = "native")]
+    fn list_canvases(&self) -> Result<Vec<CanvasRecord>, DbError>;
+
+    /// Delete a canvas and all its blocks and messages (CASCADE).
+    #[cfg(feature = "native")]
+    fn delete_canvas(&self, id: &str) -> Result<(), DbError>;
+
+    /// Insert or update a canvas block record.
+    #[cfg(feature = "native")]
+    fn upsert_canvas_block(&self, block: &CanvasBlockRecord) -> Result<(), DbError>;
+
+    /// List all blocks for a canvas, ordered by display_order ascending.
+    #[cfg(feature = "native")]
+    fn list_canvas_blocks(&self, canvas_id: &str) -> Result<Vec<CanvasBlockRecord>, DbError>;
+
+    /// Delete a single canvas block by ID.
+    #[cfg(feature = "native")]
+    fn delete_canvas_block(&self, id: &str) -> Result<(), DbError>;
+
+    /// Insert a canvas message.
+    #[cfg(feature = "native")]
+    fn insert_canvas_message(&self, msg: &CanvasMessageRecord) -> Result<(), DbError>;
+
+    /// List all messages for a canvas, ordered by created_at ascending.
+    #[cfg(feature = "native")]
+    fn list_canvas_messages(&self, canvas_id: &str) -> Result<Vec<CanvasMessageRecord>, DbError>;
+
+    // ── Saved Pipeline CRUD (native only) ────────────────────────────────────
+
+    /// Upsert a saved pipeline (insert or replace by id).
+    #[cfg(feature = "native")]
+    fn upsert_saved_pipeline(
+        &self,
+        id: &str,
+        name: &str,
+        description: &str,
+        pipeline: &PipelineInfo,
+    ) -> Result<(), DbError>;
+
+    /// List all saved pipelines ordered by created_at DESC.
+    #[cfg(feature = "native")]
+    fn list_saved_pipelines(&self) -> Result<Vec<SavedPipeline>, DbError>;
+
+    /// Delete a saved pipeline by id. No-op if not found.
+    #[cfg(feature = "native")]
+    fn delete_saved_pipeline(&self, id: &str) -> Result<(), DbError>;
+
+    // ── Dynamic Agent Def CRUD (available on all targets) ────────────────────
+    // Uses a (name, json_string) interface to avoid a hard dependency on
+    // pap-agents in the wasm feature set.  Callers are responsible for
+    // serialising/deserialising the JSON string to/from their preferred type.
+
+    /// Insert or replace a dynamic agent definition, keyed by name.
+    /// `json` must be a valid JSON string representing the full definition.
+    fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError>;
+
+    /// Return the raw JSON strings for all stored agent definitions.
+    fn list_agent_defs(&self) -> Result<Vec<String>, DbError>;
+
+    /// Return the raw JSON string for a single agent definition, or `None`.
+    fn get_agent_def(&self, name: &str) -> Result<Option<String>, DbError>;
+
+    /// Remove an agent definition by name.  No-op if the name is not found.
+    fn delete_agent_def(&self, name: &str) -> Result<(), DbError>;
 }
 
 /// A preference signal recording which agent was selected for a given
@@ -305,6 +405,17 @@ pub struct PreferenceSignal {
 pub struct RetentionStats {
     pub compressed: usize,
     pub deleted: usize,
+}
+
+/// A single per-agent setting override, pinned to the agent version
+/// it was configured against. When the agent bumps its version, stale
+/// overrides are surfaced to the principal rather than silently applied.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSettingOverride {
+    /// JSON-encoded setting value.
+    pub value: String,
+    /// Semver of the agent when this override was stored.
+    pub agent_version: String,
 }
 
 // ── Chat types ────────────────────────────────────────────────

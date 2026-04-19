@@ -33,11 +33,16 @@ impl CatalogState {
 }
 
 /// Build a `name → DID` map from an agent list.
-/// Agents without a `agent_did` are skipped (remote registry agents without a known DID
-/// cannot be directly resolved via catalog shorthand).
+/// Only agents that are both `live` (have a runtime handler) and have a known
+/// DID are indexed. DB-only agents (`live=false`) are excluded: including them
+/// would cause `pap://agent-name` URIs to resolve to a DID whose handler is
+/// absent, silently routing the request to the wrong agent (AskAction fallback).
 pub fn build_catalog(agents: &[AgentInfo]) -> HashMap<String, String> {
     let mut map: HashMap<String, String> = HashMap::new();
     for agent in agents {
+        if !agent.live {
+            continue;
+        }
         if let Some(did) = agent.agent_did.as_ref() {
             // Keep first entry on name collision — last-writer-wins would silently
             // redirect the principal's intent to the wrong agent.

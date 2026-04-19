@@ -251,19 +251,28 @@ docker stop chrysalis-test && docker rm chrysalis-test
 
 ## Running Examples
 
-Each example demonstrates a specific protocol feature. Run them with `cargo run -p <name>`:
+Each example demonstrates a specific protocol feature. All 11 examples are self-contained and runnable with `cargo run -p <name>`:
 
 ```bash
-cargo run -p pap-search-example                # End-to-end agent search
-cargo run -p pap-travel-booking-example        # Multi-step travel booking workflow
-cargo run -p pap-delegation-chain-example      # Mandate delegation chain
-cargo run -p pap-payment-example               # Payment handling
-cargo run -p pap-networked-search-example      # Networked agent search
-cargo run -p pap-webauthn-ceremony-example     # WebAuthn authentication ceremony
-cargo run -p pap-federated-discovery-example   # Federated registry discovery
-cargo run -p pap-credential-lifecycle-example  # Credential lifecycle management
-cargo run -p pap-protocol-envelope-example     # Protocol message envelope
-cargo run -p tee-attestation                   # Trusted execution environment attestation
+# 6-phase handshake & local execution
+cargo run -p pap-search-example                      # 6-phase handshake, loopback
+cargo run -p pap-travel-booking-example              # SD-JWT selective disclosure
+cargo run -p pap-delegation-chain-example            # Multi-hop mandate delegation
+cargo run -p pap-credential-lifecycle-example        # VC issuance and decay
+cargo run -p pap-protocol-envelope-example           # JWS signing and verification
+cargo run -p pap-selective-disclosure-decay-example  # Mandate decay state machine
+cargo run -p pap-payment-example                     # Ecash payment attachment
+cargo run -p pap-webauthn-ceremony-example           # WebAuthn signer
+
+# Requires `just registry-local` (Chrysalis registry):
+cargo run -p pap-networked-search-example            # Networked agent discovery and execution
+cargo run -p pap-federated-discovery-example         # Cross-registry federation sync
+
+# TEE simulation:
+cargo run -p tee-attestation                         # Trusted execution environment attestation
+
+# Or using just:
+just run-example pap-search-example
 ```
 
 ## Building the Browser Extension
@@ -309,6 +318,19 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
+
+If you modified anything under `apps/papillon/frontend/` **or** any crate it depends on
+(`crates/papillon-shared`, `crates/pap-did`, `crates/pap-proto`, `crates/pap-core`), also run:
+
+```bash
+just check-wasm
+```
+
+The frontend lives in its own Cargo workspace and is excluded from `--workspace` flags, so
+`cargo check/test --workspace` silently skips it. `just check-wasm` runs
+`cargo check --target wasm32-unknown-unknown` against the frontend manifest directly, catching
+`js-sys`/`web-sys` API errors and missing struct fields in seconds rather than waiting for
+`trunk build --release` to fail in CI.
 
 ## Code Style
 

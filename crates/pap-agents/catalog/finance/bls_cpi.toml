@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "BLS Consumer Price Index"
 provider = "Bureau of Labor Statistics"
 description = "Get US inflation and CPI data from the Bureau of Labor Statistics."

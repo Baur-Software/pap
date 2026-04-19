@@ -1,4 +1,4 @@
-//! Core protocol primitives for the Principal Agent Protocol.
+//! Core protocol primitives for the Principal Agent Protocol (PAP).
 //!
 //! - `scope` — Schema.org action references, deny-by-default, disclosure sets
 //! - `mandate` — hierarchical delegation with chain verification and decay
@@ -9,6 +9,7 @@
 //! - `extensions` — continuity tokens, auto-approval policies (spec section 9)
 //! - `recovery` — M-of-N social recovery via designated notaries (spec section 13.5)
 //! - `shamir` — Shamir Secret Sharing over GF(2^8) for seed-byte splitting (spec section 13.5)
+//! - `tee` — Trusted Execution Environment attestation hooks (spec section 14.2)
 //! - `error` — protocol error types
 
 pub mod error;

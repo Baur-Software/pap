@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "NASDAQ Market Data"
 provider = "NASDAQ"
 description = "Access NASDAQ market data including stock prices and corporate actions."
@@ -15,3 +16,13 @@ url_template = "https://data.nasdaq.com/api/v3/datasets/WIKI/{query}/data.json?r
 method = "Get"
 response_jsonpath = "$.dataset_data.data[0][0]"
 response_schema_type = "schema:InvestmentFund"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50

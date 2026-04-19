@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "DuckDuckGo Search"
 provider = "DuckDuckGo"
 description = "Web search via DuckDuckGo. Returns organic search results without tracking."
@@ -19,3 +20,26 @@ url_template = "https://api.duckduckgo.com/?q={query}&format=json&no_html=1&skip
 method = "Get"
 response_jsonpath = "$.AbstractText"
 response_schema_type = "schema:SearchResultsPage"
+
+# Map DuckDuckGo Instant Answer fields → schema.org vocabulary
+[endpoint.response_mapping]
+name = "$.Heading"
+description = "$.AbstractText"
+url = "$.AbstractURL"
+source = "$.AbstractSource"
+image = "$.Image"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "safe_search"
+name = "Safe Search"
+description = "Filter explicit content from results"
+defaultValue = true
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "no_html"
+name = "Strip HTML"
+description = "Remove HTML tags from result text"
+defaultValue = true

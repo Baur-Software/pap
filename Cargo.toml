@@ -37,7 +37,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.8.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Baur-Software/pap"
@@ -99,6 +99,7 @@ aes-gcm = "0.10"
 curve25519-dalek = { version = "4", features = ["digest"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 hpke = "0.11"
+semver = "1"
 
 # Local patch to work around Windows registry permission issue on this machine.
 # The icu_locale_core crate in the cargo cache has unreadable src/ files;

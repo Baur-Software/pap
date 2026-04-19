@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "ZenQuotes Daily"
 provider = "ZenQuotes.io"
 description = "Get daily inspiring quotes from ZenQuotes for motivation and reflection."

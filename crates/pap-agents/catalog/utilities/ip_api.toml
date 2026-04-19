@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "IP Address Geolocation"
 provider = "ip-api.com"
 description = "Look up geolocation, ISP, and network details for any IP address."

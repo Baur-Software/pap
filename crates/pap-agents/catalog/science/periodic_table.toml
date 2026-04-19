@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Periodic Table Elements"
 provider = "Periodic Table API"
 description = "Look up element properties from the periodic table of elements."

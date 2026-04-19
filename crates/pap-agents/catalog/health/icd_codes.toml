@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "ICD-10 Code Lookup"
 provider = "WHO"
 description = "Look up ICD-10 medical diagnosis codes and descriptions."

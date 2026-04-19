@@ -1,0 +1,39 @@
+schema_version = 1
+version = "0.1.0"
+name = "HuggingFace Dataset Search"
+provider = "Hugging Face"
+description = "Search 1M+ ML datasets on HuggingFace Hub. Returns schema:Dataset with Croissant metadata. Zero disclosure required — all queries are public."
+action = "schema:DatasetAction"
+object_types = ["schema:Dataset"]
+requires_disclosure = []
+returns = ["schema:Dataset"]
+source = "Catalog"
+llm_instructions = """Describe the dataset's purpose, creator, license, size, and format.
+Flag gated datasets (require access approval) and commercial-use restrictions.
+Note if Croissant metadata is available for ML framework loading."""
+subagents = []
+
+[endpoint]
+url_template = "https://huggingface.co/api/datasets?search={query}&limit=5&sort=likes&full=false"
+method = "Get"
+response_jsonpath = "$[0].id"
+response_schema_type = "schema:Dataset"
+
+[endpoint.response_mapping]
+"name"                = "$[0].id"
+"description"         = "$[0].description"
+"author"              = "$[0].author"
+"dateModified"        = "$[0].lastModified"
+"downloadCount"       = "$[0].downloads"
+"url"                 = "$[0].id"
+"keywords"            = "$[0].tags"
+"isAccessibleForFree" = "$[0].gated"
+
+[[configurable_properties]]
+"@type"       = "PropertyValueSpecification"
+valueName     = "results_per_page"
+name          = "Results Per Page"
+description   = "Maximum number of datasets to return per query"
+defaultValue  = 5
+minValue      = 1
+maxValue      = 20

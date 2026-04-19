@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "OMDb Movie/TV Lookup"
 provider = "Open Movie Database"
 description = "Look up detailed movie and TV metadata via the Open Movie Database API."
@@ -18,3 +19,11 @@ url_template = "https://www.omdbapi.com/?t={query}&plot=full"
 method = "Get"
 response_jsonpath = "$.Title"
 response_schema_type = "schema:Movie"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

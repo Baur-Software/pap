@@ -34,7 +34,7 @@ jobs:
       should_release: ${{ steps.check.outputs.should_release }}
       version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -66,7 +66,7 @@ jobs:
     outputs:
       release_id: ${{ steps.create.outputs.result }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Extract changelog for this version
         id: changelog
@@ -77,7 +77,7 @@ jobs:
 
       - name: Create draft release
         id: create
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           VERSION: ${{ needs.check-version.outputs.version }}
         with:
@@ -121,8 +121,9 @@ jobs:
     env:
       HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
       HAS_WINDOWS_SIGNING: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+      HAS_STORE_APP_ID: ${{ secrets.MICROSOFT_STORE_APP_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -201,7 +202,7 @@ jobs:
         if: |
           matrix.platform == 'windows-latest' &&
           env.HAS_WINDOWS_SIGNING == 'true' &&
-          secrets.MICROSOFT_STORE_APP_ID != ''
+          env.HAS_STORE_APP_ID == 'true'
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -272,16 +273,16 @@ jobs:
       HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
       HAS_ASC_API_KEY: ${{ secrets.APPLE_API_KEY_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download WASM frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: papillon-web-dist
           path: apps/papillon/frontend/dist/
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -356,7 +357,7 @@ jobs:
             -exportPath $RUNNER_TEMP/ipa/
 
       - name: Upload iOS artifacts to release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           VERSION: ${{ needs.check-version.outputs.version }}
@@ -419,16 +420,16 @@ jobs:
       HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE != '' }}
       HAS_PLAY_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download WASM frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: papillon-web-dist
           path: apps/papillon/frontend/dist/
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -437,7 +438,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -514,7 +515,7 @@ jobs:
           fi
 
       - name: Upload Android APK to GitHub Release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           VERSION: ${{ needs.check-version.outputs.version }}
@@ -561,7 +562,7 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -581,7 +582,7 @@ jobs:
         run: trunk build --release
 
       - name: Upload web artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: papillon-web-dist
           path: apps/papillon/frontend/dist/
@@ -593,16 +594,16 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
       - name: Download web artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: papillon-web-dist
           path: packages/papillon-cli/dist/
@@ -625,10 +626,10 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -638,7 +639,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/papillon/Dockerfile
@@ -665,7 +666,7 @@ jobs:
       contents: write
     steps:
       - name: Publish release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
         with:
@@ -684,16 +685,16 @@ jobs:
     runs-on: ubuntu-latest
     if: success()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download WASM frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: papillon-web-dist
           path: apps/papillon/frontend/dist/
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -710,7 +711,7 @@ jobs:
 
       - name: Upload canary report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: papillon-canary-report
           path: playwright-report/

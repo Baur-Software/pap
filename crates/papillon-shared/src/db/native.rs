@@ -8,6 +8,9 @@ use std::sync::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
+use crate::types::{
+    CanvasBlockRecord, CanvasMessageRecord, CanvasRecord, PipelineInfo, SavedPipeline,
+};
 use pap_agents::{DynamicAgentDef, DynamicAgentSource, HttpEndpointConfig};
 
 /// Persistent SQLite database for Papillon's experience memory.
@@ -123,6 +126,7 @@ impl NativeDatabase {
             CREATE TABLE IF NOT EXISTS agents (
                 agent_did TEXT PRIMARY KEY,
                 schema_version INTEGER NOT NULL DEFAULT 1,
+                version TEXT NOT NULL DEFAULT '0.1.0',
                 name TEXT NOT NULL,
                 provider TEXT NOT NULL,
                 description TEXT NOT NULL,
@@ -164,6 +168,63 @@ impl NativeDatabase {
             );
             CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
                 ON chat_messages(conversation_id, created_at);
+
+            -- Per-agent setting overrides. Specification comes from the
+            -- agent's advertisement (via pap://); values live here.
+            -- agent_version pins each override to the version it was
+            -- configured against, like Docker image tags.
+            CREATE TABLE IF NOT EXISTS agent_settings (
+                agent_did_hash TEXT NOT NULL,
+                value_name     TEXT NOT NULL,
+                value          TEXT NOT NULL,
+                agent_version  TEXT NOT NULL DEFAULT '0.1.0',
+                updated_at     TEXT NOT NULL,
+                PRIMARY KEY (agent_did_hash, value_name)
+            );
+
+            CREATE TABLE IF NOT EXISTS canvases (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS canvas_blocks (
+                id                  TEXT PRIMARY KEY,
+                canvas_id           TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
+                prompt_text         TEXT,
+                schema_type         TEXT,
+                content_json        TEXT,
+                block_state         TEXT NOT NULL DEFAULT 'resolving',
+                episode_id          TEXT,
+                agent_did           TEXT,
+                mandate_expires_at  TEXT,
+                preference_guided   INTEGER NOT NULL DEFAULT 0,
+                display_order       INTEGER NOT NULL DEFAULT 0,
+                created_at          TEXT NOT NULL,
+                updated_at          TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_canvas_blocks_canvas ON canvas_blocks(canvas_id, display_order);
+
+            CREATE TABLE IF NOT EXISTS canvas_messages (
+                id          TEXT PRIMARY KEY,
+                canvas_id   TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
+                role        TEXT NOT NULL CHECK(role IN ('user','assistant')),
+                content     TEXT NOT NULL,
+                block_id    TEXT,
+                created_at  TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_canvas_messages_canvas ON canvas_messages(canvas_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS saved_pipelines (
+                id            TEXT PRIMARY KEY,
+                name          TEXT NOT NULL,
+                description   TEXT NOT NULL DEFAULT '',
+                pipeline_json TEXT NOT NULL,
+                created_at    TEXT NOT NULL,
+                updated_at    TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_pipelines_name ON saved_pipelines(name);
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -248,6 +309,30 @@ impl NativeDatabase {
             ",
         )
         .map_err(|e| DbError(format!("db migrate preferences: {e}")))?;
+
+        // Additive column migrations — ALTER TABLE returns an error if the column
+        // already exists; we suppress those to keep migrations idempotent.
+        let _ = conn.execute(
+            "ALTER TABLE agents ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE agents ADD COLUMN version TEXT NOT NULL DEFAULT '0.1.0'",
+            [],
+        );
+
+        // Dynamic agent definitions persisted as raw JSON blobs. This is a
+        // separate table from `agents` so that user-managed lightweight defs
+        // (name + JSON) can round-trip without requiring all the columns of
+        // the full agents table.
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS agent_defs (
+                name TEXT PRIMARY KEY,
+                json TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| DbError(format!("db migrate agent_defs: {e}")))?;
 
         Ok(())
     }
@@ -525,6 +610,69 @@ impl DatabaseOps for NativeDatabase {
         )
         .map_err(|e| DbError(format!("db set setting: {e}")))?;
 
+        Ok(())
+    }
+
+    fn set_agent_setting(
+        &self,
+        agent_did_hash: &str,
+        value_name: &str,
+        value: &str,
+        agent_version: &str,
+    ) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO agent_settings (agent_did_hash, value_name, value, agent_version, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(agent_did_hash, value_name)
+             DO UPDATE SET value = excluded.value,
+                           agent_version = excluded.agent_version,
+                           updated_at = excluded.updated_at",
+            params![agent_did_hash, value_name, value, agent_version, now],
+        )
+        .map_err(|e| DbError(format!("db set agent setting: {e}")))?;
+        Ok(())
+    }
+
+    fn get_agent_settings(
+        &self,
+        agent_did_hash: &str,
+    ) -> Result<std::collections::HashMap<String, super::AgentSettingOverride>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT value_name, value, agent_version FROM agent_settings WHERE agent_did_hash = ?1",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map(params![agent_did_hash], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    super::AgentSettingOverride {
+                        value: row.get(1)?,
+                        agent_version: row.get(2)?,
+                    },
+                ))
+            })
+            .map_err(|e| DbError(format!("db query: {e}")))?;
+
+        let mut result = std::collections::HashMap::new();
+        for row in rows {
+            let (k, v) = row.map_err(|e| DbError(format!("db row: {e}")))?;
+            result.insert(k, v);
+        }
+        Ok(result)
+    }
+
+    fn delete_agent_setting(&self, agent_did_hash: &str, value_name: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "DELETE FROM agent_settings WHERE agent_did_hash = ?1 AND value_name = ?2",
+            params![agent_did_hash, value_name],
+        )
+        .map_err(|e| DbError(format!("db delete agent setting: {e}")))?;
         Ok(())
     }
 
@@ -992,21 +1140,22 @@ impl DatabaseOps for NativeDatabase {
         };
         conn.execute(
             "INSERT INTO agents (
-                agent_did, schema_version, name, provider, description, action,
+                agent_did, schema_version, version, name, provider, description, action,
                 object_types_json, requires_disclosure_json, returns_json,
                 endpoint_json, llm_instructions, subagents_json, source,
                 operator_key_seed, published_to_json, catalog_path,
                 created_at, updated_at
             ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6,
-                ?7, ?8, ?9,
-                ?10, ?11, ?12, ?13,
-                ?14, ?15, ?16,
-                ?17, ?18
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7,
+                ?8, ?9, ?10,
+                ?11, ?12, ?13, ?14,
+                ?15, ?16, ?17,
+                ?18, ?19
             )",
             params![
                 agent_did,
                 def.schema_version,
+                def.version,
                 def.name,
                 def.provider,
                 def.description,
@@ -1033,7 +1182,7 @@ impl DatabaseOps for NativeDatabase {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let mut stmt = conn
             .prepare(
-                "SELECT agent_did, schema_version, name, provider, description, action,
+                "SELECT agent_did, schema_version, version, name, provider, description, action,
                     object_types_json, requires_disclosure_json, returns_json,
                     endpoint_json, llm_instructions, subagents_json, source,
                     operator_key_seed, published_to_json, catalog_path,
@@ -1046,33 +1195,39 @@ impl DatabaseOps for NativeDatabase {
 
         let rows = stmt
             .query_map([], |row| {
-                let source_str: String = row.get(12)?;
+                // Column indices: 0=agent_did, 1=schema_version, 2=version,
+                // 3=name, 4=provider, 5=description, 6=action,
+                // 7=object_types_json, 8=requires_disclosure_json, 9=returns_json,
+                // 10=endpoint_json, 11=llm_instructions, 12=subagents_json, 13=source,
+                // 14=operator_key_seed, 15=published_to_json, 16=catalog_path,
+                // 17=created_at, 18=updated_at
+                let source_str: String = row.get(13)?;
                 let source = match source_str.as_str() {
                     "catalog" => DynamicAgentSource::Catalog,
                     "user_created" => DynamicAgentSource::UserCreated,
                     "generated" => DynamicAgentSource::Generated,
                     other => {
                         return Err(rusqlite::Error::FromSqlConversionFailure(
-                            12,
+                            13,
                             rusqlite::types::Type::Text,
                             format!("unknown source: {other}").into(),
                         ))
                     }
                 };
-                let seed_blob: Vec<u8> = row.get(13)?;
+                let seed_blob: Vec<u8> = row.get(14)?;
                 let seed_arr: [u8; 32] = seed_blob.try_into().map_err(|_| {
                     rusqlite::Error::FromSqlConversionFailure(
-                        13,
+                        14,
                         rusqlite::types::Type::Blob,
                         "operator_key_seed must be 32 bytes".into(),
                     )
                 })?;
-                let endpoint_json: Option<String> = row.get(9)?;
+                let endpoint_json: Option<String> = row.get(10)?;
                 let endpoint = endpoint_json
                     .map(|j| {
                         serde_json::from_str::<HttpEndpointConfig>(&j).map_err(|e| {
                             rusqlite::Error::FromSqlConversionFailure(
-                                9,
+                                10,
                                 rusqlite::types::Type::Text,
                                 Box::new(e),
                             )
@@ -1092,22 +1247,26 @@ impl DatabaseOps for NativeDatabase {
                 Ok(DynamicAgentDef {
                     agent_did: Some(row.get(0)?),
                     schema_version: row.get::<_, i64>(1)? as u32,
-                    name: row.get(2)?,
-                    provider: row.get(3)?,
-                    description: row.get(4)?,
-                    action: row.get(5)?,
-                    object_types: parse_json_array(6, row.get(6)?)?,
-                    requires_disclosure: parse_json_array(7, row.get(7)?)?,
-                    returns: parse_json_array(8, row.get(8)?)?,
+                    version: row.get(2)?,
+                    name: row.get(3)?,
+                    provider: row.get(4)?,
+                    description: row.get(5)?,
+                    action: row.get(6)?,
+                    object_types: parse_json_array(7, row.get(7)?)?,
+                    requires_disclosure: parse_json_array(8, row.get(8)?)?,
+                    returns: parse_json_array(9, row.get(9)?)?,
                     endpoint,
-                    llm_instructions: row.get(10)?,
-                    subagents: parse_json_array(11, row.get(11)?)?,
+                    llm_instructions: row.get(11)?,
+                    subagents: parse_json_array(12, row.get(12)?)?,
                     source,
                     operator_key_seed: Some(seed_arr),
-                    published_to: parse_json_array(14, row.get(14)?)?,
-                    catalog_path: row.get(15)?,
-                    created_at: row.get(16)?,
-                    updated_at: row.get(17)?,
+                    published_to: parse_json_array(15, row.get(15)?)?,
+                    catalog_path: row.get(16)?,
+                    // configurable_properties are sourced from TOML/advertisement,
+                    // not stored in the agents table. Default to empty.
+                    configurable_properties: vec![],
+                    created_at: row.get(17)?,
+                    updated_at: row.get(18)?,
                 })
             })
             .map_err(|e| DbError(format!("db query: {e}")))?;
@@ -1144,15 +1303,16 @@ impl DatabaseOps for NativeDatabase {
         let rows_changed = conn
             .execute(
                 "UPDATE agents SET
-                schema_version = ?1, name = ?2, provider = ?3,
-                description = ?4, action = ?5,
-                object_types_json = ?6, requires_disclosure_json = ?7,
-                returns_json = ?8, endpoint_json = ?9,
-                llm_instructions = ?10, subagents_json = ?11,
-                published_to_json = ?12, updated_at = ?13
-             WHERE agent_did = ?14",
+                schema_version = ?1, version = ?2, name = ?3, provider = ?4,
+                description = ?5, action = ?6,
+                object_types_json = ?7, requires_disclosure_json = ?8,
+                returns_json = ?9, endpoint_json = ?10,
+                llm_instructions = ?11, subagents_json = ?12,
+                published_to_json = ?13, updated_at = ?14
+             WHERE agent_did = ?15",
                 params![
                     def.schema_version,
+                    def.version,
                     def.name,
                     def.provider,
                     def.description,
@@ -1495,6 +1655,312 @@ impl DatabaseOps for NativeDatabase {
             signals.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
         }
         Ok(signals)
+    }
+
+    // ── Canvas CRUD ───────────────────────────────────────────────────────
+
+    fn upsert_canvas(&self, canvas: &CanvasRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvases (id, name, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 updated_at = excluded.updated_at",
+            params![canvas.id, canvas.name, canvas.created_at, canvas.updated_at],
+        )
+        .map_err(|e| DbError(format!("db upsert canvas: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvases(&self) -> Result<Vec<CanvasRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, created_at, updated_at
+                 FROM canvases
+                 ORDER BY updated_at DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(CanvasRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    created_at: row.get(2)?,
+                    updated_at: row.get(3)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvases: {e}")))?;
+        let mut canvases = Vec::new();
+        for row in rows {
+            canvases.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(canvases)
+    }
+
+    fn delete_canvas(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM canvases WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete canvas: {e}")))?;
+        Ok(())
+    }
+
+    fn upsert_canvas_block(&self, block: &CanvasBlockRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvas_blocks (
+                id, canvas_id, prompt_text, schema_type, content_json,
+                block_state, episode_id, agent_did, mandate_expires_at,
+                preference_guided, display_order, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            ON CONFLICT(id) DO UPDATE SET
+                canvas_id = excluded.canvas_id,
+                prompt_text = excluded.prompt_text,
+                schema_type = excluded.schema_type,
+                content_json = excluded.content_json,
+                block_state = excluded.block_state,
+                episode_id = excluded.episode_id,
+                agent_did = excluded.agent_did,
+                mandate_expires_at = excluded.mandate_expires_at,
+                preference_guided = excluded.preference_guided,
+                display_order = excluded.display_order,
+                updated_at = excluded.updated_at",
+            params![
+                block.id,
+                block.canvas_id,
+                block.prompt_text,
+                block.schema_type,
+                block.content_json,
+                block.block_state,
+                block.episode_id,
+                block.agent_did,
+                block.mandate_expires_at,
+                block.preference_guided as i64,
+                block.display_order,
+                block.created_at,
+                block.updated_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db upsert canvas block: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvas_blocks(&self, canvas_id: &str) -> Result<Vec<CanvasBlockRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, canvas_id, prompt_text, schema_type, content_json,
+                        block_state, episode_id, agent_did, mandate_expires_at,
+                        preference_guided, display_order, created_at, updated_at
+                 FROM canvas_blocks
+                 WHERE canvas_id = ?1
+                 ORDER BY display_order ASC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![canvas_id], |row| {
+                Ok(CanvasBlockRecord {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    prompt_text: row.get(2)?,
+                    schema_type: row.get(3)?,
+                    content_json: row.get(4)?,
+                    block_state: row.get(5)?,
+                    episode_id: row.get(6)?,
+                    agent_did: row.get(7)?,
+                    mandate_expires_at: row.get(8)?,
+                    preference_guided: {
+                        let v: i64 = row.get(9)?;
+                        v != 0
+                    },
+                    display_order: row.get(10)?,
+                    created_at: row.get(11)?,
+                    updated_at: row.get(12)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvas blocks: {e}")))?;
+        let mut blocks = Vec::new();
+        for row in rows {
+            blocks.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(blocks)
+    }
+
+    fn delete_canvas_block(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM canvas_blocks WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete canvas block: {e}")))?;
+        Ok(())
+    }
+
+    fn insert_canvas_message(&self, msg: &CanvasMessageRecord) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO canvas_messages (id, canvas_id, role, content, block_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                msg.id,
+                msg.canvas_id,
+                msg.role,
+                msg.content,
+                msg.block_id,
+                msg.created_at,
+            ],
+        )
+        .map_err(|e| DbError(format!("db insert canvas message: {e}")))?;
+        Ok(())
+    }
+
+    fn list_canvas_messages(&self, canvas_id: &str) -> Result<Vec<CanvasMessageRecord>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, canvas_id, role, content, block_id, created_at
+                 FROM canvas_messages
+                 WHERE canvas_id = ?1
+                 ORDER BY created_at ASC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map(params![canvas_id], |row| {
+                Ok(CanvasMessageRecord {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    role: row.get(2)?,
+                    content: row.get(3)?,
+                    block_id: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query canvas messages: {e}")))?;
+        let mut messages = Vec::new();
+        for row in rows {
+            messages.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(messages)
+    }
+
+    // ── Saved Pipeline CRUD ───────────────────────────────────────────────
+
+    fn upsert_saved_pipeline(
+        &self,
+        id: &str,
+        name: &str,
+        description: &str,
+        pipeline: &PipelineInfo,
+    ) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let pipeline_json = serde_json::to_string(pipeline)
+            .map_err(|e| DbError(format!("serialize pipeline: {e}")))?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO saved_pipelines (id, name, description, pipeline_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET
+                 name          = excluded.name,
+                 description   = excluded.description,
+                 pipeline_json = excluded.pipeline_json,
+                 updated_at    = excluded.updated_at",
+            params![id, name, description, pipeline_json, now, now],
+        )
+        .map_err(|e| DbError(format!("db upsert saved_pipeline: {e}")))?;
+        Ok(())
+    }
+
+    fn list_saved_pipelines(&self) -> Result<Vec<SavedPipeline>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, description, pipeline_json, created_at, updated_at
+                 FROM saved_pipelines
+                 ORDER BY created_at DESC",
+            )
+            .map_err(|e| DbError(format!("db prepare: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                let pipeline_json: String = row.get(3)?;
+                let pipeline: PipelineInfo = serde_json::from_str(&pipeline_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
+                Ok(SavedPipeline {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    pipeline,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| DbError(format!("db query saved_pipelines: {e}")))?;
+        let mut pipelines = Vec::new();
+        for row in rows {
+            pipelines.push(row.map_err(|e| DbError(format!("db row: {e}")))?);
+        }
+        Ok(pipelines)
+    }
+
+    fn delete_saved_pipeline(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM saved_pipelines WHERE id = ?1", params![id])
+            .map_err(|e| DbError(format!("db delete saved_pipeline: {e}")))?;
+        Ok(())
+    }
+
+    // ── Dynamic Agent Def CRUD ────────────────────────────────────────────────
+
+    fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError> {
+        // Validate JSON is well-formed before storing
+        serde_json::from_str::<serde_json::Value>(json).map_err(|e| {
+            DbError(format!(
+                "upsert_agent_def: invalid JSON for '{}': {e}",
+                name
+            ))
+        })?;
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT OR REPLACE INTO agent_defs (name, json) VALUES (?1, ?2)",
+            params![name, json],
+        )
+        .map_err(|e| DbError(format!("db upsert agent_def: {e}")))?;
+        Ok(())
+    }
+
+    fn list_agent_defs(&self) -> Result<Vec<String>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare("SELECT json FROM agent_defs ORDER BY name")
+            .map_err(|e| DbError(format!("db prepare agent_defs: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| DbError(format!("db query agent_defs: {e}")))?;
+        let mut defs = Vec::new();
+        for row in rows {
+            defs.push(row.map_err(|e| DbError(format!("db row agent_def: {e}")))?);
+        }
+        Ok(defs)
+    }
+
+    fn get_agent_def(&self, name: &str) -> Result<Option<String>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.query_row(
+            "SELECT json FROM agent_defs WHERE name = ?1",
+            params![name],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| DbError(format!("db get agent_def: {e}")))
+    }
+
+    fn delete_agent_def(&self, name: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute("DELETE FROM agent_defs WHERE name = ?1", params![name])
+            .map_err(|e| DbError(format!("db delete agent_def: {e}")))?;
+        Ok(())
     }
 }
 
@@ -1970,6 +2436,7 @@ mod tests {
         DynamicAgentDef {
             agent_did: Some(agent_did.to_string()),
             schema_version: 1,
+            version: "0.1.0".into(),
             name: format!("Test Agent {agent_did}"),
             provider: "Test Provider".to_string(),
             description: "A test agent".to_string(),
@@ -1984,6 +2451,8 @@ mod tests {
                 body_template: None,
                 response_jsonpath: "$.results[*]".to_string(),
                 response_schema_type: "schema:SearchResult".to_string(),
+                response_mapping: std::collections::HashMap::new(),
+                timeout_secs: 5,
             }),
             llm_instructions: "You are a search assistant.".to_string(),
             subagents: vec![],
@@ -1991,6 +2460,7 @@ mod tests {
             operator_key_seed: Some([42u8; 32]),
             published_to: vec![],
             catalog_path: catalog_path.map(|s| s.to_string()),
+            configurable_properties: vec![],
             created_at: "2026-04-01T00:00:00Z".to_string(),
             updated_at: "2026-04-01T00:00:00Z".to_string(),
         }
@@ -2005,6 +2475,7 @@ mod tests {
         assert_eq!(agents.len(), 1);
         let loaded = &agents[0];
         assert_eq!(loaded.agent_did, def.agent_did);
+        assert_eq!(loaded.version, "0.1.0");
         assert_eq!(loaded.name, def.name);
         assert_eq!(loaded.source, DynamicAgentSource::Catalog);
         assert_eq!(loaded.operator_key_seed, Some([42u8; 32]));
@@ -2316,5 +2787,433 @@ mod tests {
         assert_eq!(msgs_b.len(), 1);
         assert_eq!(msgs_a[0].id, "1");
         assert_eq!(msgs_b[0].id, "2");
+    }
+
+    // ── Agent settings version pinning ──────────────────────────────
+
+    #[test]
+    fn agent_setting_stores_and_retrieves_with_version() {
+        let db = test_db();
+        db.set_agent_setting("did-hash-1", "safe_search", "true", "0.1.0")
+            .unwrap();
+        let settings = db.get_agent_settings("did-hash-1").unwrap();
+        assert_eq!(settings.len(), 1);
+        let s = settings.get("safe_search").unwrap();
+        assert_eq!(s.value, "true");
+        assert_eq!(s.agent_version, "0.1.0");
+    }
+
+    #[test]
+    fn agent_setting_upsert_updates_version() {
+        let db = test_db();
+        db.set_agent_setting("did-hash-1", "safe_search", "true", "0.1.0")
+            .unwrap();
+        // Agent bumps version → user reconfigures → new version stored
+        db.set_agent_setting("did-hash-1", "safe_search", "false", "0.2.0")
+            .unwrap();
+        let settings = db.get_agent_settings("did-hash-1").unwrap();
+        let s = settings.get("safe_search").unwrap();
+        assert_eq!(s.value, "false");
+        assert_eq!(s.agent_version, "0.2.0");
+    }
+
+    #[test]
+    fn agent_setting_delete_removes_override() {
+        let db = test_db();
+        db.set_agent_setting("did-hash-1", "units", "\"imperial\"", "0.1.0")
+            .unwrap();
+        db.delete_agent_setting("did-hash-1", "units").unwrap();
+        let settings = db.get_agent_settings("did-hash-1").unwrap();
+        assert!(settings.is_empty());
+    }
+
+    #[test]
+    fn agent_settings_scoped_by_did_hash() {
+        let db = test_db();
+        db.set_agent_setting("agent-a", "safe_search", "true", "0.1.0")
+            .unwrap();
+        db.set_agent_setting("agent-b", "units", "\"metric\"", "1.0.0")
+            .unwrap();
+        let a = db.get_agent_settings("agent-a").unwrap();
+        let b = db.get_agent_settings("agent-b").unwrap();
+        assert_eq!(a.len(), 1);
+        assert_eq!(b.len(), 1);
+        assert!(a.contains_key("safe_search"));
+        assert!(b.contains_key("units"));
+    }
+
+    #[test]
+    fn agent_version_round_trips_through_agents_table() {
+        let db = test_db();
+        let mut def = sample_agent_def("did:key:zVersioned", Some("test/versioned.toml"));
+        def.version = "1.2.3".into();
+        db.insert_agent(&def).unwrap();
+        let agents = db.load_all_agents().unwrap();
+        assert_eq!(agents[0].version, "1.2.3");
+    }
+
+    // ── Canvas persistence ───────────────────────────────────────────────
+
+    fn sample_canvas(id: &str) -> CanvasRecord {
+        CanvasRecord {
+            id: id.to_string(),
+            name: format!("Canvas {id}"),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_canvas_block(id: &str, canvas_id: &str, order: i64) -> CanvasBlockRecord {
+        CanvasBlockRecord {
+            id: id.to_string(),
+            canvas_id: canvas_id.to_string(),
+            prompt_text: Some(format!("query for {id}")),
+            schema_type: Some("schema:SearchAction".to_string()),
+            content_json: None,
+            block_state: "resolving".to_string(),
+            episode_id: None,
+            agent_did: None,
+            mandate_expires_at: None,
+            preference_guided: false,
+            display_order: order,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_canvas_message(
+        id: &str,
+        canvas_id: &str,
+        role: &str,
+        ts_suffix: &str,
+    ) -> CanvasMessageRecord {
+        CanvasMessageRecord {
+            id: id.to_string(),
+            canvas_id: canvas_id.to_string(),
+            role: role.to_string(),
+            content: format!("message content {id}"),
+            block_id: None,
+            created_at: format!("2026-01-01T00:00:{ts_suffix}Z"),
+        }
+    }
+
+    #[test]
+    fn canvas_upsert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-2")).unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 2);
+        assert!(canvases.iter().any(|c| c.id == "c-1"));
+        assert!(canvases.iter().any(|c| c.id == "c-2"));
+    }
+
+    #[test]
+    fn canvas_upsert_updates_name() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        let mut updated = sample_canvas("c-1");
+        updated.name = "Renamed Canvas".to_string();
+        db.upsert_canvas(&updated).unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 1);
+        assert_eq!(canvases[0].name, "Renamed Canvas");
+    }
+
+    #[test]
+    fn canvas_delete_removes_canvas() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-2")).unwrap();
+        db.delete_canvas("c-1").unwrap();
+        let canvases = db.list_canvases().unwrap();
+        assert_eq!(canvases.len(), 1);
+        assert_eq!(canvases[0].id, "c-2");
+    }
+
+    #[test]
+    fn canvas_block_upsert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].id, "b-1");
+        assert_eq!(blocks[0].prompt_text.as_deref(), Some("query for b-1"));
+    }
+
+    #[test]
+    fn canvas_block_upsert_updates_state() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        let mut resolved = sample_canvas_block("b-1", "c-1", 0);
+        resolved.block_state = "resolved".to_string();
+        resolved.content_json = Some(r#"{"@type":"SearchResult"}"#.to_string());
+        db.upsert_canvas_block(&resolved).unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].block_state, "resolved");
+        assert!(blocks[0].content_json.is_some());
+    }
+
+    #[test]
+    fn canvas_blocks_ordered_by_display_order() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-3", "c-1", 2))
+            .unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-2", "c-1", 1))
+            .unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks[0].id, "b-1");
+        assert_eq!(blocks[1].id, "b-2");
+        assert_eq!(blocks[2].id, "b-3");
+    }
+
+    #[test]
+    fn canvas_block_delete() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.delete_canvas_block("b-1").unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        assert!(blocks.is_empty());
+    }
+
+    #[test]
+    fn canvas_delete_cascades_to_blocks_and_messages() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.upsert_canvas_block(&sample_canvas_block("b-1", "c-1", 0))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        // Delete the canvas — blocks and messages should cascade
+        db.delete_canvas("c-1").unwrap();
+        let blocks = db.list_canvas_blocks("c-1").unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert!(
+            blocks.is_empty(),
+            "blocks should cascade-delete with canvas"
+        );
+        assert!(
+            msgs.is_empty(),
+            "messages should cascade-delete with canvas"
+        );
+    }
+
+    #[test]
+    fn canvas_message_insert_and_list() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-1", "assistant", "02"))
+            .unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[1].role, "assistant");
+    }
+
+    #[test]
+    fn canvas_messages_ordered_chronologically() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-1")).unwrap();
+        // Insert in reverse order
+        db.insert_canvas_message(&sample_canvas_message("m-3", "c-1", "user", "03"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-1", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-1", "user", "02"))
+            .unwrap();
+        let msgs = db.list_canvas_messages("c-1").unwrap();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0].id, "m-1");
+        assert_eq!(msgs[1].id, "m-2");
+        assert_eq!(msgs[2].id, "m-3");
+    }
+
+    #[test]
+    fn canvas_messages_scoped_to_canvas() {
+        let db = test_db();
+        db.upsert_canvas(&sample_canvas("c-a")).unwrap();
+        db.upsert_canvas(&sample_canvas("c-b")).unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-1", "c-a", "user", "01"))
+            .unwrap();
+        db.insert_canvas_message(&sample_canvas_message("m-2", "c-b", "user", "01"))
+            .unwrap();
+        let msgs_a = db.list_canvas_messages("c-a").unwrap();
+        let msgs_b = db.list_canvas_messages("c-b").unwrap();
+        assert_eq!(msgs_a.len(), 1);
+        assert_eq!(msgs_b.len(), 1);
+        assert_eq!(msgs_a[0].id, "m-1");
+        assert_eq!(msgs_b[0].id, "m-2");
+    }
+
+    // ── Saved Pipeline tests ──────────────────────────────────────────────
+
+    fn sample_pipeline_info(id: &str) -> crate::types::PipelineInfo {
+        crate::types::PipelineInfo {
+            id: id.to_string(),
+            name: format!("Pipeline {id}"),
+            nodes: vec![
+                crate::types::PipelineNodeInfo {
+                    id: "n-1".to_string(),
+                    agent_hash: "hash-a".to_string(),
+                    agent_name: "Agent A".to_string(),
+                    action_type: "schema:SearchAction".to_string(),
+                    node_type: crate::types::PipelineNodeType::Agent,
+                    position_x: 0.0,
+                    position_y: 0.0,
+                    format: Default::default(),
+                },
+                crate::types::PipelineNodeInfo {
+                    id: "n-2".to_string(),
+                    agent_hash: "hash-b".to_string(),
+                    agent_name: "Agent B".to_string(),
+                    action_type: "schema:SearchAction".to_string(),
+                    node_type: crate::types::PipelineNodeType::Agent,
+                    position_x: 200.0,
+                    position_y: 0.0,
+                    format: Default::default(),
+                },
+            ],
+            edges: vec![crate::types::PipelineEdgeInfo {
+                from_node: "n-1".to_string(),
+                to_node: "n-2".to_string(),
+            }],
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn saved_pipeline_upsert_and_list() {
+        let db = test_db();
+        let pipeline = sample_pipeline_info("pipe-1");
+
+        db.upsert_saved_pipeline("sp-1", "My Pipeline", "A test pipeline", &pipeline)
+            .unwrap();
+
+        let list = db.list_saved_pipelines().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, "sp-1");
+        assert_eq!(list[0].name, "My Pipeline");
+        assert_eq!(list[0].description, "A test pipeline");
+        assert_eq!(list[0].pipeline.nodes.len(), 2);
+        assert_eq!(list[0].pipeline.edges.len(), 1);
+        assert_eq!(list[0].pipeline.nodes[0].agent_name, "Agent A");
+    }
+
+    #[test]
+    fn saved_pipeline_update_name() {
+        let db = test_db();
+        let pipeline = sample_pipeline_info("pipe-1");
+
+        db.upsert_saved_pipeline("sp-1", "Original Name", "desc", &pipeline)
+            .unwrap();
+
+        // Upsert again with the same id but a different name — should update.
+        db.upsert_saved_pipeline("sp-1", "Updated Name", "new desc", &pipeline)
+            .unwrap();
+
+        let list = db.list_saved_pipelines().unwrap();
+        assert_eq!(list.len(), 1, "upsert must not insert duplicate rows");
+        assert_eq!(list[0].name, "Updated Name");
+        assert_eq!(list[0].description, "new desc");
+    }
+
+    #[test]
+    fn saved_pipeline_delete() {
+        let db = test_db();
+        let pipeline = sample_pipeline_info("pipe-1");
+
+        db.upsert_saved_pipeline("sp-1", "Pipeline A", "", &pipeline)
+            .unwrap();
+        db.upsert_saved_pipeline("sp-2", "Pipeline B", "", &pipeline)
+            .unwrap();
+
+        let before = db.list_saved_pipelines().unwrap();
+        assert_eq!(before.len(), 2);
+
+        db.delete_saved_pipeline("sp-1").unwrap();
+
+        let after = db.list_saved_pipelines().unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].id, "sp-2");
+    }
+
+    #[test]
+    fn saved_pipeline_delete_nonexistent_is_noop() {
+        let db = test_db();
+        // Deleting an id that does not exist must not error.
+        db.delete_saved_pipeline("does-not-exist").unwrap();
+    }
+
+    // ── agent_defs table tests ────────────────────────────────────────────────
+
+    #[test]
+    fn agent_def_upsert_and_get() {
+        let db = test_db();
+        let json = r#"{"name":"weather","description":"Weather agent"}"#;
+        db.upsert_agent_def("weather", json).unwrap();
+
+        let result = db.get_agent_def("weather").unwrap();
+        assert_eq!(result, Some(json.to_string()));
+    }
+
+    #[test]
+    fn agent_def_upsert_replaces_existing() {
+        let db = test_db();
+        db.upsert_agent_def("weather", r#"{"name":"weather","v":1}"#)
+            .unwrap();
+        db.upsert_agent_def("weather", r#"{"name":"weather","v":2}"#)
+            .unwrap();
+
+        let result = db.get_agent_def("weather").unwrap().unwrap();
+        assert!(result.contains("\"v\":2"), "expected v=2 but got {result}");
+    }
+
+    #[test]
+    fn agent_def_get_missing_returns_none() {
+        let db = test_db();
+        assert_eq!(db.get_agent_def("nonexistent").unwrap(), None);
+    }
+
+    #[test]
+    fn agent_def_list_returns_all() {
+        let db = test_db();
+        db.upsert_agent_def("agent-a", r#"{"name":"agent-a"}"#)
+            .unwrap();
+        db.upsert_agent_def("agent-b", r#"{"name":"agent-b"}"#)
+            .unwrap();
+
+        let defs = db.list_agent_defs().unwrap();
+        assert_eq!(defs.len(), 2);
+    }
+
+    #[test]
+    fn agent_def_delete_removes_entry() {
+        let db = test_db();
+        db.upsert_agent_def("weather", r#"{"name":"weather"}"#)
+            .unwrap();
+        db.delete_agent_def("weather").unwrap();
+
+        assert_eq!(db.get_agent_def("weather").unwrap(), None);
+        assert_eq!(db.list_agent_defs().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn agent_def_delete_nonexistent_is_noop() {
+        let db = test_db();
+        // Must not return an error when the name doesn't exist.
+        db.delete_agent_def("nonexistent").unwrap();
     }
 }

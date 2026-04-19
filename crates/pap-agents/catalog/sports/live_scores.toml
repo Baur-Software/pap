@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Live Sports Scores"
 provider = "TheSportsDB"
 description = "Get live and recent sports scores across multiple leagues."

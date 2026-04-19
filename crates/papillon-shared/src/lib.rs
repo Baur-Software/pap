@@ -1,3 +1,10 @@
+pub mod canvas_ops;
+pub use canvas_ops::{
+    filter_messages_by_canvas, merge_canvases_from_records, merge_messages_dedup,
+    parse_inline_citations, segment_with_citations, InlineCitation, TextSegment,
+};
+pub mod dataset_types;
+pub use dataset_types::{DatasetDiscoveryState, DatasetResult};
 pub mod events;
 pub mod intent;
 pub mod json_ld_query;
@@ -20,6 +27,25 @@ pub mod episode_db;
 pub mod preference_engine;
 #[cfg(feature = "native")]
 pub use preference_engine::PreferenceEngine;
+
+/// Personal context aggregation for the orchestrator system prompt.
+/// Synthesizes episode history, agent profiles, and user traits into a
+/// compact JSON-LD preamble injected into every orchestrator LLM call.
+#[cfg(feature = "native")]
+pub mod personal_context;
+#[cfg(feature = "native")]
+pub use personal_context::PersonalContext;
+
+/// WASM-safe local agent registry backed by IndexedDB.
+///
+/// Compiled when the `wasm` feature is enabled (both in browser WASM builds and
+/// in native test runs with `--features wasm`).  Provides
+/// [`wasm_registry::WasmAgentRegistry`] which mirrors what the desktop
+/// `AppState::with_db()` does for catalog seeding and agent discovery.
+#[cfg(feature = "wasm")]
+pub mod wasm_registry;
+#[cfg(feature = "wasm")]
+pub use wasm_registry::{WasmAgentRegistry, WasmDynamicAgentDef};
 
 pub use events::*;
 pub use json_ld_query::JsonLdQuery;

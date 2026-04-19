@@ -101,7 +101,12 @@ pub async fn chat(
     }
 }
 
-/// Check if the configured LLM provider is reachable and working.
+/// Check the inference substrate status.
+///
+/// Returns a human-readable status string for each provider variant:
+/// - `None` → deterministic-only mode is valid; agents use HTTP + schema.org without LLM.
+/// - `BuiltIn` → verifies the on-device model loads and can generate.
+/// - HTTP providers → sends a probe message and returns the response.
 #[tauri::command]
 pub async fn check_llm_connection(
     state: tauri::State<'_, crate::state::AppState>,
@@ -136,11 +141,17 @@ pub async fn check_llm_connection(
                     .as_ref()
                     .map(|m| crate::inference::ChatTemplate::from_backend(&m.model))
                     .unwrap_or(crate::inference::ChatTemplate::Llama),
+                None, // probe call — no personal context needed
             );
             let response = mgr.generate(&probe, 50).map_err(PapillonError::from)?;
             Ok(response)
         }
-        LlmProvider::None => Err(PapillonError::from("No LLM provider configured")),
+        LlmProvider::None => {
+            // Deterministic-only mode: agents operate via HTTP + schema.org mapping
+            // without any LLM. This is a valid operational state — the protocol
+            // provides zero-trust agent negotiation without inference.
+            Ok("Deterministic mode — agents use HTTP and schema.org vocabulary without LLM inference. Configure an inference substrate for advanced reasoning.".to_string())
+        }
         other => {
             let messages = vec![ChatMessage {
                 role: "user".into(),

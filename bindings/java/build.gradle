@@ -29,6 +29,6 @@ test {
     // installing the library system-wide.
     // Override via: ./gradlew test -Pjna.library.path=/your/path
     def libPath = project.findProperty('jna.library.path')
-                  ?: "${rootDir}/../../target/release"
+                  ?: "${rootDir}/../../target/debug"
     systemProperty 'jna.library.path', libPath
 }

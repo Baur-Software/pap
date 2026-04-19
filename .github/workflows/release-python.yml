@@ -26,7 +26,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Extract and validate version
         id: version
@@ -37,23 +37,17 @@ jobs:
             TAG_VERSION="0.0.0-dev"
           fi
 
-          TOML_VERSION=$(python3 -c "
-          import re
-          with open('crates/pap-python/pyproject.toml') as f:
-              content = f.read()
-          match = re.search(r'^version\s*=\s*\"(.+?)\"', content, re.MULTILINE)
-          print(match.group(1))
-          ")
+          FILE_VERSION=$(cat VERSION)
 
           echo "Tag version:  ${TAG_VERSION}"
-          echo "TOML version: ${TOML_VERSION}"
+          echo "File version: ${FILE_VERSION}"
 
-          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${TOML_VERSION}" ]]; then
-            echo "::error::Tag version (${TAG_VERSION}) does not match pyproject.toml (${TOML_VERSION})"
+          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${FILE_VERSION}" ]]; then
+            echo "::error::Tag version (${TAG_VERSION}) does not match VERSION file (${FILE_VERSION})"
             exit 1
           fi
 
-          echo "version=${TOML_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${FILE_VERSION}" >> "$GITHUB_OUTPUT"
 
   # ── 2. Build wheels ────────────────────────────────────────────────────────
   build-wheels:
@@ -84,7 +78,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU (Linux aarch64 cross-compile)
         if: matrix.target == 'aarch64'
@@ -93,7 +87,7 @@ jobs:
           platforms: arm64
 
       - name: Build wheels
-        uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad  # v1
+        uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
@@ -103,7 +97,7 @@ jobs:
             --manifest-path crates/pap-python/Cargo.toml
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: dist/*.whl
@@ -115,10 +109,10 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build sdist
-        uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad  # v1
+        uses: PyO3/maturin-action@v1
         with:
           command: sdist
           args: >-
@@ -126,7 +120,7 @@ jobs:
             --manifest-path crates/pap-python/Cargo.toml
 
       - name: Upload sdist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -141,10 +135,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
           merge-multiple: true
@@ -160,7 +154,7 @@ jobs:
           echo "${NOTES}" > /tmp/release-notes.md
 
       - name: Create release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           VERSION: ${{ needs.validate.outputs.version }}
         with:
@@ -198,7 +192,7 @@ jobs:
       id-token: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
           merge-multiple: true
@@ -207,6 +201,7 @@ jobs:
         run: ls -lh dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          attestations: true

@@ -31,6 +31,9 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
 
         source: source_to_str(&def.source).to_owned(),
         published_to: def.published_to.clone(),
+        // Callers that need live=false (DB-only agents) override this after construction.
+        live: true,
+        category: def.category().to_string(),
     }
 }
 
@@ -38,6 +41,14 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
 
 /// List all local agents: compiled + catalog + user_created + generated.
 /// Returns AgentInfo for each. No sensitive fields.
+///
+/// Sources:
+/// - Registry advertisements → compiled agents (no DB row) and any
+///   dynamically-registered agents.
+/// - DB rows with agent_did not already in the registry → catalog/user/generated
+///   agents that are available but weren't loaded into the runtime registry
+///   (e.g. first launch before catalog seeding completes, or production builds
+///   where the catalog is pre-seeded but not re-registered yet).
 #[tauri::command]
 pub async fn list_local_agents(
     state: tauri::State<'_, AppState>,
@@ -50,7 +61,13 @@ pub async fn list_local_agents(
     let ads = registry.all_advertisements();
     let db_defs = state.db.load_all_agents().unwrap_or_default();
 
-    let agents: Vec<AgentInfo> = ads
+    // Collect DIDs already covered by the registry so we can append DB-only agents below.
+    let mut seen_dids: std::collections::HashSet<String> =
+        ads.iter().map(|ad| ad.provider.did.clone()).collect();
+
+    // 1. Registry ads (compiled + successfully registered dynamic agents).
+    //    These are fully live — the runtime has a handler and keypair for each.
+    let mut agents: Vec<AgentInfo> = ads
         .iter()
         .map(|ad| {
             let db_def = db_defs
@@ -72,9 +89,27 @@ pub async fn list_local_agents(
                     .map(|d| source_to_str(&d.source).to_owned())
                     .unwrap_or_else(|| "compiled".to_owned()),
                 published_to: db_def.map(|d| d.published_to.clone()).unwrap_or_default(),
+                live: true,
+                category: db_def
+                    .map(|d| d.category().to_string())
+                    .unwrap_or_else(|| "general".to_owned()),
             }
         })
         .collect();
+
+    // 2. DB-only agents (catalog/user_created/generated agents whose advertisement
+    //    didn't make it into the runtime registry — e.g. first-launch timing or
+    //    registration failure). Marked live=false so the frontend knows they are
+    //    not yet invocable and must not be added to the pap:// catalog index.
+    for def in &db_defs {
+        if let Some(did) = &def.agent_did {
+            if seen_dids.insert(did.clone()) {
+                let mut info = def_to_agent_info(def);
+                info.live = false;
+                agents.push(info);
+            }
+        }
+    }
 
     Ok(agents)
 }
@@ -478,6 +513,57 @@ pub async fn unpublish_agent(
         .db
         .update_agent(&def)
         .map_err(|e| format!("Failed to persist published_to for {agent_did}: {e}"))?;
+
+    Ok(())
+}
+
+// ── TraitBeacon profile ───────────────────────────────────────────────────────
+
+/// Save the user's advertised Trait Beacon profile (a Schema.org Person document).
+///
+/// Persists the profile to settings DB under `"trait_beacon_profile"`, updates
+/// the in-memory `trait_beacon_profile` field on `AppState`, and pushes a
+/// rebuilt personal-context preamble into the watch channel so all orchestrator
+/// LLM consumers immediately reflect the updated traits.
+///
+/// Returns an error if `profile` does not carry `"@type": "Person"`.
+#[tauri::command]
+pub fn save_trait_beacon_profile(
+    state: tauri::State<'_, AppState>,
+    profile: serde_json::Value,
+) -> Result<(), String> {
+    // Validate that this is a Schema.org Person document.
+    match profile.get("@type").and_then(|v| v.as_str()) {
+        Some("Person") | Some("schema:Person") => {}
+        other => {
+            return Err(format!(
+                "Trait Beacon profile must have @type 'Person', got {:?}",
+                other
+            ));
+        }
+    }
+
+    // Persist to settings DB so it survives restarts.
+    state
+        .db
+        .set_setting(
+            "trait_beacon_profile",
+            &serde_json::to_string(&profile)
+                .map_err(|e| format!("Failed to serialize profile: {e}"))?,
+        )
+        .map_err(|e| format!("Failed to persist trait beacon profile: {e}"))?;
+
+    // Update in-memory Arc so the next context rebuild picks it up.
+    if let Ok(mut guard) = state.trait_beacon_profile.write() {
+        *guard = profile.clone();
+    }
+
+    // Rebuild and broadcast the personal context preamble.
+    {
+        use papillon_shared::PersonalContext;
+        let preamble = PersonalContext::from_db(&*state.db, Some(profile)).to_system_preamble();
+        let _ = state.context_tx.send(preamble);
+    }
 
     Ok(())
 }

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Vercel Deployment Templates"
 provider = "Vercel"
 description = "Discover Vercel deployment templates and framework starters."
@@ -15,3 +16,11 @@ url_template = "https://vercel.com/api/v1/templates"
 method = "Get"
 response_jsonpath = "$.templates[0].name"
 response_schema_type = "schema:SoftwareApplication"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_deprecated"
+name = "Include Deprecated"
+description = "Show deprecated or archived packages"
+defaultValue = false

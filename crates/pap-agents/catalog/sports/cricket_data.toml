@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "CricAPI Cricket Stats"
 provider = "CricAPI"
 description = "Get cricket match scores, player stats, and series information via CricAPI."

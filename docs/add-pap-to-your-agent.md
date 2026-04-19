@@ -11,6 +11,14 @@ The Provider Agent Protocol (PAP) is a lightweight interoperability standard tha
 - Basic understanding of JWT tokens
 - Python 3.8+ or Rust 1.70+
 
+Install dependencies:
+```bash
+pip install pap langchain langchain-core langchain-openai crewai mcp
+
+# Note: if pap is not yet available on PyPI, build from source:
+# cd crates/pap-python && pip install maturin && maturin develop --release
+```
+
 ## What You'll Build
 
 Your agent will gain:
@@ -50,7 +58,7 @@ async def search_documents(request: SearchRequest):
  from fastapi import FastAPI
 +from fastapi import Header, Response
  from pydantic import BaseModel
-+from pap_sdk import PAPProvider, ToolSchema, Disclosure
++from pap import PAPProvider, ToolSchema, Disclosure
 +import os
 
  app = FastAPI()
@@ -250,7 +258,7 @@ results = orchestrator.call_tool("search", {"query": "PAP protocol"})
 +import jwt
 +from datetime import datetime
  from typing import Dict, Any
-+from pap_sdk import PAPClient, parse_disclosure
++from pap import PAPClient, parse_disclosure
 
  class AgentOrchestrator:
 -    def __init__(self, agent_url: str):
@@ -369,7 +377,7 @@ curl -X POST https://marketplace.pap.dev/v1/register \
 
 ### Via Python:
 ```python
-from pap_sdk import MarketplaceClient
+from pap import MarketplaceClient
 
 marketplace = MarketplaceClient("https://marketplace.pap.dev")
 
@@ -441,7 +449,7 @@ The audit trail is cryptographically signed and tamper-evident. Each entry inclu
 # agent.py
 from fastapi import FastAPI, Header, Response
 from pydantic import BaseModel
-from pap_sdk import PAPProvider, ToolSchema
+from pap import PAPProvider, ToolSchema
 import os
 from typing import Optional, List
 
@@ -703,7 +711,7 @@ Your agent is now interoperable with any PAP-compliant orchestrator while mainta
 ### Resources
 
 - PAP Specification: https://github.com/pap-protocol/spec
-- Python SDK: `pip install pap-sdk` (pending issue #42)
+- Python SDK: `pip install pap` or build from source (see Prerequisites)
 - Rust Crate: `cargo add pap`
 - CLI Tools: `brew install pap-cli` or download from releases
 - Community: https://discord.gg/pap-protocol

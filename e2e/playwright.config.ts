@@ -6,7 +6,10 @@ export default defineConfig({
   testDir: "./tests",
   // WASM compile+mount takes ~15ms; 60s covers slow CI runners.
   timeout: 60_000,
-  retries: 0,
+  retries: 1,
+  // Limit parallel workers in CI to reduce CPU contention from 8 concurrent
+  // WASM + Playwright instances (prevents typed-block render timeouts).
+  workers: isCI ? 4 : undefined,
   expect: {
     timeout: 30_000,
   },

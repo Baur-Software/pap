@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 
 use crate::ui::api;
 
@@ -71,7 +72,7 @@ pub fn SettingsPage() -> impl IntoView {
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" style="margin-bottom: var(--sp-xl)">
                 <div class="card-header">
                     <span class="card-title">"Deployment"</span>
                 </div>
@@ -85,6 +86,82 @@ pub fn SettingsPage() -> impl IntoView {
                         <li>"Set " <code style="font-family: var(--font-mono); color: var(--gold); background: rgba(240,160,48,0.1); padding: 2px 6px; border-radius: 4px">"PAP_REGISTRY_ENDPOINT"</code> " to your public URL"</li>
                         <li>"Set " <code style="font-family: var(--font-mono); color: var(--gold); background: rgba(240,160,48,0.1); padding: 2px 6px; border-radius: 4px">"PAP_REGISTRY_ADMIN_TOKEN"</code> " for security"</li>
                     </ol>
+                </div>
+            </div>
+
+            <CatalogInstallCard />
+        </div>
+    }
+}
+
+#[component]
+fn CatalogInstallCard() -> impl IntoView {
+    let installing = RwSignal::new(false);
+    let install_status: RwSignal<Option<Result<String, String>>> = RwSignal::new(None);
+
+    let on_install = move |_| {
+        installing.set(true);
+        install_status.set(None);
+        spawn_local(async move {
+            match api::install_catalog_agents().await {
+                Ok(result) => {
+                    install_status.set(Some(Ok(format!(
+                        "✓ Installed {} agents ({} already present{})",
+                        result.installed,
+                        result.skipped,
+                        if result.errors > 0 {
+                            format!(", {} errors", result.errors)
+                        } else {
+                            String::new()
+                        }
+                    ))));
+                }
+                Err(e) => {
+                    install_status.set(Some(Err(e.to_string())));
+                }
+            }
+            installing.set(false);
+        });
+    };
+
+    view! {
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">"PAP Catalog Agents"</span>
+            </div>
+            <div class="card-body">
+                <p style="font-size: 13px; color: var(--text-2); margin-bottom: var(--sp-md)">
+                    "Install the shared PAP agent catalog (200+ agents covering search, travel, finance, science, and more) into this registry. "
+                    "Each agent receives a deterministic operator keypair — reinstalling is safe and idempotent."
+                </p>
+                <div style="display: flex; align-items: center; gap: var(--sp-sm); margin-bottom: var(--sp-md); font-size: 12px; color: var(--text-3)">
+                    <span style="font-family: var(--font-mono);">"Catalog path:"</span>
+                    <code style="font-family: var(--font-mono); color: var(--purple); background: var(--purple-muted); padding: 2px 6px; border-radius: 4px">
+                        "$PAP_CATALOG_PATH"
+                    </code>
+                    <span>"or"</span>
+                    <code style="font-family: var(--font-mono); color: var(--text-2); background: var(--bg-2); padding: 2px 6px; border-radius: 4px">
+                        "crates/pap-agents/catalog"
+                    </code>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: var(--sp-md); flex-wrap: wrap">
+                    <button
+                        class="btn btn-primary"
+                        disabled=move || installing.get()
+                        on:click=on_install
+                    >
+                        {move || if installing.get() { "⏳ Installing…" } else { "Install Catalog Agents" }}
+                    </button>
+
+                    {move || install_status.get().map(|result| match result {
+                        Ok(msg) => view! {
+                            <span style="font-size: 13px; color: var(--teal)">{msg}</span>
+                        }.into_any(),
+                        Err(e) => view! {
+                            <span style="font-size: 13px; color: var(--red)">"✗ " {e}</span>
+                        }.into_any(),
+                    })}
                 </div>
             </div>
         </div>

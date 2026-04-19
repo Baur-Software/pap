@@ -1,5 +1,61 @@
 ## [Unreleased]
 
+## [0.8.2] - 2026-04-18
+
+### Added
+
+- **pap-agents**: BM25 semantic intent classifier (`IntentIndex`) — pure-Rust Okapi BM25
+  (k1=1.5, b=0.75) over the agent catalog. Classify any natural-language prompt to a
+  `schema:` action type in ~50µs with no network, no LLM, no external dependencies.
+  Per-agent confidence hint (`IntentMatch::agent_name`) for local catalog pre-selection;
+  falls back to federation discovery when below threshold.
+- **pap-agents**: `IntentIndex::new(agents)` and `IntentIndex::classify(prompt, threshold)`
+  re-exported from the crate root for downstream consumers.
+- **docs**: FAQ Q7 updated to describe the three-level intent routing chain:
+  URL fast path (~0µs) → BM25 semantic index (~50µs) → on-device AI fallback (~100ms),
+  with a revised prompt-injection analysis for each level.
+- **tests**: 18 unit tests for the BM25 classifier covering routing by action type, action
+  group aggregation, confidence gating, AskAction exclusion, Unicode tokenization, UTF-8
+  boundary safety, empty/single-agent catalogs, and agent-score hint threshold.
+
+### Changed
+
+- **canvas**: Intent routing wired as a three-level chain — `classify_intent()` now inserts
+  BM25 semantic scoring between the existing URL fast path and the on-device AI fallback.
+  Prompts that match a catalog agent with ≥25% BM25 confidence mass are routed directly,
+  bypassing the ~100ms AI path. Unmatched prompts fall through unchanged.
+- **canvas**: DB errors on agent catalog load are now logged via `eprintln!` instead of
+  silently swallowed; routing falls through to Level 3 on catalog unavailability.
+
+## [0.8.1] - 2026-04-17
+
+### Added
+
+- **pap-transport**: Real RFC 9458 Oblivious HTTP with HPKE
+  (DHKEM(X25519, HKDF-SHA256) + HKDF-SHA256 + AES-128-GCM). Relay operators and passive
+  observers can no longer read SD-JWT disclosure structure. Stateful per-request
+  `OhttpResponseDecryptCtx` / `OhttpResponseEncryptCtx` bind each response
+  cryptographically to its corresponding request via HPKE context export. Server keypair
+  management via `OhttpKeyPair` / `OhttpKeyConfig` with RFC 9458 §5 wire format (41 bytes)
+  and DID Document `PAPObliviousHTTP` service publication. Passthrough mode preserved for
+  direct connections when no `recipient_public_key` is configured.
+- **pap-did**: `Service` struct and optional `service` field on `DidDocument` for W3C DID
+  service endpoints (`PAPObliviousHTTP` and others). Backward-compatible with v1.0
+  documents via `#[serde(default)]`.
+- **pap-transport**: 9 unit tests covering OHTTP/HPKE error paths (`from_wire_bytes` too
+  short, request too short, `fetch_key_config` missing/invalid service), `resolve_relay`
+  branches, and `Clone` correctness for `OhttpServerDecryptor`.
+- **pap-did**: 4 unit tests for `Service` JSON serialization, `skip_serializing_if`
+  behavior on optional fields, `DidDocument` service field roundtrip, and backward
+  compat with v1.0 documents lacking a `service` key.
+- **docs**: Public FAQ page (`docs/faq.html`) answering the 10 most common investor and enterprise questions about PAP's trust model, cryptography, Sybil resistance, latency, compliance posture, and Python integration story. Answers are grounded in the actual codebase with source references.
+- **benches**: p99 tail-latency benchmark harness (`benches/benches/p99.rs`) — 2000-sample raw timing runs for the three most latency-sensitive operations (session lifecycle, depth-3 mandate chain verification, receipt co-sign). Produces `target/p99_results.json` for CI consumption.
+- **benches**: p99 regression gate in `check_regression.sh` — reads `target/p99_results.json` against new `p99_ns` baselines in `baseline.json` with a 50% threshold (more variance expected at tail vs p50's 30%).
+
+### Changed
+
+- **docs**: All five doc-site nav bars updated to include FAQ and "Work With Us" links.
+
 ## [0.7.2] - 2026-04-04
 
 ### Added

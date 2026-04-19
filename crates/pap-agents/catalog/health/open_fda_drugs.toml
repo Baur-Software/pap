@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "openFDA Drug Search"
 provider = "U.S. Food and Drug Administration"
 description = "Search FDA drug labeling information including indications, warnings, and dosage."
@@ -20,3 +21,13 @@ url_template = "https://api.fda.gov/drug/label.json?search=openfda.brand_name:{q
 method = "Get"
 response_jsonpath = "$.results[0].indications_and_usage[0]"
 response_schema_type = "schema:Drug"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 1
+minValue = 1
+maxValue = 50

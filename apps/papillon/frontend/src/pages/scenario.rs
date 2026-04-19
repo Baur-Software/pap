@@ -60,7 +60,7 @@ pub fn ScenarioPage() -> impl IntoView {
                         </div>
 
                         <div class="card" style="margin-bottom: 16px;">
-                            <h3 style="font-size: 14px; margin-bottom: 12px;">"Disclosure Requirements"</h3>
+                            <h3 style="font-size: 14px; margin-bottom: 12px;">"What this agent will see"</h3>
                             {
                                 let disc_for_check = disclosure.clone();
                                 let disc_for_list = disclosure;

@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open Library Book Search"
 provider = "Internet Archive"
 description = "Search the Internet Archive Open Library catalog of millions of books."
@@ -15,3 +16,20 @@ url_template = "https://openlibrary.org/search.json?q={query}&limit=5"
 method = "Get"
 response_jsonpath = "$.docs[0].title"
 response_schema_type = "schema:Book"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "results_per_page"
+name = "Results Per Page"
+description = "Maximum number of results to return per query"
+defaultValue = 5
+minValue = 1
+maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "include_adult_content"
+name = "Include Adult Content"
+description = "Show results that may contain mature content"
+defaultValue = false

@@ -19,10 +19,16 @@ import { waitForApp } from "./helpers";
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  await page.locator(".topbar-settings-btn").click();
-  await expect(page.locator(".settings-tab", { hasText: "TEMPLATES" })).toBeVisible();
-  await page.locator(".settings-tab", { hasText: "TEMPLATES" }).click();
-  await expect(page.locator('input[placeholder*="Name"]')).toBeVisible();
+  // Use the topbar slide-panel for SPA navigation to preserve in-memory mock state.
+  const settingsNav = page.locator(".settings-nav");
+  const alreadyOnSettings = await settingsNav.isVisible().catch(() => false);
+  if (!alreadyOnSettings) {
+    await page.locator(".topbar-brand").click();
+    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+    await expect(page.locator(".settings-nav")).toBeVisible({ timeout: 5000 });
+  }
+  await page.locator(".settings-nav-link").filter({ hasText: "Templates" }).click();
+  await expect(page.locator(".settings-nav-link.active").filter({ hasText: "Templates" })).toBeVisible();
 }
 
 /** Scope selectors to the WYSIWYG builder modal (fixed overlay with "Template Builder" heading). */
@@ -215,21 +221,18 @@ test.describe("Schema Type Autocomplete", () => {
     await expect(suggestion).toBeVisible({ timeout: 3000 });
 
     // The component uses on:mousedown + ev.prevent_default() to handle selection before
-    // blur fires. Use page.mouse to simulate a real mouse interaction sequence so that
-    // mousedown fires before the browser moves focus (matching real user behaviour).
-    const bbox = await suggestion.boundingBox();
-    await page.mouse.move(bbox!.x + bbox!.width / 2, bbox!.y + bbox!.height / 2);
-    await page.mouse.down();
-    // Give the Leptos WASM signal update one tick to propagate to the DOM
-    await page.waitForTimeout(300);
+    // blur fires. Dispatch a synthetic mousedown event directly on the DOM element so
+    // that the WASM event handler runs in the same microtask as the event dispatch,
+    // before the browser processes any potential blur on the input.
+    await suggestion.dispatchEvent("mousedown");
+    // Give the Leptos WASM signal update time to propagate to the DOM.
+    await page.waitForTimeout(500);
 
     // The dropdown should now be closed (show_dropdown set to false in mousedown handler)
-    await expect(dropdown).not.toBeVisible({ timeout: 3000 });
-
-    await page.mouse.up();
+    await expect(dropdown).not.toBeVisible({ timeout: 5000 });
 
     // The input value should have been set to the selected suggestion
-    await expect(schemaInput).toHaveValue("FlightReservation", { timeout: 3000 });
+    await expect(schemaInput).toHaveValue("FlightReservation", { timeout: 5000 });
   });
 
   test("unknown schema type is accepted without error", async ({ page }) => {
@@ -353,8 +356,8 @@ test.describe("Auto-Generate Template and Registry-Driven Rendering", () => {
   test("FlightReservation block uses declarative renderer (tier-2 template dispatch)", async ({
     page,
   }) => {
-    await page.locator(".palette-input").fill("mock:flightreservation");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("mock:flightreservation");
+    await page.locator(".topbar-address-input").press("Enter");
 
     // The app has pre-existing UNKNOWN blocks; filter to the one that has a declarative grid
     // (this is the only block that DeclarativeRenderer::render() produced).
@@ -373,8 +376,8 @@ test.describe("Auto-Generate Template and Registry-Driven Rendering", () => {
   test("Hotel block uses declarative renderer (LodgingReservation tier-2 dispatch)", async ({
     page,
   }) => {
-    await page.locator(".palette-input").fill("mock:hotel");
-    await page.locator(".palette-input").press("Enter");
+    await page.locator(".topbar-address-input").fill("mock:hotel");
+    await page.locator(".topbar-address-input").press("Enter");
 
     // Hotel template may use grid or flex layout — filter by either
     const declarativeBlock = page

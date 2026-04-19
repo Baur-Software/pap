@@ -127,7 +127,7 @@ pub async fn list_agents(
     let per_page = per_page.clamp(1, 200);
     let db_page = state
         .store
-        .search_agents(q.as_deref().filter(|s| !s.is_empty()), page, per_page)
+        .search_agents(q.as_deref().filter(|s| !s.is_empty()), None, page, per_page)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -491,4 +491,102 @@ pub async fn get_peer_sync_log(did: String) -> Result<Vec<SyncEvent>, ServerFnEr
     // JSON round-trip: state::SyncEvent → ui::api::SyncEvent (same shape)
     let json = serde_json::to_string(&events).map_err(|e| ServerFnError::new(e.to_string()))?;
     serde_json::from_str(&json).map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+/// Result of a catalog install operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogInstallResult {
+    pub installed: usize,
+    pub skipped: usize,
+    pub errors: usize,
+    pub catalog_path: String,
+}
+
+/// Install PAP catalog agents (from the shared pap-agents package) into this registry.
+///
+/// Each catalog agent receives a deterministic Ed25519 operator keypair derived from
+/// its name via SHA-256, so reinstalls produce the same DIDs and content hashes —
+/// making the operation fully idempotent.
+///
+/// Catalog path is resolved in order:
+///   1. `$PAP_CATALOG_PATH` environment variable
+///   2. `crates/pap-agents/catalog` relative to the current working directory
+///      (works when running `cargo run -p pap-registry` from the workspace root)
+#[server]
+pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+    use std::path::PathBuf;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    // Resolve catalog path
+    let catalog_path: PathBuf = std::env::var("PAP_CATALOG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("crates/pap-agents/catalog"));
+
+    if !catalog_path.exists() {
+        return Err(ServerFnError::new(format!(
+            "Catalog directory not found: {}. Set $PAP_CATALOG_PATH or run from the workspace root.",
+            catalog_path.display()
+        )));
+    }
+
+    let catalog_path_str = catalog_path.display().to_string();
+    let entries = pap_agents::load_catalog(&catalog_path);
+
+    let mut installed = 0usize;
+    let mut skipped = 0usize;
+    let mut errors = 0usize;
+
+    for entry in entries {
+        let ad = match entry.to_signed_advertisement() {
+            Ok(ad) => ad,
+            Err(e) => {
+                tracing::warn!("Failed to build catalog agent '{}': {e}", entry.name);
+                errors += 1;
+                continue;
+            }
+        };
+
+        let hash = ad.hash();
+
+        match state.store.insert_agent(&hash, &ad).await {
+            Ok(()) => {
+                let mut registry = state.registry.lock().unwrap();
+                let _ = registry.register_local(ad); // duplicate silently ignored
+                installed += 1;
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("UNIQUE")
+                    || msg.contains("duplicate")
+                    || msg.contains("already exists")
+                {
+                    skipped += 1;
+                } else {
+                    tracing::warn!("Failed to insert catalog agent '{}': {e}", entry.name);
+                    errors += 1;
+                }
+            }
+        }
+    }
+
+    tracing::info!(
+        "Catalog install complete: {installed} installed, {skipped} skipped, {errors} errors"
+    );
+
+    Ok(CatalogInstallResult {
+        installed,
+        skipped,
+        errors,
+        catalog_path: catalog_path_str,
+    })
 }

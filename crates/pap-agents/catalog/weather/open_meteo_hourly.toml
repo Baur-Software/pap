@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open-Meteo Hourly Forecast"
 provider = "Open-Meteo"
 description = "Free 48-hour hourly weather forecast with temperature, precipitation, and wind."
@@ -15,3 +16,13 @@ url_template = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude=
 method = "Get"
 response_jsonpath = "$.hourly.time[0]"
 response_schema_type = "schema:WeatherForecast"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "forecast_days"
+name = "Forecast Days"
+description = "Number of days to forecast ahead"
+defaultValue = 2
+minValue = 1
+maxValue = 16

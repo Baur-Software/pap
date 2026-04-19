@@ -7,21 +7,21 @@ use wasm_bindgen_futures::spawn_local;
 use std::sync::Arc;
 
 use crate::bridge;
-use crate::components::recovery_setup::RecoverySetup;
+
 use crate::components::setup_wizard::SetupWizard;
-use crate::components::sidebar::Sidebar;
 use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
 use crate::pages::dashboard::DashboardPage;
-use crate::pages::home::HomePage;
+// home.rs removed — canvas at "/" IS the home screen
 use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
 use crate::service::{PapillonService, TauriService, WebService};
 use crate::state::canvas::CanvasState;
 use crate::state::catalog::CatalogState;
+use crate::state::dataset::DatasetState;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::recovery::RecoveryState;
@@ -29,11 +29,66 @@ use crate::state::registry::RegistryState;
 use crate::state::renderer::RendererState;
 use crate::state::templates::TemplatesState;
 use papillon_shared::{
-    BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, RecoveryStatus, Template,
+    BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template,
 };
 
 #[component]
 pub fn App() -> impl IntoView {
+    // Apply persisted appearance settings on startup
+    if let Some(win) = web_sys::window() {
+        // Theme
+        let stored_theme = win
+            .local_storage()
+            .ok()
+            .flatten()
+            .and_then(|s| s.get_item("papillon_theme").ok().flatten())
+            .unwrap_or_else(|| "dark".to_string());
+        if let Some(doc) = win.document() {
+            let _ = doc
+                .document_element()
+                .map(|el| el.set_attribute("data-theme", &stored_theme));
+        }
+
+        // Accent color, font scale, reduce motion, compact density
+        if let (Some(doc), Ok(Some(storage))) = (win.document(), win.local_storage()) {
+            // Accent color
+            if let Ok(Some(accent)) = storage.get_item("papillon_accent") {
+                if let Some(root) = doc
+                    .document_element()
+                    .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+                {
+                    let _ = root.style().set_property("--purple", &accent);
+                }
+            }
+            // Font scale
+            if let Ok(Some(font_size)) = storage.get_item("papillon_font_size") {
+                let scale = match font_size.as_str() {
+                    "small" => "0.9",
+                    "large" => "1.1",
+                    _ => "1.0",
+                };
+                if let Some(root) = doc
+                    .document_element()
+                    .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+                {
+                    let _ = root.style().set_property("--font-scale", scale);
+                }
+            }
+            // Reduce motion
+            if let Ok(Some(reduce_motion)) = storage.get_item("papillon_reduce_motion") {
+                if let Some(root) = doc.document_element() {
+                    let _ = root.set_attribute("data-reduce-motion", &reduce_motion);
+                }
+            }
+            // Compact density
+            if let Ok(Some(compact)) = storage.get_item("papillon_compact") {
+                if let Some(root) = doc.document_element() {
+                    let _ = root.set_attribute("data-compact", &compact);
+                }
+            }
+        }
+    }
+
     let identity_state = IdentityState::default();
     let registry_state = RegistryState::default();
     let orchestrator_state = OrchestratorState::default();
@@ -42,6 +97,7 @@ pub fn App() -> impl IntoView {
     let renderer_state = RendererState::default();
     let catalog_state = CatalogState::default();
     let recovery_state = RecoveryState::default();
+    let dataset_state = DatasetState::default();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);
@@ -50,6 +106,7 @@ pub fn App() -> impl IntoView {
     provide_context(renderer_state);
     provide_context(catalog_state);
     provide_context(recovery_state);
+    provide_context(dataset_state);
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
@@ -80,11 +137,11 @@ pub fn App() -> impl IntoView {
     };
     provide_context(service.clone());
 
-    // Seed the first canvas if this is a fresh install.
-    // Only in Tauri mode — the backend resolves prompts via IPC. In browser mode
-    // the WASM handshake has no agents to query, so seed would just panic.
-    if bridge::tauri_available() && canvas_state.canvases.get_untracked().is_empty() {
-        canvas_state.seed_first_canvas();
+    // Load persisted canvases from SQLite on startup (Tauri mode only).
+    // `load_from_db` spawns its own async task; it creates a default canvas if
+    // the DB is empty so new installs get a fresh workspace.
+    if bridge::tauri_available() {
+        canvas_state.load_from_db();
     }
 
     // WASM browser startup — initialize identity from IndexedDB
@@ -111,6 +168,10 @@ pub fn App() -> impl IntoView {
 
             // No backend orchestrator in browser mode
             orchestrator.status.set(OrchestratorStatus::Unconfigured);
+
+            // Browser mode has no embedded registry — the user connects to
+            // one from the Browse page (standalone registry app or remote).
+            // Nothing to auto-connect to here.
         });
     }
 
@@ -228,6 +289,9 @@ pub fn App() -> impl IntoView {
 
                 // Reconnect to local registry after profile switch
                 registry_state.connect_to("pap://local");
+
+                // Dataset: Clear discovery state for the old principal
+                dataset_state.clear_all();
             }
         }
 
@@ -253,35 +317,6 @@ pub fn App() -> impl IntoView {
                 }
             });
         }
-    });
-
-    // Post-onboarding recovery prompt.
-    // After identity loads, check if the principal has already completed the Shamir
-    // ceremony (persisted in the DB). If not, surface the recovery setup modal once.
-    // The modal is skippable; it will re-appear on the next launch until the user
-    // clicks [ DONE ] which calls mark_recovery_complete.
-    Effect::new(move || {
-        if !bridge::tauri_available() {
-            return;
-        }
-        // Only trigger once identity has actually loaded.
-        let has_identity = identity_state.info.get().is_some();
-        if !has_identity {
-            return;
-        }
-        // Don't show if already done this session.
-        if recovery_state.setup_complete.get() {
-            return;
-        }
-        spawn_local(async move {
-            if let Ok(status) =
-                bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await
-            {
-                if !status.configured {
-                    recovery_state.show_setup.set(true);
-                }
-            }
-        });
     });
 
     // Global keyboard listener for ⌘K — creates a new canvas and navigates home.
@@ -325,11 +360,9 @@ pub fn App() -> impl IntoView {
         <Router>
             <div class="app-shell-canvas">
                 <TopBar />
-                <Sidebar />
                 <main class="app-main">
                     <Routes fallback=|| "Page not found.">
                         <Route path=path!("/") view=CanvasPage />
-                        <Route path=path!("/home") view=HomePage />
                         <Route path=path!("/scenario/:id") view=ScenarioPage />
                         <Route path=path!("/activity") view=ActivityPage />
                         <Route path=path!("/receipts") view=ReceiptsPage />
@@ -346,7 +379,6 @@ pub fn App() -> impl IntoView {
                 </footer>
             </div>
             <SetupWizard />
-            <RecoverySetup />
         </Router>
     }
 }

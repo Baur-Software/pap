@@ -9,34 +9,36 @@ test.beforeEach(async ({ page }) => {
 // ── Top Bar & App Shell ──────────────────────────────────────
 
 test.describe("App shell", () => {
-  test("renders top bar with identity and status", async ({ page }) => {
+  test("renders top bar with brand icon and workflow toggle", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(page.locator(".topbar")).toBeVisible();
-    await expect(page.locator(".topbar-identity")).not.toBeEmpty();
-    await expect(page.locator(".topbar-status")).toBeVisible();
+    await expect(page.locator(".topbar-brand-icon")).toBeVisible();
+    await expect(page.locator(".canvas-flip-toggle")).toBeVisible();
   });
 
-  test("shows orchestrator status in top bar", async ({ page }) => {
+  test("shows workflow toggle button in top bar right zone", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Mock returns "Ready" → topbar maps to "Ready"
-    await expect(page.locator(".topbar-status")).toContainText("Ready");
+    // Status dot replaced by canvas flip-toggle; default label is "⟳ Workflow"
+    await expect(page.locator(".canvas-flip-toggle")).toContainText("Workflow");
   });
 
-  test("shows settings gear link", async ({ page }) => {
+  test("brand button opens slide panel with nav items", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".topbar-settings-btn")).toBeVisible();
+    await page.locator(".topbar-brand").click();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
+    await expect(page.locator(".panel-section-label").first()).toContainText("Canvases");
   });
 
-  test("hamburger menu opens and shows nav items", async ({ page }) => {
+  test("slide panel shows navigate and settings sections", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
-    await expect(page.locator(".menu-dropdown")).toBeVisible();
-    await expect(page.locator("text=Browse Registries")).toBeVisible();
-    await expect(page.locator(".menu-dropdown >> text=Settings")).toBeVisible();
+    await page.locator(".topbar-brand").click();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" })).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" })).toBeVisible();
   });
 
   test("shows status bar footer", async ({ page }) => {
@@ -49,44 +51,51 @@ test.describe("App shell", () => {
 // ── Canvas Page (Home) ───────────────────────────────────────
 
 test.describe("Canvas page", () => {
-  test("shows empty state with inspiration lines on new canvas", async ({ page }) => {
+  test("shows empty state with agent tiles on new canvas", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-area")).toBeVisible();
-    // Seed canvas has blocks — create a new empty canvas via menu
-    await page.locator(".topbar-menu-btn").click();
+    await expect(page.locator(".canvas-stream")).toBeVisible();
+    // Seed canvas has blocks — create a new empty canvas via brand dropdown
+    await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
-    await expect(page.locator(".canvas-empty")).toBeVisible();
-    await expect(page.locator(".inspiration-line").first()).toBeVisible();
+    await expect(page.locator(".canvas-empty-state")).toBeVisible();
+    await expect(page.locator(".agent-tile").first()).toBeVisible();
   });
 
-  test("shows inline prompt when orchestrator is ready", async ({ page }) => {
+  test("shows address bar prompt when orchestrator is ready", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-prompt")).toBeVisible();
-    await expect(
-      page.locator(".palette-label")
-    ).toContainText("What do you want to build?");
+    // The prompt input is now the topbar address bar, not an inline canvas element
+    await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 
-  test("inline prompt shows suggestion buttons", async ({ page }) => {
+  test("address bar shows pap:// suggestion buttons when typing pap://", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-prompt")).toBeVisible();
-    await expect(page.locator(".palette-suggestion").first()).toBeVisible();
+    // Navigate to browse via slide panel — the app auto-connects to pap://local on startup
+    // which calls list_agents and populates the catalog state
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
+    // Agents are auto-loaded — verify catalog is populated before testing suggestions
+    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 10000 });
+    // Address bar is in the topbar — catalog now has entries from auto-connect.
+    // The suggestion list only shows when there is a non-empty prefix after pap://,
+    // so type pap://d to match "duckduckgo search" from the local catalog.
+    await page.locator(".topbar-address-input").fill("pap://d");
+    await expect(page.locator(".palette-suggestion").first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("inline prompt input accepts text", async ({ page }) => {
+  test("address bar input accepts text", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-prompt")).toBeVisible();
-    await page.locator(".palette-input").fill("Search for flights");
-    await expect(page.locator(".palette-input")).toHaveValue("Search for flights");
-    // Suggestions should hide when input has text
+    await page.locator(".topbar-address-input").fill("Search for flights");
+    await expect(page.locator(".topbar-address-input")).toHaveValue("Search for flights");
+    // Suggestions should hide when input has non-pap:// text
     await expect(page.locator(".palette-suggestion").first()).not.toBeVisible();
   });
 
-  test("shows setup prompt when orchestrator is disconnected", async ({ page }) => {
+  test("canvas renders normally when orchestrator is disconnected", async ({ page }) => {
     // Override mock to return Disconnected status
     await page.addInitScript(`
       const origInvoke = window.__TAURI__.core.invoke;
@@ -97,12 +106,10 @@ test.describe("Canvas page", () => {
     `);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Seed canvas has blocks — create a new empty canvas to see the setup prompt
-    await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=+ New Canvas").click();
-    await expect(page.locator(".canvas-prompt-setup")).toBeVisible();
-    await expect(page.locator("text=Configure an LLM provider")).toBeVisible();
-    await expect(page.locator("text=Open Settings")).toBeVisible();
+    // Canvas still renders — deterministic routing works without LLM
+    await expect(page.locator(".canvas-stream")).toBeVisible();
+    // Topbar address input is still available
+    await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 });
 
@@ -121,22 +128,26 @@ test.describe("Activity page", () => {
 // ── Settings Page ────────────────────────────────────────────
 
 test.describe("Settings page", () => {
-  test("renders six tabs", async ({ page }) => {
+  test("renders settings nav with all sections", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".settings-tab")).toHaveCount(6);
-    await expect(page.locator(".settings-tab").nth(0)).toHaveText("GENERAL");
-    await expect(page.locator(".settings-tab").nth(1)).toHaveText("PROFILES");
-    await expect(page.locator(".settings-tab").nth(2)).toHaveText("TEMPLATES");
-    await expect(page.locator(".settings-tab").nth(3)).toHaveText("IDENTITY");
-    await expect(page.locator(".settings-tab").nth(4)).toHaveText("ADVANCED");
-    await expect(page.locator(".settings-tab").nth(5)).toHaveText("MANDATES");
+    // Settings page uses a left-nav layout (settings-nav-link), not horizontal tabs
+    await expect(page.locator(".settings-nav")).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Profiles" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Identity" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Privacy" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
 
-  test("General tab shows LLM Provider config", async ({ page }) => {
+  test("Orchestrator nav shows AI model config", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator("text=LLM Provider")).toBeVisible();
+    // Click Orchestrator nav link to show the AI model section
+    await page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" }).click();
+    await expect(page.locator("text=AI Model")).toBeVisible();
     // Provider select is the first select on the page
     await expect(page.locator("select").first()).toBeVisible();
   });
@@ -146,7 +157,7 @@ test.describe("Settings page", () => {
   }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(3).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
 
     // Should show backup warning (key not backed up)
     await expect(page.locator(".backup-warning")).toBeVisible();
@@ -154,8 +165,8 @@ test.describe("Settings page", () => {
       page.locator("text=Your key has not been backed up!")
     ).toBeVisible();
 
-    // Should show identity DID
-    await expect(page.getByText("DID:", { exact: true })).toBeVisible();
+    // Should show identity key label
+    await expect(page.getByText("Identity key:", { exact: true })).toBeVisible();
 
     // Export and Import buttons
     await expect(page.locator("text=Export Key")).toBeVisible();
@@ -165,7 +176,7 @@ test.describe("Settings page", () => {
   test("Export key shows seed and clears backup warning", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(3).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     await expect(page.locator(".backup-warning")).toBeVisible();
 
     // Click export
@@ -184,7 +195,7 @@ test.describe("Settings page", () => {
   test("Add Successor form works", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(3).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
 
     // Wait for Identity tab content
     await expect(page.locator("text=Designated Successors")).toBeVisible();
@@ -216,20 +227,24 @@ test.describe("Settings page", () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("switching tabs works", async ({ page }) => {
+  test("switching nav links works", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
-    // Start on General
-    await expect(page.locator("text=LLM Provider")).toBeVisible();
+    // Default is Profiles — nav is visible
+    await expect(page.locator(".settings-nav")).toBeVisible();
 
-    // Switch to Identity
-    await page.locator(".settings-tab").nth(3).click();
+    // Switch to Orchestrator — shows AI Model heading
+    await page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" }).click();
+    await expect(page.locator("text=AI Model")).toBeVisible();
+
+    // Switch to Identity — shows Export Key button
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     await expect(page.locator("text=Export Key")).toBeVisible();
 
-    // Switch to Advanced
-    await page.locator(".settings-tab").nth(4).click();
-    await expect(page.locator("text=Registry Browser")).toBeVisible();
+    // Switch to Advanced — shows Saved Registries
+    await page.locator(".settings-nav-link").filter({ hasText: "Advanced" }).click();
+    await expect(page.locator("text=Saved Registries")).toBeVisible();
   });
 });
 
@@ -239,23 +254,24 @@ test.describe("Agent discovery workflow", () => {
   test("loads agent registry with 3 builtin agents", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Navigate to browse registries
-    await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=Browse Registries").click();
-    // Should show registry page
-    await expect(page.locator("text=Browse Registries")).toBeVisible({ timeout: 5000 });
-    // Should show agents (at least 3 from mock)
+    // Navigate to browse registries via slide panel ("Browse Agents" link)
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    // Should show registry page heading
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
+    // App auto-connects to pap://local on startup — agents are already loaded
     await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
   });
 
   test("agent cards display name and action type", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=Browse Registries").click();
-    // Wait for first agent card
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
+    // App auto-connects to pap://local on startup — wait for agent cards
     await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
-    // Check agent card contains expected fields
+    // Check agent card contains expected fields from the mock (DuckDuckGo Search)
     const firstCard = page.locator(".agent-card").first();
     await expect(firstCard).toContainText("DuckDuckGo Search");
     await expect(firstCard).toContainText("SearchAction");
@@ -264,8 +280,11 @@ test.describe("Agent discovery workflow", () => {
   test("clicking agent shows detail view", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".topbar-menu-btn").click();
-    await page.locator("text=Browse Registries").click();
+    await page.locator(".topbar-brand").click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
+    // App auto-connects to pap://local on startup — wait for agent cards
+    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
     // Click first agent card
     await page.locator(".agent-card").first().click();
     // Should show agent detail view
@@ -281,7 +300,7 @@ test.describe("Scenario selection and disclosure", () => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     // Click "Browse Scenarios" or navigate to scenarios
-    await page.locator(".topbar-menu-btn").click();
+    await page.locator(".topbar-brand").click();
     // Assuming there's a scenarios link
     const scenariosLink = page.locator("text=Scenarios, Mandates & Receipts");
     if (await scenariosLink.isVisible()) {
@@ -418,7 +437,7 @@ test.describe("Settings management and persistence", () => {
   test("successors can be added and persisted", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".settings-tab").nth(1).click();
+    await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     // Verify empty state
     let successors = await page.evaluate(() => {
       return window.__TAURI__.core.invoke("list_successors");

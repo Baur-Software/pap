@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Open-Meteo Weather"
 provider = "Open-Meteo"
 description = "Retrieve current weather and forecasts using latitude/longitude coordinates. No API key required."

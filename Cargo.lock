@@ -4515,7 +4515,7 @@ dependencies = [
 
 [[package]]
 name = "pap-agents"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "candle-core",
  "candle-transformers",
@@ -4531,6 +4531,7 @@ dependencies = [
  "reqwest 0.12.12",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "tokenizers 0.21.4",
@@ -4542,7 +4543,7 @@ dependencies = [
 
 [[package]]
 name = "pap-bench"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "criterion",
@@ -4580,7 +4581,7 @@ dependencies = [
 
 [[package]]
 name = "pap-c"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "cbindgen",
@@ -4596,7 +4597,7 @@ dependencies = [
 
 [[package]]
 name = "pap-core"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4616,7 +4617,7 @@ dependencies = [
 
 [[package]]
 name = "pap-credential"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4635,7 +4636,7 @@ dependencies = [
 
 [[package]]
 name = "pap-credential-lifecycle-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -4648,7 +4649,7 @@ dependencies = [
 
 [[package]]
 name = "pap-credential-store"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -4671,7 +4672,7 @@ dependencies = [
 
 [[package]]
 name = "pap-delegation-chain-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "pap-core",
@@ -4681,7 +4682,7 @@ dependencies = [
 
 [[package]]
 name = "pap-did"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "bs58",
  "ed25519-dalek",
@@ -4694,7 +4695,7 @@ dependencies = [
 
 [[package]]
 name = "pap-ecash"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "blind-rsa-signatures",
@@ -4706,7 +4707,7 @@ dependencies = [
 
 [[package]]
 name = "pap-federated-discovery-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -4722,7 +4723,7 @@ dependencies = [
 
 [[package]]
 name = "pap-federation"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "axum",
  "axum-server",
@@ -4759,7 +4760,7 @@ dependencies = [
 
 [[package]]
 name = "pap-marketplace"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4767,6 +4768,7 @@ dependencies = [
  "pap-core",
  "pap-did",
  "rand 0.8.5",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
@@ -4776,7 +4778,7 @@ dependencies = [
 
 [[package]]
 name = "pap-networked-search-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "axum",
  "chrono",
@@ -4792,7 +4794,7 @@ dependencies = [
 
 [[package]]
 name = "pap-payment-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "pap-core",
@@ -4804,7 +4806,7 @@ dependencies = [
 
 [[package]]
 name = "pap-proto"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -4826,7 +4828,7 @@ dependencies = [
 
 [[package]]
 name = "pap-protocol-envelope-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -4839,7 +4841,7 @@ dependencies = [
 
 [[package]]
 name = "pap-python"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -4856,7 +4858,7 @@ dependencies = [
 
 [[package]]
 name = "pap-registry"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -4901,7 +4903,7 @@ dependencies = [
 
 [[package]]
 name = "pap-search-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "pap-core",
@@ -4913,7 +4915,7 @@ dependencies = [
 
 [[package]]
 name = "pap-selective-disclosure-decay-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "ed25519-dalek",
  "pap-core",
@@ -4925,7 +4927,7 @@ dependencies = [
 
 [[package]]
 name = "pap-tee"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4940,7 +4942,7 @@ dependencies = [
 
 [[package]]
 name = "pap-test-utils"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "ed25519-dalek",
  "pap-did",
@@ -4949,10 +4951,12 @@ dependencies = [
 
 [[package]]
 name = "pap-transport"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
+ "aes-gcm",
  "axum",
  "axum-server",
+ "base64 0.22.1",
  "chrono",
  "ed25519-dalek",
  "futures-util",
@@ -4975,7 +4979,7 @@ dependencies = [
 
 [[package]]
 name = "pap-travel-booking-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "pap-core",
@@ -4987,7 +4991,7 @@ dependencies = [
 
 [[package]]
 name = "pap-wasm"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -5009,7 +5013,7 @@ dependencies = [
 
 [[package]]
 name = "pap-webauthn"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5026,7 +5030,7 @@ dependencies = [
 
 [[package]]
 name = "pap-webauthn-ceremony-example"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -5038,7 +5042,7 @@ dependencies = [
 
 [[package]]
 name = "papillon"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "axum",
  "axum-server",
@@ -5078,15 +5082,22 @@ dependencies = [
 
 [[package]]
 name = "papillon-shared"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "chrono",
+ "ed25519-dalek",
+ "getrandom 0.2.17",
  "js-sys",
  "pap-agents",
+ "pap-did",
+ "pap-federation",
+ "pap-marketplace",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
+ "toml 0.8.23",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -6477,9 +6488,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.10"
+version = "0.103.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -7866,7 +7877,7 @@ dependencies = [
 
 [[package]]
 name = "tee-attestation"
-version = "0.6.0"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",

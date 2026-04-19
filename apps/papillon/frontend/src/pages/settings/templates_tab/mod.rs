@@ -12,6 +12,19 @@ mod schema_type_input;
 mod template_builder;
 mod template_library;
 
+fn generate_starter_config(schema_type: &str) -> String {
+    let fields = match schema_type {
+        "FlightReservation" => r#"[{"path":"reservationId","label":"Booking","display":"title"},{"path":"underName.name","label":"Passenger","display":"text"},{"path":"reservationFor.flightNumber","label":"Flight","display":"badge"},{"path":"reservationFor.departureAirport.iataCode","label":"From","display":"text"},{"path":"reservationFor.arrivalAirport.iataCode","label":"To","display":"text"},{"path":"reservationFor.departureTime","label":"Departs","display":"text"}]"#,
+        "WeatherForecast" => r#"[{"path":"name","label":"Location","display":"title"},{"path":"weather.0.description","label":"Conditions","display":"text"},{"path":"main.temp","label":"Temperature","display":"badge"},{"path":"main.humidity","label":"Humidity","display":"text"}]"#,
+        "NewsArticle" | "Article" => r#"[{"path":"headline","label":"Headline","display":"title"},{"path":"author.name","label":"Author","display":"text"},{"path":"datePublished","label":"Published","display":"text"},{"path":"description","label":"Summary","display":"text"}]"#,
+        "Product" => r#"[{"path":"name","label":"Name","display":"title"},{"path":"offers.price","label":"Price","display":"badge"},{"path":"description","label":"Description","display":"text"},{"path":"brand.name","label":"Brand","display":"text"}]"#,
+        "Event" => r#"[{"path":"name","label":"Event","display":"title"},{"path":"startDate","label":"Date","display":"text"},{"path":"location.name","label":"Venue","display":"text"},{"path":"description","label":"Details","display":"text"}]"#,
+        "Person" => r#"[{"path":"name","label":"Name","display":"title"},{"path":"jobTitle","label":"Role","display":"badge"},{"path":"email","label":"Email","display":"text"},{"path":"url","label":"Website","display":"link"}]"#,
+        _ => r#"[{"path":"name","label":"Name","display":"title"},{"path":"description","label":"Description","display":"text"}]"#,
+    };
+    format!(r#"{{"version":1,"layout":{{"type":"grid","columns":2}},"fields":{fields}}}"#)
+}
+
 use schema_type_input::SchemaTypeInput;
 use template_builder::TemplateBuilder;
 use template_library::TemplateLibrary;
@@ -39,6 +52,9 @@ pub fn TemplatesTab() -> impl IntoView {
     let edit_error = RwSignal::new(None::<String>);
     let delete_confirm_id = RwSignal::new(None::<String>);
     let delete_error = RwSignal::new(None::<String>);
+
+    // Tooltip state for "Create Template" help
+    let show_help_tooltip = RwSignal::new(false);
 
     // Phase 9b: Template Builder UI state
     let builder_open = RwSignal::new(false);
@@ -281,8 +297,8 @@ pub fn TemplatesTab() -> impl IntoView {
         });
     };
 
-    // Toggle template enabled state
-    let handle_toggle_enabled = move |template_name: String, enabled: bool| {
+    // Toggle template enabled state (used by bulk operations via bridge directly)
+    let _handle_toggle_enabled = move |template_name: String, enabled: bool| {
         spawn_local(async move {
             let _ = bridge::invoke::<serde_json::Value, ()>(
                 "set_template_enabled",
@@ -306,6 +322,24 @@ pub fn TemplatesTab() -> impl IntoView {
     // user-defined or agent-registered templates. Updated reactively by the
     // sync Effect in app.rs whenever templates change.
     let registered_types = Signal::derive(move || renderer_state.registered_keys.get());
+
+    // Auto-generate starter JSON when schema type changes
+    let last_generated = RwSignal::new(String::new());
+    Effect::new(move || {
+        let schema_type = new_schema_type.get();
+        if schema_type.trim().is_empty() {
+            return;
+        }
+        let current_config = new_config.get();
+        let prev_generated = last_generated.get_untracked();
+        // Only auto-populate if config is empty or still matches the last auto-generated value
+        if current_config.is_empty() || current_config == prev_generated {
+            let generated = generate_starter_config(&schema_type);
+            last_generated.set(generated.clone());
+            new_config.set(generated);
+            new_config_error.set(None);
+        }
+    });
 
     // Handler for builder completion (Phase 9b)
     let handle_builder_complete = move |config: TemplateConfig| {
@@ -497,9 +531,23 @@ pub fn TemplatesTab() -> impl IntoView {
             // Create Form (Phase 7 UI Polish)
             <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;">
-                    <h3 style="font-size: 15px; font-weight: 700; color: var(--text-1); margin: 0;">
-                        "Create Template"
-                    </h3>
+                    <div style="display: flex; align-items: center; gap: 8px; position: relative;">
+                        <h3 style="font-size: 15px; font-weight: 700; color: var(--text-1); margin: 0;">
+                            "Create Template"
+                        </h3>
+                        <button
+                            style="width: 18px; height: 18px; border-radius: 50%; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-2); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 1;"
+                            on:click=move |_| show_help_tooltip.update(|v| *v = !*v)
+                            aria-label="Help"
+                        >
+                            "?"
+                        </button>
+                        <Show when=move || show_help_tooltip.get()>
+                            <div style="position: absolute; top: 24px; left: 0; z-index: 100; background: var(--bg-primary, #1a1a2e); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                                "Templates control how agent results are displayed. Pick a Schema.org type (e.g. FlightReservation, WeatherForecast) and Papillon will use your layout whenever an agent returns that data type."
+                            </div>
+                        </Show>
+                    </div>
                     <div style="display: flex; gap: 8px;">
                         <button
                             class="btn"
@@ -655,8 +703,6 @@ pub fn TemplatesTab() -> impl IntoView {
                             let name_for_toggle = template.template_name.clone();
                             let name_display = template.template_name.clone();
                             let schema_display = template.schema_type.clone();
-                            let enabled = template.enabled;
-                            let name_for_enable = template.template_name.clone();
                             let name_for_delete = template.template_name.clone();
                             let template_for_edit = template.clone();
                             view! {
@@ -676,31 +722,12 @@ pub fn TemplatesTab() -> impl IntoView {
                                         </div>
                                     </div>
 
-                                    <Show when=move || enabled>
-                                        <span style="font-size: 11px; background: var(--teal); color: white; padding: 2px 8px; border-radius: 4px;">
-                                            "Enabled"
-                                        </span>
-                                    </Show>
-                                    <Show when=move || !enabled>
-                                        <span style="font-size: 11px; background: var(--text-3); color: var(--text-2); padding: 2px 8px; border-radius: 4px;">
-                                            "Disabled"
-                                        </span>
-                                    </Show>
-
                                     <button
                                         class="btn"
                                         on:click=move |_| handle_edit_open(template_for_edit.clone())
                                         style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
                                     >
                                         "Edit"
-                                    </button>
-
-                                    <button
-                                        class="btn"
-                                        on:click=move |_| handle_toggle_enabled(name_for_enable.clone(), enabled)
-                                        style="padding: 4px 8px; font-size: 11px; background: var(--bg-secondary); color: var(--text-1); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;"
-                                    >
-                                        {move || if enabled { "Disable" } else { "Enable" }}
                                     </button>
 
                                     <button

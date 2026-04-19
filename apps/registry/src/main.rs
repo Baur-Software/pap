@@ -140,6 +140,36 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             info!("Seeded registry with {} standard agents", persisted.len());
+
+            // Seed TOML catalog agents when PAP_CATALOG_PATH is configured.
+            if let Ok(catalog_env) = std::env::var("PAP_CATALOG_PATH") {
+                let catalog_path = std::path::PathBuf::from(&catalog_env);
+                if catalog_path.exists() {
+                    let catalog_defs = pap_agents::load_catalog(&catalog_path);
+                    let mut catalog_seeded = 0usize;
+                    for def in &catalog_defs {
+                        match def.to_signed_advertisement() {
+                            Ok(ad) => {
+                                let hash = ad.hash();
+                                if store.insert_agent(&hash, &ad).await.is_ok() {
+                                    persisted.push(ad);
+                                    catalog_seeded += 1;
+                                }
+                            }
+                            Err(e) => tracing::warn!("Startup catalog sign error: {e}"),
+                        }
+                    }
+                    info!(
+                        "Seeded {} TOML catalog agents from {}",
+                        catalog_seeded, catalog_env
+                    );
+                } else {
+                    tracing::warn!(
+                        "PAP_CATALOG_PATH={catalog_env} does not exist; skipping TOML catalog seeding"
+                    );
+                }
+            }
+
             persisted
         } else {
             vec![]

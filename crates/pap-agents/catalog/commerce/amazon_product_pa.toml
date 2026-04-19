@@ -1,4 +1,5 @@
 schema_version = 1
+version = "0.1.0"
 name = "Amazon Product Search"
 provider = "Amazon"
 description = "Search Amazon products by keyword with prices, ratings, and descriptions."

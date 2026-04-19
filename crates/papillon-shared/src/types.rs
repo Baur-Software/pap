@@ -164,6 +164,20 @@ pub struct AgentInfo {
     /// Registry URLs this agent's advertisement has been published to.
     #[serde(default)]
     pub published_to: Vec<String>,
+    /// True when the agent has a live runtime handler registered in the local
+    /// registry (i.e. it was loaded via `register_dynamic` or `build_agents`
+    /// at startup and can actually execute).  False for DB-only catalog agents
+    /// that are known to the system but whose handler failed to register or
+    /// whose seed has not yet been activated — they appear in the fleet roster
+    /// but cannot be invoked or resolved via `pap://` catalog URIs.
+    #[serde(default)]
+    pub live: bool,
+    /// Top-level category derived from the agent's catalog path
+    /// (e.g. `"search"`, `"travel"`, `"food"`).
+    /// Defaults to `"general"` for compiled agents and user-created agents
+    /// with no catalog path.
+    #[serde(default)]
+    pub category: String,
 }
 
 /// Federation peer information.
@@ -206,6 +220,18 @@ pub struct PipelineInfo {
     pub created_at: String,
 }
 
+/// Output format for an on-device synthesizer node.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SynthesisFormat {
+    #[default]
+    FreeText,
+    BriefingDoc,
+    Faq,
+    Timeline,
+    Outline,
+}
+
 /// The type of a pipeline node — either a remote agent or an on-device synthesizer.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -232,6 +258,9 @@ pub struct PipelineNodeInfo {
     pub node_type: PipelineNodeType,
     pub position_x: f64,
     pub position_y: f64,
+    /// Output format for synthesizer nodes. Ignored for agent nodes.
+    #[serde(default)]
+    pub format: SynthesisFormat,
 }
 
 /// An edge in a pipeline (data flow between agents).
@@ -239,6 +268,17 @@ pub struct PipelineNodeInfo {
 pub struct PipelineEdgeInfo {
     pub from_node: String,
     pub to_node: String,
+}
+
+/// A user-saved pipeline DAG that can be loaded and re-run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedPipeline {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub pipeline: PipelineInfo,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Pipeline execution result.
@@ -314,6 +354,14 @@ pub struct IntentPlan {
     pub returns: Vec<String>,
     /// UUID correlating this plan to the backend's oneshot channel in approval_gates
     pub approval_request_id: String,
+    /// Mandate TTL in hours, sourced from orchestrator config at plan-build time.
+    /// Used by the AwaitingApproval UI to show the correct authorization window.
+    #[serde(default = "default_ttl_hours")]
+    pub ttl_hours: u32,
+}
+
+fn default_ttl_hours() -> u32 {
+    8
 }
 
 // ── PreferenceEngine ─────────────────────────────────────────
@@ -380,6 +428,10 @@ impl<'a> PreferenceEngine<'a> {
 
 // ── Orchestrator types ──────────────────────────────────────
 
+fn default_confidence_threshold() -> f64 {
+    0.35
+}
+
 /// Orchestrator configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorConfig {
@@ -389,6 +441,11 @@ pub struct OrchestratorConfig {
     pub inference_substrate: LlmProvider,
     pub mandate_ttl_hours: u64,
     pub auto_approve_zero_disclosure: bool,
+    /// Minimum NLU confidence score to accept a classification result.
+    /// Below this threshold, classify_intent() falls back to schema:AskAction.
+    /// Default: 0.35. Range: 0.0–1.0.
+    #[serde(default = "default_confidence_threshold")]
+    pub intent_confidence_threshold: f64,
 }
 
 impl Default for OrchestratorConfig {
@@ -397,6 +454,7 @@ impl Default for OrchestratorConfig {
             inference_substrate: LlmProvider::default(),
             mandate_ttl_hours: 8,
             auto_approve_zero_disclosure: true,
+            intent_confidence_threshold: default_confidence_threshold(),
         }
     }
 }
@@ -423,6 +481,21 @@ pub struct SetupState {
 }
 
 // ── Canvas block types ────────────────────────────────────
+
+/// A suggested follow-up action shown in the Canvas Guide block.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GuideSuggestion {
+    /// Display label shown as a pill button.
+    pub label: String,
+    /// Prompt text to prefill into the topbar when clicked (text-only suggestion).
+    pub prompt_template: String,
+    /// If set, clicking runs this saved pipeline ID directly.
+    pub saved_pipeline_id: Option<String>,
+    /// Preferred synthesis format when this suggestion triggers a pipeline run.
+    /// `None` means use the pipeline's own default.
+    #[serde(default)]
+    pub synthesis_format: Option<SynthesisFormat>,
+}
 
 /// The state of a canvas block during the PAP handshake lifecycle.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -454,6 +527,26 @@ pub enum BlockState {
         /// Block IDs of the agent blocks that contributed to this outcome.
         provenance_block_ids: Vec<String>,
     },
+    /// Auto-generated canvas context block.
+    /// Pinned at position 0 with stable id = "guide-{canvas_id}".
+    /// Updated in place whenever another block resolves.
+    Guide {
+        /// Summary sentence: "N results from {agents} covering {types}".
+        summary: String,
+        /// 3–5 suggested follow-up actions.
+        suggestions: Vec<GuideSuggestion>,
+    },
+    /// A user-authored note block. Content is principal-owned, not agent-produced.
+    /// Can be referenced via {{block:ID}} in prompts and fed into pipeline synthesizers.
+    Note {
+        /// Note title shown in the block header.
+        title: String,
+        /// Content authored by the user.
+        content: String,
+        /// Frontend-only edit mode flag. Not persisted to DB columns.
+        #[serde(default)]
+        editing: bool,
+    },
 }
 
 /// A single block on the Papillon canvas.
@@ -461,7 +554,7 @@ pub enum BlockState {
 /// Created by the backend when the orchestrator delegates a mandate.
 /// Sent to the frontend via Tauri events (`block_created`, `block_updated`,
 /// `block_resolved`, `block_failed`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CanvasBlock {
     /// Unique block identifier.
     pub id: String,
@@ -487,11 +580,21 @@ pub struct CanvasBlock {
     pub created_at: String,
     /// When this block was last updated.
     pub updated_at: String,
+    /// ISO-8601 timestamp when the mandate authorizing this block expires.
+    /// `None` while Resolving / AwaitingApproval / Ghost — set on block_resolved.
+    /// Drives the TTL badge decay state: active (teal) → degraded (gold) → readonly (blue).
+    #[serde(default)]
+    pub mandate_expires_at: Option<String>,
     /// `true` when the orchestrator's agent selection was guided by local
     /// preference history (≥ 3 prior sessions for this schema type).
     /// Always `false` during cold start. Never transmitted off-device.
     #[serde(default)]
     pub preference_guided: bool,
+    /// `true` when this block was created from a browse URL (`HttpsEndpoint`
+    /// resolution path).  Drives the initial viewport-filling expansion and
+    /// shows the in-block URL bar in the renderer.
+    #[serde(default)]
+    pub auto_expand: bool,
 }
 
 /// A saved canvas — a collection of blocks from prompt sessions.
@@ -524,10 +627,45 @@ pub struct CanvasPrompt {
     pub submitted_at: String,
 }
 
-/// Tauri event payloads for streaming block updates to the frontend.
+/// Backend-to-frontend event payload for block state transitions.
+///
+/// Contains **only backend-owned fields**. The frontend-only fields
+/// `linked_block_ids` and `auto_expand` are intentionally absent — the type
+/// system prevents them from ever appearing in an event and being accidentally
+/// overwritten. Adding a new frontend-only field to `CanvasBlock` is
+/// automatically safe: it cannot be present here, so `apply_block_event` never
+/// touches it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockUpdate {
+    /// Matches the `id` of the `CanvasBlock` to patch on the frontend.
+    pub id: String,
+    pub prompt_id: String,
+    /// `None` during intermediate phase events; `Some(text)` on final
+    /// resolution. `apply_block_event` only writes this field when `Some`,
+    /// preserving whatever prompt text was set at block creation.
+    #[serde(default)]
+    pub prompt_text: Option<String>,
+    pub state: BlockState,
+    pub schema_type: Option<String>,
+    pub content: Option<serde_json::Value>,
+    #[serde(default)]
+    pub agent_did: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(default)]
+    pub mandate_expires_at: Option<String>,
+    #[serde(default)]
+    pub preference_guided: bool,
+}
+
+/// Tauri event payload wrapping a `BlockUpdate`.
+///
+/// Used for both `"block_updated"` (phase progress) and `"block_resolved"`
+/// (completion/failure) events emitted by the backend during the 6-phase
+/// PAP handshake.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockEvent {
-    pub block: CanvasBlock,
+    pub block: BlockUpdate,
 }
 
 /// A user-facing scenario card for the Home page.
@@ -1021,9 +1159,11 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
+            auto_expand: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1050,9 +1190,11 @@ mod tests {
             content: Some(content.clone()),
             linked_block_ids: vec!["blk-3".into()],
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
             preference_guided: false,
+            auto_expand: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1075,9 +1217,11 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
+            auto_expand: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1106,9 +1250,11 @@ mod tests {
                 content: Some(serde_json::json!({"@type": "FlightReservation"})),
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
+                auto_expand: false,
             }],
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1169,17 +1315,19 @@ mod tests {
     // ── BlockEvent serde ──────────────────────────────────
 
     #[test]
-    fn block_event_wraps_block() {
+    fn block_event_wraps_block_update() {
+        // BlockEvent now carries a BlockUpdate (backend-owned fields only).
+        // linked_block_ids and auto_expand are intentionally absent.
         let event = BlockEvent {
-            block: CanvasBlock {
+            block: BlockUpdate {
                 id: "blk-ev".into(),
                 prompt_id: "p-1".into(),
                 prompt_text: None,
                 state: BlockState::Resolved,
                 schema_type: Some("Answer".into()),
                 content: Some(serde_json::json!({"text": "42"})),
-                linked_block_ids: Vec::new(),
                 agent_did: None,
+                mandate_expires_at: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
@@ -1353,6 +1501,7 @@ mod tests {
                 node_type: PipelineNodeType::default(),
                 position_x: 100.0,
                 position_y: 200.0,
+                format: Default::default(),
             }],
             edges: vec![PipelineEdgeInfo {
                 from_node: "n-1".into(),
@@ -1452,9 +1601,11 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
+            auto_expand: false,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1504,6 +1655,7 @@ mod tests {
             requires_disclosure: vec!["schema:query".to_string()],
             returns: vec!["schema:SearchResult".to_string()],
             approval_request_id: "test-uuid-1234".to_string(),
+            ttl_hours: 8,
         };
         let json = serde_json::to_string(&plan).unwrap();
         let round_trip: IntentPlan = serde_json::from_str(&json).unwrap();
@@ -1519,6 +1671,7 @@ mod tests {
             requires_disclosure: vec![],
             returns: vec!["schema:SearchResult".to_string()],
             approval_request_id: "uuid-5678".to_string(),
+            ttl_hours: 8,
         };
         let state = BlockState::AwaitingApproval { plan };
         let json = serde_json::to_string(&state).unwrap();
@@ -1548,6 +1701,30 @@ mod tests {
         assert!(matches!(config2.inference_substrate, LlmProvider::None));
         assert_eq!(config2.mandate_ttl_hours, 2);
         assert!(config2.auto_approve_zero_disclosure);
+    }
+
+    #[test]
+    fn recovery_status_needs_renewal_roundtrip_json() {
+        let status = RecoveryStatus {
+            configured: true,
+            needs_renewal: true,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        let back: RecoveryStatus = serde_json::from_str(&json).unwrap();
+        assert!(back.configured);
+        assert!(back.needs_renewal);
+    }
+
+    #[test]
+    fn recovery_status_needs_renewal_defaults_false_from_old_json() {
+        // Simulate JSON from a version that lacks needs_renewal.
+        let json = r#"{"configured":true}"#;
+        let back: RecoveryStatus = serde_json::from_str(json).unwrap();
+        assert!(back.configured);
+        assert!(
+            !back.needs_renewal,
+            "needs_renewal must default to false for backward compat"
+        );
     }
 }
 
@@ -1604,4 +1781,50 @@ pub struct RecoveryReconstructResult {
 pub struct RecoveryStatus {
     /// `true` once the user has completed the Shamir shard setup ceremony.
     pub configured: bool,
+    /// `true` when the current shard ceremony was used in a recovery and the
+    /// principal must re-distribute fresh shards before the old ones can be
+    /// reused by an attacker who collected M of them.
+    #[serde(default)]
+    pub needs_renewal: bool,
+}
+
+// ── Canvas persistence types ──────────────────────────────────────────────
+
+/// A named canvas — a persistent, named collection of blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasRecord {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A single block within a canvas, representing one intent → agent → result cycle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasBlockRecord {
+    pub id: String,
+    pub canvas_id: String,
+    pub prompt_text: Option<String>,
+    pub schema_type: Option<String>,
+    pub content_json: Option<String>,
+    pub block_state: String,
+    pub episode_id: Option<String>,
+    pub agent_did: Option<String>,
+    pub mandate_expires_at: Option<String>,
+    pub preference_guided: bool,
+    pub display_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A single message in a canvas conversation thread.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasMessageRecord {
+    pub id: String,
+    pub canvas_id: String,
+    /// "user" or "assistant"
+    pub role: String,
+    pub content: String,
+    pub block_id: Option<String>,
+    pub created_at: String,
 }

@@ -20,6 +20,9 @@ pub struct RecoveryState {
     pub error: RwSignal<Option<String>>,
     /// Whether recovery shards have been set up and exported.
     pub setup_complete: RwSignal<bool>,
+    /// True when the current ceremony was used in a recovery and the principal
+    /// must distribute fresh shards before the old compromised ones can be reused.
+    pub needs_renewal: RwSignal<bool>,
 }
 
 impl Default for RecoveryState {
@@ -33,6 +36,7 @@ impl Default for RecoveryState {
             generating: RwSignal::new(false),
             error: RwSignal::new(None),
             setup_complete: RwSignal::new(false),
+            needs_renewal: RwSignal::new(false),
         }
     }
 }

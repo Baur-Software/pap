@@ -5,9 +5,16 @@ use crate::dynamic::{is_safe_url, DynamicAgentDef, DynamicAgentSource, HttpEndpo
 use serde::Deserialize;
 use std::path::Path;
 
+fn default_catalog_version() -> String {
+    "0.1.0".into()
+}
+
 #[derive(Debug, Deserialize)]
 struct CatalogEntry {
     schema_version: u32,
+    /// Semantic version of this agent (e.g. "1.0.0").
+    #[serde(default = "default_catalog_version")]
+    version: String,
     name: String,
     provider: String,
     description: String,
@@ -23,6 +30,22 @@ struct CatalogEntry {
     llm_instructions: String,
     #[serde(default)]
     subagents: Vec<String>,
+    /// Agent-declared configurable properties as schema.org PropertyValueSpecification.
+    /// Flows into AgentAdvertisement for federation advertisement.
+    #[serde(default)]
+    configurable_properties: Vec<serde_json::Value>,
+}
+
+/// Returns the embedded default catalog for WASM builds (no filesystem required).
+///
+/// The catalog JSON is baked into the binary at compile time by `build.rs`,
+/// which walks `catalog/**/*.toml` and serialises every entry as a JSON array
+/// compatible with [`DynamicAgentDef`]'s serde shape.
+#[cfg(target_arch = "wasm32")]
+pub fn default_catalog() -> Vec<DynamicAgentDef> {
+    const CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/catalog.json"));
+    serde_json::from_str(CATALOG_JSON)
+        .expect("embedded catalog.json failed to deserialize — re-run build.rs to regenerate")
 }
 
 pub fn load_catalog(catalog_dir: &Path) -> Vec<DynamicAgentDef> {
@@ -83,6 +106,7 @@ fn load_one(root: &Path, path: &Path) -> Option<DynamicAgentDef> {
         .replace('\\', "/");
     Some(DynamicAgentDef {
         schema_version: entry.schema_version,
+        version: entry.version,
         name: entry.name,
         provider: entry.provider,
         description: entry.description,
@@ -98,6 +122,7 @@ fn load_one(root: &Path, path: &Path) -> Option<DynamicAgentDef> {
         operator_key_seed: None,
         agent_did: None,
         published_to: vec![],
+        configurable_properties: entry.configurable_properties,
         created_at: String::new(),
         updated_at: String::new(),
     })
@@ -161,6 +186,27 @@ mod tests {
                 "action '{}' in '{}' does not start with 'schema:'",
                 def.action,
                 def.name
+            );
+        }
+    }
+
+    #[test]
+    fn embedded_catalog_deserializes() {
+        const CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/catalog.json"));
+        let defs: Vec<DynamicAgentDef> = serde_json::from_str(CATALOG_JSON)
+            .expect("embedded catalog.json must deserialize without error");
+        assert!(
+            defs.len() >= 300,
+            "expected 300+ entries, got {}",
+            defs.len()
+        );
+        // Verify source field is always Catalog
+        for def in &defs {
+            assert!(
+                matches!(def.source, DynamicAgentSource::Catalog),
+                "expected source=Catalog for {}, got {:?}",
+                def.name,
+                def.source
             );
         }
     }
