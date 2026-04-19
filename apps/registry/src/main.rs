@@ -7,7 +7,7 @@ use anyhow::Context as _;
 use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tracing::info;
 
@@ -226,14 +226,36 @@ async fn main() -> anyhow::Result<()> {
     let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
         .with_state(leptos_options);
 
-    // TODO(I9): allow_origin(Any) permits cross-origin Bearer-authenticated requests from any
-    // web page. Acceptable for a reference implementation on a trusted network. For
-    // production deployments that require strict origin isolation, restrict this to
-    // the node's own public_endpoint origin and leave federation routes open separately.
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // CORS policy — resolved at startup from PAP_REGISTRY_ALLOWED_ORIGINS.
+    //
+    // Default: localhost only (safe for local-dev, breaks nothing when no env
+    // var is set).  Set PAP_REGISTRY_ALLOWED_ORIGINS to a comma-separated list
+    // of exact origin strings for production, or to "*" to restore an open
+    // policy on fully-trusted networks.
+    let cors = {
+        use pap_registry::config::AllowedOrigins;
+        let allow_origin: AllowOrigin = match &config.allowed_origins {
+            AllowedOrigins::Any => {
+                tracing::warn!(
+                    "CORS: allow_origin(Any) is active — all origins permitted. \
+                     Set PAP_REGISTRY_ALLOWED_ORIGINS to restrict access."
+                );
+                AllowOrigin::any()
+            }
+            AllowedOrigins::List(origins) => {
+                info!("CORS: allowed origins = {:?}", origins);
+                let headers: Vec<axum::http::HeaderValue> = origins
+                    .iter()
+                    .filter_map(|o| o.parse().ok())
+                    .collect();
+                AllowOrigin::list(headers)
+            }
+        };
+        CorsLayer::new()
+            .allow_origin(allow_origin)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    };
 
     // Static assets (icon, favicon, logo).
     // Local dev: workspace root → apps/registry/assets
