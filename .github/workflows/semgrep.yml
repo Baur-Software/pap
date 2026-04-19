@@ -1,10 +1,9 @@
 name: Semgrep Security Scan
 
 # Replaces CodeQL. Runs the same trigger paths; outputs SARIF to the
-# GitHub Security tab. Requires SEMGREP_APP_TOKEN secret (generate at
-# https://semgrep.dev/orgs/-/settings/tokens). Without the token,
-# semgrep ci still runs with the default OSS ruleset — no platform
-# features (triage, policies) but scanning still works.
+# GitHub Security tab. Uses the OSS ruleset (no token required).
+# Optionally set SEMGREP_APP_TOKEN secret for Semgrep AppSec Platform
+# features (triage, policies, custom rules).
 #
 # Known false positives (previously suppressed in .github/codeql/codeql-config.yml):
 #   - [0u8; 32] zero-init buffers immediately filled by a CSPRNG — not hard-coded secrets
@@ -53,11 +52,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Semgrep
-        run: semgrep ci --sarif --output semgrep.sarif
+      - name: Run Semgrep (OSS)
+        # semgrep scan runs the OSS engine with no token required.
+        # If SEMGREP_APP_TOKEN is set, results are also sent to the platform.
+        # continue-on-error so SARIF upload still runs even when findings exist.
+        run: |
+          if [ -n "$SEMGREP_APP_TOKEN" ]; then
+            semgrep ci --sarif --output semgrep.sarif
+          else
+            semgrep scan --sarif --output semgrep.sarif --config auto .
+          fi
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-        # continue-on-error so SARIF upload still runs even if findings exist
         continue-on-error: true
 
       - name: Upload SARIF to GitHub Security tab
