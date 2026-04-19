@@ -14,8 +14,8 @@ fn main() {
     // Tell Cargo to re-run this script whenever the catalog changes.
     println!("cargo:rerun-if-changed=catalog/");
 
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .expect("CARGO_MANIFEST_DIR must be set by Cargo");
+    let manifest_dir =
+        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set by Cargo");
     let catalog_dir = PathBuf::from(&manifest_dir).join("catalog");
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR must be set by Cargo");
     let out_path = PathBuf::from(&out_dir).join("catalog.json");
@@ -23,8 +23,8 @@ fn main() {
     let mut entries: Vec<serde_json::Value> = Vec::new();
     collect_toml_entries(&catalog_dir, &catalog_dir, &mut entries);
 
-    let json = serde_json::to_string(&entries)
-        .expect("failed to serialize catalog entries to JSON");
+    let json =
+        serde_json::to_string(&entries).expect("failed to serialize catalog entries to JSON");
     std::fs::write(&out_path, json)
         .unwrap_or_else(|e| panic!("failed to write {}: {e}", out_path.display()));
 
@@ -48,10 +48,7 @@ fn collect_toml_entries(
         }
     };
 
-    let mut paths: Vec<std::path::PathBuf> = read_dir
-        .flatten()
-        .map(|e| e.path())
-        .collect();
+    let mut paths: Vec<std::path::PathBuf> = read_dir.flatten().map(|e| e.path()).collect();
     // Sort for deterministic output order.
     paths.sort();
 
@@ -97,7 +94,10 @@ fn load_toml_as_json(
     if let Some(obj) = json_val.as_object_mut() {
         // `source` — always "Catalog" for embedded catalog entries; overwrite unconditionally
         // so a TOML that accidentally sets source="UserCreated" doesn't leak through.
-        obj.insert("source".into(), serde_json::Value::String("Catalog".to_string()));
+        obj.insert(
+            "source".into(),
+            serde_json::Value::String("Catalog".to_string()),
+        );
 
         // `catalog_path` — relative path from catalog root, forward-slash separators.
         let rel = path
@@ -151,10 +151,7 @@ fn toml_to_json(val: toml::Value) -> serde_json::Value {
             serde_json::Value::Array(arr.into_iter().map(toml_to_json).collect())
         }
         toml::Value::Table(tbl) => {
-            let map = tbl
-                .into_iter()
-                .map(|(k, v)| (k, toml_to_json(v)))
-                .collect();
+            let map = tbl.into_iter().map(|(k, v)| (k, toml_to_json(v))).collect();
             serde_json::Value::Object(map)
         }
     }

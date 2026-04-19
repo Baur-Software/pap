@@ -55,10 +55,7 @@ fn collect_toml_entries(
         }
     };
 
-    let mut paths: Vec<std::path::PathBuf> = read_dir
-        .flatten()
-        .map(|e| e.path())
-        .collect();
+    let mut paths: Vec<std::path::PathBuf> = read_dir.flatten().map(|e| e.path()).collect();
     paths.sort();
 
     for path in paths {
@@ -153,10 +150,7 @@ fn toml_to_json(val: toml::Value) -> serde_json::Value {
             serde_json::Value::Array(arr.into_iter().map(toml_to_json).collect())
         }
         toml::Value::Table(tbl) => {
-            let map = tbl
-                .into_iter()
-                .map(|(k, v)| (k, toml_to_json(v)))
-                .collect();
+            let map = tbl.into_iter().map(|(k, v)| (k, toml_to_json(v))).collect();
             serde_json::Value::Object(map)
         }
     }

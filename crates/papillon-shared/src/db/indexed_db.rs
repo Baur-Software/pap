@@ -202,9 +202,7 @@ impl IndexedDbDatabase {
             .inner
             .list_all_agent_defs()?
             .into_iter()
-            .map(|(name, json)| {
-                serde_json::json!({ "name": name, "json": json })
-            })
+            .map(|(name, json)| serde_json::json!({ "name": name, "json": json }))
             .collect();
 
         let state = serde_json::json!({
@@ -600,15 +598,15 @@ mod tests {
         let snapshot: serde_json::Value = serde_json::from_str(&snapshot_str).unwrap();
 
         // Version must be 2
-        assert_eq!(
-            snapshot.get("version").and_then(|v| v.as_u64()),
-            Some(2)
-        );
+        assert_eq!(snapshot.get("version").and_then(|v| v.as_u64()), Some(2));
 
         // "agents" array must contain our entry
         let agents = snapshot.get("agents").and_then(|v| v.as_array()).unwrap();
         assert_eq!(agents.len(), 1);
-        assert_eq!(agents[0].get("name").and_then(|v| v.as_str()), Some("weather"));
+        assert_eq!(
+            agents[0].get("name").and_then(|v| v.as_str()),
+            Some("weather")
+        );
         assert_eq!(agents[0].get("json").and_then(|v| v.as_str()), Some(json));
 
         // Restore into a fresh db and verify

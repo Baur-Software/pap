@@ -42,6 +42,9 @@ pap-federation = { workspace = true, default-features = false, optional = true }
 pap-did = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+# getrandom with `js` feature is required for wasm32-unknown-unknown so that
+# rand/ed25519-dalek can generate random numbers via the Web Crypto API.
+getrandom = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -59,6 +62,8 @@ wasm = [
     # WasmAgentRegistry deps — included here so tests run under `--features wasm`
     # on native as well as in actual wasm32 browser builds.
     "pap-marketplace", "pap-federation", "pap-did", "ed25519-dalek", "sha2",
+    # getrandom/js enables Web Crypto API for random number generation on wasm32
+    "getrandom/js",
 ]
 
 [lints]
