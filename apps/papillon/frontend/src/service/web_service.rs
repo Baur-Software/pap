@@ -20,6 +20,9 @@ use std::sync::Mutex;
 use pap_did::PrincipalKeypair;
 #[cfg(feature = "wasm")]
 use papillon_shared::WasmAgentRegistry;
+use papillon_shared::db::indexed_db::IndexedDbDatabase;
+use papillon_shared::db::DatabaseOps;
+use papillon_shared::types::LlmProvider;
 
 use super::web_identity::WebIdentityService;
 use super::{AgentProfileInfo, PapillonService};
@@ -29,21 +32,29 @@ use papillon_shared::{
 };
 use serde_json::Value;
 
+/// Settings key under which `OrchestratorConfig` is persisted as JSON.
+const ORCHESTRATOR_CONFIG_KEY: &str = "orchestrator_config";
+
+/// Settings key under which `Vec<AgentProfileInfo>` is persisted as JSON.
+const AGENT_PROFILE_INFOS_KEY: &str = "agent_profile_infos";
+
 /// The built-in local registry URL recognised as "this device's registry".
 #[cfg(feature = "wasm")]
 const LOCAL_REGISTRY_URL: &str = "pap://local";
 
 /// Service implementation for pure WASM environments with IndexedDB.
 ///
-/// Holds a `WebIdentityService` for identity/profile management and a
-/// `WasmAgentRegistry` for local agent storage. Uses `std::sync::Mutex`
-/// (not `RefCell`) to satisfy `Send + Sync` bounds required by
-/// `PapillonService`. This is safe because WASM is single-threaded —
+/// Holds a `WebIdentityService` for identity/profile management, a
+/// `WasmAgentRegistry` for local agent storage, and an `IndexedDbDatabase`
+/// for templates, orchestrator config, and agent profile info.
+/// Uses `std::sync::Mutex` (not `RefCell`) to satisfy `Send + Sync` bounds
+/// required by `PapillonService`. This is safe because WASM is single-threaded —
 /// the mutex never actually contends.
 pub struct WebService {
     identity: Mutex<WebIdentityService>,
     #[cfg(feature = "wasm")]
     registry: Mutex<WasmAgentRegistry>,
+    db: Mutex<IndexedDbDatabase>,
 }
 
 impl WebService {
@@ -88,10 +99,20 @@ impl WebService {
             reg
         };
 
+        #[cfg(target_arch = "wasm32")]
+        let db = IndexedDbDatabase::open("papillon-db")
+            .await
+            .map_err(|e| format!("Failed to open papillon-db: {}", e.0))?;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let db = IndexedDbDatabase::new_with_persistence("papillon-db")
+            .map_err(|e| format!("Failed to create papillon-db: {}", e.0))?;
+
         Ok(Self {
             identity: Mutex::new(identity),
             #[cfg(feature = "wasm")]
             registry: Mutex::new(registry),
+            db: Mutex::new(db),
         })
     }
 
@@ -106,7 +127,32 @@ impl WebService {
                 WasmAgentRegistry::new_empty("papillon-agents-empty")
                     .expect("in-memory registry must succeed"),
             ),
+            db: Mutex::new(
+                IndexedDbDatabase::new_with_persistence("papillon-empty")
+                    .expect("in-memory db must succeed"),
+            ),
         }
+    }
+
+    // ── Private helpers ──────────────────────────────────────────────────────
+
+    fn load_agent_profile_infos(db: &IndexedDbDatabase) -> Result<Vec<AgentProfileInfo>, String> {
+        match db.get_setting(AGENT_PROFILE_INFOS_KEY).map_err(|e| e.0)? {
+            Some(json) => {
+                serde_json::from_str(&json).map_err(|e| format!("deserialize agent profiles: {e}"))
+            }
+            None => Ok(vec![]),
+        }
+    }
+
+    fn save_agent_profile_infos(
+        db: &IndexedDbDatabase,
+        profiles: &[AgentProfileInfo],
+    ) -> Result<(), String> {
+        let json = serde_json::to_string(profiles)
+            .map_err(|e| format!("serialize agent profiles: {e}"))?;
+        db.set_setting(AGENT_PROFILE_INFOS_KEY, &json)
+            .map_err(|e| e.0)
     }
 }
 
@@ -145,37 +191,38 @@ impl PapillonService for WebService {
     // ============================================================================
 
     async fn get_global_templates(&self) -> Result<Vec<Template>, String> {
-        // TODO: Implement IndexedDB read for global templates
-        Err("WebService: get_global_templates not yet implemented".into())
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        db.query_templates(None).map_err(|e| e.0)
     }
 
-    async fn get_profile_templates(&self, _principal_did: &str) -> Result<Vec<Template>, String> {
-        // TODO: Implement IndexedDB read for profile-specific templates
-        Err("WebService: get_profile_templates not yet implemented".into())
+    async fn get_profile_templates(&self, principal_did: &str) -> Result<Vec<Template>, String> {
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        db.query_templates(Some(principal_did)).map_err(|e| e.0)
     }
 
-    async fn create_template(&self, _template: &Template) -> Result<(), String> {
-        // TODO: Implement IndexedDB write for new template
-        Err("WebService: create_template not yet implemented".into())
+    async fn create_template(&self, template: &Template) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        db.insert_template(template).map_err(|e| e.0)
     }
 
-    async fn update_template(&self, _template: &Template) -> Result<(), String> {
-        // TODO: Implement IndexedDB update for template
-        Err("WebService: update_template not yet implemented".into())
+    async fn update_template(&self, template: &Template) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        db.update_template(template).map_err(|e| e.0)
     }
 
-    async fn delete_template(&self, _template_name: &str) -> Result<(), String> {
-        // TODO: Implement IndexedDB delete for template
-        Err("WebService: delete_template not yet implemented".into())
+    async fn delete_template(&self, template_name: &str) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        db.delete_template(template_name).map_err(|e| e.0)
     }
 
     async fn set_template_enabled(
         &self,
-        _template_name: &str,
-        _enabled: bool,
+        template_name: &str,
+        enabled: bool,
     ) -> Result<(), String> {
-        // TODO: Implement IndexedDB update for template enabled flag
-        Err("WebService: set_template_enabled not yet implemented".into())
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        db.set_template_enabled(template_name, enabled)
+            .map_err(|e| e.0)
     }
 
     // ============================================================================
@@ -294,16 +341,27 @@ impl PapillonService for WebService {
     // ============================================================================
 
     async fn get_orchestrator_config(&self) -> Result<OrchestratorConfig, String> {
-        // TODO: Implement IndexedDB read for orchestrator config
-        Err("WebService: get_orchestrator_config not yet implemented".into())
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        match db
+            .get_setting(ORCHESTRATOR_CONFIG_KEY)
+            .map_err(|e| e.0)?
+        {
+            Some(json) => serde_json::from_str(&json)
+                .map_err(|e| format!("deserialize orchestrator config: {e}")),
+            None => Ok(OrchestratorConfig::default()),
+        }
     }
 
     async fn configure_orchestrator(
         &self,
-        _config: &OrchestratorConfig,
+        config: &OrchestratorConfig,
     ) -> Result<OrchestratorConfig, String> {
-        // TODO: Implement IndexedDB write for orchestrator config
-        Err("WebService: configure_orchestrator not yet implemented".into())
+        let json = serde_json::to_string(config)
+            .map_err(|e| format!("serialize orchestrator config: {e}"))?;
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        db.set_setting(ORCHESTRATOR_CONFIG_KEY, &json)
+            .map_err(|e| e.0)?;
+        Ok(config.clone())
     }
 
     async fn get_orchestrator_status(&self) -> Result<OrchestratorStatus, String> {
@@ -316,8 +374,30 @@ impl PapillonService for WebService {
     // ============================================================================
 
     async fn get_setup_state(&self) -> Result<SetupState, String> {
-        // TODO: Implement IndexedDB read for setup state
-        Err("WebService: get_setup_state not yet implemented".into())
+        let identity_created = {
+            let identity = self
+                .identity
+                .lock()
+                .map_err(|e| format!("identity lock: {e}"))?;
+            !identity.list_profiles().is_empty()
+        };
+        let llm_configured = {
+            let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+            match db
+                .get_setting(ORCHESTRATOR_CONFIG_KEY)
+                .map_err(|e| e.0)?
+            {
+                Some(json) => serde_json::from_str::<OrchestratorConfig>(&json)
+                    .map(|cfg| !matches!(cfg.inference_substrate, LlmProvider::None))
+                    .unwrap_or(false),
+                None => false,
+            }
+        };
+        Ok(SetupState {
+            identity_created,
+            llm_configured,
+            setup_complete: identity_created && llm_configured,
+        })
     }
 
     // WASM is single-threaded; holding a std::sync::MutexGuard across an
@@ -352,13 +432,15 @@ impl PapillonService for WebService {
     // ============================================================================
 
     async fn list_scenarios(&self) -> Result<Vec<ScenarioCard>, String> {
-        // TODO: Implement IndexedDB read for scenarios
-        Err("WebService: list_scenarios not yet implemented".into())
+        // Scenario definitions live in the backend orchestrator and have no
+        // WASM-side storage. Return an empty list so the UI renders gracefully.
+        Ok(vec![])
     }
 
     async fn list_completed_runs(&self) -> Result<Vec<ScenarioRunResult>, String> {
-        // TODO: Implement IndexedDB read for run results
-        Err("WebService: list_completed_runs not yet implemented".into())
+        // Run results live in the backend orchestrator and have no
+        // WASM-side storage. Return an empty list so the UI renders gracefully.
+        Ok(vec![])
     }
 
     async fn run_scenario(
@@ -375,26 +457,60 @@ impl PapillonService for WebService {
     // ============================================================================
 
     async fn list_agent_profiles(&self) -> Result<Vec<AgentProfileInfo>, String> {
-        // TODO: Implement IndexedDB read for agent profiles
-        Err("WebService: list_agent_profiles not yet implemented".into())
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        Self::load_agent_profile_infos(&db)
     }
 
     async fn create_agent_profile(
         &self,
-        _name: &str,
-        _agent_did: &str,
+        name: &str,
+        agent_did: &str,
     ) -> Result<AgentProfileInfo, String> {
-        // TODO: Implement IndexedDB write for new agent profile
-        Err("WebService: create_agent_profile not yet implemented".into())
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        let mut profiles = Self::load_agent_profile_infos(&db)?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let id = format!("ap-{}", uuid::Uuid::new_v4());
+        let profile = AgentProfileInfo {
+            id,
+            name: name.to_owned(),
+            agent_did: agent_did.to_owned(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+
+        profiles.push(profile.clone());
+        Self::save_agent_profile_infos(&db, &profiles)?;
+        Ok(profile)
     }
 
-    async fn update_agent_profile(&self, _profile: &AgentProfileInfo) -> Result<(), String> {
-        // TODO: Implement IndexedDB update for agent profile
-        Err("WebService: update_agent_profile not yet implemented".into())
+    async fn update_agent_profile(&self, updated: &AgentProfileInfo) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        let mut profiles = Self::load_agent_profile_infos(&db)?;
+
+        let pos = profiles
+            .iter()
+            .position(|p| p.id == updated.id)
+            .ok_or_else(|| format!("agent profile not found: {}", updated.id))?;
+
+        let mut entry = updated.clone();
+        entry.updated_at = chrono::Utc::now().to_rfc3339();
+        profiles[pos] = entry;
+
+        Self::save_agent_profile_infos(&db, &profiles)
     }
 
-    async fn delete_agent_profile(&self, _profile_id: &str) -> Result<(), String> {
-        // TODO: Implement IndexedDB delete for agent profile
-        Err("WebService: delete_agent_profile not yet implemented".into())
+    async fn delete_agent_profile(&self, profile_id: &str) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
+        let mut profiles = Self::load_agent_profile_infos(&db)?;
+
+        let before = profiles.len();
+        profiles.retain(|p| p.id != profile_id);
+
+        if profiles.len() == before {
+            return Err(format!("agent profile not found: {profile_id}"));
+        }
+
+        Self::save_agent_profile_infos(&db, &profiles)
     }
 }
