@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -101,7 +101,7 @@ impl Envelope {
         );
 
         let bytes = self.signable_bytes();
-        key.verify(&bytes, &signature)
+        key.verify_strict(&bytes, &signature)
             .map_err(|_| ProtoError::VerificationFailed)
     }
 

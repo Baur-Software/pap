@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, VerifyingKey};
 use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -117,7 +117,7 @@ impl SessionAttestation {
         );
         let bytes = self.canonical_bytes();
         verifying_key
-            .verify(&bytes, &signature)
+            .verify_strict(&bytes, &signature)
             .map_err(|_| PapError::VerificationFailed)
     }
 
@@ -418,7 +418,7 @@ impl TransactionReceipt {
         );
         let bytes = self.canonical_bytes();
         verifying_key
-            .verify(&bytes, &signature)
+            .verify_strict(&bytes, &signature)
             .map_err(|_| PapError::VerificationFailed)
     }
 

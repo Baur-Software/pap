@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, VerifyingKey};
 use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -92,7 +92,7 @@ impl PeerVouch {
         );
         let canonical = self.canonical_bytes();
         verifying_key
-            .verify(&canonical, &signature)
+            .verify_strict(&canonical, &signature)
             .map_err(|_| FederationError::InvalidVouch("signature verification failed".into()))
     }
 
