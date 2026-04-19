@@ -256,6 +256,61 @@
       border-radius: 6px; padding: 3px 9px; margin-top: 10px;
     }
 
+    /* ─── Glossary ───────────────────────────────────────────────────── */
+    .glossary-section {
+      margin: 0 auto 80px;
+      max-width: 800px; padding: 0 24px;
+    }
+    .glossary-heading {
+      font-family: 'Satoshi', sans-serif; font-weight: 700;
+      font-size: 1.1rem; letter-spacing: -.01em;
+      color: var(--text); margin-bottom: 6px;
+    }
+    .glossary-sub {
+      font-size: .83rem; color: var(--faint);
+      margin-bottom: 28px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glossary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--border);
+    }
+    .glossary-term {
+      background: var(--surface);
+      padding: 16px 20px;
+    }
+    .glossary-term dt {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .82rem; font-weight: 600;
+      color: var(--violet); margin-bottom: 5px;
+    }
+    .glossary-term dd {
+      font-size: .87rem; color: var(--muted);
+      line-height: 1.6; margin: 0;
+    }
+    .glossary-term dd code {
+      font-family: 'JetBrains Mono', monospace; font-size: .82em;
+      background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 4px;
+      color: var(--teal);
+    }
+    /* glossary link style inside faq bodies */
+    .faq-body a.gloss {
+      color: var(--violet);
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-decoration-color: rgba(139,127,245,.4);
+      text-underline-offset: 2px;
+    }
+    .faq-body a.gloss:hover {
+      color: var(--text);
+      text-decoration-color: var(--violet);
+    }
+
     /* ─── Footer ──────────────────────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--border); padding: 40px 0;
@@ -353,11 +408,13 @@
         <div class="faq-body">
           <p>
             PAP v0.x is <strong>explicitly consumer-first</strong>. The trust anchor is a
-            <strong>device-bound Ed25519 keypair</strong> held by a single human principal
-            (<code>crates/pap-did/src/principal.rs</code>). Mandate delegation chains downstream
+            <strong>device-bound Ed25519 keypair</strong> held by a single human
+            <a href="#gloss-principal" class="gloss">principal</a>
+            (<code>crates/pap-did/src/principal.rs</code>).
+            <a href="#gloss-mandate" class="gloss">Mandate</a> delegation chains downstream
             <em>agents</em>, not other principals — principal-to-principal hierarchies are
             intentionally out of scope. Enterprise organizational structure is instead expressed
-            through Chrysalis-hosted agent workloads: a company runs agents in Chrysalis and
+            through <a href="#gloss-chrysalis" class="gloss">Chrysalis</a>-hosted agent workloads: a company runs agents in Chrysalis and
             routes advertisements to principals through normal PAP transport mechanisms, composing
             org-level orchestration at the agent layer without encoding it into the identity layer.
           </p>
@@ -402,16 +459,18 @@
         <div class="faq-body">
           <p>
             <strong>Yes — scoped to the recipient agent and cross-session receipt patterns.</strong>
-            SD-JWT (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim
+            <a href="#gloss-sd-jwt" class="gloss">SD-JWT</a> (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim
             salted hashes. It does not hide claim <em>structure</em>. Each agent in
             <code>pap-agents</code> declares exactly what it needs via
             <code>AgentMeta.requires_disclosure</code>
             (<code>crates/pap-agents/src/executor.rs</code>) — the orchestrator sends only those
             property slots via SD-JWT selective disclosure, no more. The
             <strong>recipient agent</strong> always learns which property slots were disclosed;
-            that is the intent of the handshake. Network-level visibility is not a concern:
-            RFC 9458 OHTTP with real HPKE encrypts the transport, so relay operators and
-            passive observers see nothing.
+            that is the intent of the handshake. Network-level visibility is configurable:
+            OHTTP (RFC 9458, HPKE DHKEM-X25519 + AES-128-GCM) is a setting in Papillon and
+            Chrysalis — when enabled, relay operators and passive observers see nothing.
+            Without it, transport encryption is present but query structure is visible to
+            the relay hop.
           </p>
           <p>
             Receipts sharpen the concern: <code>pap-core/src/receipt.rs</code> stores
@@ -451,23 +510,26 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>Each Papillon instance and Chrysalis node runs its own embedded OHTTP relay.</strong>
-            Baur Software does not operate a relay. There is no external relay operator to capture.
-            The relay is colocated with your own deployment — decentralized by topology, not just by policy.
+            <strong><a href="#gloss-ohttp" class="gloss">OHTTP</a> relay capability is built into
+            <a href="#gloss-papillon" class="gloss">Papillon</a> and
+            <a href="#gloss-chrysalis" class="gloss">Chrysalis</a> — it runs
+            colocated with each deployment, not on Baur Software infrastructure.</strong>
+            When OHTTP is configured, there is no external relay operator to capture traffic.
+            The decentralization is topological: the relay lives alongside your own node.
           </p>
           <p>
-            In <code>pap-transport/src/ohttp.rs</code>, <code>relay_url</code> is typed <code>Option&lt;String&gt;</code>:
-            when absent the protocol falls back to a direct connection, so removing the relay degrades
-            privacy but never breaks the handshake. The core privacy guarantees — SD-JWT selective
-            disclosure, ephemeral session DIDs, deny-by-default mandates — do not depend on OHTTP.
+            <code>relay_url</code> in <code>pap-transport/src/ohttp.rs</code> is typed
+            <code>Option&lt;String&gt;</code>. When absent, the protocol falls back to a direct
+            connection — privacy degrades but the handshake never breaks. The core guarantees
+            (SD-JWT selective disclosure, ephemeral session DIDs, deny-by-default mandates)
+            do not depend on OHTTP being enabled.
           </p>
           <p>
-            The relay uses real
+            When the relay is active, it uses
             <a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">RFC 9458</a>
-            HPKE in <code>pap-transport/src/ohttp.rs</code>: DHKEM(X25519, HKDF-SHA256) +
-            HKDF-SHA256 + AES-128-GCM (RFC 9180). Relay operators and passive observers cannot
-            read SD-JWT disclosure structure or query content. The relay architecture is correct
-            and the cryptography is now real.
+            HPKE: DHKEM(X25519, HKDF-SHA256) + AES-128-GCM (RFC 9180). Relay operators and
+            passive observers cannot link IP addresses to query content or SD-JWT disclosure
+            structure.
           </p>
         </div>
       </div>
@@ -559,8 +621,9 @@
         </button>
         <div class="faq-body">
           <p>
-            Scope containment is <strong>cryptographically enforced at every delegation step</strong>.
-            <code>pap-core/src/scope.rs</code> <code>contains()</code> verifies that a child mandate's
+            <a href="#gloss-scope" class="gloss">Scope containment</a> is <strong>cryptographically enforced at every delegation step</strong>.
+            <code>pap-core/src/scope.rs</code> <code>contains()</code> verifies that a child
+            <a href="#gloss-mandate" class="gloss">mandate</a>'s
             action set is a strict subset of its parent's. <code>mandate.rs</code> <code>verify_chain()</code>
             binds each delegation to its parent by hash — you cannot forge a valid chain that expands scope.
             TTL cannot exceed the parent mandate either.
@@ -777,8 +840,8 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>The LLM touches exactly one function in the PAP stack.</strong> The
-            <code>LlmClient</code> trait in <code>crates/pap-agents/src/llm.rs</code> exposes two methods:
+            <strong>The LLM touches exactly one function in the PAP stack.</strong>
+            The <code>LlmClient</code> trait in <code>crates/pap-agents/src/llm.rs</code> exposes two methods:
             <code>classify_intent(text, candidate_actions)</code> and <code>complete(system, user)</code>.
             That's the entire surface. The model receives the user's query string and a pre-computed list
             of allowed <code>schema:*Action</code> strings. It does not receive — and cannot request —
@@ -797,7 +860,8 @@
             <strong>Prompt injection</strong> — succeeds only at routing the query to the wrong catalog
             agent; it cannot forge the Ed25519 signature that authorizes scope. <strong>Context
             exfiltration</strong> — the model only receives query text, never the mandate or session keys.
-            <strong>Session correlation</strong> — each session generates a fresh ephemeral DID discarded
+            <strong>Session correlation</strong> — each session generates a fresh
+            <a href="#gloss-session-did" class="gloss">ephemeral session DID</a> discarded
             at close; the model sees the query text, never the session DID. <strong>Scope escalation</strong>
             — child mandates are cryptographically constrained to a subset of their parent's scope
             (<code>Scope::deny_all()</code> baseline, <code>contains()</code> enforcement);
@@ -838,8 +902,9 @@
             <strong>The IdP question carries a centralized assumption PAP is designed to make
             unnecessary.</strong> Okta and Azure AD solve a hub-and-spoke problem: a central
             authority that decides who gets access to what. PAP inverts this. Agents protect
-            themselves — they advertise what they require, principals present cryptographically
-            scoped mandates, and the protocol enforces access at the edge without any central
+            themselves — they advertise what they require,
+            <a href="#gloss-principal" class="gloss">principals</a> present cryptographically
+            scoped <a href="#gloss-mandate" class="gloss">mandates</a>, and the protocol enforces access at the edge without any central
             authority in the loop.
           </p>
           <p>
@@ -857,7 +922,7 @@
             <strong>For value exchange between agents, ecash receipts replace
             identity-gated permissions.</strong> Instead of "does this principal have the
             Analyst role in Okta?", access is structured as "does this principal hold a valid
-            payment proof for this action?" The ecash system (<code>crates/pap-ecash/</code>)
+            payment proof for this action?" The <a href="#gloss-ecash" class="gloss">ecash system</a> (<code>crates/pap-ecash/</code>)
             issues blind-signed RFC 9474 RSABSSA-SHA384-PSS tokens — the agent validates
             the token without learning who holds it, and the receipt proves the exchange
             occurred without linking it to an identity. This is more privacy-preserving
@@ -868,8 +933,9 @@
             <strong>What security teams actually need</strong> is answered by the protocol, not
             by an IdP bridge: access policy is encoded in mandate scope
             (<code>Scope::deny_all()</code> baseline, cryptographically enforced containment);
-            audit trail is the co-signed receipt chain (property references, never values,
-            held by both parties locally); revocation is TTL decay
+            audit trail is the <a href="#gloss-receipt" class="gloss">co-signed receipt</a> chain (property references, never values,
+            held by both parties locally); revocation is
+            <a href="#gloss-decay" class="gloss">TTL decay</a>
             (<code>Active → Degraded → ReadOnly → Suspended</code>) with no deprovisioning
             step required. The threat model of "who has a live session token?" doesn't apply
             to a system where every mandate expires by design.
@@ -897,8 +963,9 @@
             means per framework.
           </p>
           <p>
-            <strong>HIPAA — Minimum Necessary Rule:</strong> Every agent session uses Selective
-            Disclosure JWT (<code>crates/pap-credential/src/sd_jwt.rs</code>) for claim-level
+            <strong>HIPAA — Minimum Necessary Rule:</strong> Every agent session uses
+            <a href="#gloss-sd-jwt" class="gloss">Selective Disclosure JWT</a>
+            (<code>crates/pap-credential/src/sd_jwt.rs</code>) for claim-level
             cryptographic hiding. The mandate's <code>DisclosureSet</code>
             (<code>crates/pap-core/src/scope.rs</code>) specifies exactly which
             <code>schema:</code> properties an agent may receive. An agent requesting <code>schema:SSN</code> when the mandate permits
@@ -922,7 +989,7 @@
             expires without any deprovisioning step. The episode store
             (<code>papillon-shared/src/episode_db.rs</code>) is a local SQLite database under
             the principal's sole control — no platform coordinates erasure. Portability: PAP uses
-            no central registry; the principal's <code>did:key</code> is self-sovereign and moves
+            no central registry; the principal's <a href="#gloss-did-key" class="gloss"><code>did:key</code></a> is self-sovereign and moves
             to any compatible orchestrator.
           </p>
           <p>
@@ -958,6 +1025,76 @@
     </div><!-- /faq-list -->
 
   </div><!-- /container-md -->
+
+  <!-- ─── Glossary ──────────────────────────────────────────────────────── -->
+  <div class="glossary-section reveal">
+    <h2 class="glossary-heading">Glossary</h2>
+    <p class="glossary-sub">Key terms used throughout this FAQ.</p>
+    <dl class="glossary-grid">
+
+      <div class="glossary-term" id="gloss-principal">
+        <dt>Principal</dt>
+        <dd>The human whose data and intent drives a PAP session. The principal holds the root Ed25519 keypair and is the only entity that can issue or authorize mandates. Agents act <em>on behalf of</em> the principal, never independently.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-mandate">
+        <dt>Mandate</dt>
+        <dd>A cryptographically signed authorization granted by the principal to an agent. Specifies which actions the agent may take (<code>schema:*Action</code>), which data properties it may see, and how long it is valid (TTL). Child mandates cannot exceed their parent's scope.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-sd-jwt">
+        <dt>SD-JWT (Selective Disclosure JWT)</dt>
+        <dd>A credential format that hides individual claim <em>values</em> via per-claim salted hashes. The orchestrator reveals only the property slots required by each agent — no more. Defined in <code>crates/pap-credential/src/sd_jwt.rs</code>.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-did-key">
+        <dt>did:key</dt>
+        <dd>A W3C Decentralized Identifier method that derives the DID directly from a public key — no registry, no DNS, no issuer. PAP uses <code>did:key</code> with Ed25519 keypairs. Each principal's identity is self-sovereign and portable.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-papillon">
+        <dt>Papillon</dt>
+        <dd>The PAP reference client. A desktop browser for the <code>pap://</code> protocol — analogous to what Mosaic was for HTTP. Handles the 6-phase handshake, renders schema.org results as typed UI blocks, and holds the principal's keypair locally.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-chrysalis">
+        <dt>Chrysalis</dt>
+        <dd>The PAP peer-to-peer agent registry and federation mesh. Organisations run agent workloads on Chrysalis; principals discover and interact with them through normal PAP transport. Entry requires vouch-based peer admission — not open registration.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-ohttp">
+        <dt>OHTTP (Oblivious HTTP)</dt>
+        <dd>RFC 9458. Wraps an HTTP request in HPKE encryption so the relay cannot link the client's IP address to the request content. A configurable setting in Papillon and Chrysalis — when enabled, the relay sees neither query content nor SD-JWT structure.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-decay">
+        <dt>Decay states</dt>
+        <dd>The lifecycle of a PAP mandate: <code>Active → Degraded → ReadOnly → Suspended</code>. Expiry is automatic at TTL without any deprovisioning step. Provides cryptographic revocation without a central revocation authority.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-receipt">
+        <dt>Co-signed receipt</dt>
+        <dd>An immutable record of a completed agent session, signed by both the orchestrator and the agent. Stores property type references only (e.g. <code>schema:Person.schema:email</code>) — never values. Both parties hold a local copy; no platform stores receipts.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-ecash">
+        <dt>ecash / blind signatures</dt>
+        <dd>RFC 9474 RSABSSA-SHA384-PSS blind-signed tokens used in <code>crates/pap-ecash/</code>. The issuer cannot link the signing operation to the redemption — enabling private value exchange between agents without identity-gated permissions.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-scope">
+        <dt>Scope::deny_all()</dt>
+        <dd>The baseline mandate scope in <code>pap-core/src/scope.rs</code>. Every mandate starts with all actions denied; permissions are added explicitly. Child mandates are verified with <code>contains()</code> — a child can never exceed its parent's scope.</dd>
+      </div>
+
+      <div class="glossary-term" id="gloss-session-did">
+        <dt>Ephemeral session DID</dt>
+        <dd>A temporary <code>did:key</code> generated fresh for each PAP session and discarded at close. The session DID is unlinkable to the principal's long-term identity, preventing session correlation across interactions.</dd>
+      </div>
+
+    </dl>
+  </div>
+
 </main>
 
 <!-- ─── Footer ───────────────────────────────────────────────────────────── -->
