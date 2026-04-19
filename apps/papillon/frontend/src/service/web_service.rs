@@ -32,11 +32,23 @@ use papillon_shared::{
 };
 use serde_json::Value;
 
-/// Settings key under which `OrchestratorConfig` is persisted as JSON.
-const ORCHESTRATOR_CONFIG_KEY: &str = "orchestrator_config";
+/// Return the per-principal settings key for `OrchestratorConfig`.
+///
+/// Scoping the key to the principal DID prevents orchestrator config from
+/// leaking across identities in multi-profile deployments. When no identity is
+/// active yet (initial setup) the DID is an empty string, which produces the
+/// legacy global key `"orchestrator_config:"` — still isolated from any real
+/// principal and readable during first-run setup.
+fn orchestrator_config_key(principal_did: &str) -> String {
+    format!("orchestrator_config:{principal_did}")
+}
 
-/// Settings key under which `Vec<AgentProfileInfo>` is persisted as JSON.
-const AGENT_PROFILE_INFOS_KEY: &str = "agent_profile_infos";
+/// Return the per-principal settings key for `Vec<AgentProfileInfo>`.
+///
+/// Same scoping rationale as [`orchestrator_config_key`].
+fn agent_profile_infos_key(principal_did: &str) -> String {
+    format!("agent_profile_infos:{principal_did}")
+}
 
 /// The built-in local registry URL recognised as "this device's registry".
 #[cfg(feature = "wasm")]
@@ -136,8 +148,12 @@ impl WebService {
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    fn load_agent_profile_infos(db: &IndexedDbDatabase) -> Result<Vec<AgentProfileInfo>, String> {
-        match db.get_setting(AGENT_PROFILE_INFOS_KEY).map_err(|e| e.0)? {
+    fn load_agent_profile_infos(
+        db: &IndexedDbDatabase,
+        principal_did: &str,
+    ) -> Result<Vec<AgentProfileInfo>, String> {
+        let key = agent_profile_infos_key(principal_did);
+        match db.get_setting(&key).map_err(|e| e.0)? {
             Some(json) => {
                 serde_json::from_str(&json).map_err(|e| format!("deserialize agent profiles: {e}"))
             }
@@ -147,12 +163,23 @@ impl WebService {
 
     fn save_agent_profile_infos(
         db: &IndexedDbDatabase,
+        principal_did: &str,
         profiles: &[AgentProfileInfo],
     ) -> Result<(), String> {
+        let key = agent_profile_infos_key(principal_did);
         let json = serde_json::to_string(profiles)
             .map_err(|e| format!("serialize agent profiles: {e}"))?;
-        db.set_setting(AGENT_PROFILE_INFOS_KEY, &json)
-            .map_err(|e| e.0)
+        db.set_setting(&key, &json).map_err(|e| e.0)
+    }
+
+    /// Retrieve the active principal DID, falling back to an empty string if
+    /// no identity is currently active (e.g. during first-run setup).
+    fn active_did(&self) -> String {
+        self.identity
+            .lock()
+            .ok()
+            .and_then(|guard| guard.get_identity().map(|info| info.did.clone()))
+            .unwrap_or_default()
     }
 }
 
@@ -315,13 +342,21 @@ impl PapillonService for WebService {
     async fn list_registry_agents(&self, registry_url: &str) -> Result<Vec<AgentInfo>, String> {
         #[cfg(feature = "wasm")]
         {
+            // NOTE: `registry_url` is overloaded here: if it starts with "schema:", it is treated
+            // as a Schema.org action type for capability filtering; otherwise it is treated as a
+            // registry URL (only "pap://local" or empty is supported in WASM).
+            if !registry_url.starts_with("schema:") {
+                const LOCAL_URLS: &[&str] = &["", "pap://local", "local"];
+                if !LOCAL_URLS.iter().any(|&u| u == registry_url.trim()) {
+                    return Err(format!(
+                        "WebService: remote registry URL '{registry_url}' not supported in WASM"
+                    ));
+                }
+            }
             let registry = self
                 .registry
                 .lock()
                 .map_err(|e| format!("registry lock: {e}"))?;
-            // NOTE: `registry_url` is overloaded here: if it starts with "schema:", it is treated
-            // as a Schema.org action type for capability filtering; otherwise it is treated as a
-            // registry URL (only "pap://local" or empty is supported in WASM).
             let ads = if registry_url.starts_with("schema:") {
                 registry.query_by_action(registry_url)
             } else {
@@ -341,11 +376,9 @@ impl PapillonService for WebService {
     // ============================================================================
 
     async fn get_orchestrator_config(&self) -> Result<OrchestratorConfig, String> {
+        let key = orchestrator_config_key(&self.active_did());
         let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
-        match db
-            .get_setting(ORCHESTRATOR_CONFIG_KEY)
-            .map_err(|e| e.0)?
-        {
+        match db.get_setting(&key).map_err(|e| e.0)? {
             Some(json) => serde_json::from_str(&json)
                 .map_err(|e| format!("deserialize orchestrator config: {e}")),
             None => Ok(OrchestratorConfig::default()),
@@ -356,11 +389,11 @@ impl PapillonService for WebService {
         &self,
         config: &OrchestratorConfig,
     ) -> Result<OrchestratorConfig, String> {
+        let key = orchestrator_config_key(&self.active_did());
         let json = serde_json::to_string(config)
             .map_err(|e| format!("serialize orchestrator config: {e}"))?;
         let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
-        db.set_setting(ORCHESTRATOR_CONFIG_KEY, &json)
-            .map_err(|e| e.0)?;
+        db.set_setting(&key, &json).map_err(|e| e.0)?;
         Ok(config.clone())
     }
 
@@ -382,11 +415,9 @@ impl PapillonService for WebService {
             !identity.list_profiles().is_empty()
         };
         let llm_configured = {
+            let key = orchestrator_config_key(&self.active_did());
             let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
-            match db
-                .get_setting(ORCHESTRATOR_CONFIG_KEY)
-                .map_err(|e| e.0)?
-            {
+            match db.get_setting(&key).map_err(|e| e.0)? {
                 Some(json) => serde_json::from_str::<OrchestratorConfig>(&json)
                     .map(|cfg| !matches!(cfg.inference_substrate, LlmProvider::None))
                     .unwrap_or(false),
@@ -457,8 +488,9 @@ impl PapillonService for WebService {
     // ============================================================================
 
     async fn list_agent_profiles(&self) -> Result<Vec<AgentProfileInfo>, String> {
+        let did = self.active_did();
         let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
-        Self::load_agent_profile_infos(&db)
+        Self::load_agent_profile_infos(&db, &did)
     }
 
     async fn create_agent_profile(
@@ -466,8 +498,9 @@ impl PapillonService for WebService {
         name: &str,
         agent_did: &str,
     ) -> Result<AgentProfileInfo, String> {
+        let did = self.active_did();
         let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
-        let mut profiles = Self::load_agent_profile_infos(&db)?;
+        let mut profiles = Self::load_agent_profile_infos(&db, &did)?;
 
         let now = chrono::Utc::now().to_rfc3339();
         let id = format!("ap-{}", uuid::Uuid::new_v4());
@@ -480,13 +513,14 @@ impl PapillonService for WebService {
         };
 
         profiles.push(profile.clone());
-        Self::save_agent_profile_infos(&db, &profiles)?;
+        Self::save_agent_profile_infos(&db, &did, &profiles)?;
         Ok(profile)
     }
 
     async fn update_agent_profile(&self, updated: &AgentProfileInfo) -> Result<(), String> {
+        let did = self.active_did();
         let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
-        let mut profiles = Self::load_agent_profile_infos(&db)?;
+        let mut profiles = Self::load_agent_profile_infos(&db, &did)?;
 
         let pos = profiles
             .iter()
@@ -497,12 +531,13 @@ impl PapillonService for WebService {
         entry.updated_at = chrono::Utc::now().to_rfc3339();
         profiles[pos] = entry;
 
-        Self::save_agent_profile_infos(&db, &profiles)
+        Self::save_agent_profile_infos(&db, &did, &profiles)
     }
 
     async fn delete_agent_profile(&self, profile_id: &str) -> Result<(), String> {
+        let did = self.active_did();
         let db = self.db.lock().map_err(|e| format!("db lock: {e}"))?;
-        let mut profiles = Self::load_agent_profile_infos(&db)?;
+        let mut profiles = Self::load_agent_profile_infos(&db, &did)?;
 
         let before = profiles.len();
         profiles.retain(|p| p.id != profile_id);
@@ -511,6 +546,6 @@ impl PapillonService for WebService {
             return Err(format!("agent profile not found: {profile_id}"));
         }
 
-        Self::save_agent_profile_infos(&db, &profiles)
+        Self::save_agent_profile_infos(&db, &did, &profiles)
     }
 }
