@@ -79,7 +79,12 @@ pub struct WasmDynamicAgentDef {
     pub llm_instructions: String,
     #[serde(default)]
     pub subagents: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Deterministic operator key seed — derived on the fly from `name` via
+    /// SHA-256 and **never persisted** to IndexedDB.  Storing a raw signing-key
+    /// seed in the browser database would be a plaintext private-key leak;
+    /// since catalog seeds are fully deterministic (SHA-256 of agent name) they
+    /// can always be re-derived at runtime without any loss of functionality.
+    #[serde(skip)]
     pub operator_key_seed: Option<[u8; 32]>,
     #[serde(default)]
     pub published_to: Vec<String>,
@@ -185,11 +190,23 @@ impl WasmAgentRegistry {
         for json_str in raw_defs {
             match serde_json::from_str::<WasmDynamicAgentDef>(&json_str) {
                 Ok(def) => {
+                    #[cfg(target_arch = "wasm32")]
+                    let def_name = def.name.clone();
                     match def.to_signed_advertisement() {
                         Ok(ad) => {
-                            // Ignore AlreadyRegistered — can happen if DB has
-                            // duplicate entries from a previous interrupted seed.
-                            let _ = registry.register_local(ad);
+                            // Warn on duplicate — can happen if DB has duplicate
+                            // entries from a previous interrupted seed.
+                            if let Err(e) = registry.register_local(ad) {
+                                #[cfg(target_arch = "wasm32")]
+                                web_sys::console::warn_1(
+                                    &format!(
+                                        "WasmAgentRegistry: skipping duplicate agent '{}': {:?}",
+                                        def_name, e
+                                    )
+                                    .into(),
+                                );
+                                let _ = e;
+                            }
                             defs.push(def);
                         }
                         Err(_e) => {
@@ -252,6 +269,14 @@ impl WasmAgentRegistry {
     /// Returns the count of agents successfully seeded, or `Ok(0)` when
     /// already seeded.
     ///
+    /// **Partial-seeding behaviour**: this method skips seeding entirely when
+    /// *any* agents are already present in the database (it checks
+    /// `list_agent_defs().is_empty()`).  If a prior seeding run was
+    /// interrupted mid-way, the missing agents will **not** be backfilled
+    /// automatically — the check is presence-based, not count-based.  To force
+    /// a full reseed, clear all existing agents first (a `clear_agents()` helper
+    /// is not yet implemented; for now, drop and recreate the IndexedDB store).
+    ///
     /// In browser builds this method is `async` because it awaits IndexedDB
     /// persistence; on the native-feature path (tests) it is synchronous.
     #[cfg(target_arch = "wasm32")]
@@ -289,8 +314,9 @@ impl WasmAgentRegistry {
 
         for mut def in catalog_defs {
             // Derive deterministic operator keypair from name.
+            // NOTE: operator_key_seed is intentionally not persisted (marked
+            // #[serde(skip)]) — it is always re-derived from `name` at runtime.
             let seed: [u8; 32] = Sha256::digest(def.name.as_bytes()).into();
-            def.operator_key_seed = Some(seed);
 
             // Derive the DID from the seed and store it on the def.
             let signing_key = SigningKey::from_bytes(&seed);
@@ -673,6 +699,21 @@ mod tests {
                 "action '{}' in '{}' must start with 'schema:'",
                 def.action,
                 def.name
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_json_has_required_keys() {
+        let entries: Vec<serde_json::Value> = serde_json::from_str(CATALOG_JSON)
+            .expect("catalog.json must be valid JSON array");
+        assert!(!entries.is_empty(), "catalog must have entries");
+        let first = &entries[0];
+        for key in &["name", "provider", "action", "description"] {
+            assert!(
+                first.get(key).is_some(),
+                "catalog entry missing required key: {}",
+                key
             );
         }
     }

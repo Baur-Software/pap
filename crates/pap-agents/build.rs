@@ -70,6 +70,10 @@ fn load_toml_as_json(
     catalog_root: &std::path::Path,
     path: &std::path::Path,
 ) -> Option<serde_json::Value> {
+    // Emit a per-file rerun directive so Cargo rebuilds when any individual
+    // TOML file changes, not just when the directory mtime changes.
+    println!("cargo:rerun-if-changed={}", path.display());
+
     let raw = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {

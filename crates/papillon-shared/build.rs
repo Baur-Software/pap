@@ -76,6 +76,10 @@ fn load_toml_as_json(
     catalog_root: &std::path::Path,
     path: &std::path::Path,
 ) -> Option<serde_json::Value> {
+    // Emit a per-file rerun directive so Cargo rebuilds when any individual
+    // TOML file changes, not just when the directory mtime changes.
+    println!("cargo:rerun-if-changed={}", path.display());
+
     let raw = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -109,8 +113,8 @@ fn load_toml_as_json(
             .or_insert_with(|| serde_json::Value::String(rel));
 
         obj.entry("agent_did").or_insert(serde_json::Value::Null);
-        obj.entry("operator_key_seed")
-            .or_insert(serde_json::Value::Null);
+        // operator_key_seed is intentionally omitted — it is marked #[serde(skip)]
+        // on WasmDynamicAgentDef and is always re-derived from `name` at runtime.
         obj.entry("published_to")
             .or_insert_with(|| serde_json::Value::Array(vec![]));
         obj.entry("created_at")
