@@ -188,11 +188,10 @@ fn dispatch<H: AgentHandler>(
         ProtocolMessage::ReceiptForCoSign { receipt } => {
             require_phase(*phase, Phase::AwaitingReceipt, "ReceiptForCoSign")?;
             let _sid = require_session(session_id)?;
-        ProtocolMessage::ReceiptForCoSign { receipt } => {
-            let _sid = require_session(session_id)?;
             let signed = handler
                 .co_sign_receipt(receipt)
                 .map_err(|e| BluefieldError::ProtocolError(e.to_string()))?;
+            *phase = Phase::AwaitingClose;
             Ok(ProtocolMessage::ReceiptCoSigned { receipt: signed })
         }
 
@@ -412,7 +411,12 @@ mod tests {
             signatures: vec![],
             attestations: vec![],
         };
-        let resp = dispatch(&h, &mut sid, &mut phase, ProtocolMessage::ReceiptForCoSign { receipt });
+        let resp = dispatch(
+            &h,
+            &mut sid,
+            &mut phase,
+            ProtocolMessage::ReceiptForCoSign { receipt },
+        );
         assert!(resp.is_err());
     }
 
