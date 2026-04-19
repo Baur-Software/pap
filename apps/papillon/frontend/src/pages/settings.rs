@@ -22,7 +22,7 @@ pub fn SettingsPage() -> impl IntoView {
     let active_tab = RwSignal::new("profiles".to_string());
 
     view! {
-        <div class="settings-page settings-layout">
+        <div class="settings-layout">
 
             // ── Left nav ──
             <nav class="settings-nav">
