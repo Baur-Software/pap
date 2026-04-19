@@ -1,4 +1,4 @@
-//! Core protocol primitives for the Principal Agent Protocol.
+//! Core protocol primitives for the Principal Agent Protocol (PAP).
 //!
 //! - `scope` — Schema.org action references, deny-by-default, disclosure sets
 //! - `mandate` — hierarchical delegation with chain verification and decay
