@@ -9,11 +9,10 @@
 //!
 //! ```text
 //! # default device, port 7777, GID index 0
-//! cargo run -p pap-bluefield --example loopback --features rdma
+//! cargo run -p pap-bluefield-loopback
 //!
 //! # explicit device/port/GID
-//! cargo run -p pap-bluefield --example loopback --features rdma -- \
-//!     --device mlx5_2 --port 7777 --gid-index 0
+//! cargo run -p pap-bluefield-loopback -- --device mlx5_2 --port 7777 --gid-index 0
 //! ```
 //!
 //! # BlueField-2 ARM: which device to use
@@ -29,8 +28,7 @@
 //!
 //! ```text
 //! # Confirmed working on BlueField-2 ARM (FW 24.31.2006, Ubuntu 20.04):
-//! cargo run -p pap-bluefield --example loopback --features rdma -- \
-//!     --device mlx5_2 --gid-index 0
+//! cargo run -p pap-bluefield-loopback -- --device mlx5_2 --gid-index 0
 //! ```
 //!
 //! # Choosing the right GID index

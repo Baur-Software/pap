@@ -43,9 +43,5 @@ rdma-sys = { version = "0.3", optional = true }
 tokio = { workspace = true }
 rand  = { workspace = true }
 
-[[example]]
-name = "loopback"
-required-features = ["rdma"]
-
 [lints]
 workspace = true
