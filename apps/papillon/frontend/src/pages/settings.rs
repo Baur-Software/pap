@@ -323,13 +323,13 @@ fn GeneralTab() -> impl IntoView {
 
             // ── Inference Substrate (optional) ────────────────────────
             <h3 style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; font-family: var(--font-mono);">
-                "INFERENCE_SUBSTRATE"
+                "AI Model"
                 <span style="font-size: 10px; color: var(--text-tertiary); margin-left: 8px; text-transform: none; letter-spacing: 0;">"optional"</span>
             </h3>
             <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                "Synthesizes natural-language answers from structured agent data. "
-                "PAP routing works without it. Sending queries to an external provider "
-                "shares your query context with that provider."
+                "Turns structured agent data into plain-language answers. "
+                "Papillon works without one. Using an external provider "
+                "sends your questions to that company."
             </p>
             <select
                 style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px; margin-bottom: 16px;"
@@ -462,9 +462,9 @@ fn GeneralTab() -> impl IntoView {
                         "Security disclosure"
                     </p>
                     <p style="font-size: 12px; color: var(--text-secondary);">
-                        "The orchestrator has full context over your tokens, keys, and agent actions. "
-                        "Sending prompts to an external API discloses this context to the provider. "
-                        "PAP can still wrap these HTTP calls, but zero-trust guarantees no longer hold."
+                        "Papillon has full context over your activity and permissions. "
+                        "Sending prompts to an external AI service shares that context with the provider. "
+                        "Your interactions are no longer private to your device."
                     </p>
                 </div>
             </Show>
@@ -780,11 +780,11 @@ fn IdentityTab() -> impl IntoView {
                 {move || identity.info.get().map(|info| view! {
                     <div>
                         <div style="margin-bottom: 8px;">
-                            <span style="color: var(--text-secondary); font-size: 12px;">"DID: "</span>
+                            <span style="color: var(--text-secondary); font-size: 12px;">"Identity key: "</span>
                             <code style="font-size: 12px; word-break: break-all;">{info.did}</code>
                         </div>
                         <div>
-                            <span style="color: var(--text-secondary); font-size: 12px;">"Public Key: "</span>
+                            <span style="color: var(--text-secondary); font-size: 12px;">"Public key: "</span>
                             <code style="font-size: 12px; word-break: break-all;">{info.public_key_b64}</code>
                         </div>
                     </div>

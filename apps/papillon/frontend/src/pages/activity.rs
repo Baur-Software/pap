@@ -36,8 +36,8 @@ pub fn ActivityPage() -> impl IntoView {
                         </svg>
                     </div>
                     <div>
-                        <div class="ledger-title">"NEGOTIATION LEDGER"</div>
-                        <div class="ledger-subtitle">"PAP Protocol Exchange Log & Trust Verification"</div>
+                        <div class="ledger-title">"ACTIVITY LOG"</div>
+                        <div class="ledger-subtitle">"Agent interactions &amp; verified receipts"</div>
                     </div>
                 </div>
                 <div class="ledger-header-right">
@@ -59,8 +59,8 @@ pub fn ActivityPage() -> impl IntoView {
                                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
                                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                                 </svg>
-                                <div>"No protocol events yet."</div>
-                                <div style="margin-top: 6px; font-size: 11px; opacity: 0.5;">"Run a scenario to start recording PAP handshakes."</div>
+                                <div>"No activity yet."</div>
+                                <div style="margin-top: 6px; font-size: 11px; opacity: 0.5;">"Ask an agent something to see your interaction history here."</div>
                             </div>
                         }
                     >
@@ -86,7 +86,7 @@ pub fn ActivityPage() -> impl IntoView {
                                                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                                                 </svg>
                                             </div>
-                                            <span class="ledger-event-type">"PAP HANDSHAKE"</span>
+                                            <span class="ledger-event-type">"AGENT INTERACTION"</span>
                                             {if !session_id.is_empty() {
                                                 let short = if session_id.len() > 12 {
                                                     format!("ID: {}...", &session_id[..8])

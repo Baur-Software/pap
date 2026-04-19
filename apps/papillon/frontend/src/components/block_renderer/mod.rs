@@ -362,7 +362,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                             {format!("DATA VALID  \u{007e}{}h  \u{00b7}  refresh any time", ttl_hours)}
                         </div>
                         <div class="awaiting-approval-mandate-note">
-                            "AGENT ACCESS EXPIRES  with this mandate"
+                            "PERMISSION REVOKES  when the time above runs out"
                         </div>
 
                         <div class="awaiting-approval-actions">
@@ -807,7 +807,7 @@ fn PhaseDots(current_phase: u8, #[prop(default = false)] failed: bool) -> impl I
         .collect::<Vec<_>>();
 
     view! {
-        <div class="phase-dots" aria-live="polite" aria-label=move || format!("Handshake phase {} of 6", current_phase)>
+        <div class="phase-dots" aria-live="polite" aria-label=move || format!("Connecting, step {} of 6", current_phase)>
             {dots}
         </div>
     }
@@ -1022,18 +1022,18 @@ fn ProvenancePanel(block: papillon_shared::CanvasBlock) -> impl IntoView {
                 <span class=decay_class>{decay_state.clone()}</span>
             </div>
 
-            // Agent DID row (hidden for on-device synthesizer)
+            // Agent identity row (hidden for on-device synthesizer)
             <Show when=move || !is_on_device>
                 <div class="prov-did-row">
-                    <span class="prov-label">"DID"</span>
+                    <span class="prov-label">"AGENT"</span>
                     <span class="prov-did" title=agent_did.clone()>{agent_did_short.clone()}</span>
                 </div>
             </Show>
 
-            // Issuer DID row
+            // Your identity row (shows who authorized this)
             <Show when=move || has_issuer_did>
                 <div class="prov-did-row">
-                    <span class="prov-label">"PRINCIPAL"</span>
+                    <span class="prov-label">"YOU"</span>
                     <span class="prov-did" title=issuer_did.clone()>{issuer_did_short.clone()}</span>
                 </div>
             </Show>
