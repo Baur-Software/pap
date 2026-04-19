@@ -137,27 +137,44 @@ impl CryptoAccel for SoftwareCrypto {
 ///
 /// # Wiring guide (for the DOCA implementer)
 ///
-/// 1. **`new()`** — call `doca_crypto_ctx_create()`; on success store the
-///    context handle and set `hw_available = true`.
-/// 2. **`sign()`** — post an Ed25519 sign job to the DOCA work-queue; poll
-///    `doca_workq_progress_retrieve()` until complete; return the signature.
-/// 3. **`verify()`** — post an Ed25519 verify job similarly.
+/// **DOCA 2.x+ Progress Engine model** (replaces the DOCA 1.x work-queue API):
 ///
-/// Reference: <https://docs.nvidia.com/doca/sdk/doca+crypto/index.html>
+/// 1. **`new()`** — use the BlueField PKA engine via the OpenSSL DOCA engine
+///    (`-engine pka`) for Ed25519/ECDSA operations, or wire `doca_ec` for
+///    elliptic-curve tasks.  There is no `doca_crypto_ctx_create()` in DOCA 2.x;
+///    the correct entry points are `doca_ec_create()` (for EC math primitives)
+///    or the PKA OpenSSL engine for high-level sign/verify.
+///    On success set `hw_available = true`.
+/// 2. **`sign()`** / **`verify()`** — allocate a `doca_ec` task via
+///    `doca_ec_task_sign_alloc_init()`, submit with `doca_task_submit()`, then
+///    drive the Progress Engine with `doca_pe_progress()` until the completion
+///    callback fires.  Do **not** call the removed `doca_workq_progress_retrieve()`.
+///
+/// Relevant DOCA 2.x docs:
+/// - EC/PKA: <https://docs.nvidia.com/doca/sdk/doca+crypto+acceleration/index.html>
+/// - Progress Engine: <https://docs.nvidia.com/doca/sdk/doca+core/index.html>
+/// - DOCA SHA (BF-2 only): <https://docs.nvidia.com/doca/sdk/doca+sha/index.html>
+///
+/// **Note on DOCA version:** The installed BF-2 ships DOCA 1.1.x which has
+/// `doca-dpi`, `doca-flow`, and `doca-utils` but **no `doca-crypto` package**.
+/// The crypto/PKA acceleration path requires DOCA 2.x (BF-OS 3.9+).
 #[cfg(feature = "doca-crypto")]
 pub struct DocaCrypto {
     /// Software fallback — always valid.
     sw: SoftwareCrypto,
-    /// True once `doca_crypto_ctx_create()` succeeds in [`DocaCrypto::new`].
+    /// True once the DOCA PKA/EC context is successfully initialised in
+    /// [`DocaCrypto::new`].
     hw_available: bool,
 }
 
 #[cfg(feature = "doca-crypto")]
 impl DocaCrypto {
-    /// Initialise.  Attempts to open the DOCA crypto context; falls back to
+    /// Initialise.  Attempts to open the DOCA PKA/EC context; falls back to
     /// [`SoftwareCrypto`] and sets `hw_available = false` if unavailable.
     pub fn new(key: SigningKey) -> Self {
-        // TODO(doca-crypto): call `doca_crypto_ctx_create()` here.
+        // TODO(doca-crypto): wire DOCA 2.x EC/PKA here (requires DOCA 2.x / BF-OS 3.9+).
+        //   Use doca_ec_create() + doca_pe_create() for the Progress Engine model.
+        //   doca_workq_* APIs from DOCA 1.x are removed — do not use them.
         //   On success:  set hw_available = true and store the context handle.
         //   On failure:  leave hw_available = false (software fallback active).
         //
@@ -181,10 +198,10 @@ impl DocaCrypto {
 impl CryptoAccel for DocaCrypto {
     fn sign(&self, data: &[u8]) -> [u8; 64] {
         if self.hw_available {
-            // TODO(doca-crypto): submit an Ed25519 sign job to the DOCA
-            // work-queue and return the hardware-produced signature.
-            // Replace this unimplemented! with the real SDK call once
-            // doca_crypto_ctx_create() is wired in DocaCrypto::new().
+            // TODO(doca-crypto): submit an Ed25519 sign task via doca_ec /
+            // PKA Progress Engine (DOCA 2.x) and return the hardware signature.
+            // Use doca_task_submit() + doca_pe_progress() — the DOCA 1.x
+            // doca_workq_* API has been removed.  Wire context in new() first.
             unimplemented!("DOCA hardware sign path not yet wired — see TODO in DocaCrypto::new")
         } else {
             // NOTE: using software fallback.
@@ -194,10 +211,10 @@ impl CryptoAccel for DocaCrypto {
 
     fn verify(&self, data: &[u8], signature: &[u8; 64]) -> Result<(), BluefieldError> {
         if self.hw_available {
-            // TODO(doca-crypto): submit an Ed25519 verify job to the DOCA
-            // work-queue and return the result.
-            // Replace this unimplemented! with the real SDK call once
-            // doca_crypto_ctx_create() is wired in DocaCrypto::new().
+            // TODO(doca-crypto): submit an Ed25519 verify task via doca_ec /
+            // PKA Progress Engine (DOCA 2.x) and return the result.
+            // Use doca_task_submit() + doca_pe_progress() — the DOCA 1.x
+            // doca_workq_* API has been removed.  Wire context in new() first.
             unimplemented!(
                 "DOCA hardware verify path not yet wired — see TODO in DocaCrypto::new"
             )
