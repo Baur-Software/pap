@@ -1914,6 +1914,9 @@ impl DatabaseOps for NativeDatabase {
     // ── Dynamic Agent Def CRUD ────────────────────────────────────────────────
 
     fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError> {
+        // Validate JSON is well-formed before storing
+        serde_json::from_str::<serde_json::Value>(json)
+            .map_err(|e| DbError(format!("upsert_agent_def: invalid JSON for '{}': {e}", name)))?;
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         conn.execute(
             "INSERT OR REPLACE INTO agent_defs (name, json) VALUES (?1, ?2)",
@@ -1926,7 +1929,7 @@ impl DatabaseOps for NativeDatabase {
     fn list_agent_defs(&self) -> Result<Vec<String>, DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let mut stmt = conn
-            .prepare("SELECT json FROM agent_defs")
+            .prepare("SELECT json FROM agent_defs ORDER BY name")
             .map_err(|e| DbError(format!("db prepare agent_defs: {e}")))?;
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))

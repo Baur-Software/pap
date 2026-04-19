@@ -106,6 +106,8 @@ impl IndexedDbDatabase {
     fn restore_state(&self, state: &serde_json::Value) -> Result<(), DbError> {
         // Check snapshot version (if missing, assume v1 — the first version)
         let _version = state.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
+        // v1 snapshots have no "agents" key — key absence is sufficient for backward
+        // compat; no branching on _version is needed.
 
         if let Some(episodes) = state.get("episodes").and_then(|v| v.as_array()) {
             for (_i, val) in episodes.iter().enumerate() {
