@@ -252,6 +252,41 @@ jobs:
           path: apps/papillon/frontend/dist/
           retention-days: 1
 
+  build-registry-image:
+    name: Build registry Docker image
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true')
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build registry image (with GHA layer cache)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/registry/Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: pap-registry:ci
+          cache-from: type=gha,scope=pap-registry-ci
+          cache-to: type=gha,scope=pap-registry-ci,mode=max
+
+      - name: Export image as compressed tarball
+        run: docker save pap-registry:ci | zstd -T0 -3 -o /tmp/pap-registry-ci.tar.zst
+
+      - name: Upload registry image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pap-registry-ci-image
+          path: /tmp/pap-registry-ci.tar.zst
+          retention-days: 1
+
   bench:
     name: Benchmark (regression gate)
     runs-on: ubuntu-latest
@@ -447,33 +482,25 @@ jobs:
   chrysalis-e2e-tier2:
     name: E2E Tier 2 (Chrysalis functional tests)
     runs-on: ubuntu-latest
-    needs: [changes, build-wasm]
+    needs: [changes, build-wasm, build-registry-image]
     if: |
       always() &&
       (needs.changes.result == 'skipped' || needs.changes.outputs.e2e == 'true') &&
-      needs.build-wasm.result == 'success'
+      needs.build-wasm.result == 'success' &&
+      needs.build-registry-image.result == 'success'
     env:
       CHRYSALIS_PORT: "7890"
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev curl
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build Chrysalis registry image
-        uses: docker/build-push-action@v7
+      - name: Download registry image artifact
+        uses: actions/download-artifact@v8
         with:
-          context: .
-          file: apps/registry/Dockerfile
-          target: runtime
-          push: false
-          load: true
-          tags: pap-registry:ci
-          cache-from: type=gha,scope=pap-registry-ci
-          cache-to: type=gha,scope=pap-registry-ci,mode=max
+          name: pap-registry-ci-image
+          path: /tmp
+
+      - name: Load registry image
+        run: zstd -d /tmp/pap-registry-ci.tar.zst --stdout | docker load
 
       - name: Start Chrysalis registry (no-TLS, plain HTTP)
         run: |
