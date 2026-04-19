@@ -835,16 +835,16 @@
         </button>
         <div class="faq-body">
           <p>
-            <strong>If your first instinct is IdP integration, you're importing a centralized
-            assumption PAP is designed to make unnecessary.</strong> Okta and Azure AD solve a
-            hub-and-spoke problem: a central authority that decides who gets access to what.
-            PAP inverts this. Agents protect themselves — they advertise what they require,
-            principals present cryptographically scoped mandates, and the protocol enforces
-            access at the edge without any central authority in the loop.
+            <strong>The IdP question carries a centralized assumption PAP is designed to make
+            unnecessary.</strong> Okta and Azure AD solve a hub-and-spoke problem: a central
+            authority that decides who gets access to what. PAP inverts this. Agents protect
+            themselves — they advertise what they require, principals present cryptographically
+            scoped mandates, and the protocol enforces access at the edge without any central
+            authority in the loop.
           </p>
           <p>
             <strong>The PAP-native pattern for enterprise agent access control:</strong>
-            Your company runs agents on Chrysalis. Each agent declares its
+            An enterprise runs agents on Chrysalis. Each agent declares its
             <code>requires_disclosure</code> — the minimum SD-JWT claims it needs to execute
             (e.g. <code>schema:Organization.schema:memberOf</code> to verify employment, or
             a <code>schema:Role</code> claim scoped to a department). A principal's orchestrator
@@ -854,9 +854,9 @@
             is in the path. No central session store. The agent is the access control point.
           </p>
           <p>
-            <strong>For value exchange between agents, use ecash receipts rather than
+            <strong>For value exchange between agents, ecash receipts replace
             identity-gated permissions.</strong> Instead of "does this principal have the
-            Analyst role in Okta?", structure access as "does this principal hold a valid
+            Analyst role in Okta?", access is structured as "does this principal hold a valid
             payment proof for this action?" The ecash system (<code>crates/pap-ecash/</code>)
             issues blind-signed RFC 9474 RSABSSA-SHA384-PSS tokens — the agent validates
             the token without learning who holds it, and the receipt proves the exchange
@@ -865,14 +865,14 @@
             token is simply gone.
           </p>
           <p>
-            <strong>What your CISO actually needs</strong> is answered by the protocol, not
+            <strong>What security teams actually need</strong> is answered by the protocol, not
             by an IdP bridge: access policy is encoded in mandate scope
             (<code>Scope::deny_all()</code> baseline, cryptographically enforced containment);
             audit trail is the co-signed receipt chain (property references, never values,
             held by both parties locally); revocation is TTL decay
             (<code>Active → Degraded → ReadOnly → Suspended</code>) with no deprovisioning
-            step required. The threat model your CISO is used to — "who has a live session
-            token?" — doesn't apply to a system where every mandate expires by design.
+            step required. The threat model of "who has a live session token?" doesn't apply
+            to a system where every mandate expires by design.
           </p>
         </div>
       </div>
