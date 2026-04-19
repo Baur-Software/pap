@@ -1,0 +1,23 @@
+[package]
+name = "pap-bluefield-loopback"
+description = "Full PAP 6-phase handshake over RDMA loopback on a BlueField DPU"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "bluefield-loopback"
+path = "src/main.rs"
+
+[dependencies]
+pap-bluefield = { workspace = true, features = ["rdma"] }
+pap-core      = { workspace = true }
+pap-proto     = { workspace = true }
+pap-transport = { workspace = true }
+serde_json    = { workspace = true }
+chrono        = { workspace = true }
+tokio         = { workspace = true }
+
+[lints]
+workspace = true

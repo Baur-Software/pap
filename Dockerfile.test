@@ -18,4 +18,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         --exclude pap-wasm \
         --exclude pap-python \
         --exclude papillon \
+        --exclude pap-bluefield \
         2>&1
+
+# pap-bluefield mock tests (no libibverbs / RDMA hardware required)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/workspace/target \
+    cargo test -p pap-bluefield --no-default-features --features mock 2>&1

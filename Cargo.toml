@@ -10,6 +10,7 @@ members = [
     "crates/pap-webauthn",
     "crates/pap-proto",
     "crates/pap-transport",
+    "crates/pap-bluefield",
     "crates/pap-federation",
     "crates/pap-agents",
     "crates/pap-tee",
@@ -33,6 +34,7 @@ members = [
     "examples/protocol-envelope",
     "examples/tee-attestation",
     "examples/selective-disclosure-decay",
+    "examples/bluefield-loopback",
 ]
 
 [workspace.package]
@@ -52,6 +54,7 @@ pap-marketplace = { path = "crates/pap-marketplace" }
 pap-webauthn = { path = "crates/pap-webauthn" }
 pap-proto = { path = "crates/pap-proto" }
 pap-transport = { path = "crates/pap-transport" }
+pap-bluefield = { path = "crates/pap-bluefield", default-features = false }
 pap-federation = { path = "crates/pap-federation", default-features = false }
 pap-agents = { path = "crates/pap-agents" }
 pap-tee = { path = "crates/pap-tee" }
@@ -83,7 +86,7 @@ rcgen = { version = "0.13", features = ["ring"] }
 rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
 tokio-rustls = "0.26"
-axum-server = { version = "0.8", features = ["tls-rustls"] }
+axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
 tokio-tungstenite = "0.28"
 futures-util = "0.3"
 hex = "0.4"

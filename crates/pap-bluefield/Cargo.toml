@@ -1,0 +1,47 @@
+[package]
+name = "pap-bluefield"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "RDMA transport and hardware-accelerated crypto for PAP via NVIDIA BlueField DPU"
+
+# ── Features ──────────────────────────────────────────────────────────────────
+#
+# rdma (default)   — Real RDMA transport via libibverbs (ibv_* API).
+#                    Requires MLNX_OFED / DOCA installed on the host.
+#
+# doca-crypto      — Hardware-accelerated Ed25519 / AES-GCM via NVIDIA DOCA
+#                    Crypto API.  Requires DOCA SDK >= 2.7.
+#
+# mock             — In-memory channel for unit/integration tests without
+#                    BlueField hardware.  Always compiled in #[cfg(test)].
+[features]
+default = ["rdma"]
+rdma = ["dep:rdma-sys"]
+doca-crypto = []
+mock = []
+
+[dependencies]
+pap-transport = { workspace = true }
+pap-proto      = { workspace = true }
+pap-core       = { workspace = true }
+pap-did        = { workspace = true }
+chrono         = { workspace = true }
+ed25519-dalek  = { workspace = true }
+serde          = { workspace = true }
+serde_json     = { workspace = true }
+thiserror      = { workspace = true }
+uuid           = { workspace = true }
+tokio          = { workspace = true }
+
+# Low-level ibverbs bindings.  Only pulled in when the rdma feature is active.
+# Requires libibverbs-dev (Linux) or MLNX_OFED WinOF-2 (Windows).
+rdma-sys = { version = "0.3", optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+rand  = { workspace = true }
+
+[lints]
+workspace = true
