@@ -763,6 +763,64 @@
         </div>
       </div>
 
+      <!-- 11 -->
+      <div class="faq-item reveal" data-cat="enterprise">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">11</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
+              You've cryptographically secured the disclosure layer. How do you prevent the model itself from being the attack surface?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>The LLM touches exactly one function in the PAP stack.</strong> The
+            <code>LlmClient</code> trait in <code>crates/pap-agents/src/llm.rs</code> exposes two methods:
+            <code>classify_intent(text, candidate_actions)</code> and <code>complete(system, user)</code>.
+            That's the entire surface. The model receives the user's query string and a pre-computed list
+            of allowed <code>schema:*Action</code> strings. It does not receive — and cannot request —
+            mandate contents, scope, TTL, session DIDs, disclosure sets, or the principal's keypair.
+          </p>
+          <p>
+            <strong>Its output is validated before use.</strong> The return value of
+            <code>classify_intent</code> must match one of the strings in <code>candidate_actions</code>.
+            A hallucinated action that isn't on the list is discarded. The model controls which
+            catalog agent handles the query. It cannot alter the mandate that governs what that agent
+            is allowed to do — mandates are signed by the principal's device-bound Ed25519 key,
+            which the model never sees.
+          </p>
+          <p>
+            <strong>The four canonical LLM attack paths:</strong>
+            <strong>Prompt injection</strong> — succeeds only at routing the query to the wrong catalog
+            agent; it cannot forge the Ed25519 signature that authorizes scope. <strong>Context
+            exfiltration</strong> — the model only receives query text, never the mandate or session keys.
+            <strong>Session correlation</strong> — each session generates a fresh ephemeral DID discarded
+            at close; the model sees the query text, never the session DID. <strong>Scope escalation</strong>
+            — child mandates are cryptographically constrained to a subset of their parent's scope
+            (<code>Scope::deny_all()</code> baseline, <code>contains()</code> enforcement);
+            no model output can extend this.
+          </p>
+          <p>
+            <strong>The default is on-device.</strong> <code>LlmProvider::BuiltIn</code> runs inference
+            locally via Candle — no network call, no external endpoint, no logs leaving the device.
+            External providers (Mistral, Ollama, OpenAI-compatible) require the user to explicitly
+            configure an API key and endpoint URL. Even with an external provider, only query text
+            travels to the endpoint. For deployments requiring network-layer query privacy,
+            OHTTP (RFC 9458) with real HPKE decouples the IP address from the request content.
+          </p>
+          <p>
+            <strong>The LLM is also optional.</strong> The full 6-phase PAP handshake executes
+            deterministically via URL fast-path and BM25 semantic index without any model.
+            Setting <code>LlmProvider::None</code> gives a fully functional, cryptographically
+            sound protocol runtime. The model enhances intent resolution for ambiguous queries;
+            it gates no security decision.
+          </p>
+        </div>
+      </div>
+
     </div><!-- /faq-list -->
 
   </div><!-- /container-md -->
