@@ -169,30 +169,9 @@ pub fn App() -> impl IntoView {
             // No backend orchestrator in browser mode
             orchestrator.status.set(OrchestratorStatus::Unconfigured);
 
-            // Auto-connect to the co-located registry.
-            //
-            // Derive the registry URL from window.location so this works in
-            // any deployment (dev, staging, production) without a build-time
-            // env var.  The registry is assumed to be served from the same
-            // origin as the frontend — on the standard pap:// path.
-            //
-            // Fallback: the local dev registry at localhost:7890 is only used
-            // when we genuinely cannot determine the origin (should not happen
-            // in a browser context).
-            let registry_url = web_sys::window()
-                .and_then(|w| w.location().origin().ok())
-                .map(|origin| {
-                    // Translate http(s):// origin to the pap+http(s):// scheme
-                    // that connect_to() expects, so URL translation in
-                    // RegistryState::connect_to() produces the correct base URL.
-                    if origin.starts_with("https://") {
-                        origin.replacen("https://", "pap+https://", 1)
-                    } else {
-                        origin.replacen("http://", "pap+http://", 1)
-                    }
-                })
-                .unwrap_or_else(|| "pap+http://localhost:7890".to_string());
-            registry_state.connect_to(&registry_url);
+            // Browser mode has no embedded registry — the user connects to
+            // one from the Browse page (standalone registry app or remote).
+            // Nothing to auto-connect to here.
         });
     }
 
