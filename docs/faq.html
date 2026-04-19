@@ -737,16 +737,30 @@
             p99 benchmarks are in <code>benches/benches/p99.rs</code> with CI regression guards.
           </p>
           <p>
-            Two failure modes that remain unspecified:
+            Two edge cases worth understanding:
           </p>
           <p>
-            <strong>Network partition mid-handshake:</strong> fail-open is a security catastrophe for
-            financial or medical agents; fail-closed may be unacceptable for high-availability systems.
-            The behavior is undefined in the current specification.
+            <strong>Network drop mid-handshake</strong> — behavior depends on which transport
+            is in use. <strong>HTTP (stateless):</strong> each phase is an independent POST;
+            a connection failure surfaces as a <code>TransportError::ConnectionFailed</code>
+            immediately. The request either reached the server and was processed, or it didn't —
+            the caller retries or aborts. <strong>WebSocket (stateful):</strong> all six phases
+            share one persistent connection; a connection drop terminates the session handler
+            and the session is abandoned. Neither transport is fail-open — the error propagates
+            to the caller. The distinction that matters is idempotency: the HTTP path can be
+            retried per-phase; the WebSocket path requires starting a new session. The residual
+            concern for high-value agents is a server-side session stuck in a non-<code>Closed</code>
+            state after a client drop — orphaned ephemeral keys and partial mandate state that
+            expire with the mandate TTL.
           </p>
           <p>
-            <strong>TTL expiry during handshake:</strong> a mandate that expires mid-flight through a
-            6-phase sequence has no defined recovery path.
+            <strong>TTL expiry:</strong> mandate TTL is enforced at verification time
+            (<code>mandate.rs</code> <code>verify_chain()</code>), not as a running clock
+            during an active handshake. A mandate that was valid when the session opened
+            remains usable for that session's duration. The edge case is a mandate within
+            seconds of expiry when the handshake starts — the Phase 4 execution check may
+            see it as expired if the TTL ticks over between phases. No built-in grace period
+            or mid-flight renewal path exists today.
           </p>
         </div>
       </div>
