@@ -91,9 +91,9 @@ fn load_toml_as_json(
 
     // Inject fields that DynamicAgentDef requires but catalog TOMLs omit.
     if let Some(obj) = json_val.as_object_mut() {
-        // `source` — always "Catalog" for embedded catalog entries.
-        obj.entry("source")
-            .or_insert_with(|| serde_json::Value::String("Catalog".to_string()));
+        // `source` — always "Catalog" for embedded catalog entries; overwrite unconditionally
+        // so a TOML that accidentally sets source="UserCreated" doesn't leak through.
+        obj.insert("source".into(), serde_json::Value::String("Catalog".to_string()));
 
         // `catalog_path` — relative path from catalog root, forward-slash separators.
         let rel = path
@@ -138,7 +138,9 @@ fn toml_to_json(val: toml::Value) -> serde_json::Value {
     match val {
         toml::Value::String(s) => serde_json::Value::String(s),
         toml::Value::Integer(i) => serde_json::Value::Number(i.into()),
-        toml::Value::Float(f) => serde_json::json!(f),
+        toml::Value::Float(f) => serde_json::Number::from_f64(f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
         toml::Value::Boolean(b) => serde_json::Value::Bool(b),
         toml::Value::Datetime(dt) => serde_json::Value::String(dt.to_string()),
         toml::Value::Array(arr) => {

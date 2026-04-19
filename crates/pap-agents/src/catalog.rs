@@ -44,7 +44,8 @@ struct CatalogEntry {
 #[cfg(target_arch = "wasm32")]
 pub fn default_catalog() -> Vec<DynamicAgentDef> {
     const CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/catalog.json"));
-    serde_json::from_str(CATALOG_JSON).unwrap_or_default()
+    serde_json::from_str(CATALOG_JSON)
+        .expect("embedded catalog.json failed to deserialize — re-run build.rs to regenerate")
 }
 
 pub fn load_catalog(catalog_dir: &Path) -> Vec<DynamicAgentDef> {
@@ -185,6 +186,23 @@ mod tests {
                 "action '{}' in '{}' does not start with 'schema:'",
                 def.action,
                 def.name
+            );
+        }
+    }
+
+    #[test]
+    fn embedded_catalog_deserializes() {
+        const CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/catalog.json"));
+        let defs: Vec<DynamicAgentDef> = serde_json::from_str(CATALOG_JSON)
+            .expect("embedded catalog.json must deserialize without error");
+        assert!(defs.len() >= 300, "expected 300+ entries, got {}", defs.len());
+        // Verify source field is always Catalog
+        for def in &defs {
+            assert!(
+                matches!(def.source, DynamicAgentSource::Catalog),
+                "expected source=Catalog for {}, got {:?}",
+                def.name,
+                def.source
             );
         }
     }

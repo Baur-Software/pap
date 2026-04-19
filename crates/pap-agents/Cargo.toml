@@ -37,8 +37,8 @@ candle-transformers = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 
 [build-dependencies]
-toml = "0.8"
-serde_json = "1"
+toml = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 pap-credential-store = { workspace = true, features = ["testing"] }
