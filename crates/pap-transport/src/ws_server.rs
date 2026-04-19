@@ -119,9 +119,13 @@ async fn handle_connection(
             _ => continue,
         };
 
+        // Malformed JSON from a remote peer returns Err — the ? here terminates
+        // the connection gracefully instead of panicking the server process.
         let ws_msg: WsMessage = serde_json::from_str(&text)
             .map_err(|e| TransportError::InvalidResponse(format!("deserialize failed: {e}")))?;
 
+        // Protocol errors from a remote peer (wrong phase, bad payload, etc.)
+        // propagate as Err, closing this connection without crashing the process.
         let response = dispatch_message(&handler, &mut session_id, ws_msg)?;
         let is_close = matches!(&response.payload, Some(ProtocolMessage::SessionClosed));
 

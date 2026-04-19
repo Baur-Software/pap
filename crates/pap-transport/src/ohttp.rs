@@ -546,6 +546,7 @@ pub fn fetch_key_config(did_doc: &pap_did::DidDocument) -> Result<OhttpConfig, T
         .decode(key_config_b64)
         .map_err(|e| TransportError::OhttpEncryptionFailed(format!("base64url decode: {e}")))?;
 
+    // Malformed OHTTP key config from a federation peer — reject, don't crash.
     let (key_id, pub_key) = OhttpKeyConfig::from_wire_bytes(&bytes)?;
 
     Ok(OhttpConfig::default()
