@@ -516,7 +516,7 @@ pub fn get_node_info(state: State<'_, AppState>) -> Result<serde_json::Value, Pa
         .map_err(|e| PapillonError::from(e.to_string()))?;
 
     let did = {
-        let signer = state.signer.read().unwrap();
+        let signer = state.signer.read().unwrap_or_else(|e| e.into_inner());
         match signer.as_ref() {
             Some(s) => s.did(),
             None => "unknown".to_string(),

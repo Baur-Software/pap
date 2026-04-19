@@ -155,7 +155,7 @@ pub(crate) async fn resolve_agent(
 
     // Read inference substrate from the orchestrator config for substrate scoring.
     let inference_substrate = {
-        let cfg = state.orchestrator_config.read().unwrap();
+        let cfg = state.orchestrator_config.read().unwrap_or_else(|e| e.into_inner());
         cfg.inference_substrate.clone()
     };
 

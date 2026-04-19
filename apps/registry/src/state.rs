@@ -32,7 +32,7 @@ pub struct SyncEventLog {
 impl SyncEventLog {
     /// Record a sync event for `peer_did`, keeping only the last 100.
     pub fn record(&self, peer_did: &str, event: SyncEvent) {
-        let mut map = self.inner.lock().expect("sync event log mutex poisoned");
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let deque = map.entry(peer_did.to_owned()).or_default();
         deque.push_front(event);
         deque.truncate(100);
@@ -40,7 +40,7 @@ impl SyncEventLog {
 
     /// Return up to 100 most-recent events for `peer_did`, newest first.
     pub fn get(&self, peer_did: &str) -> Vec<SyncEvent> {
-        let map = self.inner.lock().expect("sync event log mutex poisoned");
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         map.get(peer_did)
             .map(|d| d.iter().cloned().collect())
             .unwrap_or_default()

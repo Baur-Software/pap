@@ -176,7 +176,7 @@ async fn main() -> anyhow::Result<()> {
         };
 
         // Now acquire the lock for synchronous in-memory registration only.
-        let mut reg = registry.lock().unwrap();
+        let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
         for ad in agents {
             if let Err(e) = reg.register_local(ad.clone()) {
                 tracing::warn!("Skipping agent {} during hydration: {e}", ad.hash());

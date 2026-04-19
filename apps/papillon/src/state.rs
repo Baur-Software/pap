@@ -122,30 +122,30 @@ impl AppState {
     pub fn clone_for_background(&self) -> Self {
         Self {
             signer: RwLock::new(None), // Signer will be recreated from seed in background thread
-            principal_seed: RwLock::new(self.principal_seed.read().unwrap().clone()),
+            principal_seed: RwLock::new(self.principal_seed.read().unwrap_or_else(|e| e.into_inner()).clone()),
             profiles_db: self.profiles_db.clone(),
-            active_profile_id: RwLock::new(self.active_profile_id.read().unwrap().clone()),
-            profiles: RwLock::new(self.profiles.read().unwrap().clone()),
+            active_profile_id: RwLock::new(self.active_profile_id.read().unwrap_or_else(|e| e.into_inner()).clone()),
+            profiles: RwLock::new(self.profiles.read().unwrap_or_else(|e| e.into_inner()).clone()),
             registries: RwLock::new(HashMap::new()), // Will be populated on demand
             local_registry: self.local_registry.clone(),
-            bookmarks: RwLock::new(self.bookmarks.read().unwrap().clone()),
-            orchestrator_config: RwLock::new(self.orchestrator_config.read().unwrap().clone()),
+            bookmarks: RwLock::new(self.bookmarks.read().unwrap_or_else(|e| e.into_inner()).clone()),
+            orchestrator_config: RwLock::new(self.orchestrator_config.read().unwrap_or_else(|e| e.into_inner()).clone()),
             shared_llm_provider: self.shared_llm_provider.clone(),
             model_manager: self.model_manager.clone(),
             agent_keypairs: RwLock::new(HashMap::new()), // Will be populated on demand
             db: self.db.clone(),
-            key_backed_up: RwLock::new(*self.key_backed_up.read().unwrap()),
+            key_backed_up: RwLock::new(*self.key_backed_up.read().unwrap_or_else(|e| e.into_inner())),
             successor_designations: RwLock::new(
-                self.successor_designations.read().unwrap().clone(),
+                self.successor_designations.read().unwrap_or_else(|e| e.into_inner()).clone(),
             ),
-            resource_dir: RwLock::new(self.resource_dir.read().unwrap().clone()),
-            data_dir: RwLock::new(self.data_dir.read().unwrap().clone()),
+            resource_dir: RwLock::new(self.resource_dir.read().unwrap_or_else(|e| e.into_inner()).clone()),
+            data_dir: RwLock::new(self.data_dir.read().unwrap_or_else(|e| e.into_inner()).clone()),
             local_agents: self.local_agents.clone(),
             endpoint_registry: RwLock::new(EndpointRegistry::new()),
             federation_port: self.federation_port,
-            node_endpoint: RwLock::new(self.node_endpoint.read().unwrap().clone()),
-            node_cert_fingerprint: RwLock::new(self.node_cert_fingerprint.read().unwrap().clone()),
-            local_pap_urls: RwLock::new(self.local_pap_urls.read().unwrap().clone()),
+            node_endpoint: RwLock::new(self.node_endpoint.read().unwrap_or_else(|e| e.into_inner()).clone()),
+            node_cert_fingerprint: RwLock::new(self.node_cert_fingerprint.read().unwrap_or_else(|e| e.into_inner()).clone()),
+            local_pap_urls: RwLock::new(self.local_pap_urls.read().unwrap_or_else(|e| e.into_inner()).clone()),
             // Each clone gets its own isolated challenge store — background
             // threads never need to complete WebAuthn ceremonies.
             webauthn_challenges: WebAuthnChallengeStore::new(),
@@ -375,7 +375,7 @@ impl AppState {
         // Register app-specific agents in local_registry so they appear in
         // list_agents() and resolve_agent() discovery — not just in handlers.
         {
-            let mut reg = local_registry.lock().expect("registry lock poisoned");
+            let mut reg = local_registry.lock().unwrap_or_else(|e| e.into_inner());
 
             // Social Discovery — finds people via their Trait Beacons
             let social_kp = PrincipalKeypair::generate();

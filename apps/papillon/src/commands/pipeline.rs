@@ -80,7 +80,7 @@ async fn run_pipeline_node(
     let resolved = resolve_agent(state, at, agent_name, &[]).await?;
 
     let principal_kp = {
-        let seed_guard = state.principal_seed.read().unwrap();
+        let seed_guard = state.principal_seed.read().unwrap_or_else(|e| e.into_inner());
         let seed = seed_guard
             .as_ref()
             .ok_or_else(|| PapillonError::from("No identity configured"))?;

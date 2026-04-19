@@ -117,7 +117,7 @@ pub(crate) async fn classify_intent(
     };
 
     let principal_kp = {
-        let seed_guard = state.principal_seed.read().unwrap();
+        let seed_guard = state.principal_seed.read().unwrap_or_else(|e| e.into_inner());
         let Some(seed) = seed_guard.as_ref() else {
             nlu_fallback!();
         };
@@ -166,7 +166,7 @@ pub(crate) async fn classify_intent(
         .to_owned();
 
     let threshold = {
-        let cfg = state.orchestrator_config.read().unwrap();
+        let cfg = state.orchestrator_config.read().unwrap_or_else(|e| e.into_inner());
         cfg.intent_confidence_threshold
     };
 

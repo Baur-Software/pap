@@ -54,7 +54,7 @@ impl TraitBeaconAgent {
     /// Replace the advertised profile. Called when the user saves
     /// changes in the Advertise settings page.
     pub fn set_profile(&self, profile: serde_json::Value) {
-        *self.profile.write().expect("trait beacon rwlock poisoned") = profile;
+        *self.profile.write().unwrap_or_else(|e| e.into_inner()) = profile;
     }
 }
 
@@ -110,7 +110,7 @@ impl AgentHandler for TraitBeaconAgent {
         Ok(self
             .profile
             .read()
-            .expect("trait beacon rwlock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .clone())
     }
 
