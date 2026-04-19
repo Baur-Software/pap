@@ -99,9 +99,9 @@ test.describe("Web standalone: settings page", () => {
     await expect(page.locator(".settings-nav")).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Profiles" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Identity" })).toBeVisible();
-    await expect(page.locator(".settings-nav-link").filter({ hasText: "Model" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
-    await expect(page.locator(".settings-nav-link").filter({ hasText: "Access Control" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Privacy" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
@@ -116,13 +116,13 @@ test.describe("Web standalone: settings page", () => {
     // Default tab is Profiles — settings nav should be visible
     await expect(page.locator(".settings-nav")).toBeVisible();
 
-    // Switch to Model tab — should show INFERENCE_SUBSTRATE heading
-    await page.locator(".settings-nav-link").filter({ hasText: "Model" }).click();
-    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
+    // Switch to Orchestrator tab — should show AI Model heading
+    await page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" }).click();
+    await expect(page.locator("text=AI Model")).toBeVisible();
 
-    // Switch to Identity tab — Model content should disappear
+    // Switch to Identity tab — Orchestrator content should disappear
     await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
-    await expect(page.locator("text=INFERENCE_SUBSTRATE")).not.toBeVisible();
+    await expect(page.locator("text=AI Model")).not.toBeVisible();
 
     // Switch to Advanced tab — shows Registry Browser
     await page.locator(".settings-nav-link").filter({ hasText: "Advanced" }).click();

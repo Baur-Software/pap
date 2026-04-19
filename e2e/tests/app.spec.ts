@@ -135,19 +135,19 @@ test.describe("Settings page", () => {
     await expect(page.locator(".settings-nav")).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Profiles" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Identity" })).toBeVisible();
-    await expect(page.locator(".settings-nav-link").filter({ hasText: "Model" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
-    await expect(page.locator(".settings-nav-link").filter({ hasText: "Access Control" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Privacy" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
 
-  test("Model nav shows inference substrate config", async ({ page }) => {
+  test("Orchestrator nav shows AI model config", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    // Click Model nav link to show the inference substrate section
-    await page.locator(".settings-nav-link").filter({ hasText: "Model" }).click();
-    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
+    // Click Orchestrator nav link to show the AI model section
+    await page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" }).click();
+    await expect(page.locator("text=AI Model")).toBeVisible();
     // Provider select is the first select on the page
     await expect(page.locator("select").first()).toBeVisible();
   });
@@ -165,8 +165,8 @@ test.describe("Settings page", () => {
       page.locator("text=Your key has not been backed up!")
     ).toBeVisible();
 
-    // Should show identity DID
-    await expect(page.getByText("DID:", { exact: true })).toBeVisible();
+    // Should show identity key label
+    await expect(page.getByText("Identity key:", { exact: true })).toBeVisible();
 
     // Export and Import buttons
     await expect(page.locator("text=Export Key")).toBeVisible();
@@ -234,9 +234,9 @@ test.describe("Settings page", () => {
     // Default is Profiles — nav is visible
     await expect(page.locator(".settings-nav")).toBeVisible();
 
-    // Switch to Model — shows INFERENCE_SUBSTRATE
-    await page.locator(".settings-nav-link").filter({ hasText: "Model" }).click();
-    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
+    // Switch to Orchestrator — shows AI Model heading
+    await page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" }).click();
+    await expect(page.locator("text=AI Model")).toBeVisible();
 
     // Switch to Identity — shows Export Key button
     await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();

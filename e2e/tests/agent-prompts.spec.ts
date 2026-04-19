@@ -179,11 +179,11 @@ test.describe("LLM provider configuration", () => {
     expect(saved.mandate_ttl_hours).toBe(24);
   });
 
-  test("settings UI General tab shows inference substrate select", async ({ page }) => {
+  test("settings UI Orchestrator tab shows AI model select", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await expect(page.locator("text=INFERENCE_SUBSTRATE")).toBeVisible();
+    await expect(page.locator("text=AI Model")).toBeVisible();
     // First select on the page is the provider dropdown
     await expect(page.locator("select").first()).toBeVisible();
   });
