@@ -18,6 +18,10 @@ ignore = [
     # No patched release available; the PAP codebase does not use custom loggers with rand.
     # Track upstream: https://rustsec.org/advisories/RUSTSEC-2026-0097
     { id = "RUSTSEC-2026-0097", reason = "transitive dep; PAP does not use custom loggers that invoke rand::rng(); tracked for upgrade separately" },
+    # atty v0.2.14 unsound (unaligned read on Windows); transitive build-time dep via
+    # rdma-sys 0.3.0 -> bindgen 0.59.2 -> clap/env_logger -> atty. Not shipped in any
+    # binary. No patched atty release exists; fix requires rdma-sys to bump bindgen >= 0.66.
+    { id = "RUSTSEC-2021-0145", reason = "transitive build dep via rdma-sys/bindgen 0.59.2; atty unmaintained with no patched release; build-time only, not shipped in any binary" },
 ]
 
 [bans]

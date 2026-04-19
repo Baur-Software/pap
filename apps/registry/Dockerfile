@@ -51,6 +51,7 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
     -e '/^[[:space:]]*"crates\/pap-ecash"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
+    -e '/^[[:space:]]*"crates\/pap-bluefield"/d' \
     -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
@@ -103,6 +104,7 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-c"/d' \
     -e '/^[[:space:]]*"crates\/pap-ecash"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
+    -e '/^[[:space:]]*"crates\/pap-bluefield"/d' \
     -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
