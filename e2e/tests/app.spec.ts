@@ -242,9 +242,9 @@ test.describe("Settings page", () => {
     await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     await expect(page.locator("text=Export Key")).toBeVisible();
 
-    // Switch to Advanced — shows Registry Browser
+    // Switch to Advanced — shows Saved Registries
     await page.locator(".settings-nav-link").filter({ hasText: "Advanced" }).click();
-    await expect(page.locator("text=Registry Browser")).toBeVisible();
+    await expect(page.locator("text=Saved Registries")).toBeVisible();
   });
 });
 

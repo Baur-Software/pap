@@ -124,9 +124,9 @@ test.describe("Web standalone: settings page", () => {
     await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
     await expect(page.locator("text=AI Model")).not.toBeVisible();
 
-    // Switch to Advanced tab — shows Registry Browser
+    // Switch to Advanced tab — shows Saved Registries
     await page.locator(".settings-nav-link").filter({ hasText: "Advanced" }).click();
-    await expect(page.locator("text=Registry Browser")).toBeVisible();
+    await expect(page.locator("text=Saved Registries")).toBeVisible();
   });
 });
 
