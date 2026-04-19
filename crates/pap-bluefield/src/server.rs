@@ -73,6 +73,7 @@ impl<H: AgentHandler + 'static> BluefieldServer<H> {
 
 /// Tracks which phase the server expects next, enforcing strict phase ordering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)] // all states are "Awaiting*" by design
 enum Phase {
     /// Waiting for Phase 1 token presentation.
     AwaitingToken,
