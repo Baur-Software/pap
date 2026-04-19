@@ -69,6 +69,25 @@ impl<H: AgentHandler + 'static> BluefieldServer<H> {
     }
 }
 
+// ── Phase state machine ───────────────────────────────────────────────────────
+
+/// Tracks which phase the server expects next, enforcing strict phase ordering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    /// Waiting for Phase 1 token presentation.
+    AwaitingToken,
+    /// Phase 1 complete; waiting for Phase 2 DID exchange.
+    AwaitingDid,
+    /// Phase 2 complete; waiting for Phase 3 disclosure.
+    AwaitingDisclosure,
+    /// Phase 3 complete; waiting for Phase 4 execution trigger.
+    AwaitingExecution,
+    /// Phase 4 complete; waiting for Phase 5 receipt.
+    AwaitingReceipt,
+    /// Phase 5 complete; waiting for Phase 6 close.
+    AwaitingClose,
+}
+
 // ── Per-connection handler loop ───────────────────────────────────────────────
 
 /// Run the six-phase PAP protocol on `channel`, dispatching to `handler`.
@@ -80,10 +99,11 @@ pub async fn handle_channel<C: MessageChannel, H: AgentHandler>(
     mut channel: C,
 ) -> Result<(), BluefieldError> {
     let mut session_id: Option<String> = None;
+    let mut phase = Phase::AwaitingToken;
 
     loop {
         let msg = channel.recv_msg().await?;
-        let reply = dispatch(&handler, &mut session_id, msg)?;
+        let reply = dispatch(&handler, &mut session_id, &mut phase, msg)?;
         let is_closed = matches!(&reply, ProtocolMessage::SessionClosed);
         channel.send_msg(&reply).await?;
         if is_closed {
@@ -98,44 +118,56 @@ pub async fn handle_channel<C: MessageChannel, H: AgentHandler>(
 
 /// Map an incoming [`ProtocolMessage`] to the appropriate [`AgentHandler`]
 /// method and return the reply message.
+///
+/// Enforces strict phase ordering via `phase`; out-of-order messages return
+/// a [`BluefieldError::ProtocolError`] without calling the handler.
 fn dispatch<H: AgentHandler>(
     handler: &Arc<H>,
     session_id: &mut Option<String>,
+    phase: &mut Phase,
     msg: ProtocolMessage,
 ) -> Result<ProtocolMessage, BluefieldError> {
     match msg {
         // ── Phase 1: Token presentation ───────────────────────────────────
-        ProtocolMessage::TokenPresentation { token } => match handler.handle_token(token) {
-            Ok((sid, receiver_did)) => {
-                *session_id = Some(sid.clone());
-                Ok(ProtocolMessage::TokenAccepted {
-                    session_id: sid,
-                    receiver_session_did: receiver_did,
-                    attestation: None,
-                })
+        ProtocolMessage::TokenPresentation { token } => {
+            require_phase(*phase, Phase::AwaitingToken, "TokenPresentation")?;
+            match handler.handle_token(token) {
+                Ok((sid, receiver_did)) => {
+                    *session_id = Some(sid.clone());
+                    *phase = Phase::AwaitingDid;
+                    Ok(ProtocolMessage::TokenAccepted {
+                        session_id: sid,
+                        receiver_session_did: receiver_did,
+                        attestation: None,
+                    })
+                }
+                Err(e) => Ok(ProtocolMessage::TokenRejected {
+                    reason: e.to_string(),
+                }),
             }
-            Err(e) => Ok(ProtocolMessage::TokenRejected {
-                reason: e.to_string(),
-            }),
-        },
+        }
 
         // ── Phase 2: DID exchange ─────────────────────────────────────────
         ProtocolMessage::SessionDidExchange {
             initiator_session_did,
         } => {
+            require_phase(*phase, Phase::AwaitingDid, "SessionDidExchange")?;
             let sid = require_session(session_id)?;
             handler
                 .handle_did_exchange(&sid, &initiator_session_did)
                 .map_err(|e| BluefieldError::ProtocolError(e.to_string()))?;
+            *phase = Phase::AwaitingDisclosure;
             Ok(ProtocolMessage::SessionDidAck)
         }
 
         // ── Phase 3: Disclosure ───────────────────────────────────────────
         ProtocolMessage::DisclosureOffer { disclosures } => {
+            require_phase(*phase, Phase::AwaitingDisclosure, "DisclosureOffer")?;
             let sid = require_session(session_id)?;
             handler
                 .handle_disclosure(&sid, disclosures)
                 .map_err(|e| BluefieldError::ProtocolError(e.to_string()))?;
+            *phase = Phase::AwaitingExecution;
             Ok(ProtocolMessage::DisclosureAccepted)
         }
 
@@ -143,24 +175,29 @@ fn dispatch<H: AgentHandler>(
         // The client sends SessionDidAck as a zero-payload execution trigger.
         // handler.execute() is synchronous; call it directly.
         ProtocolMessage::SessionDidAck => {
+            require_phase(*phase, Phase::AwaitingExecution, "SessionDidAck (execute)")?;
             let sid = require_session(session_id)?;
             let result = handler
                 .execute(&sid)
                 .map_err(|e| BluefieldError::ProtocolError(e.to_string()))?;
+            *phase = Phase::AwaitingReceipt;
             Ok(ProtocolMessage::ExecutionResult { result })
         }
 
         // ── Phase 5: Receipt co-signing ───────────────────────────────────
         ProtocolMessage::ReceiptForCoSign { receipt } => {
+            require_phase(*phase, Phase::AwaitingReceipt, "ReceiptForCoSign")?;
             let _sid = require_session(session_id)?;
             let signed = handler
                 .co_sign_receipt(receipt)
                 .map_err(|e| BluefieldError::ProtocolError(e.to_string()))?;
+            *phase = Phase::AwaitingClose;
             Ok(ProtocolMessage::ReceiptCoSigned { receipt: signed })
         }
 
         // ── Phase 6: Close ────────────────────────────────────────────────
         ProtocolMessage::SessionClose { session_id: sid } => {
+            require_phase(*phase, Phase::AwaitingClose, "SessionClose")?;
             let _ = handler.handle_close(&sid);
             Ok(ProtocolMessage::SessionClosed)
         }
@@ -192,6 +229,15 @@ fn require_session(session_id: &Option<String>) -> Result<String, BluefieldError
     session_id.clone().ok_or_else(|| {
         BluefieldError::ProtocolError("session not established — phase 1 not completed".into())
     })
+}
+
+fn require_phase(current: Phase, expected: Phase, msg_type: &str) -> Result<(), BluefieldError> {
+    if current != expected {
+        return Err(BluefieldError::ProtocolError(format!(
+            "out-of-order message '{msg_type}': expected phase {expected:?}, got {current:?}"
+        )));
+    }
+    Ok(())
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -249,9 +295,11 @@ mod tests {
     fn phase1_token_accepted() {
         let h = handler();
         let mut sid = None;
+        let mut phase = Phase::AwaitingToken;
         let resp = dispatch(
             &h,
             &mut sid,
+            &mut phase,
             ProtocolMessage::TokenPresentation {
                 token: make_token(),
             },
@@ -259,6 +307,7 @@ mod tests {
         .unwrap();
         assert!(matches!(resp, ProtocolMessage::TokenAccepted { .. }));
         assert_eq!(sid.as_deref(), Some("s-pass"));
+        assert_eq!(phase, Phase::AwaitingDid);
     }
 
     #[test]
@@ -294,9 +343,11 @@ mod tests {
 
         let h = Arc::new(RejectHandler);
         let mut sid = None;
+        let mut phase = Phase::AwaitingToken;
         let resp = dispatch(
             &h,
             &mut sid,
+            &mut phase,
             ProtocolMessage::TokenPresentation {
                 token: make_token(),
             },
@@ -309,10 +360,30 @@ mod tests {
     #[test]
     fn phase2_requires_established_session() {
         let h = handler();
-        let mut sid: Option<String> = None; // no session yet
+        let mut sid: Option<String> = None;
+        // Force phase state past phase 1 to test session guard independently
+        let mut phase = Phase::AwaitingDid;
         let resp = dispatch(
             &h,
             &mut sid,
+            &mut phase,
+            ProtocolMessage::SessionDidExchange {
+                initiator_session_did: "did:key:zX".into(),
+            },
+        );
+        assert!(resp.is_err());
+    }
+
+    #[test]
+    fn out_of_order_phase_rejected() {
+        let h = handler();
+        let mut sid: Option<String> = None;
+        let mut phase = Phase::AwaitingToken;
+        // Send phase 2 before phase 1 — must be rejected
+        let resp = dispatch(
+            &h,
+            &mut sid,
+            &mut phase,
             ProtocolMessage::SessionDidExchange {
                 initiator_session_did: "did:key:zX".into(),
             },
@@ -323,7 +394,9 @@ mod tests {
     #[test]
     fn phase5_requires_established_session() {
         let h = handler();
-        let mut sid: Option<String> = None; // no session yet
+        let mut sid: Option<String> = None;
+        // Force phase state to AwaitingReceipt to test session guard independently
+        let mut phase = Phase::AwaitingReceipt;
         let receipt = TransactionReceipt {
             session_id: "s-orphan".into(),
             action: "https://schema.org/SearchAction".into(),
@@ -338,7 +411,7 @@ mod tests {
             signatures: vec![],
             attestations: vec![],
         };
-        let resp = dispatch(&h, &mut sid, ProtocolMessage::ReceiptForCoSign { receipt });
+        let resp = dispatch(&h, &mut sid, &mut phase, ProtocolMessage::ReceiptForCoSign { receipt });
         assert!(resp.is_err());
     }
 
@@ -346,9 +419,11 @@ mod tests {
     fn phase6_close_returns_session_closed() {
         let h = handler();
         let mut sid = Some("s-close".to_string());
+        let mut phase = Phase::AwaitingClose;
         let resp = dispatch(
             &h,
             &mut sid,
+            &mut phase,
             ProtocolMessage::SessionClose {
                 session_id: "s-close".into(),
             },

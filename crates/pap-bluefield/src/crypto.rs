@@ -121,8 +121,9 @@ impl DocaCrypto {
 impl CryptoAccel for DocaCrypto {
     fn sign(&self, data: &[u8]) -> [u8; 64] {
         if self.hw_available {
-            // TODO(doca-crypto): submit sign job to DOCA work-queue
-            unimplemented!("DOCA hardware crypto not yet wired")
+            // TODO(doca-crypto): submit sign job to DOCA work-queue.
+            // Fall back to software until the DOCA path is wired up.
+            self.sw.sign(data)
         } else {
             self.sw.sign(data)
         }
@@ -130,8 +131,9 @@ impl CryptoAccel for DocaCrypto {
 
     fn verify(&self, data: &[u8], signature: &[u8; 64]) -> Result<(), BluefieldError> {
         if self.hw_available {
-            // TODO(doca-crypto): submit verify job to DOCA work-queue
-            unimplemented!("DOCA hardware crypto not yet wired")
+            // TODO(doca-crypto): submit verify job to DOCA work-queue.
+            // Fall back to software until the DOCA path is wired up.
+            self.sw.verify(data, signature)
         } else {
             self.sw.verify(data, signature)
         }
