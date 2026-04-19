@@ -593,9 +593,9 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                     }.into_any()
                 }
                 BlockState::Note { title, content, .. } => {
-                    let (is_editing, set_editing) = create_signal(false);
-                    let (edit_title, set_edit_title) = create_signal(title.clone());
-                    let (edit_content, set_edit_content) = create_signal(content.clone());
+                    let (is_editing, set_editing) = signal(false);
+                    let (edit_title, set_edit_title) = signal(title.clone());
+                    let (edit_content, set_edit_content) = signal(content.clone());
                     let block_id_note = block.id.clone();
                     let canvas_id_note = canvas_state.current_canvas_id.get_untracked().unwrap_or_default();
 
