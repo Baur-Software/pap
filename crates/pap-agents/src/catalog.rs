@@ -36,6 +36,17 @@ struct CatalogEntry {
     configurable_properties: Vec<serde_json::Value>,
 }
 
+/// Returns the embedded default catalog for WASM builds (no filesystem required).
+///
+/// The catalog JSON is baked into the binary at compile time by `build.rs`,
+/// which walks `catalog/**/*.toml` and serialises every entry as a JSON array
+/// compatible with [`DynamicAgentDef`]'s serde shape.
+#[cfg(target_arch = "wasm32")]
+pub fn default_catalog() -> Vec<DynamicAgentDef> {
+    const CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/catalog.json"));
+    serde_json::from_str(CATALOG_JSON).unwrap_or_default()
+}
+
 pub fn load_catalog(catalog_dir: &Path) -> Vec<DynamicAgentDef> {
     let mut defs = Vec::new();
     collect_toml_files(catalog_dir, catalog_dir, &mut defs);
