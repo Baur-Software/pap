@@ -754,13 +754,11 @@
             expire with the mandate TTL.
           </p>
           <p>
-            <strong>TTL expiry:</strong> mandate TTL is enforced at verification time
-            (<code>mandate.rs</code> <code>verify_chain()</code>), not as a running clock
-            during an active handshake. A mandate that was valid when the session opened
-            remains usable for that session's duration. The edge case is a mandate within
-            seconds of expiry when the handshake starts — the Phase 4 execution check may
-            see it as expired if the TTL ticks over between phases. No built-in grace period
-            or mid-flight renewal path exists today.
+            <strong>TTL expiry:</strong> mandate TTL is checked at every
+            <code>verify_chain()</code> call (<code>mandate.rs</code>), which occurs at
+            each phase boundary. A mandate close to its expiry when the session opens may
+            pass the Phase 1 check but fail at Phase 4 execution if the TTL ticks over
+            between phases. No built-in grace period or mid-flight renewal path exists today.
           </p>
         </div>
       </div>
