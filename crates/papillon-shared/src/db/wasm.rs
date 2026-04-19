@@ -87,7 +87,10 @@ impl WasmDatabase {
             .map_err(|e| DbError(format!("db lock: {e}")))?;
         let mut pairs: Vec<(&String, &String)> = defs.iter().collect();
         pairs.sort_by_key(|(k, _)| k.as_str());
-        Ok(pairs.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        Ok(pairs
+            .into_iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect())
     }
 }
 
@@ -455,8 +458,12 @@ impl DatabaseOps for WasmDatabase {
 
     fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError> {
         // Validate JSON is well-formed before storing
-        serde_json::from_str::<serde_json::Value>(json)
-            .map_err(|e| DbError(format!("upsert_agent_def: invalid JSON for '{}': {e}", name)))?;
+        serde_json::from_str::<serde_json::Value>(json).map_err(|e| {
+            DbError(format!(
+                "upsert_agent_def: invalid JSON for '{}': {e}",
+                name
+            ))
+        })?;
         let mut defs = self
             .agent_defs
             .lock()

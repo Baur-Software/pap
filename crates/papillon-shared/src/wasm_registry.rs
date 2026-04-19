@@ -212,11 +212,8 @@ impl WasmAgentRegistry {
                         Err(_e) => {
                             #[cfg(target_arch = "wasm32")]
                             web_sys::console::warn_1(
-                                &format!(
-                                    "papillon: skipping agent with bad advertisement: {}",
-                                    _e
-                                )
-                                .into(),
+                                &format!("papillon: skipping agent with bad advertisement: {}", _e)
+                                    .into(),
                             );
                         }
                     }
@@ -305,10 +302,8 @@ impl WasmAgentRegistry {
             return Ok(0);
         }
 
-        let catalog_defs: Vec<WasmDynamicAgentDef> =
-            serde_json::from_str(CATALOG_JSON).map_err(|e| {
-                format!("failed to deserialize embedded catalog.json: {e}")
-            })?;
+        let catalog_defs: Vec<WasmDynamicAgentDef> = serde_json::from_str(CATALOG_JSON)
+            .map_err(|e| format!("failed to deserialize embedded catalog.json: {e}"))?;
 
         let mut count = 0usize;
 
@@ -329,11 +324,7 @@ impl WasmAgentRegistry {
                 Err(_e) => {
                     #[cfg(target_arch = "wasm32")]
                     web_sys::console::warn_1(
-                        &format!(
-                            "papillon: skipping catalog agent '{}': {}",
-                            def.name, _e
-                        )
-                        .into(),
+                        &format!("papillon: skipping catalog agent '{}': {}", def.name, _e).into(),
                     );
                     continue;
                 }
@@ -345,11 +336,8 @@ impl WasmAgentRegistry {
                 Err(_e) => {
                     #[cfg(target_arch = "wasm32")]
                     web_sys::console::warn_1(
-                        &format!(
-                            "papillon: failed to serialize agent '{}': {}",
-                            def.name, _e
-                        )
-                        .into(),
+                        &format!("papillon: failed to serialize agent '{}': {}", def.name, _e)
+                            .into(),
                     );
                     continue;
                 }
@@ -359,11 +347,7 @@ impl WasmAgentRegistry {
             if let Err(_e) = self.db.upsert_agent_def(&def.name, &json) {
                 #[cfg(target_arch = "wasm32")]
                 web_sys::console::warn_1(
-                    &format!(
-                        "papillon: failed to persist agent '{}': {:?}",
-                        def.name, _e
-                    )
-                    .into(),
+                    &format!("papillon: failed to persist agent '{}': {:?}", def.name, _e).into(),
                 );
                 continue;
             }
@@ -459,10 +443,7 @@ mod tests {
             "DID should start with did:key: — got: {}",
             ad.provider.did
         );
-        assert!(
-            ad.signature.is_some(),
-            "advertisement must be signed"
-        );
+        assert!(ad.signature.is_some(), "advertisement must be signed");
         assert_eq!(ad.name, "Test Agent");
     }
 
@@ -479,8 +460,8 @@ mod tests {
 
     #[test]
     fn new_empty_registry_has_zero_agents() {
-        let registry = WasmAgentRegistry::new_empty("test-empty")
-            .expect("new_empty should succeed");
+        let registry =
+            WasmAgentRegistry::new_empty("test-empty").expect("new_empty should succeed");
         assert_eq!(registry.agent_count(), 0);
         assert!(registry.list_agents().is_empty());
     }
@@ -491,8 +472,7 @@ mod tests {
         // in-memory registry — this lets us test the seeding logic without an
         // async runtime or browser IndexedDB.
         let catalog_defs: Vec<WasmDynamicAgentDef> =
-            serde_json::from_str(CATALOG_JSON)
-                .expect("embedded catalog.json must deserialize");
+            serde_json::from_str(CATALOG_JSON).expect("embedded catalog.json must deserialize");
 
         assert!(
             catalog_defs.len() >= 300,
@@ -518,8 +498,8 @@ mod tests {
 
     #[test]
     fn seed_default_catalog_returns_nonzero_count_on_fresh_db() {
-        let mut reg = WasmAgentRegistry::new_empty("test-seed-fresh")
-            .expect("new_empty should succeed");
+        let mut reg =
+            WasmAgentRegistry::new_empty("test-seed-fresh").expect("new_empty should succeed");
         let count = reg
             .seed_default_catalog()
             .expect("seed should succeed on fresh db");
@@ -540,8 +520,8 @@ mod tests {
     #[test]
     fn seed_default_catalog_is_idempotent() {
         // Seed once — verify count, then seed again and verify Ok(0).
-        let mut reg = WasmAgentRegistry::new_empty("test-seed-idem")
-            .expect("new_empty should succeed");
+        let mut reg =
+            WasmAgentRegistry::new_empty("test-seed-idem").expect("new_empty should succeed");
 
         let first = reg
             .seed_default_catalog()
@@ -567,13 +547,11 @@ mod tests {
     fn seed_default_catalog_idempotent_via_db() {
         // Simulate idempotency via pre-populated DB: if the DB already has
         // entries, seed_default_catalog must return Ok(0) immediately.
-        let db = IndexedDbDatabase::new_with_persistence("test-idem")
-            .expect("db creation failed");
+        let db = IndexedDbDatabase::new_with_persistence("test-idem").expect("db creation failed");
         db.upsert_agent_def("existing", r#"{"name":"existing"}"#)
             .expect("upsert should succeed");
 
-        let mut reg = WasmAgentRegistry::from_db(db)
-            .expect("from_db should succeed");
+        let mut reg = WasmAgentRegistry::from_db(db).expect("from_db should succeed");
 
         let count = reg
             .seed_default_catalog()
@@ -685,9 +663,8 @@ mod tests {
 
     #[test]
     fn catalog_json_deserializes_to_wasm_defs() {
-        let defs: Vec<WasmDynamicAgentDef> =
-            serde_json::from_str(CATALOG_JSON)
-                .expect("embedded catalog.json must deserialize to WasmDynamicAgentDef");
+        let defs: Vec<WasmDynamicAgentDef> = serde_json::from_str(CATALOG_JSON)
+            .expect("embedded catalog.json must deserialize to WasmDynamicAgentDef");
         assert!(
             defs.len() >= 300,
             "expected 300+ defs in catalog, got {}",
@@ -705,8 +682,8 @@ mod tests {
 
     #[test]
     fn catalog_json_has_required_keys() {
-        let entries: Vec<serde_json::Value> = serde_json::from_str(CATALOG_JSON)
-            .expect("catalog.json must be valid JSON array");
+        let entries: Vec<serde_json::Value> =
+            serde_json::from_str(CATALOG_JSON).expect("catalog.json must be valid JSON array");
         assert!(!entries.is_empty(), "catalog must have entries");
         let first = &entries[0];
         for key in &["name", "provider", "action", "description"] {

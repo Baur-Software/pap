@@ -195,7 +195,11 @@ mod tests {
         const CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/catalog.json"));
         let defs: Vec<DynamicAgentDef> = serde_json::from_str(CATALOG_JSON)
             .expect("embedded catalog.json must deserialize without error");
-        assert!(defs.len() >= 300, "expected 300+ entries, got {}", defs.len());
+        assert!(
+            defs.len() >= 300,
+            "expected 300+ entries, got {}",
+            defs.len()
+        );
         // Verify source field is always Catalog
         for def in &defs {
             assert!(

@@ -1915,8 +1915,12 @@ impl DatabaseOps for NativeDatabase {
 
     fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError> {
         // Validate JSON is well-formed before storing
-        serde_json::from_str::<serde_json::Value>(json)
-            .map_err(|e| DbError(format!("upsert_agent_def: invalid JSON for '{}': {e}", name)))?;
+        serde_json::from_str::<serde_json::Value>(json).map_err(|e| {
+            DbError(format!(
+                "upsert_agent_def: invalid JSON for '{}': {e}",
+                name
+            ))
+        })?;
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         conn.execute(
             "INSERT OR REPLACE INTO agent_defs (name, json) VALUES (?1, ?2)",
@@ -1954,11 +1958,8 @@ impl DatabaseOps for NativeDatabase {
 
     fn delete_agent_def(&self, name: &str) -> Result<(), DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
-        conn.execute(
-            "DELETE FROM agent_defs WHERE name = ?1",
-            params![name],
-        )
-        .map_err(|e| DbError(format!("db delete agent_def: {e}")))?;
+        conn.execute("DELETE FROM agent_defs WHERE name = ?1", params![name])
+            .map_err(|e| DbError(format!("db delete agent_def: {e}")))?;
         Ok(())
     }
 }

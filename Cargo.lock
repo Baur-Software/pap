@@ -4930,6 +4930,7 @@ version = "0.8.2"
 dependencies = [
  "chrono",
  "ed25519-dalek",
+ "getrandom 0.2.17",
  "js-sys",
  "pap-agents",
  "pap-did",
