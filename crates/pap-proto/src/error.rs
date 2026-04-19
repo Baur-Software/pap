@@ -17,6 +17,9 @@ pub enum ProtoError {
     #[error("signature verification failed")]
     VerificationFailed,
 
+    #[error("unsupported JWS algorithm: {0}")]
+    UnsupportedAlgorithm(String),
+
     #[error("serialization error: {0}")]
     SerializationError(String),
 

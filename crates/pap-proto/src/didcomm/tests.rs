@@ -570,3 +570,78 @@ fn dummy_token() -> pap_core::session::CapabilityToken {
         Utc::now() + Duration::hours(1),
     )
 }
+
+// ── JWS algorithm dispatch (issue #330) ─────────────────────────
+
+/// Correct `EdDSA` algorithm: sign + verify round-trip succeeds.
+#[test]
+fn jws_eddsa_alg_verifies_correctly() {
+    let key = SigningKey::generate(&mut OsRng);
+    let vk = key.verifying_key();
+    let env = make_envelope(ProtocolMessage::SessionDidAck);
+
+    // to_signed always uses EdDSA; verify should succeed.
+    let signed = PapToDIDComm::to_signed(&env, &key).unwrap();
+
+    // Confirm the protected header really says "EdDSA".
+    let header_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(&signed.signatures[0].protected_header)
+        .unwrap();
+    let header: serde_json::Value = serde_json::from_slice(&header_bytes).unwrap();
+    assert_eq!(header["alg"], "EdDSA");
+
+    let result = DIDCommToPap::from_signed(&signed, &vk);
+    assert!(result.is_ok(), "EdDSA verification should succeed: {result:?}");
+    assert_eq!(result.unwrap().session_id, env.session_id);
+}
+
+/// Wrong (mismatched) `alg` value that is syntactically valid but not
+/// `"EdDSA"` must be rejected with `ProtoError::UnsupportedAlgorithm`.
+#[test]
+fn jws_unsupported_algorithm_returns_correct_error() {
+    use crate::error::ProtoError;
+
+    let key = SigningKey::generate(&mut OsRng);
+    let env = make_envelope(ProtocolMessage::DisclosureAccepted);
+    let mut signed = PapToDIDComm::to_signed(&env, &key).unwrap();
+
+    // Swap in an RS256 alg header (valid JSON, wrong algorithm).
+    let bad_header =
+        serde_json::json!({"typ": "application/didcomm-signed+json", "alg": "RS256"});
+    signed.signatures[0].protected_header = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode(serde_json::to_string(&bad_header).unwrap().as_bytes());
+
+    let result = DIDCommToPap::from_signed(&signed, &key.verifying_key());
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        ProtoError::UnsupportedAlgorithm(alg) => {
+            assert_eq!(alg, "RS256", "error should name the offending algorithm");
+        }
+        other => panic!("expected UnsupportedAlgorithm, got: {other:?}"),
+    }
+}
+
+/// Completely unknown / invented algorithm string must also return
+/// `ProtoError::UnsupportedAlgorithm` — never silently pass.
+#[test]
+fn jws_unknown_algorithm_never_silently_passes() {
+    use crate::error::ProtoError;
+
+    let key = SigningKey::generate(&mut OsRng);
+    let env = make_envelope(ProtocolMessage::SessionClosed);
+    let mut signed = PapToDIDComm::to_signed(&env, &key).unwrap();
+
+    let bad_header =
+        serde_json::json!({"typ": "application/didcomm-signed+json", "alg": "UNKNOWN-42"});
+    signed.signatures[0].protected_header = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode(serde_json::to_string(&bad_header).unwrap().as_bytes());
+
+    let result = DIDCommToPap::from_signed(&signed, &key.verifying_key());
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        ProtoError::UnsupportedAlgorithm(alg) => {
+            assert_eq!(alg, "UNKNOWN-42");
+        }
+        other => panic!("expected UnsupportedAlgorithm, got: {other:?}"),
+    }
+}
