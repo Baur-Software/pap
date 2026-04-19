@@ -57,7 +57,7 @@ pub fn encrypt_plaintext(
         &[],       // apu: empty for anoncrypt
         &apv_hash, // apv: SHA-256(recipient_did)
         256,       // key length in bits
-    );
+    )?;
 
     // Build protected header
     let header = JweProtectedHeader {
@@ -167,7 +167,7 @@ pub fn decrypt_message(
         &[],        // apu: empty for anoncrypt
         &apv_bytes, // apv
         256,
-    );
+    )?;
 
     // Decode IV, ciphertext, and tag
     let iv_bytes = URL_SAFE_NO_PAD
@@ -251,7 +251,14 @@ fn concat_kdf(
     apu: &[u8],
     apv: &[u8],
     key_bits: u32,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, ProtoError> {
+    if key_bits == 0 || key_bits % 8 != 0 {
+        return Err(ProtoError::DIDCommError(format!(
+            "key_bits must be a non-zero multiple of 8, got {key_bits}"
+        )));
+    }
+    let key_bytes = (key_bits / 8) as usize;
+
     let mut hasher = Sha256::new();
 
     // Round number (1, as 4-byte big-endian)
@@ -276,6 +283,13 @@ fn concat_kdf(
     // SuppPubInfo: keydatalen in bits (4 bytes BE)
     hasher.update(key_bits.to_be_bytes());
 
-    let key_bytes = (key_bits / 8) as usize;
-    hasher.finalize()[..key_bytes].to_vec()
+    let hash = hasher.finalize();
+    if key_bytes > hash.len() {
+        return Err(ProtoError::DIDCommError(format!(
+            "requested key size ({key_bytes} bytes) exceeds SHA-256 output ({} bytes); \
+             multi-round KDF required for keys larger than 256 bits",
+            hash.len()
+        )));
+    }
+    Ok(hash[..key_bytes].to_vec())
 }
