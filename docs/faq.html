@@ -821,6 +821,62 @@
         </div>
       </div>
 
+      <!-- 12 -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="enterprise">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">12</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
+              Our CISO won't deploy an agent framework without Okta / Azure AD integration. Does PAP have a SAML bridge?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            <strong>Not built in today — and here's why that's the right architecture.</strong>
+            PAP uses <code>did:key</code> Ed25519 keypairs as its sole identity primitive
+            (<code>crates/pap-did/src/principal.rs</code>). There is no SAML assertion parser,
+            no OIDC relying party, and no LDAP connector in the codebase. This is intentional:
+            enterprise IdP and PAP answer different questions.
+          </p>
+          <p>
+            <strong>IdP answers: "Is this human allowed to access this resource?"</strong>
+            It issues tokens representing an authenticated session. PAP answers: "Is this agent
+            authorized to act on this human's behalf, with exactly this scope, for exactly this
+            long?" These are complementary layers. A PAP Gateway bridges them: it validates your
+            OIDC or SAML token against your existing IdP, maps the user's roles to a PAP mandate
+            scope, and issues a cryptographically signed mandate that the PAP orchestrator treats
+            normally. The bridge is ~100 lines of Rust using <code>pap-core</code>,
+            <code>pap-did</code>, and any standard OIDC validation library.
+          </p>
+          <p>
+            The result: your IdP remains the authority for human identity. PAP is the authority
+            for agent delegation. A deprovisioned Okta user's token fails at the gateway —
+            no mandate is issued. A mandate's TTL enforces automatic expiry without requiring
+            active deprovisioning. These are independent, non-competing trust roots: compromising
+            the IdP does not give an attacker active-mandate agent access, and a PAP mandate
+            breach doesn't expose IdP credentials.
+          </p>
+          <p>
+            <strong>For your CISO's specific concerns:</strong> "Can we enforce access policies?"
+            — Yes, via role-to-scope mapping at the gateway. "Can we see who accessed what?"
+            — Yes; co-signed receipts log property type references (e.g. <code>schema:Person.schema:email</code>
+            was permitted), never values, providing a forensically richer and PII-safer audit
+            trail than standard access logs. "Can we revoke access?" — Yes; TTL expiry is
+            automatic. Mandate decay (<code>Active → Degraded → ReadOnly → Suspended</code>)
+            enforces revocation without administrator action.
+          </p>
+          <p>
+            <strong>What's on the roadmap:</strong> An open-source PAP Gateway reference
+            implementation (OIDC→PAP mandate bridge), a SCIM provisioning adapter for role-sync,
+            and an Okta marketplace app. If your enterprise deployment is on a timeline,
+            the SDK surface is available today.
+          </p>
+        </div>
+      </div>
+
     </div><!-- /faq-list -->
 
   </div><!-- /container-md -->
