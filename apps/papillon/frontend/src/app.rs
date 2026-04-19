@@ -29,7 +29,7 @@ use crate::state::registry::RegistryState;
 use crate::state::renderer::RendererState;
 use crate::state::templates::TemplatesState;
 use papillon_shared::{
-    BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, RecoveryStatus, Template,
+    BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template,
 };
 
 #[component]
@@ -315,39 +315,6 @@ pub fn App() -> impl IntoView {
         }
     });
 
-    // Post-onboarding recovery prompt.
-    // After identity loads, check if the principal has already completed the Shamir
-    // ceremony (persisted in the DB). If not, surface the recovery setup modal once.
-    // The modal is skippable; it will re-appear on the next launch until the user
-    // clicks [ DONE ] which calls mark_recovery_complete.
-    Effect::new(move || {
-        if !bridge::tauri_available() {
-            return;
-        }
-        // Only trigger once identity has actually loaded.
-        let has_identity = identity_state.info.get().is_some();
-        if !has_identity {
-            return;
-        }
-        // Don't show if already done this session.
-        if recovery_state.setup_complete.get() {
-            return;
-        }
-        spawn_local(async move {
-            if let Ok(status) =
-                bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await
-            {
-                if status.needs_renewal {
-                    // Old shards are spent — principal must issue new ones.
-                    recovery_state.needs_renewal.set(true);
-                    recovery_state.show_setup.set(true);
-                } else if !status.configured {
-                    recovery_state.show_setup.set(true);
-                }
-            }
-        });
-    });
-
     // Global keyboard listener for ⌘K — creates a new canvas and navigates home.
     // Uses History pushState + popstate so the Leptos router picks up the change
     // without a full page reload (which would tear down WASM).
@@ -408,7 +375,6 @@ pub fn App() -> impl IntoView {
                 </footer>
             </div>
             <SetupWizard />
-            <RecoverySetup />
         </Router>
     }
 }
