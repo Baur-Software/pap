@@ -48,13 +48,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libibverbs-dev librdmacm-dev
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "native"
           cache-on-failure: true
-      - run: cargo check --workspace --all-targets
+      # pap-bluefield uses rdma-sys/bindgen 0.59.2 which cannot parse Ubuntu 24.04
+      # libibverbs headers. It is checked separately in the bluefield-mock job.
+      - run: cargo check --workspace --all-targets --exclude pap-bluefield --exclude pap-bluefield-loopback
 
   test:
     name: Test
@@ -62,13 +64,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libibverbs-dev librdmacm-dev
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "native"
           cache-on-failure: true
-      - run: cargo test --workspace
+      - run: cargo test --workspace --exclude pap-bluefield --exclude pap-bluefield-loopback
+
+  bluefield-mock:
+    name: Check + Test pap-bluefield (mock, no hardware)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "bluefield-mock"
+          cache-on-failure: true
+      - run: cargo check -p pap-bluefield --no-default-features --features mock
+      - run: cargo test -p pap-bluefield --no-default-features --features mock
 
   test-registry:
     name: Test (registry SSR)
@@ -92,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libibverbs-dev librdmacm-dev
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -100,7 +115,8 @@ jobs:
         with:
           shared-key: "native"
           cache-on-failure: true
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets --exclude pap-bluefield --exclude pap-bluefield-loopback -- -D warnings
+      - run: cargo clippy -p pap-bluefield --no-default-features --features mock -- -D warnings
 
   fmt:
     name: Format
