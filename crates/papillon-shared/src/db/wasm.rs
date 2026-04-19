@@ -20,6 +20,7 @@
 
 use super::{AgentProfile, DatabaseOps, DbError, Episode};
 use crate::types::Template;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// WASM database implementation with in-memory storage.
@@ -35,6 +36,8 @@ pub struct WasmDatabase {
     settings: Arc<Mutex<Vec<(String, String)>>>,
     /// In-memory template store
     templates: Arc<Mutex<Vec<Template>>>,
+    /// In-memory dynamic agent definition store (name → raw JSON string)
+    agent_defs: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl WasmDatabase {
@@ -45,6 +48,7 @@ impl WasmDatabase {
             agent_profiles: Arc::new(Mutex::new(Vec::new())),
             settings: Arc::new(Mutex::new(Vec::new())),
             templates: Arc::new(Mutex::new(Vec::new())),
+            agent_defs: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -74,6 +78,15 @@ impl WasmDatabase {
             .map_err(|e| DbError(format!("db lock: {e}")))?;
         Ok(episodes.clone())
     }
+
+    /// Return all (name, json) agent def pairs (for persistence serialization).
+    pub fn list_all_agent_defs(&self) -> Result<Vec<(String, String)>, DbError> {
+        let defs = self
+            .agent_defs
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(defs.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+    }
 }
 
 impl Default for WasmDatabase {
@@ -83,6 +96,7 @@ impl Default for WasmDatabase {
             agent_profiles: Arc::new(Mutex::new(Vec::new())),
             settings: Arc::new(Mutex::new(Vec::new())),
             templates: Arc::new(Mutex::new(Vec::new())),
+            agent_defs: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 }
@@ -433,6 +447,42 @@ impl DatabaseOps for WasmDatabase {
     fn apply_retention_policy(&self) -> Result<super::RetentionStats, DbError> {
         // In-memory WASM store: no persistence, nothing to compact.
         Ok(super::RetentionStats::default())
+    }
+
+    // ── Dynamic Agent Def CRUD ────────────────────────────────────────────────
+
+    fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError> {
+        let mut defs = self
+            .agent_defs
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        defs.insert(name.to_string(), json.to_string());
+        Ok(())
+    }
+
+    fn list_agent_defs(&self) -> Result<Vec<String>, DbError> {
+        let defs = self
+            .agent_defs
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(defs.values().cloned().collect())
+    }
+
+    fn get_agent_def(&self, name: &str) -> Result<Option<String>, DbError> {
+        let defs = self
+            .agent_defs
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(defs.get(name).cloned())
+    }
+
+    fn delete_agent_def(&self, name: &str) -> Result<(), DbError> {
+        let mut defs = self
+            .agent_defs
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
+        defs.remove(name);
+        Ok(())
     }
 }
 
@@ -1032,6 +1082,74 @@ mod tests {
         let db = WasmDatabase::new().unwrap();
         let result = db.set_template_enabled("nonexistent", false);
         assert!(result.is_err());
+    }
+
+    // ── agent def tests ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_upsert_and_get_agent_def() {
+        let db = WasmDatabase::new().unwrap();
+        let json = r#"{"name":"weather","description":"Weather agent"}"#;
+        db.upsert_agent_def("weather", json).unwrap();
+
+        let result = db.get_agent_def("weather").unwrap();
+        assert_eq!(result, Some(json.to_string()));
+    }
+
+    #[test]
+    fn test_upsert_agent_def_overwrites() {
+        let db = WasmDatabase::new().unwrap();
+        db.upsert_agent_def("weather", r#"{"name":"weather","v":1}"#)
+            .unwrap();
+        db.upsert_agent_def("weather", r#"{"name":"weather","v":2}"#)
+            .unwrap();
+
+        let result = db.get_agent_def("weather").unwrap().unwrap();
+        assert!(result.contains("\"v\":2"));
+    }
+
+    #[test]
+    fn test_get_agent_def_not_found() {
+        let db = WasmDatabase::new().unwrap();
+        assert_eq!(db.get_agent_def("nonexistent").unwrap(), None);
+    }
+
+    #[test]
+    fn test_list_agent_defs() {
+        let db = WasmDatabase::new().unwrap();
+        db.upsert_agent_def("agent-a", r#"{"name":"agent-a"}"#)
+            .unwrap();
+        db.upsert_agent_def("agent-b", r#"{"name":"agent-b"}"#)
+            .unwrap();
+
+        let defs = db.list_agent_defs().unwrap();
+        assert_eq!(defs.len(), 2);
+    }
+
+    #[test]
+    fn test_delete_agent_def() {
+        let db = WasmDatabase::new().unwrap();
+        db.upsert_agent_def("weather", r#"{"name":"weather"}"#)
+            .unwrap();
+        db.delete_agent_def("weather").unwrap();
+        assert_eq!(db.get_agent_def("weather").unwrap(), None);
+        assert_eq!(db.list_agent_defs().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_delete_agent_def_noop_if_missing() {
+        let db = WasmDatabase::new().unwrap();
+        // Should not return an error even though the key doesn't exist
+        db.delete_agent_def("nonexistent").unwrap();
+    }
+
+    #[test]
+    fn test_list_all_agent_defs_helper() {
+        let db = WasmDatabase::new().unwrap();
+        db.upsert_agent_def("x", r#"{"name":"x"}"#).unwrap();
+        let pairs = db.list_all_agent_defs().unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, "x");
     }
 
     #[test]

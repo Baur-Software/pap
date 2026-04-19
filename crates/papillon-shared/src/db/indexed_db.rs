@@ -27,7 +27,7 @@ use crate::types::Template;
 
 /// Current snapshot format version. Bump when the schema changes so
 /// `restore_state` can detect and migrate old snapshots.
-const SNAPSHOT_VERSION: u64 = 1;
+const SNAPSHOT_VERSION: u64 = 2;
 
 /// IndexedDB-backed database that persists all operations.
 ///
@@ -160,6 +160,27 @@ impl IndexedDbDatabase {
             }
         }
 
+        // v2+: agent defs stored as {"name": <name>, "json": <raw-json>} objects
+        if let Some(agents) = state.get("agents").and_then(|v| v.as_array()) {
+            for (_i, val) in agents.iter().enumerate() {
+                let name = val.get("name").and_then(|v| v.as_str());
+                let json = val.get("json").and_then(|v| v.as_str());
+                match (name, json) {
+                    (Some(n), Some(j)) => self.inner.upsert_agent_def(n, j)?,
+                    _ => {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::warn_1(
+                            &format!(
+                                "papillon: skipping corrupt agent_def[{}]: missing name or json",
+                                _i
+                            )
+                            .into(),
+                        );
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -173,12 +194,24 @@ impl IndexedDbDatabase {
             .map(|(k, v)| (k, serde_json::Value::String(v)))
             .collect();
 
+        // Serialise agent defs as an array of {name, json} objects so they
+        // round-trip without any dependency on the pap-agents crate.
+        let agents_array: Vec<serde_json::Value> = self
+            .inner
+            .list_all_agent_defs()?
+            .into_iter()
+            .map(|(name, json)| {
+                serde_json::json!({ "name": name, "json": json })
+            })
+            .collect();
+
         let state = serde_json::json!({
             "version": SNAPSHOT_VERSION,
             "episodes": self.inner.list_all_episodes()?,
             "profiles": self.inner.list_agent_profiles()?,
             "settings": settings_map,
             "templates": self.inner.list_all_templates()?,
+            "agents": agents_array,
         });
 
         serde_json::to_string(&state).map_err(|e| DbError(format!("serialize: {e}")))
@@ -346,6 +379,28 @@ impl DatabaseOps for IndexedDbDatabase {
     fn apply_retention_policy(&self) -> Result<super::RetentionStats, DbError> {
         self.inner.apply_retention_policy()
     }
+
+    // ── Dynamic Agent Def CRUD ────────────────────────────────────────────────
+
+    fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError> {
+        self.inner.upsert_agent_def(name, json)?;
+        self.persist_to_storage()?;
+        Ok(())
+    }
+
+    fn list_agent_defs(&self) -> Result<Vec<String>, DbError> {
+        self.inner.list_agent_defs()
+    }
+
+    fn get_agent_def(&self, name: &str) -> Result<Option<String>, DbError> {
+        self.inner.get_agent_def(name)
+    }
+
+    fn delete_agent_def(&self, name: &str) -> Result<(), DbError> {
+        self.inner.delete_agent_def(name)?;
+        self.persist_to_storage()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -440,8 +495,11 @@ mod tests {
         let json_str = db.build_snapshot_json().unwrap();
         let state: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
-        // Verify version field is present
-        assert_eq!(state.get("version").and_then(|v| v.as_u64()), Some(1));
+        // Verify version field reflects the current SNAPSHOT_VERSION (2)
+        assert_eq!(
+            state.get("version").and_then(|v| v.as_u64()),
+            Some(SNAPSHOT_VERSION)
+        );
 
         // Create a fresh database and restore
         let db2 = IndexedDbDatabase::new_with_persistence("test-db-2").unwrap();
@@ -495,5 +553,92 @@ mod tests {
             Some("alice".to_string())
         );
         assert_eq!(db_b.get_setting("owner").unwrap(), Some("bob".to_string()));
+    }
+
+    // ── agent def delegation tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_idb_upsert_and_get_agent_def() {
+        let db = IndexedDbDatabase::new_with_persistence("test-agent-defs").unwrap();
+        let json = r#"{"name":"weather","description":"Weather agent"}"#;
+        db.upsert_agent_def("weather", json).unwrap();
+
+        assert_eq!(db.get_agent_def("weather").unwrap(), Some(json.to_string()));
+    }
+
+    #[test]
+    fn test_idb_list_agent_defs() {
+        let db = IndexedDbDatabase::new_with_persistence("test-list-defs").unwrap();
+        db.upsert_agent_def("a", r#"{"name":"a"}"#).unwrap();
+        db.upsert_agent_def("b", r#"{"name":"b"}"#).unwrap();
+
+        let defs = db.list_agent_defs().unwrap();
+        assert_eq!(defs.len(), 2);
+    }
+
+    #[test]
+    fn test_idb_delete_agent_def() {
+        let db = IndexedDbDatabase::new_with_persistence("test-del-defs").unwrap();
+        db.upsert_agent_def("weather", r#"{"name":"weather"}"#)
+            .unwrap();
+        db.delete_agent_def("weather").unwrap();
+
+        assert_eq!(db.get_agent_def("weather").unwrap(), None);
+        assert_eq!(db.list_agent_defs().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_idb_agent_defs_snapshot_round_trip() {
+        let db = IndexedDbDatabase::new_with_persistence("test-snap-defs").unwrap();
+        let json = r#"{"name":"weather","description":"Weather agent"}"#;
+        db.upsert_agent_def("weather", json).unwrap();
+
+        // Build + inspect snapshot
+        let snapshot_str = db.build_snapshot_json().unwrap();
+        let snapshot: serde_json::Value = serde_json::from_str(&snapshot_str).unwrap();
+
+        // Version must be 2
+        assert_eq!(
+            snapshot.get("version").and_then(|v| v.as_u64()),
+            Some(2)
+        );
+
+        // "agents" array must contain our entry
+        let agents = snapshot.get("agents").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].get("name").and_then(|v| v.as_str()), Some("weather"));
+        assert_eq!(agents[0].get("json").and_then(|v| v.as_str()), Some(json));
+
+        // Restore into a fresh db and verify
+        let db2 = IndexedDbDatabase::new_with_persistence("test-snap-defs-2").unwrap();
+        db2.restore_state(&snapshot).unwrap();
+
+        assert_eq!(
+            db2.get_agent_def("weather").unwrap(),
+            Some(json.to_string())
+        );
+    }
+
+    #[test]
+    fn test_idb_restore_state_tolerates_corrupt_agent_defs() {
+        let state = serde_json::json!({
+            "version": 2,
+            "episodes": [],
+            "profiles": [],
+            "settings": {},
+            "templates": [],
+            "agents": [
+                {"name": "good", "json": r#"{"name":"good"}"#},
+                {"corrupt": true},
+                {"name": "missing_json"},
+            ],
+        });
+
+        let db = IndexedDbDatabase::new_with_persistence("test-corrupt-defs").unwrap();
+        db.restore_state(&state).unwrap();
+
+        // Only "good" has both name and json fields
+        assert_eq!(db.list_agent_defs().unwrap().len(), 1);
+        assert!(db.get_agent_def("good").unwrap().is_some());
     }
 }

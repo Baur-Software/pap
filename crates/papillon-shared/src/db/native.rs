@@ -321,6 +321,19 @@ impl NativeDatabase {
             [],
         );
 
+        // Dynamic agent definitions persisted as raw JSON blobs. This is a
+        // separate table from `agents` so that user-managed lightweight defs
+        // (name + JSON) can round-trip without requiring all the columns of
+        // the full agents table.
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS agent_defs (
+                name TEXT PRIMARY KEY,
+                json TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| DbError(format!("db migrate agent_defs: {e}")))?;
+
         Ok(())
     }
 
@@ -1897,6 +1910,54 @@ impl DatabaseOps for NativeDatabase {
             .map_err(|e| DbError(format!("db delete saved_pipeline: {e}")))?;
         Ok(())
     }
+
+    // ── Dynamic Agent Def CRUD ────────────────────────────────────────────────
+
+    fn upsert_agent_def(&self, name: &str, json: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "INSERT OR REPLACE INTO agent_defs (name, json) VALUES (?1, ?2)",
+            params![name, json],
+        )
+        .map_err(|e| DbError(format!("db upsert agent_def: {e}")))?;
+        Ok(())
+    }
+
+    fn list_agent_defs(&self) -> Result<Vec<String>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare("SELECT json FROM agent_defs")
+            .map_err(|e| DbError(format!("db prepare agent_defs: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| DbError(format!("db query agent_defs: {e}")))?;
+        let mut defs = Vec::new();
+        for row in rows {
+            defs.push(row.map_err(|e| DbError(format!("db row agent_def: {e}")))?);
+        }
+        Ok(defs)
+    }
+
+    fn get_agent_def(&self, name: &str) -> Result<Option<String>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.query_row(
+            "SELECT json FROM agent_defs WHERE name = ?1",
+            params![name],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| DbError(format!("db get agent_def: {e}")))
+    }
+
+    fn delete_agent_def(&self, name: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.execute(
+            "DELETE FROM agent_defs WHERE name = ?1",
+            params![name],
+        )
+        .map_err(|e| DbError(format!("db delete agent_def: {e}")))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -3090,5 +3151,65 @@ mod tests {
         let db = test_db();
         // Deleting an id that does not exist must not error.
         db.delete_saved_pipeline("does-not-exist").unwrap();
+    }
+
+    // ── agent_defs table tests ────────────────────────────────────────────────
+
+    #[test]
+    fn agent_def_upsert_and_get() {
+        let db = test_db();
+        let json = r#"{"name":"weather","description":"Weather agent"}"#;
+        db.upsert_agent_def("weather", json).unwrap();
+
+        let result = db.get_agent_def("weather").unwrap();
+        assert_eq!(result, Some(json.to_string()));
+    }
+
+    #[test]
+    fn agent_def_upsert_replaces_existing() {
+        let db = test_db();
+        db.upsert_agent_def("weather", r#"{"name":"weather","v":1}"#)
+            .unwrap();
+        db.upsert_agent_def("weather", r#"{"name":"weather","v":2}"#)
+            .unwrap();
+
+        let result = db.get_agent_def("weather").unwrap().unwrap();
+        assert!(result.contains("\"v\":2"), "expected v=2 but got {result}");
+    }
+
+    #[test]
+    fn agent_def_get_missing_returns_none() {
+        let db = test_db();
+        assert_eq!(db.get_agent_def("nonexistent").unwrap(), None);
+    }
+
+    #[test]
+    fn agent_def_list_returns_all() {
+        let db = test_db();
+        db.upsert_agent_def("agent-a", r#"{"name":"agent-a"}"#)
+            .unwrap();
+        db.upsert_agent_def("agent-b", r#"{"name":"agent-b"}"#)
+            .unwrap();
+
+        let defs = db.list_agent_defs().unwrap();
+        assert_eq!(defs.len(), 2);
+    }
+
+    #[test]
+    fn agent_def_delete_removes_entry() {
+        let db = test_db();
+        db.upsert_agent_def("weather", r#"{"name":"weather"}"#)
+            .unwrap();
+        db.delete_agent_def("weather").unwrap();
+
+        assert_eq!(db.get_agent_def("weather").unwrap(), None);
+        assert_eq!(db.list_agent_defs().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn agent_def_delete_nonexistent_is_noop() {
+        let db = test_db();
+        // Must not return an error when the name doesn't exist.
+        db.delete_agent_def("nonexistent").unwrap();
     }
 }
