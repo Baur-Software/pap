@@ -4605,6 +4605,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pap-bluefield-loopback"
+version = "0.8.2"
+dependencies = [
+ "chrono",
+ "pap-bluefield",
+ "pap-core",
+ "pap-proto",
+ "pap-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "pap-c"
 version = "0.8.2"
 dependencies = [
@@ -4990,6 +5003,7 @@ dependencies = [
  "pap-credential",
  "pap-did",
  "pap-proto",
+ "pap-test-utils",
  "rand 0.8.6",
  "reqwest 0.12.12",
  "rustls",

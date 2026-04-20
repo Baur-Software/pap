@@ -1,4 +1,4 @@
-use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, VerifyingKey};
 use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -93,7 +93,7 @@ impl SelectiveDisclosureJwt {
             })?);
         let bytes = self.commitment_bytes();
         verifying_key
-            .verify(&bytes, &signature)
+            .verify_strict(&bytes, &signature)
             .map_err(|_| CredentialError::VerificationFailed("signature mismatch".into()))
     }
 

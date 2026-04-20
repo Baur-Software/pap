@@ -34,6 +34,9 @@ COPY crates/pap-webauthn         ./crates/pap-webauthn
 COPY crates/pap-proto            ./crates/pap-proto
 COPY crates/pap-transport        ./crates/pap-transport
 COPY crates/pap-agents           ./crates/pap-agents
+# pap-test-utils is a dev-dep of pap-transport; cargo needs the crate present
+# in the workspace to resolve the manifest even during a release build.
+COPY crates/pap-test-utils       ./crates/pap-test-utils
 
 # The registry app (server + UI in one crate)
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
@@ -65,7 +68,8 @@ RUN sed -i \
 RUN sed -i -e '/^pap-test-utils[[:space:]]*=/d' \
     crates/pap-core/Cargo.toml \
     crates/pap-credential/Cargo.toml \
-    crates/pap-federation/Cargo.toml
+    crates/pap-federation/Cargo.toml \
+    crates/pap-transport/Cargo.toml
 
 # Build server binary (ssr feature) + WASM bundle (hydrate feature) in one step
 RUN cargo leptos build --release -p pap-registry
@@ -95,6 +99,7 @@ COPY crates/pap-webauthn         ./crates/pap-webauthn
 COPY crates/pap-proto            ./crates/pap-proto
 COPY crates/pap-transport        ./crates/pap-transport
 COPY crates/pap-agents           ./crates/pap-agents
+COPY crates/pap-test-utils       ./crates/pap-test-utils
 
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src        ./apps/registry/src
@@ -118,7 +123,8 @@ RUN sed -i \
 RUN sed -i -e '/^pap-test-utils[[:space:]]*=/d' \
     crates/pap-core/Cargo.toml \
     crates/pap-credential/Cargo.toml \
-    crates/pap-federation/Cargo.toml
+    crates/pap-federation/Cargo.toml \
+    crates/pap-transport/Cargo.toml
 
 RUN cargo test -p pap-registry --features ssr
 

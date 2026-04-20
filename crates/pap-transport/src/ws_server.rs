@@ -14,6 +14,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::error::TransportError;
 use crate::handler::AgentHandler;
+use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
 use crate::ws_common::{BoxedStream, WsMessage};
 
 /// WebSocket server for a receiving PAP agent.
@@ -24,6 +25,13 @@ pub struct WsAgentServer {
     handler: Arc<dyn AgentHandler>,
     port: u16,
     tls_acceptor: Option<TlsAcceptor>,
+    /// Maximum allowed size (in bytes) for any single incoming WebSocket frame.
+    ///
+    /// Frames that exceed this limit are rejected with a
+    /// [`TransportError::MessageTooLarge`] error before deserialization begins,
+    /// preventing allocation-based DoS attacks.
+    /// Defaults to [`DEFAULT_MAX_MESSAGE_BYTES`] (1 MiB).
+    max_message_bytes: usize,
 }
 
 impl WsAgentServer {
@@ -32,12 +40,23 @@ impl WsAgentServer {
             handler,
             port,
             tls_acceptor: None,
+            max_message_bytes: DEFAULT_MAX_MESSAGE_BYTES,
         }
     }
 
     /// Enable TLS with a server config (e.g. from `generate_node_identity()`).
     pub fn with_tls(mut self, server_config: Arc<rustls::ServerConfig>) -> Self {
         self.tls_acceptor = Some(TlsAcceptor::from(server_config));
+        self
+    }
+
+    /// Override the per-frame size limit (bytes).
+    ///
+    /// Use this for deployments where ExecutionResult payloads routinely
+    /// exceed the 1 MiB default (e.g. large JSON-LD documents). Setting a
+    /// value of `usize::MAX` effectively disables the check.
+    pub fn with_max_message_bytes(mut self, limit: usize) -> Self {
+        self.max_message_bytes = limit;
         self
     }
 
@@ -62,9 +81,12 @@ impl WsAgentServer {
 
             let handler = self.handler.clone();
             let tls_acceptor = self.tls_acceptor.clone();
+            let max_message_bytes = self.max_message_bytes;
 
             tokio::spawn(async move {
-                if let Err(e) = handle_connection(tcp, handler, tls_acceptor).await {
+                if let Err(e) =
+                    handle_connection(tcp, handler, tls_acceptor, max_message_bytes).await
+                {
                     eprintln!("WS session error: {e}");
                 }
             });
@@ -77,6 +99,7 @@ async fn handle_connection(
     tcp: TcpStream,
     handler: Arc<dyn AgentHandler>,
     tls_acceptor: Option<TlsAcceptor>,
+    max_message_bytes: usize,
 ) -> Result<(), TransportError> {
     // Step 1: Optional TLS upgrade
     let stream: BoxedStream = if let Some(acceptor) = tls_acceptor {
@@ -118,6 +141,16 @@ async fn handle_connection(
             }
             _ => continue,
         };
+
+        // Reject frames that exceed the per-frame size limit before any
+        // deserialization work is performed.  This prevents an attacker from
+        // exhausting server memory by sending arbitrarily large JSON frames.
+        if text.len() > max_message_bytes {
+            return Err(TransportError::MessageTooLarge {
+                size: text.len(),
+                limit: max_message_bytes,
+            });
+        }
 
         let ws_msg: WsMessage = serde_json::from_str(&text)
             .map_err(|e| TransportError::InvalidResponse(format!("deserialize failed: {e}")))?;
@@ -534,5 +567,86 @@ mod tests {
             payload: None,
         };
         assert!(dispatch_message(&h, &mut sid, msg).is_err());
+    }
+
+    // ── Per-frame size-limit tests ────────────────────────────────────────
+
+    /// Send a frame whose byte length exceeds the configured limit and verify
+    /// the server closes the connection (returns a WS error or close frame).
+    #[tokio::test]
+    async fn ws_frame_exceeding_limit_is_rejected() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio::net::TcpListener;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // Server with a tiny 32-byte limit — any real PAP frame will exceed it.
+        let server = WsAgentServer::new(arc(BasicHandler), addr.port()).with_max_message_bytes(32);
+        tokio::spawn(async move { server.serve(listener).await });
+
+        let url = format!("ws://{addr}");
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+
+        // Build a frame that is definitely larger than 32 bytes.
+        let oversized = "x".repeat(1024);
+        let _ = ws.send(Message::Text(oversized.into())).await;
+
+        // The server should close the connection — we expect either a Close
+        // frame or an error on the next read.
+        let result = ws.next().await;
+        let is_closed = match result {
+            None => true, // stream ended
+            Some(Ok(Message::Close(_))) => true,
+            Some(Err(_)) => true,
+            Some(Ok(_)) => false,
+        };
+        assert!(
+            is_closed,
+            "expected connection to be closed after oversized frame"
+        );
+    }
+
+    /// A frame within the configured limit must be processed normally.
+    #[tokio::test]
+    async fn ws_frame_within_limit_is_accepted() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio::net::TcpListener;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // Server with the default (generous) limit.
+        let server = WsAgentServer::new(arc(BasicHandler), addr.port());
+        tokio::spawn(async move { server.serve(listener).await });
+
+        let url = format!("ws://{addr}");
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+
+        // Send a valid phase-1 frame (small, well within the default limit).
+        let token_json = serde_json::json!({
+            "phase": 1,
+            "payload": {
+                "type": "TokenPresentation",
+                "token": {
+                    "id": "t1",
+                    "target_did": "did:key:zDEF",
+                    "action": "schema:SearchAction",
+                    "nonce": "test-nonce",
+                    "issuer_did": "did:key:zABC",
+                    "issued_at": "2025-01-01T00:00:00Z",
+                    "expires_at": "2099-01-01T00:00:00Z"
+                }
+            }
+        });
+        ws.send(Message::Text(token_json.to_string().into()))
+            .await
+            .unwrap();
+
+        // The server should respond (not close with an error).
+        let reply = ws.next().await.unwrap().unwrap();
+        assert!(matches!(reply, Message::Text(_)));
     }
 }

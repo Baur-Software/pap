@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, VerifyingKey};
 use pap_did::SignatureAlgorithm;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -190,7 +190,7 @@ impl Mandate {
         );
         let bytes = self.canonical_bytes();
         verifying_key
-            .verify(&bytes, &signature)
+            .verify_strict(&bytes, &signature)
             .map_err(|_| PapError::VerificationFailed)
     }
 
@@ -199,15 +199,29 @@ impl Mandate {
         Utc::now() > self.ttl
     }
 
-    /// Compute the current decay state based on TTL.
-    /// `Suspended` is terminal — it short-circuits regardless of TTL.
+    /// Compute the next decay state based on TTL and the current stored state.
+    ///
+    /// Per spec §5.7.1, each call advances by **at most one step**:
+    ///   Active → Degraded → ReadOnly → Suspended
+    ///
+    /// If the TTL has already expired between polling cycles (e.g. a mandate
+    /// goes from Active directly past Degraded), this function still returns
+    /// only `Degraded` when called from `Active`. A second call (after the
+    /// caller has applied the first transition) will then return `ReadOnly`.
+    ///
+    /// `Suspended` is terminal — no time-based transition can override it.
     pub fn compute_decay_state(&self, decay_window_secs: i64) -> DecayState {
         // Terminal state: no time-based transition can override a suspension.
         if self.decay_state == DecayState::Suspended {
             return DecayState::Suspended;
         }
+
         let now = Utc::now();
-        if now > self.ttl {
+
+        // Determine what the time-based target state would be if we could
+        // jump freely, then clamp it to at most one step from the current
+        // state so that Degraded is never skipped.
+        let time_target = if now > self.ttl {
             DecayState::ReadOnly
         } else {
             let remaining = (self.ttl - now).num_seconds();
@@ -216,6 +230,40 @@ impl Mandate {
             } else {
                 DecayState::Active
             }
+        };
+
+        // Clamp: advance by at most one step from the current state.
+        // Ordering: Active(0) < Degraded(1) < ReadOnly(2) < Suspended(3).
+        // We never go backwards via this path (renewals use transition_decay
+        // directly), so only forward advancement is clamped here.
+        match self.decay_state {
+            DecayState::Active => {
+                // Can only move to Degraded in a single step.
+                match time_target {
+                    DecayState::Active => DecayState::Active,
+                    _ => DecayState::Degraded,
+                }
+            }
+            DecayState::Degraded => {
+                // Can move to ReadOnly or stay; cannot skip to Suspended.
+                match time_target {
+                    DecayState::Active | DecayState::Degraded => DecayState::Degraded,
+                    _ => DecayState::ReadOnly,
+                }
+            }
+            DecayState::ReadOnly => {
+                // Can only move to Suspended. Time alone never forces
+                // Suspended (there is no TTL threshold for it), so we
+                // only advance if the target is already Suspended — which
+                // currently cannot happen via time alone.  Future-proof by
+                // keeping ReadOnly if time_target is ReadOnly or below.
+                match time_target {
+                    DecayState::Suspended => DecayState::Suspended,
+                    _ => DecayState::ReadOnly,
+                }
+            }
+            // Suspended was handled above as an early return.
+            DecayState::Suspended => DecayState::Suspended,
         }
     }
 
@@ -544,6 +592,75 @@ mod tests {
 
         assert_eq!(mandate.compute_decay_state(60), DecayState::Active);
         assert_eq!(mandate.compute_decay_state(300), DecayState::Degraded);
+    }
+
+    /// Regression test for §5.7.1: `Active → ReadOnly` must not occur in a
+    /// single step. When a mandate's TTL is already fully expired and the
+    /// stored state is still `Active` (because no polling cycle ran while it
+    /// was expiring), `compute_decay_state` must return `Degraded` on the
+    /// first call and `ReadOnly` only after the caller has applied that
+    /// transition and calls again.
+    #[test]
+    fn decay_computation_steps_through_degraded_before_readonly() {
+        // TTL already in the past → fully expired mandate, still Active.
+        let expired_ttl = Utc::now() - Duration::seconds(10);
+        let mut mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            expired_ttl,
+        );
+        assert_eq!(mandate.decay_state, DecayState::Active);
+
+        // First poll: must yield Degraded, not ReadOnly.
+        let first = mandate.compute_decay_state(300);
+        assert_eq!(
+            first,
+            DecayState::Degraded,
+            "Active mandate with expired TTL must step to Degraded first (§5.7.1)"
+        );
+
+        // Apply the transition, then poll again.
+        mandate.transition_decay(first).unwrap();
+        assert_eq!(mandate.decay_state, DecayState::Degraded);
+
+        // Second poll: now Degraded → ReadOnly is the correct next step.
+        let second = mandate.compute_decay_state(300);
+        assert_eq!(
+            second,
+            DecayState::ReadOnly,
+            "Degraded mandate with expired TTL must advance to ReadOnly"
+        );
+    }
+
+    /// `compute_decay_state` must never skip Degraded even when the mandate
+    /// was `Active` with a very large `decay_window_secs` that also covers
+    /// the expired-TTL scenario — the one-step rule is independent of the
+    /// window size.
+    #[test]
+    fn decay_computation_active_never_jumps_to_readonly_directly() {
+        let expired_ttl = Utc::now() - Duration::hours(2);
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            expired_ttl,
+        );
+        // Whatever the decay window, Active must not jump to ReadOnly.
+        for window in &[0i64, 60, 300, 3600, 86400] {
+            assert_ne!(
+                mandate.compute_decay_state(*window),
+                DecayState::ReadOnly,
+                "window={window}: Active should never advance directly to ReadOnly"
+            );
+            assert_ne!(
+                mandate.compute_decay_state(*window),
+                DecayState::Suspended,
+                "window={window}: Active should never advance directly to Suspended"
+            );
+        }
     }
 
     #[test]

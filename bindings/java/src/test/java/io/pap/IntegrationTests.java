@@ -421,31 +421,34 @@ class IntegrationTests {
         }
 
         @Test
-        @DisplayName("Expired mandate computes as ReadOnly")
-        void testExpiredMandateComputesReadOnly() {
+        @DisplayName("Expired mandate computes as Degraded (first step from Active)")
+        void testExpiredMandateComputesDegraded() {
             try (var kp = PrincipalKeypair.generate();
                  var scope = Scope.from(new String[]{"schema:SearchAction"});
                  var ds = DisclosureSet.empty();
                  var mandate = Mandate.issueRoot(kp.did(), "did:key:zagent", scope, ds, TTL_PAST)) {
 
-                assertEquals(DecayState.READ_ONLY, mandate.computeDecayState(3600));
+                // Per spec §5.7.1 Active→ReadOnly is not a valid single-step transition.
+                // computeDecayState steps by one: Active → Degraded.
+                assertEquals(DecayState.DEGRADED, mandate.computeDecayState(3600));
             }
         }
 
         @Test
-        @DisplayName("Sync decay handles Active→ReadOnly jump with Degraded insert")
-        void testSyncDecayAutoInsertsDegraded() {
+        @DisplayName("Sync decay from Active steps to Degraded on expired TTL")
+        void testSyncDecayStepsToDegraded() {
             try (var kp = PrincipalKeypair.generate();
                  var scope = Scope.from(new String[]{"schema:SearchAction"});
                  var ds = DisclosureSet.empty();
                  var mandate = Mandate.issueRoot(kp.did(), "did:key:zagent", scope, ds, TTL_PAST)) {
 
                 assertEquals(DecayState.ACTIVE, mandate.decayState());
-                assertEquals(DecayState.READ_ONLY, mandate.computeDecayState(3600));
+                // First compute: Active → Degraded (one step)
+                assertEquals(DecayState.DEGRADED, mandate.computeDecayState(3600));
 
-                // This must not throw despite the jump
+                // syncDecayState advances by one step without throwing
                 assertDoesNotThrow(() -> mandate.syncDecayState(3600));
-                assertEquals(DecayState.READ_ONLY, mandate.decayState());
+                assertEquals(DecayState.DEGRADED, mandate.decayState());
             }
         }
 
@@ -746,8 +749,10 @@ class IntegrationTests {
 
                 try (var mandate2 = Mandate.fromJson(json)) {
                     // The deserialized mandate state is whatever was serialized
-                    // but we must recompute it based on TTL
-                    assertEquals(DecayState.READ_ONLY, mandate2.computeDecayState(3600));
+                    // but we must recompute it based on TTL.
+                    // Per §5.7.1, Active→ReadOnly is not a valid single-step transition;
+                    // computeDecayState steps one level: Active→Degraded.
+                    assertEquals(DecayState.DEGRADED, mandate2.computeDecayState(3600));
                 }
             }
         }

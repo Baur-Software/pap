@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 pub mod agents;
+pub mod challenge_store;
 pub mod commands;
 pub mod db;
 pub mod discovery;
@@ -146,6 +147,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::health::get_health_status,
+            commands::identity::get_identity_challenge,
             commands::identity::create_identity,
             commands::identity::get_identity,
             commands::identity::get_principal_did,

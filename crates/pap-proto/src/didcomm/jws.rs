@@ -5,7 +5,7 @@
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use pap_did::SignatureAlgorithm;
 
 use crate::error::ProtoError;
@@ -90,7 +90,7 @@ pub fn verify_signed(
     );
 
     verifying_key
-        .verify(signing_input.as_bytes(), &signature)
+        .verify_strict(signing_input.as_bytes(), &signature)
         .map_err(|_| ProtoError::VerificationFailed)?;
 
     // Decode and return the plaintext

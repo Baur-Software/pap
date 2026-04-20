@@ -1,6 +1,7 @@
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::challenge_store::SignedChallenge;
 use crate::error::PapillonError;
 use crate::state::AppState;
 use papillon_shared::{BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine};
@@ -223,12 +224,33 @@ pub async fn canvas_plan_prompt(
 /// Sends `approved` (true/false) through the oneshot channel, which unblocks
 /// the waiting `canvas_plan_prompt` command and either proceeds with the
 /// handshake or emits a Failed block.
+///
+/// **Challenge requirement**: `signed_challenge` must contain a valid
+/// [`SignedChallenge`] obtained from [`get_identity_challenge`] and signed with
+/// the current principal's keypair. This prevents a compromised frontend page
+/// (e.g. a malicious `pap://` link) from silently approving data-disclosing
+/// mandates on behalf of the principal.
 #[tauri::command]
 pub async fn canvas_approve_block(
     approval_request_id: String,
     approved: bool,
+    signed_challenge: SignedChallenge,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // Verify the principal signed this approval before acting on it.
+    {
+        let signer_lock = state.signer.read().map_err(|e| e.to_string())?;
+
+        let signer = signer_lock
+            .as_ref()
+            .ok_or_else(|| "no principal identity to authorize approval against".to_string())?;
+
+        state
+            .identity_challenges
+            .take_and_verify(&signed_challenge, &signer.verifying_key())
+            .map_err(|e| format!("authorization failed: {e}"))?;
+    }
+
     let sender = {
         let mut gates = state.approval_gates.write().await;
         gates.remove(&approval_request_id)

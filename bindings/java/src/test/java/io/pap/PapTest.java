@@ -202,22 +202,23 @@ class PapTest {
 
     @Test
     void sync_decay_state_handles_active_to_read_only_jump() {
-        // Mandate with TTL in the past: compute returns ReadOnly.
+        // Mandate with TTL in the past: compute steps Active→Degraded first (§5.7.1).
         // Active→ReadOnly is not a valid single-step transition, so
-        // syncDecayState must insert Degraded automatically.
+        // syncDecayState steps through Degraded automatically.
         try (var kp = PrincipalKeypair.generate();
              var scope = Scope.from(new String[]{"schema:SearchAction"});
              var ds = DisclosureSet.empty();
              var m = Mandate.issueRoot(kp.did(), "did:key:zagent", scope, ds, TTL_PAST)) {
 
-            // The computed state should be ReadOnly (TTL has expired)
-            assertEquals(DecayState.READ_ONLY, m.computeDecayState(3600));
+            // Per §5.7.1 Active→ReadOnly is not a valid single-step transition;
+            // computeDecayState steps one level: Active→Degraded.
+            assertEquals(DecayState.DEGRADED, m.computeDecayState(3600));
             assertEquals(DecayState.ACTIVE, m.decayState()); // not yet synced
 
-            // This must NOT throw, even though Active→ReadOnly is illegal as a
-            // single step. syncDecayState steps through Degraded automatically.
+            // syncDecayState advances one step: Active→Degraded.
+            // A subsequent call would advance to ReadOnly.
             assertDoesNotThrow(() -> m.syncDecayState(3600));
-            assertEquals(DecayState.READ_ONLY, m.decayState());
+            assertEquals(DecayState.DEGRADED, m.decayState());
         }
     }
 
@@ -322,8 +323,10 @@ class PapTest {
             try (var m = Mandate.fromJson(json)) {
                 // Verify signature first (doesn't cover decay_state)
                 assertDoesNotThrow(() -> m.verify(kp.publicKeyBytes()));
-                // Now recompute — TTL is in the past, so state should be ReadOnly
-                assertEquals(DecayState.READ_ONLY, m.computeDecayState(3600));
+                // Now recompute — TTL is in the past. Per spec §5.7.1 Active→ReadOnly is
+                // not a valid single-step transition; computeDecayState steps one level:
+                // Active → Degraded.
+                assertEquals(DecayState.DEGRADED, m.computeDecayState(3600));
             }
         }
     }
