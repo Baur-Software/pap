@@ -229,6 +229,7 @@ pub fn run() {
             commands::pipeline::list_saved_pipelines,
             commands::pipeline::delete_saved_pipeline,
             commands::pipeline::run_saved_pipeline,
+            commands::pipeline::port_compatible,
             commands::templates::get_global_templates,
             commands::templates::get_profile_templates,
             commands::templates::create_template,
