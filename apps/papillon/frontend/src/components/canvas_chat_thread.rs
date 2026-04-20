@@ -6,19 +6,6 @@ use crate::state::canvas::{filter_messages_by_canvas, CanvasState};
 #[component]
 pub fn CanvasChatThread() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let input_value = RwSignal::new(String::new());
-
-    let on_keydown = move |e: leptos::ev::KeyboardEvent| {
-        if e.key() == "Enter" {
-            let text = input_value.get();
-            let trimmed = text.trim().to_string();
-            if !trimmed.is_empty() {
-                canvas_state.submit_prompt(trimmed.clone());
-                canvas_state.add_message("user", &trimmed, None);
-                input_value.set(String::new());
-            }
-        }
-    };
 
     // Only show messages belonging to the currently active canvas.
     let active_messages = move || {
@@ -67,14 +54,6 @@ pub fn CanvasChatThread() -> impl IntoView {
                 }
             />
         </div>
-        <div class="canvas-chat-input">
-            <input
-                type="text"
-                placeholder="Ask anything..."
-                prop:value=move || input_value.get()
-                on:input=move |e| input_value.set(event_target_value(&e))
-                on:keydown=on_keydown
-            />
-        </div>
+        // Input is intentionally omitted here — use the address bar in the topbar.
     }
 }

@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos_router::components::A;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
@@ -12,7 +13,6 @@ mod templates_tab;
 use papillon_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
     OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RecoverySetupResult, RecoveryStatus,
-    SuccessorDesignation,
 };
 use templates_tab::TemplatesTab;
 
@@ -26,6 +26,14 @@ pub fn SettingsPage() -> impl IntoView {
             // ── Left nav ──
             <nav class="settings-nav">
 
+                <A href="/" attr:class="settings-nav-back">
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </span>
+                    "Canvas"
+                </A>
+
+                <div class="settings-nav-divider" />
                 <div class="settings-nav-group-label">"Account"</div>
                 <button
                     class=move || if active_tab.get() == "profiles" { "settings-nav-link active" } else { "settings-nav-link" }
@@ -666,13 +674,7 @@ fn IdentityTab() -> impl IntoView {
     let show_import = RwSignal::new(false);
     let import_input = RwSignal::new(String::new());
     let import_error = RwSignal::new(None::<String>);
-    let show_add_successor = RwSignal::new(false);
-    let successor_error = RwSignal::new(None::<String>);
-    let succ_did = RwSignal::new(String::new());
-    let succ_rel = RwSignal::new("executor".to_string());
-    let succ_notes = RwSignal::new(String::new());
-
-    // Load backup status + successors on mount
+    // Load backup status on mount
     Effect::new(move || {
         if !bridge::tauri_available() {
             return;
@@ -682,11 +684,6 @@ fn IdentityTab() -> impl IntoView {
                 bridge::invoke_no_args::<KeyBackupStatus>("get_key_backup_status").await
             {
                 identity.backed_up.set(status.backed_up);
-            }
-            if let Ok(suc) =
-                bridge::invoke_no_args::<Vec<SuccessorDesignation>>("list_successors").await
-            {
-                identity.successors.set(suc);
             }
         });
     });
@@ -736,36 +733,6 @@ fn IdentityTab() -> impl IntoView {
         });
     };
 
-    let handle_add_successor = move |_| {
-        let did = succ_did.get();
-        let rel = succ_rel.get();
-        let notes = succ_notes.get();
-        spawn_local(async move {
-            successor_error.set(None);
-            match bridge::invoke::<serde_json::Value, Vec<SuccessorDesignation>>(
-                "add_successor",
-                &serde_json::json!({
-                    "successorDid": did,
-                    "relationship": rel,
-                    "notes": notes
-                }),
-            )
-            .await
-            {
-                Ok(suc) => {
-                    identity.successors.set(suc);
-                    succ_did.set(String::new());
-                    succ_notes.set(String::new());
-                    show_add_successor.set(false);
-                }
-                Err(_) => {
-                    successor_error.set(Some(
-                        "Could not add successor \u{2014} backend unavailable.".into(),
-                    ));
-                }
-            }
-        });
-    };
 
     view! {
         // Backup warning
@@ -854,111 +821,6 @@ fn IdentityTab() -> impl IntoView {
             </div>
         </Show>
 
-        // Successor designations
-        <div class="card">
-            <h3 style="font-size: 14px; margin-bottom: 4px;">"Designated Successors"</h3>
-            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
-                "Designate DIDs that could inherit your principal authority \u{2014} for estate planning, organizational continuity, or recovery."
-            </p>
-
-            <For
-                each=move || identity.successors.get()
-                key=|s| s.successor_did.clone()
-                children=move |successor| {
-                    let did = successor.successor_did.clone();
-                    let did_for_remove = successor.successor_did.clone();
-                    let rel = successor.relationship.clone();
-                    let notes = successor.notes.clone();
-                    view! {
-                        <div class="successor-entry">
-                            <div style="flex: 1; min-width: 0;">
-                                <code style="font-size: 11px; word-break: break-all;">{did}</code>
-                            </div>
-                            <span class="badge badge-accent">{rel}</span>
-                            <Show when={
-                                let n = notes.clone();
-                                move || !n.is_empty()
-                            }>
-                                <span style="font-size: 11px; color: var(--text-secondary);">{notes.clone()}</span>
-                            </Show>
-                            <button
-                                class="btn"
-                                style="padding: 2px 8px; font-size: 11px; background: var(--bg-tertiary); color: var(--error);"
-                                on:click=move |_| {
-                                    let did = did_for_remove.clone();
-                                    spawn_local(async move {
-                                        successor_error.set(None);
-                                        match bridge::invoke::<serde_json::Value, Vec<SuccessorDesignation>>(
-                                            "remove_successor",
-                                            &serde_json::json!({ "successorDid": did }),
-                                        ).await {
-                                            Ok(suc) => identity.successors.set(suc),
-                                            Err(_) => {
-                                                successor_error.set(Some("Could not remove successor \u{2014} backend unavailable.".into()));
-                                            }
-                                        }
-                                    });
-                                }
-                            >"Remove"</button>
-                        </div>
-                    }
-                }
-            />
-
-            <Show when=move || successor_error.get().is_some()>
-                <p style="color: var(--error); font-size: 12px; margin-top: 8px;">
-                    {move || successor_error.get().unwrap_or_default()}
-                </p>
-            </Show>
-
-            <Show
-                when=move || show_add_successor.get()
-                fallback=move || view! {
-                    <button
-                        class="btn"
-                        style="margin-top: 8px; background: var(--bg-tertiary); color: var(--text-secondary);"
-                        on:click=move |_| show_add_successor.set(true)
-                    >"Add Successor"</button>
-                }
-            >
-                <div class="setup-inputs" style="margin-top: 12px;">
-                    <label>"Successor DID"</label>
-                    <input
-                        type="text"
-                        placeholder="did:key:z..."
-                        prop:value=move || succ_did.get()
-                        on:input=move |ev| succ_did.set(event_target_value(&ev))
-                    />
-                    <label>"Relationship"</label>
-                    <select
-                        style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px;"
-                        on:change=move |ev| succ_rel.set(event_target_value(&ev))
-                        prop:value=move || succ_rel.get()
-                    >
-                        <option value="executor">"Executor"</option>
-                        <option value="spouse">"Spouse"</option>
-                        <option value="descendant">"Descendant"</option>
-                        <option value="trusted-friend">"Trusted Friend"</option>
-                        <option value="organization">"Organization"</option>
-                    </select>
-                    <label>"Notes"</label>
-                    <input
-                        type="text"
-                        placeholder="Optional notes..."
-                        prop:value=move || succ_notes.get()
-                        on:input=move |ev| succ_notes.set(event_target_value(&ev))
-                    />
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-primary" on:click=handle_add_successor>"Save"</button>
-                        <button
-                            class="btn"
-                            style="background: var(--bg-tertiary); color: var(--text-secondary);"
-                            on:click=move |_| show_add_successor.set(false)
-                        >"Cancel"</button>
-                    </div>
-                </div>
-            </Show>
-        </div>
     }
 }
 
@@ -1549,7 +1411,6 @@ fn MandateBuilderTab() -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let ttl_hours = RwSignal::new(8u64);
     let auto_approve_zero = RwSignal::new(true);
-    let principal_did = RwSignal::new(String::new());
     let saved_msg = RwSignal::new(false);
     let save_error = RwSignal::new(None::<String>);
 
@@ -1625,19 +1486,6 @@ fn MandateBuilderTab() -> impl IntoView {
                     class=move || if auto_approve_zero.get() { "appearance-toggle on" } else { "appearance-toggle" }
                     on:click=move |_| auto_approve_zero.update(|v| *v = !*v)
                     aria-label="Toggle auto-approve zero disclosure"
-                />
-            </div>
-
-            // Delegate to another device (advanced)
-            <div style="padding: 12px 0; border-bottom: 1px solid var(--border);">
-                <div style="font-size: 13px; font-weight: 500; margin-bottom: 4px;">"Delegate to another device"</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">"Advanced: allow another device or person you trust to act on your behalf. Leave empty to use only this device."</div>
-                <input
-                    type="text"
-                    placeholder="did:key:z6Mk... (optional)"
-                    prop:value=move || principal_did.get()
-                    on:input=move |ev| principal_did.set(event_target_value(&ev))
-                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; font-family: var(--font-mono);"
                 />
             </div>
 
