@@ -749,8 +749,10 @@ class IntegrationTests {
 
                 try (var mandate2 = Mandate.fromJson(json)) {
                     // The deserialized mandate state is whatever was serialized
-                    // but we must recompute it based on TTL
-                    assertEquals(DecayState.READ_ONLY, mandate2.computeDecayState(3600));
+                    // but we must recompute it based on TTL.
+                    // Per §5.7.1, Active→ReadOnly is not a valid single-step transition;
+                    // computeDecayState steps one level: Active→Degraded.
+                    assertEquals(DecayState.DEGRADED, mandate2.computeDecayState(3600));
                 }
             }
         }

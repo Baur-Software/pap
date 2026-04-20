@@ -122,7 +122,8 @@ RUN sed -i \
 RUN sed -i -e '/^pap-test-utils[[:space:]]*=/d' \
     crates/pap-core/Cargo.toml \
     crates/pap-credential/Cargo.toml \
-    crates/pap-federation/Cargo.toml
+    crates/pap-federation/Cargo.toml \
+    crates/pap-transport/Cargo.toml
 
 RUN cargo test -p pap-registry --features ssr
 
