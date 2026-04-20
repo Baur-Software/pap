@@ -127,9 +127,7 @@ impl IdentityChallengeStore {
             .write()
             .expect("identity challenge store lock poisoned")
             .remove(&signed.challenge_id)
-            .ok_or_else(|| {
-                "challenge not found, already used, or expired".to_string()
-            })?;
+            .ok_or_else(|| "challenge not found, already used, or expired".to_string())?;
 
         if pending.is_expired() {
             return Err("challenge expired".to_string());
@@ -166,16 +164,13 @@ impl IdentityChallengeStore {
     /// Insert a challenge with a custom timestamp — used by tests to simulate expiry.
     pub fn insert_expired_for_test(&self, nonce: Vec<u8>) -> String {
         let id = Uuid::new_v4().to_string();
-        self.inner
-            .write()
-            .expect("lock poisoned")
-            .insert(
-                id.clone(),
-                PendingChallenge {
-                    nonce,
-                    issued_at: Utc::now() - Duration::seconds(CHALLENGE_TTL_SECS + 1),
-                },
-            );
+        self.inner.write().expect("lock poisoned").insert(
+            id.clone(),
+            PendingChallenge {
+                nonce,
+                issued_at: Utc::now() - Duration::seconds(CHALLENGE_TTL_SECS + 1),
+            },
+        );
         id
     }
 }
@@ -249,7 +244,11 @@ mod tests {
         };
 
         let result = store.take_and_verify(&signed, &sk.verifying_key());
-        assert!(result.is_ok(), "valid signature must be accepted: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "valid signature must be accepted: {:?}",
+            result
+        );
     }
 
     // ── take_and_verify — rejection cases ────────────────────────────────
@@ -311,8 +310,7 @@ mod tests {
                 PendingChallenge {
                     nonce: nonce.clone(),
                     // issued CHALLENGE_TTL_SECS + 1 seconds in the past
-                    issued_at: Utc::now()
-                        - Duration::seconds(CHALLENGE_TTL_SECS + 1),
+                    issued_at: Utc::now() - Duration::seconds(CHALLENGE_TTL_SECS + 1),
                 },
             );
         }
@@ -320,8 +318,7 @@ mod tests {
         let sig = sk.sign(&nonce);
         let signed = SignedChallenge {
             challenge_id: id,
-            signature_b64: base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .encode(sig.to_bytes()),
+            signature_b64: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()),
         };
 
         let result = store.take_and_verify(&signed, &sk.verifying_key());

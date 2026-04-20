@@ -230,10 +230,7 @@ async fn main() {
     )
     .unwrap();
     in_mem_session
-        .open(
-            initiator_did.clone(),
-            "did:key:zReceiverPlaceholder".into(),
-        )
+        .open(initiator_did.clone(), "did:key:zReceiverPlaceholder".into())
         .unwrap();
     in_mem_session.execute().unwrap();
 
@@ -259,8 +256,8 @@ async fn main() {
         .run_full_handshake(
             token,
             initiator_did.clone(), // Phase 2: initiator's ephemeral DID
-            vec![],                 // Phase 3: zero disclosures for search
-            receipt,                // Phase 5: pre-signed receipt
+            vec![],                // Phase 3: zero disclosures for search
+            receipt,               // Phase 5: pre-signed receipt
         )
         .await
         .expect("6-phase handshake must succeed");

@@ -64,9 +64,7 @@ pub(crate) fn create_identity_inner(
         if let Some(signer) = signer_lock.as_ref() {
             // Identity exists — caller must prove possession of the current keypair.
             let sc = signed_challenge.ok_or_else(|| {
-                PapillonError::from(
-                    "signed_challenge required when an identity already exists",
-                )
+                PapillonError::from("signed_challenge required when an identity already exists")
             })?;
 
             state
@@ -501,8 +499,7 @@ mod tests {
         let sig = sk.sign(&nonce);
         let sc = SignedChallenge {
             challenge_id,
-            signature_b64: base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .encode(sig.to_bytes()),
+            signature_b64: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes()),
         };
 
         let new_kp = pap_did::PrincipalKeypair::generate();
@@ -512,9 +509,6 @@ mod tests {
         let result = import_key_inner(&state, seed_b64, sc);
         assert!(result.is_err(), "expired challenge must be rejected");
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("expired"),
-            "error must mention expiry: {msg}"
-        );
+        assert!(msg.contains("expired"), "error must mention expiry: {msg}");
     }
 }

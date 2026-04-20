@@ -107,9 +107,7 @@ impl AgentClient {
         };
 
         // ── Phase 2: Ephemeral DID Exchange ──────────────────────────────
-        let phase2 = self
-            .exchange_did(&session_id, initiator_session_did)
-            .await;
+        let phase2 = self.exchange_did(&session_id, initiator_session_did).await;
         let phase2 = match phase2 {
             Ok(msg) => msg,
             Err(e) => {
@@ -126,9 +124,7 @@ impl AgentClient {
         }
 
         // ── Phase 3: Disclosure ───────────────────────────────────────────
-        let phase3 = self
-            .send_disclosures(&session_id, disclosures)
-            .await;
+        let phase3 = self.send_disclosures(&session_id, disclosures).await;
         let phase3 = match phase3 {
             Ok(msg) => msg,
             Err(e) => {

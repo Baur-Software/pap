@@ -18,7 +18,7 @@ use crate::ohttp::{OhttpConfig, OhttpResponseEncryptCtx, OhttpServerDecryptor};
 /// This is large enough for typical PAP messages, including ExecutionResult
 /// payloads that carry embedded JSON-LD content, while ensuring a single
 /// malformed or malicious frame cannot exhaust server memory.
-pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 1 * 1024 * 1024;
+pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 
 /// TLS-secured HTTP server for a receiving PAP agent.
 ///
@@ -332,10 +332,7 @@ mod tests {
 
         struct NopHandler;
         impl AgentHandler for NopHandler {
-            fn handle_token(
-                &self,
-                _: CapabilityToken,
-            ) -> Result<(String, String), TransportError> {
+            fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
                 Ok(("s".into(), "did:key:z".into()))
             }
             fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {

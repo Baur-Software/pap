@@ -239,10 +239,7 @@ pub async fn canvas_approve_block(
 ) -> Result<(), String> {
     // Verify the principal signed this approval before acting on it.
     {
-        let signer_lock = state
-            .signer
-            .read()
-            .map_err(|e| e.to_string())?;
+        let signer_lock = state.signer.read().map_err(|e| e.to_string())?;
 
         let signer = signer_lock
             .as_ref()

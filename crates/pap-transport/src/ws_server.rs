@@ -583,8 +583,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         // Server with a tiny 32-byte limit — any real PAP frame will exceed it.
-        let server = WsAgentServer::new(arc(BasicHandler), addr.port())
-            .with_max_message_bytes(32);
+        let server = WsAgentServer::new(arc(BasicHandler), addr.port()).with_max_message_bytes(32);
         tokio::spawn(async move { server.serve(listener).await });
 
         let url = format!("ws://{addr}");

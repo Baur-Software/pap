@@ -117,9 +117,9 @@ mod tests {
             // In a real handler this would sign with the receiver's session key.
             // For the test we push a placeholder signature so the receipt has 2 sigs.
             use base64::Engine;
-            receipt.signatures.push(
-                base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0u8; 64]),
-            );
+            receipt
+                .signatures
+                .push(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0u8; 64]));
             Ok(receipt)
         }
 
@@ -202,7 +202,10 @@ mod tests {
         // Phase 5 was mandatory — the receipt should carry the co-signed copy.
         assert_eq!(cosigned_receipt.action, "schema:SearchAction");
         // TestHandler appends one placeholder signature; the receipt started empty.
-        assert!(!cosigned_receipt.signatures.is_empty(), "receipt must be co-signed");
+        assert!(
+            !cosigned_receipt.signatures.is_empty(),
+            "receipt must be co-signed"
+        );
 
         // Phase 4 result should be the canned search payload.
         assert_eq!(exec_result["@type"], "SearchResultsPage");
