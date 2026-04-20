@@ -241,7 +241,21 @@ async fn register_agent(
     }
     {
         let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = registry.register_local(ad); // duplicate silently ignored
+        if let Err(e) = registry.register_local(ad) {
+            // DB write succeeded but in-memory registration failed — the two
+            // stores would diverge until restart.  Return 500 so the caller
+            // knows the registration did not fully apply.
+            tracing::error!(
+                "In-memory registration failed for agent {hash} after successful DB write: {e}"
+            );
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("agent persisted but in-memory registration failed: {e}")
+                })),
+            )
+                .into_response();
+        }
     }
     (
         StatusCode::CREATED,

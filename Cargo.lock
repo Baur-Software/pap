@@ -4605,6 +4605,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pap-bluefield-loopback"
+version = "0.8.2"
+dependencies = [
+ "chrono",
+ "pap-bluefield",
+ "pap-core",
+ "pap-proto",
+ "pap-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "pap-c"
 version = "0.8.2"
 dependencies = [
@@ -5123,6 +5136,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml 0.8.23",
+ "tracing",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
