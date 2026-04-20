@@ -32,7 +32,7 @@ impl<R: Read> LimitedRead<R> {
 impl<R: Read> Read for LimitedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.remaining == 0 {
-            return Err(io::Error::new(io::ErrorKind::Other, "message too large"));
+            return Err(io::Error::other("message too large"));
         }
         let to_read = buf.len().min(self.remaining);
         let n = self.inner.read(&mut buf[..to_read])?;
