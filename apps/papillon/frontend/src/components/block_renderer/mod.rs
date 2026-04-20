@@ -525,13 +525,20 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                 BlockState::Failed { phase, reason } => {
                     let phase = *phase;
                     let reason = reason.clone();
+                    let dismiss_block_id = block_ctx.id.get_value();
+                    let on_dismiss = move |_| {
+                        canvas_state.delete_block(&dismiss_block_id);
+                    };
                     view! {
                         <PhaseDots current_phase=phase failed=true />
                         <div class="block-failed-info">
                             <span class="block-failed-msg">
                                 {format!("Failed at phase {}: {}", phase, reason)}
                             </span>
-                            <button class="btn-retry" on:click=on_retry>"Retry"</button>
+                            <div class="block-failed-actions">
+                                <button class="btn-retry" on:click=on_retry>"Retry"</button>
+                                <button class="btn-dismiss" on:click=on_dismiss title="Dismiss">" \u{00d7} Dismiss"</button>
+                            </div>
                         </div>
                     }.into_any()
                 }

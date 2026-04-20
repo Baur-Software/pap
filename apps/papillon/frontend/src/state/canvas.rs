@@ -306,6 +306,21 @@ impl CanvasState {
         }
     }
 
+    /// Remove a block from the current canvas by ID.
+    pub fn delete_block(&self, block_id: &str) {
+        let block_id = block_id.to_string();
+        let canvas_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+        self.canvases.update(|cs| {
+            if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                canvas.blocks.retain(|b| b.id != block_id);
+                canvas.updated_at = now_iso();
+            }
+        });
+    }
+
     /// Delete a canvas by ID. If it was the active canvas, select the previous one.
     pub fn delete_canvas(&self, id: &str) {
         let id = id.to_string();

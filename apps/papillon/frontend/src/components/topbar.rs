@@ -12,6 +12,7 @@ use crate::state::catalog::CatalogState;
 pub fn TopBar() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let menu_open = RwSignal::new(false);
+    let location = use_location();
 
     let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
     let toggle_side = move |_: leptos::ev::MouseEvent| {
@@ -31,12 +32,33 @@ pub fn TopBar() -> impl IntoView {
         menu_open.set(false);
     };
 
+    // When not on the canvas root, clicking the logo navigates home instead of opening the menu.
+    let on_brand_click = move |_: leptos::ev::MouseEvent| {
+        let path = location.pathname.get();
+        if path == "/" || path.is_empty() {
+            menu_open.update(|v| *v = !*v);
+        } else {
+            let nav = leptos_router::hooks::use_navigate();
+            nav("/", Default::default());
+        }
+    };
+
+    // Title hint changes depending on whether we're on canvas or a sub-page.
+    let brand_title = move || {
+        let path = location.pathname.get();
+        if path == "/" || path.is_empty() {
+            "Menu"
+        } else {
+            "Back to Canvas"
+        }
+    };
+
     let canvases = move || canvas_state.canvases.get();
     let active_id = move || canvas_state.current_canvas_id.get();
 
     view! {
         <header class="topbar app-topbar">
-            <button class="topbar-brand" on:click=toggle_menu title="Menu">
+            <button class="topbar-brand" on:click=on_brand_click title=brand_title>
                 <img class="topbar-brand-icon" src="/logo.png" alt="Papillon" />
                 <span class="topbar-brand-name">"Papillon"</span>
             </button>

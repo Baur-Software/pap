@@ -2559,6 +2559,35 @@ body {
     background: rgba(232, 112, 106, 0.1);
 }
 
+.block-failed-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-xs);
+    flex-shrink: 0;
+}
+
+.btn-dismiss {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    padding: var(--sp-xs) var(--sp-sm);
+    border-radius: var(--r-sm);
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+}
+
+.btn-dismiss:hover {
+    border-color: var(--text-2);
+    color: var(--text-2);
+}
+
 /* Inline re-prompt input */
 .block-reprompt {
     margin-top: var(--sp-sm);
