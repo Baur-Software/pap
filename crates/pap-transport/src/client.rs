@@ -4,6 +4,7 @@ use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
 
 use crate::error::TransportError;
+use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
 
 /// HTTP client for an initiating PAP agent.
 ///
@@ -34,6 +35,41 @@ fn check_mandate_ttl(expires_at: DateTime<Utc>) -> Result<(), TransportError> {
         return Err(TransportError::MandateExpired);
     }
     Ok(())
+}
+
+/// Consume an HTTP response body with a size cap before deserialization.
+///
+/// Rejects responses larger than [`DEFAULT_MAX_MESSAGE_BYTES`] with
+/// [`TransportError::MessageTooLarge`] before the JSON allocator can grow
+/// unboundedly — the client-side equivalent of the server's `decode_request_body`
+/// size guard.
+async fn decode_response(resp: reqwest::Response) -> Result<ProtocolMessage, TransportError> {
+    use crate::limited_read::{is_limit_exceeded, LimitedRead};
+    use std::io::Cursor;
+    let limit = DEFAULT_MAX_MESSAGE_BYTES;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| TransportError::InvalidResponse(e.to_string()))?;
+    // Pre-check: reject before serde_json allocation begins. reqwest has
+    // already buffered the body via resp.bytes(), but this guard prevents the
+    // JSON parser from touching an oversized buffer at all.
+    if bytes.len() > limit {
+        return Err(TransportError::MessageTooLarge {
+            size: bytes.len(),
+            limit,
+        });
+    }
+    serde_json::from_reader(LimitedRead::new(Cursor::new(&bytes[..]), limit)).map_err(|e| {
+        if is_limit_exceeded(&e) {
+            TransportError::MessageTooLarge {
+                size: bytes.len(),
+                limit,
+            }
+        } else {
+            TransportError::InvalidResponse(e.to_string())
+        }
+    })
 }
 
 impl AgentClient {
@@ -233,9 +269,7 @@ impl AgentClient {
             .await
             .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?;
 
-        resp.json::<ProtocolMessage>()
-            .await
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        decode_response(resp).await
     }
 
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
@@ -263,9 +297,7 @@ impl AgentClient {
             .await
             .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?;
 
-        resp.json::<ProtocolMessage>()
-            .await
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        decode_response(resp).await
     }
 
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
@@ -294,9 +326,7 @@ impl AgentClient {
             .await
             .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?;
 
-        resp.json::<ProtocolMessage>()
-            .await
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        decode_response(resp).await
     }
 
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
@@ -319,9 +349,7 @@ impl AgentClient {
             .await
             .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?;
 
-        resp.json::<ProtocolMessage>()
-            .await
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        decode_response(resp).await
     }
 
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
@@ -347,9 +375,7 @@ impl AgentClient {
             .await
             .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?;
 
-        resp.json::<ProtocolMessage>()
-            .await
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        decode_response(resp).await
     }
 
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
@@ -376,8 +402,63 @@ impl AgentClient {
             .await
             .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?;
 
-        resp.json::<ProtocolMessage>()
-            .await
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        decode_response(resp).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
+
+    // ── decode_response size-limit test ──────────────────────────────────
+
+    /// Spin up an Axum server that returns a body one byte larger than the
+    /// allowed maximum. `present_token()` must reject it with `MessageTooLarge`.
+    #[tokio::test]
+    async fn http_client_oversized_response_rejected() {
+        use axum::{body::Body, response::Response, routing::post, Router};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        // Handler that always returns DEFAULT_MAX_MESSAGE_BYTES + 1 bytes of 'x'.
+        async fn oversized_handler() -> Response {
+            // Must be valid JSON so serde_json reads past the first token before
+            // LimitedRead trips.  Wrap in a JSON string value.
+            let payload = "a".repeat(DEFAULT_MAX_MESSAGE_BYTES);
+            let body = format!(r#"{{"t":"{}"}}"#, payload);
+            Response::builder()
+                .status(200)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        }
+
+        let router = Router::new().route("/session", post(oversized_handler));
+        tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+
+        // Give the server a moment.
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        let client = AgentClient::new(&format!("http://127.0.0.1:{port}"));
+
+        use chrono::{Duration, Utc};
+        use pap_core::session::CapabilityToken;
+        let token = CapabilityToken::mint(
+            "did:key:zReceiver".into(),
+            "schema:SearchAction".into(),
+            "did:key:zIssuer".into(),
+            Utc::now() + Duration::hours(1),
+        );
+
+        let result = client.present_token(token).await;
+        assert!(
+            matches!(result, Err(TransportError::MessageTooLarge { .. })),
+            "expected MessageTooLarge, got: {result:?}"
+        );
     }
 }

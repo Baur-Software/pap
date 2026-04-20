@@ -10,6 +10,7 @@ pub mod ws_client;
 pub mod ws_remote;
 pub mod ws_server;
 
+pub(crate) mod limited_read;
 pub(crate) mod ws_common;
 
 pub use client::AgentClient;

@@ -10,6 +10,8 @@ use futures_util::{SinkExt, StreamExt};
 use pap_proto::ProtocolMessage;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::TlsAcceptor;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::error::TransportError;
@@ -145,7 +147,15 @@ async fn handle_connection(
         // Reject frames that exceed the per-frame size limit before any
         // deserialization work is performed.  This prevents an attacker from
         // exhausting server memory by sending arbitrarily large JSON frames.
+        //
+        // Send RFC 6455 §7.4.1 close code 1009 (MessageTooBig) so the client
+        // can distinguish an oversized-frame rejection from a generic close.
         if text.len() > max_message_bytes {
+            let frame = CloseFrame {
+                code: CloseCode::Size,
+                reason: "message too large".into(),
+            };
+            let _ = ws_tx.send(Message::Close(Some(frame))).await;
             return Err(TransportError::MessageTooLarge {
                 size: text.len(),
                 limit: max_message_bytes,

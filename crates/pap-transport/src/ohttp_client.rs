@@ -10,6 +10,7 @@ use pap_proto::ProtocolMessage;
 
 use crate::error::TransportError;
 use crate::ohttp::{OhttpConfig, OhttpEncryptor};
+use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
 
 /// HTTP client for OHTTP-wrapped PAP handshake.
 ///
@@ -121,9 +122,32 @@ impl OhttpClient {
             .map_err(|e| TransportError::InvalidResponse(e.to_string()))?;
 
         let json_resp = response_ctx.decrypt_response(&encrypted_resp)?;
+        let limit = DEFAULT_MAX_MESSAGE_BYTES;
+        // Pre-check: decrypt_response already allocated json_resp; reject before
+        // serde_json allocation begins.
+        if json_resp.len() > limit {
+            return Err(TransportError::MessageTooLarge {
+                size: json_resp.len(),
+                limit,
+            });
+        }
 
-        serde_json::from_slice(&json_resp)
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        {
+            use crate::limited_read::{is_limit_exceeded, LimitedRead};
+            use std::io::Cursor;
+            serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(
+                |e| {
+                    if is_limit_exceeded(&e) {
+                        TransportError::MessageTooLarge {
+                            size: json_resp.len(),
+                            limit,
+                        }
+                    } else {
+                        TransportError::InvalidResponse(e.to_string())
+                    }
+                },
+            )
+        }
     }
 
     /// Phase 5: Send a receipt for co-signing. Returns the co-signed receipt.
@@ -190,10 +214,33 @@ impl OhttpClient {
 
         // Step 5: Decapsulate response using the per-request context from step 2
         let json_resp = response_ctx.decrypt_response(&encrypted_resp)?;
+        let limit = DEFAULT_MAX_MESSAGE_BYTES;
+        // Pre-check: decrypt_response already allocated json_resp; reject before
+        // serde_json allocation begins.
+        if json_resp.len() > limit {
+            return Err(TransportError::MessageTooLarge {
+                size: json_resp.len(),
+                limit,
+            });
+        }
 
         // Step 6: Deserialize response message
-        serde_json::from_slice(&json_resp)
-            .map_err(|e| TransportError::InvalidResponse(e.to_string()))
+        {
+            use crate::limited_read::{is_limit_exceeded, LimitedRead};
+            use std::io::Cursor;
+            serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(
+                |e| {
+                    if is_limit_exceeded(&e) {
+                        TransportError::MessageTooLarge {
+                            size: json_resp.len(),
+                            limit,
+                        }
+                    } else {
+                        TransportError::InvalidResponse(e.to_string())
+                    }
+                },
+            )
+        }
     }
 }
 
