@@ -252,7 +252,7 @@ fn concat_kdf(
     apv: &[u8],
     key_bits: u32,
 ) -> Result<Vec<u8>, ProtoError> {
-    if key_bits == 0 || key_bits % 8 != 0 {
+    if key_bits == 0 || !key_bits.is_multiple_of(8) {
         return Err(ProtoError::DIDCommError(format!(
             "key_bits must be a non-zero multiple of 8, got {key_bits}"
         )));
