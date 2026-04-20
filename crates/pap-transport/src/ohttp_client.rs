@@ -124,16 +124,21 @@ impl OhttpClient {
         let json_resp = response_ctx.decrypt_response(&encrypted_resp)?;
 
         {
+            use crate::limited_read::{is_limit_exceeded, LimitedRead};
             use std::io::Cursor;
-            use crate::limited_read::{LimitedRead, is_limit_exceeded};
             let limit = DEFAULT_MAX_MESSAGE_BYTES;
-            serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(|e| {
-                if is_limit_exceeded(&e) {
-                    TransportError::MessageTooLarge { size: json_resp.len(), limit }
-                } else {
-                    TransportError::InvalidResponse(e.to_string())
-                }
-            })
+            serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(
+                |e| {
+                    if is_limit_exceeded(&e) {
+                        TransportError::MessageTooLarge {
+                            size: json_resp.len(),
+                            limit,
+                        }
+                    } else {
+                        TransportError::InvalidResponse(e.to_string())
+                    }
+                },
+            )
         }
     }
 
@@ -204,16 +209,21 @@ impl OhttpClient {
 
         // Step 6: Deserialize response message
         {
+            use crate::limited_read::{is_limit_exceeded, LimitedRead};
             use std::io::Cursor;
-            use crate::limited_read::{LimitedRead, is_limit_exceeded};
             let limit = DEFAULT_MAX_MESSAGE_BYTES;
-            serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(|e| {
-                if is_limit_exceeded(&e) {
-                    TransportError::MessageTooLarge { size: json_resp.len(), limit }
-                } else {
-                    TransportError::InvalidResponse(e.to_string())
-                }
-            })
+            serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(
+                |e| {
+                    if is_limit_exceeded(&e) {
+                        TransportError::MessageTooLarge {
+                            size: json_resp.len(),
+                            limit,
+                        }
+                    } else {
+                        TransportError::InvalidResponse(e.to_string())
+                    }
+                },
+            )
         }
     }
 }

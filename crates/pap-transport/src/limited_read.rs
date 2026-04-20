@@ -22,17 +22,17 @@ pub(crate) struct LimitedRead<R: Read> {
 impl<R: Read> LimitedRead<R> {
     /// Wrap `inner` and allow at most `limit` bytes to be read.
     pub fn new(inner: R, limit: usize) -> Self {
-        Self { inner, remaining: limit }
+        Self {
+            inner,
+            remaining: limit,
+        }
     }
 }
 
 impl<R: Read> Read for LimitedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.remaining == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "message too large",
-            ));
+            return Err(io::Error::new(io::ErrorKind::Other, "message too large"));
         }
         let to_read = buf.len().min(self.remaining);
         let n = self.inner.read(&mut buf[..to_read])?;
@@ -129,7 +129,11 @@ mod tests {
         let limit = 1024;
         let reader = LimitedRead::new(Cursor::new(json.as_ref()), limit);
         let result: Result<serde_json::Value, _> = serde_json::from_reader(reader);
-        assert!(result.is_ok(), "unexpected error: {:?}", result.unwrap_err());
+        assert!(
+            result.is_ok(),
+            "unexpected error: {:?}",
+            result.unwrap_err()
+        );
         assert_eq!(result.unwrap()["key"], "value");
     }
 }

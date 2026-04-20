@@ -37,7 +37,6 @@ fn check_mandate_ttl(expires_at: DateTime<Utc>) -> Result<(), TransportError> {
     Ok(())
 }
 
-
 /// Consume an HTTP response body with a size cap before deserialization.
 ///
 /// Rejects responses larger than [`DEFAULT_MAX_MESSAGE_BYTES`] with
@@ -45,8 +44,8 @@ fn check_mandate_ttl(expires_at: DateTime<Utc>) -> Result<(), TransportError> {
 /// unboundedly — the client-side equivalent of the server's `decode_request_body`
 /// size guard.
 async fn decode_response(resp: reqwest::Response) -> Result<ProtocolMessage, TransportError> {
+    use crate::limited_read::{is_limit_exceeded, LimitedRead};
     use std::io::Cursor;
-    use crate::limited_read::{LimitedRead, is_limit_exceeded};
     let limit = DEFAULT_MAX_MESSAGE_BYTES;
     let bytes = resp
         .bytes()
@@ -54,7 +53,10 @@ async fn decode_response(resp: reqwest::Response) -> Result<ProtocolMessage, Tra
         .map_err(|e| TransportError::InvalidResponse(e.to_string()))?;
     serde_json::from_reader(LimitedRead::new(Cursor::new(&bytes[..]), limit)).map_err(|e| {
         if is_limit_exceeded(&e) {
-            TransportError::MessageTooLarge { size: bytes.len(), limit }
+            TransportError::MessageTooLarge {
+                size: bytes.len(),
+                limit,
+            }
         } else {
             TransportError::InvalidResponse(e.to_string())
         }
@@ -414,7 +416,7 @@ mod tests {
 
         // Handler that always returns DEFAULT_MAX_MESSAGE_BYTES + 1 bytes of 'x'.
         async fn oversized_handler() -> Response {
-// Must be valid JSON so serde_json reads past the first token before
+            // Must be valid JSON so serde_json reads past the first token before
             // LimitedRead trips.  Wrap in a JSON string value.
             let payload = "a".repeat(DEFAULT_MAX_MESSAGE_BYTES);
             let body = format!(r#"{{"t":"{}"}}"#, payload);

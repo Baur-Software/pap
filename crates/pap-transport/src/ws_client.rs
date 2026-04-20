@@ -13,6 +13,7 @@ use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
@@ -105,6 +106,9 @@ impl WsAgentClient {
 
     /// Send a `WsMessage` and receive the response.
     async fn send_recv(&mut self, msg: WsMessage) -> Result<WsMessage, TransportError> {
+        use crate::limited_read::{is_limit_exceeded, LimitedRead};
+        use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
+        use std::io::Cursor;
         let json = serde_json::to_string(&msg)
             .map_err(|e| TransportError::RequestFailed(format!("serialize failed: {e}")))?;
 
@@ -122,22 +126,37 @@ impl WsAgentClient {
 
         match response {
             Message::Text(text) => {
-                use std::io::Cursor;
-                use crate::limited_read::{LimitedRead, is_limit_exceeded};
-                use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
                 let limit = DEFAULT_MAX_MESSAGE_BYTES;
                 serde_json::from_reader(LimitedRead::new(Cursor::new(text.as_bytes()), limit))
                     .map_err(|e| {
                         if is_limit_exceeded(&e) {
-                            TransportError::MessageTooLarge { size: text.len(), limit }
+                            TransportError::MessageTooLarge {
+                                size: text.len(),
+                                limit,
+                            }
                         } else {
                             TransportError::InvalidResponse(format!("deserialize failed: {e}"))
                         }
                     })
             }
-            Message::Close(_) => Err(TransportError::ConnectionFailed(
-                "peer closed connection".into(),
-            )),
+            Message::Close(frame) => {
+                // RFC 6455 §7.4.1 close code 1009 (Size) means the server
+                // rejected our frame as too large.
+                let is_too_large = frame
+                    .as_ref()
+                    .map(|f| f.code == CloseCode::Size)
+                    .unwrap_or(false);
+                if is_too_large {
+                    Err(TransportError::MessageTooLarge {
+                        size: 0,
+                        limit: DEFAULT_MAX_MESSAGE_BYTES,
+                    })
+                } else {
+                    Err(TransportError::ConnectionFailed(
+                        "peer closed connection".into(),
+                    ))
+                }
+            }
             other => Err(TransportError::InvalidResponse(format!(
                 "expected text frame, got: {other:?}"
             ))),
