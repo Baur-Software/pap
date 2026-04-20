@@ -235,9 +235,7 @@ impl CryptoAccel for DocaCrypto {
             // PKA Progress Engine (DOCA 2.x) and return the result.
             // Use doca_task_submit() + doca_pe_progress() — the DOCA 1.x
             // doca_workq_* API has been removed.  Wire context in new() first.
-            unimplemented!(
-                "DOCA hardware verify path not yet wired — see TODO in DocaCrypto::new"
-            )
+            unimplemented!("DOCA hardware verify path not yet wired — see TODO in DocaCrypto::new")
         } else {
             // NOTE: using software fallback.
             self.sw.verify(data, signature)
@@ -300,7 +298,10 @@ mod tests {
     #[test]
     fn crypto_backend_is_not_empty() {
         let b = crypto_backend();
-        assert!(!b.is_empty(), "crypto_backend() must return a non-empty string");
+        assert!(
+            !b.is_empty(),
+            "crypto_backend() must return a non-empty string"
+        );
     }
 
     #[cfg(not(feature = "doca-crypto"))]
