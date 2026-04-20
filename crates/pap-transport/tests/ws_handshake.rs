@@ -76,12 +76,15 @@ async fn full_handshake_over_websocket() {
         .await
         .unwrap();
 
+    // Mandate TTL used for all phase checks (valid for 1 hour)
+    let mandate_expires_at = Utc::now() + Duration::hours(1);
+
     // ── Phase 1: Token presentation ──────────────────────────────
     let token = CapabilityToken::mint(
         "did:key:zTarget".into(),
         "schema:SearchAction".into(),
         "did:key:zIssuer".into(),
-        Utc::now() + Duration::hours(1),
+        mandate_expires_at,
     );
     let resp = client.present_token(token).await.unwrap();
     let session_id = match &resp {
@@ -98,7 +101,11 @@ async fn full_handshake_over_websocket() {
 
     // ── Phase 2: DID exchange ────────────────────────────────────
     let resp = client
-        .exchange_did(&session_id, "did:key:zInitiatorSession".into())
+        .exchange_did(
+            &session_id,
+            "did:key:zInitiatorSession".into(),
+            mandate_expires_at,
+        )
         .await
         .unwrap();
     assert!(
@@ -107,14 +114,20 @@ async fn full_handshake_over_websocket() {
     );
 
     // ── Phase 3: Disclosure (zero-disclosure) ────────────────────
-    let resp = client.send_disclosures(&session_id, vec![]).await.unwrap();
+    let resp = client
+        .send_disclosures(&session_id, vec![], mandate_expires_at)
+        .await
+        .unwrap();
     assert!(
         matches!(resp, ProtocolMessage::DisclosureAccepted),
         "Expected DisclosureAccepted, got: {resp:?}"
     );
 
     // ── Phase 4: Execute ─────────────────────────────────────────
-    let resp = client.request_execution(&session_id).await.unwrap();
+    let resp = client
+        .request_execution(&session_id, mandate_expires_at)
+        .await
+        .unwrap();
     match &resp {
         ProtocolMessage::ExecutionResult { result } => {
             assert_eq!(result["@type"], "schema:SearchResult");
@@ -138,7 +151,10 @@ async fn full_handshake_over_websocket() {
         signatures: vec!["initiator-sig".into()],
         attestations: vec![],
     };
-    let resp = client.exchange_receipt(&session_id, receipt).await.unwrap();
+    let resp = client
+        .exchange_receipt(&session_id, receipt, mandate_expires_at)
+        .await
+        .unwrap();
     match &resp {
         ProtocolMessage::ReceiptCoSigned { receipt } => {
             assert_eq!(receipt.signatures.len(), 2);
@@ -149,7 +165,10 @@ async fn full_handshake_over_websocket() {
     }
 
     // ── Phase 6: Close ───────────────────────────────────────────
-    let resp = client.close_session(&session_id).await.unwrap();
+    let resp = client
+        .close_session(&session_id, mandate_expires_at)
+        .await
+        .unwrap();
     assert!(
         matches!(resp, ProtocolMessage::SessionClosed),
         "Expected SessionClosed, got: {resp:?}"
@@ -227,6 +246,39 @@ async fn token_rejection_over_websocket() {
         }
         other => panic!("Expected TokenRejected, got: {other:?}"),
     }
+
+    server_handle.abort();
+}
+
+/// Verify that an already-expired mandate TTL causes WS phase 2 to fail
+/// with `TransportError::MandateExpired` without making a network call (spec §5.5).
+#[tokio::test]
+async fn expired_mandate_ttl_blocks_phase_transitions_ws() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let handler: Arc<dyn AgentHandler> = Arc::new(TestHandler);
+    let server = WsAgentServer::new(handler, 0);
+
+    let server_handle = tokio::spawn(async move {
+        let _ = server.serve(listener).await;
+    });
+
+    let mut client = WsAgentClient::connect_plain(&format!("ws://127.0.0.1:{port}"))
+        .await
+        .unwrap();
+
+    // Already-expired TTL
+    let expired_ttl = Utc::now() - Duration::seconds(1);
+
+    // Phase 2 must be rejected before any bytes hit the wire
+    let result = client
+        .exchange_did("any-session", "did:key:zInit".into(), expired_ttl)
+        .await;
+    assert!(
+        matches!(result, Err(TransportError::MandateExpired)),
+        "WS phase 2 with expired TTL must return MandateExpired, got: {result:?}"
+    );
 
     server_handle.abort();
 }

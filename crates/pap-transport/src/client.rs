@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
@@ -21,6 +22,18 @@ use crate::error::TransportError;
 pub struct AgentClient {
     base_url: String,
     client: reqwest::Client,
+}
+
+/// Check that the mandate TTL has not elapsed.
+///
+/// Called at the start of each phase method that has access to the mandate
+/// expiry (spec §5.5: "TTL bounds are verified cryptographically at each
+/// level of the mandate chain").
+fn check_mandate_ttl(expires_at: DateTime<Utc>) -> Result<(), TransportError> {
+    if Utc::now() > expires_at {
+        return Err(TransportError::MandateExpired);
+    }
+    Ok(())
 }
 
 impl AgentClient {
@@ -217,11 +230,17 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 2: Send the initiator's ephemeral session DID.
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn exchange_did(
         &self,
         session_id: &str,
         initiator_session_did: String,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::SessionDidExchange {
             initiator_session_did,
         };
@@ -241,11 +260,17 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 3: Send selective disclosures (or empty vec for zero-disclosure).
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn send_disclosures(
         &self,
         session_id: &str,
         disclosures: Vec<serde_json::Value>,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::DisclosureOffer { disclosures };
         let resp = self
             .client
@@ -266,10 +291,16 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 4: Request execution and receive the result.
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn request_execution(
         &self,
         session_id: &str,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let resp = self
             .client
             .post(format!("{}/session/{}/execute", self.base_url, session_id))
@@ -285,11 +316,17 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 5: Send a receipt for co-signing. Returns the co-signed receipt.
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn exchange_receipt(
         &self,
         session_id: &str,
         receipt: TransactionReceipt,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::ReceiptForCoSign { receipt };
         let resp = self
             .client
@@ -307,7 +344,16 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 6: Close the session.
-    pub async fn close_session(&self, session_id: &str) -> Result<ProtocolMessage, TransportError> {
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
+    pub async fn close_session(
+        &self,
+        session_id: &str,
+        mandate_expires_at: DateTime<Utc>,
+    ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::SessionClose {
             session_id: session_id.to_string(),
         };

@@ -4,6 +4,7 @@
 //! This allows the orchestrator's handshake module to treat remote
 //! agents identically to local ones — same trait, same code path.
 
+use chrono::{DateTime, Utc};
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
@@ -20,11 +21,17 @@ use crate::handler::AgentHandler;
 /// Tracks the session_id from phase 1 (handle_token) so that phase 5
 /// (co_sign_receipt) can route the receipt to the correct session
 /// on the remote node.
+///
+/// Also stores the capability token's `expires_at` so that all subsequent
+/// phase methods can enforce the mandate TTL (spec §5.5).
 pub struct RemoteAgentHandler {
     client: AgentClient,
     /// Session ID returned by the remote agent in phase 1.
     /// Stored here because co_sign_receipt doesn't receive it as a parameter.
     last_session_id: std::sync::Mutex<Option<String>>,
+    /// Mandate expiry captured from the capability token during phase 1.
+    /// Passed to all subsequent client phase calls for TTL enforcement.
+    mandate_expires_at: std::sync::Mutex<Option<DateTime<Utc>>>,
 }
 
 impl RemoteAgentHandler {
@@ -32,6 +39,7 @@ impl RemoteAgentHandler {
         Self {
             client: AgentClient::new(base_url),
             last_session_id: std::sync::Mutex::new(None),
+            mandate_expires_at: std::sync::Mutex::new(None),
         }
     }
 
@@ -39,6 +47,7 @@ impl RemoteAgentHandler {
         Self {
             client: AgentClient::with_client(base_url, http_client),
             last_session_id: std::sync::Mutex::new(None),
+            mandate_expires_at: std::sync::Mutex::new(None),
         }
     }
 
@@ -46,10 +55,25 @@ impl RemoteAgentHandler {
     fn block_on<F: std::future::Future<Output = T>, T>(f: F) -> T {
         tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(f))
     }
+
+    /// Read the stored mandate expiry, returning an error if it was never set.
+    fn stored_expires_at(&self) -> Result<DateTime<Utc>, TransportError> {
+        self.mandate_expires_at
+            .lock()
+            .ok()
+            .and_then(|g| *g)
+            .ok_or_else(|| {
+                TransportError::InvalidResponse(
+                    "No mandate TTL — handle_token must be called before subsequent phases".into(),
+                )
+            })
+    }
 }
 
 impl AgentHandler for RemoteAgentHandler {
     fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
+        // Capture the mandate expiry before moving `token` into the request.
+        let expires_at = token.expires_at;
         let resp = Self::block_on(self.client.present_token(token))?;
         match resp {
             ProtocolMessage::TokenAccepted {
@@ -60,6 +84,10 @@ impl AgentHandler for RemoteAgentHandler {
                 // Store session_id for phase 5 (co_sign_receipt)
                 if let Ok(mut sid) = self.last_session_id.lock() {
                     *sid = Some(session_id.clone());
+                }
+                // Store mandate TTL for phases 2-6
+                if let Ok(mut ttl) = self.mandate_expires_at.lock() {
+                    *ttl = Some(expires_at);
                 }
                 Ok((session_id, receiver_session_did))
             }
@@ -77,9 +105,10 @@ impl AgentHandler for RemoteAgentHandler {
         session_id: &str,
         initiator_session_did: &str,
     ) -> Result<(), TransportError> {
+        let expires_at = self.stored_expires_at()?;
         let resp = Self::block_on(
             self.client
-                .exchange_did(session_id, initiator_session_did.to_string()),
+                .exchange_did(session_id, initiator_session_did.to_string(), expires_at),
         )?;
         match resp {
             ProtocolMessage::SessionDidAck => Ok(()),
@@ -94,7 +123,9 @@ impl AgentHandler for RemoteAgentHandler {
         session_id: &str,
         disclosures: Vec<serde_json::Value>,
     ) -> Result<(), TransportError> {
-        let resp = Self::block_on(self.client.send_disclosures(session_id, disclosures))?;
+        let expires_at = self.stored_expires_at()?;
+        let resp =
+            Self::block_on(self.client.send_disclosures(session_id, disclosures, expires_at))?;
         match resp {
             ProtocolMessage::DisclosureAccepted => Ok(()),
             other => Err(TransportError::InvalidResponse(format!(
@@ -104,7 +135,8 @@ impl AgentHandler for RemoteAgentHandler {
     }
 
     fn execute(&self, session_id: &str) -> Result<serde_json::Value, TransportError> {
-        let resp = Self::block_on(self.client.request_execution(session_id))?;
+        let expires_at = self.stored_expires_at()?;
+        let resp = Self::block_on(self.client.request_execution(session_id, expires_at))?;
         match resp {
             ProtocolMessage::ExecutionResult { result } => Ok(result),
             other => Err(TransportError::InvalidResponse(format!(
@@ -127,7 +159,9 @@ impl AgentHandler for RemoteAgentHandler {
                     "No session_id — handle_token must be called before co_sign_receipt".into(),
                 )
             })?;
-        let resp = Self::block_on(self.client.exchange_receipt(&session_id, receipt))?;
+        let expires_at = self.stored_expires_at()?;
+        let resp =
+            Self::block_on(self.client.exchange_receipt(&session_id, receipt, expires_at))?;
         match resp {
             ProtocolMessage::ReceiptCoSigned { receipt } => Ok(receipt),
             other => Err(TransportError::InvalidResponse(format!(
@@ -137,7 +171,8 @@ impl AgentHandler for RemoteAgentHandler {
     }
 
     fn handle_close(&self, session_id: &str) -> Result<(), TransportError> {
-        let resp = Self::block_on(self.client.close_session(session_id))?;
+        let expires_at = self.stored_expires_at()?;
+        let resp = Self::block_on(self.client.close_session(session_id, expires_at))?;
         match resp {
             ProtocolMessage::SessionClosed => Ok(()),
             other => Err(TransportError::InvalidResponse(format!(

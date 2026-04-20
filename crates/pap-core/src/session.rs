@@ -765,4 +765,58 @@ mod tests {
             DisclosureValidation::TeeEnforced
         );
     }
+
+    /// A capability token whose TTL has already elapsed must be rejected by
+    /// `CapabilityToken::verify()` with `PapError::MandateExpired`.
+    ///
+    /// This tests the Phase 1 check that has always existed.  The companion
+    /// tests in `pap-transport` verify that the same error surfaces at
+    /// Phases 2-6 via the client-side TTL guard (spec §5.5).
+    #[test]
+    fn expired_capability_token_rejected_with_mandate_expired() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        // Mint a token that expired 5 minutes ago
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() - Duration::minutes(5),
+        );
+        token.sign(&issuer_key).unwrap();
+
+        let consumed = HashSet::new();
+        let result = token.verify(&target_did, &issuer_key.verifying_key(), &consumed);
+
+        assert!(
+            matches!(result, Err(PapError::MandateExpired)),
+            "expired token must return MandateExpired, got: {result:?}"
+        );
+    }
+
+    /// `Session::initiate` must also return `PapError::MandateExpired` when
+    /// the token has expired — the session must not open at all.
+    #[test]
+    fn session_initiate_fails_with_expired_token() {
+        let issuer_key = make_keypair();
+        let issuer_did = did_from_key(&issuer_key);
+        let target_did = "did:key:ztarget".to_string();
+
+        let mut token = CapabilityToken::mint(
+            target_did.clone(),
+            "schema:SearchAction".into(),
+            issuer_did,
+            Utc::now() - Duration::seconds(1),
+        );
+        token.sign(&issuer_key).unwrap();
+
+        let result = Session::initiate(&token, &target_did, &issuer_key.verifying_key());
+
+        assert!(
+            matches!(result, Err(PapError::MandateExpired)),
+            "Session::initiate with expired token must return MandateExpired"
+        );
+    }
 }
