@@ -595,6 +595,14 @@ pub struct CanvasBlock {
     /// shows the in-block URL bar in the renderer.
     #[serde(default)]
     pub auto_expand: bool,
+    /// If `Some`, a non-fatal warning message to display on the block.
+    /// Set when a `no_retention` session proceeds without TEE attestation
+    /// (`DisclosureValidation::ContractualOnly`). The block resolves normally
+    /// but renders in amber/warning state to inform the user that data retention
+    /// is contractual only and cannot be cryptographically enforced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub retention_warning: Option<String>,
 }
 
 /// A saved canvas — a collection of blocks from prompt sessions.
@@ -656,6 +664,12 @@ pub struct BlockUpdate {
     pub mandate_expires_at: Option<String>,
     #[serde(default)]
     pub preference_guided: bool,
+    /// Non-fatal warning for `no_retention` sessions without TEE attestation.
+    /// When `Some`, the frontend renders the block in amber/warning state.
+    /// See [`CanvasBlock::retention_warning`] for full documentation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub retention_warning: Option<String>,
 }
 
 /// Tauri event payload wrapping a `BlockUpdate`.
@@ -1164,6 +1178,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1195,6 +1210,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:01Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1222,6 +1238,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1255,6 +1272,7 @@ mod tests {
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
                 auto_expand: false,
+                retention_warning: None,
             }],
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1331,6 +1349,7 @@ mod tests {
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
+                retention_warning: None,
             },
         };
         let json = serde_json::to_string(&event).unwrap();
@@ -1606,6 +1625,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();

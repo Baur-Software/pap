@@ -58,6 +58,7 @@ pub async fn canvas_create_note(
         auto_expand: false,
         created_at: now.clone(),
         updated_at: now,
+        retention_warning: None,
     })
 }
 
@@ -112,6 +113,7 @@ pub async fn canvas_update_note(
         preference_guided: false,
         created_at: now.clone(),
         updated_at: now.clone(),
+        retention_warning: None,
     };
     let _ = app.emit(
         "block_updated",
@@ -138,6 +140,7 @@ pub async fn canvas_update_note(
         auto_expand: false,
         created_at: now.clone(),
         updated_at: now,
+        retention_warning: None,
     })
 }
 

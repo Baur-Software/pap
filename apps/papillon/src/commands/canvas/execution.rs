@@ -39,6 +39,8 @@ pub(crate) fn assess_handshake_quality(result: &handshake::HandshakeResult) -> f
 
 /// Discover agent, resolve handler, run handshake, and apply reflection.
 /// Callers must pre-classify intent via `classify_intent` before calling this.
+///
+/// Returns `(schema_type, content, preference_guided, agent_did, retention_warning)`.
 pub(crate) async fn process_prompt(
     app: &AppHandle,
     state: &State<'_, AppState>,
@@ -47,7 +49,7 @@ pub(crate) async fn process_prompt(
     action_type: &str,
     preferred: &str,
     query: &str,
-) -> Result<(String, serde_json::Value, bool, String), PapillonError> {
+) -> Result<(String, serde_json::Value, bool, String, Option<String>), PapillonError> {
     process_prompt_inner(
         app,
         state,
@@ -65,9 +67,10 @@ pub(crate) async fn process_prompt(
 /// Inner implementation with exclusion list and retry budget for reflection.
 /// Uses `Box::pin` for the recursive async call required by the reflection gate.
 ///
-/// Returns `(schema_type, content, preference_guided, agent_did)` where `preference_guided`
-/// is `true` when the PreferenceEngine had meaningful history that influenced
-/// agent selection, and `agent_did` is the DID of the resolved agent.
+/// Returns `(schema_type, content, preference_guided, agent_did, retention_warning)` where:
+/// - `preference_guided` is `true` when the PreferenceEngine had meaningful history
+/// - `agent_did` is the DID of the resolved agent
+/// - `retention_warning` is `Some(msg)` when `no_retention` is present without TEE
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub(crate) fn process_prompt_inner<'a>(
     app: &'a AppHandle,
@@ -82,8 +85,10 @@ pub(crate) fn process_prompt_inner<'a>(
 ) -> std::pin::Pin<
     Box<
         dyn std::future::Future<
-                Output = Result<(String, serde_json::Value, bool, String), PapillonError>,
-            > + Send
+                Output = Result<
+                    (String, serde_json::Value, bool, String, Option<String>),
+                    PapillonError,
+                > + Send
             + 'a,
     >,
 > {
@@ -180,6 +185,9 @@ pub(crate) fn process_prompt_inner<'a>(
         })
         .await?;
 
+        // Capture the retention warning before the reflection gate consumes the result.
+        let retention_warning = result.retention_warning.clone();
+
         // Reflection gate: if quality is low and we haven't retried yet,
         // try the next-best agent.
         let quality = assess_handshake_quality(&result);
@@ -212,6 +220,7 @@ pub(crate) fn process_prompt_inner<'a>(
                             preference_guided,
                             created_at: now.clone(),
                             updated_at: now,
+                            retention_warning: None,
                         },
                     },
                 );
@@ -245,6 +254,7 @@ pub(crate) fn process_prompt_inner<'a>(
             result.content,
             preference_guided,
             agent_did,
+            retention_warning,
         ))
     })
 }

@@ -110,6 +110,7 @@ pub async fn canvas_plan_prompt(
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );
@@ -133,6 +134,7 @@ pub async fn canvas_plan_prompt(
                 preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
+                retention_warning: None,
             },
         },
     );
@@ -187,6 +189,7 @@ pub async fn canvas_plan_prompt(
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );
@@ -212,6 +215,7 @@ pub async fn canvas_plan_prompt(
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );

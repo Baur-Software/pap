@@ -93,6 +93,7 @@ pub(crate) async fn classify_intent(
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );

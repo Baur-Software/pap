@@ -852,6 +852,9 @@ impl CanvasState {
                     b.preference_guided = update.preference_guided;
                     b.created_at = update.created_at.clone();
                     b.updated_at = update.updated_at.clone();
+                    // Propagate retention warning when present; clear when absent
+                    // (a retry that succeeds with TEE should clear a prior warning).
+                    b.retention_warning = update.retention_warning.clone();
                     // Only overwrite prompt_text when the event carries one.
                     if let Some(pt) = update.prompt_text.clone() {
                         b.prompt_text = Some(pt);

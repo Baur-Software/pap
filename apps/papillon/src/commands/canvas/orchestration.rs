@@ -70,6 +70,7 @@ pub async fn canvas_prompt(
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
+                retention_warning: None,
             },
         },
     );
@@ -124,6 +125,7 @@ pub async fn canvas_reshape(
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
+                retention_warning: None,
             },
         },
     );
