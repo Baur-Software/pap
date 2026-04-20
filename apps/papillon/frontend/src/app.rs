@@ -28,6 +28,7 @@ use crate::state::recovery::RecoveryState;
 use crate::state::registry::RegistryState;
 use crate::state::renderer::RendererState;
 use crate::state::templates::TemplatesState;
+use crate::state::WorkflowState;
 use papillon_shared::{
     BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template,
 };
@@ -98,6 +99,7 @@ pub fn App() -> impl IntoView {
     let catalog_state = CatalogState::default();
     let recovery_state = RecoveryState::default();
     let dataset_state = DatasetState::default();
+    let workflow_state = WorkflowState::new();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);
@@ -107,6 +109,7 @@ pub fn App() -> impl IntoView {
     provide_context(catalog_state);
     provide_context(recovery_state);
     provide_context(dataset_state);
+    provide_context(workflow_state);
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
