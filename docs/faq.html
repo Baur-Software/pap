@@ -460,12 +460,17 @@
         <div class="faq-body">
           <p>
             <strong>Yes — scoped to the recipient agent and cross-session receipt patterns.</strong>
-            <a href="#gloss-sd-jwt" class="gloss">SD-JWT</a> (<code>pap-credential/src/sd_jwt.rs</code>) hides claim <em>values</em> via per-claim
-            salted hashes. It does not hide claim <em>structure</em>. Each agent in
+            Each agent in
             <code>pap-agents</code> declares exactly what it needs via
             <code>AgentMeta.requires_disclosure</code>
-            (<code>crates/pap-agents/src/executor.rs</code>) — the orchestrator sends only those
-            property slots via SD-JWT selective disclosure, no more. The
+            (<code>crates/pap-agents/src/executor.rs</code>) — those property names are embedded
+            in the Mandate's <code>DisclosureSet</code> during Phase 2 of the handshake, bounding
+            the scope of what the agent is permitted to receive. The Phase 3 disclosure payload
+            carries the query inside that scope boundary.
+            <a href="#gloss-sd-jwt" class="gloss">SD-JWT</a> (<code>pap-credential/src/sd_jwt.rs</code>)
+            hides claim <em>values</em> via per-claim salted hashes and is available as an optional
+            enhancement for credential-bearing payloads, but is not used in the current query
+            handshake path — claim <em>structure</em> is not hidden. The
             <strong>recipient agent</strong> always learns which property slots were disclosed;
             that is the intent of the handshake. Network-level visibility is configurable:
             OHTTP (RFC 9458, HPKE DHKEM-X25519 + AES-128-GCM) is a setting in Papillon and
