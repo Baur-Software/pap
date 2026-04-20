@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
+use crate::challenge_store::IdentityChallengeStore;
 use crate::commands::webauthn::WebAuthnChallengeStore;
 
 use base64::Engine;
@@ -87,6 +88,9 @@ pub struct AppState {
     /// Pending WebAuthn challenges awaiting completion.
     /// Keyed by a UUID challenge_id; entries expire after `CHALLENGE_TTL_SECS`.
     pub webauthn_challenges: WebAuthnChallengeStore,
+    /// Pending identity-mutation challenges issued by `get_identity_challenge`.
+    /// Consumed one-time by `create_identity`, `import_key`, and `canvas_approve_block`.
+    pub identity_challenges: IdentityChallengeStore,
     /// Pending approval gates for `canvas_plan_prompt` two-phase execution.
     /// Keyed by approval_request_id; resolved by `canvas_approve_block`.
     pub approval_gates:
@@ -149,6 +153,8 @@ impl AppState {
             // Each clone gets its own isolated challenge store — background
             // threads never need to complete WebAuthn ceremonies.
             webauthn_challenges: WebAuthnChallengeStore::new(),
+            // Background clones never handle identity challenges.
+            identity_challenges: IdentityChallengeStore::new(),
             // Background clones never handle approval gates; start fresh.
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
             // Share the same watch sender so background threads can push context updates.
@@ -441,6 +447,7 @@ impl AppState {
             node_cert_fingerprint: RwLock::new(String::new()),
             local_pap_urls: RwLock::new(Vec::new()),
             webauthn_challenges: WebAuthnChallengeStore::new(),
+            identity_challenges: IdentityChallengeStore::new(),
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
             context_tx,
             trait_beacon_profile,
