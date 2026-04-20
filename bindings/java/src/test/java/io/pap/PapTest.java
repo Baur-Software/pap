@@ -215,10 +215,10 @@ class PapTest {
             assertEquals(DecayState.DEGRADED, m.computeDecayState(3600));
             assertEquals(DecayState.ACTIVE, m.decayState()); // not yet synced
 
-            // This must NOT throw, even though Active→ReadOnly is illegal as a
-            // single step. syncDecayState steps through Degraded automatically.
+            // syncDecayState advances one step: Active→Degraded.
+            // A subsequent call would advance to ReadOnly.
             assertDoesNotThrow(() -> m.syncDecayState(3600));
-            assertEquals(DecayState.READ_ONLY, m.decayState());
+            assertEquals(DecayState.DEGRADED, m.decayState());
         }
     }
 
