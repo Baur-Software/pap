@@ -322,8 +322,10 @@ class PapTest {
             try (var m = Mandate.fromJson(json)) {
                 // Verify signature first (doesn't cover decay_state)
                 assertDoesNotThrow(() -> m.verify(kp.publicKeyBytes()));
-                // Now recompute — TTL is in the past, so state should be ReadOnly
-                assertEquals(DecayState.READ_ONLY, m.computeDecayState(3600));
+                // Now recompute — TTL is in the past. Per spec §5.7.1 Active→ReadOnly is
+                // not a valid single-step transition; computeDecayState steps one level:
+                // Active → Degraded.
+                assertEquals(DecayState.DEGRADED, m.computeDecayState(3600));
             }
         }
     }
