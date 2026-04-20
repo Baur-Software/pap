@@ -1,12 +1,11 @@
 use leptos::prelude::*;
-use papillon_shared::{IdentityInfo, ProfileMetadata, SuccessorDesignation};
+use papillon_shared::{IdentityInfo, ProfileMetadata};
 
 #[derive(Clone, Copy)]
 pub struct IdentityState {
     pub info: RwSignal<Option<IdentityInfo>>,
     pub loading: RwSignal<bool>,
     pub backed_up: RwSignal<bool>,
-    pub successors: RwSignal<Vec<SuccessorDesignation>>,
     /// All available profiles
     pub profiles: RwSignal<Vec<ProfileMetadata>>,
     /// Current active profile ID
@@ -29,7 +28,6 @@ impl Default for IdentityState {
             info: RwSignal::new(None),
             loading: RwSignal::new(false),
             backed_up: RwSignal::new(false),
-            successors: RwSignal::new(Vec::new()),
             profiles: RwSignal::new(Vec::new()),
             current_profile_id: RwSignal::new(None),
             profiles_loading: RwSignal::new(false),
