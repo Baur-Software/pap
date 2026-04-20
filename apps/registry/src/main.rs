@@ -199,13 +199,31 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // ── CORS allowlist — loaded from DB, seeded from config on first boot ────
-    let cors_origins_raw = match store.load_setting(SETTING_CORS_ORIGINS).await? {
-        Some(v) if !v.is_empty() => v,
-        _ => {
+    // `ALLOWED_ORIGINS` env var overrides the DB value at startup. Useful in
+    // CI / container environments where the admin UI is not yet configured.
+    // Set to `"*"` for open access (e.g. tests) or a comma-separated list of
+    // exact origins for production.
+    let cors_origins_raw = if let Ok(env_origins) = std::env::var("ALLOWED_ORIGINS") {
+        if !env_origins.is_empty() {
+            info!("CORS: using ALLOWED_ORIGINS env override: {}", env_origins);
+            env_origins
+        } else {
             let default = config.default_cors_origins();
-            store.save_setting(SETTING_CORS_ORIGINS, &default).await?;
-            info!("CORS: seeded allowed origins from config: {}", default);
+            info!(
+                "CORS: ALLOWED_ORIGINS empty, seeding from config: {}",
+                default
+            );
             default
+        }
+    } else {
+        match store.load_setting(SETTING_CORS_ORIGINS).await? {
+            Some(v) if !v.is_empty() => v,
+            _ => {
+                let default = config.default_cors_origins();
+                store.save_setting(SETTING_CORS_ORIGINS, &default).await?;
+                info!("CORS: seeded allowed origins from config: {}", default);
+                default
+            }
         }
     };
     let cors_origins: Vec<String> = cors_origins_raw
@@ -248,23 +266,34 @@ async fn main() -> anyhow::Result<()> {
     let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
         .with_state(leptos_options);
 
-    // CORS policy — reads the live allowlist from `AppState` on every request
-    // so changes made via the Settings UI take effect without a server restart.
-    //
-    // The default allowlist (localhost only) is seeded from config on first
-    // boot and stored in the `settings` DB table.  Operators can update it
-    // via the admin Settings page.
+    // CORS policy — build the layer from the current allowlist. If the list
+    // contains `"*"` respond with `Access-Control-Allow-Origin: *` via
+    // `Any`; otherwise use a per-request predicate that echoes back the
+    // exact origin for strict allowlist enforcement. The live `Arc<RwLock>`
+    // means changes saved via the admin Settings UI take effect immediately.
     let cors = {
-        let origins_ref = cors_allowed_origins.clone();
-        let allow_origin = AllowOrigin::predicate(move |origin, _req| {
-            let list = origins_ref.read().unwrap_or_else(|e| e.into_inner());
-            list.iter()
-                .any(|allowed| origin.as_bytes() == allowed.as_bytes())
-        });
-        CorsLayer::new()
-            .allow_origin(allow_origin)
-            .allow_methods(Any)
-            .allow_headers(Any)
+        let list = cors_allowed_origins
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if list.iter().any(|o| o == "*") {
+            info!("CORS: open policy (*)");
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        } else {
+            let origins_ref = cors_allowed_origins.clone();
+            let allow_origin = AllowOrigin::predicate(move |origin, _req| {
+                let list = origins_ref.read().unwrap_or_else(|e| e.into_inner());
+                list.iter()
+                    .any(|allowed| origin.as_bytes() == allowed.as_bytes())
+            });
+            CorsLayer::new()
+                .allow_origin(allow_origin)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
     };
 
     // Static assets (icon, favicon, logo).

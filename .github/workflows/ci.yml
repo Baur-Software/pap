@@ -37,7 +37,7 @@ jobs:
               - 'Cargo.lock'
             e2e:
               - 'e2e/**'
-              - 'apps/papillon/frontend/**'
+              - 'apps/**'
               - 'crates/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
@@ -527,6 +527,7 @@ jobs:
             -e PAP_REGISTRY_PORT=$CHRYSALIS_PORT \
             -e PAP_REGISTRY_HOST=0.0.0.0 \
             -e PAP_REGISTRY_ENDPOINT=http://localhost:$CHRYSALIS_PORT \
+            -e ALLOWED_ORIGINS='*' \
             pap-registry:ci
 
       - name: Wait for Chrysalis to be ready
@@ -639,6 +640,7 @@ jobs:
           docker run -d \
             --name chrysalis-ci \
             -p 8080:8080 \
+            -e ALLOWED_ORIGINS='*' \
             chrysalis-ci:latest
       - name: Wait for Chrysalis to be healthy
         working-directory: e2e
