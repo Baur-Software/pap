@@ -1481,12 +1481,19 @@ impl AgentClient {
     }
 
     /// Phase 2 — Send the initiator's ephemeral session DID. Returns JSON string.
-    fn exchange_did(&self, session_id: &str, initiator_session_did: &str) -> PyResult<String> {
+    fn exchange_did(
+        &self,
+        session_id: &str,
+        initiator_session_did: &str,
+        mandate_expires_at: &str,
+    ) -> PyResult<String> {
+        let expires_at = parse_dt(mandate_expires_at)?;
         let result = RT
-            .block_on(
-                self.inner
-                    .exchange_did(session_id, initiator_session_did.to_string()),
-            )
+            .block_on(self.inner.exchange_did(
+                session_id,
+                initiator_session_did.to_string(),
+                expires_at,
+            ))
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1498,22 +1505,25 @@ impl AgentClient {
         &self,
         session_id: &str,
         disclosures: Vec<PyRef<Disclosure>>,
+        mandate_expires_at: &str,
     ) -> PyResult<String> {
+        let expires_at = parse_dt(mandate_expires_at)?;
         let values: Vec<serde_json::Value> = disclosures
             .iter()
             .map(|d| serde_json::to_value(&d.inner))
             .collect::<Result<_, _>>()
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let result = RT
-            .block_on(self.inner.send_disclosures(session_id, values))
+            .block_on(self.inner.send_disclosures(session_id, values, expires_at))
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// Phase 4 — Request execution. Returns the execution result as a JSON string.
-    fn request_execution(&self, session_id: &str) -> PyResult<String> {
+    fn request_execution(&self, session_id: &str, mandate_expires_at: &str) -> PyResult<String> {
+        let expires_at = parse_dt(mandate_expires_at)?;
         let result = RT
-            .block_on(self.inner.request_execution(session_id))
+            .block_on(self.inner.request_execution(session_id, expires_at))
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1523,18 +1533,24 @@ impl AgentClient {
         &self,
         session_id: &str,
         receipt: PyRef<TransactionReceipt>,
+        mandate_expires_at: &str,
     ) -> PyResult<String> {
+        let expires_at = parse_dt(mandate_expires_at)?;
         let receipt_inner = receipt.inner.clone();
         let result = RT
-            .block_on(self.inner.exchange_receipt(session_id, receipt_inner))
+            .block_on(
+                self.inner
+                    .exchange_receipt(session_id, receipt_inner, expires_at),
+            )
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// Phase 6 — Close the session. Returns JSON confirmation.
-    fn close_session(&self, session_id: &str) -> PyResult<String> {
+    fn close_session(&self, session_id: &str, mandate_expires_at: &str) -> PyResult<String> {
+        let expires_at = parse_dt(mandate_expires_at)?;
         let result = RT
-            .block_on(self.inner.close_session(session_id))
+            .block_on(self.inner.close_session(session_id, expires_at))
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1564,10 +1580,12 @@ impl AgentClient {
         &self,
         session_id: String,
         initiator_session_did: String,
+        mandate_expires_at: String,
     ) -> PyResult<String> {
+        let expires_at = parse_dt(&mandate_expires_at)?;
         let result = self
             .inner
-            .exchange_did(&session_id, initiator_session_did)
+            .exchange_did(&session_id, initiator_session_did, expires_at)
             .await
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -1581,7 +1599,9 @@ impl AgentClient {
         &self,
         session_id: String,
         disclosures: Vec<Py<Disclosure>>,
+        mandate_expires_at: String,
     ) -> PyResult<String> {
+        let expires_at = parse_dt(&mandate_expires_at)?;
         let values: Vec<serde_json::Value> = Python::with_gil(|py| {
             disclosures
                 .iter()
@@ -1591,7 +1611,7 @@ impl AgentClient {
         .map_err(|e: serde_json::Error| PyValueError::new_err(e.to_string()))?;
         let result = self
             .inner
-            .send_disclosures(&session_id, values)
+            .send_disclosures(&session_id, values, expires_at)
             .await
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -1600,10 +1620,15 @@ impl AgentClient {
     /// Phase 4 — Request execution (async).
     ///
     /// Equivalent to `request_execution`, for use with `asyncio`.
-    async fn request_execution_async(&self, session_id: String) -> PyResult<String> {
+    async fn request_execution_async(
+        &self,
+        session_id: String,
+        mandate_expires_at: String,
+    ) -> PyResult<String> {
+        let expires_at = parse_dt(&mandate_expires_at)?;
         let result = self
             .inner
-            .request_execution(&session_id)
+            .request_execution(&session_id, expires_at)
             .await
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -1616,11 +1641,13 @@ impl AgentClient {
         &self,
         session_id: String,
         receipt: Py<TransactionReceipt>,
+        mandate_expires_at: String,
     ) -> PyResult<String> {
+        let expires_at = parse_dt(&mandate_expires_at)?;
         let receipt_inner = Python::with_gil(|py| receipt.borrow(py).inner.clone());
         let result = self
             .inner
-            .exchange_receipt(&session_id, receipt_inner)
+            .exchange_receipt(&session_id, receipt_inner, expires_at)
             .await
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -1629,10 +1656,15 @@ impl AgentClient {
     /// Phase 6 — Close the session (async).
     ///
     /// Equivalent to `close_session`, for use with `asyncio`.
-    async fn close_session_async(&self, session_id: String) -> PyResult<String> {
+    async fn close_session_async(
+        &self,
+        session_id: String,
+        mandate_expires_at: String,
+    ) -> PyResult<String> {
+        let expires_at = parse_dt(&mandate_expires_at)?;
         let result = self
             .inner
-            .close_session(&session_id)
+            .close_session(&session_id, expires_at)
             .await
             .map_err(|e| PapTransportError::new_err(e.to_string()))?;
         serde_json::to_string(&result).map_err(|e| PyValueError::new_err(e.to_string()))

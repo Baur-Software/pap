@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use futures_util::{SinkExt, StreamExt};
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
@@ -148,11 +149,19 @@ impl WsAgentClient {
     }
 
     /// Phase 2: Exchange ephemeral session DID.
+    ///
+    /// `mandate_expires_at` is checked before the message is sent.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn exchange_did(
         &mut self,
         session_id: &str,
         initiator_session_did: String,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        if Utc::now() > mandate_expires_at {
+            return Err(TransportError::MandateExpired);
+        }
         let resp = self
             .send_recv(WsMessage {
                 phase: 2,
@@ -167,11 +176,19 @@ impl WsAgentClient {
     }
 
     /// Phase 3: Send selective disclosures (or empty vec for zero-disclosure).
+    ///
+    /// `mandate_expires_at` is checked before the message is sent.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn send_disclosures(
         &mut self,
         session_id: &str,
         disclosures: Vec<serde_json::Value>,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        if Utc::now() > mandate_expires_at {
+            return Err(TransportError::MandateExpired);
+        }
         let resp = self
             .send_recv(WsMessage {
                 phase: 3,
@@ -184,10 +201,18 @@ impl WsAgentClient {
     }
 
     /// Phase 4: Request execution. No client payload (mirrors HTTP empty POST).
+    ///
+    /// `mandate_expires_at` is checked before the message is sent.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn request_execution(
         &mut self,
         session_id: &str,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        if Utc::now() > mandate_expires_at {
+            return Err(TransportError::MandateExpired);
+        }
         let resp = self
             .send_recv(WsMessage {
                 phase: 4,
@@ -227,11 +252,19 @@ impl WsAgentClient {
     }
 
     /// Phase 5: Send receipt for co-signing.
+    ///
+    /// `mandate_expires_at` is checked before the message is sent.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn exchange_receipt(
         &mut self,
         session_id: &str,
         receipt: TransactionReceipt,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        if Utc::now() > mandate_expires_at {
+            return Err(TransportError::MandateExpired);
+        }
         let resp = self
             .send_recv(WsMessage {
                 phase: 5,
@@ -246,10 +279,18 @@ impl WsAgentClient {
     /// Phase 6: Close session.
     ///
     /// Sends `SessionClose`, receives `SessionClosed`, then sends a WS close frame.
+    ///
+    /// `mandate_expires_at` is checked before the message is sent.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn close_session(
         &mut self,
         session_id: &str,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        if Utc::now() > mandate_expires_at {
+            return Err(TransportError::MandateExpired);
+        }
         let resp = self
             .send_recv(WsMessage {
                 phase: 6,

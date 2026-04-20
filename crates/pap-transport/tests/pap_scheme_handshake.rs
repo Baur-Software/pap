@@ -86,12 +86,15 @@ async fn pap_https_scheme_full_six_phase_handshake() {
     let endpoint = format!("http://127.0.0.1:{}", port);
     let client = AgentClient::new(&endpoint);
 
+    // Mandate TTL used for all phase checks (valid for 1 hour)
+    let mandate_expires_at = Utc::now() + Duration::hours(1);
+
     // ── Phase 1: Token presentation ──────────────────────────────────────
     let token = CapabilityToken::mint(
         "did:key:zTarget".into(),
         "schema:BuyAction".into(),
         "did:key:zIssuer".into(),
-        Utc::now() + Duration::hours(1),
+        mandate_expires_at,
     );
     let resp = client.present_token(token).await.unwrap();
     let session_id = match &resp {
@@ -108,7 +111,11 @@ async fn pap_https_scheme_full_six_phase_handshake() {
 
     // ── Phase 2: DID exchange ────────────────────────────────────────────
     let resp = client
-        .exchange_did(&session_id, "did:key:zInitiatorSession".into())
+        .exchange_did(
+            &session_id,
+            "did:key:zInitiatorSession".into(),
+            mandate_expires_at,
+        )
         .await
         .unwrap();
     assert!(
@@ -117,14 +124,20 @@ async fn pap_https_scheme_full_six_phase_handshake() {
     );
 
     // ── Phase 3: Zero-disclosure offer ───────────────────────────────────
-    let resp = client.send_disclosures(&session_id, vec![]).await.unwrap();
+    let resp = client
+        .send_disclosures(&session_id, vec![], mandate_expires_at)
+        .await
+        .unwrap();
     assert!(
         matches!(resp, ProtocolMessage::DisclosureAccepted),
         "Phase 3 — expected DisclosureAccepted, got: {resp:?}"
     );
 
     // ── Phase 4: Execute ─────────────────────────────────────────────────
-    let resp = client.request_execution(&session_id).await.unwrap();
+    let resp = client
+        .request_execution(&session_id, mandate_expires_at)
+        .await
+        .unwrap();
     match &resp {
         ProtocolMessage::ExecutionResult { result } => {
             assert_eq!(result["@type"], "schema:SearchResult");
@@ -148,7 +161,10 @@ async fn pap_https_scheme_full_six_phase_handshake() {
         signatures: vec!["initiator-sig".into()],
         attestations: vec![],
     };
-    let resp = client.exchange_receipt(&session_id, receipt).await.unwrap();
+    let resp = client
+        .exchange_receipt(&session_id, receipt, mandate_expires_at)
+        .await
+        .unwrap();
     match &resp {
         ProtocolMessage::ReceiptCoSigned { receipt } => {
             assert_eq!(receipt.signatures.len(), 2, "both parties must co-sign");
@@ -159,7 +175,10 @@ async fn pap_https_scheme_full_six_phase_handshake() {
     }
 
     // ── Phase 6: Close ───────────────────────────────────────────────────
-    let resp = client.close_session(&session_id).await.unwrap();
+    let resp = client
+        .close_session(&session_id, mandate_expires_at)
+        .await
+        .unwrap();
     assert!(
         matches!(resp, ProtocolMessage::SessionClosed),
         "Phase 6 — expected SessionClosed, got: {resp:?}"
@@ -187,12 +206,15 @@ async fn pap_wss_scheme_full_six_phase_handshake() {
     let endpoint = format!("ws://127.0.0.1:{}", port);
     let mut client = WsAgentClient::connect_plain(&endpoint).await.unwrap();
 
+    // Mandate TTL used for all phase checks (valid for 1 hour)
+    let mandate_expires_at = Utc::now() + Duration::hours(1);
+
     // ── Phase 1: Token presentation ──────────────────────────────────────
     let token = CapabilityToken::mint(
         "did:key:zTarget".into(),
         "schema:ListenAction".into(),
         "did:key:zIssuer".into(),
-        Utc::now() + Duration::hours(1),
+        mandate_expires_at,
     );
     let resp = client.present_token(token).await.unwrap();
     let session_id = match &resp {
@@ -209,7 +231,11 @@ async fn pap_wss_scheme_full_six_phase_handshake() {
 
     // ── Phase 2: DID exchange ────────────────────────────────────────────
     let resp = client
-        .exchange_did(&session_id, "did:key:zInitiatorSession".into())
+        .exchange_did(
+            &session_id,
+            "did:key:zInitiatorSession".into(),
+            mandate_expires_at,
+        )
         .await
         .unwrap();
     assert!(
@@ -218,14 +244,20 @@ async fn pap_wss_scheme_full_six_phase_handshake() {
     );
 
     // ── Phase 3: Zero-disclosure offer ───────────────────────────────────
-    let resp = client.send_disclosures(&session_id, vec![]).await.unwrap();
+    let resp = client
+        .send_disclosures(&session_id, vec![], mandate_expires_at)
+        .await
+        .unwrap();
     assert!(
         matches!(resp, ProtocolMessage::DisclosureAccepted),
         "Phase 3 — expected DisclosureAccepted, got: {resp:?}"
     );
 
     // ── Phase 4: Execute ─────────────────────────────────────────────────
-    let resp = client.request_execution(&session_id).await.unwrap();
+    let resp = client
+        .request_execution(&session_id, mandate_expires_at)
+        .await
+        .unwrap();
     match &resp {
         ProtocolMessage::ExecutionResult { result } => {
             assert_eq!(result["@type"], "schema:SearchResult");
@@ -249,7 +281,10 @@ async fn pap_wss_scheme_full_six_phase_handshake() {
         signatures: vec!["initiator-sig".into()],
         attestations: vec![],
     };
-    let resp = client.exchange_receipt(&session_id, receipt).await.unwrap();
+    let resp = client
+        .exchange_receipt(&session_id, receipt, mandate_expires_at)
+        .await
+        .unwrap();
     match &resp {
         ProtocolMessage::ReceiptCoSigned { receipt } => {
             assert_eq!(receipt.signatures.len(), 2, "both parties must co-sign");
@@ -260,10 +295,63 @@ async fn pap_wss_scheme_full_six_phase_handshake() {
     }
 
     // ── Phase 6: Close ───────────────────────────────────────────────────
-    let resp = client.close_session(&session_id).await.unwrap();
+    let resp = client
+        .close_session(&session_id, mandate_expires_at)
+        .await
+        .unwrap();
     assert!(
         matches!(resp, ProtocolMessage::SessionClosed),
         "Phase 6 — expected SessionClosed, got: {resp:?}"
+    );
+
+    server_handle.abort();
+}
+
+/// Verify that an already-expired mandate TTL causes phase 2 onwards to fail
+/// with `TransportError::MandateExpired` (spec §5.5).
+#[tokio::test]
+async fn expired_mandate_ttl_blocks_phase_transitions_http() {
+    // ── Bind a real server so the client has somewhere to connect ────────
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let handler: Arc<dyn AgentHandler> = Arc::new(TestHandler);
+    let server = AgentServer::new(handler, 0);
+    let router = server.router();
+
+    let server_handle = tokio::spawn(async move {
+        let _ = axum::serve(listener, router).await;
+    });
+
+    let endpoint = format!("http://127.0.0.1:{}", port);
+    let client = AgentClient::new(&endpoint);
+
+    // Already-expired TTL (1 second in the past)
+    let expired_ttl = Utc::now() - Duration::seconds(1);
+
+    // Phase 2 must fail immediately without making a network request
+    let result = client
+        .exchange_did("any-session", "did:key:zInit".into(), expired_ttl)
+        .await;
+    assert!(
+        matches!(result, Err(TransportError::MandateExpired)),
+        "Phase 2 with expired TTL must return MandateExpired, got: {result:?}"
+    );
+
+    // Phase 3 must also fail
+    let result = client
+        .send_disclosures("any-session", vec![], expired_ttl)
+        .await;
+    assert!(
+        matches!(result, Err(TransportError::MandateExpired)),
+        "Phase 3 with expired TTL must return MandateExpired, got: {result:?}"
+    );
+
+    // Phase 4 must also fail
+    let result = client.request_execution("any-session", expired_ttl).await;
+    assert!(
+        matches!(result, Err(TransportError::MandateExpired)),
+        "Phase 4 with expired TTL must return MandateExpired, got: {result:?}"
     );
 
     server_handle.abort();

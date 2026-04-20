@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
 use pap_proto::ProtocolMessage;
@@ -21,6 +22,18 @@ use crate::error::TransportError;
 pub struct AgentClient {
     base_url: String,
     client: reqwest::Client,
+}
+
+/// Check that the mandate TTL has not elapsed.
+///
+/// Called at the start of each phase method that has access to the mandate
+/// expiry (spec §5.5: "TTL bounds are verified cryptographically at each
+/// level of the mandate chain").
+fn check_mandate_ttl(expires_at: DateTime<Utc>) -> Result<(), TransportError> {
+    if Utc::now() > expires_at {
+        return Err(TransportError::MandateExpired);
+    }
+    Ok(())
 }
 
 impl AgentClient {
@@ -82,12 +95,15 @@ impl AgentClient {
     ///   for zero-disclosure sessions.
     /// * `receipt` — a [`TransactionReceipt`] pre-signed by the initiator,
     ///   ready for the receiver to co-sign in Phase 5.
+    /// * `mandate_expires_at` — the mandate TTL checked at each phase
+    ///   transition before any network I/O is performed (spec §5.5).
     pub async fn run_full_handshake(
         &self,
         token: CapabilityToken,
         initiator_session_did: String,
         disclosures: Vec<serde_json::Value>,
         receipt: TransactionReceipt,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<(TransactionReceipt, serde_json::Value), TransportError> {
         // ── Phase 1: Token Presentation ──────────────────────────────────
         let phase1 = self.present_token(token).await?;
@@ -107,16 +123,18 @@ impl AgentClient {
         };
 
         // ── Phase 2: Ephemeral DID Exchange ──────────────────────────────
-        let phase2 = self.exchange_did(&session_id, initiator_session_did).await;
+        let phase2 = self
+            .exchange_did(&session_id, initiator_session_did, mandate_expires_at)
+            .await;
         let phase2 = match phase2 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         if !matches!(phase2, ProtocolMessage::SessionDidAck) {
-            let _ = self.close_session(&session_id).await;
+            let _ = self.close_session(&session_id, mandate_expires_at).await;
             return Err(TransportError::InvalidResponse(format!(
                 "phase 2: expected SessionDidAck, got {}",
                 phase2.message_type()
@@ -124,16 +142,18 @@ impl AgentClient {
         }
 
         // ── Phase 3: Disclosure ───────────────────────────────────────────
-        let phase3 = self.send_disclosures(&session_id, disclosures).await;
+        let phase3 = self
+            .send_disclosures(&session_id, disclosures, mandate_expires_at)
+            .await;
         let phase3 = match phase3 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         if !matches!(phase3, ProtocolMessage::DisclosureAccepted) {
-            let _ = self.close_session(&session_id).await;
+            let _ = self.close_session(&session_id, mandate_expires_at).await;
             return Err(TransportError::InvalidResponse(format!(
                 "phase 3: expected DisclosureAccepted, got {}",
                 phase3.message_type()
@@ -141,18 +161,20 @@ impl AgentClient {
         }
 
         // ── Phase 4: Execution ────────────────────────────────────────────
-        let phase4 = self.request_execution(&session_id).await;
+        let phase4 = self
+            .request_execution(&session_id, mandate_expires_at)
+            .await;
         let phase4 = match phase4 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         let exec_result = match phase4 {
             ProtocolMessage::ExecutionResult { result } => result,
             other => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(TransportError::InvalidResponse(format!(
                     "phase 4: expected ExecutionResult, got {}",
                     other.message_type()
@@ -161,18 +183,20 @@ impl AgentClient {
         };
 
         // ── Phase 5: Receipt Co-signing (mandatory) ───────────────────────
-        let phase5 = self.exchange_receipt(&session_id, receipt).await;
+        let phase5 = self
+            .exchange_receipt(&session_id, receipt, mandate_expires_at)
+            .await;
         let phase5 = match phase5 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         let cosigned_receipt = match phase5 {
             ProtocolMessage::ReceiptCoSigned { receipt } => receipt,
             other => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(TransportError::InvalidResponse(format!(
                     "phase 5: expected ReceiptCoSigned, got {}",
                     other.message_type()
@@ -181,7 +205,7 @@ impl AgentClient {
         };
 
         // ── Phase 6: Session Close ────────────────────────────────────────
-        let phase6 = self.close_session(&session_id).await?;
+        let phase6 = self.close_session(&session_id, mandate_expires_at).await?;
         if !matches!(phase6, ProtocolMessage::SessionClosed) {
             return Err(TransportError::InvalidResponse(format!(
                 "phase 6: expected SessionClosed, got {}",
@@ -217,11 +241,17 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 2: Send the initiator's ephemeral session DID.
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn exchange_did(
         &self,
         session_id: &str,
         initiator_session_did: String,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::SessionDidExchange {
             initiator_session_did,
         };
@@ -241,11 +271,17 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 3: Send selective disclosures (or empty vec for zero-disclosure).
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn send_disclosures(
         &self,
         session_id: &str,
         disclosures: Vec<serde_json::Value>,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::DisclosureOffer { disclosures };
         let resp = self
             .client
@@ -266,10 +302,16 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 4: Request execution and receive the result.
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn request_execution(
         &self,
         session_id: &str,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let resp = self
             .client
             .post(format!("{}/session/{}/execute", self.base_url, session_id))
@@ -285,11 +327,17 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 5: Send a receipt for co-signing. Returns the co-signed receipt.
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
     pub async fn exchange_receipt(
         &self,
         session_id: &str,
         receipt: TransactionReceipt,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::ReceiptForCoSign { receipt };
         let resp = self
             .client
@@ -307,7 +355,16 @@ impl AgentClient {
     /// Low-level API. Prefer [`AgentClient::run_full_handshake`] for standard use cases.
     ///
     /// Phase 6: Close the session.
-    pub async fn close_session(&self, session_id: &str) -> Result<ProtocolMessage, TransportError> {
+    ///
+    /// `mandate_expires_at` is checked before the network request is made.
+    /// Returns [`TransportError::MandateExpired`] if the mandate TTL has
+    /// elapsed (spec §5.5).
+    pub async fn close_session(
+        &self,
+        session_id: &str,
+        mandate_expires_at: DateTime<Utc>,
+    ) -> Result<ProtocolMessage, TransportError> {
+        check_mandate_ttl(mandate_expires_at)?;
         let msg = ProtocolMessage::SessionClose {
             session_id: session_id.to_string(),
         };
