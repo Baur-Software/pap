@@ -229,7 +229,9 @@ impl AgentHandler for DynamicAgentHandler {
                                     .and_then(|s| s.as_str())
                                     .map(|s| s.to_string())
                             })
-                            .unwrap_or_else(|| format!("HTTP {} — no results found", status.as_u16()));
+                            .unwrap_or_else(|| {
+                                format!("HTTP {} — no results found", status.as_u16())
+                            });
                         return Err(TransportError::ServerError(user_msg));
                     }
                 }
