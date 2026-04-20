@@ -88,7 +88,8 @@ pub(crate) fn process_prompt_inner<'a>(
                 Output = Result<
                     (String, serde_json::Value, bool, String, Option<String>),
                     PapillonError,
-                > + Send
+                >,
+            > + Send
             + 'a,
     >,
 > {
@@ -141,6 +142,7 @@ pub(crate) fn process_prompt_inner<'a>(
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided,
+                retention_warning: None,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -165,6 +167,7 @@ pub(crate) fn process_prompt_inner<'a>(
                 agent_did: None,
                 mandate_expires_at: None,
                 preference_guided,
+                retention_warning: None,
                 created_at: now.clone(),
                 updated_at: now,
             };

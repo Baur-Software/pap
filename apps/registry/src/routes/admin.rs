@@ -1285,11 +1285,11 @@ mod tests {
         let json = body_json(resp.into_body()).await;
         let peers = json.as_array().unwrap();
         assert_eq!(peers.len(), 1, "exactly one peer was successfully admitted");
-        let dids: Vec<&str> = peers
-            .iter()
-            .filter_map(|p| p["did"].as_str())
-            .collect();
-        assert!(dids.contains(&"did:key:zAlpha"), "alpha peer must be listed");
+        let dids: Vec<&str> = peers.iter().filter_map(|p| p["did"].as_str()).collect();
+        assert!(
+            dids.contains(&"did:key:zAlpha"),
+            "alpha peer must be listed"
+        );
     }
 
     // ── POST /api/peers/{did}/sync ────────────────────────────────────────────

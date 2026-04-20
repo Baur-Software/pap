@@ -488,6 +488,7 @@ impl CanvasState {
             mandate_expires_at: None,
             preference_guided: false,
             auto_expand,
+            retention_warning: None,
             created_at: now_iso(),
             updated_at: now_iso(),
         };
@@ -1051,6 +1052,7 @@ impl CanvasState {
                                     mandate_expires_at: None,
                                     preference_guided: false,
                                     auto_expand: false,
+                                    retention_warning: None,
                                     created_at: now.clone(),
                                     updated_at: now,
                                 };
@@ -1179,6 +1181,7 @@ impl CanvasState {
                                     mandate_expires_at: rec.mandate_expires_at,
                                     preference_guided: rec.preference_guided,
                                     auto_expand: false,
+                                    retention_warning: None,
                                     created_at: rec.created_at,
                                     updated_at: rec.updated_at,
                                 };
@@ -1297,7 +1300,8 @@ mod tests {
                 created_at: String::new(),
                 updated_at: String::new(),
                 preference_guided: false,
-            auto_expand: false,
+                auto_expand: false,
+                retention_warning: None,
             }],
             created_at: String::new(),
             updated_at: String::new(),
@@ -1358,7 +1362,8 @@ mod tests {
                     created_at: String::new(),
                     updated_at: String::new(),
                     preference_guided: false,
-            auto_expand: false,
+                    auto_expand: false,
+                    retention_warning: None,
                 },
                 CanvasBlock {
                     id: "b".into(),
@@ -1373,7 +1378,8 @@ mod tests {
                     created_at: String::new(),
                     updated_at: String::new(),
                     preference_guided: false,
-            auto_expand: false,
+                    auto_expand: false,
+                    retention_warning: None,
                 },
             ],
             created_at: String::new(),

@@ -353,9 +353,7 @@ impl TransactionReceipt {
         let canonical = serde_json::to_vec(disclosures).unwrap_or_default();
         let hash = Sha256::digest(&canonical);
         use base64::Engine;
-        self.disclosure_hash = Some(
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hash),
-        );
+        self.disclosure_hash = Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hash));
         self
     }
 
@@ -373,8 +371,7 @@ impl TransactionReceipt {
                 let canonical = serde_json::to_vec(disclosures).unwrap_or_default();
                 let hash = Sha256::digest(&canonical);
                 use base64::Engine;
-                let computed =
-                    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hash);
+                let computed = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hash);
                 if computed == *expected {
                     Ok(())
                 } else {
@@ -1352,9 +1349,8 @@ mod tests {
         let session = make_executed_session();
         let signing_key = make_keypair();
 
-        let disclosures_a = vec![
-            serde_json::json!({"claim": "email", "value": "alice@example.com"}),
-        ];
+        let disclosures_a =
+            vec![serde_json::json!({"claim": "email", "value": "alice@example.com"})];
         let disclosures_b = vec![
             serde_json::json!({"claim": "email", "value": "alice@example.com"}),
             serde_json::json!({"claim": "dob", "value": "1990-01-01"}),
@@ -1372,7 +1368,10 @@ mod tests {
 
         let mut receipt_b = TransactionReceipt::from_session(
             &session,
-            vec!["schema:Person.schema:email".into(), "schema:Person.schema:birthDate".into()],
+            vec![
+                "schema:Person.schema:email".into(),
+                "schema:Person.schema:birthDate".into(),
+            ],
             vec![],
             "executed".into(),
             "returned".into(),
@@ -1396,9 +1395,7 @@ mod tests {
     #[test]
     fn receipt_disclosure_hash_verification_passes() {
         let session = make_executed_session();
-        let disclosures = vec![
-            serde_json::json!({"claim": "email", "value": "bob@example.com"}),
-        ];
+        let disclosures = vec![serde_json::json!({"claim": "email", "value": "bob@example.com"})];
 
         let receipt = TransactionReceipt::from_session(
             &session,
@@ -1423,9 +1420,8 @@ mod tests {
             serde_json::json!({"claim": "email", "value": "carol@example.com"}),
             serde_json::json!({"claim": "ssn", "value": "123-45-6789"}),
         ];
-        let claimed_disclosures = vec![
-            serde_json::json!({"claim": "email", "value": "carol@example.com"}),
-        ];
+        let claimed_disclosures =
+            vec![serde_json::json!({"claim": "email", "value": "carol@example.com"})];
 
         // Receipt is built with the real (larger) disclosure set
         let receipt = TransactionReceipt::from_session(

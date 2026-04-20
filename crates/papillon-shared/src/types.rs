@@ -1867,8 +1867,7 @@ mod tests {
     #[test]
     fn block_update_retention_warning_some_included_in_json() {
         // When the handshake sets a warning, BlockUpdate must carry it in the payload.
-        let update =
-            make_block_update_with_warning("upd-rw-some", Some("contractual only".into()));
+        let update = make_block_update_with_warning("upd-rw-some", Some("contractual only".into()));
         let json = serde_json::to_string(&update).unwrap();
         assert!(
             json.contains(r#""retention_warning":"contractual only""#),
@@ -1896,7 +1895,10 @@ mod tests {
         //   b.retention_warning = update.retention_warning.clone();
         // This test verifies the field assignment path is sound at the type level.
         let mut block = make_block_with_warning("blk-apply", None);
-        assert!(block.retention_warning.is_none(), "precondition: no warning");
+        assert!(
+            block.retention_warning.is_none(),
+            "precondition: no warning"
+        );
 
         let update = make_block_update_with_warning("blk-apply", Some("warn".into()));
         // Replicate the exact assignment from apply_block_event.

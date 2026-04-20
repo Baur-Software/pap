@@ -638,8 +638,14 @@ mod tests {
         }
 
         let server = AgentServer::new(Arc::new(NopHandler), 0);
-        assert_eq!(server.max_concurrent_sessions, DEFAULT_MAX_CONCURRENT_SESSIONS);
-        assert_eq!(server.handshake_timeout_secs, DEFAULT_HANDSHAKE_TIMEOUT_SECS);
+        assert_eq!(
+            server.max_concurrent_sessions,
+            DEFAULT_MAX_CONCURRENT_SESSIONS
+        );
+        assert_eq!(
+            server.handshake_timeout_secs,
+            DEFAULT_HANDSHAKE_TIMEOUT_SECS
+        );
     }
 
     /// `with_handshake_timeout` must store the supplied value, overriding the default.

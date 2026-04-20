@@ -96,19 +96,17 @@ pub extern "C" fn pap_last_error_message_tl() -> *mut c_char {
 /// this function may write to.
 #[no_mangle]
 pub unsafe extern "C" fn pap_get_last_error(out_msg: *mut *mut c_char) -> c_int {
-    LAST_ERROR.with(|c| {
-        match c.borrow_mut().take() {
-            Some(s) => {
-                if !out_msg.is_null() {
-                    match CString::new(s) {
-                        Ok(cs) => unsafe { *out_msg = cs.into_raw() },
-                        Err(_) => unsafe { *out_msg = std::ptr::null_mut() },
-                    }
+    LAST_ERROR.with(|c| match c.borrow_mut().take() {
+        Some(s) => {
+            if !out_msg.is_null() {
+                match CString::new(s) {
+                    Ok(cs) => unsafe { *out_msg = cs.into_raw() },
+                    Err(_) => unsafe { *out_msg = std::ptr::null_mut() },
                 }
-                1
             }
-            None => 0,
+            1
         }
+        None => 0,
     })
 }
 
@@ -2976,7 +2974,10 @@ mod tests {
         let mut out: *mut c_char = std::ptr::null_mut();
         let result = unsafe { pap_get_last_error(&mut out as *mut _) };
         assert_eq!(result, 1, "expected 1 (error present)");
-        assert!(!out.is_null(), "out should be non-null when error is present");
+        assert!(
+            !out.is_null(),
+            "out should be non-null when error is present"
+        );
 
         let msg = unsafe { std::ffi::CStr::from_ptr(out) }
             .to_str()
@@ -3040,12 +3041,18 @@ mod tests {
 
         // First call — non-null
         let msg1 = pap_last_error_message();
-        assert!(!msg1.is_null(), "pap_last_error_message should return non-null when error exists");
+        assert!(
+            !msg1.is_null(),
+            "pap_last_error_message should return non-null when error exists"
+        );
         unsafe { pap_string_free(msg1) };
 
         // Second call — null (consumed)
         let msg2 = pap_last_error_message();
-        assert!(msg2.is_null(), "pap_last_error_message should return null after error is consumed");
+        assert!(
+            msg2.is_null(),
+            "pap_last_error_message should return null after error is consumed"
+        );
     }
 
     /// pap_string_free(NULL) must be a no-op and must not panic.
@@ -3063,12 +3070,18 @@ mod tests {
 
         let bad = c("this is not a mandate");
         let m = pap_mandate_from_json(bad.as_ptr());
-        assert!(m.is_null(), "pap_mandate_from_json should return null for invalid JSON");
+        assert!(
+            m.is_null(),
+            "pap_mandate_from_json should return null for invalid JSON"
+        );
 
         // The error should have been set
         let mut out: *mut c_char = std::ptr::null_mut();
         let rc = unsafe { pap_get_last_error(&mut out as *mut _) };
-        assert_eq!(rc, 1, "an error should be set after a failed pap_mandate_from_json");
+        assert_eq!(
+            rc, 1,
+            "an error should be set after a failed pap_mandate_from_json"
+        );
         assert!(!out.is_null());
         unsafe { pap_string_free(out) };
     }
@@ -3078,7 +3091,10 @@ mod tests {
     #[test]
     fn keypair_generate_and_free_roundtrip() {
         let kp = pap_keypair_generate();
-        assert!(!kp.is_null(), "pap_keypair_generate should return a valid handle");
+        assert!(
+            !kp.is_null(),
+            "pap_keypair_generate should return a valid handle"
+        );
         // Free the handle — must not crash
         unsafe { pap_keypair_free(kp) };
         // Freeing null is also a no-op
@@ -3090,7 +3106,10 @@ mod tests {
     #[test]
     fn session_keypair_generate_and_free_roundtrip() {
         let kp = pap_session_keypair_generate();
-        assert!(!kp.is_null(), "pap_session_keypair_generate should return a valid handle");
+        assert!(
+            !kp.is_null(),
+            "pap_session_keypair_generate should return a valid handle"
+        );
         // Free the handle — must not crash
         unsafe { pap_session_keypair_free(kp) };
         // Freeing null is also a no-op
@@ -3108,12 +3127,18 @@ mod tests {
         assert!(m1.is_null());
 
         let tl_msg = pap_last_error_message_tl();
-        assert!(!tl_msg.is_null(), "pap_last_error_message_tl should return non-null when error exists");
+        assert!(
+            !tl_msg.is_null(),
+            "pap_last_error_message_tl should return non-null when error exists"
+        );
         unsafe { pap_string_free(tl_msg) };
 
         // Error should now be consumed
         let tl_msg2 = pap_last_error_message_tl();
-        assert!(tl_msg2.is_null(), "pap_last_error_message_tl should return null after consumption");
+        assert!(
+            tl_msg2.is_null(),
+            "pap_last_error_message_tl should return null after consumption"
+        );
 
         // --- Round 2: use pap_last_error_message ---
         let bad2 = c("also bad json for message test");
@@ -3121,11 +3146,17 @@ mod tests {
         assert!(m2.is_null());
 
         let msg = pap_last_error_message();
-        assert!(!msg.is_null(), "pap_last_error_message should return non-null when error exists");
+        assert!(
+            !msg.is_null(),
+            "pap_last_error_message should return non-null when error exists"
+        );
         unsafe { pap_string_free(msg) };
 
         // Error should now be consumed
         let msg2 = pap_last_error_message();
-        assert!(msg2.is_null(), "pap_last_error_message should return null after consumption");
+        assert!(
+            msg2.is_null(),
+            "pap_last_error_message should return null after consumption"
+        );
     }
 }

@@ -178,17 +178,15 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         // check_signer drops here (zeroized)
 
         match pap_core::session::Session::initiate(&check_token, agent_did, &check_vk) {
-            Ok(session) => {
-                match session.validate_disclosure_requirements(&auth.disclosure_set) {
-                    Ok(DisclosureValidation::ContractualOnly) => Some(
-                        "Data retention not enforced: no TEE present. \
+            Ok(session) => match session.validate_disclosure_requirements(&auth.disclosure_set) {
+                Ok(DisclosureValidation::ContractualOnly) => Some(
+                    "Data retention not enforced: no TEE present. \
                         The receiving agent may retain disclosed data beyond the session mandate. \
                         Disclosure is contractual only."
-                            .to_string(),
-                    ),
-                    _ => None,
-                }
-            }
+                        .to_string(),
+                ),
+                _ => None,
+            },
             // If session initiation fails here (shouldn't happen with a valid token),
             // don't block the handshake — just skip the warning.
             Err(_) => None,

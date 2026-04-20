@@ -121,6 +121,7 @@ pub fn PipelineBuilderTab() -> impl IntoView {
                                 mandate_expires_at: None,
                                 preference_guided: false,
                                 auto_expand: false,
+                                retention_warning: None,
                                 created_at: now.clone(),
                                 updated_at: now,
                             });
