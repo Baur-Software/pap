@@ -63,6 +63,8 @@ Agent nodes are styled like database tables in a query designer (Access, Sequel 
 
 #### Node anatomy
 
+A node is a complete step definition: intent + agent (resolved at run) + property wires (disclosure) + render template.
+
 ```
 ┌──────────────────────────┐
 │ 🤖  Flight Search        │  ← agent name (humanized), pap:// URI
@@ -76,6 +78,8 @@ Agent nodes are styled like database tables in a query designer (Access, Sequel 
 │ Departure Date        ●   │
 │ Destination City      ●   │     toLocation.name — already in FlightReservation
 │ Reservation           ●   │
+├──────────────────────────┤
+│ RENDER AS  [FlightCard ▾] │  ← template picker (optional; auto = RendererRegistry default)
 └──────────────────────────┘
 ```
 
@@ -83,6 +87,22 @@ Agent nodes are styled like database tables in a query designer (Access, Sequel 
 - **Input ports** (left-edge dot): filled = wired, empty = unwired or standalone
 - **Output ports** (right-edge dot): filled = connectable, absent = no port exists
 - **Standalone capable**: every node runs as its own block even with no wires
+- **Render As**: optional template picker at the bottom of the node. Defaults to `auto` (RendererRegistry dispatch). Can be set to any shipped template or user-defined template from TemplateLibrary for that schema type. Saved as part of the pipeline definition — every run renders consistently with the chosen template.
+
+The template picker only shows templates compatible with the agent's `returns` schema type. An ICP pipeline node returning `schema:Organization` would show `IcpCard`, `OrgProfile`, `GenericCard`, etc. — not flight templates.
+
+#### Scaling from single block to automated pipeline
+
+The same node definition scales across all use cases:
+
+| Mode | How it works |
+|---|---|
+| Single block | One prompt, one handshake, Map mode shows one node. No design step needed. |
+| Composed | `{{block:ID}}` refs in prompts; Map mode derives edges from receipts. No design needed. |
+| Designed workflow | Design mode, explicit property wires, template per node, saved pipeline. |
+| Automated (e.g. ICP pipeline) | Saved pipeline, all wires memex-pre-approved, fires end-to-end silently. Map mode shows execution history. |
+
+The pipeline execution engine (`commands/pipeline.rs`) already handles topological sort, parallel branches, and synthesizer nodes. Design mode is a visual editor for what that system already supports — no new execution model needed.
 
 #### Property-level connectability
 
@@ -171,8 +191,9 @@ Running a single prompt with no workflow graph is unchanged. It creates one bloc
 | `apps/papillon/frontend/src/components/canvas_workflow_pipeline.rs` | Rebuild as the Map + Design mode graph canvas |
 | `apps/papillon/frontend/src/components/block_renderer/mod.rs` | No change to block rendering itself |
 | `apps/papillon/frontend/src/components/pipeline_builder_tab.rs` | Merge into / replace with new Design mode canvas |
+| `apps/papillon/frontend/src/pages/settings/templates_tab/` | Feed TemplateLibrary into node template picker (filter by schema type) |
 | `apps/papillon/frontend/styles/main.css` | New CSS for node/edge/port components, pulse animation, approval card inline state |
-| `crates/papillon-shared/src/types.rs` | Add `WorkflowNode`, `WorkflowEdge`, `EdgeState`, `PortRef` types |
+| `crates/papillon-shared/src/types.rs` | Add `WorkflowNode` (with `template_override: Option<String>`), `WorkflowEdge`, `EdgeState`, `PortRef` types |
 | `crates/papillon-shared/src/episode_db.rs` | Add auto-approval lookup by `(output_type, input_type, agent_did)` |
 | `apps/papillon/src/commands/pipeline.rs` | Emit edge-level events for approval interrupts; expose port compatibility check |
 
