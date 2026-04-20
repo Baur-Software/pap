@@ -51,6 +51,15 @@ async fn decode_response(resp: reqwest::Response) -> Result<ProtocolMessage, Tra
         .bytes()
         .await
         .map_err(|e| TransportError::InvalidResponse(e.to_string()))?;
+    // Pre-check: reject before serde_json allocation begins. reqwest has
+    // already buffered the body via resp.bytes(), but this guard prevents the
+    // JSON parser from touching an oversized buffer at all.
+    if bytes.len() > limit {
+        return Err(TransportError::MessageTooLarge {
+            size: bytes.len(),
+            limit,
+        });
+    }
     serde_json::from_reader(LimitedRead::new(Cursor::new(&bytes[..]), limit)).map_err(|e| {
         if is_limit_exceeded(&e) {
             TransportError::MessageTooLarge {

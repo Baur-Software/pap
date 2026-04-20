@@ -122,11 +122,19 @@ impl OhttpClient {
             .map_err(|e| TransportError::InvalidResponse(e.to_string()))?;
 
         let json_resp = response_ctx.decrypt_response(&encrypted_resp)?;
+        let limit = DEFAULT_MAX_MESSAGE_BYTES;
+        // Pre-check: decrypt_response already allocated json_resp; reject before
+        // serde_json allocation begins.
+        if json_resp.len() > limit {
+            return Err(TransportError::MessageTooLarge {
+                size: json_resp.len(),
+                limit,
+            });
+        }
 
         {
             use crate::limited_read::{is_limit_exceeded, LimitedRead};
             use std::io::Cursor;
-            let limit = DEFAULT_MAX_MESSAGE_BYTES;
             serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(
                 |e| {
                     if is_limit_exceeded(&e) {
@@ -206,12 +214,20 @@ impl OhttpClient {
 
         // Step 5: Decapsulate response using the per-request context from step 2
         let json_resp = response_ctx.decrypt_response(&encrypted_resp)?;
+        let limit = DEFAULT_MAX_MESSAGE_BYTES;
+        // Pre-check: decrypt_response already allocated json_resp; reject before
+        // serde_json allocation begins.
+        if json_resp.len() > limit {
+            return Err(TransportError::MessageTooLarge {
+                size: json_resp.len(),
+                limit,
+            });
+        }
 
         // Step 6: Deserialize response message
         {
             use crate::limited_read::{is_limit_exceeded, LimitedRead};
             use std::io::Cursor;
-            let limit = DEFAULT_MAX_MESSAGE_BYTES;
             serde_json::from_reader(LimitedRead::new(Cursor::new(&json_resp[..]), limit)).map_err(
                 |e| {
                     if is_limit_exceeded(&e) {

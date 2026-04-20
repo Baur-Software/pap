@@ -46,8 +46,24 @@ impl<R: Read> Read for LimitedRead<R> {
 ///
 /// Returns `true` when the error is an I/O error with kind `Other` — the
 /// signature produced by [`LimitedRead`] when the limit is hit.
+// Sentinel string written by LimitedRead::read() when the byte cap is hit.
+// Using a module-private constant prevents false positives from other
+// io::ErrorKind::Other sources that may pass through the same code paths.
+pub(crate) const LIMIT_EXCEEDED_MSG: &str = "message too large";
+
+/// Returns `true` when `e` was produced by [`LimitedRead`] exceeding its cap.
+///
+/// Checks both `ErrorKind::Other` (necessary) *and* the sentinel message
+/// (sufficient) to avoid false positives from unrelated `Other` I/O errors.
 pub(crate) fn is_limit_exceeded(e: &serde_json::Error) -> bool {
-    e.is_io() && e.io_error_kind() == Some(io::ErrorKind::Other)
+    if !e.is_io() {
+        return false;
+    }
+    if e.io_error_kind() != Some(io::ErrorKind::Other) {
+        return false;
+    }
+    // Downcast to confirm the sentinel string, not just the error kind.
+    e.to_string().contains(LIMIT_EXCEEDED_MSG)
 }
 
 #[cfg(test)]
