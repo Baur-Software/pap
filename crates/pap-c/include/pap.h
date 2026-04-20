@@ -318,16 +318,14 @@ int pap_mandate_transition_decay(struct PapMandate *m, int next_state);
 // Synchronize the mandate's stored decay state to the time-computed value.
 //
 // This is the safe high-level alternative to calling `compute_decay_state`
-// and `transition_decay` manually. It handles two correctness traps:
+// and `transition_decay` manually. It handles the self-transition guard:
+// calling `transition_decay` with the current state is rejected by the spec
+// state machine, so this function is a no-op when the computed state equals
+// the current state.
 //
-// 1. **TTL-expiry jump**: if the TTL expires between polling cycles while the
-//    mandate is still Active, the computed state jumps straight to ReadOnly.
-//    Active→ReadOnly is not a valid single-step transition, so this function
-//    automatically steps through Degraded first.
-//
-// 2. **Self-transition guard**: calling `transition_decay` with the current
-//    state is rejected by the spec state machine. This function is a no-op
-//    when the computed state equals the current state.
+// The one-step guarantee (Active→Degraded→ReadOnly→Suspended, never
+// skipping an intermediate) is now enforced by `compute_decay_state` itself
+// per spec §5.7.1 — no special handling is needed here.
 //
 // Returns 0 on success (including no-op), -1 on error.
 int pap_mandate_sync_decay_state(struct PapMandate *m, int64_t decay_window_secs);
