@@ -1,24 +1,23 @@
 use leptos::prelude::*;
 
 use crate::components::canvas_workflow_pipeline::CanvasWorkflowPipeline;
-use crate::components::pipeline_builder_tab::PipelineBuilderTab;
 use crate::components::source_panel::SourcePanel;
 
-/// Back-face container with three tabs: Sources, Build, History.
+/// Back-face container with two tabs: Sources, Workflow.
 ///
-/// - **Sources** — `SourcePanel`: all resolved blocks as draggable reference chips.
-/// - **Build**   — `PipelineBuilderTab`: run saved pipelines with synthesis format control.
-/// - **History** — `CanvasWorkflowPipeline`: the existing block list (moved here).
+/// - **Sources**  — `SourcePanel`: all resolved blocks as draggable reference chips.
+/// - **Workflow** — `CanvasWorkflowPipeline`: MAP mode (live dependency graph derived from
+///                  block events) and DESIGN mode (intent-first node graph builder).
 #[component]
 pub fn CanvasBackFace() -> impl IntoView {
-    // "sources" | "build" | "history"
+    // "sources" | "workflow"
     let active_tab: RwSignal<&'static str> = RwSignal::new("sources");
 
     view! {
         <div class="canvas-back-face">
             // Tab bar
             <div class="back-face-tabs" role="tablist">
-                {["sources", "build", "history"].iter().map(|&tab| {
+                {["sources", "workflow"].iter().map(|&tab| {
                     view! {
                         <button
                             class="back-face-tab"
@@ -27,9 +26,8 @@ pub fn CanvasBackFace() -> impl IntoView {
                             on:click=move |_| active_tab.set(tab)
                         >
                             {match tab {
-                                "sources" => "Sources",
-                                "build"   => "Build",
-                                _         => "History",
+                                "sources"  => "Sources",
+                                _          => "Workflow",
                             }}
                         </button>
                     }
@@ -41,10 +39,7 @@ pub fn CanvasBackFace() -> impl IntoView {
                 <Show when=move || active_tab.get() == "sources">
                     <SourcePanel />
                 </Show>
-                <Show when=move || active_tab.get() == "build">
-                    <PipelineBuilderTab />
-                </Show>
-                <Show when=move || active_tab.get() == "history">
+                <Show when=move || active_tab.get() == "workflow">
                     <CanvasWorkflowPipeline />
                 </Show>
             </div>

@@ -1,6 +1,10 @@
 use leptos::prelude::*;
-use papillon_shared::{EdgeState, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode, WorkflowNode};
+use papillon_shared::{
+    BlockState, CanvasBlock, EdgeState, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode,
+    WorkflowNode,
+};
 use papillon_shared::types::Template;
+use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::{
@@ -135,9 +139,79 @@ fn DesignModeCanvas() -> impl IntoView {
     };
 
     let run_workflow = move |_| {
-        // Flip to front face immediately so user sees blocks appear in real time
+        let nodes = workflow.design_nodes.get_untracked();
+        if nodes.is_empty() {
+            return;
+        }
+
+        // Resolve the canvas ID — create one if there is none.
+        let canvas_id = {
+            let existing = canvas_state.current_canvas_id.get_untracked();
+            match existing {
+                Some(id) => id,
+                None => canvas_state.new_canvas(),
+            }
+        };
+
+        // Pre-create skeleton Resolving blocks for each design node so they appear
+        // immediately on the front face (mirrors the pipeline_builder_tab pattern).
+        canvas_state.canvases.update(|cs| {
+            if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                for node in &nodes {
+                    let block_id = format!("wf-{}", node.id);
+                    if !canvas.blocks.iter().any(|b| b.id == block_id) {
+                        let now = js_sys::Date::new_0()
+                            .to_iso_string()
+                            .as_string()
+                            .unwrap_or_default();
+                        canvas.blocks.push(CanvasBlock {
+                            id: block_id,
+                            prompt_id: String::new(),
+                            prompt_text: Some(node.intent.clone()),
+                            state: BlockState::Resolving {
+                                phase: 1,
+                                phase_label: "Queued".into(),
+                            },
+                            schema_type: None,
+                            content: None,
+                            linked_block_ids: Vec::new(),
+                            agent_did: node.agent_did.clone(),
+                            mandate_expires_at: None,
+                            preference_guided: false,
+                            auto_expand: false,
+                            retention_warning: None,
+                            created_at: now.clone(),
+                            updated_at: now,
+                        });
+                    }
+                }
+                canvas.updated_at = js_sys::Date::new_0()
+                    .to_iso_string()
+                    .as_string()
+                    .unwrap_or_default();
+            }
+        });
+
+        // Flip to front face so user sees the resolving blocks immediately.
         canvas_state.canvas_side.set(CanvasSide::Front);
-        // TODO: trigger pipeline execution from design_nodes/design_edges
+
+        // Collect the first node's intent as the initial query for the pipeline run.
+        let initial_query = nodes.first().map(|n| n.intent.clone()).unwrap_or_default();
+        let canvas_id_clone = canvas_id.clone();
+
+        spawn_local(async move {
+            #[derive(serde::Serialize)]
+            #[serde(rename_all = "camelCase")]
+            struct RunArgs {
+                initial_query: String,
+                canvas_id: Option<String>,
+            }
+            let args = RunArgs {
+                initial_query,
+                canvas_id: Some(canvas_id_clone),
+            };
+            let _ = bridge::invoke::<_, serde_json::Value>("run_pipeline", &args).await;
+        });
     };
 
     let has_nodes = move || !workflow.design_nodes.get().is_empty();
