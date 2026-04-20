@@ -50,8 +50,12 @@ pub fn sign_plaintext(
 
 /// Verify a DIDComm v2 signed message and extract the plaintext.
 ///
-/// Validates the first signature using the provided Ed25519 verifying key,
-/// then deserializes the payload into a `DIDCommPlaintext`.
+/// Dispatches to the correct verifier based on the JWS protected header `alg`
+/// field. Unknown or unsupported algorithms are rejected with
+/// `ProtoError::UnsupportedAlgorithm` — they never silently pass.
+///
+/// Per the PAP specification (Section 14.11.3), verifiers MUST reject messages
+/// where the `alg` header value is not `"EdDSA"`.
 pub fn verify_signed(
     signed: &DIDCommSigned,
     verifying_key: &VerifyingKey,
@@ -61,39 +65,41 @@ pub fn verify_signed(
         .first()
         .ok_or_else(|| ProtoError::DIDCommError("no signatures present".into()))?;
 
-    // Verify the protected header declares a supported algorithm
+    // Decode and parse the protected header to determine the algorithm.
     let header_bytes = URL_SAFE_NO_PAD
         .decode(&sig_entry.protected_header)
         .map_err(|e| ProtoError::DIDCommError(format!("invalid header encoding: {e}")))?;
     let header: JwsProtectedHeader = serde_json::from_slice(&header_bytes)
         .map_err(|e| ProtoError::DIDCommError(format!("invalid header JSON: {e}")))?;
-    // TODO: dispatch verification on algorithm when multi-alg lands
-    let _algorithm = match header.alg.as_str() {
+
+    // Dispatch verification on algorithm. Unknown algorithms are rejected
+    // immediately — never silently passed through.
+    let algorithm = match header.alg.as_str() {
         "EdDSA" => SignatureAlgorithm::Ed25519,
-        other => {
-            return Err(ProtoError::DIDCommError(format!(
-                "unsupported JWS algorithm: {other}"
-            )))
-        }
+        other => return Err(ProtoError::UnsupportedAlgorithm(other.to_owned())),
     };
 
-    // Reconstruct signing input and verify
+    // Reconstruct signing input and verify with the dispatched algorithm.
     let signing_input = format!("{}.{}", sig_entry.protected_header, signed.payload);
     let sig_bytes = URL_SAFE_NO_PAD
         .decode(&sig_entry.signature)
         .map_err(|e| ProtoError::DIDCommError(format!("invalid signature encoding: {e}")))?;
-    let signature = ed25519_dalek::Signature::from_bytes(
-        sig_bytes
-            .as_slice()
-            .try_into()
-            .map_err(|_| ProtoError::DIDCommError("invalid signature length".into()))?,
-    );
 
-    verifying_key
-        .verify_strict(signing_input.as_bytes(), &signature)
-        .map_err(|_| ProtoError::VerificationFailed)?;
+    match algorithm {
+        SignatureAlgorithm::Ed25519 => {
+            let signature = ed25519_dalek::Signature::try_from(sig_bytes.as_slice())
+                .map_err(|e| ProtoError::DIDCommError(format!("invalid signature bytes: {e}")))?;
+            verifying_key
+                .verify_strict(signing_input.as_bytes(), &signature)
+                .map_err(|_| ProtoError::VerificationFailed)?;
+        }
+        // SignatureAlgorithm is #[non_exhaustive]; any future variant that
+        // reaches here was accepted by the header dispatch but has no verifier
+        // wired up yet -- reject rather than silently pass.
+        _ => return Err(ProtoError::UnsupportedAlgorithm(header.alg.clone())),
+    }
 
-    // Decode and return the plaintext
+    // Decode and return the plaintext.
     let payload_bytes = URL_SAFE_NO_PAD
         .decode(&signed.payload)
         .map_err(|e| ProtoError::DIDCommError(format!("invalid payload encoding: {e}")))?;
