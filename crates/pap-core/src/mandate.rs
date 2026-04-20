@@ -143,7 +143,16 @@ struct MandateWire {
 
 impl From<MandateWire> for Mandate {
     fn from(wire: MandateWire) -> Self {
-        let mut m = Mandate {
+        // The wire `decay_state` is preserved as-is.  Callers MUST NOT trust
+        // this value to reflect the current time-based state — a peer could
+        // send a stale or fabricated value.  Always call
+        // `compute_decay_state` / `sync_decay_state` to obtain the live state.
+        //
+        // We do *not* auto-advance here because `compute_decay_state` is a
+        // one-step-per-call function that uses `self.decay_state` as the
+        // transition baseline.  Auto-advancing on deserialization would consume
+        // one step, making a second call return the wrong state (§5.7.1).
+        Mandate {
             principal_did: wire.principal_did,
             agent_did: wire.agent_did,
             issuer_did: wire.issuer_did,
@@ -151,21 +160,12 @@ impl From<MandateWire> for Mandate {
             scope: wire.scope,
             disclosure_set: wire.disclosure_set,
             ttl: wire.ttl,
-            decay_state: wire.decay_state, // start with the stored value as the floor
+            decay_state: wire.decay_state,
             issued_at: wire.issued_at,
             payment_proof: wire.payment_proof,
             algorithm: wire.algorithm,
             signature: wire.signature,
-        };
-        // Recompute time-based decay from TTL. The stored value may be stale
-        // (serialized hours/days ago). We only advance — never rewind — to
-        // preserve intentional states like Suspended and to honour the
-        // one-step rule encoded in compute_decay_state (§5.7.1).
-        let refreshed = m.compute_decay_state(DEFAULT_DECAY_WINDOW_SECS);
-        if refreshed.severity_rank() > m.decay_state.severity_rank() {
-            m.decay_state = refreshed;
         }
-        m
     }
 }
 
@@ -1014,8 +1014,9 @@ mod tests {
     }
 
     /// A mandate whose TTL has expired but which was serialized with
-    /// `decay_state == Active` (stale value) must be advanced to at least
-    /// `Degraded` on deserialization — the one-step rule still applies.
+    /// `decay_state == Active` (stale value) must NOT be auto-advanced on
+    /// deserialization — callers call `compute_decay_state` to get the live
+    /// state.  The first call from `Active` must return `Degraded` (§5.7.1).
     #[test]
     fn deserialize_stale_active_with_expired_ttl_advances_to_degraded() {
         // Build with a future TTL so issue_root accepts it, then forge a stale
@@ -1030,21 +1031,23 @@ mod tests {
             "scope": { "actions": [{ "action": "schema:SearchAction", "constraints": null }] },
             "disclosure_set": { "entries": [] },
             "ttl": expired.to_rfc3339(),
-            "decay_state": "Active",   // stale — should be advanced
+            "decay_state": "Active",   // stale wire value — preserved as-is
             "issued_at": (expired - Duration::hours(1)).to_rfc3339(),
         })
         .to_string();
 
         let back: Mandate = serde_json::from_str(&json).unwrap();
-        assert_ne!(
-            back.decay_state,
-            DecayState::Active,
-            "deserialized mandate with expired TTL must not remain Active"
-        );
+        // Wire value is preserved; callers must call compute_decay_state.
         assert_eq!(
             back.decay_state,
+            DecayState::Active,
+            "wire decay_state is preserved; auto-advance would break compute_decay_state one-step rule"
+        );
+        // compute_decay_state from Active with expired TTL must return Degraded (§5.7.1).
+        assert_eq!(
+            back.compute_decay_state(300),
             DecayState::Degraded,
-            "first step from Active with expired TTL must be Degraded (§5.7.1)"
+            "first compute_decay_state call from Active with expired TTL must be Degraded"
         );
     }
 
