@@ -209,7 +209,10 @@ async fn main() -> anyhow::Result<()> {
             env_origins
         } else {
             let default = config.default_cors_origins();
-            info!("CORS: ALLOWED_ORIGINS empty, seeding from config: {}", default);
+            info!(
+                "CORS: ALLOWED_ORIGINS empty, seeding from config: {}",
+                default
+            );
             default
         }
     } else {
