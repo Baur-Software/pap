@@ -41,17 +41,20 @@ use crate::error::BluefieldError;
 
 // ── Active-backend observable ─────────────────────────────────────────────────
 
-/// Returns a static string identifying the crypto backend that was compiled in.
+/// Returns a static string identifying the crypto backend in use.
 ///
 /// | Return value           | Meaning                                             |
 /// |------------------------|-----------------------------------------------------|
 /// | `"software"`           | `doca-crypto` feature disabled; all ops use dalek   |
 /// | `"doca"`               | `doca-crypto` feature enabled, DOCA engine open     |
-/// | `"software-fallback"`  | `doca-crypto` feature enabled, DOCA unavailable     |
+/// | `"software-fallback"`  | `doca-crypto` feature enabled, DOCA engine not open |
 ///
-/// This is the compile-time observable required by the acceptance criteria.
-/// Log or assert on this value to verify which path is active in tests and
-/// diagnostics.
+/// When the `doca-crypto` feature is enabled, prefer
+/// [`DocaCrypto::crypto_backend`] which reads `hw_available` at runtime.
+/// This free function is always available and returns `"software"` when the
+/// feature is disabled (compile-time constant); under `doca-crypto` it
+/// returns `"software-fallback"` as a safe compile-time default — call
+/// [`DocaCrypto::crypto_backend`] on the live instance for the true value.
 #[cfg(not(feature = "doca-crypto"))]
 pub fn crypto_backend() -> &'static str {
     // NOTE: using software fallback — doca-crypto feature not enabled.
@@ -60,9 +63,9 @@ pub fn crypto_backend() -> &'static str {
 
 #[cfg(feature = "doca-crypto")]
 pub fn crypto_backend() -> &'static str {
-    // NOTE: using software fallback — doca-crypto feature is enabled but the
-    // DOCA SDK call sites are not yet wired (see TODO in DocaCrypto::new /
-    // sign / verify).  Returns "doca" once hw_available is set to true.
+    // Conservative compile-time default — cannot inspect hw_available here.
+    // Use DocaCrypto::crypto_backend() on a live instance for the real value.
+    // NOTE: using software fallback.
     "software-fallback"
 }
 
@@ -188,9 +191,26 @@ impl DocaCrypto {
     /// Returns `true` if the DOCA hardware engine was successfully opened.
     ///
     /// `false` means all operations are transparently handled by
-    /// [`SoftwareCrypto`].  See also [`crypto_backend()`].
+    /// [`SoftwareCrypto`].  See also [`DocaCrypto::crypto_backend`].
     pub fn is_hw_accelerated(&self) -> bool {
         self.hw_available
+    }
+
+    /// Runtime-aware backend identifier.  Unlike the free [`crypto_backend()`]
+    /// function (which is a compile-time constant), this method reads
+    /// `hw_available` and returns the correct value once the DOCA SDK is wired:
+    ///
+    /// | `hw_available` | Returns               |
+    /// |----------------|-----------------------|
+    /// | `false`        | `"software-fallback"` |
+    /// | `true`         | `"doca"`              |
+    pub fn crypto_backend(&self) -> &'static str {
+        if self.hw_available {
+            "doca"
+        } else {
+            // NOTE: using software fallback.
+            "software-fallback"
+        }
     }
 }
 
@@ -316,12 +336,26 @@ mod tests {
 
         #[test]
         fn not_hw_accelerated_until_sdk_wired() {
-            // hw_available must be false until doca_crypto_ctx_create() is
-            // implemented — this test enforces that the SDK stub is never
-            // silently reported as hardware-accelerated.
+            // hw_available must be false until doca_ec_create() / PKA context
+            // init is implemented (DOCA 2.x) — this test enforces that the SDK
+            // stub is never silently reported as hardware-accelerated.
             assert!(
                 !doca_crypto().is_hw_accelerated(),
                 "DocaCrypto must not report hw_available=true until the DOCA SDK is wired"
+            );
+        }
+
+        #[test]
+        fn crypto_backend_method_returns_software_fallback_until_sdk_wired() {
+            // The instance method must return "software-fallback" while
+            // hw_available=false, and "doca" once hw_available=true.
+            // This test covers the false branch; the true branch is exercised
+            // once doca_ec_create() is wired in DocaCrypto::new().
+            let crypto = doca_crypto();
+            assert_eq!(
+                crypto.crypto_backend(),
+                "software-fallback",
+                "DocaCrypto::crypto_backend() must return 'software-fallback' until DOCA is wired"
             );
         }
 
