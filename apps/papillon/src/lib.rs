@@ -239,6 +239,7 @@ pub fn run() {
             commands::templates::set_template_enabled,
             commands::templates::export_templates,
             commands::templates::import_templates,
+            commands::templates::get_templates_for_type,
             commands::templates::auto_generate_template,
             commands::agents::list_local_agents,
             commands::agents::save_agent,

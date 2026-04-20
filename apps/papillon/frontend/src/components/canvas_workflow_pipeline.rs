@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 use papillon_shared::{EdgeState, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode, WorkflowNode};
+use papillon_shared::types::Template;
 
+use crate::bridge;
 use crate::state::{
     canvas::{CanvasSide, CanvasState},
     workflow::WorkflowState,
@@ -218,7 +220,7 @@ fn DesignModeCanvas() -> impl IntoView {
     }
 }
 
-/// A node in Design mode — shows intent input, input/output ports, and template picker stub.
+/// A node in Design mode — shows intent input, input/output ports, and template picker.
 #[component]
 fn DesignNode(node: WorkflowNode) -> impl IntoView {
     let workflow = expect_context::<WorkflowState>();
@@ -253,6 +255,20 @@ fn DesignNode(node: WorkflowNode) -> impl IntoView {
 
     let input_ports = node.input_ports.clone();
     let output_ports = node.output_ports.clone();
+
+    // Extract schema type from the first output port path:
+    // "schema:FlightReservation.departureDate" -> "FlightReservation"
+    let returns_schema_type = node.output_ports.first().map(|p| {
+        p.path
+            .split(':')
+            .nth(1)
+            .and_then(|s| s.split('.').next())
+            .unwrap_or("")
+            .to_string()
+    }).filter(|s| !s.is_empty());
+
+    // Each design node tracks its own template override
+    let template_override = RwSignal::new(node.template_override.clone());
 
     view! {
         <div class="wf-node wf-node-pending">
@@ -314,13 +330,77 @@ fn DesignNode(node: WorkflowNode) -> impl IntoView {
                 />
             </div>
 
-            // RENDER AS — template picker stub (wired in Task 7)
-            <div class="wf-node-template-picker">
-                <span class="wf-node-template-label">"RENDER AS"</span>
-                <select class="wf-node-template-select">
-                    <option value="auto">"auto"</option>
-                </select>
-            </div>
+            // RENDER AS — live template picker filtered by node's output schema type
+            <NodeTemplatePicker
+                returns_schema_type=returns_schema_type
+                current_override=template_override
+            />
+        </div>
+    }
+}
+
+/// Template picker for a Design mode node.
+/// Loads templates from the backend filtered by the node's returns schema type.
+/// Only shows templates compatible with the agent's output type.
+#[component]
+fn NodeTemplatePicker(
+    /// The schema type of what this node returns (from agent advertisement.returns[0]).
+    /// None means the output type is not yet known; the picker shows only "auto".
+    returns_schema_type: Option<String>,
+    /// Currently selected template name override (None = auto)
+    current_override: RwSignal<Option<String>>,
+) -> impl IntoView {
+    let schema_type = returns_schema_type.clone();
+
+    // Load templates from the backend filtered by schema_type.
+    // LocalResource re-runs whenever schema_type changes (it is captured by value).
+    let templates = LocalResource::new(move || {
+        let stype = schema_type.clone();
+        async move {
+            match stype {
+                Some(st) if !st.is_empty() => {
+                    bridge::invoke::<serde_json::Value, Vec<Template>>(
+                        "get_templates_for_type",
+                        &serde_json::json!({ "schema_type": st }),
+                    )
+                    .await
+                    .unwrap_or_default()
+                }
+                _ => Vec::<Template>::new(),
+            }
+        }
+    });
+
+    view! {
+        <div class="wf-node-template-picker">
+            <span class="wf-node-template-label">"RENDER AS"</span>
+            <select
+                class="wf-node-template-select"
+                on:change=move |ev| {
+                    let val = event_target_value(&ev);
+                    if val == "auto" {
+                        current_override.set(None);
+                    } else {
+                        current_override.set(Some(val));
+                    }
+                }
+            >
+                <option value="auto">"auto"</option>
+                <Suspense>
+                    {move || templates.get().map(|ts| {
+                        ts.iter().map(|t| {
+                            let name = t.template_name.clone();
+                            let name_display = name.clone();
+                            let selected = current_override.get().as_deref() == Some(name.as_str());
+                            view! {
+                                <option value=name selected=selected>
+                                    {name_display}
+                                </option>
+                            }
+                        }).collect::<Vec<_>>()
+                    })}
+                </Suspense>
+            </select>
         </div>
     }
 }
