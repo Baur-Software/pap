@@ -88,7 +88,7 @@ impl AgentHandler for DynamicAgentHandler {
         let session_id = uuid::Uuid::new_v4().to_string();
         let did = self
             .sessions
-            .insert(session_id.clone(), DynamicSession { query: None });
+            .insert(session_id.clone(), DynamicSession { query: None })?;
         Ok((session_id, did))
     }
 

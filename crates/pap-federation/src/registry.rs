@@ -86,7 +86,12 @@ impl FederatedRegistry {
         }
     }
 
-    /// Add a federation peer directly (bypasses vouch requirements).
+    /// Add a federation peer directly, bypassing `PeerRegistrationPolicy`.
+    ///
+    /// **Only use for bootstrapping (first peer) or internal trusted contexts.**
+    /// This method skips all vouch verification, budget checks, and path-diversity
+    /// requirements. External peer admission must use `register_peer_with_vouches`
+    /// so the federation trust model is enforced.
     ///
     /// **Note**: This method is retained for backward compatibility and
     /// bootstrap/testing scenarios. For production peer admission, use

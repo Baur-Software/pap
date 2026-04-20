@@ -284,6 +284,11 @@ pub struct TransactionReceipt {
     /// Contains only the commitment reference — never amounts or destinations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payment_proof_commitment: Option<String>,
+    /// SHA-256 hash of the actual Phase 3 disclosure payload.
+    /// Included in canonical bytes so the co-signature proves the
+    /// disclosed_by_* property refs match the actual disclosure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disclosure_hash: Option<String>,
     /// Timestamp
     pub timestamp: DateTime<Utc>,
     /// Co-signatures from both session DIDs (base64-encoded)
@@ -323,6 +328,7 @@ impl TransactionReceipt {
             executed,
             returned,
             payment_proof_commitment: None,
+            disclosure_hash: None,
             timestamp: Utc::now(),
             signatures: vec![],
             attestations: vec![],
@@ -337,6 +343,47 @@ impl TransactionReceipt {
             .as_ref()
             .map(|p| p.commitment().to_string());
         self
+    }
+
+    /// Commit a SHA-256 hash of the actual Phase 3 disclosure values into
+    /// the receipt. Call this before co-signing so the signatures cover
+    /// the disclosure hash and bind the property refs to the real payload.
+    pub fn with_disclosure_hash(mut self, disclosures: &[serde_json::Value]) -> Self {
+        use sha2::{Digest, Sha256};
+        let canonical = serde_json::to_vec(disclosures).unwrap_or_default();
+        let hash = Sha256::digest(&canonical);
+        use base64::Engine;
+        self.disclosure_hash = Some(
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hash),
+        );
+        self
+    }
+
+    /// Verify the disclosure hash matches the provided Phase 3 disclosures.
+    /// Call this on receipt of a co-signed receipt to verify integrity.
+    /// Receipts without a committed hash (legacy) pass without error.
+    pub fn verify_disclosure_hash(
+        &self,
+        disclosures: &[serde_json::Value],
+    ) -> Result<(), PapError> {
+        match &self.disclosure_hash {
+            None => Ok(()), // No hash committed — legacy receipt, skip check
+            Some(expected) => {
+                use sha2::{Digest, Sha256};
+                let canonical = serde_json::to_vec(disclosures).unwrap_or_default();
+                let hash = Sha256::digest(&canonical);
+                use base64::Engine;
+                let computed =
+                    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hash);
+                if computed == *expected {
+                    Ok(())
+                } else {
+                    Err(PapError::ReceiptError(
+                        "disclosure hash mismatch: receipt property refs do not match Phase 3 disclosures".into(),
+                    ))
+                }
+            }
+        }
     }
 
     /// Validate that the receipt's payment proof commitment is consistent
@@ -382,6 +429,7 @@ impl TransactionReceipt {
             "executed": self.executed,
             "returned": self.returned,
             "payment_proof_commitment": self.payment_proof_commitment,
+            "disclosure_hash": self.disclosure_hash,
             "timestamp": self.timestamp.to_rfc3339(),
         });
         serde_json::to_vec(&canonical).expect("canonical serialization cannot fail")
@@ -1292,5 +1340,106 @@ mod tests {
         let profile2: ReputationProfile = serde_json::from_str(&json).unwrap();
         assert_eq!(profile.total_receipts(), profile2.total_receipts());
         assert_eq!(profile.segment_count(), profile2.segment_count());
+    }
+
+    // ─── Disclosure Hash Tests ──────────────────────────────────────
+
+    /// Two receipts built from the same session but with different Phase 3
+    /// disclosure sets must produce different disclosure hashes, and their
+    /// co-signatures must therefore differ.
+    #[test]
+    fn receipt_disclosure_hash_committed_in_canonical_bytes() {
+        let session = make_executed_session();
+        let signing_key = make_keypair();
+
+        let disclosures_a = vec![
+            serde_json::json!({"claim": "email", "value": "alice@example.com"}),
+        ];
+        let disclosures_b = vec![
+            serde_json::json!({"claim": "email", "value": "alice@example.com"}),
+            serde_json::json!({"claim": "dob", "value": "1990-01-01"}),
+        ];
+
+        let mut receipt_a = TransactionReceipt::from_session(
+            &session,
+            vec!["schema:Person.schema:email".into()],
+            vec![],
+            "executed".into(),
+            "returned".into(),
+        )
+        .unwrap()
+        .with_disclosure_hash(&disclosures_a);
+
+        let mut receipt_b = TransactionReceipt::from_session(
+            &session,
+            vec!["schema:Person.schema:email".into(), "schema:Person.schema:birthDate".into()],
+            vec![],
+            "executed".into(),
+            "returned".into(),
+        )
+        .unwrap()
+        .with_disclosure_hash(&disclosures_b);
+
+        // Hashes must differ
+        assert_ne!(receipt_a.disclosure_hash, receipt_b.disclosure_hash);
+
+        // Co-sign both with the same key — canonical bytes differ, so
+        // signatures differ.
+        receipt_a.co_sign(&signing_key);
+        receipt_b.co_sign(&signing_key);
+
+        assert_ne!(receipt_a.signatures[0], receipt_b.signatures[0]);
+    }
+
+    /// verify_disclosure_hash succeeds when the same disclosure set is
+    /// provided as was committed via with_disclosure_hash.
+    #[test]
+    fn receipt_disclosure_hash_verification_passes() {
+        let session = make_executed_session();
+        let disclosures = vec![
+            serde_json::json!({"claim": "email", "value": "bob@example.com"}),
+        ];
+
+        let receipt = TransactionReceipt::from_session(
+            &session,
+            vec!["schema:Person.schema:email".into()],
+            vec![],
+            "executed".into(),
+            "returned".into(),
+        )
+        .unwrap()
+        .with_disclosure_hash(&disclosures);
+
+        assert!(receipt.disclosure_hash.is_some());
+        assert!(receipt.verify_disclosure_hash(&disclosures).is_ok());
+    }
+
+    /// verify_disclosure_hash returns Err when a different disclosure set is
+    /// provided, catching the case where an agent under-reports disclosures.
+    #[test]
+    fn receipt_disclosure_hash_verification_fails_on_mismatch() {
+        let session = make_executed_session();
+        let real_disclosures = vec![
+            serde_json::json!({"claim": "email", "value": "carol@example.com"}),
+            serde_json::json!({"claim": "ssn", "value": "123-45-6789"}),
+        ];
+        let claimed_disclosures = vec![
+            serde_json::json!({"claim": "email", "value": "carol@example.com"}),
+        ];
+
+        // Receipt is built with the real (larger) disclosure set
+        let receipt = TransactionReceipt::from_session(
+            &session,
+            vec!["schema:Person.schema:email".into()],
+            vec![],
+            "executed".into(),
+            "returned".into(),
+        )
+        .unwrap()
+        .with_disclosure_hash(&real_disclosures);
+
+        // Verifying against the under-reported set must fail
+        let result = receipt.verify_disclosure_hash(&claimed_disclosures);
+        assert!(matches!(result, Err(PapError::ReceiptError(_))));
     }
 }

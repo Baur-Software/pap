@@ -23,6 +23,20 @@ pub enum DecayState {
 }
 
 impl DecayState {
+    /// Numeric rank used only for "never rewind" ordering during deserialization.
+    /// Active(0) < Degraded(1) < ReadOnly(2) < Suspended(3).
+    /// Not part of the public API — use `can_transition_to` for state-machine logic.
+    fn severity_rank(self) -> u8 {
+        match self {
+            DecayState::Active => 0,
+            DecayState::Degraded => 1,
+            DecayState::ReadOnly => 2,
+            DecayState::Suspended => 3,
+        }
+    }
+}
+
+impl DecayState {
     /// Valid transitions follow strict ordering.
     pub fn can_transition_to(&self, next: DecayState) -> bool {
         matches!(
@@ -52,9 +66,21 @@ impl std::fmt::Display for DecayState {
     }
 }
 
+/// Decay window used when recomputing `decay_state` on deserialization.
+/// 5 minutes: mandates with less than this remaining TTL are considered Degraded.
+const DEFAULT_DECAY_WINDOW_SECS: i64 = 300;
+
 /// A mandate is the core delegation primitive. It is signed by the issuing
 /// agent's key, verifiable back to the root principal key.
+///
+/// **Deserialization note**: `decay_state` is automatically recomputed from the
+/// TTL when a `Mandate` is deserialized. The serialized value is used only as
+/// a floor — it will never be rewound (a `Suspended` mandate stays `Suspended`)
+/// but it may be advanced to reflect elapsed time. Callers do not need to call
+/// any sync helper after deserialization; the `From<MandateWire>` conversion
+/// handles this transparently.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "MandateWire")]
 pub struct Mandate {
     /// DID of the human principal (root of trust)
     pub principal_did: String,
@@ -70,7 +96,8 @@ pub struct Mandate {
     pub disclosure_set: DisclosureSet,
     /// Expiry timestamp
     pub ttl: DateTime<Utc>,
-    /// Current decay state
+    /// Current decay state — automatically recomputed on deserialization based on TTL.
+    /// Do not rely on the serialized value; always read `decay_state` from a live instance.
     pub decay_state: DecayState,
     /// Issuance timestamp
     pub issued_at: DateTime<Utc>,
@@ -87,6 +114,59 @@ pub struct Mandate {
     /// Signature by the issuer (base64-encoded)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
+}
+
+/// Wire-format mirror of [`Mandate`] used exclusively by serde during deserialization.
+///
+/// This private struct accepts the raw JSON fields (including the potentially-stale
+/// `decay_state`) and is immediately converted to a `Mandate` via `From<MandateWire>`,
+/// which recomputes `decay_state` from the TTL before the caller ever sees the value.
+#[derive(Deserialize)]
+#[serde(rename = "Mandate")]
+struct MandateWire {
+    principal_did: String,
+    agent_did: String,
+    issuer_did: String,
+    parent_mandate_hash: Option<String>,
+    scope: Scope,
+    disclosure_set: DisclosureSet,
+    ttl: DateTime<Utc>,
+    decay_state: DecayState,
+    issued_at: DateTime<Utc>,
+    #[serde(default)]
+    payment_proof: Option<PaymentProof>,
+    #[serde(default)]
+    algorithm: SignatureAlgorithm,
+    #[serde(default)]
+    signature: Option<String>,
+}
+
+impl From<MandateWire> for Mandate {
+    fn from(wire: MandateWire) -> Self {
+        let mut m = Mandate {
+            principal_did: wire.principal_did,
+            agent_did: wire.agent_did,
+            issuer_did: wire.issuer_did,
+            parent_mandate_hash: wire.parent_mandate_hash,
+            scope: wire.scope,
+            disclosure_set: wire.disclosure_set,
+            ttl: wire.ttl,
+            decay_state: wire.decay_state, // start with the stored value as the floor
+            issued_at: wire.issued_at,
+            payment_proof: wire.payment_proof,
+            algorithm: wire.algorithm,
+            signature: wire.signature,
+        };
+        // Recompute time-based decay from TTL. The stored value may be stale
+        // (serialized hours/days ago). We only advance — never rewind — to
+        // preserve intentional states like Suspended and to honour the
+        // one-step rule encoded in compute_decay_state (§5.7.1).
+        let refreshed = m.compute_decay_state(DEFAULT_DECAY_WINDOW_SECS);
+        if refreshed.severity_rank() > m.decay_state.severity_rank() {
+            m.decay_state = refreshed;
+        }
+        m
+    }
 }
 
 impl Mandate {
@@ -907,5 +987,119 @@ mod tests {
 
         mandate.transition_decay(DecayState::Suspended).unwrap();
         assert_eq!(mandate.decay_state, DecayState::Suspended);
+    }
+
+    // ── Deserialization decay refresh (From<MandateWire>) ─────────────
+
+    /// A freshly-issued mandate (TTL well in the future) should deserialize
+    /// with `decay_state == Active` regardless of what was stored in the JSON.
+    #[test]
+    fn deserialize_active_mandate_with_future_ttl_stays_active() {
+        let mandate = Mandate::issue_root(
+            "did:key:zprincipal".into(),
+            "did:key:zagent".into(),
+            Scope::new(vec![ScopeAction::new("schema:SearchAction")]),
+            DisclosureSet::empty(),
+            Utc::now() + Duration::hours(2),
+        );
+        assert_eq!(mandate.decay_state, DecayState::Active);
+
+        let json = serde_json::to_string(&mandate).unwrap();
+        let back: Mandate = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            back.decay_state,
+            DecayState::Active,
+            "mandate with 2-hour TTL should still be Active after round-trip"
+        );
+    }
+
+    /// A mandate whose TTL has expired but which was serialized with
+    /// `decay_state == Active` (stale value) must be advanced to at least
+    /// `Degraded` on deserialization — the one-step rule still applies.
+    #[test]
+    fn deserialize_stale_active_with_expired_ttl_advances_to_degraded() {
+        // Build with a future TTL so issue_root accepts it, then forge a stale
+        // JSON blob with an already-expired TTL and decay_state = "Active".
+        let expired = Utc::now() - Duration::seconds(30);
+        // Construct JSON directly so we can inject the expired TTL.
+        let json = serde_json::json!({
+            "principal_did": "did:key:zprincipal",
+            "agent_did":     "did:key:zagent",
+            "issuer_did":    "did:key:zprincipal",
+            "parent_mandate_hash": null,
+            "scope": { "actions": [{ "action": "schema:SearchAction", "constraints": null }] },
+            "disclosure_set": { "entries": [] },
+            "ttl": expired.to_rfc3339(),
+            "decay_state": "Active",   // stale — should be advanced
+            "issued_at": (expired - Duration::hours(1)).to_rfc3339(),
+        })
+        .to_string();
+
+        let back: Mandate = serde_json::from_str(&json).unwrap();
+        assert_ne!(
+            back.decay_state,
+            DecayState::Active,
+            "deserialized mandate with expired TTL must not remain Active"
+        );
+        assert_eq!(
+            back.decay_state,
+            DecayState::Degraded,
+            "first step from Active with expired TTL must be Degraded (§5.7.1)"
+        );
+    }
+
+    /// A `Suspended` mandate must never be rewound to a lower state on
+    /// deserialization, even if the TTL is still in the future.
+    #[test]
+    fn deserialize_suspended_mandate_never_rewound() {
+        let future_ttl = Utc::now() + Duration::hours(1);
+        let json = serde_json::json!({
+            "principal_did": "did:key:zprincipal",
+            "agent_did":     "did:key:zagent",
+            "issuer_did":    "did:key:zprincipal",
+            "parent_mandate_hash": null,
+            "scope": { "actions": [{ "action": "schema:SearchAction", "constraints": null }] },
+            "disclosure_set": { "entries": [] },
+            "ttl": future_ttl.to_rfc3339(),
+            "decay_state": "Suspended",  // terminal — must be preserved
+            "issued_at": (Utc::now() - Duration::minutes(5)).to_rfc3339(),
+        })
+        .to_string();
+
+        let back: Mandate = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            back.decay_state,
+            DecayState::Suspended,
+            "Suspended is terminal — deserialization must not rewind it"
+        );
+    }
+
+    /// Round-trip a `ReadOnly` mandate (TTL expired) — the stored state is
+    /// already advanced, so deserializing must not change it.
+    #[test]
+    fn deserialize_readonly_mandate_preserved_when_already_advanced() {
+        let expired_ttl = Utc::now() - Duration::minutes(10);
+        let json = serde_json::json!({
+            "principal_did": "did:key:zprincipal",
+            "agent_did":     "did:key:zagent",
+            "issuer_did":    "did:key:zprincipal",
+            "parent_mandate_hash": null,
+            "scope": { "actions": [{ "action": "schema:SearchAction", "constraints": null }] },
+            "disclosure_set": { "entries": [] },
+            "ttl": expired_ttl.to_rfc3339(),
+            "decay_state": "ReadOnly",
+            "issued_at": (expired_ttl - Duration::hours(1)).to_rfc3339(),
+        })
+        .to_string();
+
+        let back: Mandate = serde_json::from_str(&json).unwrap();
+        // compute_decay_state on a ReadOnly mandate with expired TTL returns ReadOnly
+        // (time alone cannot force Suspended). The "never rewind" rule also
+        // prevents going backwards, so the result is ReadOnly.
+        assert_eq!(
+            back.decay_state,
+            DecayState::ReadOnly,
+            "ReadOnly with expired TTL must remain ReadOnly after deserialization"
+        );
     }
 }

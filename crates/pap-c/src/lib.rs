@@ -40,6 +40,12 @@ fn set_last_error(msg: &str) {
 
 /// Returns the most recent error message as a heap-allocated C string,
 /// or NULL if no error has occurred. Caller must free with `pap_string_free`.
+///
+/// ⚠️ THREAD-SAFETY WARNING: This function reads from thread-local storage.
+/// In async runtimes (tokio, async-std) where tasks migrate between threads,
+/// the error set by one operation may not be visible on the thread that calls
+/// this function. For async contexts, use `pap_last_error_out` pattern or
+/// ensure all PAP calls happen on a single dedicated thread.
 #[no_mangle]
 pub extern "C" fn pap_last_error_message() -> *mut c_char {
     LAST_ERROR.with(|c| match c.borrow_mut().take() {
@@ -54,9 +60,56 @@ pub extern "C" fn pap_last_error_message() -> *mut c_char {
 /// Alias for `pap_last_error_message`.
 /// Returns the most recent error message as a heap-allocated C string,
 /// or NULL if no error has occurred. Caller must free with `pap_string_free`.
+///
+/// ⚠️ THREAD-SAFETY WARNING: This function reads from thread-local storage.
+/// In async runtimes (tokio, async-std) where tasks migrate between threads,
+/// the error set by one operation may not be visible on the thread that calls
+/// this function. For async contexts, use `pap_last_error_out` pattern or
+/// ensure all PAP calls happen on a single dedicated thread.
 #[no_mangle]
 pub extern "C" fn pap_last_error() -> *mut c_char {
     pap_last_error_message()
+}
+
+/// Alias for `pap_last_error_message`, explicitly named to signal thread-local
+/// storage semantics. Only safe in synchronous (non-async, non-task-migrating)
+/// calling contexts where the caller is guaranteed to remain on the same OS
+/// thread as the PAP function that set the error.
+///
+/// ⚠️ THREAD-SAFETY WARNING: This function reads from thread-local storage.
+/// In async runtimes (tokio, async-std) where tasks migrate between threads,
+/// the error set by one operation may not be visible on the thread that calls
+/// this function. For async contexts, use `pap_last_error_out` pattern or
+/// ensure all PAP calls happen on a single dedicated thread.
+#[no_mangle]
+pub extern "C" fn pap_last_error_message_tl() -> *mut c_char {
+    pap_last_error_message()
+}
+
+/// Thread-safe alternative to `pap_last_error_message`.
+/// Writes the last error into `out_msg` if non-null.
+/// Returns 1 if an error was present, 0 if none.
+/// The written string must be freed with `pap_string_free`.
+///
+/// # Safety
+/// `out_msg` must be either null or a valid pointer to a `*mut c_char` that
+/// this function may write to.
+#[no_mangle]
+pub unsafe extern "C" fn pap_get_last_error(out_msg: *mut *mut c_char) -> c_int {
+    LAST_ERROR.with(|c| {
+        match c.borrow_mut().take() {
+            Some(s) => {
+                if !out_msg.is_null() {
+                    match CString::new(s) {
+                        Ok(cs) => unsafe { *out_msg = cs.into_raw() },
+                        Err(_) => unsafe { *out_msg = std::ptr::null_mut() },
+                    }
+                }
+                1
+            }
+            None => 0,
+        }
+    })
 }
 
 /// Free a string returned by any `pap_*` function.
@@ -2897,5 +2950,13 @@ mod tests {
             pap_advertisement_free(ad);
             pap_marketplace_client_free(client);
         }
+    }
+
+    #[test]
+    fn get_last_error_returns_zero_when_no_error() {
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let result = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(result, 0);
+        assert!(out.is_null());
     }
 }

@@ -29,6 +29,16 @@ pub struct AddPeerRequest {
     pub did: String,
     pub endpoint: String,
     pub cert_fingerprint: Option<String>,
+    /// Bootstrap flag: when `true` and the registry has no peers yet, the peer
+    /// is admitted directly via `add_peer` (bypassing `PeerRegistrationPolicy`).
+    /// This is the only safe context for policy bypass — the first peer in an
+    /// empty registry cannot satisfy vouch requirements because there are no
+    /// existing peers to vouch for it.
+    ///
+    /// Once at least one peer exists, setting `bypass_policy: true` is rejected
+    /// with 422 so callers must use vouch-based admission for all subsequent peers.
+    #[serde(default)]
+    pub bypass_policy: bool,
 }
 
 /// Query params for GET /api/agents.
@@ -323,6 +333,46 @@ async fn add_peer(
         Some(fp) => RegistryPeer::with_fingerprint(&req.did, &req.endpoint, &fp),
         None => RegistryPeer::new(&req.did, &req.endpoint),
     };
+
+    // Determine the admission path before touching the DB.
+    //
+    // Bootstrap path: `bypass_policy: true` is only honoured when the peer list
+    // is empty.  The first peer in a fresh registry cannot satisfy vouch
+    // requirements (no existing peers exist to vouch for it), so direct
+    // admission is safe here.  For any subsequent peer the caller must supply
+    // vouches via `register_peer_with_vouches`; attempting to bypass policy on
+    // a non-empty registry is rejected immediately so admin token holders
+    // cannot silently subvert the federation trust model.
+    {
+        let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
+        if req.bypass_policy && !registry.peers().is_empty() {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({
+                    "error": "bypass_policy is only permitted when the registry has no peers \
+                              (bootstrap). Submit vouches via register_peer_with_vouches for \
+                              non-empty registries."
+                })),
+            )
+                .into_response();
+        }
+        if !req.bypass_policy && !registry.peers().is_empty() {
+            // Non-bootstrap request on a non-empty registry: policy enforcement
+            // requires vouches.  The current endpoint does not accept vouches so
+            // we surface an actionable error rather than silently bypassing policy.
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({
+                    "error": "this registry already has peers; peer admission requires vouches. \
+                              Use the register_peer_with_vouches endpoint and provide the \
+                              required vouch signatures, or set bypass_policy: true only when \
+                              bootstrapping an empty registry."
+                })),
+            )
+                .into_response();
+        }
+    }
+
     // DB first — persist before updating in-memory state.
     if let Err(e) = state.store.upsert_peer(&peer).await {
         return (
@@ -333,6 +383,8 @@ async fn add_peer(
     }
     {
         let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
+        // Bootstrap admission: registry was empty at the check above; use add_peer
+        // directly since there are no existing peers to vouch for this one.
         registry.add_peer(peer);
     }
     (StatusCode::CREATED, Json(serde_json::json!({"ok": true}))).into_response()
@@ -827,6 +879,135 @@ mod tests {
         let peers = json.as_array().unwrap();
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0]["did"], "did:key:zPeerX");
+    }
+
+    // ── Policy enforcement: non-empty registry without bypass ────────────────
+
+    /// Adding a peer to a registry that already has peers, without setting
+    /// `bypass_policy: true`, must be rejected with 422.  This is the core
+    /// trust-model guard: admin token holders cannot silently bypass vouch
+    /// requirements once the registry has bootstrapped.
+    #[tokio::test]
+    async fn add_peer_on_non_empty_registry_without_bypass_rejects() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+            max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+        };
+        let app = router().with_state(state);
+
+        // First peer: bootstrap into an empty registry — must succeed.
+        let first = serde_json::json!({
+            "did": "did:key:zBootstrap",
+            "endpoint": "https://bootstrap.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&first).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::CREATED,
+            "bootstrapping an empty registry must succeed"
+        );
+
+        // Second peer: no bypass_policy flag, registry is now non-empty — must be rejected.
+        let second = serde_json::json!({
+            "did": "did:key:zSecond",
+            "endpoint": "https://second.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&second).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "adding a peer to a non-empty registry without vouches must be rejected with 422"
+        );
+        let json = body_json(resp.into_body()).await;
+        assert!(
+            json["error"]
+                .as_str()
+                .unwrap_or("")
+                .contains("requires vouches"),
+            "error message must mention vouch requirement"
+        );
+    }
+
+    /// Attempting to use bypass_policy on an already-populated registry must
+    /// also be rejected — the bootstrap flag is not an unconditional escape hatch.
+    #[tokio::test]
+    async fn add_peer_bypass_policy_on_non_empty_registry_rejects() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+            max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+        };
+        let app = router().with_state(state);
+
+        // Seed one peer via bootstrap.
+        let first = serde_json::json!({
+            "did": "did:key:zBootstrap",
+            "endpoint": "https://bootstrap.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&first).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Attempt bypass_policy: true on the now-non-empty registry — must be rejected.
+        let second = serde_json::json!({
+            "did": "did:key:zEvil",
+            "endpoint": "https://evil.example.com",
+            "bypass_policy": true
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&second).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "bypass_policy on a non-empty registry must be rejected with 422"
+        );
+        let json = body_json(resp.into_body()).await;
+        assert!(
+            json["error"]
+                .as_str()
+                .unwrap_or("")
+                .contains("bypass_policy is only permitted"),
+            "error message must explain that bypass_policy is only for bootstrapping"
+        );
     }
 
     // ── DELETE /api/peers/{did} ───────────────────────────────────────────────
