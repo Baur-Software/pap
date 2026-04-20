@@ -275,7 +275,10 @@ mod tests {
 
         let config = Config::from_env();
         let origins = config.default_cors_origins();
-        assert!(origins.contains("http://localhost:7890"), "missing localhost");
+        assert!(
+            origins.contains("http://localhost:7890"),
+            "missing localhost"
+        );
         assert!(
             origins.contains("http://192.168.1.10:7890"),
             "missing explicit host"

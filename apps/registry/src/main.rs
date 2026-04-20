@@ -7,8 +7,8 @@ use anyhow::Context as _;
 use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
-use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use pap_registry::state::SETTING_CORS_ORIGINS;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use tower_http::services::ServeDir;
 use tracing::info;
@@ -258,9 +258,8 @@ async fn main() -> anyhow::Result<()> {
         let origins_ref = cors_allowed_origins.clone();
         let allow_origin = AllowOrigin::predicate(move |origin, _req| {
             let list = origins_ref.read().unwrap_or_else(|e| e.into_inner());
-            list.iter().any(|allowed| {
-                origin.as_bytes() == allowed.as_bytes()
-            })
+            list.iter()
+                .any(|allowed| origin.as_bytes() == allowed.as_bytes())
         });
         CorsLayer::new()
             .allow_origin(allow_origin)
