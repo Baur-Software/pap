@@ -300,34 +300,34 @@ pub struct PipelineStepResult {
     pub error: Option<String>,
 }
 
-/// A port on an agent node — either an input (requires_disclosure) or output (returns property)
+/// A port on an agent node — either an input (requires_disclosure) or output (returns property).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PortRef {
-    /// Fully-qualified schema property path, e.g. "schema:FlightReservation.departureDate"
+    /// Fully-qualified schema property path, e.g. "schema:FlightReservation.departureDate".
     pub path: String,
-    /// Human-readable label derived from last path segment, e.g. "Departure Date"
+    /// Human-readable label derived from last path segment, e.g. "Departure Date".
     pub label: String,
-    /// True = required by agent; false = optional
+    /// True = required by agent; false = optional.
     #[serde(default)]
     pub required: bool,
 }
 
-/// Visual / semantic state of a directed edge between two agent nodes
+/// Visual / semantic state of a directed edge between two agent nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EdgeState {
-    /// Both schema types are compatible AND memex has a pre-approval record — runs silently
+    /// Both schema types are compatible AND memex has a pre-approval record — runs silently.
     Confirmed,
-    /// Schema types are compatible but no memex record — will pause for approval at run time
+    /// Schema types are compatible but no memex record — will pause for approval at run time.
     Proposed,
-    /// Disclosure would exceed mandate scope — cannot connect
+    /// Disclosure would exceed mandate scope — cannot connect.
     Blocked,
-    /// No wire drawn — node runs standalone
+    /// No wire drawn — node runs standalone.
     #[default]
     Unconnected,
 }
 
-/// A directed wire from an output port on one node to an input port on another
+/// A directed wire from an output port on one node to an input port on another.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowEdge {
     pub id: String,
@@ -336,35 +336,43 @@ pub struct WorkflowEdge {
     pub to_node_id: String,
     pub to_port: PortRef,
     pub state: EdgeState,
-    /// Set when state == Confirmed and auto-approved from memex
+    /// Set when state == Confirmed and auto-approved from memex.
     #[serde(default)]
     pub memex_remembered: bool,
 }
 
-/// A single step in a designed workflow — agent node or synthesizer
+/// A single step in a designed workflow — agent node or synthesizer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowNode {
     pub id: String,
+    /// Node type: "agent" (default) or "synthesizer".
+    #[serde(default)]
     pub node_type: PipelineNodeType,
     /// Free-text intent: "what should this step do?"
     pub intent: String,
-    /// Resolved after marketplace query_satisfiable call; None until resolved
+    /// Resolved after marketplace query_satisfiable call; None until resolved.
+    #[serde(default)]
     pub agent_name: Option<String>,
+    /// Agent DID resolved from the marketplace; None until resolved.
+    #[serde(default)]
     pub agent_did: Option<String>,
+    /// PAP URI for direct agent addressing; None until resolved.
+    #[serde(default)]
     pub pap_uri: Option<String>,
-    /// Ports derived from agent advertisement.requires_disclosure
+    /// Ports derived from agent advertisement.requires_disclosure.
     pub input_ports: Vec<PortRef>,
-    /// Ports derived from agent advertisement.returns
+    /// Ports derived from agent advertisement.returns.
     pub output_ports: Vec<PortRef>,
     /// Optional template override — saved in pipeline definition.
     /// None = RendererRegistry default.
+    #[serde(default)]
     pub template_override: Option<String>,
-    /// Canvas position for Design mode layout
+    /// Canvas position for Design mode layout.
     pub position_x: f64,
     pub position_y: f64,
 }
 
-/// Which sub-mode the workflow tab is in
+/// Which sub-mode the workflow tab is in.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowMode {
@@ -373,12 +381,12 @@ pub enum WorkflowMode {
     Design,
 }
 
-/// Live workflow graph — derived from Map mode (block events) or authored in Design mode
+/// Live workflow graph — derived from Map mode (block events) or authored in Design mode.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WorkflowGraph {
     pub nodes: Vec<WorkflowNode>,
     pub edges: Vec<WorkflowEdge>,
-    /// True when this graph was authored in Design mode (vs auto-derived from block events)
+    /// True when this graph was authored in Design mode (vs auto-derived from block events).
     pub is_designed: bool,
 }
 
@@ -2101,6 +2109,68 @@ mod tests {
         assert_eq!(back.id, "n1");
         assert_eq!(back.input_ports[0].path, "schema:FlightReservation.departureDate");
         assert_eq!(back.output_ports[0].label, "Destination City");
+    }
+
+    #[test]
+    fn workflow_edge_roundtrip() {
+        let edge = WorkflowEdge {
+            id: "e1".into(),
+            from_node_id: "n1".into(),
+            from_port: PortRef { path: "schema:FlightReservation.departureDate".into(), label: "Departure Date".into(), required: true },
+            to_node_id: "n2".into(),
+            to_port: PortRef { path: "schema:LodgingReservation.checkInDate".into(), label: "Check-in Date".into(), required: true },
+            state: EdgeState::Confirmed,
+            memex_remembered: true,
+        };
+        let json = serde_json::to_string(&edge).unwrap();
+        let back: WorkflowEdge = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, "e1");
+        assert!(back.memex_remembered);
+        assert_eq!(back.state, EdgeState::Confirmed);
+    }
+
+    #[test]
+    fn workflow_graph_roundtrip() {
+        let graph = WorkflowGraph {
+            nodes: vec![],
+            edges: vec![],
+            is_designed: true,
+        };
+        let json = serde_json::to_string(&graph).unwrap();
+        let back: WorkflowGraph = serde_json::from_str(&json).unwrap();
+        assert!(back.is_designed);
+    }
+
+    #[test]
+    fn workflow_mode_roundtrip() {
+        assert_eq!(serde_json::to_string(&WorkflowMode::Map).unwrap(), "\"map\"");
+        assert_eq!(serde_json::to_string(&WorkflowMode::Design).unwrap(), "\"design\"");
+        let back: WorkflowMode = serde_json::from_str("\"map\"").unwrap();
+        assert_eq!(back, WorkflowMode::Map);
+    }
+
+    #[test]
+    fn edge_state_all_variants() {
+        for (variant, expected) in [
+            (EdgeState::Confirmed, "\"confirmed\""),
+            (EdgeState::Proposed, "\"proposed\""),
+            (EdgeState::Blocked, "\"blocked\""),
+            (EdgeState::Unconnected, "\"unconnected\""),
+        ] {
+            assert_eq!(serde_json::to_string(&variant).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn workflow_node_backward_compat_missing_optionals() {
+        // Simulate JSON from before agent_name/agent_did/pap_uri/template_override were present
+        let json = r#"{"id":"n1","node_type":"agent","intent":"search","input_ports":[],"output_ports":[],"position_x":0.0,"position_y":0.0}"#;
+        let node: WorkflowNode = serde_json::from_str(json).unwrap();
+        assert_eq!(node.id, "n1");
+        assert!(node.agent_name.is_none());
+        assert!(node.agent_did.is_none());
+        assert!(node.pap_uri.is_none());
+        assert!(node.template_override.is_none());
     }
 }
 
