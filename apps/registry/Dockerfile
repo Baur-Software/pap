@@ -68,7 +68,8 @@ RUN sed -i \
 RUN sed -i -e '/^pap-test-utils[[:space:]]*=/d' \
     crates/pap-core/Cargo.toml \
     crates/pap-credential/Cargo.toml \
-    crates/pap-federation/Cargo.toml
+    crates/pap-federation/Cargo.toml \
+    crates/pap-transport/Cargo.toml
 
 # Build server binary (ssr feature) + WASM bundle (hydrate feature) in one step
 RUN cargo leptos build --release -p pap-registry
