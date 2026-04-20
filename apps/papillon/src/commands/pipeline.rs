@@ -309,6 +309,7 @@ pub async fn run_pipeline(
                         created_at: now.clone(),
                         updated_at: now,
                         preference_guided: false,
+                        retention_warning: None,
                     },
                 },
             );
@@ -366,6 +367,7 @@ pub async fn run_pipeline(
                                 created_at: now.clone(),
                                 updated_at: now,
                                 preference_guided: false,
+                                retention_warning: None,
                             },
                         },
                     );
@@ -401,6 +403,7 @@ pub async fn run_pipeline(
                                 created_at: now.clone(),
                                 updated_at: now,
                                 preference_guided: false,
+                                retention_warning: None,
                             },
                         },
                     );

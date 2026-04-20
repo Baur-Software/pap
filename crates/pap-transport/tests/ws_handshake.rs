@@ -147,6 +147,7 @@ async fn full_handshake_over_websocket() {
         executed: "schema:SearchAction executed".into(),
         returned: "schema:SearchResult returned".into(),
         payment_proof_commitment: None,
+        disclosure_hash: None,
         timestamp: Utc::now(),
         signatures: vec!["initiator-sig".into()],
         attestations: vec![],

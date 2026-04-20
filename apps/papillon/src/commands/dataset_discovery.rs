@@ -377,6 +377,7 @@ async fn run_dataset_handshake(
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );
@@ -583,6 +584,7 @@ pub async fn canvas_discover_datasets(
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );
@@ -612,6 +614,7 @@ pub async fn canvas_discover_datasets(
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );
@@ -646,6 +649,7 @@ pub async fn canvas_discover_datasets(
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );
@@ -731,6 +735,7 @@ pub async fn canvas_discover_datasets(
                             preference_guided: false,
                             created_at: now.clone(),
                             updated_at: now,
+                            retention_warning: None,
                         },
                     },
                 );
@@ -783,6 +788,7 @@ pub async fn canvas_discover_datasets(
                 preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
+                retention_warning: None,
             },
         },
     );

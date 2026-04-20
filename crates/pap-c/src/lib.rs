@@ -40,6 +40,12 @@ fn set_last_error(msg: &str) {
 
 /// Returns the most recent error message as a heap-allocated C string,
 /// or NULL if no error has occurred. Caller must free with `pap_string_free`.
+///
+/// ⚠️ THREAD-SAFETY WARNING: This function reads from thread-local storage.
+/// In async runtimes (tokio, async-std) where tasks migrate between threads,
+/// the error set by one operation may not be visible on the thread that calls
+/// this function. For async contexts, use `pap_last_error_out` pattern or
+/// ensure all PAP calls happen on a single dedicated thread.
 #[no_mangle]
 pub extern "C" fn pap_last_error_message() -> *mut c_char {
     LAST_ERROR.with(|c| match c.borrow_mut().take() {
@@ -54,9 +60,54 @@ pub extern "C" fn pap_last_error_message() -> *mut c_char {
 /// Alias for `pap_last_error_message`.
 /// Returns the most recent error message as a heap-allocated C string,
 /// or NULL if no error has occurred. Caller must free with `pap_string_free`.
+///
+/// ⚠️ THREAD-SAFETY WARNING: This function reads from thread-local storage.
+/// In async runtimes (tokio, async-std) where tasks migrate between threads,
+/// the error set by one operation may not be visible on the thread that calls
+/// this function. For async contexts, use `pap_last_error_out` pattern or
+/// ensure all PAP calls happen on a single dedicated thread.
 #[no_mangle]
 pub extern "C" fn pap_last_error() -> *mut c_char {
     pap_last_error_message()
+}
+
+/// Alias for `pap_last_error_message`, explicitly named to signal thread-local
+/// storage semantics. Only safe in synchronous (non-async, non-task-migrating)
+/// calling contexts where the caller is guaranteed to remain on the same OS
+/// thread as the PAP function that set the error.
+///
+/// ⚠️ THREAD-SAFETY WARNING: This function reads from thread-local storage.
+/// In async runtimes (tokio, async-std) where tasks migrate between threads,
+/// the error set by one operation may not be visible on the thread that calls
+/// this function. For async contexts, use `pap_last_error_out` pattern or
+/// ensure all PAP calls happen on a single dedicated thread.
+#[no_mangle]
+pub extern "C" fn pap_last_error_message_tl() -> *mut c_char {
+    pap_last_error_message()
+}
+
+/// Thread-safe alternative to `pap_last_error_message`.
+/// Writes the last error into `out_msg` if non-null.
+/// Returns 1 if an error was present, 0 if none.
+/// The written string must be freed with `pap_string_free`.
+///
+/// # Safety
+/// `out_msg` must be either null or a valid pointer to a `*mut c_char` that
+/// this function may write to.
+#[no_mangle]
+pub unsafe extern "C" fn pap_get_last_error(out_msg: *mut *mut c_char) -> c_int {
+    LAST_ERROR.with(|c| match c.borrow_mut().take() {
+        Some(s) => {
+            if !out_msg.is_null() {
+                match CString::new(s) {
+                    Ok(cs) => unsafe { *out_msg = cs.into_raw() },
+                    Err(_) => unsafe { *out_msg = std::ptr::null_mut() },
+                }
+            }
+            1
+        }
+        None => 0,
+    })
 }
 
 /// Free a string returned by any `pap_*` function.
@@ -2897,5 +2948,215 @@ mod tests {
             pap_advertisement_free(ad);
             pap_marketplace_client_free(client);
         }
+    }
+
+    #[test]
+    fn get_last_error_returns_zero_when_no_error() {
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let result = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(result, 0);
+        assert!(out.is_null());
+    }
+
+    // -------------------------------------------------------------------------
+    // pap_get_last_error / pap_last_error_message tests
+    // -------------------------------------------------------------------------
+
+    /// Trigger an error via pap_mandate_from_json (invalid JSON), then verify
+    /// pap_get_last_error returns 1 and writes the error message.
+    #[test]
+    fn get_last_error_returns_one_when_error_set() {
+        let bad_json = c("not valid json at all");
+        // pap_mandate_from_json sets an error and returns null on bad input.
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null(), "expected null from invalid JSON");
+
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let result = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(result, 1, "expected 1 (error present)");
+        assert!(
+            !out.is_null(),
+            "out should be non-null when error is present"
+        );
+
+        let msg = unsafe { std::ffi::CStr::from_ptr(out) }
+            .to_str()
+            .expect("error message should be valid UTF-8");
+        assert!(!msg.is_empty(), "error message should not be empty");
+
+        unsafe { pap_string_free(out) };
+    }
+
+    /// After reading the error with pap_get_last_error, a second call should
+    /// return 0 (the error is consumed on read — no double-read).
+    #[test]
+    fn get_last_error_consumes_error_on_read() {
+        // Trigger an error
+        let bad_json = c("{invalid}");
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null());
+
+        // First read — error should be present
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let first = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(first, 1);
+        assert!(!out.is_null());
+        unsafe { pap_string_free(out) };
+
+        // Second read — error should be consumed, nothing to report
+        let mut out2: *mut c_char = std::ptr::null_mut();
+        let second = unsafe { pap_get_last_error(&mut out2 as *mut _) };
+        assert_eq!(second, 0, "error should be consumed after first read");
+        assert!(out2.is_null());
+    }
+
+    /// Passing a null out-param to pap_get_last_error should still return 1
+    /// (error exists) but must not crash or write through a null pointer.
+    #[test]
+    fn get_last_error_with_null_out_param() {
+        // Trigger an error
+        let bad_json = c("totally not json");
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null());
+
+        // Pass null as out_msg — must not crash
+        let result = unsafe { pap_get_last_error(std::ptr::null_mut()) };
+        assert_eq!(result, 1, "should return 1 even when out_msg is null");
+
+        // Error is consumed even with a null out param — subsequent call returns 0
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let second = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(second, 0);
+        assert!(out.is_null());
+    }
+
+    /// pap_last_error_message() should return the error string and consume it;
+    /// a second call should return null.
+    #[test]
+    fn pap_last_error_message_consumes_error_on_read() {
+        // Trigger an error
+        let bad_json = c("{}broken");
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null());
+
+        // First call — non-null
+        let msg1 = pap_last_error_message();
+        assert!(
+            !msg1.is_null(),
+            "pap_last_error_message should return non-null when error exists"
+        );
+        unsafe { pap_string_free(msg1) };
+
+        // Second call — null (consumed)
+        let msg2 = pap_last_error_message();
+        assert!(
+            msg2.is_null(),
+            "pap_last_error_message should return null after error is consumed"
+        );
+    }
+
+    /// pap_string_free(NULL) must be a no-op and must not panic.
+    #[test]
+    fn pap_string_free_null_is_safe() {
+        // This must not crash.
+        unsafe { pap_string_free(std::ptr::null_mut()) };
+    }
+
+    /// pap_mandate_from_json with invalid JSON must return null and set an error.
+    #[test]
+    fn mandate_from_json_invalid_returns_null_and_sets_error() {
+        // First consume any stale error from a prior test on this thread.
+        let _ = pap_last_error_message();
+
+        let bad = c("this is not a mandate");
+        let m = pap_mandate_from_json(bad.as_ptr());
+        assert!(
+            m.is_null(),
+            "pap_mandate_from_json should return null for invalid JSON"
+        );
+
+        // The error should have been set
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let rc = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(
+            rc, 1,
+            "an error should be set after a failed pap_mandate_from_json"
+        );
+        assert!(!out.is_null());
+        unsafe { pap_string_free(out) };
+    }
+
+    /// pap_keypair_generate() must return a non-null handle; pap_keypair_free()
+    /// must not panic on a valid handle. Null-free must also be a no-op.
+    #[test]
+    fn keypair_generate_and_free_roundtrip() {
+        let kp = pap_keypair_generate();
+        assert!(
+            !kp.is_null(),
+            "pap_keypair_generate should return a valid handle"
+        );
+        // Free the handle — must not crash
+        unsafe { pap_keypair_free(kp) };
+        // Freeing null is also a no-op
+        unsafe { pap_keypair_free(std::ptr::null_mut()) };
+    }
+
+    /// pap_session_keypair_generate() must return a non-null handle;
+    /// pap_session_keypair_free() must not panic on a valid or null handle.
+    #[test]
+    fn session_keypair_generate_and_free_roundtrip() {
+        let kp = pap_session_keypair_generate();
+        assert!(
+            !kp.is_null(),
+            "pap_session_keypair_generate should return a valid handle"
+        );
+        // Free the handle — must not crash
+        unsafe { pap_session_keypair_free(kp) };
+        // Freeing null is also a no-op
+        unsafe { pap_session_keypair_free(std::ptr::null_mut()) };
+    }
+
+    /// pap_last_error_message_tl() and pap_last_error_message() are both aliases
+    /// that consume the error. Verify both behave identically: return non-null
+    /// after an error is set, then return null on the next call.
+    #[test]
+    fn pap_last_error_message_tl_equivalent_to_pap_last_error_message() {
+        // --- Round 1: use pap_last_error_message_tl ---
+        let bad1 = c("bad json for tl test");
+        let m1 = pap_mandate_from_json(bad1.as_ptr());
+        assert!(m1.is_null());
+
+        let tl_msg = pap_last_error_message_tl();
+        assert!(
+            !tl_msg.is_null(),
+            "pap_last_error_message_tl should return non-null when error exists"
+        );
+        unsafe { pap_string_free(tl_msg) };
+
+        // Error should now be consumed
+        let tl_msg2 = pap_last_error_message_tl();
+        assert!(
+            tl_msg2.is_null(),
+            "pap_last_error_message_tl should return null after consumption"
+        );
+
+        // --- Round 2: use pap_last_error_message ---
+        let bad2 = c("also bad json for message test");
+        let m2 = pap_mandate_from_json(bad2.as_ptr());
+        assert!(m2.is_null());
+
+        let msg = pap_last_error_message();
+        assert!(
+            !msg.is_null(),
+            "pap_last_error_message should return non-null when error exists"
+        );
+        unsafe { pap_string_free(msg) };
+
+        // Error should now be consumed
+        let msg2 = pap_last_error_message();
+        assert!(
+            msg2.is_null(),
+            "pap_last_error_message should return null after consumption"
+        );
     }
 }

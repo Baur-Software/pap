@@ -81,16 +81,17 @@ pub async fn canvas_plan_prompt(
 
     if auto_approve {
         // Run directly without emitting AwaitingApproval.
-        let (schema_type, content, preference_guided, agent_did) = process_prompt(
-            &app,
-            &state,
-            &prompt_id,
-            &block_id,
-            &action_type,
-            &preferred,
-            &query,
-        )
-        .await?;
+        let (schema_type, content, preference_guided, agent_did, retention_warning) =
+            process_prompt(
+                &app,
+                &state,
+                &prompt_id,
+                &block_id,
+                &action_type,
+                &preferred,
+                &query,
+            )
+            .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -110,6 +111,7 @@ pub async fn canvas_plan_prompt(
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning,
                 },
             },
         );
@@ -133,6 +135,7 @@ pub async fn canvas_plan_prompt(
                 preference_guided: false,
                 created_at: now.clone(),
                 updated_at: now,
+                retention_warning: None,
             },
         },
     );
@@ -158,16 +161,17 @@ pub async fn canvas_plan_prompt(
         );
 
         // Run the full handshake.
-        let (schema_type, content, preference_guided, agent_did) = process_prompt(
-            &app,
-            &state,
-            &prompt_id,
-            &block_id,
-            &action_type,
-            &preferred,
-            &query,
-        )
-        .await?;
+        let (schema_type, content, preference_guided, agent_did, retention_warning) =
+            process_prompt(
+                &app,
+                &state,
+                &prompt_id,
+                &block_id,
+                &action_type,
+                &preferred,
+                &query,
+            )
+            .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -187,6 +191,7 @@ pub async fn canvas_plan_prompt(
                     preference_guided,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning,
                 },
             },
         );
@@ -212,6 +217,7 @@ pub async fn canvas_plan_prompt(
                     preference_guided: false,
                     created_at: now.clone(),
                     updated_at: now,
+                    retention_warning: None,
                 },
             },
         );

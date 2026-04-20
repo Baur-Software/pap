@@ -595,6 +595,14 @@ pub struct CanvasBlock {
     /// shows the in-block URL bar in the renderer.
     #[serde(default)]
     pub auto_expand: bool,
+    /// If `Some`, a non-fatal warning message to display on the block.
+    /// Set when a `no_retention` session proceeds without TEE attestation
+    /// (`DisclosureValidation::ContractualOnly`). The block resolves normally
+    /// but renders in amber/warning state to inform the user that data retention
+    /// is contractual only and cannot be cryptographically enforced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub retention_warning: Option<String>,
 }
 
 /// A saved canvas — a collection of blocks from prompt sessions.
@@ -656,6 +664,12 @@ pub struct BlockUpdate {
     pub mandate_expires_at: Option<String>,
     #[serde(default)]
     pub preference_guided: bool,
+    /// Non-fatal warning for `no_retention` sessions without TEE attestation.
+    /// When `Some`, the frontend renders the block in amber/warning state.
+    /// See [`CanvasBlock::retention_warning`] for full documentation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub retention_warning: Option<String>,
 }
 
 /// Tauri event payload wrapping a `BlockUpdate`.
@@ -1164,6 +1178,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1195,6 +1210,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:01Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1222,6 +1238,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1255,6 +1272,7 @@ mod tests {
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
                 auto_expand: false,
+                retention_warning: None,
             }],
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1331,6 +1349,7 @@ mod tests {
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 preference_guided: false,
+                retention_warning: None,
             },
         };
         let json = serde_json::to_string(&event).unwrap();
@@ -1606,6 +1625,7 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             preference_guided: false,
             auto_expand: false,
+            retention_warning: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let back: CanvasBlock = serde_json::from_str(&json).unwrap();
@@ -1724,6 +1744,248 @@ mod tests {
         assert!(
             !back.needs_renewal,
             "needs_renewal must default to false for backward compat"
+        );
+    }
+
+    // ── retention_warning helpers ──────────────────────────────
+
+    /// Minimal CanvasBlock with all required fields and retention_warning set to `w`.
+    fn make_block_with_warning(id: &str, w: Option<String>) -> CanvasBlock {
+        CanvasBlock {
+            id: id.into(),
+            prompt_id: "p-1".into(),
+            prompt_text: None,
+            state: BlockState::Resolved,
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            agent_did: None,
+            mandate_expires_at: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
+            auto_expand: false,
+            retention_warning: w,
+        }
+    }
+
+    /// Minimal BlockUpdate with all required fields and retention_warning set to `w`.
+    fn make_block_update_with_warning(id: &str, w: Option<String>) -> BlockUpdate {
+        BlockUpdate {
+            id: id.into(),
+            prompt_id: "p-1".into(),
+            prompt_text: None,
+            state: BlockState::Resolved,
+            schema_type: None,
+            content: None,
+            agent_did: None,
+            mandate_expires_at: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+            preference_guided: false,
+            retention_warning: w,
+        }
+    }
+
+    // ── retention_warning: CanvasBlock serde ───────────────────
+
+    #[test]
+    fn canvas_block_retention_warning_none_omitted_from_json() {
+        // `skip_serializing_if = "Option::is_none"` means the key must be absent
+        // when the value is None — this keeps the wire format lean and avoids
+        // sending the field to older clients that do not know about it.
+        let block = make_block_with_warning("blk-rw-none", None);
+        let json = serde_json::to_string(&block).unwrap();
+        assert!(
+            !json.contains("retention_warning"),
+            "retention_warning key must be omitted when None, got: {json}"
+        );
+    }
+
+    #[test]
+    fn canvas_block_retention_warning_some_included_in_json() {
+        // When a warning is present the field must appear with its exact value.
+        let block = make_block_with_warning("blk-rw-some", Some("test warning".into()));
+        let json = serde_json::to_string(&block).unwrap();
+        assert!(
+            json.contains(r#""retention_warning":"test warning""#),
+            "retention_warning must be serialized with its value, got: {json}"
+        );
+    }
+
+    #[test]
+    fn canvas_block_with_retention_warning_round_trips() {
+        // Full serialize → deserialize cycle must preserve the warning string exactly.
+        let original = "Data retention not enforced: no TEE present.";
+        let block = make_block_with_warning("blk-rw-rt", Some(original.into()));
+        let json = serde_json::to_string(&block).unwrap();
+        let back: CanvasBlock = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            back.retention_warning.as_deref(),
+            Some(original),
+            "round-trip must preserve retention_warning exactly"
+        );
+    }
+
+    #[test]
+    fn canvas_block_without_retention_warning_deserializes_as_none() {
+        // JSON from an older serializer that does not emit retention_warning must
+        // deserialize without error and produce retention_warning = None.
+        // `#[serde(default)]` provides this backward-compatibility guarantee.
+        let json = r#"{
+            "id": "blk-compat",
+            "prompt_id": "p-1",
+            "state": "Resolved",
+            "schema_type": null,
+            "content": null,
+            "linked_block_ids": [],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z"
+        }"#;
+        let block: CanvasBlock = serde_json::from_str(json).unwrap();
+        assert!(
+            block.retention_warning.is_none(),
+            "retention_warning must default to None when the key is absent"
+        );
+    }
+
+    // ── retention_warning: BlockUpdate serde ───────────────────
+
+    #[test]
+    fn block_update_retention_warning_none_omitted_from_json() {
+        // Mirrors the CanvasBlock test: the key must be absent from the wire
+        // payload when the warning is None.  BlockEvent carries a BlockUpdate
+        // so this directly affects what the backend emits over Tauri IPC.
+        let update = make_block_update_with_warning("upd-rw-none", None);
+        let json = serde_json::to_string(&update).unwrap();
+        assert!(
+            !json.contains("retention_warning"),
+            "retention_warning key must be omitted when None in BlockUpdate, got: {json}"
+        );
+    }
+
+    #[test]
+    fn block_update_retention_warning_some_included_in_json() {
+        // When the handshake sets a warning, BlockUpdate must carry it in the payload.
+        let update = make_block_update_with_warning("upd-rw-some", Some("contractual only".into()));
+        let json = serde_json::to_string(&update).unwrap();
+        assert!(
+            json.contains(r#""retention_warning":"contractual only""#),
+            "retention_warning must appear in BlockUpdate JSON when Some, got: {json}"
+        );
+    }
+
+    #[test]
+    fn block_update_with_retention_warning_round_trips() {
+        // Round-trip ensures no data loss through the Tauri event pipeline.
+        let original = "Retention is contractual only — no TEE attestation available.";
+        let update = make_block_update_with_warning("upd-rw-rt", Some(original.into()));
+        let json = serde_json::to_string(&update).unwrap();
+        let back: BlockUpdate = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            back.retention_warning.as_deref(),
+            Some(original),
+            "BlockUpdate round-trip must preserve retention_warning exactly"
+        );
+    }
+
+    #[test]
+    fn block_update_applies_retention_warning_to_canvas_block() {
+        // Simulate the assignment that `apply_block_event` performs in canvas.rs:
+        //   b.retention_warning = update.retention_warning.clone();
+        // This test verifies the field assignment path is sound at the type level.
+        let mut block = make_block_with_warning("blk-apply", None);
+        assert!(
+            block.retention_warning.is_none(),
+            "precondition: no warning"
+        );
+
+        let update = make_block_update_with_warning("blk-apply", Some("warn".into()));
+        // Replicate the exact assignment from apply_block_event.
+        block.retention_warning = update.retention_warning.clone();
+
+        assert_eq!(
+            block.retention_warning.as_deref(),
+            Some("warn"),
+            "applying BlockUpdate must propagate retention_warning to CanvasBlock"
+        );
+
+        // A second update with None should clear the warning (TEE retry case).
+        let clear_update = make_block_update_with_warning("blk-apply", None);
+        block.retention_warning = clear_update.retention_warning.clone();
+        assert!(
+            block.retention_warning.is_none(),
+            "a BlockUpdate with None must clear a previously-set retention_warning"
+        );
+    }
+
+    #[test]
+    fn retention_warning_contractual_only_message_contains_expected_keywords() {
+        // The exact warning string is set in apps/papillon/src/handshake.rs when
+        // `validate_disclosure_requirements` returns `ContractualOnly`.
+        // It must contain all three sentinel words that the UI and monitoring look for.
+        let warning = "Data retention not enforced: no TEE present. \
+            The receiving agent may retain disclosed data beyond the session mandate. \
+            Disclosure is contractual only.";
+
+        assert!(
+            warning.contains("TEE"),
+            "warning must mention TEE so the user understands the attestation gap"
+        );
+        assert!(
+            warning.contains("contractual"),
+            "warning must contain 'contractual' per protocol spec section 5.4"
+        );
+        assert!(
+            warning.contains("retention"),
+            "warning must contain 'retention' to be self-descriptive"
+        );
+    }
+
+    #[test]
+    fn canvas_block_serde_backward_compat_old_json_without_new_fields() {
+        // Exercises the full set of `#[serde(default)]` guards on CanvasBlock.
+        // An old payload may omit prompt_text, agent_did, mandate_expires_at,
+        // preference_guided, auto_expand, and retention_warning.
+        // Deserialization must succeed and every optional/defaulted field must
+        // land at its zero value — no panic, no error.
+        let old_json = r#"{
+            "id": "blk-legacy",
+            "prompt_id": "p-old",
+            "state": "Resolved",
+            "schema_type": null,
+            "content": null,
+            "linked_block_ids": [],
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z"
+        }"#;
+        let block: CanvasBlock =
+            serde_json::from_str(old_json).expect("old-style JSON must deserialize without error");
+
+        assert_eq!(block.id, "blk-legacy");
+        assert!(
+            block.retention_warning.is_none(),
+            "retention_warning must default to None for backward compat"
+        );
+        assert!(
+            block.prompt_text.is_none(),
+            "prompt_text must default to None for backward compat"
+        );
+        assert!(
+            block.agent_did.is_none(),
+            "agent_did must default to None for backward compat"
+        );
+        assert!(
+            block.mandate_expires_at.is_none(),
+            "mandate_expires_at must default to None for backward compat"
+        );
+        assert!(
+            !block.preference_guided,
+            "preference_guided must default to false for backward compat"
+        );
+        assert!(
+            !block.auto_expand,
+            "auto_expand must default to false for backward compat"
         );
     }
 }

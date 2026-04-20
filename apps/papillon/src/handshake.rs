@@ -17,7 +17,7 @@ use serde_json::json;
 use pap_core::mandate::Mandate;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
-use pap_core::session::{CapabilityToken, Session};
+use pap_core::session::{CapabilityToken, DisclosureValidation, Session};
 use pap_did::{PrincipalKeypair, SessionKeypair};
 use pap_transport::AgentHandler;
 
@@ -28,6 +28,10 @@ pub struct HandshakeResult {
     pub schema_type: String,
     pub content: serde_json::Value,
     pub agent_name: String,
+    /// Set when the mandate contains `no_retention` disclosures but no TEE attestation
+    /// is present. The handshake succeeds but the caller should surface this as a
+    /// visible warning on the resulting block.
+    pub retention_warning: Option<String>,
 }
 
 /// Callback for phase progress. (phase_number, label)
@@ -149,6 +153,45 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
     };
     // principal_kp borrow ends here — only the public VerifyingKey survives.
     // The signing key is no longer reachable from any live binding.
+
+    // Check disclosure validation level. When any `no_retention` disclosure is present
+    // but no TEE attestation is available, the handshake proceeds but we surface a
+    // warning so the user knows retention enforcement is contractual only.
+    //
+    // We use a temporary session solely to call validate_disclosure_requirements,
+    // which is the canonical check location per the protocol spec (section 5.4).
+    let retention_warning: Option<String> = {
+        // Create a minimal session for the validation call.
+        // We re-use the receipt token from phase 5 setup below — but since we need
+        // the check at phase 2 boundary, we create a lightweight ephemeral session here.
+        let check_signer = pap_did::SessionKeypair::generate();
+        let mut check_token = pap_core::session::CapabilityToken::mint(
+            agent_did.to_string(),
+            action_type.to_string(),
+            auth.principal_did.clone(),
+            ttl,
+        );
+        check_token
+            .sign(check_signer.signing_key())
+            .expect("Ed25519 is always supported");
+        let check_vk = check_signer.verifying_key();
+        // check_signer drops here (zeroized)
+
+        match pap_core::session::Session::initiate(&check_token, agent_did, &check_vk) {
+            Ok(session) => match session.validate_disclosure_requirements(&auth.disclosure_set) {
+                Ok(DisclosureValidation::ContractualOnly) => Some(
+                    "Data retention not enforced: no TEE present. \
+                        The receiving agent may retain disclosed data beyond the session mandate. \
+                        Disclosure is contractual only."
+                        .to_string(),
+                ),
+                _ => None,
+            },
+            // If session initiation fails here (shouldn't happen with a valid token),
+            // don't block the handshake — just skip the warning.
+            Err(_) => None,
+        }
+    };
 
     // ── Phase 3: Send disclosures (query goes here) ─────────
     on_phase(3, "Opening session...");
@@ -289,6 +332,7 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         schema_type,
         content,
         agent_name: agent_name.to_string(),
+        retention_warning,
     })
 }
 

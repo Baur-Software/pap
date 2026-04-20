@@ -1,4 +1,17 @@
 #![allow(clippy::unwrap_used)]
+// LOCKING DISCIPLINE:
+// - std::sync::RwLock fields: use only from synchronous contexts or inside
+//   tokio::task::spawn_blocking. Do NOT hold across .await points.
+// - tokio::sync::RwLock fields (approval_gates): awaitable, safe in async.
+// - tokio::sync::Mutex (model_manager): awaitable, safe in async.
+// - Arc<Mutex<>> (local_registry): std Mutex, use from sync or spawn_blocking.
+//
+// Fields wrapped in Arc<RwLock<>> (registries, agent_keypairs, endpoint_registry)
+// are shared by reference across clone_for_background() so that mutations in the
+// background clone are visible to the main state and vice versa.
+//
+// TODO: Migrate remaining std::sync::RwLock fields to tokio::sync::RwLock in a
+// future pass once all read sites are audited for async context safety.
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
@@ -42,7 +55,9 @@ pub struct AppState {
     /// List of all available profiles.
     pub profiles: RwLock<Vec<ProfileMetadata>>,
     /// Remote registry caches keyed by URL.
-    pub registries: RwLock<HashMap<String, FederatedRegistry>>,
+    /// Wrapped in Arc so clone_for_background() shares the same map instance
+    /// rather than creating a disconnected empty copy.
+    pub registries: Arc<RwLock<HashMap<String, FederatedRegistry>>>,
     /// The node's own registry — shared with the federation HTTP server.
     /// This is the single source of truth for locally registered agents.
     pub local_registry: Arc<Mutex<FederatedRegistry>>,
@@ -54,7 +69,9 @@ pub struct AppState {
     /// On-device Candle model for the BuiltIn LLM provider.
     pub model_manager: Arc<tokio::sync::Mutex<ModelManager>>,
     /// Agent keypairs retained for both sides of the PAP handshake.
-    pub agent_keypairs: RwLock<HashMap<String, PrincipalKeypair>>,
+    /// Wrapped in Arc so clone_for_background() shares the same keypair map
+    /// rather than creating a disconnected empty copy.
+    pub agent_keypairs: Arc<RwLock<HashMap<String, PrincipalKeypair>>>,
     /// Persistent SQLite database for experience memory.
     /// Stores episodes, agent profiles, and retention policies.
     pub db: Arc<Database>,
@@ -73,7 +90,9 @@ pub struct AppState {
     /// These implement `AgentHandler` and process the 6-phase handshake.
     pub local_agents: HashMap<String, Arc<dyn AgentHandler>>,
     /// DID → transport endpoint mapping for agent resolution.
-    pub endpoint_registry: RwLock<EndpointRegistry>,
+    /// Wrapped in Arc so clone_for_background() shares the same registry
+    /// rather than creating a disconnected empty copy.
+    pub endpoint_registry: Arc<RwLock<EndpointRegistry>>,
     /// Port the TLS federation+agent server listens on.
     pub federation_port: u16,
     /// The node's TLS-secured endpoint, e.g. `https://0.0.0.0:7890`.
@@ -145,7 +164,7 @@ impl AppState {
                     .unwrap_or_else(|e| e.into_inner())
                     .clone(),
             ),
-            registries: RwLock::new(HashMap::new()), // Will be populated on demand
+            registries: self.registries.clone(), // shared Arc — mutations visible to both sides
             local_registry: self.local_registry.clone(),
             bookmarks: RwLock::new(
                 self.bookmarks
@@ -161,7 +180,7 @@ impl AppState {
             ),
             shared_llm_provider: self.shared_llm_provider.clone(),
             model_manager: self.model_manager.clone(),
-            agent_keypairs: RwLock::new(HashMap::new()), // Will be populated on demand
+            agent_keypairs: self.agent_keypairs.clone(), // shared Arc — mutations visible to both sides
             db: self.db.clone(),
             key_backed_up: RwLock::new(
                 *self.key_backed_up.read().unwrap_or_else(|e| e.into_inner()),
@@ -185,7 +204,7 @@ impl AppState {
                     .clone(),
             ),
             local_agents: self.local_agents.clone(),
-            endpoint_registry: RwLock::new(EndpointRegistry::new()),
+            endpoint_registry: self.endpoint_registry.clone(), // shared Arc — mutations visible to both sides
             federation_port: self.federation_port,
             node_endpoint: RwLock::new(
                 self.node_endpoint
@@ -483,20 +502,20 @@ impl AppState {
             profiles_db,
             active_profile_id: RwLock::new(active_profile_id),
             profiles: RwLock::new(profiles),
-            registries: RwLock::new(HashMap::new()),
+            registries: Arc::new(RwLock::new(HashMap::new())),
             local_registry,
             bookmarks: RwLock::new(bookmarks),
             orchestrator_config: RwLock::new(saved_orchestrator_config),
             shared_llm_provider,
             model_manager,
-            agent_keypairs: RwLock::new(keypairs),
+            agent_keypairs: Arc::new(RwLock::new(keypairs)),
             db,
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
             resource_dir: RwLock::new(PathBuf::new()),
             data_dir: RwLock::new(PathBuf::new()),
             local_agents: handlers,
-            endpoint_registry: RwLock::new(EndpointRegistry::new()),
+            endpoint_registry: Arc::new(RwLock::new(EndpointRegistry::new())),
             federation_port: DEFAULT_FEDERATION_PORT,
             node_endpoint: RwLock::new(String::new()),
             node_cert_fingerprint: RwLock::new(String::new()),

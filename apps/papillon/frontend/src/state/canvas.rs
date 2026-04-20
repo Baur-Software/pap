@@ -488,6 +488,7 @@ impl CanvasState {
             mandate_expires_at: None,
             preference_guided: false,
             auto_expand,
+            retention_warning: None,
             created_at: now_iso(),
             updated_at: now_iso(),
         };
@@ -852,6 +853,9 @@ impl CanvasState {
                     b.preference_guided = update.preference_guided;
                     b.created_at = update.created_at.clone();
                     b.updated_at = update.updated_at.clone();
+                    // Propagate retention warning when present; clear when absent
+                    // (a retry that succeeds with TEE should clear a prior warning).
+                    b.retention_warning = update.retention_warning.clone();
                     // Only overwrite prompt_text when the event carries one.
                     if let Some(pt) = update.prompt_text.clone() {
                         b.prompt_text = Some(pt);
@@ -1048,6 +1052,7 @@ impl CanvasState {
                                     mandate_expires_at: None,
                                     preference_guided: false,
                                     auto_expand: false,
+                                    retention_warning: None,
                                     created_at: now.clone(),
                                     updated_at: now,
                                 };
@@ -1176,6 +1181,7 @@ impl CanvasState {
                                     mandate_expires_at: rec.mandate_expires_at,
                                     preference_guided: rec.preference_guided,
                                     auto_expand: false,
+                                    retention_warning: None,
                                     created_at: rec.created_at,
                                     updated_at: rec.updated_at,
                                 };
@@ -1294,7 +1300,8 @@ mod tests {
                 created_at: String::new(),
                 updated_at: String::new(),
                 preference_guided: false,
-            auto_expand: false,
+                auto_expand: false,
+                retention_warning: None,
             }],
             created_at: String::new(),
             updated_at: String::new(),
@@ -1355,7 +1362,8 @@ mod tests {
                     created_at: String::new(),
                     updated_at: String::new(),
                     preference_guided: false,
-            auto_expand: false,
+                    auto_expand: false,
+                    retention_warning: None,
                 },
                 CanvasBlock {
                     id: "b".into(),
@@ -1370,7 +1378,8 @@ mod tests {
                     created_at: String::new(),
                     updated_at: String::new(),
                     preference_guided: false,
-            auto_expand: false,
+                    auto_expand: false,
+                    retention_warning: None,
                 },
             ],
             created_at: String::new(),

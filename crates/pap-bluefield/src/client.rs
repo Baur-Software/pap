@@ -227,6 +227,7 @@ mod tests {
             executed: "search performed".into(),
             returned: "results returned".into(),
             payment_proof_commitment: None,
+            disclosure_hash: None,
             timestamp: chrono::Utc::now(),
             signatures: vec![],
             attestations: vec![],

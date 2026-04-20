@@ -340,6 +340,7 @@ mod tests {
             auto_expand: false,
             created_at: String::new(),
             updated_at: String::new(),
+            retention_warning: None,
         }
     }
 
