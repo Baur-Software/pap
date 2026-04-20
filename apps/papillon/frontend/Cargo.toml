@@ -8,6 +8,10 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = ["wasm"]
+wasm = []
+
 [dependencies]
 papillon-shared = { path = "../../../crates/papillon-shared", default-features = false, features = ["wasm"] }
 pap-did = { path = "../../../crates/pap-did", features = ["wasm"] }
