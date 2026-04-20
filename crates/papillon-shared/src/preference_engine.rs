@@ -202,7 +202,9 @@ impl<'a> PreferenceEngine<'a> {
             },
         };
 
-        let _ = self.db.upsert_preference(&signal);
+        if let Err(e) = self.db.upsert_preference(&signal) {
+            tracing::warn!("preference upsert failed: {e}");
+        }
     }
 
     /// Record the outcome of a session for `(action_type, schema_type, agent_did_hash)`.
@@ -232,7 +234,9 @@ impl<'a> PreferenceEngine<'a> {
                 updated_at: now,
                 ..prev
             };
-            let _ = self.db.upsert_preference(&signal);
+            if let Err(e) = self.db.upsert_preference(&signal) {
+                tracing::warn!("preference upsert failed: {e}");
+            }
         }
         // If no row exists yet, the outcome will be captured on the next selection.
     }
@@ -279,7 +283,9 @@ impl<'a> PreferenceEngine<'a> {
             updated_at: now,
             ..prev
         };
-        let _ = self.db.upsert_preference(&signal);
+        if let Err(e) = self.db.upsert_preference(&signal) {
+            tracing::warn!("preference upsert failed: {e}");
+        }
     }
 
     /// Record that the principal rejected `scope_refs` for `(action_type, schema_type)`.
@@ -323,7 +329,9 @@ impl<'a> PreferenceEngine<'a> {
             updated_at: now,
             ..prev
         };
-        let _ = self.db.upsert_preference(&signal);
+        if let Err(e) = self.db.upsert_preference(&signal) {
+            tracing::warn!("preference upsert failed: {e}");
+        }
     }
 
     /// True if any prior grant for `(action_type, schema_type)` covers all `required` scopes.
@@ -401,7 +409,9 @@ impl<'a> PreferenceEngine<'a> {
                 updated_at: now,
             },
         };
-        let _ = self.db.upsert_preference(&signal);
+        if let Err(e) = self.db.upsert_preference(&signal) {
+            tracing::warn!("preference upsert failed: {e}");
+        }
     }
 
     /// Return the intersection of approved scope refs across all agents for
