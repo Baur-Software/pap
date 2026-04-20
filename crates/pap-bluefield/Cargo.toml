@@ -11,15 +11,18 @@ description = "RDMA transport and hardware-accelerated crypto for PAP via NVIDIA
 # rdma (default)   — Real RDMA transport via libibverbs (ibv_* API).
 #                    Requires MLNX_OFED / DOCA installed on the host.
 #
-# doca-crypto      — Hardware-accelerated Ed25519 / AES-GCM via NVIDIA DOCA
-#                    Crypto API.  Requires DOCA SDK >= 2.7.
+# doca             — Hardware-accelerated Ed25519 / AES-GCM via NVIDIA DOCA
+#                    Crypto API.  Requires DOCA SDK >= 2.7.  Opt-in; CI and
+#                    default builds must pass without it.  The software
+#                    fallback (ed25519-dalek) is always present and is the
+#                    default when this flag is absent.
 #
 # mock             — In-memory channel for unit/integration tests without
 #                    BlueField hardware.  Always compiled in #[cfg(test)].
 [features]
 default = ["rdma"]
 rdma = ["dep:rdma-sys"]
-doca-crypto = []
+doca = []
 mock = []
 
 [dependencies]

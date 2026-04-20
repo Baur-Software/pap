@@ -10,9 +10,11 @@
 //!   stack entirely, cutting agent-to-agent round-trip times to ≈ 2 µs on a
 //!   single BlueField 3 card (vs. ≈ 100 µs for localhost HTTP).
 //!
-//! * **Hardware crypto** (`doca-crypto` feature) — Ed25519 signing and
-//!   AES-GCM encryption are offloaded to the BlueField's on-chip crypto
-//!   engine, freeing host CPU cycles for application logic.
+//! * **Hardware crypto** (`doca` feature) — Ed25519 signing and AES-GCM
+//!   encryption are offloaded to the BlueField's on-chip crypto engine,
+//!   freeing host CPU cycles for application logic.  The software fallback
+//!   (ed25519-dalek) is always present and is the default when `doca` is
+//!   absent.
 //!
 //! * **Kernel bypass** — message delivery never touches the host kernel's
 //!   TCP/IP stack; perfect for high-frequency data-centre agent meshes.
@@ -63,7 +65,7 @@
 //! | Feature       | What it enables                                             |
 //! |---------------|-------------------------------------------------------------|
 //! | `rdma`        | Real RDMA transport via `rdma-sys` / libibverbs (default)   |
-//! | `doca-crypto` | Hardware Ed25519/AES-GCM via NVIDIA DOCA SDK                |
+//! | `doca`        | Hardware Ed25519/AES-GCM via NVIDIA DOCA SDK (opt-in)        |
 //! | `mock`        | In-memory [`channel::MockChannel`] (always on in `#[test]`)|
 
 // ── Crate-level lint relaxations ──────────────────────────────────────────────

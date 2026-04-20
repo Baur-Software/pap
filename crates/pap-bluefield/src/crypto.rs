@@ -2,9 +2,16 @@
 //!
 //! [`CryptoAccel`] is a trait that abstracts signing and verification
 //! operations.  The default implementation [`SoftwareCrypto`] delegates to
-//! `ed25519-dalek` (always available).  When the `doca-crypto` feature is
-//! enabled, [`DocaCrypto`] offloads operations to the BlueField's on-chip
-//! crypto engine via the DOCA Crypto API.
+//! `ed25519-dalek` (always available).  When the `doca` feature is enabled,
+//! [`DocaCrypto`] offloads operations to the BlueField's on-chip crypto engine
+//! via the DOCA Crypto API.
+//!
+//! # Feature flags
+//!
+//! | Feature  | Effect |
+//! |----------|--------|
+//! | *(none)* | [`SoftwareCrypto`] only — CPU-bound ed25519-dalek (software fallback) |
+//! | `doca`   | [`DocaCrypto`] compiled in; hardware path wired once DOCA SDK is available |
 //!
 //! # Usage
 //! The transport layer uses [`CryptoAccel`] to sign phase-5 receipts and
@@ -47,8 +54,12 @@ pub trait CryptoAccel: Send + Sync {
 
 /// Ed25519 operations via `ed25519-dalek` on the host CPU.
 ///
-/// Used when DOCA hardware crypto is unavailable or when the `doca-crypto`
-/// feature is disabled.
+/// This is the always-available baseline implementation.  It is active by
+/// default (i.e. when the `doca` feature is absent) and is used as an
+/// internal fallback within [`DocaCrypto`] while the DOCA SDK hardware path
+/// is being wired.
+///
+/// Build with `--features doca` to enable hardware acceleration.
 pub struct SoftwareCrypto {
     signing_key: SigningKey,
 }
@@ -61,11 +72,13 @@ impl SoftwareCrypto {
 
 impl CryptoAccel for SoftwareCrypto {
     fn sign(&self, data: &[u8]) -> [u8; 64] {
+        // NOTE: software fallback — build with --features doca for hardware acceleration
         use ed25519_dalek::Signer;
         self.signing_key.sign(data).to_bytes()
     }
 
     fn verify(&self, data: &[u8], signature: &[u8; 64]) -> Result<(), BluefieldError> {
+        // NOTE: software fallback — build with --features doca for hardware acceleration
         use ed25519_dalek::Verifier;
         let sig = Signature::from_bytes(signature);
         self.signing_key
@@ -83,28 +96,37 @@ impl CryptoAccel for SoftwareCrypto {
 
 /// Hardware-accelerated Ed25519 operations via the NVIDIA DOCA Crypto API.
 ///
-/// Requires the `doca-crypto` feature and a BlueField 2 or later DPU.
+/// Compiled only when the `doca` feature is active.  Requires a BlueField 2
+/// or later DPU with DOCA SDK >= 2.7 installed on the host.
+///
 /// The underlying DOCA calls are made asynchronously and completed via DOCA
 /// work-queues.  For short messages (< 256 bytes) the latency is roughly
 /// 2 µs vs 20 µs on the host CPU at high load.
 ///
-/// Falls back silently to software if the DOCA engine is unavailable at
-/// runtime; use [`DocaCrypto::is_hw_accelerated`] to detect this.
-#[cfg(feature = "doca-crypto")]
+/// Use [`DocaCrypto::is_hw_accelerated`] to confirm at runtime whether the
+/// DOCA engine was successfully initialised; this type never silently degrades
+/// without an observable signal.
+#[cfg(feature = "doca")]
 pub struct DocaCrypto {
-    /// Software fallback — always valid.
+    /// Software fallback used while the DOCA SDK hardware path is pending.
     sw: SoftwareCrypto,
     /// True if a DOCA crypto context was successfully initialised.
     hw_available: bool,
 }
 
-#[cfg(feature = "doca-crypto")]
+#[cfg(feature = "doca")]
 impl DocaCrypto {
-    /// Initialise.  Attempts to open the DOCA crypto context; falls back to
-    /// software if unavailable.
+    /// Initialise.  Attempts to open the DOCA crypto context; sets
+    /// `hw_available` to `true` only when the context is successfully opened.
     pub fn new(key: SigningKey) -> Self {
-        // TODO(doca-crypto): call doca_crypto_ctx_create() here.
-        // For now, always fall back to software.
+        #[cfg(feature = "doca")]
+        {
+            // TODO(doca): wire DOCA SDK call here:
+            //   let ctx = doca_crypto_ctx_create(&dev)?;
+            //   let hw_available = ctx.is_ok();
+        }
+
+        // NOTE: software fallback — build with --features doca for hardware acceleration
         Self {
             sw: SoftwareCrypto::new(key),
             hw_available: false,
@@ -117,26 +139,36 @@ impl DocaCrypto {
     }
 }
 
-#[cfg(feature = "doca-crypto")]
+#[cfg(feature = "doca")]
 impl CryptoAccel for DocaCrypto {
     fn sign(&self, data: &[u8]) -> [u8; 64] {
+        #[cfg(feature = "doca")]
         if self.hw_available {
-            // TODO(doca-crypto): submit sign job to DOCA work-queue.
-            // Fall back to software until the DOCA path is wired up.
-            self.sw.sign(data)
-        } else {
-            self.sw.sign(data)
+            // TODO(doca): wire DOCA SDK call here:
+            //   submit sign job to DOCA work-queue via doca_crypto_sign()
+            //   and poll the completion queue for the result.
+            unimplemented!(
+                "DOCA hardware sign path not yet wired — use SoftwareCrypto or wait for DOCA SDK integration"
+            );
         }
+
+        // NOTE: software fallback — build with --features doca for hardware acceleration
+        self.sw.sign(data)
     }
 
     fn verify(&self, data: &[u8], signature: &[u8; 64]) -> Result<(), BluefieldError> {
+        #[cfg(feature = "doca")]
         if self.hw_available {
-            // TODO(doca-crypto): submit verify job to DOCA work-queue.
-            // Fall back to software until the DOCA path is wired up.
-            self.sw.verify(data, signature)
-        } else {
-            self.sw.verify(data, signature)
+            // TODO(doca): wire DOCA SDK call here:
+            //   submit verify job to DOCA work-queue via doca_crypto_verify()
+            //   and poll the completion queue for the result.
+            unimplemented!(
+                "DOCA hardware verify path not yet wired — use SoftwareCrypto or wait for DOCA SDK integration"
+            );
         }
+
+        // NOTE: software fallback — build with --features doca for hardware acceleration
+        self.sw.verify(data, signature)
     }
 
     fn verifying_key(&self) -> VerifyingKey {
@@ -186,5 +218,18 @@ mod tests {
         let vk1 = crypto.verifying_key();
         let vk2 = crypto.verifying_key();
         assert_eq!(vk1.as_bytes(), vk2.as_bytes());
+    }
+
+    /// Confirm that `DocaCrypto::new` reports software mode until the DOCA SDK
+    /// path is wired up.
+    #[cfg(feature = "doca")]
+    #[test]
+    fn doca_new_reports_software_mode() {
+        let key = SigningKey::generate(&mut OsRng);
+        let doca = DocaCrypto::new(key);
+        assert!(
+            !doca.is_hw_accelerated(),
+            "hw_available must be false until doca_crypto_ctx_create() is wired"
+        );
     }
 }
