@@ -121,8 +121,20 @@ impl WsAgentClient {
             .map_err(|e| TransportError::WebSocketError(format!("receive failed: {e}")))?;
 
         match response {
-            Message::Text(text) => serde_json::from_str(&text)
-                .map_err(|e| TransportError::InvalidResponse(format!("deserialize failed: {e}"))),
+            Message::Text(text) => {
+                use std::io::Cursor;
+                use crate::limited_read::{LimitedRead, is_limit_exceeded};
+                use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
+                let limit = DEFAULT_MAX_MESSAGE_BYTES;
+                serde_json::from_reader(LimitedRead::new(Cursor::new(text.as_bytes()), limit))
+                    .map_err(|e| {
+                        if is_limit_exceeded(&e) {
+                            TransportError::MessageTooLarge { size: text.len(), limit }
+                        } else {
+                            TransportError::InvalidResponse(format!("deserialize failed: {e}"))
+                        }
+                    })
+            }
             Message::Close(_) => Err(TransportError::ConnectionFailed(
                 "peer closed connection".into(),
             )),
@@ -306,5 +318,63 @@ impl WsAgentClient {
 
         resp.payload
             .ok_or_else(|| TransportError::InvalidResponse("phase 6: missing payload".into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::DEFAULT_MAX_MESSAGE_BYTES;
+
+    // ── LimitedRead integration: WsAgentClient response path ─────────────
+
+    /// A raw WebSocket server that immediately sends one oversized text frame
+    /// after the WS handshake, then closes.  Used to verify that the client
+    /// rejects the frame with `MessageTooLarge` rather than allocating it.
+    async fn serve_oversized_response(listener: tokio::net::TcpListener) {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        if let Ok((tcp, _)) = listener.accept().await {
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            // Consume the client's first message (phase-1 token frame).
+            let _ = ws.next().await;
+            // Reply with an oversized frame.
+            // Must be valid JSON so serde_json parses past the first byte before
+            // LimitedRead trips.  A JSON string value fills the buffer cleanly.
+            let payload = "a".repeat(2 * DEFAULT_MAX_MESSAGE_BYTES);
+            let big = format!(r#"{{"t":"{}"}}"#, payload);
+            let _ = ws.send(Message::Text(big.into())).await;
+        }
+    }
+
+    /// When the server sends a frame larger than `DEFAULT_MAX_MESSAGE_BYTES`
+    /// the client must return `Err(TransportError::MessageTooLarge { .. })`.
+    #[tokio::test]
+    async fn ws_client_oversized_response_rejected() {
+        use chrono::{Duration, Utc};
+        use pap_core::session::CapabilityToken;
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(serve_oversized_response(listener));
+
+        let url = format!("ws://{addr}");
+        let mut client = WsAgentClient::connect_plain(&url).await.unwrap();
+
+        let token = CapabilityToken::mint(
+            "did:key:zReceiver".into(),
+            "schema:SearchAction".into(),
+            "did:key:zIssuer".into(),
+            Utc::now() + Duration::hours(1),
+        );
+
+        let result = client.present_token(token).await;
+        assert!(
+            matches!(result, Err(TransportError::MessageTooLarge { .. })),
+            "expected MessageTooLarge, got: {result:?}"
+        );
     }
 }
