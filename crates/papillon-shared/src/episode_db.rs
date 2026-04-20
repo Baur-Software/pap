@@ -376,7 +376,7 @@ impl EpisodeDb {
              (id, output_type, input_type, agent_did, principal_did, ttl_hours, approved_at, expires_at) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8) \
              ON CONFLICT(output_type, input_type, agent_did, principal_did) \
-             DO UPDATE SET expires_at=excluded.expires_at, approved_at=excluded.approved_at",
+             DO UPDATE SET expires_at=excluded.expires_at, approved_at=excluded.approved_at, ttl_hours=excluded.ttl_hours",
             rusqlite::params![
                 record.id,
                 record.output_type,

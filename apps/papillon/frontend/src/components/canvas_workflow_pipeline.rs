@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use papillon_shared::{PipelineNodeType, WorkflowMode, WorkflowNode};
+use papillon_shared::{EdgeState, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode, WorkflowNode};
 
 use crate::state::{
     canvas::{CanvasSide, CanvasState},
@@ -111,6 +111,8 @@ fn DesignModeCanvas() -> impl IntoView {
     let workflow = expect_context::<WorkflowState>();
     let canvas_state = expect_context::<CanvasState>();
 
+    let show_approval_demo = RwSignal::new(false);
+
     let add_agent_node = move |_| {
         let mut nodes = workflow.design_nodes.get_untracked();
         let id = format!("node-{}", nodes.len());
@@ -186,6 +188,32 @@ fn DesignModeCanvas() -> impl IntoView {
                     />
                 </Show>
             </div>
+
+            // Approval card demo — shown when a paused edge triggers in Design mode
+            <Show when=move || show_approval_demo.get()>
+                <EdgeApprovalCard
+                    edge=WorkflowEdge {
+                        id: "demo".into(),
+                        from_node_id: "n1".into(),
+                        from_port: PortRef {
+                            path: "schema:FlightReservation.departureDate".into(),
+                            label: "Departure Date".into(),
+                            required: true,
+                        },
+                        to_node_id: "n2".into(),
+                        to_port: PortRef {
+                            path: "schema:LodgingReservation.checkInDate".into(),
+                            label: "Hotel Search".into(),
+                            required: true,
+                        },
+                        state: EdgeState::Proposed,
+                        memex_remembered: false,
+                    }
+                    on_allow_once=Callback::new(move |_| { show_approval_demo.set(false); })
+                    on_always_allow=Callback::new(move |_| { show_approval_demo.set(false); })
+                    on_deny=Callback::new(move |_| { show_approval_demo.set(false); })
+                />
+            </Show>
         </div>
     }
 }
@@ -292,6 +320,74 @@ fn DesignNode(node: WorkflowNode) -> impl IntoView {
                 <select class="wf-node-template-select">
                     <option value="auto">"auto"</option>
                 </select>
+            </div>
+        </div>
+    }
+}
+
+/// Inline approval card shown at a paused edge during workflow execution.
+/// Appears when a new (output_type, input_type, agent_did) wire has no memex pre-approval.
+#[component]
+pub fn EdgeApprovalCard(
+    /// The edge that is paused awaiting approval
+    edge: WorkflowEdge,
+    /// Callback fired on "Allow this once" — resume with current agent, no memex write
+    on_allow_once: Callback<()>,
+    /// Callback fired on "Always allow" — writes ApprovalRecord, then resumes
+    on_always_allow: Callback<()>,
+    /// Callback fired on "Deny" — orchestrator finds substitute agent
+    on_deny: Callback<()>,
+) -> impl IntoView {
+    let from_label = edge.from_port.label.clone();
+    let from_path = edge.from_port.path.clone();
+    let to_label = edge.to_port.label.clone();
+
+    view! {
+        <div class="wf-approval-card">
+            // Agent identity header
+            <div class="wf-approval-agent">
+                <span class="wf-approval-icon">"🤖"</span>
+                <div class="wf-approval-agent-info">
+                    <span class="wf-approval-agent-name">{to_label}</span>
+                </div>
+                <span class="wf-tee-badge">"✓ TEE"</span>
+            </div>
+
+            // Plain English disclosure description
+            <p class="wf-approval-prompt">"This agent will receive:"</p>
+            <div class="wf-disclosure-list">
+                <div class="wf-disclosure-item">
+                    <span class="wf-disclosure-label">{from_label}</span>
+                    <span class="wf-disclosure-path">{from_path}</span>
+                    <span class="wf-disclosure-check">"✓"</span>
+                </div>
+            </div>
+
+            // What the agent will NOT see
+            <div class="wf-approval-redacted">
+                "🔒 Will not see: your name, email, payment details, or any other data."
+            </div>
+
+            // Action buttons
+            <div class="wf-approval-actions">
+                <button
+                    class="wf-approval-btn wf-approval-allow-once"
+                    on:click=move |_| on_allow_once.run(())
+                >
+                    "Allow this once"
+                </button>
+                <button
+                    class="wf-approval-btn wf-approval-always-allow"
+                    on:click=move |_| on_always_allow.run(())
+                >
+                    "Always allow 🧠"
+                </button>
+                <button
+                    class="wf-approval-btn wf-approval-deny"
+                    on:click=move |_| on_deny.run(())
+                >
+                    "Deny"
+                </button>
             </div>
         </div>
     }

@@ -546,6 +546,59 @@ pub async fn list_saved_pipelines(
         .map_err(|e| PapillonError::from(e.0))
 }
 
+/// Store an "always allow" approval decision from the principal.
+/// Keyed by (output_type, input_type, agent_did) — subsequent runs auto-approve silently.
+#[tauri::command]
+pub async fn store_approval_record(
+    state: State<'_, AppState>,
+    output_type: String,
+    input_type: String,
+    agent_did: String,
+    ttl_hours: i64,
+) -> Result<(), PapillonError> {
+    use papillon_shared::episode_db::{ApprovalRecord, EpisodeDb};
+
+    // Get principal DID from the current signer (same pattern as canvas/outcome.rs)
+    let principal_did = {
+        let signer = state
+            .signer
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        match signer.as_ref() {
+            Some(s) => s.did(),
+            None => "did:key:unknown".to_string(),
+        }
+    };
+
+    // Resolve the data directory and open (or reuse) the approval_records table.
+    // EpisodeDb runs idempotent migrations on open so the approval_records table
+    // is created alongside the main papillon.db tables safely.
+    let data_dir = state
+        .data_dir
+        .read()
+        .map_err(|e| PapillonError::from(e.to_string()))?
+        .clone();
+    let db_path = data_dir.join("papillon.db");
+    let ep_db = EpisodeDb::open(&db_path)
+        .map_err(|e| PapillonError::from(format!("episode_db open: {e}")))?;
+
+    let now = chrono::Utc::now();
+    let record = ApprovalRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        output_type,
+        input_type,
+        agent_did,
+        principal_did,
+        ttl_hours,
+        approved_at: now.to_rfc3339(),
+        expires_at: (now + chrono::Duration::hours(ttl_hours)).to_rfc3339(),
+    };
+    ep_db
+        .store_approval(&record)
+        .map_err(|e| PapillonError::from(format!("store_approval: {e}")))?;
+    Ok(())
+}
+
 /// Delete a saved pipeline by id. No-op if the id does not exist.
 #[tauri::command]
 pub async fn delete_saved_pipeline(
