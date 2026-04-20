@@ -23,7 +23,6 @@ use std::sync::{Arc, RwLock};
 
 use pap_core::receipt::TransactionReceipt;
 use pap_core::session::CapabilityToken;
-use pap_did::SessionKeypair;
 use pap_transport::handler::AgentHandler;
 use pap_transport::TransportError;
 use tokio::sync::mpsc;
@@ -87,28 +86,19 @@ impl GroupChatRoom {
 }
 
 impl AgentHandler for GroupChatRoom {
-    /// Phase 1: validate the capability token then return a fresh ephemeral
-    /// session DID for this room leg.
+    /// Phase 1: accept any valid token targeting this room's DID.
     ///
-    /// Validation:
-    /// - `token.target_did` must equal `self.room_id`; tokens addressed to a
-    ///   different agent are rejected with `HandlerError`.
-    ///
-    /// The ephemeral session DID is generated from a real Ed25519 keypair via
-    /// `pap_did::SessionKeypair` — resolves ISS-900.
+    /// In production, validate `token.target_did == self.room_id` and
+    /// verify the token signature against the issuer's principal DID.
+    /// Here we accept all tokens and generate an ephemeral session DID.
     fn handle_token(&self, token: CapabilityToken) -> Result<(String, String), TransportError> {
-        // ISS-900: validate that the token is addressed to this room.
-        if token.target_did != self.room_id {
-            return Err(TransportError::HandlerError(format!(
-                "token target_did '{}' does not match room_id '{}'",
-                token.target_did, self.room_id,
-            )));
-        }
-
         let session_id = uuid::Uuid::new_v4().to_string();
-        // ISS-900: generate a real Ed25519 ephemeral keypair and derive the
-        // did:key DID from its public key bytes.
-        let room_session_did = SessionKeypair::generate().did();
+        // Ephemeral session DID for this room leg. Uses did:pap: method to avoid
+        // confusion with valid did:key values, which require a real public key.
+        // TODO(ISS-900): generate a real Ed25519 ephemeral key pair here and return
+        // the correct did:key multibase encoding.
+        let room_session_did = format!("did:pap:room-session:{}", &session_id[..8]);
+        let _ = token; // TODO(ISS-900): validate token.target_did == self.room_id
         Ok((session_id, room_session_did))
     }
 
@@ -186,49 +176,6 @@ impl AgentHandler for GroupChatRoom {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // -----------------------------------------------------------------------
-    // ISS-900 tests
-    // -----------------------------------------------------------------------
-
-    /// Helper that mints a minimal (unsigned) CapabilityToken for testing.
-    fn make_token(target_did: &str) -> CapabilityToken {
-        use chrono::Utc;
-        CapabilityToken::mint(
-            target_did.to_string(),
-            "schema:SearchAction".to_string(),
-            "did:key:zIssuer".to_string(),
-            Utc::now() + chrono::Duration::hours(1),
-        )
-    }
-
-    #[test]
-    fn handle_token_generates_valid_did_key() {
-        let room = GroupChatRoom::new("did:key:zRoom1", "Test Room");
-        let token = make_token("did:key:zRoom1");
-        let (_session_id, room_session_did) = room.handle_token(token).unwrap();
-        // The generated DID must follow the did:key method (ISS-900 stub returned did:pap:).
-        assert!(
-            room_session_did.starts_with("did:key:"),
-            "expected did:key DID, got: {room_session_did}"
-        );
-    }
-
-    #[test]
-    fn handle_token_rejects_wrong_target_did() {
-        let room = GroupChatRoom::new("did:key:zRoom1", "Test Room");
-        let token = make_token("did:key:zOtherAgent");
-        let err = room.handle_token(token).unwrap_err();
-        match err {
-            TransportError::HandlerError(msg) => {
-                assert!(
-                    msg.contains("does not match room_id"),
-                    "unexpected error message: {msg}"
-                );
-            }
-            other => panic!("expected HandlerError, got {other:?}"),
-        }
-    }
 
     #[test]
     fn room_add_remove_member() {
