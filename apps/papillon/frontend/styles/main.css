@@ -110,7 +110,7 @@
     --phase-dot-size: 6px;
     --block-max-width: 600px;
 
-    --dot-grid-color: rgba(255, 255, 255, 0.045);
+    --dot-grid-color: rgba(255, 255, 255, 0.045); /* overridden per theme below */
     --dot-grid-size: 24px;
     --sys-green: #00d9a6;
     --sys-green-glow: rgba(0, 217, 166, 0.2);
@@ -139,6 +139,17 @@
     --text-primary: var(--text-1);
     --text-secondary: var(--text-2);
 
+    --dot-grid-color: rgba(255, 255, 255, 0.045);
+
+    /* Topbar / status-bar chrome */
+    --chrome-bg: rgba(12, 11, 20, 0.95);
+    --chrome-border: rgba(255, 255, 255, 0.08);
+    --chrome-text: rgba(255, 255, 255, 0.4);
+    --chrome-sep: rgba(255, 255, 255, 0.15);
+    --input-bg: rgba(255, 255, 255, 0.06);
+    --input-border: rgba(255, 255, 255, 0.1);
+    --input-hover-bg: rgba(255, 255, 255, 0.04);
+
     color-scheme: dark;
 }
 
@@ -162,6 +173,17 @@
     --bg-tertiary: var(--bg-2);
     --text-primary: var(--text-1);
     --text-secondary: var(--text-2);
+
+    --dot-grid-color: rgba(0, 0, 0, 0.04);
+
+    /* Topbar / status-bar chrome */
+    --chrome-bg: rgba(240, 239, 245, 0.95);
+    --chrome-border: rgba(0, 0, 0, 0.08);
+    --chrome-text: rgba(26, 25, 40, 0.5);
+    --chrome-sep: rgba(0, 0, 0, 0.15);
+    --input-bg: rgba(0, 0, 0, 0.04);
+    --input-border: rgba(0, 0, 0, 0.1);
+    --input-hover-bg: rgba(0, 0, 0, 0.04);
 
     color-scheme: light;
 }
@@ -188,6 +210,16 @@
         --text-primary: var(--text-1);
         --text-secondary: var(--text-2);
 
+        --dot-grid-color: rgba(0, 0, 0, 0.04);
+
+        --chrome-bg: rgba(240, 239, 245, 0.95);
+        --chrome-border: rgba(0, 0, 0, 0.08);
+        --chrome-text: rgba(26, 25, 40, 0.5);
+        --chrome-sep: rgba(0, 0, 0, 0.15);
+        --input-bg: rgba(0, 0, 0, 0.04);
+        --input-border: rgba(0, 0, 0, 0.1);
+        --input-hover-bg: rgba(0, 0, 0, 0.04);
+
         color-scheme: light;
     }
 }
@@ -209,6 +241,16 @@
         --bg-tertiary: var(--bg-2);
         --text-primary: var(--text-1);
         --text-secondary: var(--text-2);
+
+        --dot-grid-color: rgba(255, 255, 255, 0.045);
+
+        --chrome-bg: rgba(12, 11, 20, 0.95);
+        --chrome-border: rgba(255, 255, 255, 0.08);
+        --chrome-text: rgba(255, 255, 255, 0.4);
+        --chrome-sep: rgba(255, 255, 255, 0.15);
+        --input-bg: rgba(255, 255, 255, 0.06);
+        --input-border: rgba(255, 255, 255, 0.1);
+        --input-hover-bg: rgba(255, 255, 255, 0.04);
 
         color-scheme: dark;
     }
@@ -341,14 +383,14 @@ body {
 
 .status-bar {
     height: var(--status-height);
-    background: rgba(13, 17, 23, 0.98);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--chrome-bg);
+    border-top: 1px solid var(--chrome-border);
     display: flex;
     align-items: center;
     padding: 0 var(--sp-md);
     gap: var(--sp-sm);
     font: var(--text-small);
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--chrome-text);
     letter-spacing: 0.05em;
     overflow: hidden;
 }
@@ -364,7 +406,7 @@ body {
 /* .status-bar-item.active/.warn removed — status colour now driven by .status-indicator classes */
 
 .status-bar-sep {
-    color: rgba(255, 255, 255, 0.15);
+    color: var(--chrome-sep);
     margin: 0 2px;
 }
 
@@ -750,13 +792,13 @@ body {
 }
 
 .setup-wizard {
-    background: rgba(13, 17, 23, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--chrome-bg);
+    border: 1px solid var(--chrome-border);
     border-radius: var(--r-lg);
     padding: var(--sp-lg);
     max-width: 560px;
     width: 90%;
-    background-image: radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-image: radial-gradient(var(--dot-grid-color) 1px, transparent 1px);
     background-size: 20px 20px;
 }
 
@@ -1292,7 +1334,7 @@ body {
     grid-template-rows: var(--header-height) 1fr var(--status-height);
     height: 100vh;
     overflow: hidden;
-    background-color: #0d1117;
+    background-color: var(--bg-0);
     background-image: radial-gradient(circle, var(--dot-grid-color) 1px, transparent 1px);
     background-size: var(--dot-grid-size) var(--dot-grid-size);
 }
@@ -1333,8 +1375,8 @@ body {
 /* Top bar */
 .topbar {
     height: var(--header-height);
-    background: rgba(13, 17, 23, 0.95);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--chrome-bg);
+    border-bottom: 1px solid var(--chrome-border);
     display: flex;
     align-items: center;
     /* No padding — each zone controls its own spacing so the brand
@@ -1364,7 +1406,7 @@ body {
 }
 
 .topbar-brand:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--input-hover-bg);
 }
 
 .topbar-brand-icon {
@@ -1399,8 +1441,8 @@ body {
 /* Pill-shaped address input — browser-style. */
 .topbar-address-input {
     width: 100%;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 20px;
     padding: 5px 16px;
     font-family: var(--font-body);
@@ -1726,7 +1768,7 @@ body {
     left: 0;
     right: 0;
     bottom: var(--status-height);
-    background: rgba(12, 11, 20, 0.55);
+    background: rgba(0, 0, 0, 0.55);
     z-index: 199;
     opacity: 0;
     pointer-events: none;
@@ -4654,7 +4696,7 @@ body {
 }
 
 .hitl-gate {
-    background: #0d1117;
+    background: var(--bg-1);
     border: 1px solid rgba(240,160,48,0.5);
     border-radius: 6px;
     padding: 28px 32px;
