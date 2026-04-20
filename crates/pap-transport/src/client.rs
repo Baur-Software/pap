@@ -95,12 +95,15 @@ impl AgentClient {
     ///   for zero-disclosure sessions.
     /// * `receipt` — a [`TransactionReceipt`] pre-signed by the initiator,
     ///   ready for the receiver to co-sign in Phase 5.
+    /// * `mandate_expires_at` — the mandate TTL checked at each phase
+    ///   transition before any network I/O is performed (spec §5.5).
     pub async fn run_full_handshake(
         &self,
         token: CapabilityToken,
         initiator_session_did: String,
         disclosures: Vec<serde_json::Value>,
         receipt: TransactionReceipt,
+        mandate_expires_at: DateTime<Utc>,
     ) -> Result<(TransactionReceipt, serde_json::Value), TransportError> {
         // ── Phase 1: Token Presentation ──────────────────────────────────
         let phase1 = self.present_token(token).await?;
@@ -120,16 +123,18 @@ impl AgentClient {
         };
 
         // ── Phase 2: Ephemeral DID Exchange ──────────────────────────────
-        let phase2 = self.exchange_did(&session_id, initiator_session_did).await;
+        let phase2 = self
+            .exchange_did(&session_id, initiator_session_did, mandate_expires_at)
+            .await;
         let phase2 = match phase2 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         if !matches!(phase2, ProtocolMessage::SessionDidAck) {
-            let _ = self.close_session(&session_id).await;
+            let _ = self.close_session(&session_id, mandate_expires_at).await;
             return Err(TransportError::InvalidResponse(format!(
                 "phase 2: expected SessionDidAck, got {}",
                 phase2.message_type()
@@ -137,16 +142,18 @@ impl AgentClient {
         }
 
         // ── Phase 3: Disclosure ───────────────────────────────────────────
-        let phase3 = self.send_disclosures(&session_id, disclosures).await;
+        let phase3 = self
+            .send_disclosures(&session_id, disclosures, mandate_expires_at)
+            .await;
         let phase3 = match phase3 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         if !matches!(phase3, ProtocolMessage::DisclosureAccepted) {
-            let _ = self.close_session(&session_id).await;
+            let _ = self.close_session(&session_id, mandate_expires_at).await;
             return Err(TransportError::InvalidResponse(format!(
                 "phase 3: expected DisclosureAccepted, got {}",
                 phase3.message_type()
@@ -154,18 +161,20 @@ impl AgentClient {
         }
 
         // ── Phase 4: Execution ────────────────────────────────────────────
-        let phase4 = self.request_execution(&session_id).await;
+        let phase4 = self
+            .request_execution(&session_id, mandate_expires_at)
+            .await;
         let phase4 = match phase4 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         let exec_result = match phase4 {
             ProtocolMessage::ExecutionResult { result } => result,
             other => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(TransportError::InvalidResponse(format!(
                     "phase 4: expected ExecutionResult, got {}",
                     other.message_type()
@@ -174,18 +183,20 @@ impl AgentClient {
         };
 
         // ── Phase 5: Receipt Co-signing (mandatory) ───────────────────────
-        let phase5 = self.exchange_receipt(&session_id, receipt).await;
+        let phase5 = self
+            .exchange_receipt(&session_id, receipt, mandate_expires_at)
+            .await;
         let phase5 = match phase5 {
             Ok(msg) => msg,
             Err(e) => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(e);
             }
         };
         let cosigned_receipt = match phase5 {
             ProtocolMessage::ReceiptCoSigned { receipt } => receipt,
             other => {
-                let _ = self.close_session(&session_id).await;
+                let _ = self.close_session(&session_id, mandate_expires_at).await;
                 return Err(TransportError::InvalidResponse(format!(
                     "phase 5: expected ReceiptCoSigned, got {}",
                     other.message_type()
@@ -194,7 +205,7 @@ impl AgentClient {
         };
 
         // ── Phase 6: Session Close ────────────────────────────────────────
-        let phase6 = self.close_session(&session_id).await?;
+        let phase6 = self.close_session(&session_id, mandate_expires_at).await?;
         if !matches!(phase6, ProtocolMessage::SessionClosed) {
             return Err(TransportError::InvalidResponse(format!(
                 "phase 6: expected SessionClosed, got {}",

@@ -258,6 +258,7 @@ async fn main() {
             initiator_did.clone(), // Phase 2: initiator's ephemeral DID
             vec![],                // Phase 3: zero disclosures for search
             receipt,               // Phase 5: pre-signed receipt
+            ttl,                   // Mandate TTL — checked at each phase transition
         )
         .await
         .expect("6-phase handshake must succeed");

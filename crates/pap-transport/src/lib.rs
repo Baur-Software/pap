@@ -194,6 +194,7 @@ mod tests {
                 "did:key:zInitiatorEphemeral".to_string(),
                 vec![], // zero disclosures
                 receipt,
+                ttl,
             )
             .await;
 
@@ -297,8 +298,9 @@ mod tests {
             attestations: vec![],
         };
 
+        let ttl = Utc::now() + Duration::hours(1);
         let result = client
-            .run_full_handshake(token, "did:key:zEphemeral".into(), vec![], receipt)
+            .run_full_handshake(token, "did:key:zEphemeral".into(), vec![], receipt, ttl)
             .await;
 
         assert!(
