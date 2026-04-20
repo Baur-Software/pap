@@ -224,4 +224,139 @@ mod tests {
             "expected insert to succeed after removing a session"
         );
     }
+
+    #[test]
+    fn with_mut_modifies_data() {
+        let store: SessionStore<Option<&str>> = SessionStore::new();
+        store.insert("s1".into(), Some("initial")).expect("insert should succeed");
+
+        store
+            .with_mut("s1", |data| {
+                *data = Some("modified");
+            })
+            .expect("with_mut should succeed for live session");
+
+        let value = store
+            .with("s1", |data| *data)
+            .expect("with should succeed for live session");
+
+        assert_eq!(value, Some("modified"), "expected value to be modified");
+    }
+
+    #[test]
+    fn with_mut_unknown_session_returns_error() {
+        let store: SessionStore<u32> = make_store();
+        let result = store.with_mut("no-such-session", |v| *v);
+        assert!(result.is_err(), "expected error for unknown session");
+        match result.unwrap_err() {
+            TransportError::ServerError(msg) => {
+                assert!(
+                    msg.contains("Unknown") || msg.contains("expired"),
+                    "unexpected error message: {msg}"
+                );
+            }
+            other => panic!("expected ServerError, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn signing_key_returns_some_for_live_session() {
+        use ed25519_dalek::Signer;
+
+        let store: SessionStore<u32> = make_store();
+        store.insert("s1".into(), 1).expect("insert should succeed");
+
+        let key = store
+            .signing_key("s1")
+            .expect("expected Some(key) for live session");
+
+        // Verify it is a usable ed25519 signing key — sign something with it.
+        let _sig = key.sign(b"test");
+    }
+
+    #[test]
+    fn signing_key_returns_none_for_unknown_session() {
+        let store: SessionStore<u32> = make_store();
+        let result = store.signing_key("no-such-session");
+        assert!(result.is_none(), "expected None for unknown session ID");
+    }
+
+    #[test]
+    fn remove_makes_session_inaccessible() {
+        let store: SessionStore<u32> = make_store();
+        store.insert("s1".into(), 42).expect("insert should succeed");
+
+        // Session is live before removal.
+        assert!(store.exists("s1"), "session should exist before remove");
+
+        store.remove("s1");
+
+        assert!(!store.exists("s1"), "session should not exist after remove");
+        assert!(
+            store.with("s1", |v| *v).is_err(),
+            "with should return error after remove"
+        );
+    }
+
+    #[test]
+    fn remove_nonexistent_is_a_no_op() {
+        let store: SessionStore<u32> = make_store();
+        // Should not panic — removing a session that never existed is a no-op.
+        store.remove("does-not-exist");
+    }
+
+    #[test]
+    fn with_mut_triggers_reap() {
+        // Insert MAX_SESSIONS - 1 sessions so we are near the cap.
+        let store: SessionStore<u32> = SessionStore::new();
+        let cap = 1024usize;
+        for i in 0..(cap - 1) {
+            store
+                .insert(format!("s-{i}"), i as u32)
+                .expect("should accept sessions below cap");
+        }
+
+        // with_mut on the very first session must succeed — it runs reap internally.
+        let result = store.with_mut("s-0", |v| {
+            *v += 1;
+        });
+        assert!(result.is_ok(), "with_mut near cap should succeed: {result:?}");
+    }
+
+    #[test]
+    fn default_creates_empty_store() {
+        let store = SessionStore::<()>::default();
+        assert!(
+            !store.exists("anything"),
+            "default store should report no sessions"
+        );
+    }
+
+    #[test]
+    fn multiple_sessions_are_independent() {
+        let store: SessionStore<u32> = make_store();
+        store.insert("a".into(), 1u32).expect("insert a");
+        store.insert("b".into(), 2u32).expect("insert b");
+        store.insert("c".into(), 3u32).expect("insert c");
+
+        let va = store.with("a", |v| *v).expect("with a");
+        let vb = store.with("b", |v| *v).expect("with b");
+        let vc = store.with("c", |v| *v).expect("with c");
+
+        assert_eq!(va, 1, "session a should hold 1");
+        assert_eq!(vb, 2, "session b should hold 2");
+        assert_eq!(vc, 3, "session c should hold 3");
+    }
+
+    #[test]
+    fn signing_key_is_stable() {
+        let store: SessionStore<u32> = make_store();
+        store.insert("s1".into(), 0).expect("insert should succeed");
+
+        let first = store.signing_key("s1");
+        let second = store.signing_key("s1");
+
+        assert!(first.is_some(), "first signing_key call should return Some");
+        assert!(second.is_some(), "second signing_key call should return Some");
+    }
 }

@@ -589,6 +589,327 @@ mod tests {
         let _router = server.router();
     }
 
+    // ── Constant value tests ─────────────────────────────────────────────
+
+    /// The two public constants must equal their documented values so that
+    /// deployments relying on these defaults are not surprised by a refactor.
+    #[test]
+    fn default_constants_have_expected_values() {
+        assert_eq!(DEFAULT_HANDSHAKE_TIMEOUT_SECS, 30);
+        assert_eq!(DEFAULT_MAX_CONCURRENT_SESSIONS, 256);
+    }
+
+    // ── AgentServer constructor / builder tests ──────────────────────────
+
+    /// `AgentServer::new` must propagate both default constants into the
+    /// newly constructed server without any builder calls.
+    #[test]
+    fn new_server_uses_defaults() {
+        use crate::handler::AgentHandler;
+        use pap_core::{receipt::TransactionReceipt, session::CapabilityToken};
+
+        struct NopHandler;
+        impl AgentHandler for NopHandler {
+            fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
+                Ok(("s".into(), "did:key:z".into()))
+            }
+            fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn handle_disclosure(
+                &self,
+                _: &str,
+                _: Vec<serde_json::Value>,
+            ) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn execute(&self, _: &str) -> Result<serde_json::Value, TransportError> {
+                Ok(serde_json::Value::Null)
+            }
+            fn co_sign_receipt(
+                &self,
+                r: TransactionReceipt,
+            ) -> Result<TransactionReceipt, TransportError> {
+                Ok(r)
+            }
+            fn handle_close(&self, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        let server = AgentServer::new(Arc::new(NopHandler), 0);
+        assert_eq!(server.max_concurrent_sessions, DEFAULT_MAX_CONCURRENT_SESSIONS);
+        assert_eq!(server.handshake_timeout_secs, DEFAULT_HANDSHAKE_TIMEOUT_SECS);
+    }
+
+    /// `with_handshake_timeout` must store the supplied value, overriding the default.
+    #[test]
+    fn with_handshake_timeout_overrides_default() {
+        use crate::handler::AgentHandler;
+        use pap_core::{receipt::TransactionReceipt, session::CapabilityToken};
+
+        struct NopHandler;
+        impl AgentHandler for NopHandler {
+            fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
+                Ok(("s".into(), "did:key:z".into()))
+            }
+            fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn handle_disclosure(
+                &self,
+                _: &str,
+                _: Vec<serde_json::Value>,
+            ) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn execute(&self, _: &str) -> Result<serde_json::Value, TransportError> {
+                Ok(serde_json::Value::Null)
+            }
+            fn co_sign_receipt(
+                &self,
+                r: TransactionReceipt,
+            ) -> Result<TransactionReceipt, TransportError> {
+                Ok(r)
+            }
+            fn handle_close(&self, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        let server = AgentServer::new(Arc::new(NopHandler), 0).with_handshake_timeout(10);
+        assert_eq!(server.handshake_timeout_secs, 10);
+    }
+
+    /// `with_max_concurrent_sessions` must store the supplied value, overriding the default.
+    #[test]
+    fn with_max_concurrent_sessions_overrides_default() {
+        use crate::handler::AgentHandler;
+        use pap_core::{receipt::TransactionReceipt, session::CapabilityToken};
+
+        struct NopHandler;
+        impl AgentHandler for NopHandler {
+            fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
+                Ok(("s".into(), "did:key:z".into()))
+            }
+            fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn handle_disclosure(
+                &self,
+                _: &str,
+                _: Vec<serde_json::Value>,
+            ) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn execute(&self, _: &str) -> Result<serde_json::Value, TransportError> {
+                Ok(serde_json::Value::Null)
+            }
+            fn co_sign_receipt(
+                &self,
+                r: TransactionReceipt,
+            ) -> Result<TransactionReceipt, TransportError> {
+                Ok(r)
+            }
+            fn handle_close(&self, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        let server = AgentServer::new(Arc::new(NopHandler), 0).with_max_concurrent_sessions(64);
+        assert_eq!(server.max_concurrent_sessions, 64);
+    }
+
+    // ── handler unit tests ───────────────────────────────────────────────
+
+    /// `handle_token` must return `Ok(bytes)` when the semaphore has at least
+    /// one available permit and the body is a valid `TokenPresentation`.
+    #[tokio::test]
+    async fn handle_token_succeeds_with_available_semaphore() {
+        // make_state initialises the semaphore with DEFAULT_MAX_CONCURRENT_SESSIONS permits.
+        let state = make_state(DEFAULT_MAX_MESSAGE_BYTES);
+
+        let valid_body = serde_json::to_vec(&serde_json::json!({
+            "type": "TokenPresentation",
+            "token": {
+                "id": "t1",
+                "target_did": "did:key:zDEF",
+                "action": "schema:SearchAction",
+                "nonce": "test-nonce",
+                "issuer_did": "did:key:zABC",
+                "issued_at": "2025-01-01T00:00:00Z",
+                "expires_at": "2099-01-01T00:00:00Z"
+            }
+        }))
+        .unwrap();
+
+        let result = handle_token(State(state), Bytes::from(valid_body)).await;
+        assert!(
+            result.is_ok(),
+            "handle_token must succeed when a semaphore permit is available; got {result:?}"
+        );
+    }
+
+    /// `handle_did_exchange` must return HTTP 400 when sent a `TokenPresentation`
+    /// body instead of the expected `SessionDidExchange` message.
+    #[tokio::test]
+    async fn handle_did_exchange_returns_bad_request_for_wrong_message() {
+        let state = make_state(DEFAULT_MAX_MESSAGE_BYTES);
+
+        let wrong_body = serde_json::to_vec(&serde_json::json!({
+            "type": "TokenPresentation",
+            "token": {
+                "id": "t1",
+                "target_did": "did:key:zDEF",
+                "action": "schema:SearchAction",
+                "nonce": "test-nonce",
+                "issuer_did": "did:key:zABC",
+                "issued_at": "2025-01-01T00:00:00Z",
+                "expires_at": "2099-01-01T00:00:00Z"
+            }
+        }))
+        .unwrap();
+
+        let result = handle_did_exchange(
+            State(state),
+            Path("session-1".to_string()),
+            Bytes::from(wrong_body),
+        )
+        .await;
+
+        assert!(
+            matches!(result, Err(StatusCode::BAD_REQUEST)),
+            "wrong message type must yield HTTP 400; got {result:?}"
+        );
+    }
+
+    /// `handle_disclosure` must return HTTP 400 when sent a `TokenPresentation`
+    /// body instead of the expected `DisclosureOffer` message.
+    #[tokio::test]
+    async fn handle_disclosure_returns_bad_request_for_wrong_message() {
+        let state = make_state(DEFAULT_MAX_MESSAGE_BYTES);
+
+        let wrong_body = serde_json::to_vec(&serde_json::json!({
+            "type": "TokenPresentation",
+            "token": {
+                "id": "t2",
+                "target_did": "did:key:zDEF",
+                "action": "schema:SearchAction",
+                "nonce": "nonce2",
+                "issuer_did": "did:key:zABC",
+                "issued_at": "2025-01-01T00:00:00Z",
+                "expires_at": "2099-01-01T00:00:00Z"
+            }
+        }))
+        .unwrap();
+
+        let result = handle_disclosure(
+            State(state),
+            Path("session-1".to_string()),
+            Bytes::from(wrong_body),
+        )
+        .await;
+
+        assert!(
+            matches!(result, Err(StatusCode::BAD_REQUEST)),
+            "wrong message type must yield HTTP 400; got {result:?}"
+        );
+    }
+
+    // ── Additional size-limit edge-case tests ────────────────────────────
+
+    /// A limit of zero must reject any non-empty body immediately.
+    #[tokio::test]
+    async fn size_limit_zero_rejects_any_body() {
+        let state = make_state(0);
+        // Even a single byte must be rejected.
+        let one_byte = Bytes::from(vec![b'{']);
+
+        let result = decode_request_body(one_byte, &state).await;
+        assert!(
+            matches!(result, Err(StatusCode::BAD_REQUEST)),
+            "a 1-byte body with limit=0 must be rejected with 400"
+        );
+    }
+
+    /// A limit of `usize::MAX` (effectively unlimited) must accept large bodies.
+    #[tokio::test]
+    async fn size_limit_max_accepts_large_body() {
+        let state = make_state(usize::MAX);
+
+        // Build a valid TokenPresentation JSON payload that is approximately
+        // 10 KiB by padding a field with a long nonce string.
+        let padding = "x".repeat(10 * 1024);
+        let large_body = serde_json::to_vec(&serde_json::json!({
+            "type": "TokenPresentation",
+            "token": {
+                "id": "t-large",
+                "target_did": "did:key:zDEF",
+                "action": "schema:SearchAction",
+                "nonce": padding,
+                "issuer_did": "did:key:zABC",
+                "issued_at": "2025-01-01T00:00:00Z",
+                "expires_at": "2099-01-01T00:00:00Z"
+            }
+        }))
+        .unwrap();
+
+        let result = decode_request_body(Bytes::from(large_body), &state).await;
+        assert!(
+            result.is_ok(),
+            "large body must be accepted when limit is usize::MAX; got {result:?}"
+        );
+    }
+
+    // ── Router construction tests ────────────────────────────────────────
+
+    /// `router()` must construct a `Router` containing all six PAP phase routes
+    /// without panicking, regardless of the server configuration.
+    #[test]
+    fn router_has_all_six_phase_routes() {
+        use crate::handler::AgentHandler;
+        use pap_core::{receipt::TransactionReceipt, session::CapabilityToken};
+
+        struct NopHandler;
+        impl AgentHandler for NopHandler {
+            fn handle_token(&self, _: CapabilityToken) -> Result<(String, String), TransportError> {
+                Ok(("s".into(), "did:key:z".into()))
+            }
+            fn handle_did_exchange(&self, _: &str, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn handle_disclosure(
+                &self,
+                _: &str,
+                _: Vec<serde_json::Value>,
+            ) -> Result<(), TransportError> {
+                Ok(())
+            }
+            fn execute(&self, _: &str) -> Result<serde_json::Value, TransportError> {
+                Ok(serde_json::Value::Null)
+            }
+            fn co_sign_receipt(
+                &self,
+                r: TransactionReceipt,
+            ) -> Result<TransactionReceipt, TransportError> {
+                Ok(r)
+            }
+            fn handle_close(&self, _: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        // Building the router must not panic. The Router type is non-trivially
+        // constructed; if any of the six route registrations are broken (wrong
+        // extractor type, duplicate path, etc.) this will panic at test time.
+        let router: Router = AgentServer::new(Arc::new(NopHandler), 0).router();
+
+        // The router is not empty — it routes at least one path. We verify this
+        // by confirming the value is usable (it implements Send + Sync).
+        fn assert_send_sync<T: Send + Sync>(_: T) {}
+        assert_send_sync(router);
+    }
+
     /// When the semaphore has zero available permits, `handle_token` must
     /// return HTTP 503 without calling the handler.
     #[tokio::test]

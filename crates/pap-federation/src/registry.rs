@@ -490,3 +490,124 @@ impl FederatedRegistry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::peer::RegistryPeer;
+    use pap_test_utils::{did_from_key, make_keypair};
+
+    // ── add_peer bypasses policy ──────────────────────────────────────────────
+
+    /// `add_peer` is documented to bypass `PeerRegistrationPolicy` entirely.
+    /// Even with an extremely restrictive policy (min_vouches = 5) the peer
+    /// must be added without error.
+    #[test]
+    fn add_peer_bypasses_policy_regardless_of_policy_settings() {
+        let strict_policy = PeerRegistrationPolicy {
+            min_vouches: 5,
+            ..Default::default()
+        };
+        let mut registry = FederatedRegistry::with_policy(strict_policy);
+        let peer = RegistryPeer::new("did:key:zBypassTest", "https://bypass.example.com");
+        // Must not panic or require vouches.
+        registry.add_peer(peer);
+        assert_eq!(
+            registry.peers().len(),
+            1,
+            "add_peer must admit the peer regardless of policy"
+        );
+        assert_eq!(registry.peers()[0].did, "did:key:zBypassTest");
+    }
+
+    // ── register_peer_with_vouches enforces min_vouches ───────────────────────
+
+    /// Attempting to register with fewer vouches than `min_vouches` must return
+    /// `FederationError::InsufficientVouches`.
+    #[test]
+    fn register_peer_respects_min_vouches_policy() {
+        let policy = PeerRegistrationPolicy {
+            min_vouches: 2,
+            vouch_budget_per_year: 10,
+            min_age_to_vouch_days: 0,
+            probation_days: 0,
+            require_diverse_paths: false,
+            path_diversity_hops: 0,
+            max_shared_ancestor_vouchers: 10,
+        };
+        let mut registry = FederatedRegistry::with_policy(policy);
+
+        // Bootstrap one voucher peer so the vouch graph is non-empty.
+        let voucher_key = make_keypair();
+        let voucher_did = did_from_key(&voucher_key);
+        let mut voucher_peer = RegistryPeer::new(&voucher_did, "https://voucher.example.com");
+        // Make it Active (not Probationary) and old enough to vouch.
+        voucher_peer.status = PeerStatus::Active;
+        voucher_peer.registered_at = Some("2000-01-01T00:00:00Z".into());
+        registry.add_peer(voucher_peer);
+
+        // Build only 1 vouch, which is below the required 2.
+        let candidate_did = "did:key:zCandidate";
+        let vouch = crate::peer::PeerVouch::sign(
+            &voucher_did,
+            candidate_did,
+            "2026-01-01T00:00:00Z",
+            "direct-interaction",
+            &voucher_key,
+        );
+        let candidate = RegistryPeer::new(candidate_did, "https://candidate.example.com");
+        let now = chrono::Utc::now();
+
+        let result = registry.register_peer_with_vouches(candidate, vec![vouch], now);
+        match result {
+            Err(FederationError::InsufficientVouches { needed, got }) => {
+                assert_eq!(needed, 2);
+                assert_eq!(got, 1);
+            }
+            other => panic!("expected InsufficientVouches, got: {other:?}"),
+        }
+    }
+
+    // ── require_diverse_paths persisted in policy ─────────────────────────────
+
+    /// The `require_diverse_paths` field is documented but its enforcement is
+    /// conditional. This test verifies the field round-trips through JSON
+    /// serialization so it is not lost if the policy is persisted or logged.
+    #[test]
+    fn require_diverse_paths_field_is_persisted_in_policy() {
+        let policy = PeerRegistrationPolicy {
+            require_diverse_paths: true,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&policy).expect("serialization cannot fail");
+        let restored: PeerRegistrationPolicy =
+            serde_json::from_str(&json).expect("deserialization cannot fail");
+        assert!(
+            restored.require_diverse_paths,
+            "require_diverse_paths must survive a JSON round-trip"
+        );
+    }
+
+    // ── peers() count ─────────────────────────────────────────────────────────
+
+    /// An empty registry must report zero peers; after one `add_peer` call it
+    /// must report exactly one.
+    #[test]
+    fn peer_count_method_if_exists() {
+        let mut registry = FederatedRegistry::new();
+        assert_eq!(
+            registry.peers().len(),
+            0,
+            "fresh registry must have zero peers"
+        );
+        registry.add_peer(RegistryPeer::new(
+            "did:key:zCountTest",
+            "https://count.example.com",
+        ));
+        assert_eq!(
+            registry.peers().len(),
+            1,
+            "registry must have exactly one peer after add_peer"
+        );
+    }
+}

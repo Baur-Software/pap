@@ -1063,6 +1063,235 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
+    // ── New peer admission tests ──────────────────────────────────────────────
+
+    /// Adding a peer with `cert_fingerprint` must persist the fingerprint and
+    /// return it when the peer list is fetched.
+    #[tokio::test]
+    async fn add_peer_with_cert_fingerprint_stored_correctly() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+            max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+        };
+        let app = router().with_state(state);
+
+        let body = serde_json::json!({
+            "did": "did:key:zFingerprintPeer",
+            "endpoint": "https://fp.example.com",
+            "cert_fingerprint": "aa:bb:cc"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // List peers and verify the fingerprint is present.
+        let req = Request::get("/api/peers").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let json = body_json(resp.into_body()).await;
+        let peers = json.as_array().unwrap();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0]["cert_fingerprint"], "aa:bb:cc");
+    }
+
+    /// `bypass_policy: true` on a completely empty registry must succeed —
+    /// this is the documented bootstrap path.
+    #[tokio::test]
+    async fn add_peer_bypass_policy_on_empty_registry_succeeds() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:zBootstrapOnly",
+            "endpoint": "https://bootstrap.example.com",
+            "bypass_policy": true
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::CREATED,
+            "bypass_policy: true on an empty registry must return 201"
+        );
+    }
+
+    /// Posting without `bypass_policy` to a fresh empty registry must also
+    /// succeed — the empty-registry check allows direct admission regardless.
+    #[tokio::test]
+    async fn add_peer_without_bypass_on_empty_registry_succeeds() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:zFirstPeer",
+            "endpoint": "https://first.example.com"
+            // bypass_policy omitted — defaults false
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::CREATED,
+            "omitting bypass_policy on an empty registry must return 201"
+        );
+    }
+
+    /// DELETE an existing peer must return 200 OK and the peer must no longer
+    /// appear in the subsequent list.
+    #[tokio::test]
+    async fn remove_existing_peer_returns_200() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+            max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+        };
+        let app = router().with_state(state);
+
+        // Add the peer first.
+        let body = serde_json::json!({
+            "did": "did:key:zToRemove",
+            "endpoint": "https://remove-me.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Delete the peer (DID percent-encoded in path).
+        let req = Request::delete("/api/peers/did%3Akey%3AzToRemove")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "deleting an existing peer must return 200"
+        );
+
+        // Verify the peer no longer appears in the list.
+        let req = Request::get("/api/peers").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let json = body_json(resp.into_body()).await;
+        assert!(
+            json.as_array().unwrap().is_empty(),
+            "peer list must be empty after deletion"
+        );
+    }
+
+    /// A request to a token-protected endpoint without an Authorization header
+    /// must be rejected with 401 Unauthorized.
+    #[tokio::test]
+    async fn add_peer_no_admin_token_when_required_returns_401() {
+        let app = test_router(Some("supersecret")).await;
+        let body = serde_json::json!({
+            "did": "did:key:zUnauthed",
+            "endpoint": "https://unauthed.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            // Deliberately omit Authorization header.
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "missing auth header when token is required must return 401"
+        );
+    }
+
+    /// Adding two peers then listing must return both DIDs.
+    #[tokio::test]
+    async fn list_peers_returns_added_peers() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zNode".into(),
+            node_endpoint: "http://localhost".into(),
+            cert_fingerprint: "sha256:test".into(),
+            admin_token: None,
+            max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+        };
+        let app = router().with_state(state);
+
+        // Add first peer.
+        let body_a = serde_json::json!({
+            "did": "did:key:zAlpha",
+            "endpoint": "https://alpha.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body_a).unwrap()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Attempt to add a second peer — this will be rejected because the
+        // registry is now non-empty and the endpoint requires vouches for
+        // subsequent peers.  We verify the list contains exactly the first peer.
+        let body_b = serde_json::json!({
+            "did": "did:key:zBeta",
+            "endpoint": "https://beta.example.com"
+        });
+        let req = Request::post("/api/peers")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&body_b).unwrap()))
+            .unwrap();
+        // This is 422 by design — non-empty registry, no vouches.
+        let _ = app.clone().oneshot(req).await.unwrap();
+
+        // List and confirm only the bootstrapped peer is present.
+        let req = Request::get("/api/peers").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let json = body_json(resp.into_body()).await;
+        let peers = json.as_array().unwrap();
+        assert_eq!(peers.len(), 1, "exactly one peer was successfully admitted");
+        let dids: Vec<&str> = peers
+            .iter()
+            .filter_map(|p| p["did"].as_str())
+            .collect();
+        assert!(dids.contains(&"did:key:zAlpha"), "alpha peer must be listed");
+    }
+
     // ── POST /api/peers/{did}/sync ────────────────────────────────────────────
 
     #[tokio::test]
