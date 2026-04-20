@@ -14,7 +14,11 @@ use crate::state::AppState;
 pub async fn list_profiles(
     state: State<'_, AppState>,
 ) -> Result<Vec<ProfileMetadata>, PapillonError> {
-    let profiles = state.profiles.read().unwrap().clone();
+    let profiles = state
+        .profiles
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     Ok(profiles)
 }
 
@@ -43,7 +47,7 @@ pub async fn create_profile(
     state
         .profiles
         .write()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .push(profile_metadata.clone());
 
     Ok(profile_metadata)
@@ -91,23 +95,29 @@ pub async fn switch_profile(
 
     // Update AppState atomically
     {
-        let mut active_id = state.active_profile_id.write().unwrap();
+        let mut active_id = state
+            .active_profile_id
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *active_id = profile_id.clone();
     }
 
     {
-        let mut seed_guard = state.principal_seed.write().unwrap();
+        let mut seed_guard = state
+            .principal_seed
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *seed_guard = Some(Zeroizing::new(seed));
     }
 
     {
-        let mut signer_guard = state.signer.write().unwrap();
+        let mut signer_guard = state.signer.write().unwrap_or_else(|e| e.into_inner());
         *signer_guard = Some(Box::new(signer));
     }
 
     // Clear registries cache so they reload for the new profile
     {
-        let mut registries = state.registries.write().unwrap();
+        let mut registries = state.registries.write().unwrap_or_else(|e| e.into_inner());
         registries.clear();
     }
 
@@ -116,7 +126,7 @@ pub async fn switch_profile(
 
     // Update in-memory profiles list
     {
-        let mut profiles = state.profiles.write().unwrap();
+        let mut profiles = state.profiles.write().unwrap_or_else(|e| e.into_inner());
         for p in profiles.iter_mut() {
             p.active = p.id == profile_id;
         }
@@ -142,7 +152,7 @@ pub async fn rename_profile(
 
     // Update in-memory list
     {
-        let mut profiles = state.profiles.write().unwrap();
+        let mut profiles = state.profiles.write().unwrap_or_else(|e| e.into_inner());
         if let Some(p) = profiles.iter_mut().find(|p| p.id == profile_id) {
             p.name = new_name;
         }
@@ -167,7 +177,7 @@ pub async fn delete_profile(
 
     // Update in-memory list
     {
-        let mut profiles = state.profiles.write().unwrap();
+        let mut profiles = state.profiles.write().unwrap_or_else(|e| e.into_inner());
         profiles.retain(|p| p.id != profile_id);
     }
 
@@ -188,7 +198,10 @@ pub async fn export_profile_seed(
 
     // Mark key as backed up
     {
-        let mut backed_up = state.key_backed_up.write().unwrap();
+        let mut backed_up = state
+            .key_backed_up
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *backed_up = true;
     }
 
@@ -233,12 +246,15 @@ pub async fn import_profile_seed(
     state
         .profiles
         .write()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .push(profile_metadata.clone());
 
     // Mark key as backed up (since we're importing it)
     {
-        let mut backed_up = state.key_backed_up.write().unwrap();
+        let mut backed_up = state
+            .key_backed_up
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *backed_up = true;
     }
 

@@ -41,7 +41,7 @@ impl<T> SessionStore<T> {
     pub fn insert(&self, session_id: String, data: T) -> String {
         let session_key = SessionKeypair::generate();
         let did = session_key.did();
-        let mut map = self.inner.lock().expect("session store mutex poisoned");
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         Self::reap(&mut map);
         map.insert(
             session_id,
@@ -56,7 +56,7 @@ impl<T> SessionStore<T> {
 
     /// Check that a session exists.
     pub fn exists(&self, session_id: &str) -> bool {
-        let map = self.inner.lock().expect("session store mutex poisoned");
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         map.get(session_id)
             .map(|e| e.created.elapsed() < SESSION_TTL)
             .unwrap_or(false)
@@ -67,7 +67,7 @@ impl<T> SessionStore<T> {
     where
         F: FnOnce(&mut T) -> R,
     {
-        let mut map = self.inner.lock().expect("session store mutex poisoned");
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         Self::reap(&mut map);
         let entry = map
             .get_mut(session_id)
@@ -80,7 +80,7 @@ impl<T> SessionStore<T> {
     where
         F: FnOnce(&T) -> R,
     {
-        let map = self.inner.lock().expect("session store mutex poisoned");
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let entry = map
             .get(session_id)
             .filter(|e| e.created.elapsed() < SESSION_TTL)
@@ -91,7 +91,7 @@ impl<T> SessionStore<T> {
     /// Get a clone of the session's signing key for co-signing.
     /// Returns None if session doesn't exist or is expired.
     pub fn signing_key(&self, session_id: &str) -> Option<ed25519_dalek::SigningKey> {
-        let map = self.inner.lock().expect("session store mutex poisoned");
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         map.get(session_id)
             .filter(|e| e.created.elapsed() < SESSION_TTL)
             .map(|e| e.session_key.signing_key().clone())
@@ -99,7 +99,7 @@ impl<T> SessionStore<T> {
 
     /// Remove a session. The `SessionKeypair` is dropped (and zeroized).
     pub fn remove(&self, session_id: &str) {
-        let mut map = self.inner.lock().expect("session store mutex poisoned");
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         map.remove(session_id);
         Self::reap(&mut map);
     }

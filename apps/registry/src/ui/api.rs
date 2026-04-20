@@ -95,7 +95,7 @@ pub async fn get_status() -> Result<RegistryStatus, ServerFnError> {
         return Err(ServerFnError::new("unauthorized"));
     }
     let (agent_count, peer_count) = {
-        let registry = state.registry.lock().unwrap();
+        let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         (registry.len(), registry.peers().len())
     };
     Ok(RegistryStatus {
@@ -170,7 +170,7 @@ pub async fn remove_agent(hash: String) -> Result<(), ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     if deleted {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.remove_by_hash(&hash);
         Ok(())
     } else {
@@ -234,7 +234,7 @@ pub async fn register_agent_json(json: String) -> Result<String, ServerFnError> 
         .map_err(|e| ServerFnError::new(format!("Invalid JSON: {}", e)))?;
 
     {
-        let registry = state.registry.lock().unwrap();
+        let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         if !registry.verify_advertisement(&ad) {
             return Err(ServerFnError::new(
                 "invalid or missing Ed25519 signature — signed_by DID must match the signature",
@@ -250,7 +250,7 @@ pub async fn register_agent_json(json: String) -> Result<String, ServerFnError> 
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         let _ = registry.register_local(ad); // duplicate is silently ignored
     }
     Ok(hash)
@@ -309,7 +309,7 @@ pub async fn add_peer(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.add_peer(peer);
     }
     Ok(())
@@ -335,7 +335,7 @@ pub async fn remove_peer(did: String) -> Result<(), ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     if deleted {
-        let mut registry = state.registry.lock().unwrap();
+        let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.remove_peer(&did);
         Ok(())
     } else {
@@ -358,7 +358,7 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
     }
 
     let peer_info = {
-        let registry = state.registry.lock().unwrap();
+        let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
         registry
             .peers()
             .iter()
@@ -412,7 +412,7 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
     if let pap_federation::sync::FederationMessage::QueryResponse { advertisements, .. } = msg {
         // Identify new ads without touching the in-memory registry yet.
         let new_ads: Vec<_> = {
-            let registry = state.registry.lock().unwrap();
+            let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
             let existing: std::collections::HashSet<String> = registry
                 .all_advertisements()
                 .iter()
@@ -436,7 +436,7 @@ pub async fn sync_peer(did: String) -> Result<usize, ServerFnError> {
 
         let merged = persisted.len();
         {
-            let mut registry = state.registry.lock().unwrap();
+            let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
             registry.merge_remote(persisted);
         }
 
@@ -560,7 +560,7 @@ pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnEr
 
         match state.store.insert_agent(&hash, &ad).await {
             Ok(()) => {
-                let mut registry = state.registry.lock().unwrap();
+                let mut registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = registry.register_local(ad); // duplicate silently ignored
                 installed += 1;
             }
