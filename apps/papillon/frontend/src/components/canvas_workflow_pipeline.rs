@@ -1,102 +1,308 @@
 use leptos::prelude::*;
+use papillon_shared::{PipelineNodeType, WorkflowMode, WorkflowNode};
 
-use crate::state::canvas::CanvasState;
+use crate::state::{
+    canvas::{CanvasSide, CanvasState},
+    workflow::WorkflowState,
+};
 
-/// Workflow pipeline — lists all blocks as workflow cards on the back face.
+/// Main workflow canvas component rendered in the back face Workflow tab.
+/// Shows MAP mode (auto-derived live dependency graph) or DESIGN mode (intent-first builder).
 #[component]
 pub fn CanvasWorkflowPipeline() -> impl IntoView {
-    let canvas_state = expect_context::<CanvasState>();
-
-    let blocks = move || {
-        canvas_state
-            .current_canvas()
-            .map(|c| c.blocks)
-            .unwrap_or_default()
-    };
-
-    let has_blocks = move || !blocks().is_empty();
+    let workflow = expect_context::<WorkflowState>();
 
     view! {
-        <div class="canvas-workflow-pipeline">
+        <div class="wf-canvas">
+            <div class="wf-mode-toggle">
+                <button
+                    class="wf-toggle-btn"
+                    class:active=move || workflow.mode.get() == WorkflowMode::Map
+                    on:click=move |_| workflow.mode.set(WorkflowMode::Map)
+                >
+                    "MAP"
+                </button>
+                <button
+                    class="wf-toggle-btn"
+                    class:active=move || workflow.mode.get() == WorkflowMode::Design
+                    on:click=move |_| workflow.mode.set(WorkflowMode::Design)
+                >
+                    "DESIGN"
+                </button>
+            </div>
+
+            <Show when=move || workflow.mode.get() == WorkflowMode::Map>
+                <MapModeCanvas />
+            </Show>
+            <Show when=move || workflow.mode.get() == WorkflowMode::Design>
+                <DesignModeCanvas />
+            </Show>
+        </div>
+    }
+}
+
+/// Map mode: read-only live dependency graph auto-derived from canvas block events.
+#[component]
+fn MapModeCanvas() -> impl IntoView {
+    let workflow = expect_context::<WorkflowState>();
+
+    let nodes = move || workflow.graph.get().nodes;
+    let has_nodes = move || !workflow.graph.get().nodes.is_empty();
+
+    view! {
+        <div class="wf-map-canvas">
             <Show
-                when=has_blocks
-                fallback=move || view! {
-                    <div class="workflow-empty-state">
-                        "No blocks yet. Switch to Rendered view and submit a prompt."
+                when=has_nodes
+                fallback=|| view! {
+                    <div class="wf-empty-state">
+                        <p class="wf-empty-hint">
+                            "Run a prompt to see the dependency graph."
+                        </p>
                     </div>
                 }
             >
-                <For
-                    each=blocks
-                    key=|b| format!("{}@{}", b.id, b.updated_at)
-                    children=move |block| {
-                        let block_id = block.id.clone();
-                        let block_id_retry = block_id.clone();
-                        let state_label = match &block.state {
-                            papillon_shared::BlockState::Resolved => "resolved",
-                            papillon_shared::BlockState::Resolving { .. } => "resolving",
-                            papillon_shared::BlockState::Failed { .. } => "failed",
-                            papillon_shared::BlockState::Ghost { .. } => "ghost",
-                            papillon_shared::BlockState::AwaitingApproval { .. } => "resolving",
-                            papillon_shared::BlockState::Outcome { .. } => "resolved",
-                            papillon_shared::BlockState::Guide { .. } => "guide",
-                            papillon_shared::BlockState::Note { .. } => "note",
-                        };
-                        let badge_class = format!("wf-state-badge {}", state_label);
-                        let query = block.prompt_text.clone().unwrap_or_else(|| block_id.clone());
-                        let schema = block.schema_type.clone().unwrap_or_default();
-                        let agent = block.agent_did.clone().unwrap_or_default();
-                        let agent_short = if agent.len() > 20 {
-                            format!("{}...", &agent[..20])
-                        } else {
-                            agent.clone()
-                        };
-                        let expires = block.mandate_expires_at.clone().unwrap_or_default();
-                        let has_agent = !agent.is_empty();
-                        let has_expires = !expires.is_empty();
-                        let id_short = if block_id.len() > 8 {
-                            format!("{}...", &block_id[..8])
-                        } else {
-                            block_id.clone()
-                        };
-                        view! {
-                            <div class="workflow-block-card">
-                                <div class="wf-header-row">
-                                    <span class="wf-meta">{id_short}</span>
-                                    {move || {
-                                        if !schema.is_empty() {
-                                            view! {
-                                                <span class="wf-meta">
-                                                    {format!(" \u{00b7} {}", schema.trim_start_matches("schema:"))}
-                                                </span>
-                                            }.into_any()
-                                        } else {
-                                            view! { <span /> }.into_any()
-                                        }
-                                    }}
-                                    <span class=badge_class>{state_label}</span>
-                                </div>
-                                <div class="wf-query">{query}</div>
-                                <Show when=move || has_agent>
-                                    <div class="wf-meta">{agent_short.clone()}</div>
-                                </Show>
-                                <Show when=move || has_expires>
-                                    <div class="wf-meta">{format!("expires {}", &expires[..16.min(expires.len())])}</div>
-                                </Show>
-                                <button
-                                    class="btn-retry"
-                                    on:click=move |e: leptos::ev::MouseEvent| {
-                                        e.stop_propagation();
-                                        canvas_state.retry_block(block_id_retry.clone());
-                                    }
-                                >
-                                    "Re-run"
-                                </button>
-                            </div>
+                <div class="wf-graph-row">
+                    <For
+                        each=nodes
+                        key=|n| n.id.clone()
+                        children=move |node| {
+                            view! { <MapNode node=node /> }
                         }
-                    }
-                />
+                    />
+                </div>
             </Show>
         </div>
+    }
+}
+
+/// A single resolved/running block shown as a node in Map mode.
+#[component]
+fn MapNode(node: WorkflowNode) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let node_id = node.id.clone();
+    let display_name = node
+        .agent_name
+        .clone()
+        .unwrap_or_else(|| truncate_intent(&node.intent));
+    let pap_uri = node.pap_uri.clone();
+
+    view! {
+        <div
+            class="wf-node wf-node-resolved"
+            on:click=move |_| {
+                canvas_state.canvas_side.set(CanvasSide::Front);
+                canvas_state.requested_expansion.set(Some(node_id.clone()));
+            }
+        >
+            <div class="wf-node-header">
+                <span class="wf-node-icon">"🤖"</span>
+                <span class="wf-node-name">{display_name}</span>
+                {pap_uri.map(|u| view! {
+                    <span class="wf-node-uri">{u}</span>
+                })}
+            </div>
+        </div>
+    }
+}
+
+/// Design mode: intent-first workflow builder with tools strip and node graph area.
+#[component]
+fn DesignModeCanvas() -> impl IntoView {
+    let workflow = expect_context::<WorkflowState>();
+    let canvas_state = expect_context::<CanvasState>();
+
+    let add_agent_node = move |_| {
+        let mut nodes = workflow.design_nodes.get_untracked();
+        let id = format!("node-{}", nodes.len());
+        nodes.push(WorkflowNode {
+            id,
+            node_type: PipelineNodeType::Agent,
+            intent: String::new(),
+            agent_name: None,
+            agent_did: None,
+            pap_uri: None,
+            input_ports: Vec::new(),
+            output_ports: Vec::new(),
+            template_override: None,
+            position_x: nodes.len() as f64 * 260.0,
+            position_y: 60.0,
+        });
+        workflow.design_nodes.set(nodes);
+    };
+
+    let run_workflow = move |_| {
+        // Flip to front face immediately so user sees blocks appear in real time
+        canvas_state.canvas_side.set(CanvasSide::Front);
+        // TODO: trigger pipeline execution from design_nodes/design_edges
+    };
+
+    let has_nodes = move || !workflow.design_nodes.get().is_empty();
+
+    view! {
+        <div class="wf-design-canvas">
+            // Tools strip
+            <div class="wf-tools-strip">
+                <button class="wf-tool wf-tool-active" on:click=add_agent_node title="Add agent node">
+                    <span>"🤖"</span>
+                    <span class="wf-tool-label">"Agent"</span>
+                </button>
+                <button class="wf-tool" title="Add synthesizer node">
+                    <span>"⬡"</span>
+                    <span class="wf-tool-label">"Synth"</span>
+                </button>
+                <button class="wf-tool" title="Add note">
+                    <span>"📝"</span>
+                    <span class="wf-tool-label">"Note"</span>
+                </button>
+                <div class="wf-tool-spacer"></div>
+                <button class="wf-tool" title="Save pipeline">
+                    <span>"💾"</span>
+                    <span class="wf-tool-label">"Save"</span>
+                </button>
+                <button class="wf-tool wf-tool-run" on:click=run_workflow title="Run workflow">
+                    <span>"▶"</span>
+                    <span class="wf-tool-label">"Run"</span>
+                </button>
+            </div>
+
+            // Node graph area
+            <div class="wf-graph-area">
+                <Show
+                    when=has_nodes
+                    fallback=|| view! {
+                        <div class="wf-empty-state">
+                            <p class="wf-empty-hint">
+                                "Click 🤖 to add an agent step."
+                            </p>
+                        </div>
+                    }
+                >
+                    <For
+                        each=move || workflow.design_nodes.get()
+                        key=|n| n.id.clone()
+                        children=move |node| {
+                            view! { <DesignNode node=node /> }
+                        }
+                    />
+                </Show>
+            </div>
+        </div>
+    }
+}
+
+/// A node in Design mode — shows intent input, input/output ports, and template picker stub.
+#[component]
+fn DesignNode(node: WorkflowNode) -> impl IntoView {
+    let workflow = expect_context::<WorkflowState>();
+    let node_id = node.id.clone();
+    let intent = RwSignal::new(node.intent.clone());
+
+    let on_intent_input = {
+        let node_id = node_id.clone();
+        move |ev: leptos::ev::Event| {
+            let value = event_target_value(&ev);
+            let mut nodes = workflow.design_nodes.get_untracked();
+            if let Some(n) = nodes.iter_mut().find(|n| n.id == node_id) {
+                n.intent = value;
+            }
+            workflow.design_nodes.set(nodes);
+            intent.set(
+                workflow
+                    .design_nodes
+                    .get_untracked()
+                    .iter()
+                    .find(|n| n.id == node_id)
+                    .map(|n| n.intent.clone())
+                    .unwrap_or_default(),
+            );
+        }
+    };
+
+    let display_name = node
+        .agent_name
+        .clone()
+        .unwrap_or_else(|| "New Agent".to_string());
+
+    let input_ports = node.input_ports.clone();
+    let output_ports = node.output_ports.clone();
+
+    view! {
+        <div class="wf-node wf-node-pending">
+            <div class="wf-node-header">
+                <span class="wf-node-icon">"🤖"</span>
+                <span class="wf-node-name">{display_name}</span>
+            </div>
+
+            // RECEIVES FROM PRINCIPAL section
+            <div class="wf-node-section">
+                <div class="wf-node-section-label">"RECEIVES FROM PRINCIPAL"</div>
+                {if input_ports.is_empty() {
+                    view! { <div class="wf-port-empty">"—"</div> }.into_any()
+                } else {
+                    view! {
+                        <For
+                            each=move || input_ports.clone()
+                            key=|p| p.path.clone()
+                            children=|port| view! {
+                                <div class="wf-port-row input">
+                                    <span class="wf-port-dot"></span>
+                                    <span class="wf-port-label">{port.label.clone()}</span>
+                                </div>
+                            }
+                        />
+                    }.into_any()
+                }}
+            </div>
+
+            // OUTPUTS section
+            <div class="wf-node-section">
+                <div class="wf-node-section-label">"OUTPUTS"</div>
+                {if output_ports.is_empty() {
+                    view! { <div class="wf-port-empty">"—"</div> }.into_any()
+                } else {
+                    view! {
+                        <For
+                            each=move || output_ports.clone()
+                            key=|p| p.path.clone()
+                            children=|port| view! {
+                                <div class="wf-port-row output">
+                                    <span class="wf-port-label">{port.label.clone()}</span>
+                                    <span class="wf-port-dot"></span>
+                                </div>
+                            }
+                        />
+                    }.into_any()
+                }}
+            </div>
+
+            // Intent input (visible before agent resolves)
+            <div class="wf-node-section">
+                <input
+                    type="text"
+                    class="wf-node-intent-input"
+                    placeholder="What should this step do?"
+                    prop:value=intent
+                    on:input=on_intent_input
+                />
+            </div>
+
+            // RENDER AS — template picker stub (wired in Task 7)
+            <div class="wf-node-template-picker">
+                <span class="wf-node-template-label">"RENDER AS"</span>
+                <select class="wf-node-template-select">
+                    <option value="auto">"auto"</option>
+                </select>
+            </div>
+        </div>
+    }
+}
+
+fn truncate_intent(intent: &str) -> String {
+    if intent.len() > 28 {
+        format!("{}…", &intent[..28])
+    } else if intent.is_empty() {
+        "Block".to_string()
+    } else {
+        intent.to_string()
     }
 }
