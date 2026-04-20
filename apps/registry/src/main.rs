@@ -7,7 +7,7 @@ use anyhow::Context as _;
 use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tracing::info;
 
@@ -226,12 +226,55 @@ async fn main() -> anyhow::Result<()> {
     let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
         .with_state(leptos_options);
 
-    // TODO(I9): allow_origin(Any) permits cross-origin Bearer-authenticated requests from any
-    // web page. Acceptable for a reference implementation on a trusted network. For
-    // production deployments that require strict origin isolation, restrict this to
-    // the node's own public_endpoint origin and leave federation routes open separately.
+    // ── CORS origin allowlist ─────────────────────────────────────────────────
+    // Read ALLOWED_ORIGINS from the environment (comma-separated list of exact
+    // origins, e.g. "http://localhost:3000,https://app.example.com").
+    // If the variable is not set, default to allowing any port on localhost and
+    // 127.0.0.1 (scheme+host prefix match, port-agnostic).
+    let allowed_origins: Vec<String> = match std::env::var("ALLOWED_ORIGINS") {
+        Ok(val) if !val.trim().is_empty() => val
+            .split(',')
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        _ => vec![
+            "http://localhost".to_owned(),
+            "http://127.0.0.1".to_owned(),
+        ],
+    };
+    tracing::info!("CORS origins: {:?}", allowed_origins);
+
+    // Build a predicate that matches an incoming `Origin` header value against
+    // the allowlist.  An entry that has no port component (e.g.
+    // "http://localhost") is treated as a prefix match so that it covers all
+    // ports on that host.  An entry that already includes a port (e.g.
+    // "http://localhost:3000") is an exact match.
+    let cors_origins = allowed_origins.clone();
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(AllowOrigin::predicate(move |origin, _req| {
+            let origin_str = match origin.to_str() {
+                Ok(s) => s,
+                Err(_) => return false,
+            };
+            cors_origins.iter().any(|allowed| {
+                // If the allowed entry already contains a port (second `:` after
+                // the scheme colon), require an exact match.  Otherwise treat it
+                // as a scheme+host prefix so that any port is accepted.
+                let has_port = allowed
+                    .find("://")
+                    .map(|i| &allowed[i + 3..])
+                    .unwrap_or(allowed.as_str())
+                    .contains(':');
+                if has_port {
+                    origin_str == allowed.as_str()
+                } else {
+                    // Prefix match: "http://localhost" matches
+                    // "http://localhost", "http://localhost:3000", etc.
+                    origin_str == allowed.as_str()
+                        || origin_str.starts_with(&format!("{allowed}:"))
+                }
+            })
+        }))
         .allow_methods(Any)
         .allow_headers(Any);
 
