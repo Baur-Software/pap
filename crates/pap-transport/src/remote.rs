@@ -106,10 +106,11 @@ impl AgentHandler for RemoteAgentHandler {
         initiator_session_did: &str,
     ) -> Result<(), TransportError> {
         let expires_at = self.stored_expires_at()?;
-        let resp = Self::block_on(
-            self.client
-                .exchange_did(session_id, initiator_session_did.to_string(), expires_at),
-        )?;
+        let resp = Self::block_on(self.client.exchange_did(
+            session_id,
+            initiator_session_did.to_string(),
+            expires_at,
+        ))?;
         match resp {
             ProtocolMessage::SessionDidAck => Ok(()),
             other => Err(TransportError::InvalidResponse(format!(
@@ -124,8 +125,11 @@ impl AgentHandler for RemoteAgentHandler {
         disclosures: Vec<serde_json::Value>,
     ) -> Result<(), TransportError> {
         let expires_at = self.stored_expires_at()?;
-        let resp =
-            Self::block_on(self.client.send_disclosures(session_id, disclosures, expires_at))?;
+        let resp = Self::block_on(self.client.send_disclosures(
+            session_id,
+            disclosures,
+            expires_at,
+        ))?;
         match resp {
             ProtocolMessage::DisclosureAccepted => Ok(()),
             other => Err(TransportError::InvalidResponse(format!(
@@ -160,8 +164,10 @@ impl AgentHandler for RemoteAgentHandler {
                 )
             })?;
         let expires_at = self.stored_expires_at()?;
-        let resp =
-            Self::block_on(self.client.exchange_receipt(&session_id, receipt, expires_at))?;
+        let resp = Self::block_on(
+            self.client
+                .exchange_receipt(&session_id, receipt, expires_at),
+        )?;
         match resp {
             ProtocolMessage::ReceiptCoSigned { receipt } => Ok(receipt),
             other => Err(TransportError::InvalidResponse(format!(
