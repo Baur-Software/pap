@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos_router::components::A;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
@@ -25,6 +26,14 @@ pub fn SettingsPage() -> impl IntoView {
             // ── Left nav ──
             <nav class="settings-nav">
 
+                <A href="/" class="settings-nav-back">
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </span>
+                    "Canvas"
+                </A>
+
+                <div class="settings-nav-divider" />
                 <div class="settings-nav-group-label">"Account"</div>
                 <button
                     class=move || if active_tab.get() == "profiles" { "settings-nav-link active" } else { "settings-nav-link" }

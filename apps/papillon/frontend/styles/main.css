@@ -1019,6 +1019,23 @@ body {
     margin: 8px 0;
 }
 
+.settings-nav-back {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 16px;
+    height: 32px;
+    font-size: 13px;
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.12s;
+    font-family: var(--font-body);
+}
+
+.settings-nav-back:hover {
+    color: var(--text-1);
+}
+
 .settings-content {
     flex: 1;
     overflow-y: auto;
