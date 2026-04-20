@@ -31,7 +31,7 @@ pub async fn canvas_prompt(
         .await;
     }
 
-    let (schema_type, content, preference_guided, agent_did) = process_prompt(
+    let (schema_type, content, preference_guided, agent_did, retention_warning) = process_prompt(
         &app,
         &state,
         &prompt_id,
@@ -70,7 +70,7 @@ pub async fn canvas_prompt(
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
-                retention_warning: None,
+                retention_warning,
             },
         },
     );
@@ -86,7 +86,7 @@ pub async fn canvas_reshape(
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
     let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
-    let (schema_type, content, preference_guided, agent_did) = process_prompt(
+    let (schema_type, content, preference_guided, agent_did, retention_warning) = process_prompt(
         &app,
         &state,
         "",
@@ -125,7 +125,7 @@ pub async fn canvas_reshape(
                 preference_guided,
                 created_at: now.clone(),
                 updated_at: now,
-                retention_warning: None,
+                retention_warning,
             },
         },
     );

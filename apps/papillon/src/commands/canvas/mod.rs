@@ -104,6 +104,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"agent": "test"}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         // No "result" key → 0.3
@@ -116,6 +117,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": null}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.2).abs() < f64::EPSILON);
@@ -134,6 +136,7 @@ mod tests {
                 }
             }),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         // 4 fields → 0.8
@@ -148,6 +151,7 @@ mod tests {
                 "result": ["a", "b", "c", "d"]
             }),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         // Array with 4 items → 0.8 (generic match)
@@ -160,6 +164,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": ""}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.3).abs() < f64::EPSILON);
@@ -173,6 +178,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": "short answer"}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.5).abs() < f64::EPSILON, "got {quality}");
@@ -184,6 +190,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": "this is a longer answer that exceeds twenty characters"}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.8).abs() < f64::EPSILON, "got {quality}");
@@ -195,6 +202,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": {"name": "Rust"}}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.6).abs() < f64::EPSILON, "got {quality}");
@@ -211,6 +219,7 @@ mod tests {
                 }
             }),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 1.0).abs() < f64::EPSILON, "got {quality}");
@@ -222,6 +231,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": ["only_one"]}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.6).abs() < f64::EPSILON, "got {quality}");
@@ -233,6 +243,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": []}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.3).abs() < f64::EPSILON, "got {quality}");
@@ -244,6 +255,7 @@ mod tests {
             schema_type: "Thing".into(),
             content: serde_json::json!({"result": true}),
             agent_name: "Test".into(),
+            retention_warning: None,
         };
         let quality = assess_handshake_quality(&result);
         assert!((quality - 0.8).abs() < f64::EPSILON, "got {quality}");

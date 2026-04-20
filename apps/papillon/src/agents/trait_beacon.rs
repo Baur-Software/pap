@@ -74,7 +74,10 @@ impl AgentHandler for TraitBeaconAgent {
         }
 
         let session_id = uuid::Uuid::new_v4().to_string();
-        let did = self.sessions.insert(session_id.clone(), ());
+        let did = self
+            .sessions
+            .insert(session_id.clone(), ())
+            .map_err(|e| TransportError::ServerError(e.to_string()))?;
         Ok((session_id, did))
     }
 
