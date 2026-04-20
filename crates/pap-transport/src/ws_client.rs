@@ -127,11 +127,17 @@ impl WsAgentClient {
         match response {
             Message::Text(text) => {
                 let limit = DEFAULT_MAX_MESSAGE_BYTES;
+                // Capture the byte count before the LimitedRead consumes `text` by
+                // reference, so we can report it in the error without holding a
+                // reference to the frame payload (which may be large).
+                // Note: this is the length of a *server-sent* frame — it carries no
+                // principal data, so including it in the error is safe.
+                let frame_len = text.len();
                 serde_json::from_reader(LimitedRead::new(Cursor::new(text.as_bytes()), limit))
                     .map_err(|e| {
                         if is_limit_exceeded(&e) {
                             TransportError::MessageTooLarge {
-                                size: text.len(),
+                                size: frame_len,
                                 limit,
                             }
                         } else {
