@@ -14,7 +14,11 @@ use crate::state::AppState;
 pub async fn list_profiles(
     state: State<'_, AppState>,
 ) -> Result<Vec<ProfileMetadata>, PapillonError> {
-    let profiles = state.profiles.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let profiles = state
+        .profiles
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     Ok(profiles)
 }
 
@@ -91,12 +95,18 @@ pub async fn switch_profile(
 
     // Update AppState atomically
     {
-        let mut active_id = state.active_profile_id.write().unwrap_or_else(|e| e.into_inner());
+        let mut active_id = state
+            .active_profile_id
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *active_id = profile_id.clone();
     }
 
     {
-        let mut seed_guard = state.principal_seed.write().unwrap_or_else(|e| e.into_inner());
+        let mut seed_guard = state
+            .principal_seed
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *seed_guard = Some(Zeroizing::new(seed));
     }
 
@@ -188,7 +198,10 @@ pub async fn export_profile_seed(
 
     // Mark key as backed up
     {
-        let mut backed_up = state.key_backed_up.write().unwrap_or_else(|e| e.into_inner());
+        let mut backed_up = state
+            .key_backed_up
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *backed_up = true;
     }
 
@@ -238,7 +251,10 @@ pub async fn import_profile_seed(
 
     // Mark key as backed up (since we're importing it)
     {
-        let mut backed_up = state.key_backed_up.write().unwrap_or_else(|e| e.into_inner());
+        let mut backed_up = state
+            .key_backed_up
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *backed_up = true;
     }
 

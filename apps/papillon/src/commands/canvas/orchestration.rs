@@ -47,7 +47,10 @@ pub async fn canvas_prompt(
 
     let now = Utc::now().to_rfc3339();
     let mandate_ttl_hours = {
-        let cfg = state.orchestrator_config.read().unwrap_or_else(|e| e.into_inner());
+        let cfg = state
+            .orchestrator_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         cfg.mandate_ttl_hours
     };
     let mandate_expires_at =
@@ -98,7 +101,10 @@ pub async fn canvas_reshape(
 
     let now = Utc::now().to_rfc3339();
     let mandate_ttl_hours = {
-        let cfg = state.orchestrator_config.read().unwrap_or_else(|e| e.into_inner());
+        let cfg = state
+            .orchestrator_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         cfg.mandate_ttl_hours
     };
     let mandate_expires_at =

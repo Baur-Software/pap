@@ -81,8 +81,14 @@ pub fn run() {
             // Identity is auto-loaded from SQLite or generated on first launch.
             let app_state = AppState::new(&db_path, catalog_dir);
 
-            *app_state.resource_dir.write().unwrap_or_else(|e| e.into_inner()) = resource_dir;
-            *app_state.data_dir.write().unwrap_or_else(|e| e.into_inner()) = data_dir.clone();
+            *app_state
+                .resource_dir
+                .write()
+                .unwrap_or_else(|e| e.into_inner()) = resource_dir;
+            *app_state
+                .data_dir
+                .write()
+                .unwrap_or_else(|e| e.into_inner()) = data_dir.clone();
 
             // Register the keypair store so Tauri commands can access it.
             app.manage(keypair_store);
@@ -266,7 +272,10 @@ async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn s
     {
         let mut signer = state.signer.write().unwrap_or_else(|e| e.into_inner());
         if signer.is_none() {
-            let seed_lock = state.principal_seed.read().unwrap_or_else(|e| e.into_inner());
+            let seed_lock = state
+                .principal_seed
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
             let seed_ref = seed_lock.as_ref().ok_or("No principal seed available")?;
             let keypair = PrincipalKeypair::from_bytes(seed_ref)
                 .map_err(|e| format!("Failed to recreate keypair from seed: {e}"))?;
@@ -288,11 +297,17 @@ async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn s
         .map_err(|e| format!("TLS identity generation failed: {e}"))?;
 
     // Store the cert fingerprint so other parts of the app can access it
-    *state.node_cert_fingerprint.write().unwrap_or_else(|e| e.into_inner()) = identity.fingerprint.clone();
+    *state
+        .node_cert_fingerprint
+        .write()
+        .unwrap_or_else(|e| e.into_inner()) = identity.fingerprint.clone();
 
     let port = state.federation_port;
     let endpoint = format!("https://0.0.0.0:{port}");
-    *state.node_endpoint.write().unwrap_or_else(|e| e.into_inner()) = endpoint.clone();
+    *state
+        .node_endpoint
+        .write()
+        .unwrap_or_else(|e| e.into_inner()) = endpoint.clone();
 
     // Build the combined router: federation routes + agent routes
     let registry = state.local_registry.clone();
@@ -341,7 +356,10 @@ async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn s
                 }
             })
             .collect();
-        *state.local_pap_urls.write().unwrap_or_else(|e| e.into_inner()) = pap_urls;
+        *state
+            .local_pap_urls
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = pap_urls;
     }
 
     // Spawn background discovery loop
