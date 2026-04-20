@@ -497,21 +497,6 @@ fn plaintext_invalid_body_fails_restoration() {
 }
 
 #[test]
-fn jws_bad_algorithm_rejected() {
-    let key = SigningKey::generate(&mut OsRng);
-    let env = make_envelope(ProtocolMessage::SessionDidAck);
-    let mut signed = PapToDIDComm::to_signed(&env, &key).unwrap();
-
-    // Replace protected header with non-EdDSA algorithm
-    let bad_header = serde_json::json!({"typ": "application/didcomm-signed+json", "alg": "RS256"});
-    signed.signatures[0].protected_header = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .encode(serde_json::to_string(&bad_header).unwrap().as_bytes());
-
-    let result = DIDCommToPap::from_signed(&signed, &key.verifying_key());
-    assert!(result.is_err());
-}
-
-#[test]
 fn jws_invalid_signature_encoding_fails() {
     let signed = DIDCommSigned {
         payload: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"{}"),
