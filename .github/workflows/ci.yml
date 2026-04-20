@@ -37,7 +37,7 @@ jobs:
               - 'Cargo.lock'
             e2e:
               - 'e2e/**'
-              - 'apps/papillon/frontend/**'
+              - 'apps/**'
               - 'crates/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
