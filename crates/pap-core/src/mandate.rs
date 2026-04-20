@@ -23,20 +23,6 @@ pub enum DecayState {
 }
 
 impl DecayState {
-    /// Numeric rank used only for "never rewind" ordering during deserialization.
-    /// Active(0) < Degraded(1) < ReadOnly(2) < Suspended(3).
-    /// Not part of the public API — use `can_transition_to` for state-machine logic.
-    fn severity_rank(self) -> u8 {
-        match self {
-            DecayState::Active => 0,
-            DecayState::Degraded => 1,
-            DecayState::ReadOnly => 2,
-            DecayState::Suspended => 3,
-        }
-    }
-}
-
-impl DecayState {
     /// Valid transitions follow strict ordering.
     pub fn can_transition_to(&self, next: DecayState) -> bool {
         matches!(
@@ -66,19 +52,15 @@ impl std::fmt::Display for DecayState {
     }
 }
 
-/// Decay window used when recomputing `decay_state` on deserialization.
-/// 5 minutes: mandates with less than this remaining TTL are considered Degraded.
-const DEFAULT_DECAY_WINDOW_SECS: i64 = 300;
-
 /// A mandate is the core delegation primitive. It is signed by the issuing
 /// agent's key, verifiable back to the root principal key.
 ///
-/// **Deserialization note**: `decay_state` is automatically recomputed from the
-/// TTL when a `Mandate` is deserialized. The serialized value is used only as
-/// a floor — it will never be rewound (a `Suspended` mandate stays `Suspended`)
-/// but it may be advanced to reflect elapsed time. Callers do not need to call
-/// any sync helper after deserialization; the `From<MandateWire>` conversion
-/// handles this transparently.
+/// **Deserialization note**: `decay_state` is preserved from the wire value.
+/// Callers MUST NOT trust the deserialized value — use `compute_decay_state`
+/// or `sync_decay_state` to obtain the live time-based state. The wire value
+/// is kept as-is so that `compute_decay_state`'s one-step clamping rule
+/// (§5.7.1) works correctly: a call from `Active` returns `Degraded`, and
+/// a subsequent call from `Degraded` returns `ReadOnly`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "MandateWire")]
 pub struct Mandate {
@@ -96,8 +78,8 @@ pub struct Mandate {
     pub disclosure_set: DisclosureSet,
     /// Expiry timestamp
     pub ttl: DateTime<Utc>,
-    /// Current decay state — automatically recomputed on deserialization based on TTL.
-    /// Do not rely on the serialized value; always read `decay_state` from a live instance.
+    /// Current decay state. The wire value is preserved on deserialization.
+    /// Always call `compute_decay_state` or `sync_decay_state` to obtain the live state.
     pub decay_state: DecayState,
     /// Issuance timestamp
     pub issued_at: DateTime<Utc>,
