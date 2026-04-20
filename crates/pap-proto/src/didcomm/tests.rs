@@ -591,7 +591,10 @@ fn jws_eddsa_alg_verifies_correctly() {
     assert_eq!(header["alg"], "EdDSA");
 
     let result = DIDCommToPap::from_signed(&signed, &vk);
-    assert!(result.is_ok(), "EdDSA verification should succeed: {result:?}");
+    assert!(
+        result.is_ok(),
+        "EdDSA verification should succeed: {result:?}"
+    );
     assert_eq!(result.unwrap().session_id, env.session_id);
 }
 
@@ -606,8 +609,7 @@ fn jws_unsupported_algorithm_returns_correct_error() {
     let mut signed = PapToDIDComm::to_signed(&env, &key).unwrap();
 
     // Swap in an RS256 alg header (valid JSON, wrong algorithm).
-    let bad_header =
-        serde_json::json!({"typ": "application/didcomm-signed+json", "alg": "RS256"});
+    let bad_header = serde_json::json!({"typ": "application/didcomm-signed+json", "alg": "RS256"});
     signed.signatures[0].protected_header = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .encode(serde_json::to_string(&bad_header).unwrap().as_bytes());
 
