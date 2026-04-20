@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::ui::api;
+use crate::ui::api::{get_cors_origins, update_cors_origins};
 
 #[component]
 pub fn SettingsPage() -> impl IntoView {
@@ -89,7 +90,98 @@ pub fn SettingsPage() -> impl IntoView {
                 </div>
             </div>
 
+            <CorsOriginsCard />
             <CatalogInstallCard />
+        </div>
+    }
+}
+
+/// Card that lets operators view and update the CORS allowed origins.
+/// Changes are persisted to the DB and applied live — no restart needed.
+#[component]
+fn CorsOriginsCard() -> impl IntoView {
+    let origins_resource = Resource::new(|| (), |_| get_cors_origins());
+    let textarea_value: RwSignal<Option<String>> = RwSignal::new(None);
+    let saving = RwSignal::new(false);
+    let save_result: RwSignal<Option<Result<(), String>>> = RwSignal::new(None);
+
+    let on_save = move |_| {
+        let value = textarea_value.get().unwrap_or_default();
+        saving.set(true);
+        save_result.set(None);
+        spawn_local(async move {
+            match update_cors_origins(value).await {
+                Ok(()) => {
+                    save_result.set(Some(Ok(())));
+                    // Refresh the displayed value from the server.
+                    origins_resource.refetch();
+                }
+                Err(e) => {
+                    save_result.set(Some(Err(e.to_string())));
+                }
+            }
+            saving.set(false);
+        });
+    };
+
+    view! {
+        <div class="card" style="margin-bottom: var(--sp-xl)">
+            <div class="card-header">
+                <span class="card-title">"CORS Allowed Origins"</span>
+            </div>
+            <div class="card-body">
+                <p style="font-size: 13px; color: var(--text-2); margin-bottom: var(--sp-md)">
+                    "Enter the origins (one per line) that are allowed to make cross-origin \
+                     requests to this registry's API.  Changes take effect immediately without \
+                     restarting the server."
+                </p>
+                <Suspense fallback=|| view! { <div class="loading">"Loading…"</div> }>
+                    {move || origins_resource.get().map(|result| {
+                        let initial = match result {
+                            Ok(ref s) => s.clone(),
+                            Err(_) => String::new(),
+                        };
+                        // Seed the signal on first load only.
+                        if textarea_value.get_untracked().is_none() {
+                            textarea_value.set(Some(initial.clone()));
+                        }
+                        view! {
+                            <textarea
+                                class="form-input"
+                                rows="4"
+                                placeholder="https://app.example.com\nhttps://localhost:7890"
+                                style="font-family: var(--font-mono); font-size: 12px; width: 100%; \
+                                       box-sizing: border-box; resize: vertical"
+                                prop:value=move || textarea_value.get().unwrap_or(initial.clone())
+                                on:input=move |ev| {
+                                    textarea_value.set(Some(event_target_value(&ev)));
+                                }
+                            />
+                        }.into_any()
+                    })}
+                </Suspense>
+                <div style="display: flex; align-items: center; gap: var(--sp-md); margin-top: var(--sp-md); flex-wrap: wrap">
+                    <button
+                        class="btn btn-primary"
+                        disabled=move || saving.get()
+                        on:click=on_save
+                    >
+                        {move || if saving.get() { "Saving…" } else { "Save Origins" }}
+                    </button>
+                    {move || save_result.get().map(|r| match r {
+                        Ok(()) => view! {
+                            <span style="font-size: 13px; color: var(--teal)">"✓ Saved — active immediately"</span>
+                        }.into_any(),
+                        Err(e) => view! {
+                            <span style="font-size: 13px; color: var(--red)">"✗ " {e}</span>
+                        }.into_any(),
+                    })}
+                </div>
+                <p style="font-size: 12px; color: var(--text-3); margin-top: var(--sp-sm)">
+                    "Example: " <code style="font-family: var(--font-mono)">"https://registry.example.com"</code>
+                    " · Format: one exact origin per line (scheme + host + port, no trailing slash)"
+                </p>
+            </div>
         </div>
     }
 }

@@ -1,13 +1,15 @@
 #![allow(clippy::unwrap_used)]
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::Context as _;
 
 use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
-use tower_http::cors::{Any, CorsLayer};
+use pap_registry::state::SETTING_CORS_ORIGINS;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+
 use tower_http::services::ServeDir;
 use tracing::info;
 
@@ -196,12 +198,32 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    // ── CORS allowlist — loaded from DB, seeded from config on first boot ────
+    let cors_origins_raw = match store.load_setting(SETTING_CORS_ORIGINS).await? {
+        Some(v) if !v.is_empty() => v,
+        _ => {
+            let default = config.default_cors_origins();
+            store.save_setting(SETTING_CORS_ORIGINS, &default).await?;
+            info!("CORS: seeded allowed origins from config: {}", default);
+            default
+        }
+    };
+    let cors_origins: Vec<String> = cors_origins_raw
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect();
+    info!("CORS: allowed origins = {:?}", cors_origins);
+    let cors_allowed_origins: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(cors_origins));
+
     let app_state = AppState::new(
         registry.clone(),
         store.clone(),
         node_did.clone(),
         &config,
         cert_fingerprint.clone(),
+        cors_allowed_origins.clone(),
     );
 
     // ── Leptos configuration ──────────────────────────────────────────────────
@@ -226,14 +248,24 @@ async fn main() -> anyhow::Result<()> {
     let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
         .with_state(leptos_options);
 
-    // TODO(I9): allow_origin(Any) permits cross-origin Bearer-authenticated requests from any
-    // web page. Acceptable for a reference implementation on a trusted network. For
-    // production deployments that require strict origin isolation, restrict this to
-    // the node's own public_endpoint origin and leave federation routes open separately.
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // CORS policy — reads the live allowlist from `AppState` on every request
+    // so changes made via the Settings UI take effect without a server restart.
+    //
+    // The default allowlist (localhost only) is seeded from config on first
+    // boot and stored in the `settings` DB table.  Operators can update it
+    // via the admin Settings page.
+    let cors = {
+        let origins_ref = cors_allowed_origins.clone();
+        let allow_origin = AllowOrigin::predicate(move |origin, _req| {
+            let list = origins_ref.read().unwrap_or_else(|e| e.into_inner());
+            list.iter()
+                .any(|allowed| origin.as_bytes() == allowed.as_bytes())
+        });
+        CorsLayer::new()
+            .allow_origin(allow_origin)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    };
 
     // Static assets (icon, favicon, logo).
     // Local dev: workspace root → apps/registry/assets

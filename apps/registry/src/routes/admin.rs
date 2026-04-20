@@ -528,7 +528,7 @@ fn percent_decode(s: &str) -> Result<String, Response> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, RwLock};
 
     use axum::body::Body;
     use axum::http::{header, Request, StatusCode};
@@ -562,6 +562,7 @@ mod tests {
             admin_token: token.map(str::to_owned),
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         router().with_state(state)
     }
@@ -750,6 +751,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -804,6 +806,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -855,6 +858,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -920,6 +924,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 2,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 
@@ -975,6 +980,76 @@ mod tests {
         );
     }
 
+    // ── CORS allowlist smoke tests ─────────────────────────────────────────────
+
+    /// Build an app that has CorsLayer wired up with a fixed allowlist, just
+    /// like `main.rs` does at runtime.
+    async fn test_router_with_cors(allowed: &[&str]) -> axum::Router {
+        use axum::http::HeaderValue;
+        use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+        let app = test_router(None).await;
+        let headers: Vec<HeaderValue> = allowed.iter().filter_map(|o| o.parse().ok()).collect();
+        let cors = CorsLayer::new()
+            .allow_origin(AllowOrigin::list(headers))
+            .allow_methods(Any)
+            .allow_headers(Any);
+        app.layer(cors)
+    }
+
+    /// An `OPTIONS` preflight from an *allowed* origin must return 200 with the
+    /// appropriate `Access-Control-Allow-Origin` header.
+    #[tokio::test]
+    async fn cors_preflight_allowed_origin_returns_200() {
+        use axum::http::{header, Method};
+        let app = test_router_with_cors(&["http://localhost:3000"]).await;
+        let req = Request::builder()
+            .method(Method::OPTIONS)
+            .uri("/api/status")
+            .header(header::ORIGIN, "http://localhost:3000")
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // tower-http CorsLayer returns 200 for valid preflights.
+        assert_eq!(resp.status(), StatusCode::OK);
+        // The response must echo back the allowed origin.
+        let acao = resp
+            .headers()
+            .get("access-control-allow-origin")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert_eq!(
+            acao, "http://localhost:3000",
+            "Access-Control-Allow-Origin must echo the allowed origin"
+        );
+    }
+
+    /// An `OPTIONS` preflight from an origin *not* in the allowlist must be
+    /// rejected — the CORS layer must not emit `Access-Control-Allow-Origin`.
+    #[tokio::test]
+    async fn cors_preflight_unlisted_origin_rejected() {
+        use axum::http::{header, Method};
+        let app = test_router_with_cors(&["http://localhost:3000"]).await;
+        let req = Request::builder()
+            .method(Method::OPTIONS)
+            .uri("/api/status")
+            .header(header::ORIGIN, "https://evil.example.com")
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // The response must NOT contain Access-Control-Allow-Origin for an
+        // unlisted origin, which is what the browser uses to block the request.
+        let acao = resp
+            .headers()
+            .get("access-control-allow-origin")
+            .and_then(|v| v.to_str().ok());
+        assert!(
+            acao.is_none() || acao == Some(""),
+            "unlisted origin must not receive Access-Control-Allow-Origin, got: {acao:?}"
+        );
+    }
+
     #[tokio::test]
     async fn rate_limit_allows_different_principals() {
         // Limit=1: each principal gets one slot, but not two.
@@ -993,6 +1068,7 @@ mod tests {
             admin_token: None,
             max_ads_per_principal: 1,
             sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
         let app = router().with_state(state);
 

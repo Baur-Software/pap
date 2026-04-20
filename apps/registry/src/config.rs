@@ -72,6 +72,23 @@ impl Config {
             reset_db,
         }
     }
+
+    /// Build the default CORS origin allowlist from env config.
+    ///
+    /// Used to seed the `settings` DB table on first boot when no persisted
+    /// value exists yet.  Returns a comma-separated string ready for storage,
+    /// e.g. `"https://localhost:7890"`.
+    pub fn default_cors_origins(&self) -> String {
+        let scheme = if self.no_tls { "http" } else { "https" };
+        // Always include localhost so the bundled admin UI works even when the
+        // server binds 0.0.0.0.
+        let mut origins = vec![format!("{scheme}://localhost:{}", self.port)];
+        // If the operator explicitly bound a non-wildcard host, include it too.
+        if self.host != "0.0.0.0" && self.host != "localhost" {
+            origins.push(format!("{scheme}://{}:{}", self.host, self.port));
+        }
+        origins.join(",")
+    }
 }
 
 #[cfg(test)]
@@ -235,5 +252,39 @@ mod tests {
         assert!(config.reset_db);
 
         env::remove_var("PAP_REGISTRY_RESET_DB");
+    }
+
+    // ── default_cors_origins ──────────────────────────────────────────────────
+
+    #[test]
+    fn default_cors_origins_0000_bind_returns_only_localhost() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+
+        let config = Config::from_env(); // host=0.0.0.0, port=7890, no_tls=false
+        let origins = config.default_cors_origins();
+        assert_eq!(origins, "https://localhost:7890");
+    }
+
+    #[test]
+    fn default_cors_origins_explicit_host_included() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_HOST", "192.168.1.10");
+        env::set_var("PAP_REGISTRY_NO_TLS", "true");
+
+        let config = Config::from_env();
+        let origins = config.default_cors_origins();
+        assert!(
+            origins.contains("http://localhost:7890"),
+            "missing localhost"
+        );
+        assert!(
+            origins.contains("http://192.168.1.10:7890"),
+            "missing explicit host"
+        );
+
+        env::remove_var("PAP_REGISTRY_HOST");
+        env::remove_var("PAP_REGISTRY_NO_TLS");
     }
 }

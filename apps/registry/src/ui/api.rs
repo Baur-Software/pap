@@ -502,6 +502,97 @@ pub struct CatalogInstallResult {
     pub catalog_path: String,
 }
 
+// ── CORS settings server fns ───────────────────────────────────────────────────
+
+/// Return the current CORS allowed origins as a newline-separated string
+/// suitable for a `<textarea>`.  One origin per line, e.g.:
+///   `https://app.example.com\nhttps://localhost:7890`
+#[server]
+pub async fn get_cors_origins() -> Result<String, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::{AppState, SETTING_CORS_ORIGINS};
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    // Prefer the in-memory list (already parsed); fall back to DB if somehow
+    // out of sync.
+    let raw = state
+        .store
+        .load_setting(SETTING_CORS_ORIGINS)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .unwrap_or_default();
+
+    // Return as newline-separated for the textarea.
+    let lines: String = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(lines)
+}
+
+/// Replace the CORS allowed origins.
+///
+/// `origins` is a newline-separated (or comma-separated) list of exact origin
+/// strings.  The new list is persisted to the DB and applied to in-memory
+/// state immediately — no restart required.
+#[server]
+pub async fn update_cors_origins(origins: String) -> Result<(), ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::{AppState, SETTING_CORS_ORIGINS};
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    // Accept both newline- and comma-separated input; normalise to CSV for storage.
+    let parsed: Vec<String> = origins
+        .split(['\n', ','])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect();
+
+    if parsed.is_empty() {
+        return Err(ServerFnError::new(
+            "At least one allowed origin is required.",
+        ));
+    }
+
+    let csv = parsed.join(",");
+
+    // Persist first; only update in-memory state if DB write succeeds.
+    state
+        .store
+        .save_setting(SETTING_CORS_ORIGINS, &csv)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // Apply live without restart.
+    let mut list = state
+        .cors_allowed_origins
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    *list = parsed;
+
+    tracing::info!("CORS: allowed origins updated to {:?}", &*list);
+    Ok(())
+}
+
 /// Install PAP catalog agents (from the shared pap-agents package) into this registry.
 ///
 /// Each catalog agent receives a deterministic Ed25519 operator keypair derived from

@@ -149,4 +149,20 @@ impl RegistryStore {
             RegistryStore::Postgres(p) => p.update_peer_sync_time(did, ts).await,
         }
     }
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+
+    pub async fn load_setting(&self, key: &str) -> Result<Option<String>> {
+        match self {
+            RegistryStore::Sqlite(s) => s.load_setting(key).await,
+            RegistryStore::Postgres(p) => p.load_setting(key).await,
+        }
+    }
+
+    pub async fn save_setting(&self, key: &str, value: &str) -> Result<()> {
+        match self {
+            RegistryStore::Sqlite(s) => s.save_setting(key, value).await,
+            RegistryStore::Postgres(p) => p.save_setting(key, value).await,
+        }
+    }
 }

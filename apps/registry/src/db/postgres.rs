@@ -314,4 +314,29 @@ impl PostgresStore {
             .await?;
         Ok(())
     }
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+
+    pub async fn load_setting(&self, key: &str) -> Result<Option<String>> {
+        let row = sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key = $1")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|(v,)| v))
+    }
+
+    pub async fn save_setting(&self, key: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO settings (key, value, updated_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT(key) DO UPDATE SET
+                 value = EXCLUDED.value,
+                 updated_at = EXCLUDED.updated_at",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
