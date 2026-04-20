@@ -300,6 +300,88 @@ pub struct PipelineStepResult {
     pub error: Option<String>,
 }
 
+/// A port on an agent node — either an input (requires_disclosure) or output (returns property)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortRef {
+    /// Fully-qualified schema property path, e.g. "schema:FlightReservation.departureDate"
+    pub path: String,
+    /// Human-readable label derived from last path segment, e.g. "Departure Date"
+    pub label: String,
+    /// True = required by agent; false = optional
+    #[serde(default)]
+    pub required: bool,
+}
+
+/// Visual / semantic state of a directed edge between two agent nodes
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EdgeState {
+    /// Both schema types are compatible AND memex has a pre-approval record — runs silently
+    Confirmed,
+    /// Schema types are compatible but no memex record — will pause for approval at run time
+    Proposed,
+    /// Disclosure would exceed mandate scope — cannot connect
+    Blocked,
+    /// No wire drawn — node runs standalone
+    #[default]
+    Unconnected,
+}
+
+/// A directed wire from an output port on one node to an input port on another
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowEdge {
+    pub id: String,
+    pub from_node_id: String,
+    pub from_port: PortRef,
+    pub to_node_id: String,
+    pub to_port: PortRef,
+    pub state: EdgeState,
+    /// Set when state == Confirmed and auto-approved from memex
+    #[serde(default)]
+    pub memex_remembered: bool,
+}
+
+/// A single step in a designed workflow — agent node or synthesizer
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowNode {
+    pub id: String,
+    pub node_type: PipelineNodeType,
+    /// Free-text intent: "what should this step do?"
+    pub intent: String,
+    /// Resolved after marketplace query_satisfiable call; None until resolved
+    pub agent_name: Option<String>,
+    pub agent_did: Option<String>,
+    pub pap_uri: Option<String>,
+    /// Ports derived from agent advertisement.requires_disclosure
+    pub input_ports: Vec<PortRef>,
+    /// Ports derived from agent advertisement.returns
+    pub output_ports: Vec<PortRef>,
+    /// Optional template override — saved in pipeline definition.
+    /// None = RendererRegistry default.
+    pub template_override: Option<String>,
+    /// Canvas position for Design mode layout
+    pub position_x: f64,
+    pub position_y: f64,
+}
+
+/// Which sub-mode the workflow tab is in
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowMode {
+    #[default]
+    Map,
+    Design,
+}
+
+/// Live workflow graph — derived from Map mode (block events) or authored in Design mode
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct WorkflowGraph {
+    pub nodes: Vec<WorkflowNode>,
+    pub edges: Vec<WorkflowEdge>,
+    /// True when this graph was authored in Design mode (vs auto-derived from block events)
+    pub is_designed: bool,
+}
+
 /// Transaction receipt information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReceiptInfo {
@@ -1987,6 +2069,38 @@ mod tests {
             !block.auto_expand,
             "auto_expand must default to false for backward compat"
         );
+    }
+
+    // ── WorkflowNode / WorkflowEdge / WorkflowGraph serde ────────
+
+    #[test]
+    fn workflow_types_roundtrip() {
+        let node = WorkflowNode {
+            id: "n1".into(),
+            node_type: PipelineNodeType::Agent,
+            intent: "search flights".into(),
+            agent_name: Some("Flight Search".into()),
+            agent_did: None,
+            pap_uri: Some("pap://agents/flights".into()),
+            input_ports: vec![PortRef {
+                path: "schema:FlightReservation.departureDate".into(),
+                label: "Departure Date".into(),
+                required: true,
+            }],
+            output_ports: vec![PortRef {
+                path: "schema:FlightReservation.toLocation.name".into(),
+                label: "Destination City".into(),
+                required: false,
+            }],
+            template_override: None,
+            position_x: 0.0,
+            position_y: 0.0,
+        };
+        let json = serde_json::to_string(&node).unwrap();
+        let back: WorkflowNode = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, "n1");
+        assert_eq!(back.input_ports[0].path, "schema:FlightReservation.departureDate");
+        assert_eq!(back.output_ports[0].label, "Destination City");
     }
 }
 
