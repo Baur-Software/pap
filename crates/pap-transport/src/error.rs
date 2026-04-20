@@ -31,4 +31,16 @@ pub enum TransportError {
 
     #[error("JSON serialization error: {0}")]
     JsonError(#[from] serde_json::Error),
+
+    /// Incoming frame exceeded the configured per-frame size limit.
+    ///
+    /// The default limit is 1 MiB — large enough for typical PAP messages
+    /// (including JSON-LD ExecutionResult payloads) while bounding the memory
+    /// an attacker can allocate with a single malformed frame.
+    #[error("message too large: {size} bytes exceeds limit of {limit} bytes")]
+    MessageTooLarge { size: usize, limit: usize },
+
+    /// Mandate TTL has elapsed; the phase transition is forbidden (spec §5.5).
+    #[error("mandate expired: TTL bounds must be verified at each phase transition")]
+    MandateExpired,
 }

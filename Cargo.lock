@@ -5003,6 +5003,7 @@ dependencies = [
  "pap-credential",
  "pap-did",
  "pap-proto",
+ "pap-test-utils",
  "rand 0.8.6",
  "reqwest 0.12.12",
  "rustls",
