@@ -110,6 +110,8 @@ pub fn App() -> impl IntoView {
     provide_context(recovery_state);
     provide_context(dataset_state);
     provide_context(workflow_state);
+    let show_settings: RwSignal<bool> = RwSignal::new(false);
+    provide_context(show_settings);
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
@@ -379,6 +381,21 @@ pub fn App() -> impl IntoView {
                 </footer>
             </div>
             <SetupWizard />
+            <Show when=move || show_settings.get()>
+                <div class="settings-overlay">
+                    <div class="settings-overlay-topbar">
+                        <span class="settings-overlay-title">"SETTINGS"</span>
+                        <button
+                            class="settings-overlay-close"
+                            on:click=move |_| show_settings.set(false)
+                            aria-label="Close settings"
+                        >"×"</button>
+                    </div>
+                    <div class="settings-overlay-body">
+                        <SettingsPage />
+                    </div>
+                </div>
+            </Show>
         </Router>
     }
 }

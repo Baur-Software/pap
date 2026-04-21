@@ -139,9 +139,21 @@ pub fn TopBar() -> impl IntoView {
                 // ── Settings ──
                 <div class="panel-section-label">"Settings"</div>
                 <ThemeToggleRow />
-                <PanelNavItem href="/settings" label="All Settings" close_panel=menu_open>
-                    <IconGear />
-                </PanelNavItem>
+                {
+                    let show_settings = expect_context::<RwSignal<bool>>();
+                    view! {
+                        <button
+                            class="panel-nav-item"
+                            on:click=move |_| {
+                                menu_open.set(false);
+                                show_settings.set(true);
+                            }
+                        >
+                            <span class="panel-nav-icon"><IconGear /></span>
+                            "All Settings"
+                        </button>
+                    }
+                }
 
             </div>
         </div>
