@@ -1,7 +1,5 @@
 pub mod activity;
-pub mod browse;
 pub mod canvas;
-pub mod dashboard;
 pub mod pipelines;
 pub mod receipts;
 pub mod scenario;

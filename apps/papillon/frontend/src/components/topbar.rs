@@ -137,12 +137,6 @@ pub fn TopBar() -> impl IntoView {
 
                 // ── Navigate ──
                 <div class="panel-section-label">"Navigate"</div>
-                <PanelNavItem href="/browse" label="Browse Agents" close_panel=menu_open>
-                    <IconLayers />
-                </PanelNavItem>
-                <PanelNavItem href="/fleet" label="Fleet" close_panel=menu_open>
-                    <IconChip />
-                </PanelNavItem>
                 <PanelNavItem href="/receipts" label="Receipts" close_panel=menu_open>
                     <IconHistory />
                 </PanelNavItem>
@@ -470,30 +464,6 @@ fn ThemeToggleRow() -> impl IntoView {
 }
 
 // ── Icons used by panel nav items ────────────────────────────
-
-#[component]
-fn IconLayers() -> impl IntoView {
-    view! {
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-            <polyline points="2 17 12 22 22 17"/>
-            <polyline points="2 12 12 17 22 12"/>
-        </svg>
-    }
-}
-
-#[component]
-fn IconChip() -> impl IntoView {
-    view! {
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="6" height="6" rx="1"/>
-            <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-        </svg>
-    }
-}
 
 #[component]
 fn IconHistory() -> impl IntoView {
