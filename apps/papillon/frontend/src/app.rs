@@ -375,9 +375,6 @@ pub fn App() -> impl IntoView {
                     </Routes>
                 </main>
                 <footer class="status-bar app-statusbar">
-                    <span class="status-bar-spacer" />
-                    <span class="status-bar-item">"PAPILLON_v0.6.0"</span>
-                    <span class="status-bar-sep">"|"</span>
                     <span class=move || format!("status-bar-item {}", status_class())>{status_label}</span>
                 </footer>
             </div>
