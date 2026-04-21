@@ -120,7 +120,7 @@ test.describe("Activity page", () => {
     await page.goto("/activity", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(
-      page.locator("text=No protocol events yet.")
+      page.locator("text=No activity yet.")
     ).toBeVisible();
   });
 });
@@ -192,39 +192,27 @@ test.describe("Settings page", () => {
     await expect(page.locator(".backup-warning")).not.toBeVisible();
   });
 
-  test("Add Successor form works", async ({ page }) => {
+  test("Identity tab shows export and import key UI", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
 
-    // Wait for Identity tab content
-    await expect(page.locator("text=Designated Successors")).toBeVisible();
+    // Export Key button is always visible
+    await expect(page.locator("text=Export Key")).toBeVisible();
 
-    // Click Add Successor
-    await page.getByRole("button", { name: "Add Successor" }).click();
+    // Import Key button is always visible
+    await expect(page.locator("text=Import Key")).toBeVisible();
 
-    // Wait for form to appear
-    await expect(page.locator('input[placeholder="did:key:z..."]')).toBeVisible();
+    // Click Import Key to reveal the import form
+    await page.locator("text=Import Key").click();
 
-    // Fill in successor form
-    await page.locator('input[placeholder="did:key:z..."]').fill(
-      "did:key:z6MkSuccessor123"
-    );
-    await page.locator('input[placeholder="Optional notes..."]').fill(
-      "My estate executor"
-    );
-
-    // Save — the form's Save button (inside the successor form area)
-    await page
-      .locator(".setup-inputs")
-      .last()
-      .getByRole("button", { name: "Save" })
-      .click();
-
-    // Should show successor entry (wait for async response)
+    // Import form appears with a password input for base64url seed
     await expect(
-      page.locator(".successor-entry")
-    ).toBeVisible({ timeout: 10_000 });
+      page.locator('input[placeholder="Paste base64url seed..."]')
+    ).toBeVisible();
+
+    // Import submit button inside the form is visible (exact match)
+    await expect(page.getByRole("button", { name: "Import", exact: true })).toBeVisible();
   });
 
   test("switching nav links works", async ({ page }) => {

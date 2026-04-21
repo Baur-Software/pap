@@ -20,99 +20,85 @@ test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
-// ── Fleet page rendering ──────────────────────────────────────
+// ── Chrysalis Network page rendering (mounted at /fleet) ──────
 
 test.describe("Agent fleet page", () => {
-  test("renders fleet header title and subtitle", async ({ page }) => {
+  test("renders Chrysalis Network header title and subtitle", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".fleet-header-title")).toContainText(
-      "AGENT FLEET"
+    await expect(page.locator(".chrysalis-header-title")).toContainText(
+      "CHRYSALIS NETWORK"
     );
-    await expect(page.locator(".fleet-header-subtitle")).toContainText(
-      "Multi-Agent Roster"
-    );
+    await expect(page.locator(".chrysalis-header-subtitle")).toBeVisible();
   });
 
-  test("renders + ADD AGENT button", async ({ page }) => {
+  test("renders NETWORK NODES section label", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".fleet-add-btn")).toBeVisible();
-    await expect(page.locator(".fleet-add-btn")).toContainText("ADD AGENT");
+    await expect(page.locator(".chrysalis-section-label")).toContainText("NETWORK NODES");
   });
 
-  test("active badge shows correct count", async ({ page }) => {
+  test("local node row is always present", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    // 2 compiled agents in mock (Web Page Reader, On-Device AI) → 2 ACTIVE
-    const activeBadge = page.locator(".fleet-badge.active");
-    await expect(activeBadge).toBeVisible();
-    await expect(activeBadge).toContainText("2 ACTIVE");
+    const localRow = page.locator(".chrysalis-node-row.local");
+    await expect(localRow).toBeVisible();
+    await expect(localRow.locator(".chrysalis-node-url")).toContainText("pap://local");
+    await expect(localRow.locator(".chrysalis-node-tag.local")).toContainText("LOCAL");
   });
 
-  test("total badge shows all 5 agents", async ({ page }) => {
+  test("local node row has BROWSE link", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    const totalBadge = page.locator(".fleet-badge.total");
-    await expect(totalBadge).toBeVisible();
-    await expect(totalBadge).toContainText("5 TOTAL");
+    const localRow = page.locator(".chrysalis-node-row.local");
+    await expect(localRow.locator(".chrysalis-node-action")).toContainText("BROWSE →");
   });
 
-  test("ACTIVE AGENTS section renders 2 compiled agent cards", async ({ page }) => {
+  test("connect form is present with correct input placeholder", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    // Only compiled agents appear in the ACTIVE AGENTS grid
-    await expect(page.locator(".agent-card")).toHaveCount(2);
+    await expect(page.locator(".chrysalis-connect")).toBeVisible();
+    await expect(page.locator(".chrysalis-connect-input")).toBeVisible();
+    await expect(page.locator(".chrysalis-connect-btn")).toContainText("CONNECT");
   });
 
-  test("first agent card shows Web Page Reader (first compiled agent)", async ({ page }) => {
+  test("THIS NODE identity panel is present", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    const firstCard = page.locator(".agent-card").first();
-    await expect(firstCard.locator(".agent-card-name")).toContainText(
-      "Web Page Reader"
-    );
+    await expect(page.locator(".chrysalis-panel")).toBeVisible();
+    await expect(page.locator(".chrysalis-panel-header")).toContainText("THIS NODE");
   });
 
-  test("agent cards show compiled source badges", async ({ page }) => {
+  test("agent roster section is present with pills", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    // Only compiled agents are shown in the ACTIVE AGENTS grid
-    await expect(page.locator(".agent-source-badge.compiled")).toHaveCount(2);
+    const roster = page.locator(".chrysalis-agents");
+    await expect(roster).toBeVisible();
+    await expect(roster.locator(".chrysalis-agents-title")).toContainText("AGENT ROSTER");
+    // compiled and catalog pills are always rendered
+    await expect(roster.locator(".chrysalis-pill.compiled")).toBeVisible();
+    await expect(roster.locator(".chrysalis-pill.catalog")).toBeVisible();
   });
 
-  test("agent cards show truncated DID", async ({ page }) => {
+  test("agent roster toggle caret is visible and clickable", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    const firstCard = page.locator(".agent-card").first();
-    const did = firstCard.locator(".agent-card-did");
-    await expect(did).toBeVisible();
-    // The mock DID is truncated to "did:key:z6..." format
-    await expect(did).not.toBeEmpty();
+    const toggle = page.locator(".chrysalis-agents-toggle");
+    await expect(toggle).toBeVisible();
+    // Initial state: collapsed (▼)
+    await expect(page.locator(".chrysalis-agents-caret")).toContainText("▼");
+    // Click to expand
+    await toggle.click();
+    await expect(page.locator(".chrysalis-agents-caret")).toContainText("▲");
   });
 
-  test("agent cards show action type without schema: prefix", async ({
-    page,
-  }) => {
+  test("chrysalis-page root element exists", async ({ page }) => {
     await page.goto("/fleet", { waitUntil: "commit" });
     await waitForApp(page);
-    const firstCard = page.locator(".agent-card").first();
-    const actionStat = firstCard.locator(".agent-stat").nth(1);
-    await expect(actionStat).toContainText("ReadAction");
-    // Must NOT include raw "schema:" prefix
-    await expect(actionStat).not.toContainText("schema:");
-  });
-
-  test("Chrysalis sidebar panel renders", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    await expect(page.locator(".fleet-sidebar")).toBeVisible();
-    await expect(page.locator(".fleet-panel-header")).toContainText(
-      "CHRYSALIS DROP-INS"
-    );
-    await expect(
-      page.locator("text=No remote Chrysalis nodes connected")
-    ).toBeVisible();
+    await expect(page.locator(".chrysalis-page")).toBeVisible();
+    // Body layout contains nodes and identity panels
+    await expect(page.locator(".chrysalis-nodes")).toBeVisible();
+    await expect(page.locator(".chrysalis-identity")).toBeVisible();
   });
 });
 

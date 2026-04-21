@@ -183,6 +183,9 @@ test.describe("LLM provider configuration", () => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
+    // Settings page defaults to Profiles tab; navigate to Orchestrator first
+    await page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" }).click();
+
     await expect(page.locator("text=AI Model")).toBeVisible();
     // First select on the page is the provider dropdown
     await expect(page.locator("select").first()).toBeVisible();

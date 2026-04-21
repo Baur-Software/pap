@@ -6236,6 +6236,55 @@ body {
   transform: rotateY(180deg);
 }
 
+/* ── Canvas back face tabs ────────────────────────────────────── */
+.canvas-back-face {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-1, #0e0e1a);
+  overflow: hidden;
+}
+
+.back-face-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  padding: 0 14px;
+  flex-shrink: 0;
+  background: var(--bg-2, #13131f);
+}
+
+.back-face-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted, #6b7280);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  padding: 10px 14px 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.back-face-tab:hover {
+  color: var(--text-primary, #e0e0e0);
+}
+
+.back-face-tab--active {
+  color: var(--purple, #6c5ce7);
+  border-bottom-color: var(--purple, #6c5ce7);
+}
+
+.back-face-panel {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── Block query label ───────────────────────────────────────────────────── */
 .block-query-label {
   font-size: 11px;

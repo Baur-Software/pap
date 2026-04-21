@@ -19,12 +19,11 @@ import { waitForApp } from "./helpers";
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  // Use the topbar slide-panel for SPA navigation to preserve in-memory mock state.
+  // Navigate directly to settings to avoid topbar slide-panel timing issues.
   const settingsNav = page.locator(".settings-nav");
   const alreadyOnSettings = await settingsNav.isVisible().catch(() => false);
   if (!alreadyOnSettings) {
-    await page.locator(".topbar-brand").click();
-    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+    await page.goto("/settings", { waitUntil: "commit" });
     await expect(page.locator(".settings-nav")).toBeVisible({ timeout: 5000 });
   }
   await page.locator(".settings-nav-link").filter({ hasText: "Templates" }).click();
@@ -200,10 +199,11 @@ test.describe("Schema Type Autocomplete", () => {
 
   test("shows dropdown with matching suggestions after typing", async ({ page }) => {
     // The schema-type autocomplete input has placeholder "e.g. FlightReservation"
-    // Default templates seed FlightReservation and Hotel — typing "Flight" should show suggestion
+    // Default templates seed FlightReservation and Hotel — typing "Flight" should show suggestion.
+    // Use pressSequentially (not fill) to avoid WASM reactive on:focus timing issues.
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
     await schemaInput.click();
-    await schemaInput.fill("Flight");
+    await schemaInput.pressSequentially("Flight", { delay: 30 });
     // Dropdown should appear with FlightReservation
     await expect(page.locator("div").filter({ hasText: "FlightReservation" }).last()).toBeVisible({ timeout: 3000 });
   });
@@ -211,7 +211,7 @@ test.describe("Schema Type Autocomplete", () => {
   test("clicking a suggestion closes the dropdown (selection confirmed)", async ({ page }) => {
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
     await schemaInput.click();
-    await schemaInput.fill("Flight");
+    await schemaInput.pressSequentially("Flight", { delay: 30 });
 
     // Scope the dropdown to the z-index:9999 positioned overlay inside SchemaTypeInput
     const dropdown = page.locator('div[style*="z-index: 9999"]');
@@ -237,7 +237,8 @@ test.describe("Schema Type Autocomplete", () => {
 
   test("unknown schema type is accepted without error", async ({ page }) => {
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
-    await schemaInput.fill("MyCustomSchemaXYZ");
+    await schemaInput.click();
+    await schemaInput.pressSequentially("MyCustomSchemaXYZ", { delay: 30 });
     // No error should appear — unknown types are always accepted
     await expect(page.getByText(/invalid/i)).not.toBeVisible();
     await expect(schemaInput).toHaveValue("MyCustomSchemaXYZ");
@@ -246,7 +247,7 @@ test.describe("Schema Type Autocomplete", () => {
   test("filtering is case-insensitive (flight → FlightReservation)", async ({ page }) => {
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
     await schemaInput.click();
-    await schemaInput.fill("flight"); // lowercase
+    await schemaInput.pressSequentially("flight", { delay: 30 }); // lowercase
     // FlightReservation should still appear in suggestions
     await expect(page.locator("div").filter({ hasText: "FlightReservation" }).last()).toBeVisible({ timeout: 3000 });
   });
@@ -521,7 +522,7 @@ test.describe("Live Registry Types in Autocomplete", () => {
     // RendererState is app-level and registered_keys is seeded from the live registry.
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
     await schemaInput.click();
-    await schemaInput.fill("Mov");
+    await schemaInput.pressSequentially("Mov", { delay: 30 });
     const dropdown = page.locator('div[style*="z-index: 9999"]');
     await expect(dropdown).toBeVisible({ timeout: 3000 });
     await expect(dropdown.locator("div").filter({ hasText: /^Movie$/ }).first()).toBeVisible({
@@ -536,7 +537,7 @@ test.describe("Live Registry Types in Autocomplete", () => {
     // Proves the autocomplete is fed from the live registry, not just saved templates.
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
     await schemaInput.click();
-    await schemaInput.fill("Per");
+    await schemaInput.pressSequentially("Per", { delay: 30 });
     const dropdown = page.locator('div[style*="z-index: 9999"]');
     await expect(dropdown).toBeVisible({ timeout: 3000 });
     await expect(dropdown.locator("div").filter({ hasText: /^Person$/ }).first()).toBeVisible({
