@@ -163,6 +163,7 @@ fn DesignModeCanvas() -> impl IntoView {
             agent_name: None,
             agent_did: None,
             pap_uri: None,
+            action_type: String::new(),
             input_ports: Vec::new(),
             output_ports: Vec::new(),
             template_override: None,
@@ -200,7 +201,9 @@ fn DesignModeCanvas() -> impl IntoView {
             id: n.id.clone(),
             agent_hash: String::new(),
             agent_name: n.agent_name.clone().unwrap_or_else(|| n.intent.clone()),
-            action_type: "schema:SearchAction".to_string(),
+            // Empty string lets the backend detect action_type from intent via detect_intent().
+            // Populated when an agent is resolved from the marketplace (Phase 4).
+            action_type: n.action_type.clone(),
             node_type: n.node_type.clone(),
             position_x: n.position_x,
             position_y: n.position_y,

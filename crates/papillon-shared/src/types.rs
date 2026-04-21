@@ -359,6 +359,10 @@ pub struct WorkflowNode {
     /// PAP URI for direct agent addressing; None until resolved.
     #[serde(default)]
     pub pap_uri: Option<String>,
+    /// Schema.org action type for this node, e.g. "schema:FlightSearchAction".
+    /// Empty string = let the backend detect from intent. Set when agent is resolved.
+    #[serde(default)]
+    pub action_type: String,
     /// Ports derived from agent advertisement.requires_disclosure.
     pub input_ports: Vec<PortRef>,
     /// Ports derived from agent advertisement.returns.
@@ -2090,6 +2094,7 @@ mod tests {
             agent_name: Some("Flight Search".into()),
             agent_did: None,
             pap_uri: Some("pap://agents/flights".into()),
+            action_type: "schema:FlightSearchAction".into(),
             input_ports: vec![PortRef {
                 path: "schema:FlightReservation.departureDate".into(),
                 label: "Departure Date".into(),

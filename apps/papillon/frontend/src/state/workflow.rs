@@ -74,6 +74,7 @@ impl WorkflowState {
                 agent_name: None, // humanized label populated in a future enhancement
                 agent_did: block.agent_did.clone(),
                 pap_uri: block.agent_did.as_ref().map(|d| format!("pap://{d}")),
+                action_type: String::new(), // derived from block schema_type in a future enhancement
                 input_ports: Vec::new(),
                 output_ports: Vec::new(),
                 template_override: None,

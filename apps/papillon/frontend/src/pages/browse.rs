@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 
 use crate::components::agent_picker_modal::AgentPickerModal;
 use papillon_shared::AgentInfo;
@@ -11,13 +12,14 @@ pub fn BrowsePage() -> impl IntoView {
     // Open immediately on mount
     let modal_open: RwSignal<bool> = RwSignal::new(true);
 
+    // Use Leptos router navigation — avoids a full WebView reload that would
+    // discard all reactive state (signals, context, in-memory mock state).
+    let navigate = use_navigate();
+
     let on_select = Callback::new(move |_agent: AgentInfo| {
-        // Modal closed by on_select path — navigate back to canvas
         // NOTE: Phase 3 — navigate to canvas root; agent pre-filling of the intent bar
         // (populating topbar-address-input with pap://<agent.agent_did>) is deferred to Phase 4.
-        if let Some(win) = web_sys::window() {
-            let _ = win.location().set_href("/");
-        }
+        navigate("/", Default::default());
     });
 
     view! {
