@@ -195,10 +195,16 @@ impl EpisodeDb {
             .map_err(|e| EpisodeDbError::Lock(e.to_string()))
     }
 
-    /// Run all schema migrations.  Safe to call on every startup — all
-    /// statements use `IF NOT EXISTS` or are otherwise idempotent.
+    /// Run all schema migrations.  Safe to call on every startup.
+    ///
+    /// Structured as two phases so that column-backfills (which SQLite only
+    /// supports one-at-a-time and has no `IF NOT EXISTS` guard for) are applied
+    /// before the indexes that depend on those columns are created.
     fn migrate(&self) -> Result<()> {
         let conn = self.lock()?;
+
+        // Phase 1 — create tables and pragmas.
+        // `CREATE TABLE IF NOT EXISTS` is safe on an existing DB.
         conn.execute_batch(
             "
             PRAGMA journal_mode = WAL;
@@ -218,17 +224,6 @@ impl EpisodeDb {
                 principal_did TEXT NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS idx_episodes_agent_did
-                ON episodes(agent_did);
-            CREATE INDEX IF NOT EXISTS idx_episodes_principal_did
-                ON episodes(principal_did);
-            CREATE INDEX IF NOT EXISTS idx_episodes_action
-                ON episodes(action);
-            CREATE INDEX IF NOT EXISTS idx_episodes_started_at
-                ON episodes(started_at);
-            CREATE INDEX IF NOT EXISTS idx_episodes_outcome
-                ON episodes(outcome);
-
             CREATE TABLE IF NOT EXISTS approval_records (
                 id            TEXT PRIMARY KEY,
                 output_type   TEXT NOT NULL,
@@ -240,6 +235,50 @@ impl EpisodeDb {
                 expires_at    TEXT NOT NULL,
                 UNIQUE(output_type, input_type, agent_did, principal_did)
             );
+            ",
+        )
+        .map_err(EpisodeDbError::Sqlite)?;
+
+        // Phase 2 — backfill columns that may be absent in databases created
+        // before the current schema.  SQLite has no `ADD COLUMN IF NOT EXISTS`
+        // so we execute each ALTER separately and treat "duplicate column" as
+        // success (error code 1 / SQLITE_ERROR with "duplicate column name").
+        let backfills: &[&str] = &[
+            "ALTER TABLE episodes ADD COLUMN agent_did     TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN principal_did TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN scope_summary TEXT NOT NULL DEFAULT '{}'",
+            "ALTER TABLE episodes ADD COLUMN receipt_hash  TEXT",
+        ];
+        for sql in backfills {
+            match conn.execute(sql, []) {
+                Ok(_) => {}
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error {
+                        code: rusqlite::ffi::ErrorCode::Unknown,
+                        ..
+                    },
+                    Some(ref msg),
+                )) if msg.contains("duplicate column") => {
+                    // Column already exists — this is the normal case on an up-to-date DB.
+                }
+                Err(e) => return Err(EpisodeDbError::Sqlite(e)),
+            }
+        }
+
+        // Phase 3 — indexes.  Now safe because all referenced columns exist.
+        conn.execute_batch(
+            "
+            CREATE INDEX IF NOT EXISTS idx_episodes_agent_did
+                ON episodes(agent_did);
+            CREATE INDEX IF NOT EXISTS idx_episodes_principal_did
+                ON episodes(principal_did);
+            CREATE INDEX IF NOT EXISTS idx_episodes_action
+                ON episodes(action);
+            CREATE INDEX IF NOT EXISTS idx_episodes_started_at
+                ON episodes(started_at);
+            CREATE INDEX IF NOT EXISTS idx_episodes_outcome
+                ON episodes(outcome);
+
             CREATE INDEX IF NOT EXISTS idx_approval_agent
                 ON approval_records(agent_did);
             ",
