@@ -6657,3 +6657,82 @@ body {
 .wf-approval-deny {
   background: transparent; border-color: #444; color: #666; flex: 0 0 auto;
 }
+
+/* ── Agent Picker Modal ──────────────────────────────────────────────────── */
+.agent-picker-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1100;
+  backdrop-filter: blur(4px);
+}
+.agent-picker-modal {
+  background: var(--bg-1, #0e0e1a);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 12px;
+  padding: 24px;
+  width: min(720px, 94vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.agent-picker-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.agent-picker-title {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; font-family: var(--font-mono); color: var(--text-primary, #e0e0e0);
+}
+.agent-picker-close {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-muted, #6b7280); font-size: 18px; padding: 2px 6px;
+  border-radius: 4px; transition: color 0.15s;
+}
+.agent-picker-close:hover { color: var(--text-primary, #e0e0e0); }
+.agent-picker-search {
+  width: 100%; background: var(--bg-2, #13131f);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 6px; padding: 8px 12px;
+  color: var(--text-primary, #e0e0e0); font-size: 13px;
+  outline: none; font-family: var(--font-body);
+}
+.agent-picker-search:focus { border-color: var(--purple, #6c5ce7); }
+.agent-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.agent-picker-card {
+  background: var(--bg-2, #13131f);
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 8px; padding: 12px 14px;
+  cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.agent-picker-card:hover {
+  border-color: var(--purple, #6c5ce7);
+  background: rgba(108,92,231,0.06);
+}
+.agent-picker-card-name {
+  font-size: 12px; font-weight: 600; color: var(--text-primary, #e0e0e0);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.agent-picker-card-cap {
+  font-size: 10px; color: var(--teal, #2ec4a0);
+  font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.agent-picker-card-source {
+  font-size: 9px; color: var(--text-muted, #6b7280);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;
+}
+.agent-picker-empty {
+  grid-column: 1 / -1; text-align: center;
+  color: var(--text-muted, #6b7280); font-size: 12px; padding: 24px 0;
+}
+.agent-picker-count {
+  font-size: 10px; color: var(--text-muted, #6b7280); text-align: right;
+  font-family: var(--font-mono);
+}

@@ -1,4 +1,5 @@
 pub mod address_bar;
+pub mod agent_picker_modal;
 pub mod block_renderer;
 pub mod canvas_back_face;
 pub mod canvas_chat_thread;
