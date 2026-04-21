@@ -24,7 +24,9 @@ use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_transport::{AgentHandler, EndpointRegistry};
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillon_shared::{episode_db::EpisodeDb, LlmProvider, OrchestratorConfig, SuccessorDesignation};
+use papillon_shared::{
+    episode_db::EpisodeDb, LlmProvider, OrchestratorConfig, SuccessorDesignation,
+};
 use zeroize::Zeroizing;
 
 use crate::agents::on_device_ai::OnDeviceAiExecutor;
@@ -142,10 +144,15 @@ impl AppState {
 
         // Open the EpisodeDb at the same path as the main db so approval_records
         // migrations run once here rather than on every store_approval_record call.
-        let episode_db = EpisodeDb::open(db_path)
-            .expect("failed to open episode_db for approval records");
+        let episode_db =
+            EpisodeDb::open(db_path).expect("failed to open episode_db for approval records");
 
-        Self::with_db(Arc::new(db), Arc::new(profiles_db), Arc::new(episode_db), catalog_dir)
+        Self::with_db(
+            Arc::new(db),
+            Arc::new(profiles_db),
+            Arc::new(episode_db),
+            catalog_dir,
+        )
     }
 
     /// Create a clone suitable for moving to a background thread.
@@ -592,9 +599,13 @@ impl Default for AppState {
             crate::db::open_db(&PathBuf::from("papillon.db")).expect("failed to open fallback db");
         let profiles_db = ProfilesDatabase::open(&PathBuf::from("profiles.db"))
             .expect("failed to open fallback profiles db");
-        let episode_db = EpisodeDb::open_in_memory()
-            .expect("failed to open in-memory episode_db");
-        Self::with_db(Arc::new(db), Arc::new(profiles_db), Arc::new(episode_db), PathBuf::new())
+        let episode_db = EpisodeDb::open_in_memory().expect("failed to open in-memory episode_db");
+        Self::with_db(
+            Arc::new(db),
+            Arc::new(profiles_db),
+            Arc::new(episode_db),
+            PathBuf::new(),
+        )
     }
 }
 
@@ -727,9 +738,7 @@ mod tests {
         let profiles_db = Arc::new(
             crate::profiles_db::ProfilesDatabase::open_memory().expect("in-memory profiles db"),
         );
-        let episode_db = Arc::new(
-            EpisodeDb::open_in_memory().expect("in-memory episode_db"),
-        );
+        let episode_db = Arc::new(EpisodeDb::open_in_memory().expect("in-memory episode_db"));
         AppState::with_db(db, profiles_db, episode_db, PathBuf::new())
     }
 

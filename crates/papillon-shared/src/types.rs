@@ -2107,7 +2107,10 @@ mod tests {
         let json = serde_json::to_string(&node).unwrap();
         let back: WorkflowNode = serde_json::from_str(&json).unwrap();
         assert_eq!(back.id, "n1");
-        assert_eq!(back.input_ports[0].path, "schema:FlightReservation.departureDate");
+        assert_eq!(
+            back.input_ports[0].path,
+            "schema:FlightReservation.departureDate"
+        );
         assert_eq!(back.output_ports[0].label, "Destination City");
     }
 
@@ -2116,9 +2119,17 @@ mod tests {
         let edge = WorkflowEdge {
             id: "e1".into(),
             from_node_id: "n1".into(),
-            from_port: PortRef { path: "schema:FlightReservation.departureDate".into(), label: "Departure Date".into(), required: true },
+            from_port: PortRef {
+                path: "schema:FlightReservation.departureDate".into(),
+                label: "Departure Date".into(),
+                required: true,
+            },
             to_node_id: "n2".into(),
-            to_port: PortRef { path: "schema:LodgingReservation.checkInDate".into(), label: "Check-in Date".into(), required: true },
+            to_port: PortRef {
+                path: "schema:LodgingReservation.checkInDate".into(),
+                label: "Check-in Date".into(),
+                required: true,
+            },
             state: EdgeState::Confirmed,
             memex_remembered: true,
         };
@@ -2143,8 +2154,14 @@ mod tests {
 
     #[test]
     fn workflow_mode_roundtrip() {
-        assert_eq!(serde_json::to_string(&WorkflowMode::Map).unwrap(), "\"map\"");
-        assert_eq!(serde_json::to_string(&WorkflowMode::Design).unwrap(), "\"design\"");
+        assert_eq!(
+            serde_json::to_string(&WorkflowMode::Map).unwrap(),
+            "\"map\""
+        );
+        assert_eq!(
+            serde_json::to_string(&WorkflowMode::Design).unwrap(),
+            "\"design\""
+        );
         let back: WorkflowMode = serde_json::from_str("\"map\"").unwrap();
         assert_eq!(back, WorkflowMode::Map);
     }

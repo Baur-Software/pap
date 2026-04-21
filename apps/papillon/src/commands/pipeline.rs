@@ -471,8 +471,14 @@ pub fn port_compatible(output_schema_type: String, input_property_path: String) 
 
     // Cross-type: known schema supertype relationships
     const SCHEMA_SUPERTYPES: &[(&str, &[&str])] = &[
-        ("FlightReservation", &["Reservation", "Order", "Intangible", "Thing"]),
-        ("LodgingReservation", &["Reservation", "Order", "Intangible", "Thing"]),
+        (
+            "FlightReservation",
+            &["Reservation", "Order", "Intangible", "Thing"],
+        ),
+        (
+            "LodgingReservation",
+            &["Reservation", "Order", "Intangible", "Thing"],
+        ),
         ("FoodEstablishmentReservation", &["Reservation", "Order"]),
         ("TaxiReservation", &["Reservation", "Order"]),
         ("TrainReservation", &["Reservation", "Order"]),
@@ -585,7 +591,8 @@ pub async fn store_approval_record(
     };
 
     // Use the singleton EpisodeDb from AppState — avoids opening a new connection per call.
-    state.episode_db
+    state
+        .episode_db
         .store_approval(&record)
         .map_err(|e| PapillonError::from(format!("store_approval: {e}")))?;
     Ok(())
