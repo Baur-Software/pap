@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use papillon_shared::CanvasBlock;
 
 use crate::components::block_renderer::BlockRenderer;
+use crate::components::canvas_aside::CanvasAside;
 use crate::components::canvas_back_face::CanvasBackFace;
-use crate::components::canvas_chat_thread::CanvasChatThread;
 use crate::components::canvas_empty_state::CanvasEmptyState;
 use crate::components::hitl_gate::HitlGate;
 use crate::state::canvas::{CanvasSide, CanvasState};
@@ -11,6 +11,8 @@ use crate::state::canvas::{CanvasSide, CanvasState};
 #[component]
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
+    let aside_open: RwSignal<bool> = RwSignal::new(false);
+    provide_context(aside_open);
 
     // Use a Memo so grouped_blocks only rebuilds when the active canvas's blocks
     // actually change — not when unrelated canvases or signals fire.
@@ -59,51 +61,53 @@ pub fn CanvasPage() -> impl IntoView {
                 class="canvas-flip-container"
                 class:flipped=is_back
             >
-                // Front face: rendered blocks + chat thread.
+                // Front face: rendered blocks + collapsible aside.
                 <div class="canvas-face front">
-                    <div class="canvas-stream">
-                        <Show
-                            when=has_blocks
-                            fallback=move || view! { <CanvasEmptyState /> }
-                        >
-                            <For
-                                each=grouped_blocks
-                                key=|g| match g {
-                                    BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
-                                    BlockGroup::Linked(bs) => bs
-                                        .iter()
-                                        .map(|b| format!("{}@{}", b.id, b.updated_at))
-                                        .collect::<Vec<_>>()
-                                        .join("-"),
-                                }
-                                children=move |group| {
-                                    match group {
-                                        BlockGroup::Single(block) => {
-                                            view! { <BlockRenderer block_id=block.id /> }.into_any()
-                                        }
-                                        BlockGroup::Linked(blocks) => {
-                                            view! {
-                                                <div class="block-group">
-                                                    {blocks.into_iter().map(|block| {
-                                                        view! { <BlockRenderer block_id=block.id /> }
-                                                    }).collect::<Vec<_>>()}
-                                                </div>
+                    <div class="canvas-page-with-aside">
+                        <div class="canvas-stream" style="flex:1;overflow-y:auto;min-height:0;">
+                            <Show
+                                when=has_blocks
+                                fallback=move || view! { <CanvasEmptyState /> }
+                            >
+                                <For
+                                    each=grouped_blocks
+                                    key=|g| match g {
+                                        BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
+                                        BlockGroup::Linked(bs) => bs
+                                            .iter()
+                                            .map(|b| format!("{}@{}", b.id, b.updated_at))
+                                            .collect::<Vec<_>>()
+                                            .join("-"),
+                                    }
+                                    children=move |group| {
+                                        match group {
+                                            BlockGroup::Single(block) => {
+                                                view! { <BlockRenderer block_id=block.id /> }.into_any()
                                             }
-                                            .into_any()
+                                            BlockGroup::Linked(blocks) => {
+                                                view! {
+                                                    <div class="block-group">
+                                                        {blocks.into_iter().map(|block| {
+                                                            view! { <BlockRenderer block_id=block.id /> }
+                                                        }).collect::<Vec<_>>()}
+                                                    </div>
+                                                }
+                                                .into_any()
+                                            }
                                         }
                                     }
-                                }
-                            />
-                        </Show>
-                        <button
-                            class="add-note-btn"
-                            title="Add a note"
-                            on:click=move |_| canvas_state.create_note(String::new(), String::new())
-                        >
-                            "+ Note"
-                        </button>
+                                />
+                            </Show>
+                            <button
+                                class="add-note-btn"
+                                title="Add a note"
+                                on:click=move |_| canvas_state.create_note(String::new(), String::new())
+                            >
+                                "+ Note"
+                            </button>
+                        </div>
+                        <CanvasAside open=aside_open />
                     </div>
-                    <CanvasChatThread />
                 </div>
 
                 // Back face: three-tab panel — Sources / Build / History.
