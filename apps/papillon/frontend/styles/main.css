@@ -132,6 +132,18 @@
     --border: #2c2b40;
     --border-subtle: #222136;
 
+    /* fg-0 alias — primary foreground text */
+    --fg-0: #eeeef2;
+
+    /* Surface tokens for cards */
+    --surface-card-bg: rgba(255,255,255,0.03);
+    --surface-card-hover: rgba(255,255,255,0.05);
+    --surface-card-border: rgba(255,255,255,0.08);
+    --surface-card-border-hover: rgba(255,255,255,0.14);
+
+    /* Muted text for DIDs and secondary labels */
+    --text-muted-rgb: 255,255,255;
+
     /* Short aliases used by inline styles in components */
     --bg-primary: var(--bg-0);
     --bg-secondary: var(--bg-1);
@@ -167,6 +179,18 @@
     --text-3: #8888a0;
     --border: #d0cfdc;
     --border-subtle: #e2e1ec;
+
+    /* fg-0 alias used by card/agent components — maps to primary text in light mode */
+    --fg-0: #1a1928;
+
+    /* Surface tokens for cards that use rgba(255,255,255,...) in dark mode */
+    --surface-card-bg: rgba(0,0,0,0.03);
+    --surface-card-hover: rgba(0,0,0,0.05);
+    --surface-card-border: rgba(0,0,0,0.08);
+    --surface-card-border-hover: rgba(0,0,0,0.14);
+
+    /* Muted text for DIDs and secondary labels */
+    --text-muted-rgb: 26,25,40;
 
     --bg-primary: var(--bg-0);
     --bg-secondary: var(--bg-1);
@@ -204,6 +228,12 @@
         --border: #d0cfdc;
         --border-subtle: #e2e1ec;
 
+        --fg-0: #1a1928;
+        --surface-card-bg: rgba(0,0,0,0.03);
+        --surface-card-hover: rgba(0,0,0,0.05);
+        --surface-card-border: rgba(0,0,0,0.08);
+        --surface-card-border-hover: rgba(0,0,0,0.14);
+
         --bg-primary: var(--bg-0);
         --bg-secondary: var(--bg-1);
         --bg-tertiary: var(--bg-2);
@@ -235,6 +265,12 @@
         --text-3: #6a6a80;
         --border: #2c2b40;
         --border-subtle: #222136;
+
+        --fg-0: #eeeef2;
+        --surface-card-bg: rgba(255,255,255,0.03);
+        --surface-card-hover: rgba(255,255,255,0.05);
+        --surface-card-border: rgba(255,255,255,0.08);
+        --surface-card-border-hover: rgba(255,255,255,0.14);
 
         --bg-primary: var(--bg-0);
         --bg-secondary: var(--bg-1);
@@ -3588,7 +3624,7 @@ body {
 }
 
 .fleet-section-check { color: var(--sys-green, #00d9a6); }
-.fleet-section-title { color: var(--fg-0, #f0f0f5); font-weight: 600; }
+.fleet-section-title { color: var(--fg-0); font-weight: 600; }
 .fleet-section-count {
     background: rgba(0,217,166,0.12);
     color: var(--sys-green, #00d9a6);
@@ -3647,7 +3683,7 @@ body {
 
 .fleet-dropins-empty {
     font: var(--text-small);
-    color: rgba(255,255,255,0.3);
+    color: var(--text-3);
     text-align: center;
     padding: var(--sp-lg) 0;
     font-family: var(--font-mono);
@@ -3658,8 +3694,8 @@ body {
 
 /* Agent cards */
 .agent-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: var(--surface-card-bg);
+    border: 1px solid var(--surface-card-border);
     border-radius: var(--r-lg);
     padding: var(--sp-md);
     display: flex;
@@ -3668,8 +3704,8 @@ body {
 }
 
 .agent-card:hover {
-    border-color: rgba(255,255,255,0.14);
-    background: rgba(255,255,255,0.05);
+    border-color: var(--surface-card-border-hover);
+    background: var(--surface-card-hover);
 }
 
 .agent-card-header {
@@ -3697,7 +3733,7 @@ body {
     font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 600;
-    color: var(--fg-0, #f0f0f5);
+    color: var(--fg-0);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -3706,7 +3742,7 @@ body {
 .agent-card-did {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: rgba(255,255,255,0.35);
+    color: var(--text-2);
     margin-top: 2px;
 }
 
@@ -3756,7 +3792,7 @@ body {
     font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.3);
+    color: var(--text-3);
     text-transform: uppercase;
     margin-bottom: 2px;
 }
@@ -3764,7 +3800,7 @@ body {
 .agent-stat-value {
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--fg-0, #f0f0f5);
+    color: var(--fg-0);
 }
 
 .agent-card-capabilities {}
@@ -3773,7 +3809,7 @@ body {
     font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.3);
+    color: var(--text-3);
     text-transform: uppercase;
     margin-bottom: 6px;
 }
@@ -3789,9 +3825,9 @@ body {
     font-size: 11px;
     padding: 2px 8px;
     border-radius: 3px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: rgba(255,255,255,0.6);
+    background: var(--surface-card-bg);
+    border: 1px solid var(--surface-card-border);
+    color: var(--text-2);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -5458,13 +5494,13 @@ body {
     gap: var(--sp-sm, 8px);
     padding: 5px var(--sp-sm, 8px);
     border-radius: var(--r-sm, 4px);
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.04);
+    background: var(--surface-card-bg);
+    border: 1px solid var(--surface-card-border);
     min-width: 0;
 }
 
 .fleet-catalog-row:hover {
-    background: rgba(255,255,255,0.04);
+    background: var(--surface-card-hover);
 }
 
 .fleet-catalog-live {
@@ -5476,7 +5512,8 @@ body {
 }
 
 .fleet-catalog-live.offline {
-    background: rgba(255,255,255,0.15);
+    background: var(--text-3);
+    opacity: 0.5;
 }
 
 .fleet-catalog-name {
@@ -5816,7 +5853,7 @@ body {
 /* ── Agent roster (collapsible bottom section) ───────────────────── */
 .chrysalis-agents {
     flex-shrink: 0;
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 1px solid var(--border-subtle);
     background: var(--bg-1);
 }
 .chrysalis-agents-toggle {
@@ -5828,7 +5865,7 @@ body {
     user-select: none;
     transition: background 0.15s;
 }
-.chrysalis-agents-toggle:hover { background: rgba(255,255,255,0.02); }
+.chrysalis-agents-toggle:hover { background: var(--surface-card-bg); }
 .chrysalis-agents-title {
     font-family: var(--font-mono);
     font-size: 11px;
