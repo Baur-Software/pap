@@ -929,6 +929,50 @@ window.__TAURI__ = {
           return null;
         }
 
+        case 'get_templates_for_type': {
+          const schemaType = args?.schema_type || args?.schemaType || '';
+          return window.__TAURI__.core._templates.filter(
+            (t) => t.schema_type === schemaType && t.enabled
+          );
+        }
+
+        case 'list_saved_pipelines':
+          return [
+            {
+              id: 'pipeline-flight-hotel',
+              name: 'Flight + Hotel',
+              pipeline: {
+                id: 'pipeline-flight-hotel',
+                nodes: [
+                  { id: 'n1', node_type: 'Agent', intent: 'search flights', format: 'FreeText' },
+                  { id: 'n2', node_type: 'Agent', intent: 'search hotels', format: 'FreeText' },
+                ],
+              },
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ];
+
+        case 'port_compatible': {
+          const outputType = args?.output_schema_type || args?.outputSchemaType || '';
+          const inputPath = args?.input_property_path || args?.inputPropertyPath || '';
+          const outBase = outputType.replace('schema:', '');
+          const inBase = inputPath.replace('schema:', '').split('.')[0];
+          // Direct match
+          if (outBase.toLowerCase() === inBase.toLowerCase()) return true;
+          // Basic supertype map
+          const supertypes = {
+            FlightReservation: ['Reservation', 'Order', 'Intangible', 'Thing'],
+            LodgingReservation: ['Reservation', 'Order', 'Intangible', 'Thing'],
+          };
+          const types = supertypes[outBase] || [];
+          return types.some(t => t.toLowerCase() === inBase.toLowerCase());
+        }
+
+        case 'store_approval_record':
+          // No-op in mock — real implementation writes to EpisodeDb
+          return null;
+
         case 'get_recovery_status':
           return { has_recovery: false, guardian_count: 0, threshold: 0 };
 
