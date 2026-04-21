@@ -401,12 +401,15 @@
             <span class="faq-num">01</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-trust">Trust Model</span></div>
-              What is the enterprise identity story — RBAC, SAML, OIDC integration?
+              Does PAP work with our company's existing identity system — SSO, Active Directory, SAML?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            PAP doesn't plug into Okta or Active Directory — and that's intentional. Instead of a central hub that decides who has access, every agent session runs under a time-limited permission signed by the principal's own device key. When someone leaves your org, their access doesn't need to be revoked. It decays automatically — Active → Degraded → ReadOnly → Suspended — and stops working on its own. For key recovery, you split your identity into shards using Shamir Secret Sharing (the same math behind AES) and give them to trustees you choose. Any M shards reconstruct your key; fewer than M reveals nothing. Threshold and total are yours to configure.
+          </p>
           <p>
             PAP v0.x is <strong>explicitly consumer-first</strong>. The trust anchor is a
             <strong>device-bound Ed25519 keypair</strong> held by a single human
@@ -452,12 +455,15 @@
             <span class="faq-num">02</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-crypto">Cryptography</span></div>
-              Do property reference patterns constitute quasi-identifiers even when values are hidden?
+              Could an agent build a profile of me just from seeing which data fields were requested, even without the actual values?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            Yes, and we document it honestly. Even if an agent never sees your actual data, it still learns which fields you shared. Receipts store strings like <code>"schema:Person.name"</code> — property references, never values. But across enough sessions, the pattern of which properties you share with a given agent becomes a fingerprint on its own. A healthcare provider never reads your records but still knows you asked about the same condition three times this month. The mitigation today is OHTTP — when enabled, even the field pattern is invisible to network observers. Without it, transport is encrypted but the query structure is visible at the relay hop.
+          </p>
           <p>
             <strong>Yes — scoped to the recipient agent and cross-session receipt patterns.</strong>
             Each agent in
@@ -509,12 +515,15 @@
             <span class="faq-num">03</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-governance">Governance</span></div>
-              Who operates OHTTP relays, and is there a recentralization risk?
+              Who runs the privacy relay, and could it become a new central chokepoint?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            The relay runs wherever you deploy it — colocated with your own node, not on Baur Software infrastructure. If you don't configure one, the protocol falls back to a direct connection: <code>relay_url</code> is optional, and when it's absent, the handshake continues without it. Privacy degrades — query structure becomes visible at the relay hop — but the session never breaks, and scope enforcement, expiring mandates, and co-signed receipts all work exactly the same.
+          </p>
           <p>
             <strong><a href="#gloss-ohttp" class="gloss">OHTTP</a> relay capability is built into
             <a href="#gloss-papillon" class="gloss">Papillon</a> and
@@ -547,12 +556,15 @@
             <span class="faq-num">04</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-governance">Governance</span></div>
-              What stops a Sybil flood of signed agent advertisements in Chrysalis?
+              What stops someone from flooding the network with fake agents?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            Getting a fake agent into the Chrysalis mesh takes real calendar time, not just compute. A new peer needs three vouches from existing members, each of whom can only vouch for three peers per year — and must themselves have been active for at least 90 days before they can vouch for anyone. New peers spend 60 days in a probationary state. The trust graph also checks path diversity: if your three vouchers all trace back through the same cluster of ancestors, the registration is rejected. You can't manufacture trust quickly; you have to earn it slowly.
+          </p>
           <p>
             <strong>Vouch-based peer admission.</strong> Joining the Chrysalis mesh is not free —
             it requires existing trusted peers to stake their reputation on you.
@@ -788,12 +800,15 @@
             <span class="faq-num">09</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-compliance">Compliance</span></div>
-              How does PAP handle GDPR Article 17, HIPAA, and MiFID II?
+              Does PAP satisfy GDPR, HIPAA, and financial regulations out of the box?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            The hard parts are protocol invariants, not configuration. There's no central PAP server — nothing to breach at the platform level. Every session runs under a time-limited permission that decays on its own (Active → Degraded → ReadOnly → Suspended). Receipts store which <em>types</em> of data were accessed — <code>"schema:Person.dateOfBirth"</code> — never actual values. The episode store is local SQLite under your control. For stricter requirements — HIPAA no-retention policies, MiFID audit windows — those are configurable at deployment. Set <code>no_retention: true</code> on a disclosure entry and the protocol requires the receiving agent to run in a TEE, making the retention constraint cryptographically auditable rather than contractual.
+          </p>
           <p>
             Receipts contain <strong>property references only, never values</strong>
             (<code>pap-core/src/receipt.rs</code>: <code>Vec&lt;String&gt;</code> of strings like
@@ -835,12 +850,15 @@
             <span class="faq-num">10</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-dx">Developer UX</span></div>
-              What is the Python integration story for LangChain and CrewAI?
+              How do I use PAP with Python, LangChain, or CrewAI?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            Full PyO3 bindings ship today. Async works correctly — the GIL is released during await, so concurrent handshakes don't block each other in asyncio pipelines. There's an integration guide covering LangChain, CrewAI, and MCP. The main friction right now: the package isn't on PyPI yet, so you build from source with <code>maturin develop --release</code>. For a team at the evaluation stage, that's a real speed bump. A zero-build-step <code>pip install pap</code> is on the roadmap.
+          </p>
           <p>
             <strong>Full PyO3 bindings ship today.</strong> <code>crates/pap-python/src/lib.rs</code>
             (1,595 lines) exposes the complete PAP API with both blocking methods and
@@ -877,12 +895,15 @@
             <span class="faq-num">11</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
-              You've cryptographically secured the disclosure layer. How do you prevent the model itself from being the attack surface?
+              If the AI model gets compromised, does your whole security model fall apart?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            No — and the reason is that the model is structurally isolated from anything security-critical. It has one job: pick one of the action strings you handed it. It receives your query text and a list of permitted action types from the agent catalog. It cannot see your mandate, your session keys, your principal identity, or any previously disclosed values. Its output must match one of the strings it was given — a hallucinated action is discarded. What the model controls is routing: which catalog agent handles your query. What it cannot touch is the mandate that governs what that agent is allowed to do. Those are signed by your device-bound key, which the model never sees. If you prefer no model at all, <code>LlmProvider::None</code> gives you the full protocol running deterministically.
+          </p>
           <p>
             <strong>The LLM touches exactly one function in the PAP stack.</strong>
             The <code>LlmClient</code> trait in <code>crates/pap-agents/src/llm.rs</code> exposes two methods:
@@ -936,12 +957,15 @@
             <span class="faq-num">12</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
-              Our CISO won't deploy an agent framework without Okta / Azure AD integration. Does PAP have a SAML bridge?
+              Our security team requires Okta or Azure AD. Is there an integration path?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            The SAML bridge question assumes a hub-and-spoke model PAP is designed to make unnecessary. Instead of a central authority managing who has access, each agent protects itself — it declares what it requires, your orchestrator presents a cryptographically scoped mandate, and access is enforced at the edge with no IdP involved. When a mandate expires (default 8 hours), access stops without a deprovisioning call or a session token to revoke. For access tied to value exchange, the ecash layer issues blind-signed tokens using RFC 9474 RSABSSA-SHA384-PSS — the agent validates the token without learning who holds it, and receipts store only a commitment hash, never amounts or identities. What your security team actually needs maps to protocol mechanisms: access policy in mandate scope, audit trail in co-signed receipts (property type references, held locally by both parties), revocation through TTL decay.
+          </p>
           <p>
             <strong>The IdP question carries a centralized assumption PAP is designed to make
             unnecessary.</strong> Okta and Azure AD solve a hub-and-spoke problem: a central
@@ -994,12 +1018,15 @@
             <span class="faq-num">13</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
-              We're a regulated financial institution / healthcare system. Walk me through how PAP operates inside our compliance framework.
+              We're in healthcare or financial services. How does PAP fit our compliance requirements?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            Most enterprise software achieves compliance by adding controls on top of a general-purpose system. PAP's compliance properties are protocol invariants — they hold because of how the cryptography works, not because someone configured them correctly. No central server. Receipts store property type references like <code>"schema:Person.dateOfBirth"</code>, never the values. Every session runs under a mandate your device signed, specifying the exact agent, actions, data types, and duration. Access decays automatically without a deprovisioning step. For no-retention requirements, set <code>no_retention: true</code> on disclosure entries and the protocol requires the receiving agent to run in a TEE, making retention constraints auditable and binding. The 34 pre-built health and finance catalog agents (15 health, 19 finance) all require zero personal disclosure — public data sources only — giving you a no-PHI baseline to build from before you add anything sensitive.
+          </p>
           <p>
             <strong>Most enterprise software achieves compliance by adding controls on top of a
             general-purpose system.</strong> PAP's compliance properties are protocol invariants —
@@ -1007,10 +1034,7 @@
             means per framework.
           </p>
           <p>
-            <strong>HIPAA — Minimum Necessary Rule:</strong> Every agent session uses
-            <a href="#gloss-sd-jwt" class="gloss">Selective Disclosure JWT</a>
-            (<code>crates/pap-credential/src/sd_jwt.rs</code>) for claim-level
-            cryptographic hiding. The mandate's <code>DisclosureSet</code>
+            <strong>HIPAA — Minimum Necessary Rule:</strong> The mandate's <code>DisclosureSet</code>
             (<code>crates/pap-core/src/scope.rs</code>) specifies exactly which
             <code>schema:</code> properties an agent may receive. An agent requesting <code>schema:SSN</code> when the mandate permits
             only <code>schema:dateOfBirth</code> is filtered out by the marketplace before any
