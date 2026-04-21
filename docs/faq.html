@@ -1112,7 +1112,7 @@
 
       <div class="glossary-term" id="gloss-sd-jwt">
         <dt>SD-JWT (Selective Disclosure JWT)</dt>
-        <dd>A credential format that hides individual claim <em>values</em> via per-claim salted hashes. The orchestrator reveals only the property slots required by each agent — no more. Defined in <code>crates/pap-credential/src/sd_jwt.rs</code>.</dd>
+        <dd>A credential format that hides individual claim <em>values</em> via per-claim salted hashes. Available as an optional enhancement for credential-bearing payloads; not used in the current query handshake path — scope is instead bounded by the Mandate's <code>DisclosureSet</code> during Phase 2. Defined in <code>crates/pap-credential/src/sd_jwt.rs</code>.</dd>
       </div>
 
       <div class="glossary-term" id="gloss-did-key">
