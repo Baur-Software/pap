@@ -134,25 +134,24 @@ test.describe("Web standalone: settings page", () => {
 // Navigate via the slide panel (brand button → Browse Agents link).
 
 test.describe("Web standalone: browse page", () => {
-  test("shows registry browser heading", async ({ page }) => {
+  test("shows agent picker modal on browse", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
     await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
 
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
+    // Browse page now opens AgentPickerModal immediately (no registry heading)
+    await expect(page.locator(".agent-picker-overlay")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".agent-picker-title")).toContainText("INSTALLED AGENTS");
   });
 
-  test("shows disconnected empty state", async ({ page }) => {
+  test("agent picker modal has search input", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
     await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
 
-    // Registry is not connected → shows quickstart to connect
-    await expect(
-      page.locator("text=Connect to a Chrysalis Registry")
-    ).toBeVisible();
+    await expect(page.locator(".agent-picker-search")).toBeVisible({ timeout: 10000 });
   });
 });
 
@@ -212,10 +211,10 @@ test.describe("Web standalone: graceful degradation", () => {
     await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" }).click();
     await expect(page.locator(".settings-nav")).toBeVisible();
 
-    // Navigate to browse via slide panel
+    // Navigate to browse via slide panel — browse opens AgentPickerModal immediately
     await page.locator(".topbar-brand").click();
     await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
+    await expect(page.locator(".agent-picker-overlay")).toBeVisible({ timeout: 10000 });
 
     // Back to home canvas page via direct navigation
     await page.goto("/", { waitUntil: "commit" });
