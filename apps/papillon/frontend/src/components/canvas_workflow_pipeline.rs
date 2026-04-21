@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use papillon_shared::{
-    BlockState, CanvasBlock, EdgeState, PipelineEdgeInfo, PipelineInfo, PipelineNodeInfo,
-    PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode, WorkflowNode,
+    intent::detect_intent, BlockState, CanvasBlock, EdgeState, PipelineEdgeInfo, PipelineInfo,
+    PipelineNodeInfo, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode, WorkflowNode,
 };
 use papillon_shared::types::Template;
 use wasm_bindgen_futures::spawn_local;
@@ -201,9 +201,15 @@ fn DesignModeCanvas() -> impl IntoView {
             id: n.id.clone(),
             agent_hash: String::new(),
             agent_name: n.agent_name.clone().unwrap_or_else(|| n.intent.clone()),
-            // Empty string lets the backend detect action_type from intent via detect_intent().
-            // Populated when an agent is resolved from the marketplace (Phase 4).
-            action_type: n.action_type.clone(),
+            // Use the node's resolved action_type if available; otherwise derive it
+            // from the intent text using the same deterministic routing as the
+            // single-block canvas path. This ensures the correct agent is selected
+            // even before marketplace resolution populates action_type.
+            action_type: if n.action_type.is_empty() {
+                detect_intent(&n.intent).0.to_string()
+            } else {
+                n.action_type.clone()
+            },
             node_type: n.node_type.clone(),
             position_x: n.position_x,
             position_y: n.position_y,

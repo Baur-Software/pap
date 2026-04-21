@@ -7,8 +7,9 @@ use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
 use papillon_shared::{
-    BlockEvent, BlockState, BlockUpdate, PipelineExecutionResult, PipelineInfo, PipelineNodeType,
-    PipelineStepEvent, PipelineStepResult, SavedPipeline, SynthesisFormat,
+    intent::detect_intent, BlockEvent, BlockState, BlockUpdate, PipelineExecutionResult,
+    PipelineInfo, PipelineNodeType, PipelineStepEvent, PipelineStepResult, SavedPipeline,
+    SynthesisFormat,
 };
 
 use crate::db::prelude::DatabaseOps;
@@ -71,8 +72,12 @@ async fn run_pipeline_node(
     action_type: &str,
     query: &str,
 ) -> Result<(String, serde_json::Value), PapillonError> {
+    // If no action_type was provided by the caller, derive it from the query
+    // using the same deterministic routing as the single-block canvas path.
+    let detected;
     let at = if action_type.is_empty() {
-        "schema:SearchAction"
+        detected = detect_intent(query).0;
+        detected
     } else {
         action_type
     };
