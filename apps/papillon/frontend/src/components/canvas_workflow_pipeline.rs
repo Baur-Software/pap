@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use papillon_shared::{
-    BlockState, CanvasBlock, EdgeState, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode,
-    WorkflowNode,
+    BlockState, CanvasBlock, EdgeState, PipelineEdgeInfo, PipelineInfo, PipelineNodeInfo,
+    PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode, WorkflowNode,
 };
 use papillon_shared::types::Template;
 use wasm_bindgen_futures::spawn_local;
@@ -52,7 +52,6 @@ pub fn CanvasWorkflowPipeline() -> impl IntoView {
 fn MapModeCanvas() -> impl IntoView {
     let workflow = expect_context::<WorkflowState>();
 
-    let nodes = move || workflow.graph.get().nodes;
     let has_nodes = move || !workflow.graph.get().nodes.is_empty();
 
     view! {
@@ -68,15 +67,50 @@ fn MapModeCanvas() -> impl IntoView {
                 }
             >
                 <div class="wf-graph-row">
-                    <For
-                        each=nodes
-                        key=|n| n.id.clone()
-                        children=move |node| {
-                            view! { <MapNode node=node /> }
+                    {move || {
+                        let graph = workflow.graph.get();
+                        let mut items: Vec<leptos::prelude::AnyView> = Vec::new();
+                        for (i, node) in graph.nodes.iter().enumerate() {
+                            // Edge connector before each node except the first.
+                            if i > 0 {
+                                // Find the edge coming into this node (if any).
+                                let target_id = node.id.clone();
+                                let edge_state = graph.edges.iter()
+                                    .find(|e| e.to_node_id == target_id)
+                                    .map(|e| e.state.clone())
+                                    .unwrap_or(EdgeState::Unconnected);
+                                let memex = graph.edges.iter()
+                                    .find(|e| e.to_node_id == target_id)
+                                    .map(|e| e.memex_remembered)
+                                    .unwrap_or(false);
+                                items.push(view! { <MapEdgeConnector state=edge_state memex_remembered=memex /> }.into_any());
+                            }
+                            items.push(view! { <MapNode node=node.clone() /> }.into_any());
                         }
-                    />
+                        items
+                    }}
                 </div>
             </Show>
+        </div>
+    }
+}
+
+/// A directed edge connector rendered between two Map mode nodes.
+/// Uses CSS flexbox alignment — no SVG geometry required.
+#[component]
+fn MapEdgeConnector(state: EdgeState, memex_remembered: bool) -> impl IntoView {
+    let line_class = match state {
+        EdgeState::Confirmed => "wf-edge-line",
+        EdgeState::Proposed => "wf-edge-line proposed",
+        EdgeState::Blocked => "wf-edge-line blocked",
+        EdgeState::Unconnected => "wf-edge-line unconnected",
+    };
+    view! {
+        <div class="wf-edge-connector">
+            <div class={line_class}></div>
+            {memex_remembered.then(|| view! {
+                <span class="wf-memex-badge">"🧠"</span>
+            })}
         </div>
     }
 }
@@ -140,9 +174,16 @@ fn DesignModeCanvas() -> impl IntoView {
 
     let run_workflow = move |_| {
         let nodes = workflow.design_nodes.get_untracked();
+        let edges = workflow.design_edges.get_untracked();
         if nodes.is_empty() {
             return;
         }
+
+        // Stable pipeline ID for this run so all block IDs are deterministic.
+        let pipeline_id = {
+            let ts = js_sys::Date::new_0().get_time() as u64;
+            format!("wf-{ts}")
+        };
 
         // Resolve the canvas ID — create one if there is none.
         let canvas_id = {
@@ -153,17 +194,40 @@ fn DesignModeCanvas() -> impl IntoView {
             }
         };
 
-        // Pre-create skeleton Resolving blocks for each design node so they appear
-        // immediately on the front face (mirrors the pipeline_builder_tab pattern).
+        // Build PipelineInfo from design nodes/edges.
+        // Block ID pattern must match what run_pipeline emits: "pipeline-{id}-{node_id}".
+        let pipeline_nodes: Vec<PipelineNodeInfo> = nodes.iter().map(|n| PipelineNodeInfo {
+            id: n.id.clone(),
+            agent_hash: String::new(),
+            agent_name: n.agent_name.clone().unwrap_or_else(|| n.intent.clone()),
+            action_type: "schema:SearchAction".to_string(),
+            node_type: n.node_type.clone(),
+            position_x: n.position_x,
+            position_y: n.position_y,
+            format: papillon_shared::SynthesisFormat::FreeText,
+        }).collect();
+
+        let pipeline_edges: Vec<PipelineEdgeInfo> = edges.iter().map(|e| PipelineEdgeInfo {
+            from_node: e.from_node_id.clone(),
+            to_node: e.to_node_id.clone(),
+        }).collect();
+
+        let now = js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default();
+        let pipeline = PipelineInfo {
+            id: pipeline_id.clone(),
+            name: "Design Canvas Run".to_string(),
+            nodes: pipeline_nodes,
+            edges: pipeline_edges,
+            created_at: now.clone(),
+        };
+
+        // Pre-create skeleton Resolving blocks using the canonical "pipeline-{id}-{node_id}"
+        // IDs so that block_updated/block_resolved events from the backend land correctly.
         canvas_state.canvases.update(|cs| {
             if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
                 for node in &nodes {
-                    let block_id = format!("wf-{}", node.id);
+                    let block_id = format!("pipeline-{pipeline_id}-{}", node.id);
                     if !canvas.blocks.iter().any(|b| b.id == block_id) {
-                        let now = js_sys::Date::new_0()
-                            .to_iso_string()
-                            .as_string()
-                            .unwrap_or_default();
                         canvas.blocks.push(CanvasBlock {
                             id: block_id,
                             prompt_id: String::new(),
@@ -181,21 +245,18 @@ fn DesignModeCanvas() -> impl IntoView {
                             auto_expand: false,
                             retention_warning: None,
                             created_at: now.clone(),
-                            updated_at: now,
+                            updated_at: now.clone(),
                         });
                     }
                 }
-                canvas.updated_at = js_sys::Date::new_0()
-                    .to_iso_string()
-                    .as_string()
-                    .unwrap_or_default();
+                canvas.updated_at = now.clone();
             }
         });
 
         // Flip to front face so user sees the resolving blocks immediately.
         canvas_state.canvas_side.set(CanvasSide::Front);
 
-        // Collect the first node's intent as the initial query for the pipeline run.
+        // Use the first node's intent as the initial_query seed.
         let initial_query = nodes.first().map(|n| n.intent.clone()).unwrap_or_default();
         let canvas_id_clone = canvas_id.clone();
 
@@ -203,10 +264,12 @@ fn DesignModeCanvas() -> impl IntoView {
             #[derive(serde::Serialize)]
             #[serde(rename_all = "camelCase")]
             struct RunArgs {
+                pipeline: PipelineInfo,
                 initial_query: String,
                 canvas_id: Option<String>,
             }
             let args = RunArgs {
+                pipeline,
                 initial_query,
                 canvas_id: Some(canvas_id_clone),
             };
@@ -552,10 +615,15 @@ pub fn EdgeApprovalCard(
 }
 
 fn truncate_intent(intent: &str) -> String {
-    if intent.len() > 28 {
-        format!("{}…", &intent[..28])
-    } else if intent.is_empty() {
-        "Block".to_string()
+    const MAX_CHARS: usize = 28;
+    if intent.is_empty() {
+        return "Block".to_string();
+    }
+    let char_count = intent.chars().count();
+    if char_count > MAX_CHARS {
+        // Collect exactly MAX_CHARS characters so we never split a multi-byte codepoint.
+        let truncated: String = intent.chars().take(MAX_CHARS).collect();
+        format!("{truncated}…")
     } else {
         intent.to_string()
     }

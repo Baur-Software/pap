@@ -13,7 +13,10 @@ fn extract_block_ids(text: &str) -> Vec<String> {
     while let Some(start) = remaining.find("{{block:") {
         let after = &remaining[start + 8..];
         if let Some(end) = after.find("}}") {
-            ids.push(after[..end].to_string());
+            let id = &after[..end];
+            if !id.is_empty() {
+                ids.push(id.to_string());
+            }
             remaining = &after[end + 2..];
         } else {
             break;

@@ -558,7 +558,7 @@ pub async fn store_approval_record(
     agent_did: String,
     ttl_hours: i64,
 ) -> Result<(), PapillonError> {
-    use papillon_shared::episode_db::{ApprovalRecord, EpisodeDb};
+    use papillon_shared::episode_db::ApprovalRecord;
 
     // Get principal DID from the current signer (same pattern as canvas/outcome.rs)
     let principal_did = {
@@ -572,18 +572,6 @@ pub async fn store_approval_record(
         }
     };
 
-    // Resolve the data directory and open (or reuse) the approval_records table.
-    // EpisodeDb runs idempotent migrations on open so the approval_records table
-    // is created alongside the main papillon.db tables safely.
-    let data_dir = state
-        .data_dir
-        .read()
-        .map_err(|e| PapillonError::from(e.to_string()))?
-        .clone();
-    let db_path = data_dir.join("papillon.db");
-    let ep_db = EpisodeDb::open(&db_path)
-        .map_err(|e| PapillonError::from(format!("episode_db open: {e}")))?;
-
     let now = chrono::Utc::now();
     let record = ApprovalRecord {
         id: uuid::Uuid::new_v4().to_string(),
@@ -595,7 +583,9 @@ pub async fn store_approval_record(
         approved_at: now.to_rfc3339(),
         expires_at: (now + chrono::Duration::hours(ttl_hours)).to_rfc3339(),
     };
-    ep_db
+
+    // Use the singleton EpisodeDb from AppState — avoids opening a new connection per call.
+    state.episode_db
         .store_approval(&record)
         .map_err(|e| PapillonError::from(format!("store_approval: {e}")))?;
     Ok(())
