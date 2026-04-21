@@ -462,10 +462,10 @@
         </button>
         <div class="faq-body">
           <p>
-            Yes, and we document it honestly. Even if an agent never sees your actual data, it still learns which fields you shared. Receipts store strings like <code>"schema:Person.name"</code> — property references, never values. But across enough sessions, the pattern of which properties you share with a given agent becomes a fingerprint on its own. A healthcare provider never reads your records but still knows you asked about the same condition three times this month. The mitigation today is OHTTP — when enabled, even the field pattern is invisible to network observers. Without it, transport is encrypted but the query structure is visible at the relay hop.
+            PAP gives you two controls for this. First, enable OHTTP in Settings — it wraps every request in RFC 9458 HPKE so even the relay hop sees nothing, not the query structure, not the property list. Second, set <code>no_retention: true</code> on any disclosure entry where you need the receiving agent to discard its copy of the receipt. When that flag is set, PAP requires the agent to run in a TEE — the retention constraint becomes cryptographically binding, not a promise. The risk isn't gone without these settings, but with them it's fully addressed.
           </p>
           <p>
-            <strong>Yes — scoped to the recipient agent and cross-session receipt patterns.</strong>
+            <strong>The underlying concern — and why both controls matter.</strong>
             Each agent in
             <code>pap-agents</code> declares exactly what it needs via
             <code>AgentMeta.requires_disclosure</code>
@@ -485,25 +485,26 @@
             the relay hop.
           </p>
           <p>
-            Receipts sharpen the concern: <code>pap-core/src/receipt.rs</code> stores
-            <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — property <em>references</em> such as
-            <code>"schema:Person.name"</code>, never values. That design is correct and intentional.
-            But the <strong>recipient agent</strong> holds a co-signed receipt after every session.
-            Across multiple sessions, the <em>pattern</em> of which properties a principal discloses
-            to that agent is itself a quasi-identifier — an agent that logs disclosure sets could
-            fingerprint a principal with high confidence even though no value ever leaves.
-            Any other party seeing this pattern would have to breach the encrypted transport or
-            compromise local storage first.
+            Receipts store property <em>references</em>, never values: <code>pap-core/src/receipt.rs</code>
+            holds <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — strings like
+            <code>"schema:Person.name"</code>. The receiving agent holds a co-signed copy after
+            every session. Across multiple sessions the pattern of which properties a principal
+            discloses to that agent can become a quasi-identifier even without any value leaving.
+            The <code>no_retention</code> flag on <code>DisclosureEntry</code>
+            (<code>pap-core/src/scope.rs</code>) addresses this: when set, the handshake requires
+            TEE attestation from the receiving agent before proceeding, making receipt discard
+            auditable rather than contractual.
           </p>
           <p>
             In healthcare and financial services, <em>which</em> properties were accessed is frequently
-            PHI or material non-public information in its own right.
+            PHI or material non-public information in its own right — both controls are worth
+            enabling by default in those contexts.
           </p>
           <p>
             <strong>What we're watching:</strong> The <a href="https://privacybydesign.foundation/irma-english/" target="_blank" rel="noopener">IRMA/Yivi</a>
             ZKP-based approach provides stronger structural privacy guarantees using W3C VCs.
-            A future spec section will formally acknowledge the property-pattern correlation risk
-            and evaluate ZKP-based disclosure as an optional enhancement.
+            A future spec section will evaluate ZKP-based disclosure as an optional enhancement
+            for cases where even TEE-attested no-retention is insufficient.
           </p>
         </div>
       </div>
