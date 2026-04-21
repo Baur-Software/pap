@@ -383,18 +383,12 @@ fn DesignNode(node: WorkflowNode) -> impl IntoView {
             let value = event_target_value(&ev);
             let mut nodes = workflow.design_nodes.get_untracked();
             if let Some(n) = nodes.iter_mut().find(|n| n.id == node_id) {
-                n.intent = value;
+                n.intent = value.clone();
             }
             workflow.design_nodes.set(nodes);
-            intent.set(
-                workflow
-                    .design_nodes
-                    .get_untracked()
-                    .iter()
-                    .find(|n| n.id == node_id)
-                    .map(|n| n.intent.clone())
-                    .unwrap_or_default(),
-            );
+            // Sync local display signal directly from the value already in hand —
+            // no need to re-read design_nodes.
+            intent.set(value);
         }
     };
 

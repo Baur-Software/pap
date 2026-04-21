@@ -156,7 +156,7 @@ pub async fn get_templates_for_type(
         .map_err(|e| e.to_string())?;
     Ok(all
         .into_iter()
-        .filter(|t| t.schema_type == schema_type && t.enabled)
+        .filter(|t| t.schema_type == schema_type)
         .collect())
 }
 
