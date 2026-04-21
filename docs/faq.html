@@ -585,12 +585,15 @@
             <span class="faq-num">05</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-governance">Governance</span></div>
-              Doesn't PAP's dependency on Schema.org create a governance capture risk?
+              Google basically co-created Schema.org. Doesn't that give them leverage over PAP?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            The protocol doesn't depend on Schema.org being controlled by anyone in particular. The action field in a mandate is a plain string — any namespace-prefixed identifier is valid. Schema.org is the default because it's widely understood and makes agents discoverable to everyone, but a financial compliance action, a FHIR operation, or a lab protocol step can be expressed as <code>operator:FhirReadAction</code> without touching Schema.org at all. The governance capture risk is real for the interoperability layer — agents that want to be universally discoverable benefit from Schema.org alignment. Agents targeting a specific vertical can use the <code>operator:</code> namespace freely.
+          </p>
           <p>
             Schema.org is a <strong>collaborative, open-community project</strong> founded by Google,
             Microsoft, Yahoo, and Yandex to create a shared structured-data vocabulary. The schema
@@ -634,12 +637,15 @@
             <span class="faq-num">06</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-trust">Trust Model</span></div>
-              Can an adversarial agent decompose a prohibited action into auto-approvable micro-actions?
+              Could a malicious agent sneak around your restrictions by breaking one big ask into many small ones?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            The mandate chain enforces scope cryptographically at every delegation step. Each child's scope must be a strict subset of its parent's, its TTL can't exceed its parent's, and the whole chain is hash-linked so nothing can be forged or reordered. An agent cannot ask for more than it was granted, regardless of how the request is phrased. The narrower residual risk: a sequence of zero-disclosure micro-actions — each individually below the approval threshold — could collectively achieve something a single equivalent request would have surfaced for review. The cryptographic bounds still hold at each step. The gap is at the semantic layer, not the authorization layer.
+          </p>
           <p>
             <a href="#gloss-scope" class="gloss">Scope containment</a> is <strong>cryptographically enforced at every delegation step</strong>.
             <code>pap-core/src/scope.rs</code> <code>contains()</code> verifies that a child
@@ -670,12 +676,15 @@
             <span class="faq-num">07</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-trust">Trust Model</span></div>
-              Doesn't prompt injection bypass all your cryptographic controls?
+              Can't someone trick PAP with a prompt injection attack?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            The parts of PAP that enforce what an agent can do are cryptographic, not textual. Your device-signed key authorizes scope — no injected text can change that. The routing step has three layers: direct URL detection (deterministic), BM25 scoring (pure math — k1=1.5, b=0.75, no model), and on-device LLM fallback only when confidence drops below 0.35. Even at the LLM layer, the output must match one of a fixed list of permitted action strings from the agent catalog — a hallucinated action that isn't on the list is discarded. The model receives your query text and the list of allowed action types. It cannot see your mandate, your session keys, or any prior disclosed values.
+          </p>
           <p>
             <strong>The premise needs clarifying.</strong> Papillon's intent router is a
             <strong>three-level deterministic chain</strong> — no LLM is in the path until
@@ -728,12 +737,15 @@
             <span class="faq-num">08</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-latency">Latency</span></div>
-              What are real-world p99 latencies in a 3-hop production chain?
+              How fast is PAP in the real world — what are the actual latency numbers?
             </div>
           </div>
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="faq-body">
+          <p>
+            The loopback benchmarks — 2,000 runs each, 200 warmup — show full session lifecycle at 130 µs p50 / 500 µs p99, and a three-level mandate chain verification at 138.5 µs p50 / 480 µs p99. Those are on a single machine with no network hop, so they're best-case numbers. Real latency adds network RTT at each of the six protocol phases. One detail worth understanding: the HTTP path treats each phase as an independent POST and can be retried per-phase if a connection drops. The WebSocket path shares one persistent connection across all six phases — a drop requires starting a new session. Neither path is fail-open; errors propagate immediately to the caller.
+          </p>
           <p>
             Measured loopback numbers from CI (<code>benches/baseline.json</code>):
             full session lifecycle <strong>130 µs p50 / 500 µs p99</strong> (target &lt;20 ms),
