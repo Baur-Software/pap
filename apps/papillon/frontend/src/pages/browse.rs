@@ -13,6 +13,8 @@ pub fn BrowsePage() -> impl IntoView {
 
     let on_select = Callback::new(move |_agent: AgentInfo| {
         // Modal closed by on_select path — navigate back to canvas
+        // NOTE: Phase 3 — navigate to canvas root; agent pre-filling of the intent bar
+        // (populating topbar-address-input with pap://<agent.agent_did>) is deferred to Phase 4.
         if let Some(win) = web_sys::window() {
             let _ = win.location().set_href("/");
         }

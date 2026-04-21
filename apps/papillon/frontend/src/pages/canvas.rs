@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use papillon_shared::CanvasBlock;
 
 use crate::components::block_renderer::BlockRenderer;
-use crate::components::canvas_aside::CanvasAside;
+use crate::components::canvas_aside::{AsideOpen, CanvasAside};
 use crate::components::canvas_back_face::CanvasBackFace;
 use crate::components::canvas_empty_state::CanvasEmptyState;
 use crate::components::hitl_gate::HitlGate;
@@ -12,7 +12,7 @@ use crate::state::canvas::{CanvasSide, CanvasState};
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let aside_open: RwSignal<bool> = RwSignal::new(false);
-    provide_context(aside_open);
+    provide_context(AsideOpen(aside_open));
 
     // Use a Memo so grouped_blocks only rebuilds when the active canvas's blocks
     // actually change — not when unrelated canvases or signals fire.
@@ -64,7 +64,7 @@ pub fn CanvasPage() -> impl IntoView {
                 // Front face: rendered blocks + collapsible aside.
                 <div class="canvas-face front">
                     <div class="canvas-page-with-aside">
-                        <div class="canvas-stream" style="flex:1;overflow-y:auto;min-height:0;">
+                        <div class="canvas-stream">
                             <Show
                                 when=has_blocks
                                 fallback=move || view! { <CanvasEmptyState /> }

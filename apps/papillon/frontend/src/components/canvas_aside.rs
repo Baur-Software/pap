@@ -5,6 +5,12 @@ use crate::components::canvas_chat_thread::CanvasChatThread;
 use crate::state::canvas::CanvasState;
 use crate::state::orchestrator::OrchestratorState;
 
+/// Newtype wrapper for the aside open signal, so context lookup is unambiguous.
+/// Using a newtype avoids collision with `show_settings: RwSignal<bool>` which
+/// is provided at the app root with the same underlying type.
+#[derive(Clone, Copy)]
+pub struct AsideOpen(pub RwSignal<bool>);
+
 #[derive(Clone, Copy, PartialEq)]
 enum AsideMode {
     None,
@@ -19,12 +25,9 @@ enum AsideMode {
 /// - Conversation / chat history via `CanvasChatThread`
 ///
 /// The aside starts collapsed (`open` defaults to `false`). It exposes an X
-/// close button to collapse itself. A topbar toggle was planned but was omitted
-/// because `use_context::<RwSignal<bool>>()` is ambiguous — both `show_settings`
-/// (provided in app root) and `aside_open` (provided in CanvasPage) share the
-/// same type. The innermost context wins, but this is fragile across pages.
-/// A future refactor should introduce a dedicated `AsideOpen(RwSignal<bool>)`
-/// newtype to eliminate the ambiguity.
+/// close button to collapse itself. The topbar toggle button uses the
+/// `AsideOpen` newtype context (see above) to avoid ambiguity with the
+/// `show_settings: RwSignal<bool>` context provided at the app root.
 #[component]
 pub fn CanvasAside(open: RwSignal<bool>) -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();

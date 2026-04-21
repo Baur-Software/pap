@@ -4925,6 +4925,7 @@ body {
 .canvas-stream {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
     padding: var(--sp-lg) var(--sp-md);
     display: flex;
     flex-direction: column;
@@ -6770,6 +6771,11 @@ body {
 }
 .settings-overlay-body {
   flex: 1; overflow: hidden; display: flex;
+}
+/* Settings layout inside overlay fills remaining space */
+.settings-overlay .settings-layout {
+  flex: 1;
+  overflow: hidden;
 }
 
 /* ── Canvas Aside ────────────────────────────────────────────────────────── */

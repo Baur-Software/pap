@@ -5,6 +5,7 @@ use leptos_router::hooks::use_location;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
+use crate::components::canvas_aside::AsideOpen;
 use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::catalog::CatalogState;
 
@@ -52,6 +53,18 @@ pub fn TopBar() -> impl IntoView {
                 >
                     {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
                 </button>
+                {
+                    let aside = use_context::<AsideOpen>();
+                    aside.map(|AsideOpen(open)| view! {
+                        <button
+                            class="canvas-aside-toggle"
+                            on:click=move |_| open.update(|v| *v = !*v)
+                            title="Toggle conversation aside"
+                        >
+                            {move || if open.get() { "\u{2715} Chat" } else { "\u{1f4ac} Chat" }}
+                        </button>
+                    })
+                }
             </div>
         </header>
 
