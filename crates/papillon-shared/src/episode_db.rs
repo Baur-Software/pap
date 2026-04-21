@@ -243,11 +243,22 @@ impl EpisodeDb {
         // before the current schema.  SQLite has no `ADD COLUMN IF NOT EXISTS`
         // so we execute each ALTER separately and treat "duplicate column" as
         // success (error code 1 / SQLITE_ERROR with "duplicate column name").
+        //
+        // Cover every non-primary-key column so the migration is safe regardless
+        // of how old the on-disk DB is.  NOT NULL columns must have a DEFAULT so
+        // SQLite can back-fill existing rows.  CHECK constraints are omitted from
+        // ALTER TABLE because they are only enforced on new inserts — existing rows
+        // are unaffected and new inserts still hit the constraint on the table def.
         let backfills: &[&str] = &[
+            "ALTER TABLE episodes ADD COLUMN session_did   TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE episodes ADD COLUMN agent_did     TEXT NOT NULL DEFAULT ''",
-            "ALTER TABLE episodes ADD COLUMN principal_did TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN action        TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE episodes ADD COLUMN scope_summary TEXT NOT NULL DEFAULT '{}'",
+            "ALTER TABLE episodes ADD COLUMN started_at    TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN completed_at  TEXT",
+            "ALTER TABLE episodes ADD COLUMN outcome       TEXT NOT NULL DEFAULT 'success'",
             "ALTER TABLE episodes ADD COLUMN receipt_hash  TEXT",
+            "ALTER TABLE episodes ADD COLUMN principal_did TEXT NOT NULL DEFAULT ''",
         ];
         for sql in backfills {
             match conn.execute(sql, []) {
@@ -508,6 +519,31 @@ mod tests {
         // not fail.
         let db = EpisodeDb::open_in_memory().expect("open");
         db.migrate().expect("second migrate must not fail");
+    }
+
+    #[test]
+    fn migration_upgrades_minimal_legacy_db() {
+        // Simulate a DB created by an old version that only had (id, session_did).
+        // The migration must add all missing columns and indexes without panicking.
+        use rusqlite::Connection;
+        use std::sync::Mutex;
+
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE episodes (id TEXT PRIMARY KEY, session_did TEXT NOT NULL);",
+        )
+        .unwrap();
+        let db = EpisodeDb {
+            conn: Mutex::new(conn),
+        };
+        db.migrate()
+            .expect("migration must succeed on legacy minimal schema");
+
+        // After migration we must be able to insert and retrieve a full episode.
+        let ep = make_episode("legacy-001", "success");
+        db.insert_episode(&ep).expect("insert after migration");
+        let fetched = db.get_episode("legacy-001").unwrap();
+        assert_eq!(fetched.as_ref(), Some(&ep));
     }
 
     // ── insert_episode ────────────────────────────────────────────────────
