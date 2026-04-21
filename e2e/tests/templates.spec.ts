@@ -42,15 +42,7 @@ async function goToTemplatesTab(
       // Topbar panel navigation preserves the window.__TAURI__ in-memory state.
       await page.locator(".topbar-brand").click();
       await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
-      // Wait for the slide-panel to fully close (200ms transition) before proceeding.
-      await page.locator(".slide-panel").evaluate((el) =>
-        new Promise((resolve) => {
-          const handler = () => { el.removeEventListener("transitionend", handler); resolve(undefined); };
-          el.addEventListener("transitionend", handler);
-          // Fallback in case transition already ended
-          setTimeout(resolve, 300);
-        })
-      );
+      await page.locator(".settings-overlay").waitFor({ state: "visible" });
     } else {
       // Direct navigation is faster and avoids slide-panel overlay issues.
       await page.goto("/settings", { waitUntil: "commit" });
@@ -73,7 +65,7 @@ async function createTemplate(
   // Use click + pressSequentially to avoid reactive WASM fill timing issues.
   const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
   await schemaInput.click();
-  await schemaInput.pressSequentially(schemaType, { delay: 30 });
+  await schemaInput.pressSequentially(schemaType);
   await page.locator("textarea").first().fill(config);
   await page.locator('button:has-text("Create Template")').click();
   // Wait for success message
@@ -204,7 +196,7 @@ test.describe("Templates", () => {
     await page.locator('input[placeholder*="Name"]').fill(templateName);
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
     await schemaInput.click();
-    await schemaInput.pressSequentially("Recipe", { delay: 30 });
+    await schemaInput.pressSequentially("Recipe");
     await page.locator("textarea").first().fill("{invalid json");
     await page.locator('button:has-text("Create Template")').click();
 
@@ -221,7 +213,7 @@ test.describe("Templates", () => {
     // Try to create with empty name — just fill schema and config
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
     await schemaInput.click();
-    await schemaInput.pressSequentially("Recipe", { delay: 30 });
+    await schemaInput.pressSequentially("Recipe");
     await page.locator("textarea").first().fill(VALID_CONFIG);
 
     // Click Create and expect error

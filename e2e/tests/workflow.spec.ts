@@ -117,7 +117,7 @@ test.describe("MAP mode", () => {
 
     // Click Workflow tab — wait for it to be stable first
     const workflowTab = page.locator(".back-face-tab").filter({ hasText: "Workflow" });
-    await expect(workflowTab).toBeVisible({ timeout: 5_000 });
+    await workflowTab.waitFor({ state: "visible" });
     await workflowTab.click();
 
     // MAP mode canvas should be visible
@@ -193,7 +193,7 @@ test.describe("MAP mode", () => {
     await page.locator(".canvas-flip-toggle").click();
     await expect(page.locator(".canvas-back-face")).toBeVisible({ timeout: 5_000 });
     const workflowTabA = page.locator(".back-face-tab").filter({ hasText: "Workflow" });
-    await expect(workflowTabA).toBeVisible({ timeout: 5_000 });
+    await workflowTabA.waitFor({ state: "visible" });
     await workflowTabA.click();
     await expect(page.locator(".wf-map-canvas")).toBeVisible({ timeout: 5_000 });
 
@@ -212,7 +212,7 @@ test.describe("MAP mode", () => {
     await page.locator(".canvas-flip-toggle").click();
     await expect(page.locator(".canvas-back-face")).toBeVisible({ timeout: 5_000 });
     const workflowTabB = page.locator(".back-face-tab").filter({ hasText: "Workflow" });
-    await expect(workflowTabB).toBeVisible({ timeout: 5_000 });
+    await workflowTabB.waitFor({ state: "visible" });
     await workflowTabB.click();
     await expect(page.locator(".wf-map-canvas")).toBeVisible({ timeout: 5_000 });
 
