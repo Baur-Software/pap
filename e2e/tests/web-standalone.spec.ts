@@ -209,7 +209,11 @@ test.describe("Web standalone: graceful degradation", () => {
     // Navigate to settings via slide panel
     await page.locator(".topbar-brand").click();
     await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" }).click();
-    await expect(page.locator(".settings-nav")).toBeVisible();
+    await expect(page.locator(".settings-overlay")).toBeVisible();
+
+    // Close settings overlay before navigating elsewhere — the overlay intercepts pointer events
+    await page.locator(".settings-overlay-close").click();
+    await expect(page.locator(".settings-overlay")).not.toBeVisible();
 
     // Navigate to browse via slide panel — browse opens AgentPickerModal immediately
     await page.locator(".topbar-brand").click();
