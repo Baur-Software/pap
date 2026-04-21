@@ -6397,6 +6397,23 @@ body {
 }
 .wf-map-empty-icon { font-size: 2rem; opacity: 0.4; }
 
+/* Unified empty state (Map + Design mode fallbacks) */
+.wf-empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 8px;
+  padding: 40px 20px; color: var(--text-muted, #6b7280);
+  font-size: 12px; text-align: center; flex: 1;
+}
+.wf-empty-hint { margin: 0; opacity: 0.7; }
+
+/* Row wrapper for Map mode node grid */
+.wf-graph-row {
+  display: flex; align-items: flex-start; gap: 80px; flex-wrap: wrap;
+}
+
+/* Fallback text for a node section with no ports */
+.wf-port-empty { color: #444; font-size: 10px; padding: 2px 0; }
+
 /* ─── Agent Node (shared: map + design) ──────────────────────────────────── */
 .wf-node {
   background: var(--surface-2); border: 2px solid var(--border-subtle);
@@ -6555,6 +6572,7 @@ body {
   border: 1px solid var(--border-subtle);
 }
 .wf-approval-icon  { font-size: 1.5rem; flex-shrink: 0; }
+.wf-approval-agent-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .wf-approval-agent-name { font-size: 11px; font-weight: 600; color: #e0e0e0; }
 .wf-tee-badge {
   margin-left: auto; font-size: 9px; color: var(--teal);

@@ -498,13 +498,15 @@ pub fn port_compatible(output_schema_type: String, input_property_path: String) 
 /// Passes `excluded_dids` to skip already-denied agents.
 /// Returns the next candidate advertisement, or None if marketplace is exhausted.
 /// On exhaustion, the pipeline node should be marked Failed { reason: "no_candidate" }.
+///
+/// STUB: `pap_marketplace` does not yet expose `query_satisfiable(intent, excluded_dids)`.
+/// When that method is added to the marketplace client, replace this body with:
+///   `state.marketplace().query_satisfiable(intent, excluded_dids).await.map_err(Into::into)`
 pub async fn resolve_substitute_agent(
     state: &AppState,
     intent: &str,
     excluded_dids: &[String],
 ) -> Result<Option<pap_marketplace::AgentAdvertisement>, PapillonError> {
-    // TODO: wire to state.marketplace().query_satisfiable(intent, excluded_dids)
-    // Stub for now — returns None (exhausted) so the node transitions to Failed
     let _ = (state, intent, excluded_dids);
     Ok(None)
 }

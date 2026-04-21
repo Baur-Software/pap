@@ -233,7 +233,7 @@ fn DesignModeCanvas() -> impl IntoView {
                     <span class="wf-tool-label">"Note"</span>
                 </button>
                 <div class="wf-tool-spacer"></div>
-                <button class="wf-tool" title="Save pipeline">
+                <button class="wf-tool" title="Save pipeline (coming soon)" disabled=true>
                     <span>"💾"</span>
                     <span class="wf-tool-label">"Save"</span>
                 </button>
@@ -265,7 +265,11 @@ fn DesignModeCanvas() -> impl IntoView {
                 </Show>
             </div>
 
-            // Approval card demo — shown when a paused edge triggers in Design mode
+            // Approval card demo — shown when a paused edge triggers in Design mode.
+            // NOTE: This is a UI preview only. In production, this card is surfaced when
+            // a workflow block transitions to BlockState::AwaitingApproval and the
+            // on_always_allow callback invokes the `store_approval_record` Tauri command.
+            // The demo callbacks simply dismiss the card without backend interaction.
             <Show when=move || show_approval_demo.get()>
                 <EdgeApprovalCard
                     edge=WorkflowEdge {
