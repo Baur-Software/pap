@@ -76,19 +76,30 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
 
       - name: Cache Playwright browsers
         uses: actions/cache@v5
+        id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
 
-      - name: Install Playwright
+      - name: Install npm dependencies
         working-directory: e2e
-        run: |
-          npm install
-          npx playwright install chromium --with-deps
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright system deps only
+        working-directory: e2e
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Run web standalone smoke tests
         working-directory: e2e
@@ -164,19 +175,12 @@ jobs:
           name: papillon-web
           path: apps/papillon/frontend/dist/
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
       - name: Verify web app can start
         run: |
-          # Install a simple HTTP server
-          npm install -g http-server
-          # Start server in background
-          http-server apps/papillon/frontend/dist/ -p 8080 &
-          sleep 2
-          # Check if index.html is served
+          # Use Python's built-in HTTP server — no npm install needed
+          cd apps/papillon/frontend/dist/
+          python3 -m http.server 8080 &
+          sleep 1
           curl -f http://localhost:8080/ || exit 1
           echo "Web app served successfully"
 
