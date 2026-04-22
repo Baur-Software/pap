@@ -312,10 +312,7 @@ fn DesignModeCanvas() -> impl IntoView {
                     <span>"⬡"</span>
                     <span class="wf-tool-label">"Synth"</span>
                 </button>
-                <button class="wf-tool" title="Add note">
-                    <span>"📝"</span>
-                    <span class="wf-tool-label">"Note"</span>
-                </button>
+                // NOTE: Note node tool deferred — full note toolkit TBD
                 <div class="wf-tool-spacer"></div>
                 <button class="wf-tool" title="Save pipeline (coming soon)" disabled=true>
                     <span>"💾"</span>
