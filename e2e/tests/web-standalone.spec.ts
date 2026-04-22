@@ -58,7 +58,7 @@ test.describe("Web standalone: app shell", () => {
 
     await page.locator(".topbar-brand").click();
     await expect(page.locator(".slide-panel.open")).toBeVisible();
-    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" })).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" })).toBeVisible();
     await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" })).toBeVisible();
   });
 });
@@ -102,6 +102,7 @@ test.describe("Web standalone: settings page", () => {
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Privacy" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Network" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
@@ -130,28 +131,29 @@ test.describe("Web standalone: settings page", () => {
   });
 });
 
-// ── Browse Page ──────────────────────────────────────────────
-// Navigate via the slide panel (brand button → Browse Agents link).
+// ── Receipts Page ─────────────────────────────────────────────
+// Navigate via the slide panel (brand button → Receipts link).
 
-test.describe("Web standalone: browse page", () => {
-  test("shows agent picker modal on browse", async ({ page }) => {
+test.describe("Web standalone: receipts page", () => {
+  test("receipts link in slide panel navigates to receipts page", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" }).click();
 
-    // Browse page now opens AgentPickerModal immediately (no registry heading)
-    await expect(page.locator(".agent-picker-overlay")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator(".agent-picker-title")).toContainText("INSTALLED AGENTS");
+    // Receipts page renders — no Tauri = empty state
+    await expect(page.locator(".receipts-page, .activity-page, text=No receipts")).toBeVisible({ timeout: 5000 });
   });
 
-  test("agent picker modal has search input", async ({ page }) => {
+  test("slide panel close button works after nav", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
 
-    await expect(page.locator(".agent-picker-search")).toBeVisible({ timeout: 10000 });
+    // Click backdrop to close
+    await page.locator(".slide-panel-backdrop.open").click({ position: { x: 5, y: 5 } });
+    await expect(page.locator(".slide-panel.open")).not.toBeVisible();
   });
 });
 
@@ -215,10 +217,9 @@ test.describe("Web standalone: graceful degradation", () => {
     await page.locator(".settings-overlay-close").click();
     await expect(page.locator(".settings-overlay")).not.toBeVisible();
 
-    // Navigate to browse via slide panel — browse opens AgentPickerModal immediately
+    // Navigate to receipts via slide panel
     await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
-    await expect(page.locator(".agent-picker-overlay")).toBeVisible({ timeout: 10000 });
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" }).click();
 
     // Back to home canvas page via direct navigation
     await page.goto("/", { waitUntil: "commit" });

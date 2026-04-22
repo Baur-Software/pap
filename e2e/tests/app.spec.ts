@@ -37,7 +37,8 @@ test.describe("App shell", () => {
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
     await expect(page.locator(".slide-panel.open")).toBeVisible();
-    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" })).toBeVisible();
+    // Slide panel contains Receipts nav item and All Settings button
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" })).toBeVisible();
     await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" })).toBeVisible();
   });
 
@@ -121,6 +122,7 @@ test.describe("Settings page", () => {
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Privacy" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Network" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });

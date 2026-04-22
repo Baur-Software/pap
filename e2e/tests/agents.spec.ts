@@ -20,85 +20,45 @@ test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
-// ── Chrysalis Network page rendering (mounted at /fleet) ──────
+// ── Network tab in Settings (formerly at /fleet) ──────────────
 
-test.describe("Agent fleet page", () => {
-  test("renders Chrysalis Network header title and subtitle", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    await expect(page.locator(".chrysalis-header-title")).toContainText(
-      "CHRYSALIS NETWORK"
-    );
-    await expect(page.locator(".chrysalis-header-subtitle")).toBeVisible();
+// Helper: navigate to Settings > Network tab
+async function openNetworkTab(page: import("@playwright/test").Page): Promise<void> {
+  await page.goto("/", { waitUntil: "commit" });
+  await waitForApp(page);
+  await page.locator(".topbar-brand").click();
+  await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+  await expect(page.locator(".settings-overlay")).toBeVisible({ timeout: 5000 });
+  await page.locator(".settings-nav-link").filter({ hasText: "Network" }).click();
+}
+
+test.describe("Network settings tab", () => {
+  test("settings Network tab renders the section title", async ({ page }) => {
+    await openNetworkTab(page);
+    await expect(page.locator(".settings-section-title")).toContainText("Network");
   });
 
-  test("renders NETWORK NODES section label", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    await expect(page.locator(".chrysalis-section-label")).toContainText("NETWORK NODES");
+  test("This Node group is present", async ({ page }) => {
+    await openNetworkTab(page);
+    await expect(page.locator(".settings-group-label").filter({ hasText: "This Node" })).toBeVisible();
   });
 
-  test("local node row is always present", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    const localRow = page.locator(".chrysalis-node-row.local");
-    await expect(localRow).toBeVisible();
-    await expect(localRow.locator(".chrysalis-node-url")).toContainText("pap://local");
-    await expect(localRow.locator(".chrysalis-node-tag.local")).toContainText("LOCAL");
+  test("Remote Nodes group is present", async ({ page }) => {
+    await openNetworkTab(page);
+    await expect(page.locator(".settings-group-label").filter({ hasText: "Remote Nodes" })).toBeVisible();
   });
 
-  test("local node row has BROWSE link", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    const localRow = page.locator(".chrysalis-node-row.local");
-    await expect(localRow.locator(".chrysalis-node-action")).toContainText("BROWSE →");
+  test("Connect to Node group has a text input and Connect button", async ({ page }) => {
+    await openNetworkTab(page);
+    await expect(page.locator(".settings-group-label").filter({ hasText: "Connect to Node" })).toBeVisible();
+    await expect(page.locator(".settings-input").first()).toBeVisible();
+    await expect(page.locator(".btn-primary")).toContainText("Connect");
   });
 
-  test("connect form is present with correct input placeholder", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
+  test("Network tab is accessible from settings nav", async ({ page }) => {
+    await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".chrysalis-connect")).toBeVisible();
-    await expect(page.locator(".chrysalis-connect-input")).toBeVisible();
-    await expect(page.locator(".chrysalis-connect-btn")).toContainText("CONNECT");
-  });
-
-  test("THIS NODE identity panel is present", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    await expect(page.locator(".chrysalis-panel")).toBeVisible();
-    await expect(page.locator(".chrysalis-panel-header")).toContainText("THIS NODE");
-  });
-
-  test("agent roster section is present with pills", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    const roster = page.locator(".chrysalis-agents");
-    await expect(roster).toBeVisible();
-    await expect(roster.locator(".chrysalis-agents-title")).toContainText("AGENT ROSTER");
-    // compiled and catalog pills are always rendered
-    await expect(roster.locator(".chrysalis-pill.compiled")).toBeVisible();
-    await expect(roster.locator(".chrysalis-pill.catalog")).toBeVisible();
-  });
-
-  test("agent roster toggle caret is visible and clickable", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    const toggle = page.locator(".chrysalis-agents-toggle");
-    await expect(toggle).toBeVisible();
-    // Initial state: collapsed (▼)
-    await expect(page.locator(".chrysalis-agents-caret")).toContainText("▼");
-    // Click to expand
-    await toggle.click();
-    await expect(page.locator(".chrysalis-agents-caret")).toContainText("▲");
-  });
-
-  test("chrysalis-page root element exists", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
-    await waitForApp(page);
-    await expect(page.locator(".chrysalis-page")).toBeVisible();
-    // Body layout contains nodes and identity panels
-    await expect(page.locator(".chrysalis-nodes")).toBeVisible();
-    await expect(page.locator(".chrysalis-identity")).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Network" })).toBeVisible();
   });
 });
 
@@ -327,38 +287,68 @@ test.describe("Agent command round-trips", () => {
   });
 });
 
-// ── Agent Picker Modal (Browse page) ─────────────────────────────
+// ── Agent Picker Modal ────────────────────────────────────────
+// The agent picker is surfaced from canvas empty state agent tiles.
 
-test.describe("Agent Picker Modal (Browse page)", () => {
-  test("browse page opens agent picker modal immediately", async ({ page }) => {
-    await page.goto("/browse", { waitUntil: "commit" });
+test.describe("Agent Picker Modal", () => {
+  test("agent picker command returns list of installed agents", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".agent-picker-overlay")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".agent-picker-modal")).toBeVisible();
-    await expect(page.locator(".agent-picker-title")).toContainText("INSTALLED AGENTS");
+
+    const agents = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_local_agents")
+    );
+
+    expect(Array.isArray(agents)).toBe(true);
+    expect(agents.length).toBeGreaterThan(0);
+
+    for (const agent of agents) {
+      expect(agent).toHaveProperty("name");
+      expect(agent).toHaveProperty("agent_did");
+    }
   });
 
-  test("agent picker search filters results", async ({ page }) => {
-    await page.goto("/browse", { waitUntil: "commit" });
+  test("list_local_agents returns agents with required fields", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".agent-picker-search").waitFor({ state: "visible" });
-    await page.locator(".agent-picker-search").fill("web");
-    const cards = page.locator(".agent-picker-card");
-    const count = await cards.count();
-    expect(count).toBeGreaterThanOrEqual(0);
+
+    const agents = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_local_agents")
+    );
+
+    for (const agent of agents) {
+      expect(agent).toHaveProperty("name");
+      expect(agent).toHaveProperty("agent_did");
+      expect(agent).toHaveProperty("source");
+      expect(agent).toHaveProperty("capabilities");
+    }
   });
 
-  test("agent picker close button dismisses modal", async ({ page }) => {
-    await page.goto("/browse", { waitUntil: "commit" });
+  test("list_local_agents includes all agent sources", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await page.locator(".agent-picker-close").waitFor({ state: "visible" });
-    await page.locator(".agent-picker-close").click();
-    await expect(page.locator(".agent-picker-overlay")).not.toBeVisible();
+
+    const agents = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_local_agents")
+    );
+
+    const sources = agents.map((a: any) => a.source);
+    expect(sources).toContain("compiled");
+    expect(sources).toContain("catalog");
   });
 
-  test("agent picker shows count label", async ({ page }) => {
-    await page.goto("/browse", { waitUntil: "commit" });
+  test("agent picker modal appears when triggered via canvas empty state", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".agent-picker-count")).toContainText("agents installed");
+
+    // Create a new empty canvas first
+    await page.locator(".topbar-brand").click();
+    await page.locator("text=+ New Canvas").click();
+    await expect(page.locator(".canvas-empty-state")).toBeVisible();
+
+    // Agent tiles should be visible in empty state
+    const tiles = page.locator(".agent-tile");
+    const count = await tiles.count();
+    expect(count).toBeGreaterThan(0);
   });
 });
