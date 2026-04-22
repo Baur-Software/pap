@@ -604,6 +604,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                     let (edit_title, set_edit_title) = signal(title.clone());
                     let (edit_content, set_edit_content) = signal(content.clone());
                     let block_id_note = block.id.clone();
+                    let block_id_delete = StoredValue::new(block.id.clone());
                     let canvas_id_note = canvas_state.current_canvas_id.get_untracked().unwrap_or_default();
 
                     view! {
@@ -626,6 +627,13 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                                     <button class="note-edit-btn"
                                         on:click=move |_| set_editing.set(true)>
                                         "Edit"
+                                    </button>
+                                    <button class="note-delete-btn"
+                                        title="Delete note"
+                                        on:click=move |_| {
+                                            canvas_state.delete_block(&block_id_delete.get_value());
+                                        }>
+                                        "\u{00d7}"
                                     </button>
                                 </Show>
                                 <Show when=move || is_editing.get()>

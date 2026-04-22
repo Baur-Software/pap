@@ -2549,7 +2549,8 @@ body {
 }
 .note-edit-btn,
 .note-save-btn,
-.note-cancel-btn {
+.note-cancel-btn,
+.note-delete-btn {
     font-size: 10px;
     padding: 2px 8px;
     border-radius: 4px;
@@ -2583,6 +2584,19 @@ body {
 .note-cancel-btn:hover {
     border-color: rgba(255,255,255,0.2);
     color: var(--text-1, #e0e0e0);
+}
+.note-delete-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted, #666);
+    padding: 2px 6px;
+    font-size: 14px;
+    line-height: 1;
+}
+.note-delete-btn:hover {
+    border-color: rgba(232,112,106,0.4);
+    color: var(--coral, #e8706a);
+    background: rgba(232,112,106,0.08);
 }
 
 .note-body {
@@ -5301,49 +5315,134 @@ body {
     gap: var(--sp-md);
 }
 
-/* Agent capability tiles shown in the canvas empty state */
-.agent-tiles {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--sp-sm);
-    width: 100%;
-    max-width: 720px;
-}
-
-.agent-tile {
+/* ── Onboarding empty state ──────────────────────────────────────────────── */
+.onboard-card {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: var(--sp-sm) var(--sp-md);
+    align-items: center;
+    gap: var(--sp-md);
+    width: 100%;
+    max-width: 520px;
+    padding: var(--sp-xl) var(--sp-lg);
+}
+
+.onboard-progress {
+    display: flex;
+    gap: 6px;
+    margin-bottom: var(--sp-xs);
+}
+.onboard-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    transition: background 0.2s;
+}
+.onboard-dot.done { background: var(--teal, #2ec4a0); }
+.onboard-dot.active { background: var(--purple, #6c5ce7); }
+
+.onboard-question {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-1, #e0e0e0);
+    text-align: center;
+    line-height: 1.4;
+}
+.onboard-hint {
+    font-size: 12px;
+    color: var(--text-muted, #666);
+    text-align: center;
+}
+
+.onboard-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    margin-top: var(--sp-xs);
+}
+.onboard-option {
     background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: var(--r-md);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--r-md, 8px);
+    padding: 12px 18px;
+    font-size: 14px;
+    color: var(--text-1, #e0e0e0);
     cursor: pointer;
     text-align: left;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    font-family: var(--font-body);
+}
+.onboard-option:hover {
+    background: rgba(108,92,231,0.1);
+    border-color: var(--purple, #6c5ce7);
+    color: var(--purple, #6c5ce7);
 }
 
-.agent-tile:hover {
-    background: rgba(108, 92, 231, 0.12);
-    border-color: var(--purple);
+.onboard-skip {
+    background: none;
+    border: none;
+    font-size: 11px;
+    color: var(--text-muted, #555);
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-top: var(--sp-xs);
+    font-family: var(--font-body);
+    transition: color 0.15s;
+}
+.onboard-skip:hover { color: var(--text-2, #aaa); }
+
+.onboard-done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-md);
+    padding: var(--sp-xl);
+}
+.onboard-done-msg {
+    font-size: 14px;
+    color: var(--text-2, #aaa);
+    text-align: center;
+}
+.onboard-done-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+}
+.onboard-breadcrumb-tag {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(108,92,231,0.08);
+    border: 1px solid rgba(108,92,231,0.2);
+    border-radius: 99px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--text-2, #aaa);
+}
+.onboard-breadcrumb-num {
+    width: 14px;
+    height: 14px;
+    background: var(--purple, #6c5ce7);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
 }
 
-.agent-tile-label {
-    font: var(--text-small);
-    font-weight: 600;
-    color: var(--text-1);
-    letter-spacing: 0.03em;
+/* Light theme */
+[data-theme="light"] .onboard-question { color: #1a1a2e; }
+[data-theme="light"] .onboard-option {
+    background: rgba(0,0,0,0.02);
+    border-color: rgba(0,0,0,0.1);
+    color: #333;
 }
-
-.agent-tile-example {
-    font: var(--text-small);
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-}
+[data-theme="light"] .onboard-option:hover { color: var(--purple, #6c5ce7); }
 
 /* ─── AwaitingApproval block ─── */
 .canvas-block.awaiting-approval {
