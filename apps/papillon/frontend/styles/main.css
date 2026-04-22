@@ -6711,48 +6711,81 @@ body {
   transform: rotateY(180deg);
 }
 
-/* ── Canvas back face tabs ────────────────────────────────────── */
+/* ── Canvas back face: workflow + sources aside ──────────────────── */
 .canvas-back-face {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
   background: var(--bg-1, #0e0e1a);
   overflow: hidden;
 }
 
-.back-face-tabs {
+.back-face-workflow {
+  flex: 1;
+  overflow: hidden;
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
-  padding: 0 14px;
+  flex-direction: column;
+}
+
+/* Sources aside on the right of the back face */
+.back-face-sources-aside {
+  width: 220px;
   flex-shrink: 0;
+  border-left: 1px solid var(--border, rgba(255,255,255,0.08));
   background: var(--bg-2, #13131f);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+.back-face-sources-aside.collapsed {
+  width: 32px;
 }
 
-.back-face-tab {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-muted, #6b7280);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+.back-face-sources-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  flex-shrink: 0;
+}
+.back-face-sources-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  padding: 10px 14px 8px;
+  color: var(--text-muted, #666);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.back-face-sources-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted, #666);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.back-face-sources-toggle:hover { color: var(--text-1, #e0e0e0); }
+
+/* Source panel inside aside has no extra padding — the aside provides it */
+.back-face-sources-aside .source-panel {
+  padding: 0;
+}
+.back-face-sources-aside .source-panel-header {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
 }
 
-.back-face-tab:hover {
-  color: var(--text-primary, #e0e0e0);
-}
-
-.back-face-tab--active {
-  color: var(--purple, #6c5ce7);
-  border-bottom-color: var(--purple, #6c5ce7);
-}
-
+/* Unused tab CSS kept for reference — tabs are removed from back face */
+.back-face-tabs { display: none; }
+.back-face-tab  { display: none; }
+.back-face-tab--active { display: none; }
 .back-face-panel {
   flex: 1;
   overflow: auto;

@@ -68,7 +68,7 @@ pub fn CanvasAside(open: RwSignal<bool>) -> impl IntoView {
             class:collapsed=move || !open.get()
         >
             <div class="canvas-aside-header">
-                <span class="canvas-aside-title">"CANVAS"</span>
+                <span class="canvas-aside-title">"HISTORY"</span>
                 <button
                     class="canvas-aside-close"
                     on:click=move |_| open.set(false)
