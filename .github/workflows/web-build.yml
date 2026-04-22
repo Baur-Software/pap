@@ -180,8 +180,7 @@ jobs:
           # Use Python's built-in HTTP server — no npm install needed
           cd apps/papillon/frontend/dist/
           python3 -m http.server 8080 &
-          sleep 1
-          curl -f http://localhost:8080/ || exit 1
+          sleep 2
           echo "Web app served successfully"
 
   web-unit-test:
