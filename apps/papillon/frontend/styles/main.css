@@ -2733,8 +2733,8 @@ body {
 /* Failed block */
 .block-failed-info {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: flex-start;
     gap: var(--sp-sm);
 }
 
@@ -2742,6 +2742,46 @@ body {
     font: var(--text-small);
     font-family: var(--font-body);
     color: var(--coral);
+}
+
+/* Recovery suggestions — shown below failed block message */
+.block-failed-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.block-failed-suggestions-label {
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: var(--font-mono);
+}
+
+.block-failed-suggestion-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.block-failed-suggestion-pill {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.block-failed-suggestion-pill:hover {
+    border-color: var(--purple);
+    color: var(--purple);
+    background: rgba(108, 92, 231, 0.08);
 }
 
 .btn-retry {

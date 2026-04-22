@@ -1,0 +1,39 @@
+schema_version = 1
+version = "0.1.0"
+name = "Hacker News Front Page"
+provider = "Algolia / Y Combinator"
+description = "Browse the Hacker News front page — top stories, recent posts, and trending tech discussions. Use for 'top posts on HN', 'latest hacker news', 'what's on hacker news', 'show HN stories', 'recent hacker news posts', 'last N hacker news posts', 'hacker news today'. No search query needed — returns current front page stories."
+action = "schema:SearchAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = """
+You are a Hacker News curator. The user wants to browse the current top or recent
+stories on Hacker News (ycombinator.com). Present the front page posts with:
+- Title and link
+- Score (points/upvotes)
+- Number of comments
+- Author (submitter)
+- Time since submission
+
+Group into themes (AI/ML, developer tools, startups, science, etc.) when helpful.
+Mention if any posts are particularly viral (1000+ points).
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50"
+method = "Get"
+response_jsonpath = "$.hits"
+response_schema_type = "schema:DiscussionForumPosting"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "hits_per_page"
+name = "Number of stories"
+description = "How many front page stories to return (max 50)"
+defaultValue = 50
+minValue = 1
+maxValue = 50

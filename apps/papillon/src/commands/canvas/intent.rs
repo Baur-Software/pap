@@ -99,6 +99,54 @@ pub(crate) async fn classify_intent(
         );
     }
 
+    // Level 2.5: literal agent-name match — catches prompts like
+    // "hacker news last 50 posts" or "show me github trending repos".
+    // Runs after BM25 falls below threshold to rescue high-specificity prompts
+    // that mention a catalog agent by name but don't score well on BM25 because
+    // the phrase is dominated by generic words ("last", "posts", "show", "me").
+    {
+        let lower_text = text.to_lowercase();
+        let agents = state.db.load_all_agents().unwrap_or_default();
+
+        // Sort candidates: longer names first so "Hacker News Front Page" beats
+        // "Hacker News Search" when the prompt says "hacker news" generically.
+        let mut name_candidates: Vec<_> = agents
+            .iter()
+            .filter(|a| {
+                let lower_name = a.name.to_lowercase();
+                // Require at least 5 chars to avoid false positives on "Art", "NPM", etc.
+                lower_name.len() >= 5 && lower_text.contains(&lower_name)
+            })
+            .collect();
+        name_candidates.sort_by(|a, b| b.name.len().cmp(&a.name.len()));
+
+        if let Some(matched) = name_candidates.first() {
+            return (
+                matched.action.clone(),
+                matched.name.clone(),
+                text.to_owned(),
+            );
+        }
+
+        // Also check common brand aliases that don't exactly match agent names.
+        let alias_match: Option<(&str, &str)> = [
+            ("hacker news", "schema:SearchAction"),
+            ("hn ", "schema:SearchAction"),
+            ("hackernews", "schema:SearchAction"),
+        ]
+        .iter()
+        .find_map(|(alias, action)| {
+            if lower_text.contains(alias) {
+                Some((*action, "Hacker News Front Page"))
+            } else {
+                None
+            }
+        });
+        if let Some((action, agent)) = alias_match {
+            return (action.to_owned(), agent.to_owned(), text.to_owned());
+        }
+    }
+
     // Universal fallback: when NLU classification cannot run or is not confident,
     // route to DuckDuckGo web search (no API key, always available) rather than
     // schema:AskAction which requires a local LLM.

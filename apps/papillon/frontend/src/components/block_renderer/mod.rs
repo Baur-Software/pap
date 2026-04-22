@@ -529,12 +529,77 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                     let on_dismiss = move |_| {
                         canvas_state.delete_block(&dismiss_block_id);
                     };
+
+                    // Derive contextual recovery suggestions from the prompt text.
+                    // These are prefill shortcuts — they don't fire a request automatically,
+                    // they populate the address bar so the user can confirm and adjust.
+                    let prompt = block.prompt_text.clone().unwrap_or_default();
+                    let lower = prompt.to_lowercase();
+                    let suggestions_owned: Vec<(String, String)> = {
+                        let mut s: Vec<(String, String)> = Vec::new();
+                        // No agent / intent couldn't be derived — offer LLM setup path
+                        let no_agent = reason.contains("No agent") || reason.contains("no agent") || phase <= 1;
+                        if no_agent {
+                            s.push((
+                                "\u{2699} Configure AI".to_string(),
+                                "settings llm".to_string(),
+                            ));
+                        }
+                        // Topic-specific recovery suggestions
+                        if lower.contains("hacker news") || lower.contains(" hn ") || lower.contains("hackernews") {
+                            s.push(("\u{1f4f0} HN Front Page".to_string(), "hacker news front page top stories".to_string()));
+                            s.push(("\u{1f50d} Search HN".to_string(), format!("hacker news {}", prompt.trim())));
+                        } else if lower.contains("github") || lower.contains("trending") || lower.contains("repos") {
+                            s.push(("\u{1f4e6} GitHub Trending".to_string(), "github trending repositories".to_string()));
+                        } else if lower.contains("weather") || lower.contains("forecast") || lower.contains("temperature") {
+                            s.push(("\u{1f324} Weather".to_string(), format!("weather {}", prompt.trim())));
+                        } else if lower.contains("news") || lower.contains("article") {
+                            s.push(("\u{1f4f0} Hacker News".to_string(), "hacker news front page".to_string()));
+                        }
+                        // Always offer a web search fallback if we have room
+                        if s.len() < 3 && !prompt.trim().is_empty() {
+                            s.push(("\u{1f50e} Web Search".to_string(), prompt.trim().to_string()));
+                        }
+                        s.truncate(3);
+                        s
+                    };
+                    let has_suggestions = !suggestions_owned.is_empty();
+
                     view! {
                         <PhaseDots current_phase=phase failed=true />
                         <div class="block-failed-info">
                             <span class="block-failed-msg">
-                                {format!("Failed at phase {}: {}", phase, reason)}
+                                {
+                                    // Surface a human-friendly message for the most common failure:
+                                    // no agent could be found for the intent.
+                                    if reason.contains("No agent") || reason.contains("no agent") {
+                                        "Papillon couldn't find an agent for this request.".to_string()
+                                    } else {
+                                        reason.clone()
+                                    }
+                                }
                             </span>
+                            <Show when=move || has_suggestions>
+                                <div class="block-failed-suggestions">
+                                    <span class="block-failed-suggestions-label">"Try instead:"</span>
+                                    <div class="block-failed-suggestion-pills">
+                                        {suggestions_owned.iter().map(|(label, prompt_tpl)| {
+                                            let cs = canvas_state;
+                                            let pt = prompt_tpl.clone();
+                                            let lbl = label.clone();
+                                            view! {
+                                                <button
+                                                    class="block-failed-suggestion-pill"
+                                                    on:click=move |_| {
+                                                        cs.prefill_prompt.set(Some(pt.clone()));
+                                                        cs.focus_prompt.update(|n| *n += 1);
+                                                    }
+                                                >{lbl}</button>
+                                            }
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                </div>
+                            </Show>
                             <div class="block-failed-actions">
                                 <button class="btn-retry" on:click=on_retry>"Retry"</button>
                                 <button class="btn-dismiss" on:click=on_dismiss title="Dismiss">" \u{00d7} Dismiss"</button>
