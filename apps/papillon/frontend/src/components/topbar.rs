@@ -35,6 +35,15 @@ pub fn TopBar() -> impl IntoView {
     let canvases = move || canvas_state.canvases.get();
     let active_id = move || canvas_state.current_canvas_id.get();
 
+    // Only show the Workflow toggle when the active canvas has at least one block
+    let canvas_has_blocks = move || {
+        let id = canvas_state.current_canvas_id.get();
+        canvas_state.canvases.get().into_iter()
+            .find(|c| Some(&c.id) == id.as_ref())
+            .map(|c| !c.blocks.is_empty())
+            .unwrap_or(false)
+    };
+
     view! {
         <header class="topbar app-topbar">
             <button class="topbar-brand" on:click=toggle_menu title="Menu">
@@ -47,12 +56,14 @@ pub fn TopBar() -> impl IntoView {
             </div>
 
             <div class="topbar-end">
-                <button
-                    class="canvas-flip-toggle"
-                    on:click=toggle_side
-                >
-                    {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
-                </button>
+                <Show when=canvas_has_blocks>
+                    <button
+                        class="canvas-flip-toggle"
+                        on:click=toggle_side
+                    >
+                        {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
+                    </button>
+                </Show>
                 {
                     let aside = use_context::<AsideOpen>();
                     aside.map(|AsideOpen(open)| view! {

@@ -106,7 +106,7 @@
     --sidebar-width: 64px;
     --header-height: 48px;
     --status-height: 28px;
-    --topbar-height: 36px;
+    --topbar-height: 48px; /* matches --header-height; slide-panel + backdrop use this */
     --phase-dot-size: 6px;
     --block-max-width: 600px;
 
