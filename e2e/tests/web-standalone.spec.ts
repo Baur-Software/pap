@@ -153,9 +153,9 @@ test.describe("Web standalone: receipts page", () => {
 
     // Wait for backdrop to be fully visible before clicking
     await page.waitForSelector(".slide-panel-backdrop.open", { state: "visible" });
-    // Click the backdrop away from the panel to close it
-    await page.locator(".slide-panel-backdrop.open").click({ position: { x: 5, y: 5 }, force: true });
-    await expect(page.locator(".slide-panel.open")).not.toBeVisible({ timeout: 3000 });
+    // Click to the right of the 272px panel so the backdrop receives the event
+    await page.locator(".slide-panel-backdrop.open").click({ position: { x: 400, y: 100 } });
+    await expect(page.locator(".slide-panel.open")).not.toBeVisible({ timeout: 5000 });
   });
 });
 
