@@ -13,6 +13,7 @@ mod templates_tab;
 use papillon_shared::{
     builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
     OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RecoverySetupResult, RecoveryStatus,
+    RegistryInfo,
 };
 use templates_tab::TemplatesTab;
 
@@ -106,6 +107,18 @@ pub fn SettingsPage() -> impl IntoView {
                 </button>
 
                 <div class="settings-nav-divider" />
+                <div class="settings-nav-group-label">"Network"</div>
+                <button
+                    class=move || if active_tab.get() == "network" { "settings-nav-link active" } else { "settings-nav-link" }
+                    on:click=move |_| active_tab.set("network".into())
+                >
+                    <span class="settings-nav-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8"/></svg>
+                    </span>
+                    "Network"
+                </button>
+
+                <div class="settings-nav-divider" />
                 <div class="settings-nav-group-label">"Appearance"</div>
                 <button
                     class=move || if active_tab.get() == "appearance" { "settings-nav-link active" } else { "settings-nav-link" }
@@ -141,6 +154,9 @@ pub fn SettingsPage() -> impl IntoView {
                 </Show>
                 <Show when=move || active_tab.get() == "advanced">
                     <AdvancedTab />
+                </Show>
+                <Show when=move || active_tab.get() == "network">
+                    <NetworkTab />
                 </Show>
                 <Show when=move || active_tab.get() == "appearance">
                     <AppearanceTab />
@@ -1979,6 +1995,280 @@ fn AppearanceTab() -> impl IntoView {
                         aria-label="Toggle compact density"
                     />
                 </div>
+            </div>
+        </div>
+    }
+}
+
+// ── NetworkTab ─────────────────────────────────────────────────────────────
+
+#[component]
+fn NetworkTab() -> impl IntoView {
+    use leptos::ev::MouseEvent;
+
+    const LOCAL_URL: &str = "pap://local";
+
+    fn short_did(did: &str) -> String {
+        if did.len() > 26 {
+            format!("{}…{}", &did[..14], &did[did.len() - 6..])
+        } else {
+            did.to_string()
+        }
+    }
+
+    let node_did: RwSignal<String> = RwSignal::new(String::new());
+    let node_port: RwSignal<u64> = RwSignal::new(0);
+    let node_addresses: RwSignal<Vec<String>> = RwSignal::new(vec![]);
+    let bookmarks: RwSignal<Vec<String>> = RwSignal::new(vec![]);
+    let registry_infos: RwSignal<Vec<(String, RegistryInfo)>> = RwSignal::new(vec![]);
+
+    let connect_input: RwSignal<String> = RwSignal::new(String::new());
+    let connecting: RwSignal<bool> = RwSignal::new(false);
+    let connect_error: RwSignal<Option<String>> = RwSignal::new(None);
+
+    Effect::new(move || {
+        if bridge::tauri_available() {
+            spawn_local(async move {
+                if let Ok(info) =
+                    bridge::invoke_no_args::<serde_json::Value>("get_node_info").await
+                {
+                    if let Some(d) = info.get("did").and_then(|v| v.as_str()) {
+                        node_did.set(d.to_string());
+                    }
+                    if let Some(p) = info.get("port").and_then(|v| v.as_u64()) {
+                        node_port.set(p);
+                    }
+                    let ac = info
+                        .get("agent_count")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as usize;
+                    let pc = info
+                        .get("peer_count")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as usize;
+                    registry_infos.update(|v| {
+                        v.retain(|(u, _)| u != LOCAL_URL);
+                        v.insert(
+                            0,
+                            (
+                                LOCAL_URL.to_string(),
+                                RegistryInfo {
+                                    url: LOCAL_URL.to_string(),
+                                    agent_count: ac,
+                                    peer_count: pc,
+                                },
+                            ),
+                        );
+                    });
+                }
+
+                if let Ok(addrs) =
+                    bridge::invoke_no_args::<Vec<String>>("get_node_addresses").await
+                {
+                    node_addresses.set(addrs);
+                }
+
+                if let Ok(bm) = bridge::invoke_no_args::<Vec<String>>("list_bookmarks").await {
+                    let remote: Vec<String> = bm
+                        .into_iter()
+                        .filter(|u| u.as_str() != LOCAL_URL)
+                        .collect();
+                    bookmarks.set(remote);
+                }
+            });
+        }
+    });
+
+    let do_connect = move |_: MouseEvent| {
+        let url = connect_input.get();
+        let url = url.trim().to_string();
+        if url.is_empty() || connecting.get() {
+            return;
+        }
+        connect_error.set(None);
+        connecting.set(true);
+        spawn_local(async move {
+            #[derive(serde::Serialize)]
+            struct NavArgs {
+                url: String,
+            }
+            match bridge::invoke::<NavArgs, RegistryInfo>(
+                "navigate_registry",
+                &NavArgs { url: url.clone() },
+            )
+            .await
+            {
+                Ok(info) => {
+                    registry_infos.update(|v| {
+                        v.retain(|(u, _)| u != &url);
+                        v.push((url.clone(), info));
+                    });
+                    #[derive(serde::Serialize)]
+                    struct BmArgs {
+                        registry_url: String,
+                    }
+                    let _ = bridge::invoke::<BmArgs, Vec<String>>(
+                        "add_bookmark",
+                        &BmArgs {
+                            registry_url: url.clone(),
+                        },
+                    )
+                    .await;
+                    bookmarks.update(|b| {
+                        if !b.contains(&url) {
+                            b.push(url.clone());
+                        }
+                    });
+                    connect_input.set(String::new());
+                }
+                Err(e) => {
+                    connect_error.set(Some(e));
+                }
+            }
+            connecting.set(false);
+        });
+    };
+
+    view! {
+        <div class="settings-section-title">"Network"</div>
+        <p class="settings-section-desc">"Manage your node identity and connected registries."</p>
+
+        // ── This Node ─────────────────────────────────────────────────────────
+        <div class="settings-group">
+            <div class="settings-group-label">"This Node"</div>
+            <Show
+                when=move || !node_did.get().is_empty()
+                fallback=move || view! {
+                    <div class="settings-row">
+                        <span style="font-size: 12px; color: var(--text-secondary);">
+                            {if bridge::tauri_available() {
+                                "Loading\u{2026}"
+                            } else {
+                                "Tauri bridge unavailable in browser mode."
+                            }}
+                        </span>
+                    </div>
+                }
+            >
+                <div class="settings-row">
+                    <div class="settings-row-label">
+                        <strong>"Identity (DID)"</strong>
+                    </div>
+                    <div class="settings-row-control">
+                        <span
+                            style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);"
+                            title=move || node_did.get()
+                        >
+                            {move || short_did(&node_did.get())}
+                        </span>
+                    </div>
+                </div>
+                <Show when=move || { node_port.get() > 0 }>
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            <strong>"Port"</strong>
+                        </div>
+                        <div class="settings-row-control">
+                            <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);">
+                                {move || node_port.get().to_string()}
+                            </span>
+                        </div>
+                    </div>
+                </Show>
+                <Show when=move || !node_addresses.get().is_empty()>
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            <strong>"Listen Address"</strong>
+                        </div>
+                        <div class="settings-row-control">
+                            <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);">
+                                {move || node_addresses.get().into_iter().next().unwrap_or_default()}
+                            </span>
+                        </div>
+                    </div>
+                </Show>
+            </Show>
+        </div>
+
+        // ── Remote Nodes ──────────────────────────────────────────────────────
+        <div class="settings-group">
+            <div class="settings-group-label">"Remote Nodes"</div>
+            <Show
+                when=move || !bookmarks.get().is_empty()
+                fallback=move || view! {
+                    <div class="settings-row">
+                        <span style="font-size: 12px; color: var(--text-tertiary);">"No remote nodes connected."</span>
+                    </div>
+                }
+            >
+                <For
+                    each=move || bookmarks.get()
+                    key=|url| url.clone()
+                    children=move |url| {
+                        let url2 = url.clone();
+                        view! {
+                            <div class="settings-row">
+                                <div class="settings-row-label">
+                                    <span style="font-family: var(--font-mono); font-size: 12px;">
+                                        {url.clone()}
+                                    </span>
+                                </div>
+                                <div class="settings-row-control">
+                                    <span style="font-size: 12px; color: var(--text-tertiary);">
+                                        {move || {
+                                            registry_infos.get()
+                                                .into_iter()
+                                                .find(|(u, _)| u == &url2)
+                                                .map(|(_, i)| format!(
+                                                    "{} agents · {} peers",
+                                                    i.agent_count, i.peer_count
+                                                ))
+                                                .unwrap_or_else(|| "Not yet synced".to_string())
+                                        }}
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    }
+                />
+            </Show>
+        </div>
+
+        // ── Connect to Node ───────────────────────────────────────────────────
+        <div class="settings-group">
+            <div class="settings-group-label">"Connect to Node"</div>
+            <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input
+                        type="text"
+                        class="settings-input"
+                        style="flex: 1; font-size: 13px; font-family: var(--font-mono);"
+                        placeholder="pap://hostname or pap+http://hostname:7891"
+                        prop:value=move || connect_input.get()
+                        on:input=move |ev| {
+                            connect_input.set(leptos::prelude::event_target_value(&ev));
+                        }
+                        on:keydown=move |ev| {
+                            let ke: web_sys::KeyboardEvent = ev.unchecked_into();
+                            if ke.key() == "Enter" {
+                                do_connect(MouseEvent::new("click").unwrap());
+                            }
+                        }
+                    />
+                    <button
+                        class="btn btn-primary"
+                        style="font-size: 12px; white-space: nowrap;"
+                        prop:disabled=move || connecting.get()
+                        on:click=do_connect
+                    >
+                        {move || if connecting.get() { "Connecting\u{2026}" } else { "Connect" }}
+                    </button>
+                </div>
+                <Show when=move || connect_error.get().is_some()>
+                    <div style="font-size: 12px; color: var(--error);">
+                        {move || connect_error.get().unwrap_or_default()}
+                    </div>
+                </Show>
             </div>
         </div>
     }

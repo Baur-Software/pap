@@ -7,8 +7,9 @@ use tauri::{AppHandle, Emitter, State};
 
 use pap_did::PrincipalKeypair;
 use papillon_shared::{
-    BlockEvent, BlockState, BlockUpdate, PipelineExecutionResult, PipelineInfo, PipelineNodeType,
-    PipelineStepEvent, PipelineStepResult, SavedPipeline, SynthesisFormat,
+    intent::detect_intent, BlockEvent, BlockState, BlockUpdate, PipelineExecutionResult,
+    PipelineInfo, PipelineNodeType, PipelineStepEvent, PipelineStepResult, SavedPipeline,
+    SynthesisFormat,
 };
 
 use crate::db::prelude::DatabaseOps;
@@ -71,8 +72,12 @@ async fn run_pipeline_node(
     action_type: &str,
     query: &str,
 ) -> Result<(String, serde_json::Value), PapillonError> {
+    // If no action_type was provided by the caller, derive it from the query
+    // using the same deterministic routing as the single-block canvas path.
+    let detected;
     let at = if action_type.is_empty() {
-        "schema:SearchAction"
+        detected = detect_intent(query).0;
+        detected
     } else {
         action_type
     };
@@ -447,6 +452,76 @@ pub async fn run_pipeline(
     })
 }
 
+/// Check if an output schema type is compatible with an input property path.
+/// Used at graph-build time to decide whether to render a connection port.
+/// Returns false → no port is rendered, the wire is cryptographically impossible.
+///
+/// Full SD-JWT commitment inspection is a v2 enhancement.
+/// Current: string-prefix matching + schema supertype table.
+#[tauri::command]
+pub fn port_compatible(output_schema_type: String, input_property_path: String) -> bool {
+    let out_type = output_schema_type
+        .strip_prefix("schema:")
+        .unwrap_or(&output_schema_type);
+    let in_path = input_property_path
+        .strip_prefix("schema:")
+        .unwrap_or(&input_property_path);
+
+    // Direct: input path base type matches output type
+    if let Some(base) = in_path.split('.').next() {
+        if base.eq_ignore_ascii_case(out_type) {
+            return true;
+        }
+    }
+
+    // Cross-type: known schema supertype relationships
+    const SCHEMA_SUPERTYPES: &[(&str, &[&str])] = &[
+        (
+            "FlightReservation",
+            &["Reservation", "Order", "Intangible", "Thing"],
+        ),
+        (
+            "LodgingReservation",
+            &["Reservation", "Order", "Intangible", "Thing"],
+        ),
+        ("FoodEstablishmentReservation", &["Reservation", "Order"]),
+        ("TaxiReservation", &["Reservation", "Order"]),
+        ("TrainReservation", &["Reservation", "Order"]),
+        ("BusReservation", &["Reservation", "Order"]),
+        ("RentalCarReservation", &["Reservation", "Order"]),
+        ("EventReservation", &["Reservation", "Order"]),
+    ];
+
+    for (type_name, supertypes) in SCHEMA_SUPERTYPES {
+        if type_name.eq_ignore_ascii_case(out_type) {
+            if let Some(base) = in_path.split('.').next() {
+                if supertypes.iter().any(|s| s.eq_ignore_ascii_case(base)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Re-resolve an agent for a node after the principal denies the current candidate.
+/// Passes `excluded_dids` to skip already-denied agents.
+/// Returns the next candidate advertisement, or None if marketplace is exhausted.
+/// On exhaustion, the pipeline node should be marked Failed { reason: "no_candidate" }.
+///
+/// STUB: `pap_marketplace` does not yet expose `query_satisfiable(intent, excluded_dids)`.
+/// When that method is added to the marketplace client, replace this body with:
+///   `state.marketplace().query_satisfiable(intent, excluded_dids).await.map_err(Into::into)`
+pub async fn resolve_substitute_agent(
+    state: &AppState,
+    intent: &str,
+    excluded_dids: &[String],
+) -> Result<Option<pap_marketplace::AgentAdvertisement>, PapillonError> {
+    let _ = (state, intent, excluded_dids);
+    Ok(None)
+}
+
 /// Save (upsert) a pipeline by id. Returns the full `SavedPipeline` record.
 #[tauri::command]
 pub async fn save_pipeline(
@@ -482,6 +557,50 @@ pub async fn list_saved_pipelines(
         .db
         .list_saved_pipelines()
         .map_err(|e| PapillonError::from(e.0))
+}
+
+/// Store an "always allow" approval decision from the principal.
+/// Keyed by (output_type, input_type, agent_did) — subsequent runs auto-approve silently.
+#[tauri::command]
+pub async fn store_approval_record(
+    state: State<'_, AppState>,
+    output_type: String,
+    input_type: String,
+    agent_did: String,
+    ttl_hours: i64,
+) -> Result<(), PapillonError> {
+    use papillon_shared::episode_db::ApprovalRecord;
+
+    // Get principal DID from the current signer (same pattern as canvas/outcome.rs)
+    let principal_did = {
+        let signer = state
+            .signer
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        match signer.as_ref() {
+            Some(s) => s.did(),
+            None => "did:key:unknown".to_string(),
+        }
+    };
+
+    let now = chrono::Utc::now();
+    let record = ApprovalRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        output_type,
+        input_type,
+        agent_did,
+        principal_did,
+        ttl_hours,
+        approved_at: now.to_rfc3339(),
+        expires_at: (now + chrono::Duration::hours(ttl_hours)).to_rfc3339(),
+    };
+
+    // Use the singleton EpisodeDb from AppState — avoids opening a new connection per call.
+    state
+        .episode_db
+        .store_approval(&record)
+        .map_err(|e| PapillonError::from(format!("store_approval: {e}")))?;
+    Ok(())
 }
 
 /// Delete a saved pipeline by id. No-op if the id does not exist.
@@ -799,5 +918,47 @@ mod tests {
         let json = r#"{"id":"n1","agent_hash":"","agent_name":"test","action_type":"schema:SearchAction","node_type":"agent","position_x":0.0,"position_y":0.0}"#;
         let node: papillon_shared::PipelineNodeInfo = serde_json::from_str(json).unwrap();
         assert_eq!(node.format, papillon_shared::SynthesisFormat::FreeText);
+    }
+
+    #[test]
+    fn port_compat_direct() {
+        assert!(port_compatible(
+            "schema:FlightReservation".into(),
+            "schema:FlightReservation.departureDate".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_subpath() {
+        assert!(port_compatible(
+            "schema:FlightReservation".into(),
+            "schema:FlightReservation.toLocation.name".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_reject_type_mismatch() {
+        // Airport object is not a Place.name string — no port
+        assert!(!port_compatible(
+            "schema:Airport".into(),
+            "schema:Place.name".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_cross_type_supertype() {
+        // Reservation is a supertype of FlightReservation
+        assert!(port_compatible(
+            "schema:FlightReservation".into(),
+            "schema:Reservation.reservationId".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_case_insensitive() {
+        assert!(port_compatible(
+            "schema:flightreservation".into(),
+            "schema:FlightReservation.departureDate".into()
+        ));
     }
 }

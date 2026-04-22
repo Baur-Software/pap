@@ -8,6 +8,7 @@ use crate::bridge;
 use crate::service::PapillonService;
 use crate::state::catalog::CatalogState;
 use crate::state::registry::RegistryState;
+use crate::state::workflow::WorkflowState;
 pub use papillon_shared::{filter_messages_by_canvas, merge_canvases_from_records, merge_messages_dedup};
 
 /// Which face of the canvas flipper is visible.
@@ -958,6 +959,18 @@ impl CanvasState {
         };
         if let Some(evt) = typed_event {
             self.last_event.set(Some(evt));
+        }
+
+        // Update the workflow Map mode graph whenever a block resolves.
+        if matches!(&update.state, BlockState::Resolved) {
+            if let Some(workflow) = use_context::<WorkflowState>() {
+                let canvases = self.canvases.get_untracked();
+                if let Some(canvas_id) = self.current_canvas_id.get_untracked() {
+                    if let Some(canvas) = canvases.iter().find(|c| c.id == canvas_id) {
+                        workflow.derive_map_graph(canvas);
+                    }
+                }
+            }
         }
 
         // Trigger guide generation outside the borrow of canvases.

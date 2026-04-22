@@ -7,3 +7,5 @@ pub mod recovery;
 pub mod registry;
 pub mod renderer;
 pub mod templates;
+pub mod workflow;
+pub use workflow::WorkflowState;

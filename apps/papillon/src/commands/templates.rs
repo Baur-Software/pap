@@ -143,6 +143,23 @@ pub async fn import_templates(
     }))
 }
 
+/// Return all enabled templates whose schema_type matches the given type.
+/// Used by the Design mode node template picker to show only compatible templates.
+#[tauri::command]
+pub async fn get_templates_for_type(
+    state: tauri::State<'_, AppState>,
+    schema_type: String,
+) -> Result<Vec<Template>, String> {
+    let all = state
+        .db
+        .list_enabled_templates_for_principal(None)
+        .map_err(|e| e.to_string())?;
+    Ok(all
+        .into_iter()
+        .filter(|t| t.schema_type == schema_type)
+        .collect())
+}
+
 /// Auto-generate a template from a JSON-LD payload and save it.
 ///
 /// Analyzes the schema type and content structure to produce a declarative

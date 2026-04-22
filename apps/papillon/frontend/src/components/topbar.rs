@@ -5,6 +5,7 @@ use leptos_router::hooks::use_location;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
+use crate::components::canvas_aside::AsideOpen;
 use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::catalog::CatalogState;
 
@@ -52,6 +53,18 @@ pub fn TopBar() -> impl IntoView {
                 >
                     {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
                 </button>
+                {
+                    let aside = use_context::<AsideOpen>();
+                    aside.map(|AsideOpen(open)| view! {
+                        <button
+                            class="canvas-aside-toggle"
+                            on:click=move |_| open.update(|v| *v = !*v)
+                            title="Toggle conversation aside"
+                        >
+                            {move || if open.get() { "\u{2715} Chat" } else { "\u{1f4ac} Chat" }}
+                        </button>
+                    })
+                }
             </div>
         </header>
 
@@ -124,12 +137,6 @@ pub fn TopBar() -> impl IntoView {
 
                 // ── Navigate ──
                 <div class="panel-section-label">"Navigate"</div>
-                <PanelNavItem href="/browse" label="Browse Agents" close_panel=menu_open>
-                    <IconLayers />
-                </PanelNavItem>
-                <PanelNavItem href="/fleet" label="Fleet" close_panel=menu_open>
-                    <IconChip />
-                </PanelNavItem>
                 <PanelNavItem href="/receipts" label="Receipts" close_panel=menu_open>
                     <IconHistory />
                 </PanelNavItem>
@@ -139,9 +146,21 @@ pub fn TopBar() -> impl IntoView {
                 // ── Settings ──
                 <div class="panel-section-label">"Settings"</div>
                 <ThemeToggleRow />
-                <PanelNavItem href="/settings" label="All Settings" close_panel=menu_open>
-                    <IconGear />
-                </PanelNavItem>
+                {
+                    let show_settings = expect_context::<RwSignal<bool>>();
+                    view! {
+                        <button
+                            class="panel-nav-item"
+                            on:click=move |_| {
+                                menu_open.set(false);
+                                show_settings.set(true);
+                            }
+                        >
+                            <span class="panel-nav-icon"><IconGear /></span>
+                            "All Settings"
+                        </button>
+                    }
+                }
 
             </div>
         </div>
@@ -445,30 +464,6 @@ fn ThemeToggleRow() -> impl IntoView {
 }
 
 // ── Icons used by panel nav items ────────────────────────────
-
-#[component]
-fn IconLayers() -> impl IntoView {
-    view! {
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-            <polyline points="2 17 12 22 22 17"/>
-            <polyline points="2 12 12 17 22 12"/>
-        </svg>
-    }
-}
-
-#[component]
-fn IconChip() -> impl IntoView {
-    view! {
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="6" height="6" rx="1"/>
-            <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-        </svg>
-    }
-}
 
 #[component]
 fn IconHistory() -> impl IntoView {

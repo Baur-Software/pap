@@ -24,7 +24,9 @@ use pap_did::PrincipalKeypair;
 use pap_federation::FederatedRegistry;
 use pap_transport::{AgentHandler, EndpointRegistry};
 use pap_webauthn::{PrincipalSigner, SoftwareSigner};
-use papillon_shared::{LlmProvider, OrchestratorConfig, SuccessorDesignation};
+use papillon_shared::{
+    episode_db::EpisodeDb, LlmProvider, OrchestratorConfig, SuccessorDesignation,
+};
 use zeroize::Zeroizing;
 
 use crate::agents::on_device_ai::OnDeviceAiExecutor;
@@ -75,6 +77,9 @@ pub struct AppState {
     /// Persistent SQLite database for experience memory.
     /// Stores episodes, agent profiles, and retention policies.
     pub db: Arc<Database>,
+    /// Focused SQLite store for approval records (and episodes).
+    /// Stored as a singleton in AppState to avoid opening a new connection per call.
+    pub episode_db: Arc<EpisodeDb>,
     /// Whether the principal key has been exported/backed up.
     pub key_backed_up: RwLock<bool>,
     /// Forward-looking successor designations.
@@ -137,7 +142,17 @@ impl AppState {
         let profiles_db = ProfilesDatabase::open(&profiles_db_path)
             .expect("failed to open profiles registry database");
 
-        Self::with_db(Arc::new(db), Arc::new(profiles_db), catalog_dir)
+        // Open the EpisodeDb at the same path as the main db so approval_records
+        // migrations run once here rather than on every store_approval_record call.
+        let episode_db =
+            EpisodeDb::open(db_path).expect("failed to open episode_db for approval records");
+
+        Self::with_db(
+            Arc::new(db),
+            Arc::new(profiles_db),
+            Arc::new(episode_db),
+            catalog_dir,
+        )
     }
 
     /// Create a clone suitable for moving to a background thread.
@@ -182,6 +197,7 @@ impl AppState {
             model_manager: self.model_manager.clone(),
             agent_keypairs: self.agent_keypairs.clone(), // shared Arc — mutations visible to both sides
             db: self.db.clone(),
+            episode_db: self.episode_db.clone(), // shared Arc — same singleton across clones
             key_backed_up: RwLock::new(
                 *self.key_backed_up.read().unwrap_or_else(|e| e.into_inner()),
             ),
@@ -240,6 +256,7 @@ impl AppState {
     fn with_db(
         db: Arc<Database>,
         profiles_db: Arc<ProfilesDatabase>,
+        episode_db: Arc<EpisodeDb>,
         catalog_dir: PathBuf,
     ) -> Self {
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
@@ -510,6 +527,8 @@ impl AppState {
             model_manager,
             agent_keypairs: Arc::new(RwLock::new(keypairs)),
             db,
+            // Shared via Arc — avoids opening a new connection per store_approval_record call.
+            episode_db,
             key_backed_up: RwLock::new(false),
             successor_designations: RwLock::new(Vec::new()),
             resource_dir: RwLock::new(PathBuf::new()),
@@ -580,7 +599,13 @@ impl Default for AppState {
             crate::db::open_db(&PathBuf::from("papillon.db")).expect("failed to open fallback db");
         let profiles_db = ProfilesDatabase::open(&PathBuf::from("profiles.db"))
             .expect("failed to open fallback profiles db");
-        Self::with_db(Arc::new(db), Arc::new(profiles_db), PathBuf::new())
+        let episode_db = EpisodeDb::open_in_memory().expect("failed to open in-memory episode_db");
+        Self::with_db(
+            Arc::new(db),
+            Arc::new(profiles_db),
+            Arc::new(episode_db),
+            PathBuf::new(),
+        )
     }
 }
 
@@ -713,7 +738,8 @@ mod tests {
         let profiles_db = Arc::new(
             crate::profiles_db::ProfilesDatabase::open_memory().expect("in-memory profiles db"),
         );
-        AppState::with_db(db, profiles_db, PathBuf::new())
+        let episode_db = Arc::new(EpisodeDb::open_in_memory().expect("in-memory episode_db"));
+        AppState::with_db(db, profiles_db, episode_db, PathBuf::new())
     }
 
     #[test]

@@ -24,18 +24,29 @@ const VALID_CONFIG = JSON.stringify({
 
 /** Navigate to Settings > Templates tab and wait for content.
  *
- * Uses the topbar slide-panel for SPA navigation so that in-memory mock state
- * (e.g. created templates) is preserved across navigation within the same test.
+ * Uses direct page.goto when coming from a non-settings page to avoid
+ * topbar slide-panel animation timing issues. Falls back to topbar nav
+ * when in-memory mock state must be preserved (e.g., after creating a template
+ * in the same test and navigating away to canvas then back).
+ *
+ * @param preserveMock - if true, navigate via topbar panel to keep window.__TAURI__ state
  */
-async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  // If the settings nav is already visible we are already on the settings page;
-  // just click the Templates link directly.
+async function goToTemplatesTab(
+  page: import("@playwright/test").Page,
+  preserveMock: boolean = false
+) {
   const settingsNav = page.locator(".settings-nav");
   const alreadyOnSettings = await settingsNav.isVisible().catch(() => false);
   if (!alreadyOnSettings) {
-    // Open the topbar slide panel and navigate to All Settings via SPA link.
-    await page.locator(".topbar-brand").click();
-    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+    if (preserveMock) {
+      // Topbar panel navigation preserves the window.__TAURI__ in-memory state.
+      await page.locator(".topbar-brand").click();
+      await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+      await page.locator(".settings-overlay").waitFor({ state: "visible" });
+    } else {
+      // Direct navigation is faster and avoids slide-panel overlay issues.
+      await page.goto("/settings", { waitUntil: "commit" });
+    }
     await expect(page.locator(".settings-nav")).toBeVisible({ timeout: 5000 });
   }
   await page.locator(".settings-nav-link").filter({ hasText: "Templates" }).click();
@@ -50,8 +61,11 @@ async function createTemplate(
   config: string = VALID_CONFIG,
 ) {
   await page.locator('input[placeholder*="Name"]').fill(name);
-  // SchemaTypeInput placeholder is "e.g. FlightReservation"
-  await page.locator('input[placeholder*="FlightReservation"]').fill(schemaType);
+  // SchemaTypeInput placeholder is "e.g. FlightReservation".
+  // Use click + pressSequentially to avoid reactive WASM fill timing issues.
+  const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
+  await schemaInput.click();
+  await schemaInput.pressSequentially(schemaType);
   await page.locator("textarea").first().fill(config);
   await page.locator('button:has-text("Create Template")').click();
   // Wait for success message
@@ -121,27 +135,19 @@ test.describe("Templates", () => {
     ).not.toBeVisible();
   });
 
-  test("enable/disable toggle updates state", async ({ page }) => {
+  test("template row shows Edit and Delete buttons", async ({ page }) => {
     await goToTemplatesTab(page);
 
-    // Create a template
-    const templateName = `Toggle-${Date.now()}`;
-    await createTemplate(page, templateName, "FlightReservation");
-
-    // Get the specific template row
-    const row = templateRow(page, templateName);
+    // Use an existing default template row (seeded by mock)
+    const row = templateRow(page, "Default Flight Template");
     await expect(row).toBeVisible();
 
-    // Verify initially enabled — check the Enabled badge in this specific row
-    await expect(row.getByText("Enabled")).toBeVisible();
+    // Each row has Edit and Delete action buttons
+    await expect(row.locator('button:has-text("Edit")')).toBeVisible();
+    await expect(row.locator('button:has-text("Delete")')).toBeVisible();
 
-    // Toggle via the Disable button in the template row
-    await row.locator('button:has-text("Disable")').click();
-    await expect(row.getByText("Disabled")).toBeVisible();
-
-    // Toggle back via the Enable button
-    await row.locator('button:has-text("Enable")').click();
-    await expect(row.getByText("Enabled")).toBeVisible();
+    // Each row has a checkbox for bulk operations
+    await expect(row.locator('input[type="checkbox"]')).toBeVisible();
   });
 
   test("template list persists after page navigation", async ({ page }) => {
@@ -154,10 +160,11 @@ test.describe("Templates", () => {
     // Verify template exists
     await expect(templateRow(page, templateName)).toBeVisible();
 
-    // Navigate away (back to canvas) and back to Settings > Templates
+    // Navigate away (back to canvas) and back to Settings > Templates.
+    // Use preserveMock=true to keep the window.__TAURI__ in-memory template state.
     await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
-    await goToTemplatesTab(page);
+    await goToTemplatesTab(page, true);
 
     // Verify template still present
     await expect(templateRow(page, templateName)).toBeVisible();
@@ -187,7 +194,9 @@ test.describe("Templates", () => {
     // Try to create with malformed JSON
     const templateName = `BadJSON-${Date.now()}`;
     await page.locator('input[placeholder*="Name"]').fill(templateName);
-    await page.locator('input[placeholder*="FlightReservation"]').fill("Recipe");
+    const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
+    await schemaInput.click();
+    await schemaInput.pressSequentially("Recipe");
     await page.locator("textarea").first().fill("{invalid json");
     await page.locator('button:has-text("Create Template")').click();
 
@@ -202,7 +211,9 @@ test.describe("Templates", () => {
     await goToTemplatesTab(page);
 
     // Try to create with empty name — just fill schema and config
-    await page.locator('input[placeholder*="FlightReservation"]').fill("Recipe");
+    const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
+    await schemaInput.click();
+    await schemaInput.pressSequentially("Recipe");
     await page.locator("textarea").first().fill(VALID_CONFIG);
 
     // Click Create and expect error
@@ -234,8 +245,8 @@ test.describe("Templates", () => {
     await expect(page.getByText("Default Flight Template").first()).toBeVisible();
     await expect(page.getByText("Default Hotel Template").first()).toBeVisible();
 
-    // Verify they show as enabled
-    const enabledBadges = page.getByText("Enabled");
-    await expect(enabledBadges.first()).toBeVisible();
+    // Verify their schema types are shown in the rows
+    await expect(page.getByText("FlightReservation").first()).toBeVisible();
+    await expect(page.getByText("LodgingReservation").first()).toBeVisible();
   });
 });

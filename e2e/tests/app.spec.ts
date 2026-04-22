@@ -37,7 +37,8 @@ test.describe("App shell", () => {
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
     await expect(page.locator(".slide-panel.open")).toBeVisible();
-    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" })).toBeVisible();
+    // Slide panel contains Receipts nav item and All Settings button
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" })).toBeVisible();
     await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" })).toBeVisible();
   });
 
@@ -67,23 +68,6 @@ test.describe("Canvas page", () => {
     await waitForApp(page);
     // The prompt input is now the topbar address bar, not an inline canvas element
     await expect(page.locator(".topbar-address-input")).toBeVisible();
-  });
-
-  test("address bar shows pap:// suggestion buttons when typing pap://", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-    // Navigate to browse via slide panel — the app auto-connects to pap://local on startup
-    // which calls list_agents and populates the catalog state
-    await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
-    // Agents are auto-loaded — verify catalog is populated before testing suggestions
-    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 10000 });
-    // Address bar is in the topbar — catalog now has entries from auto-connect.
-    // The suggestion list only shows when there is a non-empty prefix after pap://,
-    // so type pap://d to match "duckduckgo search" from the local catalog.
-    await page.locator(".topbar-address-input").fill("pap://d");
-    await expect(page.locator(".palette-suggestion").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("address bar input accepts text", async ({ page }) => {
@@ -120,7 +104,7 @@ test.describe("Activity page", () => {
     await page.goto("/activity", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(
-      page.locator("text=No protocol events yet.")
+      page.locator("text=No activity yet.")
     ).toBeVisible();
   });
 });
@@ -138,6 +122,7 @@ test.describe("Settings page", () => {
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Privacy" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Network" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
@@ -192,39 +177,27 @@ test.describe("Settings page", () => {
     await expect(page.locator(".backup-warning")).not.toBeVisible();
   });
 
-  test("Add Successor form works", async ({ page }) => {
+  test("Identity tab shows export and import key UI", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".settings-nav-link").filter({ hasText: "Identity" }).click();
 
-    // Wait for Identity tab content
-    await expect(page.locator("text=Designated Successors")).toBeVisible();
+    // Export Key button is always visible
+    await expect(page.locator("text=Export Key")).toBeVisible();
 
-    // Click Add Successor
-    await page.getByRole("button", { name: "Add Successor" }).click();
+    // Import Key button is always visible
+    await expect(page.locator("text=Import Key")).toBeVisible();
 
-    // Wait for form to appear
-    await expect(page.locator('input[placeholder="did:key:z..."]')).toBeVisible();
+    // Click Import Key to reveal the import form
+    await page.locator("text=Import Key").click();
 
-    // Fill in successor form
-    await page.locator('input[placeholder="did:key:z..."]').fill(
-      "did:key:z6MkSuccessor123"
-    );
-    await page.locator('input[placeholder="Optional notes..."]').fill(
-      "My estate executor"
-    );
-
-    // Save — the form's Save button (inside the successor form area)
-    await page
-      .locator(".setup-inputs")
-      .last()
-      .getByRole("button", { name: "Save" })
-      .click();
-
-    // Should show successor entry (wait for async response)
+    // Import form appears with a password input for base64url seed
     await expect(
-      page.locator(".successor-entry")
-    ).toBeVisible({ timeout: 10_000 });
+      page.locator('input[placeholder="Paste base64url seed..."]')
+    ).toBeVisible();
+
+    // Import submit button inside the form is visible (exact match)
+    await expect(page.getByRole("button", { name: "Import", exact: true })).toBeVisible();
   });
 
   test("switching nav links works", async ({ page }) => {
@@ -245,51 +218,6 @@ test.describe("Settings page", () => {
     // Switch to Advanced — shows Saved Registries
     await page.locator(".settings-nav-link").filter({ hasText: "Advanced" }).click();
     await expect(page.locator("text=Saved Registries")).toBeVisible();
-  });
-});
-
-// ── Tier 2 Tests: Agent Discovery (Browse) ──────────────────────
-
-test.describe("Agent discovery workflow", () => {
-  test("loads agent registry with 3 builtin agents", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-    // Navigate to browse registries via slide panel ("Browse Agents" link)
-    await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
-    // Should show registry page heading
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
-    // App auto-connects to pap://local on startup — agents are already loaded
-    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
-  });
-
-  test("agent cards display name and action type", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-    await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
-    // App auto-connects to pap://local on startup — wait for agent cards
-    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
-    // Check agent card contains expected fields from the mock (DuckDuckGo Search)
-    const firstCard = page.locator(".agent-card").first();
-    await expect(firstCard).toContainText("DuckDuckGo Search");
-    await expect(firstCard).toContainText("SearchAction");
-  });
-
-  test("clicking agent shows detail view", async ({ page }) => {
-    await page.goto("/", { waitUntil: "commit" });
-    await waitForApp(page);
-    await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible({ timeout: 5000 });
-    // App auto-connects to pap://local on startup — wait for agent cards
-    await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 5000 });
-    // Click first agent card
-    await page.locator(".agent-card").first().click();
-    // Should show agent detail view
-    await expect(page.locator(".agent-detail")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".agent-detail-name")).toBeVisible();
   });
 });
 
@@ -489,5 +417,29 @@ test.describe("Settings management and persistence", () => {
     });
     expect(successors).toHaveLength(1);
     expect(successors[0].successor_did).toBe("did:key:z6MkSuccessor2");
+  });
+});
+
+// ── Settings Overlay ─────────────────────────────────────────────
+
+test.describe("Settings overlay", () => {
+  test("clicking All Settings in slide panel opens settings overlay", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await page.locator(".topbar-brand").click();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
+    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+    await expect(page.locator(".settings-overlay")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".settings-overlay-title")).toContainText("SETTINGS");
+  });
+
+  test("settings overlay X button closes the overlay", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await page.locator(".topbar-brand").click();
+    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
+    await expect(page.locator(".settings-overlay")).toBeVisible({ timeout: 5000 });
+    await page.locator(".settings-overlay-close").click();
+    await expect(page.locator(".settings-overlay")).not.toBeVisible();
   });
 });

@@ -118,6 +118,40 @@ pub struct Episode {
     pub principal_did: String,
 }
 
+// ── Approval record data model ────────────────────────────────────────────────
+
+/// A persisted "always allow" decision from the principal.
+///
+/// Keyed by `(output_type, input_type, agent_did, principal_did)` so that
+/// previously-approved property wire disclosures auto-approve silently on
+/// subsequent runs until the record expires.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalRecord {
+    /// UUID v4, primary key.
+    pub id: String,
+
+    /// The Schema.org output type produced by the agent (e.g. `"schema:FlightReservation"`).
+    pub output_type: String,
+
+    /// The Schema.org input type consumed by the agent (e.g. `"schema:LodgingReservation"`).
+    pub input_type: String,
+
+    /// The DID of the agent that was approved.
+    pub agent_did: String,
+
+    /// The root principal's DID that granted the approval.
+    pub principal_did: String,
+
+    /// How many hours this approval is valid for (used when computing `expires_at`).
+    pub ttl_hours: i64,
+
+    /// ISO 8601 timestamp at which the approval was granted.
+    pub approved_at: String,
+
+    /// ISO 8601 timestamp at which the approval expires.
+    pub expires_at: String,
+}
+
 // ── Database wrapper ──────────────────────────────────────────────────────────
 
 /// A focused rusqlite wrapper for the episode store.
@@ -161,10 +195,16 @@ impl EpisodeDb {
             .map_err(|e| EpisodeDbError::Lock(e.to_string()))
     }
 
-    /// Run all schema migrations.  Safe to call on every startup — all
-    /// statements use `IF NOT EXISTS` or are otherwise idempotent.
+    /// Run all schema migrations.  Safe to call on every startup.
+    ///
+    /// Structured as two phases so that column-backfills (which SQLite only
+    /// supports one-at-a-time and has no `IF NOT EXISTS` guard for) are applied
+    /// before the indexes that depend on those columns are created.
     fn migrate(&self) -> Result<()> {
         let conn = self.lock()?;
+
+        // Phase 1 — create tables and pragmas.
+        // `CREATE TABLE IF NOT EXISTS` is safe on an existing DB.
         conn.execute_batch(
             "
             PRAGMA journal_mode = WAL;
@@ -184,6 +224,61 @@ impl EpisodeDb {
                 principal_did TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS approval_records (
+                id            TEXT PRIMARY KEY,
+                output_type   TEXT NOT NULL,
+                input_type    TEXT NOT NULL,
+                agent_did     TEXT NOT NULL,
+                principal_did TEXT NOT NULL,
+                ttl_hours     INTEGER NOT NULL DEFAULT 24,
+                approved_at   TEXT NOT NULL,
+                expires_at    TEXT NOT NULL,
+                UNIQUE(output_type, input_type, agent_did, principal_did)
+            );
+            ",
+        )
+        .map_err(EpisodeDbError::Sqlite)?;
+
+        // Phase 2 — backfill columns that may be absent in databases created
+        // before the current schema.  SQLite has no `ADD COLUMN IF NOT EXISTS`
+        // so we execute each ALTER separately and treat "duplicate column" as
+        // success (error code 1 / SQLITE_ERROR with "duplicate column name").
+        //
+        // Cover every non-primary-key column so the migration is safe regardless
+        // of how old the on-disk DB is.  NOT NULL columns must have a DEFAULT so
+        // SQLite can back-fill existing rows.  CHECK constraints are omitted from
+        // ALTER TABLE because they are only enforced on new inserts — existing rows
+        // are unaffected and new inserts still hit the constraint on the table def.
+        let backfills: &[&str] = &[
+            "ALTER TABLE episodes ADD COLUMN session_did   TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN agent_did     TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN action        TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN scope_summary TEXT NOT NULL DEFAULT '{}'",
+            "ALTER TABLE episodes ADD COLUMN started_at    TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE episodes ADD COLUMN completed_at  TEXT",
+            "ALTER TABLE episodes ADD COLUMN outcome       TEXT NOT NULL DEFAULT 'success'",
+            "ALTER TABLE episodes ADD COLUMN receipt_hash  TEXT",
+            "ALTER TABLE episodes ADD COLUMN principal_did TEXT NOT NULL DEFAULT ''",
+        ];
+        for sql in backfills {
+            match conn.execute(sql, []) {
+                Ok(_) => {}
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error {
+                        code: rusqlite::ffi::ErrorCode::Unknown,
+                        ..
+                    },
+                    Some(ref msg),
+                )) if msg.contains("duplicate column") => {
+                    // Column already exists — this is the normal case on an up-to-date DB.
+                }
+                Err(e) => return Err(EpisodeDbError::Sqlite(e)),
+            }
+        }
+
+        // Phase 3 — indexes.  Now safe because all referenced columns exist.
+        conn.execute_batch(
+            "
             CREATE INDEX IF NOT EXISTS idx_episodes_agent_did
                 ON episodes(agent_did);
             CREATE INDEX IF NOT EXISTS idx_episodes_principal_did
@@ -194,6 +289,9 @@ impl EpisodeDb {
                 ON episodes(started_at);
             CREATE INDEX IF NOT EXISTS idx_episodes_outcome
                 ON episodes(outcome);
+
+            CREATE INDEX IF NOT EXISTS idx_approval_agent
+                ON approval_records(agent_did);
             ",
         )
         .map_err(EpisodeDbError::Sqlite)
@@ -286,6 +384,83 @@ impl EpisodeDb {
             .optional()
             .map_err(EpisodeDbError::Sqlite)
     }
+
+    // ── Approval record operations ────────────────────────────────────────
+
+    /// Check if a `(output_type, input_type, agent_did, principal_did)` tuple
+    /// has a non-expired approval record.
+    ///
+    /// Returns `Ok(true)` only when a matching record exists **and** its
+    /// `expires_at` timestamp is strictly in the future.
+    pub fn has_approval(
+        &self,
+        output_type: &str,
+        input_type: &str,
+        agent_did: &str,
+        principal_did: &str,
+    ) -> Result<bool> {
+        let conn = self.lock()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM approval_records \
+                 WHERE output_type=?1 AND input_type=?2 AND agent_did=?3 \
+                 AND principal_did=?4 AND expires_at > ?5",
+                rusqlite::params![output_type, input_type, agent_did, principal_did, now],
+                |row| row.get(0),
+            )
+            .map_err(EpisodeDbError::Sqlite)?;
+        Ok(count > 0)
+    }
+
+    /// Persist an "always allow" approval.
+    ///
+    /// Uses `ON CONFLICT … DO UPDATE` (upsert) so that re-approving the same
+    /// `(output_type, input_type, agent_did, principal_did)` tuple simply
+    /// refreshes the `approved_at` and `expires_at` timestamps without
+    /// duplicating the row.
+    pub fn store_approval(&self, record: &ApprovalRecord) -> Result<()> {
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO approval_records \
+             (id, output_type, input_type, agent_did, principal_did, ttl_hours, approved_at, expires_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8) \
+             ON CONFLICT(output_type, input_type, agent_did, principal_did) \
+             DO UPDATE SET expires_at=excluded.expires_at, approved_at=excluded.approved_at, ttl_hours=excluded.ttl_hours",
+            rusqlite::params![
+                record.id,
+                record.output_type,
+                record.input_type,
+                record.agent_did,
+                record.principal_did,
+                record.ttl_hours,
+                record.approved_at,
+                record.expires_at,
+            ],
+        )
+        .map_err(EpisodeDbError::Sqlite)?;
+        Ok(())
+    }
+
+    /// Remove an approval record — called on explicit "Deny" or revocation.
+    ///
+    /// Silently succeeds when no matching record exists.
+    pub fn revoke_approval(
+        &self,
+        output_type: &str,
+        input_type: &str,
+        agent_did: &str,
+        principal_did: &str,
+    ) -> Result<()> {
+        let conn = self.lock()?;
+        conn.execute(
+            "DELETE FROM approval_records \
+             WHERE output_type=?1 AND input_type=?2 AND agent_did=?3 AND principal_did=?4",
+            rusqlite::params![output_type, input_type, agent_did, principal_did],
+        )
+        .map_err(EpisodeDbError::Sqlite)?;
+        Ok(())
+    }
 }
 
 // ── Row mapping ───────────────────────────────────────────────────────────────
@@ -344,6 +519,31 @@ mod tests {
         // not fail.
         let db = EpisodeDb::open_in_memory().expect("open");
         db.migrate().expect("second migrate must not fail");
+    }
+
+    #[test]
+    fn migration_upgrades_minimal_legacy_db() {
+        // Simulate a DB created by an old version that only had (id, session_did).
+        // The migration must add all missing columns and indexes without panicking.
+        use rusqlite::Connection;
+        use std::sync::Mutex;
+
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE episodes (id TEXT PRIMARY KEY, session_did TEXT NOT NULL);",
+        )
+        .unwrap();
+        let db = EpisodeDb {
+            conn: Mutex::new(conn),
+        };
+        db.migrate()
+            .expect("migration must succeed on legacy minimal schema");
+
+        // After migration we must be able to insert and retrieve a full episode.
+        let ep = make_episode("legacy-001", "success");
+        db.insert_episode(&ep).expect("insert after migration");
+        let fetched = db.get_episode("legacy-001").unwrap();
+        assert_eq!(fetched.as_ref(), Some(&ep));
     }
 
     // ── insert_episode ────────────────────────────────────────────────────
@@ -546,5 +746,109 @@ mod tests {
         let episodes = db2.list_episodes(10).unwrap();
         assert_eq!(episodes.len(), 1);
         assert_eq!(episodes[0].id, "path-test");
+    }
+
+    // ── approval_records ──────────────────────────────────────────────────
+
+    #[test]
+    fn approval_record_roundtrip() {
+        let db = EpisodeDb::open_in_memory().unwrap();
+        let now = chrono::Utc::now();
+        let record = ApprovalRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            output_type: "schema:FlightReservation".into(),
+            input_type: "schema:LodgingReservation".into(),
+            agent_did: "did:key:zQ3shtest".into(),
+            principal_did: "did:key:zQ3shprincipal".into(),
+            ttl_hours: 24,
+            approved_at: now.to_rfc3339(),
+            expires_at: (now + chrono::Duration::hours(24)).to_rfc3339(),
+        };
+        db.store_approval(&record).unwrap();
+        assert!(db
+            .has_approval(
+                "schema:FlightReservation",
+                "schema:LodgingReservation",
+                "did:key:zQ3shtest",
+                "did:key:zQ3shprincipal"
+            )
+            .unwrap());
+
+        // Revoke and verify gone.
+        db.revoke_approval(
+            "schema:FlightReservation",
+            "schema:LodgingReservation",
+            "did:key:zQ3shtest",
+            "did:key:zQ3shprincipal",
+        )
+        .unwrap();
+        assert!(!db
+            .has_approval(
+                "schema:FlightReservation",
+                "schema:LodgingReservation",
+                "did:key:zQ3shtest",
+                "did:key:zQ3shprincipal"
+            )
+            .unwrap());
+    }
+
+    #[test]
+    fn approval_upsert_refreshes_expiry() {
+        let db = EpisodeDb::open_in_memory().unwrap();
+        let now = chrono::Utc::now();
+        let id = uuid::Uuid::new_v4().to_string();
+        let record = ApprovalRecord {
+            id: id.clone(),
+            output_type: "schema:FlightReservation".into(),
+            input_type: "schema:LodgingReservation".into(),
+            agent_did: "did:key:zagent".into(),
+            principal_did: "did:key:zprincipal".into(),
+            ttl_hours: 1,
+            approved_at: now.to_rfc3339(),
+            expires_at: (now + chrono::Duration::hours(1)).to_rfc3339(),
+        };
+        db.store_approval(&record).unwrap();
+
+        // Upsert with extended TTL.
+        let refreshed = ApprovalRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            expires_at: (now + chrono::Duration::hours(48)).to_rfc3339(),
+            ..record
+        };
+        db.store_approval(&refreshed).unwrap();
+        // Should still be valid (not expired).
+        assert!(db
+            .has_approval(
+                "schema:FlightReservation",
+                "schema:LodgingReservation",
+                "did:key:zagent",
+                "did:key:zprincipal"
+            )
+            .unwrap());
+    }
+
+    #[test]
+    fn expired_approval_not_returned() {
+        let db = EpisodeDb::open_in_memory().unwrap();
+        let past = chrono::Utc::now() - chrono::Duration::hours(2);
+        let record = ApprovalRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            output_type: "schema:FlightReservation".into(),
+            input_type: "schema:LodgingReservation".into(),
+            agent_did: "did:key:zold".into(),
+            principal_did: "did:key:zprincipal".into(),
+            ttl_hours: 1,
+            approved_at: (past - chrono::Duration::hours(1)).to_rfc3339(),
+            expires_at: past.to_rfc3339(), // already expired
+        };
+        db.store_approval(&record).unwrap();
+        assert!(!db
+            .has_approval(
+                "schema:FlightReservation",
+                "schema:LodgingReservation",
+                "did:key:zold",
+                "did:key:zprincipal"
+            )
+            .unwrap());
     }
 }

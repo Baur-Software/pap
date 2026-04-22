@@ -58,7 +58,7 @@ test.describe("Web standalone: app shell", () => {
 
     await page.locator(".topbar-brand").click();
     await expect(page.locator(".slide-panel.open")).toBeVisible();
-    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" })).toBeVisible();
+    await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" })).toBeVisible();
     await expect(page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" })).toBeVisible();
   });
 });
@@ -102,6 +102,7 @@ test.describe("Web standalone: settings page", () => {
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Templates" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Privacy" })).toBeVisible();
+    await expect(page.locator(".settings-nav-link").filter({ hasText: "Network" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Advanced" })).toBeVisible();
     await expect(page.locator(".settings-nav-link").filter({ hasText: "Appearance" })).toBeVisible();
   });
@@ -130,29 +131,31 @@ test.describe("Web standalone: settings page", () => {
   });
 });
 
-// ── Browse Page ──────────────────────────────────────────────
-// Navigate via the slide panel (brand button → Browse Agents link).
+// ── Receipts Page ─────────────────────────────────────────────
+// Navigate via the slide panel (brand button → Receipts link).
 
-test.describe("Web standalone: browse page", () => {
-  test("shows registry browser heading", async ({ page }) => {
+test.describe("Web standalone: receipts page", () => {
+  test("receipts link in slide panel navigates to receipts page", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" }).click();
 
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
+    // Receipts page renders as .history-page — no Tauri = loading/empty state
+    await expect(page.locator(".history-page")).toBeVisible({ timeout: 5000 });
   });
 
-  test("shows disconnected empty state", async ({ page }) => {
+  test("slide panel close button works after nav", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
     await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
+    await expect(page.locator(".slide-panel.open")).toBeVisible();
 
-    // Registry is not connected → shows quickstart to connect
-    await expect(
-      page.locator("text=Connect to a Chrysalis Registry")
-    ).toBeVisible();
+    // Wait for backdrop to be fully visible before clicking
+    await page.waitForSelector(".slide-panel-backdrop.open", { state: "visible" });
+    // Click the backdrop away from the panel to close it
+    await page.locator(".slide-panel-backdrop.open").click({ position: { x: 5, y: 5 }, force: true });
+    await expect(page.locator(".slide-panel.open")).not.toBeVisible({ timeout: 3000 });
   });
 });
 
@@ -210,12 +213,15 @@ test.describe("Web standalone: graceful degradation", () => {
     // Navigate to settings via slide panel
     await page.locator(".topbar-brand").click();
     await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "All Settings" }).click();
-    await expect(page.locator(".settings-nav")).toBeVisible();
+    await expect(page.locator(".settings-overlay")).toBeVisible();
 
-    // Navigate to browse via slide panel
+    // Close settings overlay before navigating elsewhere — the overlay intercepts pointer events
+    await page.locator(".settings-overlay-close").click();
+    await expect(page.locator(".settings-overlay")).not.toBeVisible();
+
+    // Navigate to receipts via slide panel
     await page.locator(".topbar-brand").click();
-    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Browse Agents" }).click();
-    await expect(page.locator("h2:has-text('Browse Registries')")).toBeVisible();
+    await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" }).click();
 
     // Back to home canvas page via direct navigation
     await page.goto("/", { waitUntil: "commit" });

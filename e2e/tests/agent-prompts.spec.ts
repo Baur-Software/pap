@@ -183,6 +183,9 @@ test.describe("LLM provider configuration", () => {
     await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
+    // Settings page defaults to Profiles tab; navigate to Orchestrator first
+    await page.locator(".settings-nav-link").filter({ hasText: "Orchestrator" }).click();
+
     await expect(page.locator("text=AI Model")).toBeVisible();
     // First select on the page is the provider dropdown
     await expect(page.locator("select").first()).toBeVisible();
@@ -542,12 +545,13 @@ test.describe("Chrysalis federation commands", () => {
     expect(published.published_to).toContain(chrysalisUrl);
   });
 
-  test("fleet sidebar panel shows Chrysalis drop-in UI", async ({ page }) => {
-    await page.goto("/fleet", { waitUntil: "commit" });
+  test("network settings tab shows connect-to-node form", async ({ page }) => {
+    await page.goto("/settings", { waitUntil: "commit" });
     await waitForApp(page);
 
-    await expect(page.locator(".fleet-sidebar")).toBeVisible();
-    await expect(page.locator(".fleet-panel-header")).toContainText("CHRYSALIS DROP-INS");
+    await page.locator(".settings-nav-link").filter({ hasText: "Network" }).click();
+    await expect(page.locator(".settings-group-label").filter({ hasText: "Connect to Node" })).toBeVisible();
+    await expect(page.locator(".btn-primary")).toContainText("Connect");
   });
 });
 

@@ -11,9 +11,7 @@ use crate::bridge;
 use crate::components::setup_wizard::SetupWizard;
 use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
-use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
-use crate::pages::dashboard::DashboardPage;
 // home.rs removed — canvas at "/" IS the home screen
 use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
@@ -28,6 +26,7 @@ use crate::state::recovery::RecoveryState;
 use crate::state::registry::RegistryState;
 use crate::state::renderer::RendererState;
 use crate::state::templates::TemplatesState;
+use crate::state::WorkflowState;
 use papillon_shared::{
     BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template,
 };
@@ -98,6 +97,7 @@ pub fn App() -> impl IntoView {
     let catalog_state = CatalogState::default();
     let recovery_state = RecoveryState::default();
     let dataset_state = DatasetState::default();
+    let workflow_state = WorkflowState::new();
     provide_context(identity_state);
     provide_context(registry_state);
     provide_context(orchestrator_state);
@@ -107,6 +107,9 @@ pub fn App() -> impl IntoView {
     provide_context(catalog_state);
     provide_context(recovery_state);
     provide_context(dataset_state);
+    provide_context(workflow_state);
+    let show_settings: RwSignal<bool> = RwSignal::new(false);
+    provide_context(show_settings);
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
@@ -367,18 +370,28 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/activity") view=ActivityPage />
                         <Route path=path!("/receipts") view=ReceiptsPage />
                         <Route path=path!("/settings") view=SettingsPage />
-                        <Route path=path!("/browse") view=BrowsePage />
-                        <Route path=path!("/fleet") view=DashboardPage />
                     </Routes>
                 </main>
                 <footer class="status-bar app-statusbar">
-                    <span class="status-bar-spacer" />
-                    <span class="status-bar-item">"PAPILLON_v0.6.0"</span>
-                    <span class="status-bar-sep">"|"</span>
                     <span class=move || format!("status-bar-item {}", status_class())>{status_label}</span>
                 </footer>
             </div>
             <SetupWizard />
+            <Show when=move || show_settings.get()>
+                <div class="settings-overlay">
+                    <div class="settings-overlay-topbar">
+                        <span class="settings-overlay-title">"SETTINGS"</span>
+                        <button
+                            class="settings-overlay-close"
+                            on:click=move |_| show_settings.set(false)
+                            aria-label="Close settings"
+                        >"×"</button>
+                    </div>
+                    <div class="settings-overlay-body">
+                        <SettingsPage />
+                    </div>
+                </div>
+            </Show>
         </Router>
     }
 }
