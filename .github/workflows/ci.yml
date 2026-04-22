@@ -159,9 +159,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
+          cache: 'npm'
+          cache-dependency-path: apps/papillon-extension/package-lock.json
       - name: Install npm dependencies
         working-directory: apps/papillon-extension
-        run: npm install
+        run: npm ci
       - name: Build extension WASM
         working-directory: apps/papillon-extension
         run: npm run build:wasm
@@ -470,6 +472,8 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         id: playwright-cache
@@ -477,11 +481,17 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
-      - name: Install Playwright
+      - name: Install npm dependencies
         working-directory: e2e
-        run: |
-          npm install
-          npx playwright install chromium --with-deps
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: e2e
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+      - name: Install Playwright system deps only
+        working-directory: e2e
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - name: Run smoke tests
         working-directory: e2e
         run: npx playwright test tests/smoke.spec.ts --workers=1
@@ -548,6 +558,8 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
 
       - name: Cache Playwright browsers
         uses: actions/cache@v5
@@ -557,11 +569,19 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
 
-      - name: Install Playwright
+      - name: Install npm dependencies
         working-directory: e2e
-        run: |
-          npm install
-          npx playwright install chromium --with-deps
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        if: steps.playwright-cache-tier2.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright system deps only
+        working-directory: e2e
+        if: steps.playwright-cache-tier2.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Run Tier 2 functional tests
         working-directory: e2e
@@ -608,17 +628,26 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
       - name: Cache Playwright browsers
         uses: actions/cache@v5
+        id: playwright-cache-chrysalis
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
-      - name: Install Playwright + wait-on
+      - name: Install npm dependencies
         working-directory: e2e
-        run: |
-          npm install
-          npx playwright install chromium --with-deps
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: e2e
+        if: steps.playwright-cache-chrysalis.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+      - name: Install Playwright system deps only
+        working-directory: e2e
+        if: steps.playwright-cache-chrysalis.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       # ── Chrysalis CI image (lean SSR-only build, no WASM bundle) ──────────
       - name: Set up Docker Buildx
