@@ -294,33 +294,56 @@ impl AppState {
         let mut agent_set = build_agents(extra);
 
         // ── Catalog seeding (first startup + upgrade detection) ──────────────────
+        // New catalog paths → insert. Existing paths with a different version → update
+        // (preserves the agent's DID/keypair so preference history survives upgrades).
         if catalog_dir.exists() {
             let catalog_defs = load_catalog(&catalog_dir);
             let existing_agents = db.load_all_agents().unwrap_or_default();
-            let existing_catalog_paths: std::collections::HashSet<String> = existing_agents
-                .iter()
-                .filter_map(|a| a.catalog_path.as_deref())
-                .map(str::to_owned)
-                .collect();
+            // Map catalog_path → (agent_did, operator_key_seed, version) for update lookup.
+            let existing_by_path: std::collections::HashMap<String, (String, Option<[u8; 32]>, String)> =
+                existing_agents
+                    .iter()
+                    .filter_map(|a| {
+                        a.catalog_path.as_deref().map(|p| {
+                            (
+                                p.to_owned(),
+                                (
+                                    a.agent_did.clone().unwrap_or_default(),
+                                    a.operator_key_seed,
+                                    a.version.clone(),
+                                ),
+                            )
+                        })
+                    })
+                    .collect();
 
             for mut def in catalog_defs {
-                if def
-                    .catalog_path
-                    .as_deref()
-                    .map(|p| existing_catalog_paths.contains(p))
-                    .unwrap_or(false)
-                {
-                    continue; // already seeded
-                }
-                let kp = PrincipalKeypair::generate();
-                def.operator_key_seed = Some(kp.signing_key().to_bytes());
-                def.agent_did = Some(kp.did());
                 let now = chrono::Utc::now().to_rfc3339();
-                def.created_at = now.clone();
-                def.updated_at = now;
-                if let Err(e) = db.insert_agent(&def) {
-                    eprintln!("Failed to seed catalog agent '{}': {e}", def.name);
-                    continue;
+                match def.catalog_path.as_deref().and_then(|p| existing_by_path.get(p)) {
+                    None => {
+                        // New agent — generate a fresh keypair and insert.
+                        let kp = PrincipalKeypair::generate();
+                        def.operator_key_seed = Some(kp.signing_key().to_bytes());
+                        def.agent_did = Some(kp.did());
+                        def.created_at = now.clone();
+                        def.updated_at = now;
+                        if let Err(e) = db.insert_agent(&def) {
+                            eprintln!("Failed to seed catalog agent '{}': {e}", def.name);
+                        }
+                    }
+                    Some((existing_did, existing_seed, existing_version)) => {
+                        // Existing agent — update if the TOML version changed.
+                        // Preserve the DID and keypair so preference history survives.
+                        if &def.version != existing_version {
+                            def.agent_did = Some(existing_did.clone());
+                            def.operator_key_seed = existing_seed.clone();
+                            def.updated_at = now;
+                            if let Err(e) = db.update_agent(&def) {
+                                eprintln!("Failed to update catalog agent '{}': {e}", def.name);
+                            }
+                        }
+                        // Same version — skip (already up to date).
+                    }
                 }
             }
         }
