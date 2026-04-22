@@ -6113,6 +6113,24 @@ body {
     overflow: hidden;
 }
 
+/* ── Back button (shared: receipts + activity) ───────────────────── */
+.history-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    color: var(--text-muted, #666);
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+}
+.history-back-btn:hover {
+    background: rgba(255,255,255,0.06);
+    color: var(--text-1, #e0e0e0);
+}
+
 /* ── Header ──────────────────────────────────────────────────────── */
 .history-header {
     display: flex;

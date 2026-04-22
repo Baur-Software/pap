@@ -98,6 +98,18 @@ pub fn TopBar() -> impl IntoView {
                                 on:click=move |_| {
                                     canvas_state.current_canvas_id.set(Some(cid_switch.clone()));
                                     menu_open.set(false);
+                                    // Navigate home if on a secondary page
+                                    if let Some(window) = web_sys::window() {
+                                        let loc = window.location();
+                                        let path = loc.pathname().unwrap_or_default();
+                                        if path != "/" {
+                                            let history = window.history().unwrap();
+                                            let _ = history.push_state_with_url(
+                                                &wasm_bindgen::JsValue::NULL, "", Some("/"));
+                                            let _ = window.dispatch_event(
+                                                &web_sys::Event::new("popstate").unwrap());
+                                        }
+                                    }
                                 }
                             >
                                 <div class=move || if active_id().as_deref() == Some(&cid_dot) {
@@ -127,6 +139,18 @@ pub fn TopBar() -> impl IntoView {
                     on:click=move |_| {
                         canvas_state.new_canvas();
                         menu_open.set(false);
+                        // Navigate home if on a secondary page
+                        if let Some(window) = web_sys::window() {
+                            let loc = window.location();
+                            let path = loc.pathname().unwrap_or_default();
+                            if path != "/" {
+                                let history = window.history().unwrap();
+                                let _ = history.push_state_with_url(
+                                    &wasm_bindgen::JsValue::NULL, "", Some("/"));
+                                let _ = window.dispatch_event(
+                                    &web_sys::Event::new("popstate").unwrap());
+                            }
+                        }
                     }
                 >
                     <span>"+ New Canvas"</span>
