@@ -206,6 +206,42 @@ pub fn TopBar() -> impl IntoView {
 /// Accepts natural-language prompts, pap:// URIs, and https:// URLs.
 /// Identical logic to the former canvas InlinePrompt, but styled as a
 /// compact pill input rather than a card.
+/// A suggestion row in the topbar dropdown.
+#[derive(Clone)]
+enum BarSuggestion {
+    /// A catalog agent that can handle this domain/query.
+    /// Submits as `pap://agent-name`, which routes to the local catalog agent.
+    CatalogAgent { name: String },
+    /// Bare domain / URL — PAP handshake to the site's well-known endpoint,
+    /// falling back to Web Page Reader if no agent advertisements are found.
+    BrowseDomain { url: String },
+    /// pap:// catalog name completion (user already typed pap://).
+    PapName { name: String },
+}
+
+impl BarSuggestion {
+    fn submit_value(&self) -> String {
+        match self {
+            Self::CatalogAgent { name } => format!("pap://{}", name),
+            Self::BrowseDomain { url } => url.clone(),
+            Self::PapName { name } => format!("pap://{}", name),
+        }
+    }
+    fn fills_bar(&self) -> bool {
+        matches!(self, Self::PapName { .. })
+    }
+}
+
+/// Return the keyword that best identifies the domain for catalog matching.
+/// Strips www., strips TLD, returns the registrable part.
+/// e.g. "www.github.com" → "github", "news.ycombinator.com" → "ycombinator"
+fn domain_keyword(host: &str) -> &str {
+    // Strip www. prefix
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    // Take everything before the first dot (the SLD)
+    host.split('.').next().unwrap_or(host)
+}
+
 #[component]
 fn TopbarPrompt() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
@@ -214,42 +250,99 @@ fn TopbarPrompt() -> impl IntoView {
     let input_value = RwSignal::new(String::new());
     let selected_idx: RwSignal<Option<usize>> = RwSignal::new(None);
 
-    // Live pap:// completions from the catalog, plus web-browse for domains.
+    // Build suggestions based on what the user has typed:
     //
-    // - Web domain (prefix contains '.') → single "Browse → domain" suggestion.
-    //   Any external domain resolves to HttpsEndpoint and routes to Web Page Reader.
-    // - Catalog name (no dot) → agent name completions from local catalog.
-    let pap_suggestions = Memo::new(move |_| {
+    // - Bare domain ("github.com", "news.ycombinator.com") →
+    //     1. Catalog agents whose name contains the domain keyword (e.g. "github")
+    //     2. A "Browse via PAP" fallback for the domain
+    //
+    // - pap:// prefix → catalog name completions (existing behaviour)
+    //
+    // - https:// / http:// → single "Browse" suggestion (confirm the URL)
+    //
+    // - Plain text → no suggestions (natural language goes straight through)
+    let suggestions: Memo<Vec<BarSuggestion>> = Memo::new(move |_| {
         let val = input_value.get();
-        if !val.starts_with("pap://") {
+        let trimmed = val.trim().to_lowercase();
+
+        if trimmed.is_empty() {
             return vec![];
         }
-        let prefix = val["pap://".len()..].to_lowercase();
-        if prefix.is_empty() {
-            return vec![];
+
+        // pap:// prefix → catalog name completions
+        if trimmed.starts_with("pap://") {
+            let prefix = &trimmed["pap://".len()..];
+            if prefix.is_empty() {
+                return vec![];
+            }
+            // Web domain after pap:// → confirm browse suggestion
+            if prefix.contains('.') {
+                return vec![BarSuggestion::BrowseDomain {
+                    url: format!("pap://{}", prefix),
+                }];
+            }
+            // Catalog name completions
+            let entries = catalog_state
+                .map(|c| c.entries.get())
+                .unwrap_or_default();
+            let mut names: Vec<String> = entries
+                .keys()
+                .filter(|k| k.starts_with(prefix))
+                .take(8)
+                .cloned()
+                .collect();
+            names.sort();
+            return names.into_iter().map(|n| BarSuggestion::PapName { name: n }).collect();
         }
-        // Web domain: show a single confirm suggestion so the user can see
-        // that pressing Enter will browse the site on the canvas.
-        if prefix.contains('.') {
-            return vec![prefix];
+
+        // https:// or http:// → single browse confirmation
+        if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+            return vec![BarSuggestion::BrowseDomain { url: val.trim().to_string() }];
         }
-        // Catalog agent name match.
-        let entries = catalog_state
-            .map(|c| c.entries.get())
-            .unwrap_or_default();
-        let mut names: Vec<String> = entries
-            .keys()
-            .filter(|k| k.starts_with(&prefix))
-            .take(8)
-            .cloned()
-            .collect();
-        names.sort();
-        names
+
+        // Bare domain detection: contains a dot, no spaces, not a pap/did scheme
+        let looks_like_domain = trimmed.contains('.')
+            && !trimmed.contains(' ')
+            && !trimmed.starts_with("did:")
+            && trimmed.rsplit('.').next().map(|tld| !tld.is_empty()).unwrap_or(false);
+
+        if looks_like_domain {
+            // Extract the SLD to match against catalog agent names
+            // e.g. "github.com" → "github", "news.ycombinator.com" → "ycombinator"
+            let host = trimmed.split('/').next().unwrap_or(&trimmed);
+            let keyword = domain_keyword(host);
+
+            let mut result: Vec<BarSuggestion> = Vec::new();
+
+            // Catalog agents whose name contains the domain keyword
+            if keyword.len() >= 3 {
+                let entries = catalog_state
+                    .map(|c| c.entries.get())
+                    .unwrap_or_default();
+                let mut matched: Vec<String> = entries
+                    .keys()
+                    .filter(|k| k.contains(keyword))
+                    .take(5)
+                    .cloned()
+                    .collect();
+                matched.sort();
+                for name in matched {
+                    result.push(BarSuggestion::CatalogAgent { name });
+                }
+            }
+
+            // Always append the "Browse via PAP" fallback for the domain
+            result.push(BarSuggestion::BrowseDomain {
+                url: format!("https://{}", trimmed),
+            });
+
+            return result;
+        }
+
+        vec![]
     });
 
-    let show_pap_suggestions = Memo::new(move |_| {
-        input_value.get().starts_with("pap://") && !pap_suggestions.get().is_empty()
-    });
+    let show_suggestions = Memo::new(move |_| !suggestions.get().is_empty());
 
     let submit = move || {
         let text = input_value.get();
@@ -262,20 +355,17 @@ fn TopbarPrompt() -> impl IntoView {
     };
 
     let on_keydown = move |e: ev::KeyboardEvent| {
-        let suggestions = pap_suggestions.get_untracked();
+        let suggs = suggestions.get_untracked();
         match e.key().as_str() {
             "Enter" => {
                 if let Some(idx) = selected_idx.get_untracked() {
-                    if let Some(name) = suggestions.get(idx) {
-                        let full = format!("pap://{name}");
-                        if name.contains('.') {
-                            // Web domain: submit immediately.
-                            canvas_state.submit_prompt(full);
-                            input_value.set(String::new());
+                    if let Some(s) = suggs.get(idx) {
+                        let val = s.submit_value();
+                        if s.fills_bar() {
+                            input_value.set(val);
                         } else {
-                            // Catalog agent: fill the address bar so the user
-                            // can review / refine before submitting.
-                            input_value.set(full);
+                            canvas_state.submit_prompt(val);
+                            input_value.set(String::new());
                         }
                         selected_idx.set(None);
                         return;
@@ -283,15 +373,15 @@ fn TopbarPrompt() -> impl IntoView {
                 }
                 submit();
             }
-            "ArrowDown" if !suggestions.is_empty() => {
+            "ArrowDown" if !suggs.is_empty() => {
                 e.prevent_default();
                 let next = match selected_idx.get_untracked() {
                     None => 0,
-                    Some(i) => (i + 1).min(suggestions.len() - 1),
+                    Some(i) => (i + 1).min(suggs.len() - 1),
                 };
                 selected_idx.set(Some(next));
             }
-            "ArrowUp" if !suggestions.is_empty() => {
+            "ArrowUp" if !suggs.is_empty() => {
                 e.prevent_default();
                 let prev = match selected_idx.get_untracked() {
                     None | Some(0) => None,
@@ -335,7 +425,7 @@ fn TopbarPrompt() -> impl IntoView {
                 node_ref=input_ref
                 class="topbar-address-input"
                 type="text"
-                placeholder="Search agents, ask a question, or enter a pap:// address\u{2026}"
+                placeholder="Ask anything, or enter a domain / pap:// address\u{2026}"
                 prop:value=move || input_value.get()
                 on:input=move |e| {
                     input_value.set(event_target_value(&e));
@@ -372,24 +462,25 @@ fn TopbarPrompt() -> impl IntoView {
                     }
                 }
             />
-            <Show when=move || show_pap_suggestions.get()>
+            <Show when=move || show_suggestions.get()>
                 <div class="topbar-suggestions">
-                    {move || pap_suggestions.get().into_iter().enumerate().map(|(i, name)| {
-                        let name_for_click = name.clone();
-                        let is_web_domain = name.contains('.');
+                    {move || suggestions.get().into_iter().enumerate().map(|(i, s)| {
+                        let s_for_click = s.clone();
                         view! {
                             <button
-                                class="palette-suggestion palette-suggestion-pap"
+                                class=move || match &s {
+                                    BarSuggestion::CatalogAgent { .. } => "palette-suggestion palette-suggestion-agent",
+                                    BarSuggestion::BrowseDomain { .. } => "palette-suggestion palette-suggestion-browse",
+                                    BarSuggestion::PapName { .. } => "palette-suggestion palette-suggestion-pap",
+                                }
                                 class:palette-suggestion--active=move || selected_idx.get() == Some(i)
                                 on:click=move |_| {
-                                    let full = format!("pap://{}", name_for_click);
-                                    // For web domains, selecting the suggestion submits immediately
-                                    // since what's typed is already the complete address.
-                                    if name_for_click.contains('.') {
-                                        canvas_state.submit_prompt(full);
-                                        input_value.set(String::new());
+                                    let val = s_for_click.submit_value();
+                                    if s_for_click.fills_bar() {
+                                        input_value.set(val);
                                     } else {
-                                        input_value.set(full);
+                                        canvas_state.submit_prompt(val);
+                                        input_value.set(String::new());
                                     }
                                     selected_idx.set(None);
                                     if let Some(el) = input_ref.get() {
@@ -397,16 +488,30 @@ fn TopbarPrompt() -> impl IntoView {
                                     }
                                 }
                             >
-                                {if is_web_domain {
-                                    view! {
-                                        <span class="pap-suggestion-scheme">"Browse  "</span>
-                                        <span class="pap-suggestion-name">{format!("pap://{}", name)}</span>
-                                    }.into_any()
-                                } else {
-                                    view! {
+                                {match s {
+                                    BarSuggestion::CatalogAgent { name } => view! {
+                                        <span class="bar-suggestion-icon">"⚡"</span>
+                                        <span class="bar-suggestion-label">{name}</span>
+                                        <span class="bar-suggestion-hint">"via PAP agent"</span>
+                                    }.into_any(),
+                                    BarSuggestion::BrowseDomain { url } => {
+                                        // Show just the domain for readability
+                                        let display = url
+                                            .strip_prefix("https://")
+                                            .or_else(|| url.strip_prefix("http://"))
+                                            .or_else(|| url.strip_prefix("pap://"))
+                                            .unwrap_or(&url)
+                                            .to_string();
+                                        view! {
+                                            <span class="bar-suggestion-icon">"🌐"</span>
+                                            <span class="bar-suggestion-label">{display}</span>
+                                            <span class="bar-suggestion-hint">"browse via PAP"</span>
+                                        }.into_any()
+                                    },
+                                    BarSuggestion::PapName { name } => view! {
                                         <span class="pap-suggestion-scheme">"pap://"</span>
                                         <span class="pap-suggestion-name">{name}</span>
-                                    }.into_any()
+                                    }.into_any(),
                                 }}
                             </button>
                         }

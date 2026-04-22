@@ -2465,6 +2465,63 @@ body {
     color: var(--text-1);
 }
 
+/* ── Address bar suggestion rows (domain / agent / pap://) ───────────────── */
+
+/* Shared layout for agent and browse suggestions */
+.palette-suggestion-agent,
+.palette-suggestion-browse {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: var(--sp-sm) var(--sp-md);
+}
+.palette-suggestion-agent::before,
+.palette-suggestion-browse::before {
+    content: "";  /* icon supplied inline */
+}
+
+.bar-suggestion-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+}
+
+.bar-suggestion-label {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bar-suggestion-hint {
+    font-size: 10px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+/* Catalog agent suggestions — purple accent to signal PAP-native */
+.palette-suggestion-agent .bar-suggestion-label {
+    color: var(--purple);
+}
+.palette-suggestion-agent:hover .bar-suggestion-label,
+.palette-suggestion-agent.palette-suggestion--active .bar-suggestion-label {
+    color: #a89df5;
+}
+
+/* Browse suggestions — teal accent to signal PAP handshake + web content */
+.palette-suggestion-browse .bar-suggestion-label {
+    color: var(--teal);
+}
+.palette-suggestion-browse:hover .bar-suggestion-label,
+.palette-suggestion-browse.palette-suggestion--active .bar-suggestion-label {
+    color: #5dd9b9;
+}
+
 /* ═══════════════════════════════════════════════════════════
    CANVAS BLOCKS
    ═══════════════════════════════════════════════════════════ */

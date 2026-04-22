@@ -171,6 +171,26 @@ fn resolve_prompt_text(text: &str, origin: LinkOrigin) -> Option<ResolvedUri> {
         || text.starts_with("pap+wss://");
 
     if !is_pap {
+        // Bare domain / URL shorthand: "github.com", "news.ycombinator.com/item?id=42"
+        // Has a dot, no spaces, no scheme — treat as https:// browse via PAP handshake.
+        // This is the same as the user typing https://domain — routes to Web Page Reader
+        // after checking for PAP agent advertisements at /.well-known/pap/advertisements.
+        let trimmed = text.trim();
+        let looks_like_domain = !trimmed.is_empty()
+            && !trimmed.contains(' ')
+            && trimmed.contains('.')
+            && !trimmed.starts_with("https://")
+            && !trimmed.starts_with("http://")
+            && !trimmed.starts_with("pap")
+            && !trimmed.starts_with("did:")
+            // Must have a valid-looking TLD: at least one char after the last dot
+            && trimmed.rsplit('.').next().map(|tld| !tld.is_empty()).unwrap_or(false);
+
+        if looks_like_domain {
+            let https_url = format!("https://{}", trimmed);
+            return Some(ResolvedUri::HttpsEndpoint(https_url));
+        }
+
         return Some(ResolvedUri::LocalIntent(text.to_string()));
     }
 
@@ -387,6 +407,10 @@ impl CanvasState {
             r.insert(0, text.clone());
             r.truncate(10);
         });
+
+        // Always flip to the front face so the resulting block is immediately
+        // visible — the user should never have to manually flip after submitting.
+        self.canvas_side.set(CanvasSide::Front);
 
         let resolved_uri = match resolve_prompt_text(&text, LinkOrigin::Principal) {
             Some(r) => r,
