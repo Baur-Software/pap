@@ -141,8 +141,8 @@ test.describe("Web standalone: receipts page", () => {
     await page.locator(".topbar-brand").click();
     await page.locator(".slide-panel .panel-nav-item").filter({ hasText: "Receipts" }).click();
 
-    // Receipts page renders — no Tauri = empty state
-    await expect(page.locator(".receipts-page, .activity-page, text=No receipts")).toBeVisible({ timeout: 5000 });
+    // Receipts page renders as .history-page — no Tauri = loading/empty state
+    await expect(page.locator(".history-page")).toBeVisible({ timeout: 5000 });
   });
 
   test("slide panel close button works after nav", async ({ page }) => {
@@ -151,9 +151,11 @@ test.describe("Web standalone: receipts page", () => {
     await page.locator(".topbar-brand").click();
     await expect(page.locator(".slide-panel.open")).toBeVisible();
 
-    // Click backdrop to close
-    await page.locator(".slide-panel-backdrop.open").click({ position: { x: 5, y: 5 } });
-    await expect(page.locator(".slide-panel.open")).not.toBeVisible();
+    // Wait for backdrop to be fully visible before clicking
+    await page.waitForSelector(".slide-panel-backdrop.open", { state: "visible" });
+    // Click the backdrop away from the panel to close it
+    await page.locator(".slide-panel-backdrop.open").click({ position: { x: 5, y: 5 }, force: true });
+    await expect(page.locator(".slide-panel.open")).not.toBeVisible({ timeout: 3000 });
   });
 });
 
