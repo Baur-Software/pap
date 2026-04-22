@@ -193,10 +193,14 @@ fn TopbarPrompt() -> impl IntoView {
         if prefix.is_empty() {
             return vec![];
         }
-        // Web domain: show a single confirm suggestion so the user can see
-        // that pressing Enter will browse the site on the canvas.
+        // Web domain: show two suggestions —
+        //   1. "Browse → pap://domain" (existing direct-browse path)
+        //   2. "Check for PAP agents at domain" (well-known discovery)
         if prefix.contains('.') {
-            return vec![prefix];
+            return vec![
+                prefix.clone(),
+                format!("__pap_discover__:{prefix}"),
+            ];
         }
         // Catalog agent name match.
         let entries = catalog_state
@@ -232,6 +236,17 @@ fn TopbarPrompt() -> impl IntoView {
             "Enter" => {
                 if let Some(idx) = selected_idx.get_untracked() {
                     if let Some(name) = suggestions.get(idx) {
+                        if name.starts_with("__pap_discover__:") {
+                            // PAP discovery suggestion: submit as pap+discovery://
+                            let domain = name
+                                .strip_prefix("__pap_discover__:")
+                                .unwrap_or(name)
+                                .to_string();
+                            canvas_state.submit_prompt(format!("pap+discovery://{domain}"));
+                            input_value.set(String::new());
+                            selected_idx.set(None);
+                            return;
+                        }
                         let full = format!("pap://{name}");
                         if name.contains('.') {
                             // Web domain: submit immediately.
@@ -341,20 +356,35 @@ fn TopbarPrompt() -> impl IntoView {
                 <div class="topbar-suggestions">
                     {move || pap_suggestions.get().into_iter().enumerate().map(|(i, name)| {
                         let name_for_click = name.clone();
-                        let is_web_domain = name.contains('.');
+                        let is_discovery = name.starts_with("__pap_discover__:");
+                        let is_web_domain = !is_discovery && name.contains('.');
+
                         view! {
                             <button
                                 class="palette-suggestion palette-suggestion-pap"
                                 class:palette-suggestion--active=move || selected_idx.get() == Some(i)
+                                class:palette-suggestion-pap-discovery=is_discovery
                                 on:click=move |_| {
-                                    let full = format!("pap://{}", name_for_click);
-                                    // For web domains, selecting the suggestion submits immediately
-                                    // since what's typed is already the complete address.
-                                    if name_for_click.contains('.') {
-                                        canvas_state.submit_prompt(full);
+                                    if is_discovery {
+                                        // Strip the sentinel prefix to get the bare domain.
+                                        let domain = name_for_click
+                                            .strip_prefix("__pap_discover__:")
+                                            .unwrap_or(&name_for_click)
+                                            .to_string();
+                                        // Submit as a pap+discovery intent so the orchestrator
+                                        // knows to check /.well-known/pap/advertisements first.
+                                        canvas_state.submit_prompt(
+                                            format!("pap+discovery://{domain}")
+                                        );
                                         input_value.set(String::new());
                                     } else {
-                                        input_value.set(full);
+                                        let full = format!("pap://{}", name_for_click);
+                                        if name_for_click.contains('.') {
+                                            canvas_state.submit_prompt(full);
+                                            input_value.set(String::new());
+                                        } else {
+                                            input_value.set(full);
+                                        }
                                     }
                                     selected_idx.set(None);
                                     if let Some(el) = input_ref.get() {
@@ -362,7 +392,18 @@ fn TopbarPrompt() -> impl IntoView {
                                     }
                                 }
                             >
-                                {if is_web_domain {
+                                {if is_discovery {
+                                    let domain = name
+                                        .strip_prefix("__pap_discover__:")
+                                        .unwrap_or(&name)
+                                        .to_string();
+                                    view! {
+                                        <span class="pap-suggestion-scheme pap-discovery-icon">"\u{1f50d} "</span>
+                                        <span class="pap-suggestion-name">
+                                            {format!("Check for PAP agents at {domain}")}
+                                        </span>
+                                    }.into_any()
+                                } else if is_web_domain {
                                     view! {
                                         <span class="pap-suggestion-scheme">"Browse  "</span>
                                         <span class="pap-suggestion-name">{format!("pap://{}", name)}</span>

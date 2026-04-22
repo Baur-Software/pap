@@ -231,6 +231,7 @@ pub fn run() {
             commands::pipeline::run_saved_pipeline,
             commands::pipeline::port_compatible,
             commands::pipeline::store_approval_record,
+            commands::pipeline::discover_pap_agents,
             commands::templates::get_global_templates,
             commands::templates::get_profile_templates,
             commands::templates::create_template,

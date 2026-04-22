@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use papillon_shared::CanvasBlock;
 
 use crate::components::block_renderer::BlockRenderer;
-use crate::components::canvas_aside::{AsideOpen, CanvasAside};
+use crate::components::canvas_aside::CanvasAside;
 use crate::components::canvas_back_face::CanvasBackFace;
 use crate::components::canvas_empty_state::CanvasEmptyState;
 use crate::components::hitl_gate::HitlGate;
@@ -11,8 +11,9 @@ use crate::state::canvas::{CanvasSide, CanvasState};
 #[component]
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let aside_open: RwSignal<bool> = RwSignal::new(false);
-    provide_context(AsideOpen(aside_open));
+    let aside_open = use_context::<crate::components::canvas_aside::AsideOpen>()
+        .expect("AsideOpen provided at app root")
+        .0;
 
     // Use a Memo so grouped_blocks only rebuilds when the active canvas's blocks
     // actually change — not when unrelated canvases or signals fire.

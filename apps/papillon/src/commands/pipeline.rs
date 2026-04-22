@@ -643,6 +643,39 @@ pub async fn run_saved_pipeline(
     run_pipeline(app, state, saved.pipeline, initial_query, canvas_id).await
 }
 
+// ─── PAP Well-Known Discovery ──────────────────────────────────────────────
+
+/// Metadata returned for a single agent advertised at
+/// `https://{domain}/.well-known/pap/advertisements`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgentAdvertisement {
+    /// Human-readable agent name (e.g. "GitHub Code Search").
+    pub name: String,
+    /// DID of the advertising agent (e.g. "did:web:github.com").
+    pub did: String,
+    /// Optional description shown to the user.
+    pub description: Option<String>,
+    /// Schema.org action types this agent supports (e.g. ["schema:SearchAction"]).
+    pub action_types: Vec<String>,
+}
+
+/// Attempt to discover PAP agents advertised by a domain.
+///
+/// Fetches `https://{domain}/.well-known/pap/advertisements` with a short
+/// timeout and parses the response as `Vec<AgentAdvertisement>`.
+///
+/// Returns an empty list on any error (404, timeout, parse failure, network
+/// error) — the frontend treats an empty result as "no PAP agents found,
+/// fall back to Web Page Reader".
+#[tauri::command]
+pub async fn discover_pap_agents(domain: String) -> Result<Vec<AgentAdvertisement>, String> {
+    // TODO: implement HTTP GET to https://{domain}/.well-known/pap/advertisements
+    // with a ~2 s connect timeout, then deserialize the JSON body.
+    // For now return an empty list so the frontend wiring is in place.
+    let _ = domain;
+    Ok(vec![])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
