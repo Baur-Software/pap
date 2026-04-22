@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use papillon_shared::{
-    intent::detect_intent, BlockState, CanvasBlock, EdgeState, IntentPlan, PipelineEdgeInfo,
+    intent::detect_intent, BlockState, CanvasBlock, EdgeState, PipelineEdgeInfo,
     PipelineInfo, PipelineNodeInfo, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode,
     WorkflowNode,
 };
@@ -152,18 +152,11 @@ fn DesignModeCanvas() -> impl IntoView {
     let workflow = expect_context::<WorkflowState>();
     let canvas_state = expect_context::<CanvasState>();
 
-    // Reactively find the first canvas block currently in AwaitingApproval state.
-    // This drives the inline EdgeApprovalCard — no manual toggle required.
-    let blocks = canvas_state.current_canvas_blocks();
-    let awaiting_approval: Memo<Option<(String, IntentPlan)>> = Memo::new(move |_| {
-        blocks.get().into_iter().find_map(|b| {
-            if let BlockState::AwaitingApproval { plan } = b.state {
-                Some((b.id, plan))
-            } else {
-                None
-            }
-        })
-    });
+    // Approval always surfaces on the front face via BlockRenderer's AwaitingApproval
+    // UI. When a block reaches AwaitingApproval, canvas_state.apply_block_event() flips
+    // the canvas to front automatically. The EdgeApprovalCard is reserved for future
+    // multi-step workflow runs where the graph context matters; for single-agent prompts
+    // the front-face block approval is the canonical path.
 
     let add_agent_node = move |_| {
         let mut nodes = workflow.design_nodes.get_untracked();
@@ -346,73 +339,6 @@ fn DesignModeCanvas() -> impl IntoView {
                 </Show>
             </div>
 
-            // Inline approval card — surfaced when any canvas block transitions to
-            // BlockState::AwaitingApproval during a workflow run. Wired to the real
-            // CanvasState approve/reject methods so decisions flow back to the backend.
-            <Show when=move || awaiting_approval.get().is_some()>
-                {move || {
-                    awaiting_approval.get().map(|(block_id, plan)| {
-                        let plan_clone = plan.clone();
-                        let block_id_allow = block_id.clone();
-                        let block_id_deny = block_id.clone();
-                        let request_id_allow = plan.approval_request_id.clone();
-                        let request_id_deny = plan_clone.approval_request_id.clone();
-
-                        // Build a display edge from the plan's disclosure list.
-                        let from_path = plan_clone.requires_disclosure.first()
-                            .cloned()
-                            .unwrap_or_default();
-                        let from_label = from_path.split('.').last()
-                            .unwrap_or("output")
-                            .to_string();
-                        let to_label = plan_clone.selected_agent_name.clone();
-                        let edge = WorkflowEdge {
-                            id: plan_clone.approval_request_id.clone(),
-                            from_node_id: String::new(),
-                            from_port: PortRef {
-                                path: from_path,
-                                label: from_label,
-                                required: true,
-                            },
-                            to_node_id: block_id.clone(),
-                            to_port: PortRef {
-                                path: plan_clone.action.clone(),
-                                label: to_label,
-                                required: true,
-                            },
-                            state: EdgeState::Proposed,
-                            memex_remembered: false,
-                        };
-
-                        view! {
-                            <EdgeApprovalCard
-                                edge=edge
-                                on_allow_once=Callback::new(move |_| {
-                                    canvas_state.approve_block(
-                                        block_id_allow.clone(),
-                                        request_id_allow.clone(),
-                                    );
-                                })
-                                on_always_allow=Callback::new(move |_| {
-                                    // store_approval_record is called by the front-face approval
-                                    // flow; here we just forward to approve_block so the workflow
-                                    // resumes — the backend writes the memex record on its side.
-                                    canvas_state.approve_block(
-                                        block_id.clone(),
-                                        plan.approval_request_id.clone(),
-                                    );
-                                })
-                                on_deny=Callback::new(move |_| {
-                                    canvas_state.reject_block(
-                                        block_id_deny.clone(),
-                                        request_id_deny.clone(),
-                                    );
-                                })
-                            />
-                        }
-                    })
-                }}
-            </Show>
         </div>
     }
 }

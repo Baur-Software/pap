@@ -937,6 +937,13 @@ impl CanvasState {
                         _ => {}
                     }
 
+                    // When a block transitions to AwaitingApproval, flip to the front face
+                    // so the user sees the block's built-in approval UI immediately.
+                    // The approval card lives on the front face inside BlockRenderer.
+                    if matches!(&update.state, BlockState::AwaitingApproval { .. }) {
+                        self.canvas_side.set(CanvasSide::Front);
+                    }
+
                     // After a block resolves, check whether we should trigger a Guide refresh.
                     // Guard: only trigger when the new state is Resolved or Outcome.
                     if matches!(&update.state, BlockState::Resolved | BlockState::Outcome { .. }) {
