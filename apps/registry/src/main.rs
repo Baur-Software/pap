@@ -378,6 +378,22 @@ async fn main() -> anyhow::Result<()> {
             .expect("invalid rate-limit configuration"),
     );
 
+    // Spawn a background thread to periodically clean up stale rate-limiter
+    // entries. Without this, the in-memory per-IP token-bucket map grows
+    // unboundedly as new source IPs are seen (relevant for a public registry).
+    {
+        let governor_limiter = governor_conf.limiter().clone();
+        let interval = std::time::Duration::from_secs(60);
+        std::thread::spawn(move || loop {
+            std::thread::sleep(interval);
+            tracing::debug!(
+                "rate limiter storage size: {}",
+                governor_limiter.len()
+            );
+            governor_limiter.retain_recent();
+        });
+    }
+
     let app = Router::new()
         .merge(federation_router)
         .merge(admin_router)

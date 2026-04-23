@@ -409,5 +409,8 @@ mod tests {
         let cfg = Config::from_env();
         assert_eq!(cfg.rate_limit_rps, 5);
         assert_eq!(cfg.rate_limit_burst, 10);
+
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_BURST");
     }
 }
