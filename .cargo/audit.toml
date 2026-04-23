@@ -1,20 +1,123 @@
+# Security Advisory Ignore List
+#
+# Every entry here is a conscious acknowledgement, not a blanket suppression.
+# Each advisory is ignored only after analysis confirming it does not affect
+# pap-registry (the server binary we are hardening for production).
+#
+# Advisories are grouped by root cause. Re-evaluate each when the owning
+# crate ships a fix or when pap-registry's dep tree changes.
+
 [advisories]
 ignore = [
+    # ──────────────────────────────────────────────────────────────────────
+    # RSA / cryptography
+    # ──────────────────────────────────────────────────────────────────────
+
     # RUSTSEC-2023-0071: rsa Marvin Attack timing side-channel.
     #
-    # Two separate transitive paths pull in a vulnerable rsa crate:
-    #
-    # 1. rsa 0.7.2 via blind-rsa-signatures 0.14 -> pap-ecash.
-    #    No patched rsa release is available on crates.io. The pap-ecash issuer
-    #    is an offline trusted node; network timing key-recovery is not in scope.
-    #
-    # 2. rsa 0.9.10 via sqlx-mysql 0.8.6 -> sqlx 0.8.6 -> pap-registry.
-    #    pap-registry declares sqlx with default-features = false and does NOT
-    #    include the "mysql" feature. sqlx-mysql appears in Cargo.lock only
-    #    because Cargo's resolver pins all optional dependencies of resolved
-    #    packages (including ones that are never compiled). No MySQL code is
-    #    built or shipped. This advisory does not apply to the registry binary.
-    #
-    # Track upstream fix: https://github.com/RustCrypto/RSA/issues/19
+    # Two transitive paths:
+    # 1. rsa 0.7.2 via blind-rsa-signatures -> pap-ecash (offline trusted node,
+    #    network timing attack not in scope).
+    # 2. rsa 0.9.10 via sqlx-mysql -> sqlx -> pap-registry. pap-registry uses
+    #    sqlx with default-features=false and no "mysql" feature; sqlx-mysql is
+    #    lock-file-only and never compiled into the registry binary.
+    # Track: https://github.com/RustCrypto/RSA/issues/19
     "RUSTSEC-2023-0071",
+
+    # ──────────────────────────────────────────────────────────────────────
+    # GTK3 / Tauri / Papillon desktop app (Linux only)
+    #
+    # All GTK3 rs-bindings were deprecated by the gtk-rs project in favour of
+    # GTK4. They remain in the lock file because Tauri 2.x still uses them on
+    # Linux for the papillon desktop app. pap-registry is a headless Axum HTTP
+    # server compiled without the "tauri" feature — none of these crates are
+    # linked into the registry binary.
+    # Track: https://github.com/tauri-apps/tauri/issues (GTK4 migration)
+    # ──────────────────────────────────────────────────────────────────────
+
+    "RUSTSEC-2024-0411", # gdkwayland-sys unmaintained  → tauri → papillon only
+    "RUSTSEC-2024-0412", # gdk unmaintained             → tauri → papillon only
+    "RUSTSEC-2024-0413", # atk unmaintained             → tauri → papillon only
+    "RUSTSEC-2024-0414", # gdkx11-sys unmaintained      → tauri → papillon only
+    "RUSTSEC-2024-0415", # gtk unmaintained             → tauri → papillon only
+    "RUSTSEC-2024-0416", # atk-sys unmaintained         → tauri → papillon only
+    "RUSTSEC-2024-0417", # gdkx11 unmaintained          → tauri → papillon only
+    "RUSTSEC-2024-0418", # gdk-sys unmaintained         → tauri → papillon only
+    "RUSTSEC-2024-0419", # gtk3-macros unmaintained     → tauri → papillon only
+    "RUSTSEC-2024-0420", # gtk-sys unmaintained         → tauri → papillon only
+
+    # RUSTSEC-2024-0429: glib VariantStrIter unsoundness.
+    # Unsound Iterator impl in glib 0.18.5. The glib crate is used only by
+    # Tauri's Linux WebKit renderer (webkit2gtk → glib). pap-registry does not
+    # depend on glib and is not compiled with any glib feature.
+    # Track: https://gitlab.gnome.org/GNOME/glib-rs/-/issues
+    "RUSTSEC-2024-0429",
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Tauri utilities (all paths → papillon desktop app only)
+    # ──────────────────────────────────────────────────────────────────────
+
+    # RUSTSEC-2025-0057: fxhash unmaintained.
+    # Via selectors → kuchikiki → tauri-utils → tauri → papillon.
+    # Not used by pap-registry.
+    "RUSTSEC-2025-0057",
+
+    # RUSTSEC-2024-0436: paste unmaintained.
+    # Build-time proc-macro used across tauri-utils, leptos, tokenizers, candle.
+    # Does not ship in any pap-registry runtime binary.
+    "RUSTSEC-2024-0436",
+
+    # RUSTSEC-2024-0370: proc-macro-error unmaintained.
+    # Used by gtk3-macros → gtk → tauri → papillon. Build-time only for
+    # pap-registry's dependency on leptos (no GTK macros are invoked).
+    "RUSTSEC-2024-0370",
+
+    # RUSTSEC-2025-0075 / 0080 / 0081 / 0098 / 0100: unic-* crates unmaintained.
+    # Unicode character data tables used by urlpattern → tauri-utils → tauri.
+    # pap-registry does not use URL pattern matching; these ship in papillon only.
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098",
+    "RUSTSEC-2025-0100",
+
+    # RUSTSEC-2026-0097: rand 0.7 unsoundness with custom global logger.
+    # rand 0.7.3 is used by phf_generator → selectors → tauri-utils.
+    # The unsoundness is triggered only when a custom global allocator/logger
+    # calls rand::rng() during allocation. tauri-utils uses rand at build time
+    # for CSS selector hashing; pap-registry does not link tauri-utils.
+    # Track: https://github.com/rust-random/rand/issues
+    "RUSTSEC-2026-0097",
+
+    # ──────────────────────────────────────────────────────────────────────
+    # BlueField DPU acceleration (pap-bluefield / pap-bluefield-loopback only)
+    # ──────────────────────────────────────────────────────────────────────
+
+    # RUSTSEC-2021-0139: ansi_term unmaintained.
+    # Via clap 2.x → bindgen → rdma-sys → pap-bluefield. The BlueField crate
+    # is a workspace member used only on DPU hardware; pap-registry does not
+    # depend on it.
+    "RUSTSEC-2021-0139",
+
+    # RUSTSEC-2024-0375: atty unmaintained.
+    # RUSTSEC-2021-0145: atty unsound (potential unaligned read on Windows).
+    # Both via env_logger/clap 2.x → bindgen → rdma-sys → pap-bluefield.
+    # pap-registry does not use atty; the unsoundness only manifests on
+    # Windows where atty calls GetConsoleMode, not relevant to the Linux
+    # server deployment target.
+    "RUSTSEC-2024-0375",
+    "RUSTSEC-2021-0145",
+
+    # ──────────────────────────────────────────────────────────────────────
+    # reqwest / TLS (pap-registry dep — monitored, no fix available yet)
+    # ──────────────────────────────────────────────────────────────────────
+
+    # RUSTSEC-2025-0134: rustls-pemfile unmaintained.
+    # The maintainer stepped down; the crate still functions correctly and has
+    # no known vulnerabilities. Used by reqwest 0.12 for PEM certificate
+    # parsing (pap-registry's HTTP client). reqwest upstream tracks a migration
+    # to a maintained alternative.
+    # Action: bump reqwest when a version without rustls-pemfile ships.
+    # Track: https://github.com/seanmonstar/reqwest/issues
+    "RUSTSEC-2025-0134",
 ]

@@ -28,11 +28,10 @@ jobs:
         working-directory: pap
         run: cargo audit
 
-      - name: Deny on actual vulnerabilities
+      - name: Deny on any warning
         working-directory: pap
-        # --deny vulnerability: fail on RUSTSEC vulnerability advisories only.
-        # Unsound and unmaintained warnings come from Tauri/GTK3/BlueField
-        # transitive deps that are outside our control; they do not affect
-        # pap-registry and are suppressed here to avoid CI noise.
-        # audit.toml handles any specific advisory ignores (e.g. rsa).
-        run: cargo audit --deny vulnerability
+        # --deny warnings catches vulnerabilities, unsoundness, AND unmaintained.
+        # Every ignored advisory is explicitly documented in .cargo/audit.toml
+        # with justification. Any new undocumented advisory will fail this step,
+        # forcing a conscious decision to either fix or document-and-ignore it.
+        run: cargo audit --deny warnings
