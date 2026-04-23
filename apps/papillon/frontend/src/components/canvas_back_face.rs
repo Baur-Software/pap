@@ -6,8 +6,8 @@ use crate::components::source_panel::SourcePanel;
 /// Back-face container with two tabs: Sources, Workflow.
 ///
 /// - **Sources**  — `SourcePanel`: all resolved blocks as draggable reference chips.
-/// - **Workflow** — `CanvasWorkflowPipeline`: MAP mode (live dependency graph derived from
-///                  block events) and DESIGN mode (intent-first node graph builder).
+/// - **Workflow** — `CanvasWorkflowPipeline`: live orchestration trace showing per-block
+///                  PAP handshake phases, awaiting-approval plans, and outcomes.
 #[component]
 pub fn CanvasBackFace() -> impl IntoView {
     // "sources" | "workflow"
