@@ -25,7 +25,14 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run cargo audit
+        working-directory: pap
         run: cargo audit
 
-      - name: Deny on warnings
-        run: cargo audit --deny warnings
+      - name: Deny on actual vulnerabilities
+        working-directory: pap
+        # --deny vulnerability: fail on RUSTSEC vulnerability advisories only.
+        # Unsound and unmaintained warnings come from Tauri/GTK3/BlueField
+        # transitive deps that are outside our control; they do not affect
+        # pap-registry and are suppressed here to avoid CI noise.
+        # audit.toml handles any specific advisory ignores (e.g. rsa).
+        run: cargo audit --deny vulnerability
