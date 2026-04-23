@@ -84,10 +84,64 @@
         line-height: 1.6;
       }
 
+      /* ─── Nav ──────────────────────────────────────────────────────── */
+      nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+        background: rgba(12,11,20,.85);
+        backdrop-filter: blur(16px) saturate(1.5);
+        border-bottom: 1px solid var(--border);
+      }
+      @media (prefers-color-scheme: light) {
+        nav { background: rgba(250,249,252,.9); }
+      }
+      .nav-inner {
+        max-width: 1100px; margin: 0 auto; padding: 0 24px;
+        height: 64px; display: flex; align-items: center; justify-content: space-between;
+      }
+      .nav-logo {
+        display: flex; align-items: center; gap: 10px;
+        text-decoration: none; color: var(--text-1);
+      }
+      .nav-logo img { height: 32px; width: auto; }
+      .nav-wordmark {
+        font-family: "Satoshi", sans-serif; font-weight: 700; font-size: 1.1rem;
+        letter-spacing: -.02em;
+      }
+      .nav-links {
+        display: flex; align-items: center; gap: 8px; list-style: none;
+      }
+      .nav-links a {
+        color: var(--text-2); font-size: .9rem; font-weight: 500;
+        padding: 6px 12px; border-radius: 8px;
+        text-decoration: none; transition: all .15s ease;
+      }
+      .nav-links a:hover { color: var(--text-1); background: rgba(128,128,128,.08); }
+      .nav-links a[aria-current="page"] { color: var(--text-1); }
+      .nav-link-icon {
+        font-family: var(--font-mono);
+        font-size: .65rem; font-weight: 700;
+        background: linear-gradient(135deg, var(--purple), #8b7ff5);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
+      .nav-cta { display: flex; align-items: center; gap: 10px; }
+      .nav-gh-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 8px 16px; border-radius: 8px;
+        font-size: .9rem; font-weight: 600;
+        background: transparent; color: var(--text-1);
+        border: 1px solid var(--border);
+        text-decoration: none; cursor: pointer;
+        transition: all .15s ease; font-family: var(--font-body);
+      }
+      .nav-gh-btn:hover { border-color: var(--purple); color: var(--purple); }
+      .gh-icon { width: 18px; height: 18px; fill: currentColor; }
+
       .page {
         max-width: 680px;
         margin: 0 auto;
-        padding: 80px 24px;
+        padding: 144px 24px 80px;
       }
 
       /* Hero */
@@ -327,6 +381,29 @@
     </style>
   </head>
   <body>
+    <nav aria-label="Main navigation">
+      <div class="nav-inner">
+        <a href="../" class="nav-logo" aria-label="Baur Software">
+          <img src="https://www.baursoftware.com/wp-content/uploads/2025/11/cropped-Artboard-1.png" alt="Baur Software logo" />
+          <span class="nav-wordmark">Baur Software</span>
+        </a>
+        <ul class="nav-links" role="list">
+          <li><a href="../pap/"><span class="nav-link-icon">pap://</span> PAP</a></li>
+          <li><a href="../papillon/"><img src="../assets/images/papillon-icon.png" alt="" class="nav-link-icon-img" /> Papillon</a></li>
+          <li><a href="../chrysalis.html"><img src="../assets/images/chrysalis-icon.svg" alt="" class="nav-link-icon-img" /> Chrysalis</a></li>
+          <li><a href="./" aria-current="page">Extension</a></li>
+          <li><a href="../faq.html">FAQ</a></li>
+          <li><a href="../get-pap.html">Work With Us</a></li>
+        </ul>
+        <div class="nav-cta">
+          <a href="https://github.com/Baur-Software/pap" class="nav-gh-btn" target="_blank" rel="noopener" aria-label="View on GitHub">
+            <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+    </nav>
+
     <div class="page">
       <!-- Hero -->
       <section class="hero">

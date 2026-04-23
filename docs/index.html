@@ -36,6 +36,19 @@
       --radius-lg: 12px;
       scroll-behavior: smooth;
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg:       #faf9fc;
+        --surface:  #f0eff5;
+        --surface2: #e6e5ee;
+        --border:   #d0cfdc;
+        --border2:  #bbb9cc;
+        --text:     #1a1928;
+        --muted:    #5c5b70;
+        --faint:    #8888a0;
+      }
+      nav { background: rgba(250,249,252,.9); }
+    }
     html { font-size: 16px; }
     body {
       font-family: 'DM Sans', -apple-system, sans-serif;

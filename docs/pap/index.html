@@ -41,6 +41,20 @@
       --radius-lg: 16px;
       scroll-behavior: smooth;
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg:       #faf9fc;
+        --surface:  #f0eff5;
+        --surface2: #e6e5ee;
+        --border:   #d0cfdc;
+        --border2:  #bbb9cc;
+        --text:     #1a1928;
+        --muted:    #5c5b70;
+        --faint:    #8888a0;
+        --code-bg:  #eceaf4;
+      }
+      nav { background: rgba(250,249,252,.9); }
+    }
     html { font-size: 16px; }
     body {
       font-family: 'Inter', -apple-system, sans-serif;
@@ -772,7 +786,7 @@
 <nav aria-label="Main navigation">
   <div class="nav-inner">
     <a href="../" class="nav-logo" aria-label="Baur Software">
-      <img src="../assets/images/papillon-icon.png" alt="Baur Software logo" />
+      <img src="https://www.baursoftware.com/wp-content/uploads/2025/11/cropped-Artboard-1.png" alt="Baur Software logo" />
       <span class="nav-wordmark">Baur Software</span>
     </a>
     <ul class="nav-links" role="list">
