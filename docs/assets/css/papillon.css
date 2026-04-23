@@ -173,7 +173,8 @@ nav { background: rgba(6,6,9,.85); }
 .pillar h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
 .pillar p  { color: var(--muted); font-size: .9rem; }
 
-.trust-list { display: flex; flex-direction: column; gap: 16px; margin-top: 40px; max-width: 480px; }
+.trust-list { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 40px; margin-top: 40px; }
+@media (max-width: 640px) { .trust-list { grid-template-columns: 1fr; } }
 .trust-item { display: flex; align-items: center; gap: 14px; font-size: 1.05rem; font-weight: 500; }
 .trust-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(139,92,246,.08); display: flex; align-items: center; justify-content: center; color: var(--violet); font-size: .9rem; flex-shrink: 0; }
 
