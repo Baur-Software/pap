@@ -122,7 +122,7 @@ fn TraceEntry(block: CanvasBlock) -> impl IntoView {
 
 /// Derive display properties from a block's current state.
 /// Returns (CSS modifier class, badge label, optional inline description text).
-fn derive_block_trace(block: &CanvasBlock) -> (&'static str, &'static str, Option<String>) {
+pub(crate) fn derive_block_trace(block: &CanvasBlock) -> (&'static str, &'static str, Option<String>) {
     match &block.state {
         BlockState::Resolving { phase_label, .. } => (
             "trace-resolving",
@@ -239,5 +239,302 @@ pub fn EdgeApprovalCard(
                 </button>
             </div>
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use papillon_shared::{BlockState, CanvasBlock, IntentPlan};
+
+    // ── Fixture helpers ─────────────────────────────────────────────────────
+
+    fn make_block(state: BlockState) -> CanvasBlock {
+        CanvasBlock {
+            id: "blk-001".into(),
+            prompt_id: "p-001".into(),
+            prompt_text: Some("What flights are available?".into()),
+            state,
+            schema_type: None,
+            content: None,
+            linked_block_ids: vec![],
+            agent_did: None,
+            created_at: "2026-04-22T00:00:00Z".into(),
+            updated_at: "2026-04-22T00:00:00Z".into(),
+            mandate_expires_at: None,
+            preference_guided: false,
+            auto_expand: false,
+            retention_warning: None,
+        }
+    }
+
+    fn make_intent_plan() -> IntentPlan {
+        IntentPlan {
+            action: "schema:SearchAction".into(),
+            selected_agent_name: "Flight Search Agent".into(),
+            selected_agent_did: Some("did:web:flights.example".into()),
+            requires_disclosure: vec!["schema:Person.name".into(), "schema:Date".into()],
+            returns: vec!["schema:FlightReservation".into()],
+            approval_request_id: "req-abc-123".into(),
+            ttl_hours: 1,
+        }
+    }
+
+    // ── derive_block_trace: CSS modifier class ───────────────────────────────
+
+    #[test]
+    fn resolving_returns_trace_resolving_class() {
+        let block = make_block(BlockState::Resolving {
+            phase: 2,
+            phase_label: "Mandate".into(),
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-resolving");
+    }
+
+    #[test]
+    fn awaiting_approval_returns_trace_awaiting_class() {
+        let block = make_block(BlockState::AwaitingApproval {
+            plan: make_intent_plan(),
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-awaiting");
+    }
+
+    #[test]
+    fn ghost_returns_trace_ghost_class() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "Flight Agent".into(),
+            action_type: "schema:SearchAction".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-ghost");
+    }
+
+    #[test]
+    fn resolved_returns_trace_resolved_class() {
+        let block = make_block(BlockState::Resolved);
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-resolved");
+    }
+
+    #[test]
+    fn failed_returns_trace_failed_class() {
+        let block = make_block(BlockState::Failed {
+            phase: 3,
+            reason: "agent_unavailable".into(),
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-failed");
+    }
+
+    #[test]
+    fn outcome_returns_trace_resolved_class() {
+        let block = make_block(BlockState::Outcome {
+            provenance_block_ids: vec!["blk-a".into(), "blk-b".into()],
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-resolved");
+    }
+
+    #[test]
+    fn guide_returns_trace_pending_class() {
+        let block = make_block(BlockState::Guide {
+            summary: "2 results from flight agents".into(),
+            suggestions: vec![],
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-pending");
+    }
+
+    #[test]
+    fn note_returns_trace_pending_class() {
+        let block = make_block(BlockState::Note {
+            title: "My note".into(),
+            content: "Some content".into(),
+            editing: false,
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-pending");
+    }
+
+    // ── derive_block_trace: badge label ─────────────────────────────────────
+
+    #[test]
+    fn resolving_badge_label_is_resolving() {
+        let block = make_block(BlockState::Resolving {
+            phase: 1,
+            phase_label: "Token Presentation".into(),
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "resolving");
+    }
+
+    #[test]
+    fn awaiting_approval_badge_label_is_awaiting_approval() {
+        let block = make_block(BlockState::AwaitingApproval {
+            plan: make_intent_plan(),
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "awaiting approval");
+    }
+
+    #[test]
+    fn ghost_badge_label_is_pre_approval() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "Test Agent".into(),
+            action_type: "schema:SearchAction".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "pre-approval");
+    }
+
+    #[test]
+    fn resolved_badge_label_is_done() {
+        let block = make_block(BlockState::Resolved);
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "done");
+    }
+
+    #[test]
+    fn failed_badge_label_is_failed() {
+        let block = make_block(BlockState::Failed {
+            phase: 4,
+            reason: "timeout".into(),
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "failed");
+    }
+
+    #[test]
+    fn outcome_badge_label_is_outcome() {
+        let block = make_block(BlockState::Outcome {
+            provenance_block_ids: vec![],
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "outcome");
+    }
+
+    // ── derive_block_trace: inline description text ──────────────────────────
+
+    #[test]
+    fn resolving_inline_text_contains_phase_label() {
+        let block = make_block(BlockState::Resolving {
+            phase: 3,
+            phase_label: "Disclosure".into(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some("Disclosure".to_string()));
+    }
+
+    #[test]
+    fn resolving_empty_phase_label_returns_empty_string() {
+        let block = make_block(BlockState::Resolving {
+            phase: 1,
+            phase_label: String::new(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some(String::new()));
+    }
+
+    #[test]
+    fn awaiting_approval_has_no_inline_text() {
+        let block = make_block(BlockState::AwaitingApproval {
+            plan: make_intent_plan(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert!(desc.is_none());
+    }
+
+    #[test]
+    fn ghost_inline_text_contains_agent_name() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "Skyscanner Agent".into(),
+            action_type: "schema:SearchAction".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some("Agent: Skyscanner Agent".to_string()));
+    }
+
+    #[test]
+    fn ghost_inline_text_prefixes_with_agent_colon() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "X".into(),
+            action_type: "".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        let text = desc.unwrap();
+        assert!(
+            text.starts_with("Agent: "),
+            "expected 'Agent: ' prefix, got '{text}'"
+        );
+    }
+
+    #[test]
+    fn resolved_has_no_inline_text() {
+        let block = make_block(BlockState::Resolved);
+        let (_, _, desc) = derive_block_trace(&block);
+        assert!(desc.is_none());
+    }
+
+    #[test]
+    fn failed_inline_text_is_the_reason_string() {
+        let block = make_block(BlockState::Failed {
+            phase: 5,
+            reason: "co_sign_mismatch".into(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some("co_sign_mismatch".to_string()));
+    }
+
+    #[test]
+    fn failed_empty_reason_returns_empty_string() {
+        let block = make_block(BlockState::Failed {
+            phase: 2,
+            reason: String::new(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some(String::new()));
+    }
+
+    #[test]
+    fn outcome_has_no_inline_text() {
+        let block = make_block(BlockState::Outcome {
+            provenance_block_ids: vec!["a".into()],
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert!(desc.is_none());
+    }
+
+    // ── derive_block_trace: all 6 PAP handshake phases ──────────────────────
+
+    #[test]
+    fn resolving_phase_labels_roundtrip_for_all_six_phases() {
+        let phase_labels = [
+            (1u8, "Token Presentation"),
+            (2, "Mandate"),
+            (3, "Disclosure"),
+            (4, "Execution"),
+            (5, "Co-sign Receipt"),
+            (6, "Session Close"),
+        ];
+        for (phase, label) in phase_labels {
+            let block = make_block(BlockState::Resolving {
+                phase,
+                phase_label: label.into(),
+            });
+            let (css_class, badge, desc) = derive_block_trace(&block);
+            assert_eq!(css_class, "trace-resolving", "phase {phase}");
+            assert_eq!(badge, "resolving", "phase {phase}");
+            assert_eq!(desc, Some(label.to_string()), "phase {phase}");
+        }
     }
 }

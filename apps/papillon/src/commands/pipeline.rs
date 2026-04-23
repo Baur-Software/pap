@@ -994,4 +994,298 @@ mod tests {
             "schema:FlightReservation.departureDate".into()
         ));
     }
+
+    // ── port_compatible: additional supertype chains ─────────────────────────
+
+    #[test]
+    fn port_compat_lodging_reservation_to_reservation() {
+        assert!(port_compatible(
+            "schema:LodgingReservation".into(),
+            "schema:Reservation.reservationId".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_lodging_reservation_to_order() {
+        assert!(port_compatible(
+            "schema:LodgingReservation".into(),
+            "schema:Order.orderNumber".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_taxi_reservation_to_reservation() {
+        assert!(port_compatible(
+            "schema:TaxiReservation".into(),
+            "schema:Reservation.reservationId".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_train_reservation_to_order() {
+        assert!(port_compatible(
+            "schema:TrainReservation".into(),
+            "schema:Order.orderNumber".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_bus_reservation_to_reservation() {
+        assert!(port_compatible(
+            "schema:BusReservation".into(),
+            "schema:Reservation.reservationId".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_rental_car_reservation_to_reservation() {
+        assert!(port_compatible(
+            "schema:RentalCarReservation".into(),
+            "schema:Reservation.reservationId".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_event_reservation_to_reservation() {
+        assert!(port_compatible(
+            "schema:EventReservation".into(),
+            "schema:Reservation.reservationId".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_flight_to_intangible() {
+        // FlightReservation extends Intangible in the supertype table
+        assert!(port_compatible(
+            "schema:FlightReservation".into(),
+            "schema:Intangible.name".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_flight_to_thing() {
+        assert!(port_compatible(
+            "schema:FlightReservation".into(),
+            "schema:Thing.name".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_reject_reservation_to_flight_property() {
+        // Reservation is a supertype of FlightReservation, not vice-versa
+        assert!(!port_compatible(
+            "schema:Reservation".into(),
+            "schema:FlightReservation.departureDate".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_empty_output_type() {
+        assert!(!port_compatible(
+            String::new(),
+            "schema:FlightReservation.departureDate".into()
+        ));
+    }
+
+    #[test]
+    fn port_compat_empty_input_path() {
+        // An empty input path has no base type — always incompatible
+        assert!(!port_compatible(
+            "schema:FlightReservation".into(),
+            String::new()
+        ));
+    }
+
+    #[test]
+    fn port_compat_no_schema_prefix_still_matches() {
+        // strip_prefix is optional — bare type names should also match
+        assert!(port_compatible(
+            "FlightReservation".into(),
+            "FlightReservation.departureDate".into()
+        ));
+    }
+
+    // ── topological_sort: additional edge cases ──────────────────────────────
+
+    #[test]
+    fn topological_sort_three_node_cycle_detected() {
+        let pipeline = PipelineInfo {
+            id: "p-cycle3".into(),
+            name: "Three-node cycle".into(),
+            nodes: vec![make_node("A"), make_node("B"), make_node("C")],
+            edges: vec![
+                make_edge("A", "B"),
+                make_edge("B", "C"),
+                make_edge("C", "A"),
+            ],
+            created_at: String::new(),
+        };
+        let result = topological_sort(&pipeline);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message.contains("cycle"));
+    }
+
+    #[test]
+    fn topological_sort_self_loop_is_a_cycle() {
+        let pipeline = PipelineInfo {
+            id: "p-selfloop".into(),
+            name: "Self-loop".into(),
+            nodes: vec![make_node("A")],
+            edges: vec![make_edge("A", "A")],
+            created_at: String::new(),
+        };
+        let result = topological_sort(&pipeline);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn topological_sort_two_disconnected_nodes() {
+        // No edges — both are roots, order is either [A, B] or [B, A]
+        let pipeline = PipelineInfo {
+            id: "p-disconn".into(),
+            name: "Disconnected".into(),
+            nodes: vec![make_node("A"), make_node("B")],
+            edges: vec![],
+            created_at: String::new(),
+        };
+        let order = topological_sort(&pipeline).unwrap();
+        assert_eq!(order.len(), 2);
+        assert!(order.contains(&"A".to_string()));
+        assert!(order.contains(&"B".to_string()));
+    }
+
+    #[test]
+    fn topological_sort_long_linear_chain() {
+        // A -> B -> C -> D -> E — order must be strictly linear
+        let ids = ["A", "B", "C", "D", "E"];
+        let nodes: Vec<_> = ids.iter().map(|id| make_node(id)).collect();
+        let edges: Vec<_> = ids.windows(2).map(|w| make_edge(w[0], w[1])).collect();
+        let pipeline = PipelineInfo {
+            id: "p-chain5".into(),
+            name: "Chain 5".into(),
+            nodes,
+            edges,
+            created_at: String::new(),
+        };
+        let order = topological_sort(&pipeline).unwrap();
+        assert_eq!(order.len(), 5);
+        for pair in order.windows(2) {
+            let expected_next = ids[ids.iter().position(|x| *x == pair[0]).unwrap() + 1];
+            assert_eq!(pair[1], expected_next);
+        }
+    }
+
+    // ── AgentAdvertisement serde ─────────────────────────────────────────────
+
+    #[test]
+    fn agent_advertisement_serializes_to_json() {
+        let ad = AgentAdvertisement {
+            name: "GitHub Code Search".into(),
+            did: "did:web:github.com".into(),
+            description: Some("Search GitHub repositories".into()),
+            action_types: vec!["schema:SearchAction".into()],
+        };
+        let json = serde_json::to_string(&ad).unwrap();
+        assert!(json.contains("\"name\":\"GitHub Code Search\""));
+        assert!(json.contains("\"did\":\"did:web:github.com\""));
+        assert!(json.contains("schema:SearchAction"));
+    }
+
+    #[test]
+    fn agent_advertisement_deserializes_from_json() {
+        let json = r#"{
+            "name": "Flight Search",
+            "did": "did:web:flights.example",
+            "description": null,
+            "action_types": ["schema:SearchAction", "schema:ReserveAction"]
+        }"#;
+        let ad: AgentAdvertisement = serde_json::from_str(json).unwrap();
+        assert_eq!(ad.name, "Flight Search");
+        assert_eq!(ad.did, "did:web:flights.example");
+        assert!(ad.description.is_none());
+        assert_eq!(ad.action_types.len(), 2);
+        assert_eq!(ad.action_types[0], "schema:SearchAction");
+    }
+
+    #[test]
+    fn agent_advertisement_roundtrips_through_json() {
+        let original = AgentAdvertisement {
+            name: "Test Agent".into(),
+            did: "did:web:test.example".into(),
+            description: Some("A test agent".into()),
+            action_types: vec!["schema:SearchAction".into(), "schema:ReadAction".into()],
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.name, original.name);
+        assert_eq!(restored.did, original.did);
+        assert_eq!(restored.description, original.description);
+        assert_eq!(restored.action_types, original.action_types);
+    }
+
+    #[test]
+    fn agent_advertisement_empty_action_types_is_valid() {
+        let ad = AgentAdvertisement {
+            name: "Minimal Agent".into(),
+            did: "did:web:minimal.example".into(),
+            description: None,
+            action_types: vec![],
+        };
+        let json = serde_json::to_string(&ad).unwrap();
+        let restored: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert!(restored.action_types.is_empty());
+    }
+
+    #[test]
+    fn agent_advertisement_description_optional_field_roundtrip() {
+        // With description
+        let with_desc = AgentAdvertisement {
+            name: "A".into(),
+            did: "did:web:a.example".into(),
+            description: Some("desc".into()),
+            action_types: vec![],
+        };
+        let json = serde_json::to_string(&with_desc).unwrap();
+        let restored: AgentAdvertisement = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.description, Some("desc".to_string()));
+
+        // Without description (null)
+        let without_desc = AgentAdvertisement {
+            name: "B".into(),
+            did: "did:web:b.example".into(),
+            description: None,
+            action_types: vec![],
+        };
+        let json2 = serde_json::to_string(&without_desc).unwrap();
+        let restored2: AgentAdvertisement = serde_json::from_str(&json2).unwrap();
+        assert!(restored2.description.is_none());
+    }
+
+    // ── discover_pap_agents stub ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn discover_pap_agents_stub_returns_empty_vec() {
+        let result = discover_pap_agents("github.com".into()).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn discover_pap_agents_stub_ok_for_any_domain() {
+        for domain in &["example.com", "localhost", "sub.domain.co.uk", "192.168.1.1"] {
+            let result = discover_pap_agents(domain.to_string()).await;
+            assert!(result.is_ok(), "domain {domain} returned Err");
+            assert!(
+                result.unwrap().is_empty(),
+                "stub should always return empty vec"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn discover_pap_agents_stub_ok_for_empty_string() {
+        // Empty input should not panic — stub ignores the argument
+        let result = discover_pap_agents(String::new()).await;
+        assert!(result.is_ok());
+    }
 }
