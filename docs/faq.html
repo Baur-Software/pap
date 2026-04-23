@@ -98,42 +98,13 @@
         </button>
         <div class="faq-body">
           <p>
-            PAP doesn't plug into Okta or Active Directory — and that's intentional. Instead of a central hub that decides who has access, every agent session runs under a time-limited permission signed by the principal's own device key. When someone leaves your org, their access doesn't need to be revoked. It decays automatically — Active → Degraded → ReadOnly → Suspended — and stops working on its own. For key recovery, you split your identity into shards using Shamir Secret Sharing (the same math behind AES) and give them to trustees you choose. Any M shards reconstruct your key; fewer than M reveals nothing. Threshold and total are yours to configure.
+            PAP doesn't plug into Okta or Active Directory — and that's intentional. The trust anchor is a <strong>device-bound Ed25519 keypair</strong> held by the individual <a href="#gloss-principal" class="gloss">principal</a>. Every agent session runs under a time-limited <a href="#gloss-mandate" class="gloss">Mandate</a> signed by that key — no central hub decides access. When someone leaves your org, there's nothing to deprovision: mandates decay automatically (Active → Degraded → ReadOnly → Suspended) and cryptographically expire on their own.
           </p>
           <p>
-            PAP v0.x is <strong>explicitly consumer-first</strong>. The trust anchor is a
-            <strong>device-bound Ed25519 keypair</strong> held by a single human
-            <a href="#gloss-principal" class="gloss">principal</a>
-            (<code>crates/pap-did/src/principal.rs</code>).
-            <a href="#gloss-mandate" class="gloss">Mandate</a> delegation chains downstream
-            <em>agents</em>, not other principals — principal-to-principal hierarchies are
-            intentionally out of scope. Enterprise organizational structure is instead expressed
-            through <a href="#gloss-chrysalis" class="gloss">Chrysalis</a>-hosted agent workloads: a company runs agents in Chrysalis and
-            routes advertisements to principals through normal PAP transport mechanisms, composing
-            org-level orchestration at the agent layer without encoding it into the identity layer.
+            Enterprise structure is expressed at the <em>agent layer</em>, not the identity layer. A company runs agents in <a href="#gloss-chrysalis" class="gloss">Chrysalis</a> and routes them to principals through normal PAP transport — org-level orchestration without encoding hierarchy into identity.
           </p>
           <p>
-            <strong>Key resilience is built in.</strong> The M-of-N social recovery mechanism
-            (<code>crates/pap-core/src/shamir.rs</code>) lets a principal split their seed into
-            N Shamir shards and distribute them to trustees of their choosing — a family member,
-            notary, lawyer, or an offline hardware key. Any M shards reconstruct the identity;
-            fewer than M reveal nothing (mathematically provable). The default is 2-of-3,
-            fully configurable. Trustees are people the principal selects, not a platform.
-          </p>
-          <p>
-            <strong>People can advertise themselves.</strong> The social agent catalog
-            (<code>crates/pap-agents/catalog/social/</code>) includes 13 agents that return
-            <code>schema:Person</code> — Mastodon accounts, GitHub profiles, DEV.to, Stack Overflow,
-            and others. Any principal can also publish a signed
-            <code>AgentAdvertisement</code> (<code>pap-marketplace/src/advertisement.rs</code>)
-            typed as <code>schema:Person</code> to make themselves discoverable through the
-            peer-to-peer Chrysalis registry.
-          </p>
-          <p>
-            Employee offboarding, SCIM provisioning, and IdP-backed identity are
-            architecturally unnecessary in PAP. Mandate TTL is the offboarding mechanism —
-            access cryptographically expires without any deprovisioning step. There is no
-            central store to revoke access from.
+            <strong>Key resilience:</strong> M-of-N social recovery (<code>crates/pap-core/src/shamir.rs</code>) lets a principal split their seed into N Shamir shards distributed to trustees they choose. Any M shards reconstruct the identity; fewer than M reveal nothing. Default is 2-of-3, fully configurable. Trustees are people the principal selects — not a platform.
           </p>
         </div>
       </div>
