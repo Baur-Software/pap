@@ -134,6 +134,11 @@ async fn main() -> anyhow::Result<()> {
     if !cert_fingerprint.is_empty() {
         info!("Cert fingerprint: {}", cert_fingerprint);
     }
+    info!(
+        "Body limit: {} bytes ({} KB)",
+        config.max_body_bytes,
+        config.max_body_bytes / 1024
+    );
 
     // Build agent set once — used for both DB seeding and execution routing.
     // A single build ensures the advertised DIDs match the execution handler DIDs.
@@ -376,8 +381,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
-        .layer(DefaultBodyLimit::max(config.max_body_bytes))
-        .layer(cors);
+        .layer(cors)
+        .layer(DefaultBodyLimit::max(config.max_body_bytes));
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
     let scheme = if config.no_tls { "http" } else { "https" };

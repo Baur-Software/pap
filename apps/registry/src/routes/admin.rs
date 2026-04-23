@@ -600,6 +600,7 @@ mod tests {
 
     async fn test_router(token: Option<&str>) -> axum::Router {
         use axum::extract::DefaultBodyLimit;
+        use crate::config::DEFAULT_MAX_BODY_BYTES;
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
         sqlx::migrate!("src/db/migrations/sqlite")
             .run(&pool)
@@ -619,7 +620,7 @@ mod tests {
         };
         router()
             .with_state(state)
-            .layer(DefaultBodyLimit::max(256 * 1024))
+            .layer(DefaultBodyLimit::max(DEFAULT_MAX_BODY_BYTES))
     }
 
     fn signed_ad(name: &str) -> AgentAdvertisement {

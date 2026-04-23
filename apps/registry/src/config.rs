@@ -1,5 +1,9 @@
 use std::env;
 
+/// Default maximum HTTP request body size in bytes (256 KB).
+/// Used in both `Config::from_env()` and the test router to prevent drift.
+pub const DEFAULT_MAX_BODY_BYTES: usize = 256 * 1024;
+
 /// Runtime configuration for the registry server.
 ///
 /// Reads from environment variables with sensible defaults.
@@ -79,7 +83,7 @@ impl Config {
         let max_body_bytes = env::var("PAP_REGISTRY_MAX_BODY_BYTES")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(256 * 1024); // 256 KB default
+            .unwrap_or(DEFAULT_MAX_BODY_BYTES);
 
         Self {
             port,
@@ -128,6 +132,7 @@ mod tests {
         env::remove_var("PAP_REGISTRY_NO_TLS");
         env::remove_var("PAP_REGISTRY_RESET_DB");
         env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+        env::remove_var("PAP_REGISTRY_MAX_BODY_BYTES");
     }
 
     #[test]
@@ -331,5 +336,33 @@ mod tests {
         assert!(cfg.require_auth);
 
         env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+    }
+
+    // ── max_body_bytes ────────────────────────────────────────────────────────
+
+    #[test]
+    fn max_body_bytes_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_body_bytes, DEFAULT_MAX_BODY_BYTES);
+    }
+
+    #[test]
+    fn max_body_bytes_custom() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_MAX_BODY_BYTES", "65536");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_body_bytes, 65536);
+    }
+
+    #[test]
+    fn max_body_bytes_invalid_fallback_to_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_MAX_BODY_BYTES", "not-a-number");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_body_bytes, DEFAULT_MAX_BODY_BYTES);
     }
 }
