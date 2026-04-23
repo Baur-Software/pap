@@ -4,10 +4,14 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::Context as _;
 
+use axum::extract::DefaultBodyLimit;
 use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
 use pap_registry::state::SETTING_CORS_ORIGINS;
+use tower_governor::{
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
+};
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use tower_http::services::ServeDir;
@@ -22,6 +26,29 @@ use pap_registry::routes;
 use pap_registry::state::AppState;
 use pap_transport::server::AgentServer;
 
+/// Validate the authentication configuration at startup.
+///
+/// - If `admin_token` is `None`, emit a prominent `WARN` so operators notice
+///   immediately in logs.
+/// - If `require_auth` is also `true`, bail out so the server refuses to start
+///   without a configured token (useful in hardened / production deployments).
+fn check_auth_config(config: &Config) -> anyhow::Result<()> {
+    if config.admin_token.is_none() {
+        tracing::warn!(
+            "⚠️  PAP_REGISTRY_ADMIN_TOKEN is not set — all admin endpoints are UNAUTHENTICATED. \
+             In production, set PAP_REGISTRY_ADMIN_TOKEN to a strong random secret. \
+             Set PAP_REGISTRY_REQUIRE_AUTH=true to refuse startup without a token."
+        );
+        if config.require_auth {
+            anyhow::bail!(
+                "PAP_REGISTRY_REQUIRE_AUTH=true but PAP_REGISTRY_ADMIN_TOKEN is not set. \
+                 Provide a token via PAP_REGISTRY_ADMIN_TOKEN or unset PAP_REGISTRY_REQUIRE_AUTH."
+            );
+        }
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -32,8 +59,13 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env();
+    check_auth_config(&config)?;
 
     info!("Starting PAP Registry on {}:{}", config.host, config.port);
+    info!(
+        "Rate limiting: {} req/s sustained, {} burst per IP",
+        config.rate_limit_rps, config.rate_limit_burst
+    );
 
     // ── Database setup ────────────────────────────────────────────────────────
     let db_cfg = DbConfig::resolve()?;
@@ -41,11 +73,21 @@ async fn main() -> anyhow::Result<()> {
     // PAP_REGISTRY_RESET_DB=true: wipe the SQLite file so migrations start
     // from a clean slate.  Use this to recover from "migration was previously
     // applied but has been modified" errors during development.
-    if config.reset_db {
+    // Both PAP_REGISTRY_RESET_DB=true AND PAP_REGISTRY_RESET_DB_CONFIRM=yes-i-understand
+    // must be set — the confirmation guard prevents accidental production wipes.
+    if config.reset_db && !config.reset_db_confirmed() {
+        tracing::warn!(
+            "PAP_REGISTRY_RESET_DB is set but PAP_REGISTRY_RESET_DB_CONFIRM is not set to \
+             'yes-i-understand'. Database will NOT be reset. \
+             Set both env vars to confirm destructive operation."
+        );
+    }
+    if config.reset_db_confirmed() {
         if let Some(path) = db_cfg.sqlite_file_path() {
             if std::path::Path::new(&path).exists() {
                 tracing::warn!(
-                    "PAP_REGISTRY_RESET_DB=true — deleting existing database at {path}. \
+                    "PAP_REGISTRY_RESET_DB=true + PAP_REGISTRY_RESET_DB_CONFIRM confirmed — \
+                     deleting existing database at {path}. \
                      All agents, peers, and node identity will be regenerated."
                 );
                 std::fs::remove_file(&path)
@@ -109,6 +151,11 @@ async fn main() -> anyhow::Result<()> {
     if !cert_fingerprint.is_empty() {
         info!("Cert fingerprint: {}", cert_fingerprint);
     }
+    info!(
+        "Body limit: {} bytes ({} KB)",
+        config.max_body_bytes,
+        config.max_body_bytes / 1024
+    );
 
     // Build agent set once — used for both DB seeding and execution routing.
     // A single build ensures the advertised DIDs match the execution handler DIDs.
@@ -327,6 +374,33 @@ async fn main() -> anyhow::Result<()> {
         agent_set.handlers.len()
     );
 
+    // ── Rate limiting ─────────────────────────────────────────────────────────
+    // Leaky-bucket limiter keyed by client IP (SmartIpKeyExtractor honours
+    // X-Forwarded-For / X-Real-IP headers from reverse proxies).
+    // Applied as the OUTERMOST layer so requests over the rate limit are
+    // rejected before they reach the body-size limiter or route handlers.
+    let governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(config.rate_limit_rps)
+            .burst_size(config.rate_limit_burst)
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .expect("invalid rate-limit configuration"),
+    );
+
+    // Spawn a background thread to periodically clean up stale rate-limiter
+    // entries. Without this, the in-memory per-IP token-bucket map grows
+    // unboundedly as new source IPs are seen (relevant for a public registry).
+    {
+        let governor_limiter = governor_conf.limiter().clone();
+        let interval = std::time::Duration::from_secs(60);
+        std::thread::spawn(move || loop {
+            std::thread::sleep(interval);
+            tracing::debug!("rate limiter storage size: {}", governor_limiter.len());
+            governor_limiter.retain_recent();
+        });
+    }
+
     let app = Router::new()
         .merge(federation_router)
         .merge(admin_router)
@@ -351,7 +425,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
-        .layer(cors);
+        .layer(cors)
+        .layer(DefaultBodyLimit::max(config.max_body_bytes))
+        .layer(GovernorLayer::new(governor_conf));
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
     let scheme = if config.no_tls { "http" } else { "https" };
@@ -363,16 +439,78 @@ async fn main() -> anyhow::Result<()> {
         // Serve over HTTPS using the node's self-signed TLS certificate.
         // Papillon clients connect via TOFU (Trust On First Use) and pin
         // the cert fingerprint for subsequent connections.
+        // `into_make_service_with_connect_info` exposes peer IP so the
+        // SmartIpKeyExtractor can fall back to direct peer address when no
+        // proxy headers are present.
         let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(tls_id.server_config);
         axum_server::bind_rustls(addr, tls_config)
-            .serve(app.into_make_service())
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
             .await?;
     } else {
         // Plain HTTP — for local development only.
         info!("TLS disabled (PAP_REGISTRY_NO_TLS=true)");
         let listener = tokio::net::TcpListener::bind(addr).await?;
-        axum::serve(listener, app).await?;
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await?;
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::sync::Mutex;
+
+    // Env-var tests must run serially to avoid races.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn clear_auth_env() {
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+        env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
+    }
+
+    #[test]
+    fn require_auth_without_token_returns_error() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+
+        let cfg = Config::from_env();
+        let result = check_auth_config(&cfg);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("PAP_REGISTRY_ADMIN_TOKEN"));
+
+        clear_auth_env();
+    }
+
+    #[test]
+    fn require_auth_with_token_is_ok() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+        env::set_var("PAP_REGISTRY_ADMIN_TOKEN", "supersecret");
+
+        let cfg = Config::from_env();
+        assert!(check_auth_config(&cfg).is_ok());
+
+        clear_auth_env();
+    }
+
+    #[test]
+    fn no_require_auth_no_token_is_ok() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+
+        let cfg = Config::from_env();
+        // Should not error — just warn at runtime.
+        assert!(check_auth_config(&cfg).is_ok());
+    }
 }

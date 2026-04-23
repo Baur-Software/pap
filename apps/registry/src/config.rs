@@ -1,5 +1,9 @@
 use std::env;
 
+/// Default maximum HTTP request body size in bytes (256 KB).
+/// Used in both `Config::from_env()` and the test router to prevent drift.
+pub const DEFAULT_MAX_BODY_BYTES: usize = 256 * 1024;
+
 /// Runtime configuration for the registry server.
 ///
 /// Reads from environment variables with sensible defaults.
@@ -32,6 +36,32 @@ pub struct Config {
     /// and the node identity are lost.  Only meaningful for SQLite; ignored for
     /// Postgres.  Set `PAP_REGISTRY_RESET_DB=true` to enable.
     pub reset_db: bool,
+
+    /// Confirmation guard for the destructive `reset_db` operation.
+    /// Must be set to `"yes-i-understand"` via `PAP_REGISTRY_RESET_DB_CONFIRM`
+    /// in addition to `PAP_REGISTRY_RESET_DB=true` for the wipe to occur.
+    /// This two-variable requirement prevents accidental DB deletion in production
+    /// when operators copy env files or set `RESET_DB` without realising the impact.
+    pub reset_db_confirm: bool,
+
+    /// When `true`, the server will refuse to start if `admin_token` is not
+    /// set.  Use `PAP_REGISTRY_REQUIRE_AUTH=true` in production environments
+    /// where unauthenticated admin access is unacceptable.
+    pub require_auth: bool,
+
+    /// Maximum allowed HTTP request body size in bytes.
+    /// Requests exceeding this limit are rejected with 413 Payload Too Large.
+    /// Default: 262144 (256 KB). Override via `PAP_REGISTRY_MAX_BODY_BYTES`.
+    pub max_body_bytes: usize,
+
+    /// Sustained request rate per second per IP address for the leaky-bucket
+    /// rate limiter.  Default: 20. Override via `PAP_REGISTRY_RATE_LIMIT_RPS`.
+    pub rate_limit_rps: u64,
+
+    /// Maximum burst size for the rate limiter (number of requests that can
+    /// be issued in excess of the sustained rate before throttling begins).
+    /// Default: 60. Override via `PAP_REGISTRY_RATE_LIMIT_BURST`.
+    pub rate_limit_burst: u32,
 }
 
 impl Config {
@@ -62,6 +92,29 @@ impl Config {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
+        let reset_db_confirm = env::var("PAP_REGISTRY_RESET_DB_CONFIRM")
+            .map(|v| v.eq_ignore_ascii_case("yes-i-understand"))
+            .unwrap_or(false);
+
+        let require_auth = env::var("PAP_REGISTRY_REQUIRE_AUTH")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let max_body_bytes = env::var("PAP_REGISTRY_MAX_BODY_BYTES")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(DEFAULT_MAX_BODY_BYTES);
+
+        let rate_limit_rps = env::var("PAP_REGISTRY_RATE_LIMIT_RPS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20u64);
+
+        let rate_limit_burst = env::var("PAP_REGISTRY_RATE_LIMIT_BURST")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60u32);
+
         Self {
             port,
             host,
@@ -70,7 +123,21 @@ impl Config {
             no_tls,
             max_ads_per_principal,
             reset_db,
+            reset_db_confirm,
+            require_auth,
+            max_body_bytes,
+            rate_limit_rps,
+            rate_limit_burst,
         }
+    }
+
+    /// Returns `true` only when both `reset_db` is set **and** the operator has
+    /// provided the explicit confirmation string `"yes-i-understand"` via
+    /// `PAP_REGISTRY_RESET_DB_CONFIRM`.  This two-variable guard prevents
+    /// accidental database wipes when `RESET_DB=true` is copied from a dev
+    /// env file into production without understanding the consequences.
+    pub fn reset_db_confirmed(&self) -> bool {
+        self.reset_db && self.reset_db_confirm
     }
 
     /// Build the default CORS origin allowlist from env config.
@@ -106,6 +173,11 @@ mod tests {
         env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
         env::remove_var("PAP_REGISTRY_NO_TLS");
         env::remove_var("PAP_REGISTRY_RESET_DB");
+        env::remove_var("PAP_REGISTRY_RESET_DB_CONFIRM");
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+        env::remove_var("PAP_REGISTRY_MAX_BODY_BYTES");
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_BURST");
     }
 
     #[test]
@@ -286,5 +358,111 @@ mod tests {
 
         env::remove_var("PAP_REGISTRY_HOST");
         env::remove_var("PAP_REGISTRY_NO_TLS");
+    }
+
+    // ── require_auth ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn require_auth_defaults_false() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+
+        let cfg = Config::from_env();
+        assert!(!cfg.require_auth);
+    }
+
+    #[test]
+    fn require_auth_set_true() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+
+        let cfg = Config::from_env();
+        assert!(cfg.require_auth);
+
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+    }
+
+    // ── max_body_bytes ────────────────────────────────────────────────────────
+
+    #[test]
+    fn max_body_bytes_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_body_bytes, DEFAULT_MAX_BODY_BYTES);
+    }
+
+    #[test]
+    fn max_body_bytes_custom() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_MAX_BODY_BYTES", "65536");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_body_bytes, 65536);
+    }
+
+    #[test]
+    fn max_body_bytes_invalid_fallback_to_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_MAX_BODY_BYTES", "not-a-number");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_body_bytes, DEFAULT_MAX_BODY_BYTES);
+    }
+
+    // ── rate_limit_rps / rate_limit_burst ─────────────────────────────────────
+
+    #[test]
+    fn rate_limit_defaults() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        let cfg = Config::from_env();
+        assert_eq!(cfg.rate_limit_rps, 20);
+        assert_eq!(cfg.rate_limit_burst, 60);
+    }
+
+    #[test]
+    fn rate_limit_custom_values() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RATE_LIMIT_RPS", "5");
+        env::set_var("PAP_REGISTRY_RATE_LIMIT_BURST", "10");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.rate_limit_rps, 5);
+        assert_eq!(cfg.rate_limit_burst, 10);
+
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_BURST");
+    }
+
+    // ── reset_db_confirmed ────────────────────────────────────────────────────
+
+    #[test]
+    fn reset_db_requires_confirmation() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        let cfg = Config::from_env();
+        assert!(!cfg.reset_db_confirmed());
+    }
+
+    #[test]
+    fn reset_db_confirmed_when_both_set() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "yes-i-understand");
+        let cfg = Config::from_env();
+        assert!(cfg.reset_db_confirmed());
+    }
+
+    #[test]
+    fn reset_db_false_even_with_confirmation() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "yes-i-understand");
+        let cfg = Config::from_env();
+        assert!(!cfg.reset_db_confirmed());
     }
 }

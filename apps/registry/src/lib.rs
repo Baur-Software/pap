@@ -8,6 +8,8 @@ pub mod config;
 #[cfg(feature = "ssr")]
 pub mod db;
 #[cfg(feature = "ssr")]
+pub(crate) mod net_guard;
+#[cfg(feature = "ssr")]
 pub mod routes;
 #[cfg(feature = "ssr")]
 pub mod state;

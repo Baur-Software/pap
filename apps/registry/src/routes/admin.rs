@@ -9,6 +9,7 @@ use pap_federation::peer::RegistryPeer;
 use pap_marketplace::AgentAdvertisement;
 
 use crate::db::AgentEntry;
+use crate::net_guard::assert_safe_peer_url;
 use crate::state::AppState;
 
 // ── Request / response types ──────────────────────────────────────────────────
@@ -141,6 +142,18 @@ async fn list_agents(
         return auth_error();
     }
     let per_page = params.per_page.clamp(1, 200);
+    const MAX_QUERY_LEN: usize = 512;
+    if let Some(ref q) = params.q {
+        if q.len() > MAX_QUERY_LEN {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("search query too long: max {MAX_QUERY_LEN} bytes")
+                })),
+            )
+                .into_response();
+        }
+    }
     match state
         .store
         .search_agents(
@@ -162,11 +175,14 @@ async fn list_agents(
             })
             .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "database error in list_agents");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal error"})),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -231,21 +247,38 @@ async fn register_agent(
                 .into_response();
         }
         Err(e) => {
+            tracing::error!(error = %e, "database error in register_agent (count_agents_by_principal)");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": format!("Rate limit check failed: {e}")})),
+                Json(serde_json::json!({"error": "internal error"})),
             )
                 .into_response();
         }
         Ok(_) => {} // under limit — proceed
     }
 
+    // Agent advertisement JSON size check (spec §10.2).
+    const MAX_AD_JSON_BYTES: usize = 32 * 1024; // 32 KB
+    let ad_json_size = serde_json::to_string(&ad)
+        .map(|s| s.len())
+        .unwrap_or(usize::MAX);
+    if ad_json_size > MAX_AD_JSON_BYTES {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(serde_json::json!({
+                "error": format!("agent advertisement too large: max {MAX_AD_JSON_BYTES} bytes")
+            })),
+        )
+            .into_response();
+    }
+
     // DB first — persist before updating in-memory state.
     let hash = ad.hash();
     if let Err(e) = state.store.insert_agent(&hash, &ad).await {
+        tracing::error!(error = %e, "database error in register_agent (insert_agent)");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            Json(serde_json::json!({"error": "internal error"})),
         )
             .into_response();
     }
@@ -260,9 +293,7 @@ async fn register_agent(
             );
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("agent persisted but in-memory registration failed: {e}")
-                })),
+                Json(serde_json::json!({"error": "internal error"})),
             )
                 .into_response();
         }
@@ -286,11 +317,12 @@ async fn remove_agent(
     let deleted = match state.store.delete_agent(&hash).await {
         Ok(d) => d,
         Err(e) => {
+            tracing::error!(error = %e, "database error in remove_agent");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
+                Json(serde_json::json!({"error": "internal error"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     if deleted {
@@ -313,11 +345,14 @@ async fn list_peers(State(state): State<AppState>, headers: HeaderMap) -> Respon
     }
     match state.store.load_all_peers().await {
         Ok(peers) => Json(peers).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "database error in list_peers");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal error"})),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -329,6 +364,16 @@ async fn add_peer(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
+
+    // SSRF guard: validate the peer endpoint URL before any network or DB operations.
+    if let Err(reason) = assert_safe_peer_url(&req.endpoint).await {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": format!("unsafe peer endpoint: {reason}")})),
+        )
+            .into_response();
+    }
+
     let peer = match req.cert_fingerprint {
         Some(fp) => RegistryPeer::with_fingerprint(&req.did, &req.endpoint, &fp),
         None => RegistryPeer::new(&req.did, &req.endpoint),
@@ -375,9 +420,10 @@ async fn add_peer(
 
     // DB first — persist before updating in-memory state.
     if let Err(e) = state.store.upsert_peer(&peer).await {
+        tracing::error!(error = %e, "database error in add_peer");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            Json(serde_json::json!({"error": "internal error"})),
         )
             .into_response();
     }
@@ -406,11 +452,12 @@ async fn remove_peer(
     let deleted = match state.store.delete_peer(&did_decoded).await {
         Ok(d) => d,
         Err(e) => {
+            tracing::error!(error = %e, "database error in remove_peer");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
+                Json(serde_json::json!({"error": "internal error"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     if deleted {
@@ -599,6 +646,8 @@ mod tests {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     async fn test_router(token: Option<&str>) -> axum::Router {
+        use crate::config::DEFAULT_MAX_BODY_BYTES;
+        use axum::extract::DefaultBodyLimit;
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
         sqlx::migrate!("src/db/migrations/sqlite")
             .run(&pool)
@@ -616,7 +665,9 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
-        router().with_state(state)
+        router()
+            .with_state(state)
+            .layer(DefaultBodyLimit::max(DEFAULT_MAX_BODY_BYTES))
     }
 
     fn signed_ad(name: &str) -> AgentAdvertisement {
@@ -864,7 +915,7 @@ mod tests {
 
         let body = serde_json::json!({
             "did": "did:key:zPeerX",
-            "endpoint": "https://peerx.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -911,7 +962,7 @@ mod tests {
         // First peer: bootstrap into an empty registry — must succeed.
         let first = serde_json::json!({
             "did": "did:key:zBootstrap",
-            "endpoint": "https://bootstrap.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -927,7 +978,7 @@ mod tests {
         // Second peer: no bypass_policy flag, registry is now non-empty — must be rejected.
         let second = serde_json::json!({
             "did": "did:key:zSecond",
-            "endpoint": "https://second.example.com"
+            "endpoint": "https://1.1.1.1"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -975,7 +1026,7 @@ mod tests {
         // Seed one peer via bootstrap.
         let first = serde_json::json!({
             "did": "did:key:zBootstrap",
-            "endpoint": "https://bootstrap.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -987,7 +1038,7 @@ mod tests {
         // Attempt bypass_policy: true on the now-non-empty registry — must be rejected.
         let second = serde_json::json!({
             "did": "did:key:zEvil",
-            "endpoint": "https://evil.example.com",
+            "endpoint": "https://1.1.1.1",
             "bypass_policy": true
         });
         let req = Request::post("/api/peers")
@@ -1046,7 +1097,7 @@ mod tests {
         // Add
         let body = serde_json::json!({
             "did": "did:key:zPeerY",
-            "endpoint": "https://peery.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1090,7 +1141,7 @@ mod tests {
 
         let body = serde_json::json!({
             "did": "did:key:zFingerprintPeer",
-            "endpoint": "https://fp.example.com",
+            "endpoint": "https://93.184.216.34",
             "cert_fingerprint": "aa:bb:cc"
         });
         let req = Request::post("/api/peers")
@@ -1116,7 +1167,7 @@ mod tests {
         let app = test_router(None).await;
         let body = serde_json::json!({
             "did": "did:key:zBootstrapOnly",
-            "endpoint": "https://bootstrap.example.com",
+            "endpoint": "https://93.184.216.34",
             "bypass_policy": true
         });
         let req = Request::post("/api/peers")
@@ -1138,7 +1189,7 @@ mod tests {
         let app = test_router(None).await;
         let body = serde_json::json!({
             "did": "did:key:zFirstPeer",
-            "endpoint": "https://first.example.com"
+            "endpoint": "https://93.184.216.34"
             // bypass_policy omitted — defaults false
         });
         let req = Request::post("/api/peers")
@@ -1179,7 +1230,7 @@ mod tests {
         // Add the peer first.
         let body = serde_json::json!({
             "did": "did:key:zToRemove",
-            "endpoint": "https://remove-me.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1216,7 +1267,7 @@ mod tests {
         let app = test_router(Some("supersecret")).await;
         let body = serde_json::json!({
             "did": "did:key:zUnauthed",
-            "endpoint": "https://unauthed.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1256,7 +1307,7 @@ mod tests {
         // Add first peer.
         let body_a = serde_json::json!({
             "did": "did:key:zAlpha",
-            "endpoint": "https://alpha.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1270,7 +1321,7 @@ mod tests {
         // subsequent peers.  We verify the list contains exactly the first peer.
         let body_b = serde_json::json!({
             "did": "did:key:zBeta",
-            "endpoint": "https://beta.example.com"
+            "endpoint": "https://1.1.1.1"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1290,6 +1341,65 @@ mod tests {
             dids.contains(&"did:key:zAlpha"),
             "alpha peer must be listed"
         );
+    }
+
+    // ── SSRF protection tests ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn post_peers_rejects_http_endpoint() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "http://registry.example.com/",
+            "cert_fingerprint": null,
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn post_peers_rejects_private_ip_endpoint() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://192.168.1.100/",
+            "cert_fingerprint": null,
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn post_peers_rejects_loopback_endpoint() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://127.0.0.1:9999/",
+            "cert_fingerprint": null,
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     // ── POST /api/peers/{did}/sync ────────────────────────────────────────────
@@ -1460,6 +1570,21 @@ mod tests {
         );
     }
 
+    // ── Body size limit ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn post_agents_rejects_oversized_body() {
+        let app = test_router(None).await;
+        // 300 KB — well above 256 KB limit
+        let large_body = "x".repeat(300 * 1024);
+        let req = Request::post("/api/agents")
+            .header("content-type", "application/json")
+            .body(Body::from(large_body))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
     #[tokio::test]
     async fn rate_limit_allows_different_principals() {
         // Limit=1: each principal gets one slot, but not two.
@@ -1540,5 +1665,84 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS,
             "principal A second ad should be rejected with 429"
         );
+    }
+
+    // ── Task 5: Input size caps ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn search_rejects_oversized_query() {
+        let app = test_router(None).await;
+        let long_q = "a".repeat(513);
+        let req = Request::builder()
+            .method("GET")
+            .uri(&format!("/api/agents?q={long_q}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn search_accepts_query_at_limit() {
+        let app = test_router(None).await;
+        let max_q = "a".repeat(512);
+        let req = Request::builder()
+            .method("GET")
+            .uri(&format!("/api/agents?q={max_q}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn register_oversized_ad_json_returns_413() {
+        let app = test_router(None).await;
+        // Create a signed ad with a very large name field (33 KB) so the
+        // serialized advertisement exceeds the 32 KB ad_json limit.
+        let key = SigningKey::generate(&mut OsRng);
+        let kp = PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap();
+        let did = kp.did();
+        let large_name = "x".repeat(33 * 1024);
+        let mut ad = AgentAdvertisement::new(
+            &large_name,
+            "Corp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad.sign(&key).expect("Ed25519 is always supported");
+        let body = serde_json::to_vec(&ad).unwrap();
+        // The serialized body is large — use a higher body limit so axum doesn't
+        // intercept it before our handler check (the handler check is more specific).
+        use axum::extract::DefaultBodyLimit;
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zTestNode".into(),
+            node_endpoint: "http://localhost:7890".into(),
+            cert_fingerprint: "sha256:deadbeef".into(),
+            admin_token: None,
+            max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+        };
+        let app = router()
+            .with_state(state)
+            .layer(DefaultBodyLimit::max(512 * 1024)); // 512 KB limit for this test
+        let req = Request::post("/api/agents")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 }
