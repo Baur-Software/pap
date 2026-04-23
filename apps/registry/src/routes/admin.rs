@@ -322,7 +322,7 @@ async fn remove_agent(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "internal error"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     if deleted {
@@ -457,7 +457,7 @@ async fn remove_peer(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "internal error"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     if deleted {
@@ -646,8 +646,8 @@ mod tests {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     async fn test_router(token: Option<&str>) -> axum::Router {
-        use axum::extract::DefaultBodyLimit;
         use crate::config::DEFAULT_MAX_BODY_BYTES;
+        use axum::extract::DefaultBodyLimit;
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
         sqlx::migrate!("src/db/migrations/sqlite")
             .run(&pool)

@@ -32,8 +32,7 @@ use std::net::{IpAddr, Ipv4Addr};
 /// - Hostname must not be a bare IP in a private range (fast path, pre-DNS)
 /// - Hostnames that fail DNS resolution at registration time are rejected
 pub async fn assert_safe_peer_url(url: &str) -> Result<(), String> {
-    let parsed = url::Url::parse(url)
-        .map_err(|e| format!("invalid peer URL: {e}"))?;
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid peer URL: {e}"))?;
 
     if parsed.scheme() != "https" {
         return Err(format!(
@@ -137,17 +136,23 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn accepts_https_public_host() {
-        assert!(assert_safe_peer_url("https://registry.example.com/").await.is_ok());
+        assert!(assert_safe_peer_url("https://registry.example.com/")
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
     async fn rejects_http_scheme() {
-        assert!(assert_safe_peer_url("http://registry.example.com/").await.is_err());
+        assert!(assert_safe_peer_url("http://registry.example.com/")
+            .await
+            .is_err());
     }
 
     #[tokio::test]
     async fn rejects_loopback_ip() {
-        assert!(assert_safe_peer_url("https://127.0.0.1:7890/").await.is_err());
+        assert!(assert_safe_peer_url("https://127.0.0.1:7890/")
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -192,17 +197,23 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_dot_local_hostname() {
-        assert!(assert_safe_peer_url("https://registry.local/").await.is_err());
+        assert!(assert_safe_peer_url("https://registry.local/")
+            .await
+            .is_err());
     }
 
     #[tokio::test]
     async fn rejects_dot_internal_hostname() {
-        assert!(assert_safe_peer_url("https://internal.corp.internal/").await.is_err());
+        assert!(assert_safe_peer_url("https://internal.corp.internal/")
+            .await
+            .is_err());
     }
 
     #[tokio::test]
     async fn rejects_ipv6_unique_local() {
-        assert!(assert_safe_peer_url("https://[fd12:3456:789a:1::1]/").await.is_err());
+        assert!(assert_safe_peer_url("https://[fd12:3456:789a:1::1]/")
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -213,6 +224,8 @@ mod tests {
     #[tokio::test]
     async fn rejects_ipv4_mapped_private() {
         // ::ffff:192.168.1.1 — IPv4-mapped private address
-        assert!(assert_safe_peer_url("https://[::ffff:192.168.1.1]/").await.is_err());
+        assert!(assert_safe_peer_url("https://[::ffff:192.168.1.1]/")
+            .await
+            .is_err());
     }
 }

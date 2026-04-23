@@ -396,10 +396,7 @@ async fn main() -> anyhow::Result<()> {
         let interval = std::time::Duration::from_secs(60);
         std::thread::spawn(move || loop {
             std::thread::sleep(interval);
-            tracing::debug!(
-                "rate limiter storage size: {}",
-                governor_limiter.len()
-            );
+            tracing::debug!("rate limiter storage size: {}", governor_limiter.len());
             governor_limiter.retain_recent();
         });
     }
