@@ -32,6 +32,11 @@ pub struct Config {
     /// and the node identity are lost.  Only meaningful for SQLite; ignored for
     /// Postgres.  Set `PAP_REGISTRY_RESET_DB=true` to enable.
     pub reset_db: bool,
+
+    /// When `true`, the server will refuse to start if `admin_token` is not
+    /// set.  Use `PAP_REGISTRY_REQUIRE_AUTH=true` in production environments
+    /// where unauthenticated admin access is unacceptable.
+    pub require_auth: bool,
 }
 
 impl Config {
@@ -62,6 +67,10 @@ impl Config {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
+        let require_auth = env::var("PAP_REGISTRY_REQUIRE_AUTH")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
         Self {
             port,
             host,
@@ -70,6 +79,7 @@ impl Config {
             no_tls,
             max_ads_per_principal,
             reset_db,
+            require_auth,
         }
     }
 
@@ -106,6 +116,7 @@ mod tests {
         env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
         env::remove_var("PAP_REGISTRY_NO_TLS");
         env::remove_var("PAP_REGISTRY_RESET_DB");
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
     }
 
     #[test]
@@ -286,5 +297,28 @@ mod tests {
 
         env::remove_var("PAP_REGISTRY_HOST");
         env::remove_var("PAP_REGISTRY_NO_TLS");
+    }
+
+    // ── require_auth ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn require_auth_defaults_false() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+
+        let cfg = Config::from_env();
+        assert!(!cfg.require_auth);
+    }
+
+    #[test]
+    fn require_auth_set_true() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+
+        let cfg = Config::from_env();
+        assert!(cfg.require_auth);
+
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
     }
 }

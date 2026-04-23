@@ -22,6 +22,29 @@ use pap_registry::routes;
 use pap_registry::state::AppState;
 use pap_transport::server::AgentServer;
 
+/// Validate the authentication configuration at startup.
+///
+/// - If `admin_token` is `None`, emit a prominent `WARN` so operators notice
+///   immediately in logs.
+/// - If `require_auth` is also `true`, bail out so the server refuses to start
+///   without a configured token (useful in hardened / production deployments).
+fn check_auth_config(config: &Config) -> anyhow::Result<()> {
+    if config.admin_token.is_none() {
+        tracing::warn!(
+            "⚠️  PAP_REGISTRY_ADMIN_TOKEN is not set — all admin endpoints are UNAUTHENTICATED. \
+             In production, set PAP_REGISTRY_ADMIN_TOKEN to a strong random secret. \
+             Set PAP_REGISTRY_REQUIRE_AUTH=true to refuse startup without a token."
+        );
+        if config.require_auth {
+            anyhow::bail!(
+                "PAP_REGISTRY_REQUIRE_AUTH=true but PAP_REGISTRY_ADMIN_TOKEN is not set. \
+                 Provide a token via PAP_REGISTRY_ADMIN_TOKEN or unset PAP_REGISTRY_REQUIRE_AUTH."
+            );
+        }
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -32,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env();
+    check_auth_config(&config)?;
 
     info!("Starting PAP Registry on {}:{}", config.host, config.port);
 
@@ -375,4 +399,59 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::sync::Mutex;
+
+    // Env-var tests must run serially to avoid races.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn clear_auth_env() {
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+        env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
+    }
+
+    #[test]
+    fn require_auth_without_token_returns_error() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+
+        let cfg = Config::from_env();
+        let result = check_auth_config(&cfg);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("PAP_REGISTRY_ADMIN_TOKEN"));
+
+        clear_auth_env();
+    }
+
+    #[test]
+    fn require_auth_with_token_is_ok() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+        env::set_var("PAP_REGISTRY_ADMIN_TOKEN", "supersecret");
+
+        let cfg = Config::from_env();
+        assert!(check_auth_config(&cfg).is_ok());
+
+        clear_auth_env();
+    }
+
+    #[test]
+    fn no_require_auth_no_token_is_ok_with_warning() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+
+        let cfg = Config::from_env();
+        // Should not error — just warn at runtime.
+        assert!(check_auth_config(&cfg).is_ok());
+    }
 }
