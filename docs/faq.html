@@ -858,7 +858,14 @@
         </button>
         <div class="faq-body">
           <p>
-            Full PyO3 bindings ship today. Async works correctly — the GIL is released during await, so concurrent handshakes don't block each other in asyncio pipelines. There's an integration guide covering LangChain, CrewAI, and MCP. The main friction right now: the package isn't on PyPI yet, so you build from source with <code>maturin develop --release</code>. For a team at the evaluation stage, that's a real speed bump. A zero-build-step <code>pip install pap</code> is on the roadmap.
+            Full PyO3 bindings ship today. Async works correctly — the GIL is released during <code>await</code>, so concurrent handshakes don't block each other in asyncio pipelines. There's an integration guide covering LangChain, CrewAI, and MCP.
+          </p>
+          <p>
+            <strong>Install from PyPI (recommended):</strong>
+          </p>
+          <pre><code>pip install pap-protocol</code></pre>
+          <p>
+            Pre-built wheels are available for Linux x86_64/aarch64, macOS universal2, and Windows x64 — no Rust toolchain required.
           </p>
           <p>
             <strong>Full PyO3 bindings ship today.</strong> <code>crates/pap-python/src/lib.rs</code>
@@ -876,15 +883,8 @@
             implementation with zero Rust dependency, for reference.
           </p>
           <p>
-            The remaining friction: the package is not yet on PyPI (build via
-            <code>maturin develop</code>) and debugging across the FFI boundary is harder than
-            debugging pure Python at the POC stage.
-          </p>
-          <p>
-            <strong>What's next:</strong> A native pure-Python <code>pap-py</code> package — zero build step,
-            <code>pip install pap</code> — parallel to <code>pap-ts</code>. For teams that want
-            zero-friction trial integration, FFI overhead is a worse tradeoff than a small
-            performance gap.
+            <strong>Building from source</strong> (for contributors or unreleased branches):
+            <code>cd crates/pap-python &amp;&amp; pip install maturin &amp;&amp; maturin develop --release</code>
           </p>
         </div>
       </div>
@@ -1100,6 +1100,11 @@
     <h2 class="glossary-heading">Glossary</h2>
     <p class="glossary-sub">Key terms used throughout this FAQ.</p>
     <dl class="glossary-grid">
+
+      <div class="glossary-term" id="gloss-agent">
+        <dt>Agent</dt>
+        <dd>A hosted program with defined inputs and outputs — the place where execution and value happen in a PAP session. Agents declare the <code>schema:*Action</code> types they perform, the data properties they require, and the schema.org types they return. They act only within the scope and TTL of a <a href="#gloss-mandate">Mandate</a> issued by the principal.</dd>
+      </div>
 
       <div class="glossary-term" id="gloss-principal">
         <dt>Principal</dt>

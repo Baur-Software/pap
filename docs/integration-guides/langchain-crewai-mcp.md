@@ -1,6 +1,6 @@
 # Integrating PAP with LangChain, CrewAI, and MCP
 
-This guide shows how to use the PAP Python SDK (`pip install pap`) to add
+This guide shows how to use the PAP Python SDK (`pip install pap-protocol`) to add
 cryptographic mandate enforcement to the three most common AI orchestration
 stacks: LangChain, CrewAI, and the Model Context Protocol (MCP).
 
@@ -11,10 +11,12 @@ verifiable scope, TTL, and selective-disclosure policy.
 ## Prerequisites
 
 ```bash
-pip install pap langchain langchain-core langchain-openai crewai mcp
+pip install pap-protocol langchain langchain-core langchain-openai crewai mcp
 ```
 
-PAP requires Python 3.8+. If you are building the Rust extension from source:
+PAP requires Python 3.8+. Pre-built wheels are available for Linux x86_64/aarch64, macOS universal2, and Windows x64 — no Rust toolchain required.
+
+If you are building from source (contributors or unreleased branches):
 
 ```bash
 cd crates/pap-python
