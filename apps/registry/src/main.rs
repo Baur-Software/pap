@@ -73,11 +73,21 @@ async fn main() -> anyhow::Result<()> {
     // PAP_REGISTRY_RESET_DB=true: wipe the SQLite file so migrations start
     // from a clean slate.  Use this to recover from "migration was previously
     // applied but has been modified" errors during development.
-    if config.reset_db {
+    // Both PAP_REGISTRY_RESET_DB=true AND PAP_REGISTRY_RESET_DB_CONFIRM=yes-i-understand
+    // must be set — the confirmation guard prevents accidental production wipes.
+    if config.reset_db && !config.reset_db_confirmed() {
+        tracing::warn!(
+            "PAP_REGISTRY_RESET_DB is set but PAP_REGISTRY_RESET_DB_CONFIRM is not set to \
+             'yes-i-understand'. Database will NOT be reset. \
+             Set both env vars to confirm destructive operation."
+        );
+    }
+    if config.reset_db_confirmed() {
         if let Some(path) = db_cfg.sqlite_file_path() {
             if std::path::Path::new(&path).exists() {
                 tracing::warn!(
-                    "PAP_REGISTRY_RESET_DB=true — deleting existing database at {path}. \
+                    "PAP_REGISTRY_RESET_DB=true + PAP_REGISTRY_RESET_DB_CONFIRM confirmed — \
+                     deleting existing database at {path}. \
                      All agents, peers, and node identity will be regenerated."
                 );
                 std::fs::remove_file(&path)

@@ -37,6 +37,13 @@ pub struct Config {
     /// Postgres.  Set `PAP_REGISTRY_RESET_DB=true` to enable.
     pub reset_db: bool,
 
+    /// Confirmation guard for the destructive `reset_db` operation.
+    /// Must be set to `"yes-i-understand"` via `PAP_REGISTRY_RESET_DB_CONFIRM`
+    /// in addition to `PAP_REGISTRY_RESET_DB=true` for the wipe to occur.
+    /// This two-variable requirement prevents accidental DB deletion in production
+    /// when operators copy env files or set `RESET_DB` without realising the impact.
+    pub reset_db_confirm: bool,
+
     /// When `true`, the server will refuse to start if `admin_token` is not
     /// set.  Use `PAP_REGISTRY_REQUIRE_AUTH=true` in production environments
     /// where unauthenticated admin access is unacceptable.
@@ -85,6 +92,10 @@ impl Config {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
+        let reset_db_confirm = env::var("PAP_REGISTRY_RESET_DB_CONFIRM")
+            .map(|v| v.eq_ignore_ascii_case("yes-i-understand"))
+            .unwrap_or(false);
+
         let require_auth = env::var("PAP_REGISTRY_REQUIRE_AUTH")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
@@ -112,11 +123,21 @@ impl Config {
             no_tls,
             max_ads_per_principal,
             reset_db,
+            reset_db_confirm,
             require_auth,
             max_body_bytes,
             rate_limit_rps,
             rate_limit_burst,
         }
+    }
+
+    /// Returns `true` only when both `reset_db` is set **and** the operator has
+    /// provided the explicit confirmation string `"yes-i-understand"` via
+    /// `PAP_REGISTRY_RESET_DB_CONFIRM`.  This two-variable guard prevents
+    /// accidental database wipes when `RESET_DB=true` is copied from a dev
+    /// env file into production without understanding the consequences.
+    pub fn reset_db_confirmed(&self) -> bool {
+        self.reset_db && self.reset_db_confirm
     }
 
     /// Build the default CORS origin allowlist from env config.
@@ -152,6 +173,7 @@ mod tests {
         env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
         env::remove_var("PAP_REGISTRY_NO_TLS");
         env::remove_var("PAP_REGISTRY_RESET_DB");
+        env::remove_var("PAP_REGISTRY_RESET_DB_CONFIRM");
         env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
         env::remove_var("PAP_REGISTRY_MAX_BODY_BYTES");
         env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
@@ -412,5 +434,35 @@ mod tests {
 
         env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
         env::remove_var("PAP_REGISTRY_RATE_LIMIT_BURST");
+    }
+
+    // ── reset_db_confirmed ────────────────────────────────────────────────────
+
+    #[test]
+    fn reset_db_requires_confirmation() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        let cfg = Config::from_env();
+        assert!(!cfg.reset_db_confirmed());
+    }
+
+    #[test]
+    fn reset_db_confirmed_when_both_set() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "yes-i-understand");
+        let cfg = Config::from_env();
+        assert!(cfg.reset_db_confirmed());
+    }
+
+    #[test]
+    fn reset_db_false_even_with_confirmation() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "yes-i-understand");
+        let cfg = Config::from_env();
+        assert!(!cfg.reset_db_confirmed());
     }
 }
