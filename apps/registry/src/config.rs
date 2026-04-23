@@ -37,6 +37,11 @@ pub struct Config {
     /// set.  Use `PAP_REGISTRY_REQUIRE_AUTH=true` in production environments
     /// where unauthenticated admin access is unacceptable.
     pub require_auth: bool,
+
+    /// Maximum allowed HTTP request body size in bytes.
+    /// Requests exceeding this limit are rejected with 413 Payload Too Large.
+    /// Default: 262144 (256 KB). Override via `PAP_REGISTRY_MAX_BODY_BYTES`.
+    pub max_body_bytes: usize,
 }
 
 impl Config {
@@ -71,6 +76,11 @@ impl Config {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
+        let max_body_bytes = env::var("PAP_REGISTRY_MAX_BODY_BYTES")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(256 * 1024); // 256 KB default
+
         Self {
             port,
             host,
@@ -80,6 +90,7 @@ impl Config {
             max_ads_per_principal,
             reset_db,
             require_auth,
+            max_body_bytes,
         }
     }
 

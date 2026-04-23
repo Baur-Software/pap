@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::Context as _;
 
+use axum::extract::DefaultBodyLimit;
 use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
@@ -375,6 +376,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
+        .layer(DefaultBodyLimit::max(config.max_body_bytes))
         .layer(cors);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;

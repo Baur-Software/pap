@@ -599,6 +599,7 @@ mod tests {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     async fn test_router(token: Option<&str>) -> axum::Router {
+        use axum::extract::DefaultBodyLimit;
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
         sqlx::migrate!("src/db/migrations/sqlite")
             .run(&pool)
@@ -616,7 +617,9 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
         };
-        router().with_state(state)
+        router()
+            .with_state(state)
+            .layer(DefaultBodyLimit::max(256 * 1024))
     }
 
     fn signed_ad(name: &str) -> AgentAdvertisement {
@@ -1458,6 +1461,21 @@ mod tests {
             acao.is_none() || acao == Some(""),
             "unlisted origin must not receive Access-Control-Allow-Origin, got: {acao:?}"
         );
+    }
+
+    // ── Body size limit ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn post_agents_rejects_oversized_body() {
+        let app = test_router(None).await;
+        // 300 KB — well above 256 KB limit
+        let large_body = "x".repeat(300 * 1024);
+        let req = Request::post("/api/agents")
+            .header("content-type", "application/json")
+            .body(Body::from(large_body))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 
     #[tokio::test]
