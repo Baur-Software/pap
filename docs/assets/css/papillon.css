@@ -42,6 +42,10 @@ nav { background: rgba(6,6,9,.85); }
 .btn-outline:hover { border-color: var(--indigo); color: var(--indigo); }
 
 /* ─── Hero ────────────────────────────────────────────────────────────────── */
+.hero-icon {
+  width: 80px; height: 80px; border-radius: 16px;
+  margin: 0 auto 20px; display: block;
+}
 .hero {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
   text-align: center; padding: 120px 24px 80px; position: relative;
