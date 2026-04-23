@@ -1,0 +1,239 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   PAP Docs — Shared Design System
+   All common tokens, reset, nav, buttons, footer, utilities.
+   Page-specific styles live in each page's own CSS file.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  /* Palette — dark (default) */
+  --bg:        #0c0b14;
+  --surface:   #151420;
+  --surface2:  #1f1e2e;
+  --border:    #2c2b40;
+  --border2:   #353455;
+  --indigo:    #6c5ce7;
+  --violet:    #8b7ff5;
+  --teal:      #2ec4a0;
+  --amber:     #f0a030;
+  --coral:     #e8706a;
+  --red:       #e8706a;
+  --text:      #eeeef2;
+  --muted:     #9494a8;
+  --faint:     #6a6a80;
+  /* Sizing */
+  --radius:    8px;
+  --radius-lg: 12px;
+  /* Fonts */
+  --font-display: 'Satoshi', -apple-system, sans-serif;
+  --font-body:    'DM Sans', -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', 'SF Mono', monospace;
+  scroll-behavior: smooth;
+}
+
+/* ─── Light mode ─────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:       #faf9fc;
+    --surface:  #f0eff5;
+    --surface2: #e6e5ee;
+    --border:   #d0cfdc;
+    --border2:  #bbb9cc;
+    --text:     #1a1928;
+    --muted:    #5c5b70;
+    --faint:    #8888a0;
+  }
+  nav { background: rgba(250,249,252,.9); }
+}
+
+/* ─── Forced color-scheme toggle via [data-theme] ───────────────────────── */
+[data-theme="light"] {
+  --bg:       #faf9fc;
+  --surface:  #f0eff5;
+  --surface2: #e6e5ee;
+  --border:   #d0cfdc;
+  --border2:  #bbb9cc;
+  --text:     #1a1928;
+  --muted:    #5c5b70;
+  --faint:    #8888a0;
+}
+[data-theme="light"] nav { background: rgba(250,249,252,.9); }
+[data-theme="dark"] {
+  --bg:       #0c0b14;
+  --surface:  #151420;
+  --surface2: #1f1e2e;
+  --border:   #2c2b40;
+  --border2:  #353455;
+  --text:     #eeeef2;
+  --muted:    #9494a8;
+  --faint:    #6a6a80;
+}
+[data-theme="dark"] nav { background: rgba(12,11,20,.85); }
+
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: rgba(108,92,231,.35); }
+a { color: var(--indigo); text-decoration: none; }
+a:hover { color: var(--violet); }
+img { max-width: 100%; }
+
+/* ─── Utility ────────────────────────────────────────────────────────────── */
+.container    { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+.container-md { max-width: 800px;  margin: 0 auto; padding: 0 24px; }
+.section      { padding: 96px 0; }
+.section-sm   { padding: 56px 0; }
+.divider      { height: 1px; background: var(--border); }
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--indigo), var(--violet));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gh-icon { width: 18px; height: 18px; fill: currentColor; }
+
+/* ─── Navigation ─────────────────────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(12,11,20,.85);
+  backdrop-filter: blur(16px) saturate(1.5);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner {
+  max-width: 1100px; margin: 0 auto; padding: 0 24px;
+  height: 64px; display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--text);
+}
+.nav-logo img { height: 32px; width: auto; }
+.nav-wordmark {
+  font-family: var(--font-display); font-weight: 700; font-size: 1.1rem;
+  letter-spacing: -.02em;
+}
+.nav-links {
+  display: flex; align-items: center; gap: 8px; list-style: none;
+}
+.nav-links a {
+  color: var(--muted); font-size: .9rem; font-weight: 500;
+  padding: 6px 12px; border-radius: var(--radius);
+  transition: all .15s ease;
+}
+.nav-links a:hover { color: var(--text); background: rgba(128,128,128,.08); }
+.nav-links a[aria-current="page"] { color: var(--text); }
+.nav-link-icon {
+  font-family: var(--font-mono);
+  font-size: .65rem; font-weight: 700;
+  background: linear-gradient(135deg, var(--indigo), var(--violet));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.nav-link-icon-img {
+  width: 18px; height: 18px; object-fit: contain; vertical-align: middle;
+}
+.nav-cta { display: flex; align-items: center; gap: 10px; }
+
+/* Theme toggle button */
+.nav-theme-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: var(--radius);
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--muted); cursor: pointer;
+  transition: all .15s ease;
+  flex-shrink: 0;
+}
+.nav-theme-toggle:hover { border-color: var(--indigo); color: var(--indigo); }
+.nav-theme-toggle svg { width: 16px; height: 16px; fill: currentColor; }
+/* Show the right icon depending on current theme */
+.icon-sun  { display: none; }
+.icon-moon { display: block; }
+[data-theme="light"] .icon-sun  { display: block; }
+[data-theme="light"] .icon-moon { display: none; }
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) .icon-sun  { display: block; }
+  html:not([data-theme]) .icon-moon { display: none; }
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px; border-radius: var(--radius);
+  font-size: .9rem; font-weight: 600;
+  transition: all .15s ease; cursor: pointer; border: none;
+  font-family: var(--font-body); text-decoration: none;
+}
+.btn-primary {
+  background: var(--indigo); color: #fff;
+}
+.btn-primary:hover {
+  background: #5b4bd6; color: #fff; transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(108,92,231,.35);
+}
+.btn-outline {
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border2);
+}
+.btn-outline:hover {
+  border-color: var(--indigo); color: var(--indigo); transform: translateY(-1px);
+}
+.btn-lg { padding: 14px 32px; font-size: 1rem; }
+.btn-work-with-us {
+  background: linear-gradient(135deg, var(--indigo), var(--violet));
+  color: #fff; font-size: .85rem; padding: 8px 18px;
+}
+.btn-work-with-us:hover {
+  color: #fff; transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(108,92,231,.4);
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 0;
+}
+.footer-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 16px;
+  font-size: .8rem; color: var(--faint);
+}
+.footer-wordmark {
+  font-family: var(--font-display); font-weight: 700; font-size: 1rem;
+  background: linear-gradient(135deg, var(--indigo), var(--violet));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+.footer-links a { color: var(--faint); transition: color .15s; font-size: .85rem; }
+.footer-links a:hover { color: var(--muted); }
+.footer-copy {
+  font-family: var(--font-mono); font-size: .8rem; color: var(--faint);
+}
+
+/* ─── Reveal animations ──────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0; transform: translateY(20px);
+  transition: opacity .5s ease, transform .5s ease;
+}
+.reveal.visible { opacity: 1; transform: none; }
+.reveal-delay-1 { transition-delay: .1s; }
+.reveal-delay-2 { transition-delay: .2s; }
+.reveal-delay-3 { transition-delay: .3s; }
+.reveal-delay-4 { transition-delay: .4s; }
+.reveal-delay-5 { transition-delay: .5s; }
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .footer-inner { flex-direction: column; gap: 12px; text-align: center; }
+}

@@ -18,331 +18,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:        #0c0b14;
-      --surface:   #151420;
-      --surface2:  #1f1e2e;
-      --border:    #2c2b40;
-      --border2:   #353455;
-      --indigo:    #6c5ce7;
-      --violet:    #8b7ff5;
-      --teal:      #2ec4a0;
-      --amber:     #f0a030;
-      --coral:     #e17055;
-      --text:      #eeeef2;
-      --muted:     #9494a8;
-      --faint:     #6a6a80;
-      --radius:    8px;
-      --radius-lg: 12px;
-      scroll-behavior: smooth;
-    }
-    html { font-size: 16px; }
-    body {
-      font-family: 'DM Sans', -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-    ::selection { background: rgba(108,92,231,.35); }
-    a { color: var(--indigo); text-decoration: none; }
-    a:hover { color: var(--violet); }
-    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-    .container-md { max-width: 800px; margin: 0 auto; padding: 0 24px; }
-    .gradient-text {
-      background: linear-gradient(135deg, var(--indigo), var(--violet));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .gh-icon { width: 18px; height: 18px; fill: currentColor; }
-
-    /* ─── Nav ─────────────────────────────────────────────────────────── */
-    nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      background: rgba(12,11,20,.85);
-      backdrop-filter: blur(16px) saturate(1.5);
-      border-bottom: 1px solid var(--border);
-    }
-    .nav-inner {
-      max-width: 1100px; margin: 0 auto; padding: 0 24px;
-      height: 64px; display: flex; align-items: center; justify-content: space-between;
-    }
-    .nav-logo {
-      display: flex; align-items: center; gap: 10px;
-      text-decoration: none; color: var(--text);
-    }
-    .nav-logo img { height: 32px; width: auto; }
-    .nav-wordmark {
-      font-family: 'Satoshi', sans-serif; font-weight: 700; font-size: 1.1rem;
-      letter-spacing: -.02em;
-    }
-    .nav-links {
-      display: flex; align-items: center; gap: 8px; list-style: none;
-    }
-    .nav-links a {
-      color: var(--muted); font-size: .9rem; font-weight: 500;
-      padding: 6px 12px; border-radius: var(--radius);
-      transition: all .15s ease;
-    }
-    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,.05); }
-    .nav-links a[aria-current="page"] { color: var(--text); }
-    .nav-link-icon {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: .65rem; font-weight: 700;
-      background: linear-gradient(135deg, var(--indigo), var(--violet));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
-    .nav-cta { display: flex; align-items: center; gap: 10px; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 10px 20px; border-radius: var(--radius);
-      font-size: .9rem; font-weight: 600;
-      transition: all .15s ease; cursor: pointer; border: none;
-      font-family: 'DM Sans', sans-serif;
-    }
-    .btn-outline {
-      background: transparent; color: var(--text);
-      border: 1px solid var(--border2);
-    }
-    .btn-outline:hover { border-color: var(--indigo); color: var(--indigo); transform: translateY(-1px); }
-    @media (max-width: 768px) { .nav-links { display: none; } }
-
-    /* ─── Hero ────────────────────────────────────────────────────────── */
-    .hero {
-      padding: 140px 0 72px; text-align: center; position: relative;
-    }
-    .hero-bg {
-      position: absolute; inset: 0; pointer-events: none; overflow: hidden;
-    }
-    .hero-bg::before {
-      content: '';
-      position: absolute;
-      top: -10%; left: 50%; transform: translateX(-50%);
-      width: 700px; height: 700px;
-      background: radial-gradient(ellipse at center,
-        rgba(108,92,231,.09) 0%,
-        rgba(139,127,245,.04) 40%,
-        transparent 70%);
-    }
-    .hero .container { position: relative; z-index: 1; }
-    .hero-eyebrow {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.25);
-      border-radius: 99px; padding: 6px 16px;
-      font-size: .78rem; font-weight: 600; letter-spacing: .06em;
-      text-transform: uppercase; color: var(--violet);
-      margin-bottom: 24px;
-    }
-    .hero h1 {
-      font-family: 'Satoshi', sans-serif;
-      font-size: clamp(2rem, 5vw, 3.25rem);
-      font-weight: 900; letter-spacing: -.03em;
-      line-height: 1.1; margin-bottom: 20px;
-    }
-    .hero-sub {
-      font-size: 1.1rem; color: var(--muted); max-width: 560px;
-      margin: 0 auto 12px; line-height: 1.65;
-    }
-    .hero-note {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: .75rem; color: var(--faint);
-    }
-
-    /* ─── Category filter pills ───────────────────────────────────────── */
-    .filter-row {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      justify-content: center; margin-bottom: 40px;
-    }
-    .filter-pill {
-      padding: 5px 14px; border-radius: 99px;
-      font-size: .78rem; font-weight: 600; letter-spacing: .04em;
-      cursor: pointer; border: 1px solid transparent;
-      transition: all .15s ease; background: var(--surface);
-      border-color: var(--border); color: var(--muted);
-      font-family: 'DM Sans', sans-serif;
-    }
-    .filter-pill:hover { border-color: var(--border2); color: var(--text); }
-    .filter-pill.active { color: var(--text); }
-    .filter-pill[data-cat="all"].active { border-color: var(--border2); background: var(--surface2); }
-    .filter-pill[data-cat="trust"].active      { border-color: rgba(108,92,231,.4); background: rgba(108,92,231,.08); color: var(--violet); }
-    .filter-pill[data-cat="crypto"].active     { border-color: rgba(46,196,160,.4); background: rgba(46,196,160,.08); color: var(--teal); }
-    .filter-pill[data-cat="governance"].active { border-color: rgba(240,160,48,.4); background: rgba(240,160,48,.08); color: var(--amber); }
-    .filter-pill[data-cat="latency"].active    { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
-    .filter-pill[data-cat="compliance"].active { border-color: rgba(225,112,85,.4); background: rgba(225,112,85,.08); color: var(--coral); }
-    .filter-pill[data-cat="dx"].active         { border-color: rgba(46,196,160,.4); background: rgba(46,196,160,.08); color: var(--teal); }
-    .filter-pill[data-cat="enterprise"].active { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
-
-    /* ─── FAQ accordion ───────────────────────────────────────────────── */
-    .faq-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 80px; }
-    .faq-item {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-lg); overflow: hidden;
-      transition: border-color .2s ease;
-    }
-    .faq-item:hover { border-color: var(--border2); }
-    .faq-item.open { border-color: var(--border2); }
-
-    /* left accent bar by category */
-    .faq-item[data-cat="trust"]      { border-left: 3px solid rgba(108,92,231,.5); }
-    .faq-item[data-cat="crypto"]     { border-left: 3px solid rgba(46,196,160,.5); }
-    .faq-item[data-cat="governance"] { border-left: 3px solid rgba(240,160,48,.5); }
-    .faq-item[data-cat="latency"]    { border-left: 3px solid rgba(139,127,245,.5); }
-    .faq-item[data-cat="compliance"] { border-left: 3px solid rgba(225,112,85,.5); }
-    .faq-item[data-cat="dx"]         { border-left: 3px solid rgba(46,196,160,.5); }
-    .faq-item[data-cat="enterprise"] { border-left: 3px solid rgba(139,127,245,.5); }
-
-    .faq-q {
-      width: 100%; display: flex; align-items: flex-start; gap: 16px;
-      padding: 20px 24px; background: transparent; border: none; cursor: pointer;
-      text-align: left; color: var(--text);
-      font-family: 'DM Sans', sans-serif; font-size: 1rem; font-weight: 600;
-      line-height: 1.4;
-    }
-    .faq-q:focus-visible { outline: 2px solid var(--indigo); outline-offset: -2px; }
-    .faq-q-left { display: flex; align-items: flex-start; gap: 14px; flex: 1; }
-    .faq-num {
-      min-width: 28px; height: 28px; border-radius: 50%;
-      background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.2);
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'JetBrains Mono', monospace; font-size: .72rem; font-weight: 700;
-      color: var(--violet); flex-shrink: 0; margin-top: 1px;
-    }
-    .faq-q-text { flex: 1; }
-    .faq-badge {
-      display: inline-flex; align-items: center;
-      padding: 2px 10px; border-radius: 99px;
-      font-size: .68rem; font-weight: 700; letter-spacing: .05em;
-      text-transform: uppercase; margin-bottom: 4px;
-    }
-    .badge-trust      { background: rgba(108,92,231,.12); color: var(--violet); }
-    .badge-crypto     { background: rgba(46,196,160,.12); color: var(--teal); }
-    .badge-governance { background: rgba(240,160,48,.12); color: var(--amber); }
-    .badge-latency    { background: rgba(139,127,245,.12); color: var(--violet); }
-    .badge-compliance { background: rgba(225,112,85,.12); color: var(--coral); }
-    .badge-dx         { background: rgba(46,196,160,.12); color: var(--teal); }
-    .badge-enterprise { background: rgba(139,127,245,.12); color: var(--violet); }
-
-    .faq-chevron {
-      width: 20px; height: 20px; flex-shrink: 0; margin-top: 4px;
-      color: var(--faint); transition: transform .25s ease;
-    }
-    .faq-item.open .faq-chevron { transform: rotate(180deg); }
-
-    .faq-body {
-      max-height: 0; overflow: hidden;
-      transition: max-height .35s ease, padding .25s ease;
-      padding: 0 24px 0 66px;
-    }
-    .faq-item.open .faq-body { max-height: 1600px; padding: 0 24px 24px 66px; }
-
-    .faq-body p { color: var(--muted); font-size: .93rem; line-height: 1.75; margin-bottom: 12px; }
-    .faq-body p:last-child { margin-bottom: 0; }
-    .faq-body strong { color: var(--text); font-weight: 600; }
-    .faq-body code {
-      font-family: 'JetBrains Mono', monospace; font-size: .82em;
-      background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 4px;
-      color: var(--teal);
-    }
-    .faq-body a { color: var(--indigo); }
-    .faq-body a:hover { color: var(--violet); }
-    .roadmap-tag {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: .75rem; font-weight: 600; letter-spacing: .04em;
-      color: var(--amber); background: rgba(240,160,48,.1);
-      border: 1px solid rgba(240,160,48,.2);
-      border-radius: 6px; padding: 3px 9px; margin-top: 10px;
-    }
-
-    /* ─── Glossary ───────────────────────────────────────────────────── */
-    .glossary-section {
-      margin: 0 auto 80px;
-      max-width: 800px; padding: 0 24px;
-    }
-    .glossary-heading {
-      font-family: 'Satoshi', sans-serif; font-weight: 700;
-      font-size: 1.1rem; letter-spacing: -.01em;
-      color: var(--text); margin-bottom: 6px;
-    }
-    .glossary-sub {
-      font-size: .83rem; color: var(--faint);
-      margin-bottom: 28px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .glossary-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 1px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      background: var(--border);
-    }
-    .glossary-term {
-      background: var(--surface);
-      padding: 16px 20px;
-    }
-    .glossary-term dt {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: .82rem; font-weight: 600;
-      color: var(--violet); margin-bottom: 5px;
-    }
-    .glossary-term dd {
-      font-size: .87rem; color: var(--muted);
-      line-height: 1.6; margin: 0;
-    }
-    .glossary-term dd code {
-      font-family: 'JetBrains Mono', monospace; font-size: .82em;
-      background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 4px;
-      color: var(--teal);
-    }
-    /* glossary link style inside faq bodies */
-    .faq-body a.gloss {
-      color: var(--violet);
-      text-decoration: underline;
-      text-decoration-style: dotted;
-      text-decoration-color: rgba(139,127,245,.4);
-      text-underline-offset: 2px;
-    }
-    .faq-body a.gloss:hover {
-      color: var(--text);
-      text-decoration-color: var(--violet);
-    }
-
-    /* ─── Footer ──────────────────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border); padding: 40px 0;
-      display: flex; flex-direction: column; align-items: center; gap: 16px;
-      text-align: center;
-    }
-    .footer-wordmark {
-      font-family: 'Satoshi', sans-serif; font-weight: 700; font-size: 1rem;
-      background: linear-gradient(135deg, var(--indigo), var(--violet));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .footer-links { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
-    .footer-links a { font-size: .85rem; color: var(--muted); transition: color .15s; }
-    .footer-links a:hover { color: var(--text); }
-    .footer-copy { font-size: .8rem; color: var(--faint); font-family: 'JetBrains Mono', monospace; }
-
-    /* ─── Reveal animations ───────────────────────────────────────────── */
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .5s ease, transform .5s ease; }
-    .reveal.visible { opacity: 1; transform: none; }
-    .reveal-delay-1 { transition-delay: .05s; }
-    .reveal-delay-2 { transition-delay: .1s; }
-  </style>
+  <!-- Styles -->
+  <link rel="stylesheet" href="assets/css/shared.css" />
+  <link rel="stylesheet" href="assets/css/faq.css" />
 </head>
 <body>
 
 <!-- ─── Nav ────────────────────────────────────────────────────────────── -->
-<nav>
+<nav aria-label="Main navigation">
   <div class="nav-inner">
     <a href="index.html" class="nav-logo" aria-label="Baur Software">
-      <img src="assets/images/papillon-icon.png" alt="" />
+      <img src="https://www.baursoftware.com/wp-content/uploads/2025/11/cropped-Artboard-1.png" alt="Baur Software logo" />
       <span class="nav-wordmark">Baur Software</span>
     </a>
     <ul class="nav-links" role="list">
@@ -354,6 +40,10 @@
       <li><a href="get-pap.html">Work With Us</a></li>
     </ul>
     <div class="nav-cta">
+      <button class="nav-theme-toggle" aria-label="Toggle light/dark mode">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.515 4.929l1.414-1.414L7.05 5.636 5.636 7.05 3.515 4.93zM16.95 18.364l1.414-1.414 2.121 2.121-1.414 1.414-2.121-2.121zm2.121-14.85 1.414 1.415-2.121 2.121-1.414-1.414 2.121-2.121zM5.636 16.95l1.414 1.414-2.121 2.121-1.414-1.414 2.121-2.121zM23 11v2h-3v-2h3zM4 11v2H1v-2h3z"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+      </button>
       <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener" aria-label="View on GitHub">
         <svg class="gh-icon" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
         GitHub
@@ -858,7 +548,14 @@
         </button>
         <div class="faq-body">
           <p>
-            Full PyO3 bindings ship today. Async works correctly — the GIL is released during await, so concurrent handshakes don't block each other in asyncio pipelines. There's an integration guide covering LangChain, CrewAI, and MCP. The main friction right now: the package isn't on PyPI yet, so you build from source with <code>maturin develop --release</code>. For a team at the evaluation stage, that's a real speed bump. A zero-build-step <code>pip install pap</code> is on the roadmap.
+            Full PyO3 bindings ship today. Async works correctly — the GIL is released during <code>await</code>, so concurrent handshakes don't block each other in asyncio pipelines. There's an integration guide covering LangChain, CrewAI, and MCP.
+          </p>
+          <p>
+            <strong>Install from PyPI (recommended):</strong>
+          </p>
+          <pre><code>pip install pap-protocol</code></pre>
+          <p>
+            Pre-built wheels are available for Linux x86_64/aarch64, macOS universal2, and Windows x64 — no Rust toolchain required.
           </p>
           <p>
             <strong>Full PyO3 bindings ship today.</strong> <code>crates/pap-python/src/lib.rs</code>
@@ -876,15 +573,8 @@
             implementation with zero Rust dependency, for reference.
           </p>
           <p>
-            The remaining friction: the package is not yet on PyPI (build via
-            <code>maturin develop</code>) and debugging across the FFI boundary is harder than
-            debugging pure Python at the POC stage.
-          </p>
-          <p>
-            <strong>What's next:</strong> A native pure-Python <code>pap-py</code> package — zero build step,
-            <code>pip install pap</code> — parallel to <code>pap-ts</code>. For teams that want
-            zero-friction trial integration, FFI overhead is a worse tradeoff than a small
-            performance gap.
+            <strong>Building from source</strong> (for contributors or unreleased branches):
+            <code>cd crates/pap-python &amp;&amp; pip install maturin &amp;&amp; maturin develop --release</code>
           </p>
         </div>
       </div>
@@ -1101,6 +791,11 @@
     <p class="glossary-sub">Key terms used throughout this FAQ.</p>
     <dl class="glossary-grid">
 
+      <div class="glossary-term" id="gloss-agent">
+        <dt>Agent</dt>
+        <dd>A hosted program with defined inputs and outputs — the place where execution and value happen in a PAP session. Agents declare the <code>schema:*Action</code> types they perform, the data properties they require, and the schema.org types they return. They act only within the scope and TTL of a <a href="#gloss-mandate">Mandate</a> issued by the principal.</dd>
+      </div>
+
       <div class="glossary-term" id="gloss-principal">
         <dt>Principal</dt>
         <dd>The human whose data and intent drives a PAP session. The principal holds the root Ed25519 keypair and is the only entity that can issue or authorize mandates. Agents act <em>on behalf of</em> the principal, never independently.</dd>
@@ -1226,5 +921,6 @@
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 </script>
 
+<script src="assets/js/theme.js"></script>
 </body>
 </html>

@@ -13,11 +13,10 @@ The Provider Agent Protocol (PAP) is a lightweight interoperability standard tha
 
 Install dependencies:
 ```bash
-pip install pap langchain langchain-core langchain-openai crewai mcp
-
-# Note: if pap is not yet available on PyPI, build from source:
-# cd crates/pap-python && pip install maturin && maturin develop --release
+pip install pap-protocol langchain langchain-core langchain-openai crewai mcp
 ```
+
+Pre-built wheels are available for Linux x86_64/aarch64, macOS universal2, and Windows x64 — no Rust toolchain required. To build from source (contributors or unreleased branches): `cd crates/pap-python && pip install maturin && maturin develop --release`
 
 ## What You'll Build
 

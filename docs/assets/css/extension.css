@@ -1,0 +1,126 @@
+/* ─── extension/index.html — Browser extension landing page ─────────────── */
+
+/* ─── Page layout ────────────────────────────────────────────────────────── */
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 144px 24px 80px;
+}
+
+/* ─── Hero ────────────────────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  margin-bottom: 64px;
+}
+.hero-logo {
+  width: 96px; height: 96px;
+  margin-bottom: 24px;
+  border-radius: 16px;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: 40px; font-weight: 700;
+  letter-spacing: -0.02em; margin-bottom: 16px;
+}
+.hero h1 span { color: var(--indigo); }
+.hero p {
+  font-size: 18px; color: var(--muted);
+  max-width: 480px; margin: 0 auto 32px;
+}
+.hero-actions {
+  display: flex; gap: 12px;
+  justify-content: center; flex-wrap: wrap;
+}
+
+/* ─── Button overrides (extension uses border on base + secondary variant) ── */
+.btn { border: 1px solid var(--border); }
+.btn-primary {
+  background: var(--indigo);
+  border-color: var(--indigo);
+  color: #fff;
+  padding: 12px 24px; font-size: 15px; font-weight: 500;
+}
+.btn-primary:hover {
+  background: #7f6ff0;
+  border-color: #7f6ff0;
+  color: #fff;
+}
+.btn-secondary {
+  background: var(--surface2); color: var(--text);
+  padding: 12px 24px; font-size: 15px; font-weight: 500;
+}
+.btn-secondary:hover { background: var(--border); }
+
+/* ─── Features grid ──────────────────────────────────────────────────────── */
+.features {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 16px; margin-bottom: 64px;
+}
+@media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
+
+.feature {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px;
+}
+.feature-icon { font-size: 24px; margin-bottom: 12px; }
+.feature h3 {
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 700; margin-bottom: 8px;
+}
+.feature p { font-size: 14px; color: var(--muted); }
+
+/* ─── Protocol URI section ───────────────────────────────────────────────── */
+.protocol {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 32px; margin-bottom: 64px;
+}
+.protocol h2 {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 700; margin-bottom: 16px;
+}
+.uri-examples { display: flex; flex-direction: column; gap: 8px; }
+.uri-example {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 16px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.uri-scheme {
+  font-family: var(--font-mono);
+  font-size: 14px; color: var(--indigo); min-width: 200px;
+}
+.uri-desc { font-size: 13px; color: var(--faint); }
+
+/* ─── Handshake phases ───────────────────────────────────────────────────── */
+.phases { margin-bottom: 64px; }
+.phases h2 {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 700;
+  margin-bottom: 24px; text-align: center;
+}
+.phase-list { display: flex; flex-direction: column; gap: 0; }
+.phase {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 0; border-bottom: 1px solid var(--border);
+}
+.phase:last-child { border-bottom: none; }
+.phase-num {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 14px; font-weight: 700;
+  background: rgba(108,92,231,.12); color: var(--indigo); flex-shrink: 0;
+}
+.phase-info h4 {
+  font-family: var(--font-body);
+  font-size: 15px; font-weight: 500; margin-bottom: 2px;
+}
+.phase-info p { font-size: 13px; color: var(--faint); }
+
+/* ─── Footer override ────────────────────────────────────────────────────── */
+footer {
+  text-align: center; padding-top: 32px;
+  border-top: 1px solid var(--border);
+  padding-bottom: 0;
+}
+footer p { font-size: 13px; color: var(--faint); }
+footer a { color: var(--indigo); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
