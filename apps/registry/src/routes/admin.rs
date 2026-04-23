@@ -142,6 +142,18 @@ async fn list_agents(
         return auth_error();
     }
     let per_page = params.per_page.clamp(1, 200);
+    const MAX_QUERY_LEN: usize = 512;
+    if let Some(ref q) = params.q {
+        if q.len() > MAX_QUERY_LEN {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("search query too long: max {MAX_QUERY_LEN} bytes")
+                })),
+            )
+                .into_response();
+        }
+    }
     match state
         .store
         .search_agents(
@@ -239,6 +251,21 @@ async fn register_agent(
                 .into_response();
         }
         Ok(_) => {} // under limit — proceed
+    }
+
+    // Agent advertisement JSON size check (spec §10.2).
+    const MAX_AD_JSON_BYTES: usize = 32 * 1024; // 32 KB
+    let ad_json_size = serde_json::to_string(&ad)
+        .map(|s| s.len())
+        .unwrap_or(usize::MAX);
+    if ad_json_size > MAX_AD_JSON_BYTES {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(serde_json::json!({
+                "error": format!("agent advertisement too large: max {MAX_AD_JSON_BYTES} bytes")
+            })),
+        )
+            .into_response();
     }
 
     // DB first — persist before updating in-memory state.
@@ -1629,5 +1656,84 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS,
             "principal A second ad should be rejected with 429"
         );
+    }
+
+    // ── Task 5: Input size caps ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn search_rejects_oversized_query() {
+        let app = test_router(None).await;
+        let long_q = "a".repeat(513);
+        let req = Request::builder()
+            .method("GET")
+            .uri(&format!("/api/agents?q={long_q}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn search_accepts_query_at_limit() {
+        let app = test_router(None).await;
+        let max_q = "a".repeat(512);
+        let req = Request::builder()
+            .method("GET")
+            .uri(&format!("/api/agents?q={max_q}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn register_oversized_ad_json_returns_413() {
+        let app = test_router(None).await;
+        // Create a signed ad with a very large name field (33 KB) so the
+        // serialized advertisement exceeds the 32 KB ad_json limit.
+        let key = SigningKey::generate(&mut OsRng);
+        let kp = PrincipalKeypair::from_bytes(&key.to_bytes()).unwrap();
+        let did = kp.did();
+        let large_name = "x".repeat(33 * 1024);
+        let mut ad = AgentAdvertisement::new(
+            &large_name,
+            "Corp",
+            &did,
+            vec!["schema:SearchAction".into()],
+            vec![],
+            vec![],
+            vec![],
+        );
+        ad.sign(&key).expect("Ed25519 is always supported");
+        let body = serde_json::to_vec(&ad).unwrap();
+        // The serialized body is large — use a higher body limit so axum doesn't
+        // intercept it before our handler check (the handler check is more specific).
+        use axum::extract::DefaultBodyLimit;
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("src/db/migrations/sqlite")
+            .run(&pool)
+            .await
+            .unwrap();
+        let store = Arc::new(RegistryStore::Sqlite(SqliteStore { pool }));
+        let state = AppState {
+            registry: Arc::new(Mutex::new(FederatedRegistry::new())),
+            store,
+            node_did: "did:key:zTestNode".into(),
+            node_endpoint: "http://localhost:7890".into(),
+            cert_fingerprint: "sha256:deadbeef".into(),
+            admin_token: None,
+            max_ads_per_principal: 100,
+            sync_log: SyncEventLog::default(),
+            cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+        };
+        let app = router()
+            .with_state(state)
+            .layer(DefaultBodyLimit::max(512 * 1024)); // 512 KB limit for this test
+        let req = Request::post("/api/agents")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 }
