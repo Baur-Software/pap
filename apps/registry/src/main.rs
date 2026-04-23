@@ -446,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn no_require_auth_no_token_is_ok_with_warning() {
+    fn no_require_auth_no_token_is_ok() {
         let _guard = ENV_LOCK.lock().unwrap();
         clear_auth_env();
 
