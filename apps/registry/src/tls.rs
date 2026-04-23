@@ -142,9 +142,13 @@ pub(crate) fn build_peer_client(
         reqwest::Client::builder()
             .use_preconfigured_tls(tls_config)
             .timeout(timeout)
+            .redirect(reqwest::redirect::Policy::none())
             .build()
     } else {
-        reqwest::Client::builder().timeout(timeout).build()
+        reqwest::Client::builder()
+            .timeout(timeout)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
     }
 }
 

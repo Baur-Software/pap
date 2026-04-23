@@ -9,6 +9,7 @@ use pap_federation::peer::RegistryPeer;
 use pap_marketplace::AgentAdvertisement;
 
 use crate::db::AgentEntry;
+use crate::net_guard::assert_safe_peer_url;
 use crate::state::AppState;
 
 // ── Request / response types ──────────────────────────────────────────────────
@@ -329,6 +330,16 @@ async fn add_peer(
     if !state.is_authorized(extract_bearer(&headers)) {
         return auth_error();
     }
+
+    // SSRF guard: validate the peer endpoint URL before any network or DB operations.
+    if let Err(reason) = assert_safe_peer_url(&req.endpoint) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": format!("unsafe peer endpoint: {reason}")})),
+        )
+            .into_response();
+    }
+
     let peer = match req.cert_fingerprint {
         Some(fp) => RegistryPeer::with_fingerprint(&req.did, &req.endpoint, &fp),
         None => RegistryPeer::new(&req.did, &req.endpoint),
@@ -1294,6 +1305,65 @@ mod tests {
             dids.contains(&"did:key:zAlpha"),
             "alpha peer must be listed"
         );
+    }
+
+    // ── SSRF protection tests ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn post_peers_rejects_http_endpoint() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "http://registry.example.com/",
+            "cert_fingerprint": null,
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn post_peers_rejects_private_ip_endpoint() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://192.168.1.100/",
+            "cert_fingerprint": null,
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn post_peers_rejects_loopback_endpoint() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://127.0.0.1:9999/",
+            "cert_fingerprint": null,
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     // ── POST /api/peers/{did}/sync ────────────────────────────────────────────

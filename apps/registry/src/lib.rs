@@ -13,6 +13,8 @@ pub mod routes;
 pub mod state;
 #[cfg(feature = "ssr")]
 pub(crate) mod tls;
+#[cfg(feature = "ssr")]
+pub(crate) mod net_guard;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
