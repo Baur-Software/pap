@@ -1272,7 +1272,12 @@ mod tests {
 
     #[tokio::test]
     async fn discover_pap_agents_stub_ok_for_any_domain() {
-        for domain in &["example.com", "localhost", "sub.domain.co.uk", "192.168.1.1"] {
+        for domain in &[
+            "example.com",
+            "localhost",
+            "sub.domain.co.uk",
+            "192.168.1.1",
+        ] {
             let result = discover_pap_agents(domain.to_string()).await;
             assert!(result.is_ok(), "domain {domain} returned Err");
             assert!(

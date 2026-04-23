@@ -94,8 +94,7 @@ mod tests {
 
     #[test]
     fn url_with_path_and_query_string_routes_to_read() {
-        let (action, agent, query) =
-            detect_intent("https://example.com/search?q=rust&page=2");
+        let (action, agent, query) = detect_intent("https://example.com/search?q=rust&page=2");
         assert_eq!(action, "schema:ReadAction");
         assert_eq!(agent, "Web Page Reader");
         // The original prompt is returned unchanged
