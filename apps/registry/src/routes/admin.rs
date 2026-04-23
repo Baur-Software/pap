@@ -175,11 +175,14 @@ async fn list_agents(
             })
             .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "database error in list_agents");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal error"})),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -244,9 +247,10 @@ async fn register_agent(
                 .into_response();
         }
         Err(e) => {
+            tracing::error!(error = %e, "database error in register_agent (count_agents_by_principal)");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": format!("Rate limit check failed: {e}")})),
+                Json(serde_json::json!({"error": "internal error"})),
             )
                 .into_response();
         }
@@ -271,9 +275,10 @@ async fn register_agent(
     // DB first — persist before updating in-memory state.
     let hash = ad.hash();
     if let Err(e) = state.store.insert_agent(&hash, &ad).await {
+        tracing::error!(error = %e, "database error in register_agent (insert_agent)");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            Json(serde_json::json!({"error": "internal error"})),
         )
             .into_response();
     }
@@ -288,9 +293,7 @@ async fn register_agent(
             );
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("agent persisted but in-memory registration failed: {e}")
-                })),
+                Json(serde_json::json!({"error": "internal error"})),
             )
                 .into_response();
         }
@@ -314,9 +317,10 @@ async fn remove_agent(
     let deleted = match state.store.delete_agent(&hash).await {
         Ok(d) => d,
         Err(e) => {
+            tracing::error!(error = %e, "database error in remove_agent");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
+                Json(serde_json::json!({"error": "internal error"})),
             )
                 .into_response()
         }
@@ -341,11 +345,14 @@ async fn list_peers(State(state): State<AppState>, headers: HeaderMap) -> Respon
     }
     match state.store.load_all_peers().await {
         Ok(peers) => Json(peers).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "database error in list_peers");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal error"})),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -413,9 +420,10 @@ async fn add_peer(
 
     // DB first — persist before updating in-memory state.
     if let Err(e) = state.store.upsert_peer(&peer).await {
+        tracing::error!(error = %e, "database error in add_peer");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            Json(serde_json::json!({"error": "internal error"})),
         )
             .into_response();
     }
@@ -444,9 +452,10 @@ async fn remove_peer(
     let deleted = match state.store.delete_peer(&did_decoded).await {
         Ok(d) => d,
         Err(e) => {
+            tracing::error!(error = %e, "database error in remove_peer");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
+                Json(serde_json::json!({"error": "internal error"})),
             )
                 .into_response()
         }
