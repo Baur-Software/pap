@@ -1,0 +1,20 @@
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071: rsa Marvin Attack timing side-channel.
+    #
+    # Two separate transitive paths pull in a vulnerable rsa crate:
+    #
+    # 1. rsa 0.7.2 via blind-rsa-signatures 0.14 -> pap-ecash.
+    #    No patched rsa release is available on crates.io. The pap-ecash issuer
+    #    is an offline trusted node; network timing key-recovery is not in scope.
+    #
+    # 2. rsa 0.9.10 via sqlx-mysql 0.8.6 -> sqlx 0.8.6 -> pap-registry.
+    #    pap-registry declares sqlx with default-features = false and does NOT
+    #    include the "mysql" feature. sqlx-mysql appears in Cargo.lock only
+    #    because Cargo's resolver pins all optional dependencies of resolved
+    #    packages (including ones that are never compiled). No MySQL code is
+    #    built or shipped. This advisory does not apply to the registry binary.
+    #
+    # Track upstream fix: https://github.com/RustCrypto/RSA/issues/19
+    "RUSTSEC-2023-0071",
+]
