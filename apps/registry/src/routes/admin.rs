@@ -332,7 +332,7 @@ async fn add_peer(
     }
 
     // SSRF guard: validate the peer endpoint URL before any network or DB operations.
-    if let Err(reason) = assert_safe_peer_url(&req.endpoint) {
+    if let Err(reason) = assert_safe_peer_url(&req.endpoint).await {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": format!("unsafe peer endpoint: {reason}")})),
@@ -879,7 +879,7 @@ mod tests {
 
         let body = serde_json::json!({
             "did": "did:key:zPeerX",
-            "endpoint": "https://peerx.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -926,7 +926,7 @@ mod tests {
         // First peer: bootstrap into an empty registry — must succeed.
         let first = serde_json::json!({
             "did": "did:key:zBootstrap",
-            "endpoint": "https://bootstrap.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -942,7 +942,7 @@ mod tests {
         // Second peer: no bypass_policy flag, registry is now non-empty — must be rejected.
         let second = serde_json::json!({
             "did": "did:key:zSecond",
-            "endpoint": "https://second.example.com"
+            "endpoint": "https://1.1.1.1"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -990,7 +990,7 @@ mod tests {
         // Seed one peer via bootstrap.
         let first = serde_json::json!({
             "did": "did:key:zBootstrap",
-            "endpoint": "https://bootstrap.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1002,7 +1002,7 @@ mod tests {
         // Attempt bypass_policy: true on the now-non-empty registry — must be rejected.
         let second = serde_json::json!({
             "did": "did:key:zEvil",
-            "endpoint": "https://evil.example.com",
+            "endpoint": "https://1.1.1.1",
             "bypass_policy": true
         });
         let req = Request::post("/api/peers")
@@ -1061,7 +1061,7 @@ mod tests {
         // Add
         let body = serde_json::json!({
             "did": "did:key:zPeerY",
-            "endpoint": "https://peery.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1105,7 +1105,7 @@ mod tests {
 
         let body = serde_json::json!({
             "did": "did:key:zFingerprintPeer",
-            "endpoint": "https://fp.example.com",
+            "endpoint": "https://93.184.216.34",
             "cert_fingerprint": "aa:bb:cc"
         });
         let req = Request::post("/api/peers")
@@ -1131,7 +1131,7 @@ mod tests {
         let app = test_router(None).await;
         let body = serde_json::json!({
             "did": "did:key:zBootstrapOnly",
-            "endpoint": "https://bootstrap.example.com",
+            "endpoint": "https://93.184.216.34",
             "bypass_policy": true
         });
         let req = Request::post("/api/peers")
@@ -1153,7 +1153,7 @@ mod tests {
         let app = test_router(None).await;
         let body = serde_json::json!({
             "did": "did:key:zFirstPeer",
-            "endpoint": "https://first.example.com"
+            "endpoint": "https://93.184.216.34"
             // bypass_policy omitted — defaults false
         });
         let req = Request::post("/api/peers")
@@ -1194,7 +1194,7 @@ mod tests {
         // Add the peer first.
         let body = serde_json::json!({
             "did": "did:key:zToRemove",
-            "endpoint": "https://remove-me.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1231,7 +1231,7 @@ mod tests {
         let app = test_router(Some("supersecret")).await;
         let body = serde_json::json!({
             "did": "did:key:zUnauthed",
-            "endpoint": "https://unauthed.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1271,7 +1271,7 @@ mod tests {
         // Add first peer.
         let body_a = serde_json::json!({
             "did": "did:key:zAlpha",
-            "endpoint": "https://alpha.example.com"
+            "endpoint": "https://93.184.216.34"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
@@ -1285,7 +1285,7 @@ mod tests {
         // subsequent peers.  We verify the list contains exactly the first peer.
         let body_b = serde_json::json!({
             "did": "did:key:zBeta",
-            "endpoint": "https://beta.example.com"
+            "endpoint": "https://1.1.1.1"
         });
         let req = Request::post("/api/peers")
             .header(header::CONTENT_TYPE, "application/json")
