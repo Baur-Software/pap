@@ -2,16 +2,21 @@ name: Release Python SDK
 
 on:
   push:
-    tags:
-      - "python-v*"
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Build wheels without publishing"
-        type: boolean
-        default: false
+    branches: [main]
+    paths:
+      - "crates/pap-python/**"
+      - "crates/pap-core/**"
+      - "crates/pap-did/**"
+      - "crates/pap-credential/**"
+      - "crates/pap-marketplace/**"
+      - "crates/pap-transport/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "VERSION"
+  workflow_dispatch: {}
 
-permissions: read-all
+permissions:
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,40 +24,43 @@ env:
   PACKAGE_NAME: pap-protocol
 
 jobs:
-  # ── 1. Validate version ────────────────────────────────────────────────────
-  validate:
-    name: Validate version
+  # ── 1. Detect new version and create tag ──────────────────────────────────
+  check-version:
+    name: Check version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Extract and validate version
-        id: version
+      - name: Read VERSION and check for existing tag
+        id: check
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TAG_VERSION="${GITHUB_REF_NAME#python-v}"
+          VERSION=$(cat VERSION)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          TAG="python-v${VERSION}"
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
           else
-            TAG_VERSION="0.0.0-dev"
+            echo "New version ${VERSION} detected — will tag and release"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
 
-          FILE_VERSION=$(cat VERSION)
-
-          echo "Tag version:  ${TAG_VERSION}"
-          echo "File version: ${FILE_VERSION}"
-
-          if [[ "${{ github.ref_type }}" == "tag" && "${TAG_VERSION}" != "${FILE_VERSION}" ]]; then
-            echo "::error::Tag version (${TAG_VERSION}) does not match VERSION file (${FILE_VERSION})"
-            exit 1
-          fi
-
-          echo "version=${FILE_VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Create and push tag
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          git tag "python-v${{ steps.check.outputs.version }}"
+          git push origin "python-v${{ steps.check.outputs.version }}"
 
   # ── 2. Build wheels ────────────────────────────────────────────────────────
   build-wheels:
     name: Build wheels (${{ matrix.artifact }})
-    needs: validate
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +114,8 @@ jobs:
   # ── 3. Build source distribution ───────────────────────────────────────────
   build-sdist:
     name: Build sdist
-    needs: validate
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -129,11 +138,9 @@ jobs:
   # ── 4. Create GitHub Release ───────────────────────────────────────────────
   create-release:
     name: GitHub Release
-    needs: [validate, build-wheels, build-sdist]
-    if: github.ref_type == 'tag'
+    needs: [check-version, build-wheels, build-sdist]
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -149,14 +156,14 @@ jobs:
       - name: Extract changelog for this version
         id: changelog
         run: |
-          VERSION="${{ needs.validate.outputs.version }}"
+          VERSION="${{ needs.check-version.outputs.version }}"
           NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" crates/pap-python/CHANGELOG.md)
           echo "${NOTES}" > /tmp/release-notes.md
 
       - name: Create release
         uses: actions/github-script@v9
         env:
-          VERSION: ${{ needs.validate.outputs.version }}
+          VERSION: ${{ needs.check-version.outputs.version }}
         with:
           script: |
             const fs = require('fs');
@@ -174,7 +181,7 @@ jobs:
       - name: Upload release assets
         run: |
           for file in dist/*; do
-            gh release upload "python-v${{ needs.validate.outputs.version }}" "$file" --clobber
+            gh release upload "python-v${{ needs.check-version.outputs.version }}" "$file" --clobber
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -182,12 +189,12 @@ jobs:
   # ── 5. Publish to PyPI ─────────────────────────────────────────────────────
   publish-pypi:
     name: Publish to PyPI
-    needs: [validate, build-wheels, build-sdist]
-    if: github.ref_type == 'tag' && !inputs.dry_run
+    needs: [check-version, build-wheels, build-sdist]
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/pap-protocol/${{ needs.validate.outputs.version }}/
+      url: https://pypi.org/project/pap-protocol/${{ needs.check-version.outputs.version }}/
     permissions:
       id-token: write
     steps:

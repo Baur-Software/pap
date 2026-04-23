@@ -1,597 +1,175 @@
 use leptos::prelude::*;
-use papillon_shared::{
-    intent::detect_intent, BlockState, CanvasBlock, EdgeState, IntentPlan, PipelineEdgeInfo,
-    PipelineInfo, PipelineNodeInfo, PipelineNodeType, PortRef, WorkflowEdge, WorkflowMode,
-    WorkflowNode,
-};
-use papillon_shared::types::Template;
-use wasm_bindgen_futures::spawn_local;
+use papillon_shared::{BlockState, CanvasBlock, EdgeState, IntentPlan, PortRef, WorkflowEdge};
 
-use crate::bridge;
-use crate::state::{
-    canvas::{CanvasSide, CanvasState},
-    workflow::WorkflowState,
-};
+use crate::state::canvas::{CanvasSide, CanvasState};
 
-/// Main workflow canvas component rendered in the back face Workflow tab.
-/// Shows MAP mode (auto-derived live dependency graph) or DESIGN mode (intent-first builder).
+/// Back-face orchestration trace.
+///
+/// Replaces the former MAP/DESIGN pipeline builder. Shows a live per-block trace
+/// of the PAP handshake: resolving phases, awaiting-approval plans with disclosure
+/// details, completed outcomes, and failures — one entry per active canvas block.
+///
+/// Clicking "→ view block" on any entry flips to the front face and requests
+/// expansion of that block.
 #[component]
 pub fn CanvasWorkflowPipeline() -> impl IntoView {
-    let workflow = expect_context::<WorkflowState>();
+    let canvas_state = expect_context::<CanvasState>();
+    let blocks = canvas_state.current_canvas_blocks();
+    let has_blocks = move || !blocks.get().is_empty();
 
     view! {
-        <div class="wf-canvas">
-            <div class="wf-mode-toggle">
-                <button
-                    class="wf-toggle-btn"
-                    class:active=move || workflow.mode.get() == WorkflowMode::Map
-                    on:click=move |_| workflow.mode.set(WorkflowMode::Map)
-                >
-                    "MAP"
-                </button>
-                <button
-                    class="wf-toggle-btn"
-                    class:active=move || workflow.mode.get() == WorkflowMode::Design
-                    on:click=move |_| workflow.mode.set(WorkflowMode::Design)
-                >
-                    "DESIGN"
-                </button>
+        <div class="wf-trace-panel">
+            <div class="wf-trace-header">
+                <span class="wf-trace-title">"ORCHESTRATION"</span>
             </div>
-
-            <Show when=move || workflow.mode.get() == WorkflowMode::Map>
-                <MapModeCanvas />
-            </Show>
-            <Show when=move || workflow.mode.get() == WorkflowMode::Design>
-                <DesignModeCanvas />
-            </Show>
-        </div>
-    }
-}
-
-/// Map mode: read-only live dependency graph auto-derived from canvas block events.
-#[component]
-fn MapModeCanvas() -> impl IntoView {
-    let workflow = expect_context::<WorkflowState>();
-
-    let has_nodes = move || !workflow.graph.get().nodes.is_empty();
-
-    view! {
-        <div class="wf-map-canvas">
             <Show
-                when=has_nodes
+                when=has_blocks
                 fallback=|| view! {
-                    <div class="wf-empty-state">
-                        <p class="wf-empty-hint">
-                            "Run a prompt to see the dependency graph."
-                        </p>
+                    <div class="wf-trace-empty">
+                        <p>"No active orchestration."</p>
+                        <p class="wf-trace-empty-hint">"Run a prompt to see the trace."</p>
                     </div>
                 }
             >
-                <div class="wf-graph-row">
-                    {move || {
-                        let graph = workflow.graph.get();
-                        let mut items: Vec<leptos::prelude::AnyView> = Vec::new();
-                        for (i, node) in graph.nodes.iter().enumerate() {
-                            // Edge connector before each node except the first.
-                            if i > 0 {
-                                // Find the edge coming into this node (if any).
-                                let target_id = node.id.clone();
-                                let edge_state = graph.edges.iter()
-                                    .find(|e| e.to_node_id == target_id)
-                                    .map(|e| e.state.clone())
-                                    .unwrap_or(EdgeState::Unconnected);
-                                let memex = graph.edges.iter()
-                                    .find(|e| e.to_node_id == target_id)
-                                    .map(|e| e.memex_remembered)
-                                    .unwrap_or(false);
-                                items.push(view! { <MapEdgeConnector state=edge_state memex_remembered=memex /> }.into_any());
-                            }
-                            items.push(view! { <MapNode node=node.clone() /> }.into_any());
-                        }
-                        items
-                    }}
+                <div class="wf-trace-list">
+                    <For
+                        each=move || blocks.get()
+                        key=|b| format!("{}@{}", b.id, b.updated_at)
+                        children=move |block| view! { <TraceEntry block=block /> }
+                    />
                 </div>
             </Show>
         </div>
     }
 }
 
-/// A directed edge connector rendered between two Map mode nodes.
-/// Uses CSS flexbox alignment — no SVG geometry required.
+/// A single block's trace entry in the orchestration panel.
 #[component]
-fn MapEdgeConnector(state: EdgeState, memex_remembered: bool) -> impl IntoView {
-    let line_class = match state {
-        EdgeState::Confirmed => "wf-edge-line",
-        EdgeState::Proposed => "wf-edge-line proposed",
-        EdgeState::Blocked => "wf-edge-line blocked",
-        EdgeState::Unconnected => "wf-edge-line unconnected",
-    };
-    view! {
-        <div class="wf-edge-connector">
-            <div class={line_class}></div>
-            {memex_remembered.then(|| view! {
-                <span class="wf-memex-badge">"🧠"</span>
-            })}
-        </div>
-    }
-}
-
-/// A single resolved/running block shown as a node in Map mode.
-#[component]
-fn MapNode(node: WorkflowNode) -> impl IntoView {
+fn TraceEntry(block: CanvasBlock) -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let node_id = node.id.clone();
-    let display_name = node
-        .agent_name
-        .clone()
-        .unwrap_or_else(|| truncate_intent(&node.intent));
-    let pap_uri = node.pap_uri.clone();
+    let block_id = block.id.clone();
+    let bid_jump = block_id.clone();
 
-    view! {
-        <div
-            class="wf-node wf-node-resolved"
-            on:click=move |_| {
-                canvas_state.canvas_side.set(CanvasSide::Front);
-                canvas_state.requested_expansion.set(Some(node_id.clone()));
-            }
-        >
-            <div class="wf-node-header">
-                <span class="wf-node-icon">"🤖"</span>
-                <span class="wf-node-name">{display_name}</span>
-                {pap_uri.map(|u| view! {
-                    <span class="wf-node-uri">{u}</span>
-                })}
-            </div>
-        </div>
-    }
-}
-
-/// Design mode: intent-first workflow builder with tools strip and node graph area.
-#[component]
-fn DesignModeCanvas() -> impl IntoView {
-    let workflow = expect_context::<WorkflowState>();
-    let canvas_state = expect_context::<CanvasState>();
-
-    // Reactively find the first canvas block currently in AwaitingApproval state.
-    // This drives the inline EdgeApprovalCard — no manual toggle required.
-    let blocks = canvas_state.current_canvas_blocks();
-    let awaiting_approval: Memo<Option<(String, IntentPlan)>> = Memo::new(move |_| {
-        blocks.get().into_iter().find_map(|b| {
-            if let BlockState::AwaitingApproval { plan } = b.state {
-                Some((b.id, plan))
+    let prompt_preview = block
+        .prompt_text
+        .as_deref()
+        .map(|t| {
+            if t.chars().count() > 60 {
+                let truncated: String = t.chars().take(60).collect();
+                format!("{truncated}\u{2026}")
             } else {
-                None
+                t.to_string()
             }
         })
-    });
+        .unwrap_or_default();
 
-    let add_agent_node = move |_| {
-        let mut nodes = workflow.design_nodes.get_untracked();
-        let id = format!("node-{}", nodes.len());
-        nodes.push(WorkflowNode {
-            id,
-            node_type: PipelineNodeType::Agent,
-            intent: String::new(),
-            agent_name: None,
-            agent_did: None,
-            pap_uri: None,
-            action_type: String::new(),
-            input_ports: Vec::new(),
-            output_ports: Vec::new(),
-            template_override: None,
-            position_x: nodes.len() as f64 * 260.0,
-            position_y: 60.0,
-        });
-        workflow.design_nodes.set(nodes);
+    let (state_class, state_label, inline_text) = derive_block_trace(&block);
+
+    let approval_plan = if let BlockState::AwaitingApproval { plan } = &block.state {
+        Some(plan.clone())
+    } else {
+        None
     };
-
-    let run_workflow = move |_| {
-        let nodes = workflow.design_nodes.get_untracked();
-        let edges = workflow.design_edges.get_untracked();
-        if nodes.is_empty() {
-            return;
-        }
-
-        // Stable pipeline ID for this run so all block IDs are deterministic.
-        let pipeline_id = {
-            let ts = js_sys::Date::new_0().get_time() as u64;
-            format!("wf-{ts}")
-        };
-
-        // Resolve the canvas ID — create one if there is none.
-        let canvas_id = {
-            let existing = canvas_state.current_canvas_id.get_untracked();
-            match existing {
-                Some(id) => id,
-                None => canvas_state.new_canvas(),
-            }
-        };
-
-        // Build PipelineInfo from design nodes/edges.
-        // Block ID pattern must match what run_pipeline emits: "pipeline-{id}-{node_id}".
-        let pipeline_nodes: Vec<PipelineNodeInfo> = nodes.iter().map(|n| PipelineNodeInfo {
-            id: n.id.clone(),
-            agent_hash: String::new(),
-            agent_name: n.agent_name.clone().unwrap_or_else(|| n.intent.clone()),
-            // Use the node's resolved action_type if available; otherwise derive it
-            // from the intent text using the same deterministic routing as the
-            // single-block canvas path. This ensures the correct agent is selected
-            // even before marketplace resolution populates action_type.
-            action_type: if n.action_type.is_empty() {
-                detect_intent(&n.intent).0.to_string()
-            } else {
-                n.action_type.clone()
-            },
-            node_type: n.node_type.clone(),
-            position_x: n.position_x,
-            position_y: n.position_y,
-            format: papillon_shared::SynthesisFormat::FreeText,
-        }).collect();
-
-        let pipeline_edges: Vec<PipelineEdgeInfo> = edges.iter().map(|e| PipelineEdgeInfo {
-            from_node: e.from_node_id.clone(),
-            to_node: e.to_node_id.clone(),
-        }).collect();
-
-        let now = js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default();
-        let pipeline = PipelineInfo {
-            id: pipeline_id.clone(),
-            name: "Design Canvas Run".to_string(),
-            nodes: pipeline_nodes,
-            edges: pipeline_edges,
-            created_at: now.clone(),
-        };
-
-        // Pre-create skeleton Resolving blocks using the canonical "pipeline-{id}-{node_id}"
-        // IDs so that block_updated/block_resolved events from the backend land correctly.
-        canvas_state.canvases.update(|cs| {
-            if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
-                for node in &nodes {
-                    let block_id = format!("pipeline-{pipeline_id}-{}", node.id);
-                    if !canvas.blocks.iter().any(|b| b.id == block_id) {
-                        canvas.blocks.push(CanvasBlock {
-                            id: block_id,
-                            prompt_id: String::new(),
-                            prompt_text: Some(node.intent.clone()),
-                            state: BlockState::Resolving {
-                                phase: 1,
-                                phase_label: "Queued".into(),
-                            },
-                            schema_type: None,
-                            content: None,
-                            linked_block_ids: Vec::new(),
-                            agent_did: node.agent_did.clone(),
-                            mandate_expires_at: None,
-                            preference_guided: false,
-                            auto_expand: false,
-                            retention_warning: None,
-                            created_at: now.clone(),
-                            updated_at: now.clone(),
-                        });
-                    }
-                }
-                canvas.updated_at = now.clone();
-            }
-        });
-
-        // Flip to front face so user sees the resolving blocks immediately.
-        canvas_state.canvas_side.set(CanvasSide::Front);
-
-        // Use the first node's intent as the initial_query seed.
-        let initial_query = nodes.first().map(|n| n.intent.clone()).unwrap_or_default();
-        let canvas_id_clone = canvas_id.clone();
-
-        spawn_local(async move {
-            #[derive(serde::Serialize)]
-            #[serde(rename_all = "camelCase")]
-            struct RunArgs {
-                pipeline: PipelineInfo,
-                initial_query: String,
-                canvas_id: Option<String>,
-            }
-            let args = RunArgs {
-                pipeline,
-                initial_query,
-                canvas_id: Some(canvas_id_clone),
-            };
-            let _ = bridge::invoke::<_, serde_json::Value>("run_pipeline", &args).await;
-        });
-    };
-
-    let has_nodes = move || !workflow.design_nodes.get().is_empty();
+    let agent_did = block.agent_did.clone();
 
     view! {
-        <div class="wf-design-canvas">
-            // Tools strip
-            <div class="wf-tools-strip">
-                <button class="wf-tool wf-tool-active" on:click=add_agent_node title="Add agent node">
-                    <span>"🤖"</span>
-                    <span class="wf-tool-label">"Agent"</span>
-                </button>
-                <button class="wf-tool" title="Add synthesizer node">
-                    <span>"⬡"</span>
-                    <span class="wf-tool-label">"Synth"</span>
-                </button>
-                // NOTE: Note node tool deferred — full note toolkit TBD
-                <div class="wf-tool-spacer"></div>
-                <button class="wf-tool" title="Save pipeline (coming soon)" disabled=true>
-                    <span>"💾"</span>
-                    <span class="wf-tool-label">"Save"</span>
-                </button>
-                <button class="wf-tool wf-tool-run" on:click=run_workflow title="Run workflow">
-                    <span>"▶"</span>
-                    <span class="wf-tool-label">"Run"</span>
-                </button>
+        <div class=format!("wf-trace-entry {state_class}")>
+            <div class="wf-trace-entry-header">
+                <span class="wf-trace-prompt">{prompt_preview}</span>
+                <span class=format!("wf-trace-state-badge {state_class}")>{state_label}</span>
             </div>
 
-            // Node graph area
-            <div class="wf-graph-area">
-                <Show
-                    when=has_nodes
-                    fallback=|| view! {
-                        <div class="wf-empty-state">
-                            <p class="wf-empty-hint">
-                                "Click 🤖 to add an agent step."
-                            </p>
-                        </div>
-                    }
-                >
-                    <For
-                        each=move || workflow.design_nodes.get()
-                        key=|n| n.id.clone()
-                        children=move |node| {
-                            view! { <DesignNode node=node /> }
-                        }
-                    />
-                </Show>
-            </div>
+            // Animated phase label for Resolving blocks; description text for others
+            {inline_text.map(|label| view! {
+                <div class="wf-trace-phase">
+                    <span class="wf-phase-dot wf-phase-dot-pulse" />
+                    <span class="wf-trace-phase-label">{label}</span>
+                </div>
+            })}
 
-            // Inline approval card — surfaced when any canvas block transitions to
-            // BlockState::AwaitingApproval during a workflow run. Wired to the real
-            // CanvasState approve/reject methods so decisions flow back to the backend.
-            <Show when=move || awaiting_approval.get().is_some()>
-                {move || {
-                    awaiting_approval.get().map(|(block_id, plan)| {
-                        let plan_clone = plan.clone();
-                        let block_id_allow = block_id.clone();
-                        let block_id_deny = block_id.clone();
-                        let request_id_allow = plan.approval_request_id.clone();
-                        let request_id_deny = plan_clone.approval_request_id.clone();
-
-                        // Build a display edge from the plan's disclosure list.
-                        let from_path = plan_clone.requires_disclosure.first()
-                            .cloned()
-                            .unwrap_or_default();
-                        let from_label = from_path.split('.').last()
-                            .unwrap_or("output")
-                            .to_string();
-                        let to_label = plan_clone.selected_agent_name.clone();
-                        let edge = WorkflowEdge {
-                            id: plan_clone.approval_request_id.clone(),
-                            from_node_id: String::new(),
-                            from_port: PortRef {
-                                path: from_path,
-                                label: from_label,
-                                required: true,
-                            },
-                            to_node_id: block_id.clone(),
-                            to_port: PortRef {
-                                path: plan_clone.action.clone(),
-                                label: to_label,
-                                required: true,
-                            },
-                            state: EdgeState::Proposed,
-                            memex_remembered: false,
-                        };
-
-                        view! {
-                            <EdgeApprovalCard
-                                edge=edge
-                                on_allow_once=Callback::new(move |_| {
-                                    canvas_state.approve_block(
-                                        block_id_allow.clone(),
-                                        request_id_allow.clone(),
-                                    );
-                                })
-                                on_always_allow=Callback::new(move |_| {
-                                    // store_approval_record is called by the front-face approval
-                                    // flow; here we just forward to approve_block so the workflow
-                                    // resumes — the backend writes the memex record on its side.
-                                    canvas_state.approve_block(
-                                        block_id.clone(),
-                                        plan.approval_request_id.clone(),
-                                    );
-                                })
-                                on_deny=Callback::new(move |_| {
-                                    canvas_state.reject_block(
-                                        block_id_deny.clone(),
-                                        request_id_deny.clone(),
-                                    );
-                                })
-                            />
-                        }
-                    })
-                }}
-            </Show>
-        </div>
-    }
-}
-
-/// A node in Design mode — shows intent input, input/output ports, and template picker.
-#[component]
-fn DesignNode(node: WorkflowNode) -> impl IntoView {
-    let workflow = expect_context::<WorkflowState>();
-    let node_id = node.id.clone();
-    let intent = RwSignal::new(node.intent.clone());
-
-    let on_intent_input = {
-        let node_id = node_id.clone();
-        move |ev: leptos::ev::Event| {
-            let value = event_target_value(&ev);
-            let mut nodes = workflow.design_nodes.get_untracked();
-            if let Some(n) = nodes.iter_mut().find(|n| n.id == node_id) {
-                n.intent = value.clone();
-            }
-            workflow.design_nodes.set(nodes);
-            // Sync local display signal directly from the value already in hand —
-            // no need to re-read design_nodes.
-            intent.set(value);
-        }
-    };
-
-    let display_name = node
-        .agent_name
-        .clone()
-        .unwrap_or_else(|| "New Agent".to_string());
-
-    let input_ports = node.input_ports.clone();
-    let output_ports = node.output_ports.clone();
-
-    // Extract schema type from the first output port path:
-    // "schema:FlightReservation.departureDate" -> "FlightReservation"
-    let returns_schema_type = node.output_ports.first().map(|p| {
-        p.path
-            .split(':')
-            .nth(1)
-            .and_then(|s| s.split('.').next())
-            .unwrap_or("")
-            .to_string()
-    }).filter(|s| !s.is_empty());
-
-    // Each design node tracks its own template override
-    let template_override = RwSignal::new(node.template_override.clone());
-
-    view! {
-        <div class="wf-node wf-node-pending">
-            <div class="wf-node-header">
-                <span class="wf-node-icon">"🤖"</span>
-                <span class="wf-node-name">{display_name}</span>
-            </div>
-
-            // RECEIVES FROM PRINCIPAL section
-            <div class="wf-node-section">
-                <div class="wf-node-section-label">"RECEIVES FROM PRINCIPAL"</div>
-                {if input_ports.is_empty() {
-                    view! { <div class="wf-port-empty">"—"</div> }.into_any()
+            // Agent DID — shown as a truncated monospaced chip when available
+            {agent_did.map(|did| {
+                let truncated = if did.len() > 28 {
+                    format!("{}\u{2026}", &did[..28])
                 } else {
-                    view! {
-                        <For
-                            each=move || input_ports.clone()
-                            key=|p| p.path.clone()
-                            children=|port| view! {
-                                <div class="wf-port-row input">
-                                    <span class="wf-port-dot"></span>
-                                    <span class="wf-port-label">{port.label.clone()}</span>
-                                </div>
-                            }
-                        />
-                    }.into_any()
-                }}
-            </div>
-
-            // OUTPUTS section
-            <div class="wf-node-section">
-                <div class="wf-node-section-label">"OUTPUTS"</div>
-                {if output_ports.is_empty() {
-                    view! { <div class="wf-port-empty">"—"</div> }.into_any()
-                } else {
-                    view! {
-                        <For
-                            each=move || output_ports.clone()
-                            key=|p| p.path.clone()
-                            children=|port| view! {
-                                <div class="wf-port-row output">
-                                    <span class="wf-port-label">{port.label.clone()}</span>
-                                    <span class="wf-port-dot"></span>
-                                </div>
-                            }
-                        />
-                    }.into_any()
-                }}
-            </div>
-
-            // Intent input (visible before agent resolves)
-            <div class="wf-node-section">
-                <input
-                    type="text"
-                    class="wf-node-intent-input"
-                    placeholder="What should this step do?"
-                    prop:value=intent
-                    on:input=on_intent_input
-                />
-            </div>
-
-            // RENDER AS — live template picker filtered by node's output schema type
-            <NodeTemplatePicker
-                returns_schema_type=returns_schema_type
-                current_override=template_override
-            />
-        </div>
-    }
-}
-
-/// Template picker for a Design mode node.
-/// Loads templates from the backend filtered by the node's returns schema type.
-/// Only shows templates compatible with the agent's output type.
-#[component]
-fn NodeTemplatePicker(
-    /// The schema type of what this node returns (from agent advertisement.returns[0]).
-    /// None means the output type is not yet known; the picker shows only "auto".
-    returns_schema_type: Option<String>,
-    /// Currently selected template name override (None = auto)
-    current_override: RwSignal<Option<String>>,
-) -> impl IntoView {
-    let schema_type = returns_schema_type.clone();
-
-    // Load templates from the backend filtered by schema_type.
-    // LocalResource re-runs whenever schema_type changes (it is captured by value).
-    let templates = LocalResource::new(move || {
-        let stype = schema_type.clone();
-        async move {
-            match stype {
-                Some(st) if !st.is_empty() => {
-                    bridge::invoke::<serde_json::Value, Vec<Template>>(
-                        "get_templates_for_type",
-                        &serde_json::json!({ "schema_type": st }),
-                    )
-                    .await
-                    .unwrap_or_default()
+                    did.clone()
+                };
+                view! {
+                    <div class="wf-trace-agent">
+                        <span class="wf-trace-did">{truncated}</span>
+                    </div>
                 }
-                _ => Vec::<Template>::new(),
-            }
-        }
-    });
+            })}
 
-    view! {
-        <div class="wf-node-template-picker">
-            <span class="wf-node-template-label">"RENDER AS"</span>
-            <select
-                class="wf-node-template-select"
-                on:change=move |ev| {
-                    let val = event_target_value(&ev);
-                    if val == "auto" {
-                        current_override.set(None);
-                    } else {
-                        current_override.set(Some(val));
-                    }
+            // Inline approval plan for AwaitingApproval blocks
+            {approval_plan.map(|plan| {
+                view! { <ApprovalPlanInline plan=plan /> }
+            })}
+
+            // Jump to block on front face
+            <button
+                class="wf-trace-jump"
+                on:click=move |_| {
+                    canvas_state.canvas_side.set(CanvasSide::Front);
+                    canvas_state.requested_expansion.set(Some(bid_jump.clone()));
                 }
             >
-                <option value="auto">"auto"</option>
-                <Suspense>
-                    {move || templates.get().map(|ts| {
-                        ts.iter().map(|t| {
-                            let name = t.template_name.clone();
-                            let name_display = name.clone();
-                            let selected = current_override.get().as_deref() == Some(name.as_str());
-                            view! {
-                                <option value=name selected=selected>
-                                    {name_display}
-                                </option>
-                            }
-                        }).collect::<Vec<_>>()
-                    })}
-                </Suspense>
-            </select>
+                "\u{2192} view block"
+            </button>
+        </div>
+    }
+}
+
+/// Derive display properties from a block's current state.
+/// Returns (CSS modifier class, badge label, optional inline description text).
+pub(crate) fn derive_block_trace(block: &CanvasBlock) -> (&'static str, &'static str, Option<String>) {
+    match &block.state {
+        BlockState::Resolving { phase_label, .. } => (
+            "trace-resolving",
+            "resolving",
+            Some(phase_label.clone()),
+        ),
+        BlockState::AwaitingApproval { .. } => ("trace-awaiting", "awaiting approval", None),
+        BlockState::Ghost { agent_name, .. } => (
+            "trace-ghost",
+            "pre-approval",
+            Some(format!("Agent: {agent_name}")),
+        ),
+        BlockState::Resolved => ("trace-resolved", "done", None),
+        BlockState::Failed { reason, .. } => (
+            "trace-failed",
+            "failed",
+            Some(reason.clone()),
+        ),
+        BlockState::Outcome { .. } => ("trace-resolved", "outcome", None),
+        _ => ("trace-pending", "pending", None),
+    }
+}
+
+/// Inline approval plan summary shown inside a `trace-awaiting` entry.
+/// Displays agent name, required disclosures, return types, and mandate TTL.
+#[component]
+fn ApprovalPlanInline(plan: IntentPlan) -> impl IntoView {
+    view! {
+        <div class="wf-approval-plan">
+            <div class="wf-plan-agent-row">
+                <span class="wf-plan-label">"Agent:"</span>
+                <span class="wf-plan-value">{plan.selected_agent_name.clone()}</span>
+            </div>
+            {plan.requires_disclosure.iter().map(|d| view! {
+                <div class="wf-plan-disclosure">
+                    <span class="wf-plan-check">"\u{1f512} "</span>
+                    <span>{d.clone()}</span>
+                </div>
+            }).collect::<Vec<_>>()}
+            <div class="wf-plan-returns">
+                <span class="wf-plan-label">"Returns:"</span>
+                <span class="wf-plan-value">{plan.returns.join(", ")}</span>
+            </div>
+            <div class="wf-plan-ttl">
+                <span class="wf-plan-label">"Mandate:"</span>
+                <span class="wf-plan-value">{format!("~{}h", plan.ttl_hours)}</span>
+            </div>
         </div>
     }
 }
@@ -617,11 +195,11 @@ pub fn EdgeApprovalCard(
         <div class="wf-approval-card">
             // Agent identity header
             <div class="wf-approval-agent">
-                <span class="wf-approval-icon">"🤖"</span>
+                <span class="wf-approval-icon">"\u{1f916}"</span>
                 <div class="wf-approval-agent-info">
                     <span class="wf-approval-agent-name">{to_label}</span>
                 </div>
-                <span class="wf-tee-badge">"✓ TEE"</span>
+                <span class="wf-tee-badge">"\u{2713} TEE"</span>
             </div>
 
             // Plain English disclosure description
@@ -630,13 +208,13 @@ pub fn EdgeApprovalCard(
                 <div class="wf-disclosure-item">
                     <span class="wf-disclosure-label">{from_label}</span>
                     <span class="wf-disclosure-path">{from_path}</span>
-                    <span class="wf-disclosure-check">"✓"</span>
+                    <span class="wf-disclosure-check">"\u{2713}"</span>
                 </div>
             </div>
 
             // What the agent will NOT see
             <div class="wf-approval-redacted">
-                "🔒 Will not see: your name, email, payment details, or any other data."
+                "\u{1f512} Will not see: your name, email, payment details, or any other data."
             </div>
 
             // Action buttons
@@ -651,7 +229,7 @@ pub fn EdgeApprovalCard(
                     class="wf-approval-btn wf-approval-always-allow"
                     on:click=move |_| on_always_allow.run(())
                 >
-                    "Always allow 🧠"
+                    "Always allow \u{1f9e0}"
                 </button>
                 <button
                     class="wf-approval-btn wf-approval-deny"
@@ -664,17 +242,299 @@ pub fn EdgeApprovalCard(
     }
 }
 
-fn truncate_intent(intent: &str) -> String {
-    const MAX_CHARS: usize = 28;
-    if intent.is_empty() {
-        return "Block".to_string();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use papillon_shared::{BlockState, CanvasBlock, IntentPlan};
+
+    // ── Fixture helpers ─────────────────────────────────────────────────────
+
+    fn make_block(state: BlockState) -> CanvasBlock {
+        CanvasBlock {
+            id: "blk-001".into(),
+            prompt_id: "p-001".into(),
+            prompt_text: Some("What flights are available?".into()),
+            state,
+            schema_type: None,
+            content: None,
+            linked_block_ids: vec![],
+            agent_did: None,
+            created_at: "2026-04-22T00:00:00Z".into(),
+            updated_at: "2026-04-22T00:00:00Z".into(),
+            mandate_expires_at: None,
+            preference_guided: false,
+            auto_expand: false,
+            retention_warning: None,
+        }
     }
-    let char_count = intent.chars().count();
-    if char_count > MAX_CHARS {
-        // Collect exactly MAX_CHARS characters so we never split a multi-byte codepoint.
-        let truncated: String = intent.chars().take(MAX_CHARS).collect();
-        format!("{truncated}…")
-    } else {
-        intent.to_string()
+
+    fn make_intent_plan() -> IntentPlan {
+        IntentPlan {
+            action: "schema:SearchAction".into(),
+            selected_agent_name: "Flight Search Agent".into(),
+            selected_agent_did: Some("did:web:flights.example".into()),
+            requires_disclosure: vec!["schema:Person.name".into(), "schema:Date".into()],
+            returns: vec!["schema:FlightReservation".into()],
+            approval_request_id: "req-abc-123".into(),
+            ttl_hours: 1,
+        }
+    }
+
+    // ── derive_block_trace: CSS modifier class ───────────────────────────────
+
+    #[test]
+    fn resolving_returns_trace_resolving_class() {
+        let block = make_block(BlockState::Resolving {
+            phase: 2,
+            phase_label: "Mandate".into(),
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-resolving");
+    }
+
+    #[test]
+    fn awaiting_approval_returns_trace_awaiting_class() {
+        let block = make_block(BlockState::AwaitingApproval {
+            plan: make_intent_plan(),
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-awaiting");
+    }
+
+    #[test]
+    fn ghost_returns_trace_ghost_class() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "Flight Agent".into(),
+            action_type: "schema:SearchAction".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-ghost");
+    }
+
+    #[test]
+    fn resolved_returns_trace_resolved_class() {
+        let block = make_block(BlockState::Resolved);
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-resolved");
+    }
+
+    #[test]
+    fn failed_returns_trace_failed_class() {
+        let block = make_block(BlockState::Failed {
+            phase: 3,
+            reason: "agent_unavailable".into(),
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-failed");
+    }
+
+    #[test]
+    fn outcome_returns_trace_resolved_class() {
+        let block = make_block(BlockState::Outcome {
+            provenance_block_ids: vec!["blk-a".into(), "blk-b".into()],
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-resolved");
+    }
+
+    #[test]
+    fn guide_returns_trace_pending_class() {
+        let block = make_block(BlockState::Guide {
+            summary: "2 results from flight agents".into(),
+            suggestions: vec![],
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-pending");
+    }
+
+    #[test]
+    fn note_returns_trace_pending_class() {
+        let block = make_block(BlockState::Note {
+            title: "My note".into(),
+            content: "Some content".into(),
+            editing: false,
+        });
+        let (css_class, _, _) = derive_block_trace(&block);
+        assert_eq!(css_class, "trace-pending");
+    }
+
+    // ── derive_block_trace: badge label ─────────────────────────────────────
+
+    #[test]
+    fn resolving_badge_label_is_resolving() {
+        let block = make_block(BlockState::Resolving {
+            phase: 1,
+            phase_label: "Token Presentation".into(),
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "resolving");
+    }
+
+    #[test]
+    fn awaiting_approval_badge_label_is_awaiting_approval() {
+        let block = make_block(BlockState::AwaitingApproval {
+            plan: make_intent_plan(),
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "awaiting approval");
+    }
+
+    #[test]
+    fn ghost_badge_label_is_pre_approval() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "Test Agent".into(),
+            action_type: "schema:SearchAction".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "pre-approval");
+    }
+
+    #[test]
+    fn resolved_badge_label_is_done() {
+        let block = make_block(BlockState::Resolved);
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "done");
+    }
+
+    #[test]
+    fn failed_badge_label_is_failed() {
+        let block = make_block(BlockState::Failed {
+            phase: 4,
+            reason: "timeout".into(),
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "failed");
+    }
+
+    #[test]
+    fn outcome_badge_label_is_outcome() {
+        let block = make_block(BlockState::Outcome {
+            provenance_block_ids: vec![],
+        });
+        let (_, label, _) = derive_block_trace(&block);
+        assert_eq!(label, "outcome");
+    }
+
+    // ── derive_block_trace: inline description text ──────────────────────────
+
+    #[test]
+    fn resolving_inline_text_contains_phase_label() {
+        let block = make_block(BlockState::Resolving {
+            phase: 3,
+            phase_label: "Disclosure".into(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some("Disclosure".to_string()));
+    }
+
+    #[test]
+    fn resolving_empty_phase_label_returns_empty_string() {
+        let block = make_block(BlockState::Resolving {
+            phase: 1,
+            phase_label: String::new(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some(String::new()));
+    }
+
+    #[test]
+    fn awaiting_approval_has_no_inline_text() {
+        let block = make_block(BlockState::AwaitingApproval {
+            plan: make_intent_plan(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert!(desc.is_none());
+    }
+
+    #[test]
+    fn ghost_inline_text_contains_agent_name() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "Skyscanner Agent".into(),
+            action_type: "schema:SearchAction".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some("Agent: Skyscanner Agent".to_string()));
+    }
+
+    #[test]
+    fn ghost_inline_text_prefixes_with_agent_colon() {
+        let block = make_block(BlockState::Ghost {
+            agent_name: "X".into(),
+            action_type: "".into(),
+            disclosure_preview: vec![],
+            returns_preview: vec![],
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        let text = desc.unwrap();
+        assert!(
+            text.starts_with("Agent: "),
+            "expected 'Agent: ' prefix, got '{text}'"
+        );
+    }
+
+    #[test]
+    fn resolved_has_no_inline_text() {
+        let block = make_block(BlockState::Resolved);
+        let (_, _, desc) = derive_block_trace(&block);
+        assert!(desc.is_none());
+    }
+
+    #[test]
+    fn failed_inline_text_is_the_reason_string() {
+        let block = make_block(BlockState::Failed {
+            phase: 5,
+            reason: "co_sign_mismatch".into(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some("co_sign_mismatch".to_string()));
+    }
+
+    #[test]
+    fn failed_empty_reason_returns_empty_string() {
+        let block = make_block(BlockState::Failed {
+            phase: 2,
+            reason: String::new(),
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert_eq!(desc, Some(String::new()));
+    }
+
+    #[test]
+    fn outcome_has_no_inline_text() {
+        let block = make_block(BlockState::Outcome {
+            provenance_block_ids: vec!["a".into()],
+        });
+        let (_, _, desc) = derive_block_trace(&block);
+        assert!(desc.is_none());
+    }
+
+    // ── derive_block_trace: all 6 PAP handshake phases ──────────────────────
+
+    #[test]
+    fn resolving_phase_labels_roundtrip_for_all_six_phases() {
+        let phase_labels = [
+            (1u8, "Token Presentation"),
+            (2, "Mandate"),
+            (3, "Disclosure"),
+            (4, "Execution"),
+            (5, "Co-sign Receipt"),
+            (6, "Session Close"),
+        ];
+        for (phase, label) in phase_labels {
+            let block = make_block(BlockState::Resolving {
+                phase,
+                phase_label: label.into(),
+            });
+            let (css_class, badge, desc) = derive_block_trace(&block);
+            assert_eq!(css_class, "trace-resolving", "phase {phase}");
+            assert_eq!(badge, "resolving", "phase {phase}");
+            assert_eq!(desc, Some(label.to_string()), "phase {phase}");
+        }
     }
 }
