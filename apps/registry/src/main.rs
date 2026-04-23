@@ -9,6 +9,9 @@ use axum::routing::get;
 use axum::Router;
 use leptos::config::get_configuration;
 use pap_registry::state::SETTING_CORS_ORIGINS;
+use tower_governor::{
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
+};
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use tower_http::services::ServeDir;
@@ -59,6 +62,10 @@ async fn main() -> anyhow::Result<()> {
     check_auth_config(&config)?;
 
     info!("Starting PAP Registry on {}:{}", config.host, config.port);
+    info!(
+        "Rate limiting: {} req/s sustained, {} burst per IP",
+        config.rate_limit_rps, config.rate_limit_burst
+    );
 
     // ── Database setup ────────────────────────────────────────────────────────
     let db_cfg = DbConfig::resolve()?;
@@ -357,6 +364,20 @@ async fn main() -> anyhow::Result<()> {
         agent_set.handlers.len()
     );
 
+    // ── Rate limiting ─────────────────────────────────────────────────────────
+    // Leaky-bucket limiter keyed by client IP (SmartIpKeyExtractor honours
+    // X-Forwarded-For / X-Real-IP headers from reverse proxies).
+    // Applied as the OUTERMOST layer so requests over the rate limit are
+    // rejected before they reach the body-size limiter or route handlers.
+    let governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(config.rate_limit_rps)
+            .burst_size(config.rate_limit_burst)
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .expect("invalid rate-limit configuration"),
+    );
+
     let app = Router::new()
         .merge(federation_router)
         .merge(admin_router)
@@ -382,7 +403,8 @@ async fn main() -> anyhow::Result<()> {
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
         .layer(cors)
-        .layer(DefaultBodyLimit::max(config.max_body_bytes));
+        .layer(DefaultBodyLimit::max(config.max_body_bytes))
+        .layer(GovernorLayer::new(governor_conf));
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
     let scheme = if config.no_tls { "http" } else { "https" };
@@ -394,15 +416,22 @@ async fn main() -> anyhow::Result<()> {
         // Serve over HTTPS using the node's self-signed TLS certificate.
         // Papillon clients connect via TOFU (Trust On First Use) and pin
         // the cert fingerprint for subsequent connections.
+        // `into_make_service_with_connect_info` exposes peer IP so the
+        // SmartIpKeyExtractor can fall back to direct peer address when no
+        // proxy headers are present.
         let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(tls_id.server_config);
         axum_server::bind_rustls(addr, tls_config)
-            .serve(app.into_make_service())
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
             .await?;
     } else {
         // Plain HTTP — for local development only.
         info!("TLS disabled (PAP_REGISTRY_NO_TLS=true)");
         let listener = tokio::net::TcpListener::bind(addr).await?;
-        axum::serve(listener, app).await?;
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await?;
     }
 
     Ok(())

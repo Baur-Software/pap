@@ -51,6 +51,7 @@ ssr = [
     "dep:rustls",
     "dep:sha2",
     "dep:hex",
+    "dep:tower_governor",
 ]
 hydrate = [
     "leptos/hydrate",
@@ -77,6 +78,7 @@ axum-server        = { workspace = true, optional = true }
 tokio              = { workspace = true, optional = true }
 reqwest            = { workspace = true, optional = true }
 tower-http         = { version = "0.6", features = ["fs", "cors"], optional = true }
+tower_governor     = { version = "0.8", features = ["axum"], optional = true }
 anyhow             = { version = "1", optional = true }
 tracing            = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }

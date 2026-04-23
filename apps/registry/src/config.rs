@@ -46,6 +46,15 @@ pub struct Config {
     /// Requests exceeding this limit are rejected with 413 Payload Too Large.
     /// Default: 262144 (256 KB). Override via `PAP_REGISTRY_MAX_BODY_BYTES`.
     pub max_body_bytes: usize,
+
+    /// Sustained request rate per second per IP address for the leaky-bucket
+    /// rate limiter.  Default: 20. Override via `PAP_REGISTRY_RATE_LIMIT_RPS`.
+    pub rate_limit_rps: u64,
+
+    /// Maximum burst size for the rate limiter (number of requests that can
+    /// be issued in excess of the sustained rate before throttling begins).
+    /// Default: 60. Override via `PAP_REGISTRY_RATE_LIMIT_BURST`.
+    pub rate_limit_burst: u32,
 }
 
 impl Config {
@@ -85,6 +94,16 @@ impl Config {
             .and_then(|v| v.parse::<usize>().ok())
             .unwrap_or(DEFAULT_MAX_BODY_BYTES);
 
+        let rate_limit_rps = env::var("PAP_REGISTRY_RATE_LIMIT_RPS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20u64);
+
+        let rate_limit_burst = env::var("PAP_REGISTRY_RATE_LIMIT_BURST")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60u32);
+
         Self {
             port,
             host,
@@ -95,6 +114,8 @@ impl Config {
             reset_db,
             require_auth,
             max_body_bytes,
+            rate_limit_rps,
+            rate_limit_burst,
         }
     }
 
@@ -133,6 +154,8 @@ mod tests {
         env::remove_var("PAP_REGISTRY_RESET_DB");
         env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
         env::remove_var("PAP_REGISTRY_MAX_BODY_BYTES");
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_BURST");
     }
 
     #[test]
@@ -364,5 +387,27 @@ mod tests {
         env::set_var("PAP_REGISTRY_MAX_BODY_BYTES", "not-a-number");
         let cfg = Config::from_env();
         assert_eq!(cfg.max_body_bytes, DEFAULT_MAX_BODY_BYTES);
+    }
+
+    // ── rate_limit_rps / rate_limit_burst ─────────────────────────────────────
+
+    #[test]
+    fn rate_limit_defaults() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        let cfg = Config::from_env();
+        assert_eq!(cfg.rate_limit_rps, 20);
+        assert_eq!(cfg.rate_limit_burst, 60);
+    }
+
+    #[test]
+    fn rate_limit_custom_values() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RATE_LIMIT_RPS", "5");
+        env::set_var("PAP_REGISTRY_RATE_LIMIT_BURST", "10");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.rate_limit_rps, 5);
+        assert_eq!(cfg.rate_limit_burst, 10);
     }
 }
