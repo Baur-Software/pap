@@ -319,7 +319,11 @@ impl AppState {
 
             for mut def in catalog_defs {
                 let now = chrono::Utc::now().to_rfc3339();
-                match def.catalog_path.as_deref().and_then(|p| existing_by_path.get(p)) {
+                match def
+                    .catalog_path
+                    .as_deref()
+                    .and_then(|p| existing_by_path.get(p))
+                {
                     None => {
                         // New agent — generate a fresh keypair and insert.
                         let kp = PrincipalKeypair::generate();
@@ -336,7 +340,7 @@ impl AppState {
                         // Preserve the DID and keypair so preference history survives.
                         if &def.version != existing_version {
                             def.agent_did = Some(existing_did.clone());
-                            def.operator_key_seed = existing_seed.clone();
+                            def.operator_key_seed = *existing_seed;
                             def.updated_at = now;
                             if let Err(e) = db.update_agent(&def) {
                                 eprintln!("Failed to update catalog agent '{}': {e}", def.name);

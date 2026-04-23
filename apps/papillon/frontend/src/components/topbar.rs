@@ -207,7 +207,7 @@ pub fn TopBar() -> impl IntoView {
 /// Identical logic to the former canvas InlinePrompt, but styled as a
 /// compact pill input rather than a card.
 /// A suggestion row in the topbar dropdown.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum BarSuggestion {
     /// A catalog agent that can handle this domain/query.
     /// Submits as `pap://agent-name`, which routes to the local catalog agent.
