@@ -1,0 +1,156 @@
+/* ─── faq.html — FAQ page ─────────────────────────────────────────────────── */
+
+/* ─── Hero ────────────────────────────────────────────────────────────────── */
+.hero { padding: 140px 0 72px; text-align: center; position: relative; }
+.hero-bg { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.hero-bg::before {
+  content: '';
+  position: absolute; top: -10%; left: 50%; transform: translateX(-50%);
+  width: 700px; height: 700px;
+  background: radial-gradient(ellipse at center,
+    rgba(108,92,231,.09) 0%, rgba(139,127,245,.04) 40%, transparent 70%);
+}
+.hero .container { position: relative; z-index: 1; }
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.25);
+  border-radius: 99px; padding: 6px 16px;
+  font-size: .78rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--violet); margin-bottom: 24px;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 900; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 20px;
+}
+.hero-sub  { font-size: 1.1rem; color: var(--muted); max-width: 560px; margin: 0 auto 12px; line-height: 1.65; }
+.hero-note { font-family: var(--font-mono); font-size: .75rem; color: var(--faint); }
+
+/* ─── Filter pills ────────────────────────────────────────────────────────── */
+.filter-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 40px; }
+.filter-pill {
+  padding: 5px 14px; border-radius: 99px;
+  font-size: .78rem; font-weight: 600; letter-spacing: .04em;
+  cursor: pointer; border: 1px solid var(--border);
+  transition: all .15s ease; background: var(--surface); color: var(--muted);
+  font-family: var(--font-body);
+}
+.filter-pill:hover { border-color: var(--border2); color: var(--text); }
+.filter-pill.active { color: var(--text); }
+.filter-pill[data-cat="all"].active        { border-color: var(--border2); background: var(--surface2); }
+.filter-pill[data-cat="trust"].active      { border-color: rgba(108,92,231,.4); background: rgba(108,92,231,.08); color: var(--violet); }
+.filter-pill[data-cat="crypto"].active     { border-color: rgba(46,196,160,.4);  background: rgba(46,196,160,.08);  color: var(--teal); }
+.filter-pill[data-cat="governance"].active { border-color: rgba(240,160,48,.4);  background: rgba(240,160,48,.08);  color: var(--amber); }
+.filter-pill[data-cat="latency"].active    { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
+.filter-pill[data-cat="compliance"].active { border-color: rgba(225,112,85,.4);  background: rgba(225,112,85,.08);  color: var(--coral); }
+.filter-pill[data-cat="dx"].active         { border-color: rgba(46,196,160,.4);  background: rgba(46,196,160,.08);  color: var(--teal); }
+.filter-pill[data-cat="enterprise"].active { border-color: rgba(139,127,245,.4); background: rgba(139,127,245,.08); color: var(--violet); }
+
+/* ─── FAQ accordion ───────────────────────────────────────────────────────── */
+.faq-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 80px; }
+.faq-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden; transition: border-color .2s ease;
+}
+.faq-item:hover { border-color: var(--border2); }
+.faq-item.open  { border-color: var(--border2); }
+
+.faq-item[data-cat="trust"]      { border-left: 3px solid rgba(108,92,231,.5); }
+.faq-item[data-cat="crypto"]     { border-left: 3px solid rgba(46,196,160,.5); }
+.faq-item[data-cat="governance"] { border-left: 3px solid rgba(240,160,48,.5); }
+.faq-item[data-cat="latency"]    { border-left: 3px solid rgba(139,127,245,.5); }
+.faq-item[data-cat="compliance"] { border-left: 3px solid rgba(225,112,85,.5); }
+.faq-item[data-cat="dx"]         { border-left: 3px solid rgba(46,196,160,.5); }
+.faq-item[data-cat="enterprise"] { border-left: 3px solid rgba(139,127,245,.5); }
+
+.faq-q {
+  width: 100%; display: flex; align-items: flex-start; gap: 16px;
+  padding: 20px 24px; background: transparent; border: none; cursor: pointer;
+  text-align: left; color: var(--text);
+  font-family: var(--font-body); font-size: 1rem; font-weight: 600; line-height: 1.4;
+}
+.faq-q:focus-visible { outline: 2px solid var(--indigo); outline-offset: -2px; }
+.faq-q-left { display: flex; align-items: flex-start; gap: 14px; flex: 1; }
+.faq-num {
+  min-width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: .72rem; font-weight: 700;
+  color: var(--violet); flex-shrink: 0; margin-top: 1px;
+}
+.faq-q-text { flex: 1; }
+.faq-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 10px; border-radius: 99px;
+  font-size: .68rem; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.badge-trust      { background: rgba(108,92,231,.12); color: var(--violet); }
+.badge-crypto     { background: rgba(46,196,160,.12);  color: var(--teal); }
+.badge-governance { background: rgba(240,160,48,.12);  color: var(--amber); }
+.badge-latency    { background: rgba(139,127,245,.12); color: var(--violet); }
+.badge-compliance { background: rgba(225,112,85,.12);  color: var(--coral); }
+.badge-dx         { background: rgba(46,196,160,.12);  color: var(--teal); }
+.badge-enterprise { background: rgba(139,127,245,.12); color: var(--violet); }
+
+.faq-chevron {
+  width: 20px; height: 20px; flex-shrink: 0; margin-top: 4px;
+  color: var(--faint); transition: transform .25s ease;
+}
+.faq-item.open .faq-chevron { transform: rotate(180deg); }
+
+.faq-body {
+  max-height: 0; overflow: hidden;
+  transition: max-height .35s ease, padding .25s ease;
+  padding: 0 24px 0 66px;
+}
+.faq-item.open .faq-body { max-height: 1600px; padding: 0 24px 24px 66px; }
+.faq-body p { color: var(--muted); font-size: .93rem; line-height: 1.75; margin-bottom: 12px; }
+.faq-body p:last-child { margin-bottom: 0; }
+.faq-body strong { color: var(--text); font-weight: 600; }
+.faq-body code {
+  font-family: var(--font-mono); font-size: .82em;
+  background: rgba(128,128,128,.08); padding: 1px 5px; border-radius: 4px;
+  color: var(--teal);
+}
+.faq-body pre code { display: block; padding: 12px 16px; border-radius: var(--radius); }
+.faq-body a { color: var(--indigo); }
+.faq-body a:hover { color: var(--violet); }
+.faq-body a.gloss {
+  color: var(--violet); text-decoration: underline;
+  text-decoration-style: dotted; text-decoration-color: rgba(139,127,245,.4);
+  text-underline-offset: 2px;
+}
+.faq-body a.gloss:hover { color: var(--text); text-decoration-color: var(--violet); }
+.roadmap-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .75rem; font-weight: 600; letter-spacing: .04em;
+  color: var(--amber); background: rgba(240,160,48,.1); border: 1px solid rgba(240,160,48,.2);
+  border-radius: 6px; padding: 3px 9px; margin-top: 10px;
+}
+
+/* ─── Glossary ────────────────────────────────────────────────────────────── */
+.glossary-section { margin: 0 auto 80px; max-width: 800px; padding: 0 24px; }
+.glossary-heading {
+  font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; letter-spacing: -.01em;
+  color: var(--text); margin-bottom: 6px;
+}
+.glossary-sub { font-size: .83rem; color: var(--faint); margin-bottom: 28px; font-family: var(--font-mono); }
+.glossary-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--border);
+}
+.glossary-term { background: var(--surface); padding: 16px 20px; }
+.glossary-term dt {
+  font-family: var(--font-mono); font-size: .82rem; font-weight: 600;
+  color: var(--violet); margin-bottom: 5px;
+}
+.glossary-term dd { font-size: .87rem; color: var(--muted); line-height: 1.6; margin: 0; }
+.glossary-term dd code {
+  font-family: var(--font-mono); font-size: .82em;
+  background: rgba(128,128,128,.08); padding: 1px 5px; border-radius: 4px; color: var(--teal);
+}
+
+/* ─── Footer override ─────────────────────────────────────────────────────── */
+footer { padding: 40px 0; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }

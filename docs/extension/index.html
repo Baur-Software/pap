@@ -26,359 +26,9 @@
       title="PAP Configuration"
     />
 
-    <style>
-      /* PAP Design System — inline for zero-dependency landing page */
-      :root {
-        --purple: #6c5ce7;
-        --purple-hover: #7f6ff0;
-        --purple-muted: rgba(108, 92, 231, 0.12);
-        --teal: #2ec4a0;
-        --gold: #f0a030;
-        --coral: #e8706a;
-        --bg-0: #0c0b14;
-        --bg-1: #151420;
-        --bg-2: #1f1e2e;
-        --bg-3: #2a2940;
-        --text-1: #eeeef2;
-        --text-2: #9494a8;
-        --text-3: #6a6a80;
-        --border: #2c2b40;
-        --font-display: "Satoshi", -apple-system, system-ui, sans-serif;
-        --font-body: "DM Sans", -apple-system, system-ui, sans-serif;
-        --font-mono: "JetBrains Mono", "SF Mono", monospace;
-      }
-
-      @media (prefers-color-scheme: light) {
-        :root {
-          --bg-0: #faf9fc;
-          --bg-1: #f0eff5;
-          --bg-2: #e6e5ee;
-          --bg-3: #d8d7e2;
-          --text-1: #1a1928;
-          --text-2: #5c5b70;
-          --text-3: #8888a0;
-          --border: #d0cfdc;
-        }
-      }
-
-      @import url("https://api.fontshare.com/v2/css?f[]=satoshi@700&display=swap");
-      @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400&display=swap");
-
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      html {
-        font-size: 16px;
-        -webkit-font-smoothing: antialiased;
-      }
-
-      body {
-        font-family: var(--font-body);
-        color: var(--text-1);
-        background: var(--bg-0);
-        line-height: 1.6;
-      }
-
-      /* ─── Nav ──────────────────────────────────────────────────────── */
-      nav {
-        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-        background: rgba(12,11,20,.85);
-        backdrop-filter: blur(16px) saturate(1.5);
-        border-bottom: 1px solid var(--border);
-      }
-      @media (prefers-color-scheme: light) {
-        nav { background: rgba(250,249,252,.9); }
-      }
-      .nav-inner {
-        max-width: 1100px; margin: 0 auto; padding: 0 24px;
-        height: 64px; display: flex; align-items: center; justify-content: space-between;
-      }
-      .nav-logo {
-        display: flex; align-items: center; gap: 10px;
-        text-decoration: none; color: var(--text-1);
-      }
-      .nav-logo img { height: 32px; width: auto; }
-      .nav-wordmark {
-        font-family: "Satoshi", sans-serif; font-weight: 700; font-size: 1.1rem;
-        letter-spacing: -.02em;
-      }
-      .nav-links {
-        display: flex; align-items: center; gap: 8px; list-style: none;
-      }
-      .nav-links a {
-        color: var(--text-2); font-size: .9rem; font-weight: 500;
-        padding: 6px 12px; border-radius: 8px;
-        text-decoration: none; transition: all .15s ease;
-      }
-      .nav-links a:hover { color: var(--text-1); background: rgba(128,128,128,.08); }
-      .nav-links a[aria-current="page"] { color: var(--text-1); }
-      .nav-link-icon {
-        font-family: var(--font-mono);
-        font-size: .65rem; font-weight: 700;
-        background: linear-gradient(135deg, var(--purple), #8b7ff5);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
-      .nav-link-icon-img { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; }
-      .nav-cta { display: flex; align-items: center; gap: 10px; }
-      .nav-gh-btn {
-        display: inline-flex; align-items: center; gap: 8px;
-        padding: 8px 16px; border-radius: 8px;
-        font-size: .9rem; font-weight: 600;
-        background: transparent; color: var(--text-1);
-        border: 1px solid var(--border);
-        text-decoration: none; cursor: pointer;
-        transition: all .15s ease; font-family: var(--font-body);
-      }
-      .nav-gh-btn:hover { border-color: var(--purple); color: var(--purple); }
-      .gh-icon { width: 18px; height: 18px; fill: currentColor; }
-
-      .page {
-        max-width: 680px;
-        margin: 0 auto;
-        padding: 144px 24px 80px;
-      }
-
-      /* Hero */
-      .hero {
-        text-align: center;
-        margin-bottom: 64px;
-      }
-
-      .hero-logo {
-        width: 96px;
-        height: 96px;
-        margin-bottom: 24px;
-        border-radius: 16px;
-      }
-
-      .hero h1 {
-        font-family: var(--font-display);
-        font-size: 40px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        margin-bottom: 16px;
-      }
-
-      .hero h1 span {
-        color: var(--purple);
-      }
-
-      .hero p {
-        font-size: 18px;
-        color: var(--text-2);
-        max-width: 480px;
-        margin: 0 auto 32px;
-      }
-
-      .hero-actions {
-        display: flex;
-        gap: 12px;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 24px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-family: var(--font-body);
-        font-size: 15px;
-        font-weight: 500;
-        text-decoration: none;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-
-      .btn-primary {
-        background: var(--purple);
-        border-color: var(--purple);
-        color: #fff;
-      }
-
-      .btn-primary:hover {
-        background: var(--purple-hover);
-        border-color: var(--purple-hover);
-      }
-
-      .btn-secondary {
-        background: var(--bg-2);
-        color: var(--text-1);
-      }
-
-      .btn-secondary:hover {
-        background: var(--bg-3);
-      }
-
-      /* Features */
-      .features {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        margin-bottom: 64px;
-      }
-
-      @media (max-width: 600px) {
-        .features {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .feature {
-        background: var(--bg-1);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 24px;
-      }
-
-      .feature-icon {
-        font-size: 24px;
-        margin-bottom: 12px;
-      }
-
-      .feature h3 {
-        font-family: var(--font-display);
-        font-size: 16px;
-        font-weight: 700;
-        margin-bottom: 8px;
-      }
-
-      .feature p {
-        font-size: 14px;
-        color: var(--text-2);
-      }
-
-      /* Protocol URI section */
-      .protocol {
-        background: var(--bg-1);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 32px;
-        margin-bottom: 64px;
-      }
-
-      .protocol h2 {
-        font-family: var(--font-display);
-        font-size: 22px;
-        font-weight: 700;
-        margin-bottom: 16px;
-      }
-
-      .uri-examples {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .uri-example {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 16px;
-        background: var(--bg-0);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-      }
-
-      .uri-scheme {
-        font-family: var(--font-mono);
-        font-size: 14px;
-        color: var(--purple);
-        min-width: 200px;
-      }
-
-      .uri-desc {
-        font-size: 13px;
-        color: var(--text-3);
-      }
-
-      /* Handshake phases */
-      .phases {
-        margin-bottom: 64px;
-      }
-
-      .phases h2 {
-        font-family: var(--font-display);
-        font-size: 22px;
-        font-weight: 700;
-        margin-bottom: 24px;
-        text-align: center;
-      }
-
-      .phase-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-      }
-
-      .phase {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 16px 0;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .phase:last-child {
-        border-bottom: none;
-      }
-
-      .phase-num {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: var(--font-mono);
-        font-size: 14px;
-        font-weight: 700;
-        background: var(--purple-muted);
-        color: var(--purple);
-        flex-shrink: 0;
-      }
-
-      .phase-info h4 {
-        font-family: var(--font-body);
-        font-size: 15px;
-        font-weight: 500;
-        margin-bottom: 2px;
-      }
-
-      .phase-info p {
-        font-size: 13px;
-        color: var(--text-3);
-      }
-
-      /* Footer */
-      footer {
-        text-align: center;
-        padding-top: 32px;
-        border-top: 1px solid var(--border);
-      }
-
-      footer p {
-        font-size: 13px;
-        color: var(--text-3);
-      }
-
-      footer a {
-        color: var(--purple);
-        text-decoration: none;
-      }
-
-      footer a:hover {
-        text-decoration: underline;
-      }
-    </style>
+    <!-- Styles -->
+    <link rel="stylesheet" href="../assets/css/shared.css" />
+    <link rel="stylesheet" href="../assets/css/extension.css" />
   </head>
   <body>
     <nav aria-label="Main navigation">
@@ -396,6 +46,10 @@
           <li><a href="../get-pap.html">Work With Us</a></li>
         </ul>
         <div class="nav-cta">
+          <button class="nav-theme-toggle" aria-label="Toggle light/dark mode">
+            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.515 4.929l1.414-1.414L7.05 5.636 5.636 7.05 3.515 4.93zM16.95 18.364l1.414-1.414 2.121 2.121-1.414 1.414-2.121-2.121zm2.121-14.85 1.414 1.415-2.121 2.121-1.414-1.414 2.121-2.121zM5.636 16.95l1.414 1.414-2.121 2.121-1.414-1.414 2.121-2.121zM23 11v2h-3v-2h3zM4 11v2H1v-2h3z"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+          </button>
           <a href="https://github.com/Baur-Software/pap" class="nav-gh-btn" target="_blank" rel="noopener" aria-label="View on GitHub">
             <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
             GitHub
@@ -435,7 +89,7 @@
       <!-- Features -->
       <section class="features">
         <div class="feature">
-          <div class="feature-icon" style="color: var(--purple)">&#9919;</div>
+          <div class="feature-icon" style="color: var(--indigo)">&#9919;</div>
           <h3>Protocol-Native</h3>
           <p>
             Intercepts pap://, pap+https://, and pap+wss:// links.
@@ -451,7 +105,7 @@
           </p>
         </div>
         <div class="feature">
-          <div class="feature-icon" style="color: var(--gold)">&#9889;</div>
+          <div class="feature-icon" style="color: var(--amber)">&#9889;</div>
           <h3>6-Phase Handshake</h3>
           <p>
             Watch token presentation, DID exchange, selective disclosure,
@@ -550,5 +204,6 @@
         </p>
       </footer>
     </div>
+    <script src="../assets/js/theme.js"></script>
   </body>
 </html>
