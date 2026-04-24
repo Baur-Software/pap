@@ -58,19 +58,70 @@
   <div class="container">
     <img src="assets/images/papillon-icon.png" alt="Baur Software" class="hero-logo reveal" />
     <h1 class="reveal reveal-delay-1">
-      Zero Trust Internet.<br />
-      <span class="gradient-text">Open Source Forever.</span>
+      The Request Layer<br />
+      <span class="gradient-text">for Agentic Systems.</span>
     </h1>
     <p class="reveal reveal-delay-2">
-      Any program on the Internet should answer to you. We build the protocol, the canvas, and the registry
-      that give you cryptographic control over every service interaction.
+      Before your agents execute, PAP has already set the scope — cryptographically, at the request.
+      Mandates bound what can be asked. Chrysalis controls who answers.
+      Humans stay sovereign. Agents stay accountable.
     </p>
     <div class="hero-cta reveal reveal-delay-3">
       <a href="pap/" class="btn btn-primary">Read the Protocol</a>
-      <a href="https://github.com/Baur-Software/pap" class="btn btn-outline" target="_blank" rel="noopener">
-        <svg class="gh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-        Star on GitHub
+      <a href="get-pap.html" class="btn btn-outline">
+        Work With Us &#8594;
       </a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── TWO LAYERS ────────────────────────────────────────────────────── -->
+<section class="layers-section" aria-label="Two layers, one trust model">
+  <div class="container">
+    <div class="section-eyebrow-center reveal">Two Layers. One Trust Model.</div>
+    <div class="layers-grid reveal reveal-delay-1">
+
+      <div class="layer-card layer-card-pap">
+        <div class="layer-label layer-label-pap">PAP — The Request Layer</div>
+        <h3>Governs what is asked.</h3>
+        <p>
+          A principal signs a mandate specifying the action, the disclosure scope, and the TTL.
+          The 6-phase handshake enforces those bounds cryptographically at every delegation step.
+          A child request cannot exceed its parent's scope — this is <code>Scope::contains()</code>
+          in the protocol, not a policy setting.
+        </p>
+      </div>
+
+      <div class="layer-card layer-card-chr">
+        <div class="layer-label layer-label-chr">Chrysalis — The Execution Layer</div>
+        <h3>Governs who answers.</h3>
+        <p>
+          Agents register with verifiable DIDs, Ed25519-signed advertisements, and vouch-based
+          admission. A request that arrives without a valid mandate is rejected before execution.
+          An agent that requires more disclosure than the mandate permits is filtered before
+          the session opens.
+        </p>
+      </div>
+
+    </div>
+
+    <div class="identity-strip reveal reveal-delay-2">
+
+      <div class="identity-chip">
+        <span class="identity-chip-label">Humans → Decentralized</span>
+        <span class="identity-chip-value">Device-bound keypair. No registration. Ephemeral session DIDs per transaction. Self-sovereign.</span>
+      </div>
+
+      <div class="identity-chip">
+        <span class="identity-chip-label">Agents → Centralized</span>
+        <span class="identity-chip-value">Registered in Chrysalis. Operator-attributed. Cryptographically vouched. Accountable.</span>
+      </div>
+
+      <div class="identity-chip">
+        <span class="identity-chip-label">Data → Never Leaves Scope</span>
+        <span class="identity-chip-value">Selective disclosure at Phase 3. Co-signed receipts store property type references, not values.</span>
+      </div>
+
     </div>
   </div>
 </section>
@@ -85,8 +136,9 @@
         <span class="product-tag product-tag-protocol">Protocol Spec</span>
         <div class="product-name">Principal Agent Protocol</div>
         <p class="product-desc">
-          A zero-trust agent negotiation protocol. Mandate-based delegation, ephemeral session DIDs,
-          selective disclosure, co-signed receipts. No new crypto, no token economy, no central registry.
+          The request layer. A principal signs what may be asked, by whom, and for how long. Scope is
+          hash-linked and cryptographically contained at every delegation step.
+          No new crypto. No token economy. No central registry.
         </p>
         <span class="product-link">Read the spec &#8594;</span>
       </a>
@@ -108,8 +160,9 @@
         <span class="product-tag product-tag-registry">Agent Registry</span>
         <div class="product-name">Chrysalis</div>
         <p class="product-desc">
-          Build an agent, publish it to the network. A self-hostable federated registry &#8212;
-          sign a capability ad, push it to a node, and any PAP canvas can find you. No app store, no gatekeeper.
+          The execution layer. Agents register with verifiable DIDs, Ed25519-signed capability
+          advertisements, and vouch-based admission. A request without a valid PAP mandate is rejected
+          before execution begins. Self-hostable, federated, no gatekeeper.
         </p>
         <span class="product-link">Learn more &#8594;</span>
       </a>
@@ -130,8 +183,9 @@
         <span class="product-tag product-tag-consulting">Consulting</span>
         <div class="product-name">Work With Us</div>
         <p class="product-desc">
-          PAP is a protocol, not a product you install. We work with your team to evaluate your
-          agentic infrastructure, plan the transition, deliver the implementation, and train your staff.
+          Your agents run in demos. PAP + Chrysalis makes them production-grade. We evaluate your
+          delegation model, find the enforcement gaps, and deliver the implementation &#8212;
+          alongside your existing stack.
         </p>
         <span class="product-link">See how it works &#8594;</span>
       </a>
