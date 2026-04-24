@@ -77,6 +77,12 @@ fn main() {
 
     // ── Level 2: BM25 semantic index ──────────────────────────────────────
     println!("── Level 2: BM25 semantic index ────────────────────────────────────");
+    // These prompts are chosen because their words appear in the agent
+    // descriptors above (weather/forecast, handmade/candles/crafts, hotel/lodging,
+    // papers/scholarly/research, geocode/coordinates).  BM25 is a term-frequency
+    // scorer — it can only route prompts whose tokens overlap with the catalog.
+    // A prompt with no overlapping terms (e.g. "explain quantum entanglement")
+    // scores zero across the board and falls through to the fallback below.
     let bm25_cases = [
         "weather in Berlin",
         "find handmade candles",
