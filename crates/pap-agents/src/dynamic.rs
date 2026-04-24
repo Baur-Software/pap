@@ -81,6 +81,10 @@ pub enum DynamicAgentSource {
     Catalog,
     UserCreated,
     Generated,
+    /// Agent approved from a federation peer registry.
+    /// No local keypair (`operator_key_seed` is `None`).
+    /// The operator's DID is the signing authority.
+    Federation,
 }
 
 /// Validate that a URL is safe to use as an HTTP endpoint.
@@ -557,11 +561,20 @@ mod tests {
             DynamicAgentSource::Catalog,
             DynamicAgentSource::UserCreated,
             DynamicAgentSource::Generated,
+            DynamicAgentSource::Federation,
         ] {
             let json = serde_json::to_string(&src).unwrap();
             let back: DynamicAgentSource = serde_json::from_str(&json).unwrap();
             assert_eq!(src, back);
         }
+    }
+
+    #[test]
+    fn federation_source_serializes_as_federation() {
+        let json = serde_json::to_string(&DynamicAgentSource::Federation).unwrap();
+        assert_eq!(json, "\"Federation\"");
+        let back: DynamicAgentSource = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, DynamicAgentSource::Federation);
     }
 
     // ── category() tests ───────────────────────────────────────────────────────

@@ -1137,6 +1137,7 @@ impl DatabaseOps for NativeDatabase {
             DynamicAgentSource::Catalog => "catalog",
             DynamicAgentSource::UserCreated => "user_created",
             DynamicAgentSource::Generated => "generated",
+            DynamicAgentSource::Federation => "federation",
         };
         conn.execute(
             "INSERT INTO agents (

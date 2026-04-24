@@ -1,5 +1,5 @@
 use pap_agents::{DynamicAgentDef, DynamicAgentSource};
-use pap_did::PrincipalKeypair;
+use pap_did::{verify_key_from_did, PrincipalKeypair};
 use pap_marketplace::AgentAdvertisement;
 use papillon_shared::types::AgentInfo;
 
@@ -13,6 +13,40 @@ fn source_to_str(source: &DynamicAgentSource) -> &'static str {
         DynamicAgentSource::Catalog => "catalog",
         DynamicAgentSource::UserCreated => "user_created",
         DynamicAgentSource::Generated => "generated",
+        DynamicAgentSource::Federation => "federation",
+    }
+}
+
+/// Convert a verified `AgentAdvertisement` into a `DynamicAgentDef` for
+/// local storage.
+///
+/// Federation agents have no local keypair: `operator_key_seed` is `None` and
+/// `source` is `DynamicAgentSource::Federation`.  The operator's DID is the
+/// signing authority; this node has no authority to sign on their behalf.
+fn ad_to_federation_def(ad: &AgentAdvertisement) -> DynamicAgentDef {
+    let now = chrono::Utc::now().to_rfc3339();
+    DynamicAgentDef {
+        agent_did: Some(ad.provider.did.clone()),
+        schema_version: 1,
+        version: ad.version.clone(),
+        name: ad.name.clone(),
+        provider: ad.provider.name.clone(),
+        description: String::new(),
+        action: ad.capability.first().cloned().unwrap_or_default(),
+        object_types: ad.object_types.clone(),
+        requires_disclosure: ad.requires_disclosure.clone(),
+        returns: ad.returns.clone(),
+        endpoint: None,
+        llm_instructions: String::new(),
+        subagents: vec![],
+        source: DynamicAgentSource::Federation,
+        // No local keypair — the operator holds their own key.
+        operator_key_seed: None,
+        published_to: vec![],
+        catalog_path: None,
+        configurable_properties: ad.configurable_properties.clone(),
+        created_at: now.clone(),
+        updated_at: now,
     }
 }
 
@@ -517,6 +551,56 @@ pub async fn unpublish_agent(
     Ok(())
 }
 
+/// Approve a federation agent advertisement for local use.
+///
+/// Validates the advertisement signature, converts it into a `DynamicAgentDef`
+/// with `source = Federation` and `operator_key_seed = None`, persists it to
+/// the local SQLite `agents` table, and registers it in the live local registry.
+///
+/// After this call the agent is immediately visible to `IntentIndex` (BM25)
+/// because `IntentIndex::new` is built from `state.db.load_all_agents()`.
+///
+/// # Errors
+///
+/// Returns an error string if:
+/// - The advertisement has no signature.
+/// - `signed_by` is not a valid `did:key` (cannot derive verifying key).
+/// - The signature verification fails (tampered or wrong key).
+/// - The DB insert fails.
+#[tauri::command]
+pub async fn approve_federation_agent(
+    state: tauri::State<'_, AppState>,
+    ad: AgentAdvertisement,
+) -> Result<AgentInfo, String> {
+    // 1. Derive verifying key from the DID embedded in the advertisement.
+    let vk = verify_key_from_did(&ad.signed_by)
+        .map_err(|e| format!("Cannot derive verifying key from signed_by DID: {e}"))?;
+
+    // 2. Verify the advertisement signature.
+    ad.verify(&vk)
+        .map_err(|e| format!("Advertisement signature verification failed: {e}"))?;
+
+    // 3. Convert to a local DynamicAgentDef (no keypair, source=Federation).
+    let def = ad_to_federation_def(&ad);
+
+    // 4. Persist to DB so it survives restarts and is visible to IntentIndex.
+    state
+        .db
+        .insert_agent(&def)
+        .map_err(|e| format!("Failed to persist federation agent: {e}"))?;
+
+    // 5. Register in the live local registry for immediate invocability.
+    {
+        let mut reg = state
+            .local_registry
+            .lock()
+            .map_err(|e| format!("Registry lock poisoned: {e}"))?;
+        let _ = reg.register_local(ad);
+    }
+
+    Ok(def_to_agent_info(&def))
+}
+
 // ── TraitBeacon profile ───────────────────────────────────────────────────────
 
 /// Save the user's advertised Trait Beacon profile (a Schema.org Person document).
@@ -566,4 +650,119 @@ pub fn save_trait_beacon_profile(
     }
 
     Ok(())
+}
+
+// ── Unit tests ────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pap_did::PrincipalKeypair;
+    use pap_marketplace::AgentAdvertisement;
+
+    fn make_signed_ad(name: &str, action: &str) -> (AgentAdvertisement, PrincipalKeypair) {
+        let kp = PrincipalKeypair::generate();
+        let mut ad = AgentAdvertisement::new(
+            name,
+            "Test Provider",
+            kp.did(),
+            vec![action.to_string()],
+            vec!["schema:Thing".to_string()],
+            vec![],
+            vec!["schema:Result".to_string()],
+        );
+        ad.signed_by = kp.did();
+        ad.sign(kp.signing_key()).expect("Ed25519 always works");
+        (ad, kp)
+    }
+
+    #[test]
+    fn source_to_str_covers_all_variants() {
+        assert_eq!(source_to_str(&DynamicAgentSource::Catalog), "catalog");
+        assert_eq!(
+            source_to_str(&DynamicAgentSource::UserCreated),
+            "user_created"
+        );
+        assert_eq!(source_to_str(&DynamicAgentSource::Generated), "generated");
+        assert_eq!(source_to_str(&DynamicAgentSource::Federation), "federation");
+    }
+
+    #[test]
+    fn ad_to_federation_def_sets_federation_source() {
+        let (ad, _kp) = make_signed_ad("Weather Agent", "schema:CheckAction");
+        let def = ad_to_federation_def(&ad);
+        assert_eq!(def.source, DynamicAgentSource::Federation);
+    }
+
+    #[test]
+    fn ad_to_federation_def_has_no_keypair() {
+        let (ad, _kp) = make_signed_ad("Search Agent", "schema:SearchAction");
+        let def = ad_to_federation_def(&ad);
+        assert!(
+            def.operator_key_seed.is_none(),
+            "federation agent must have no local keypair"
+        );
+    }
+
+    #[test]
+    fn ad_to_federation_def_preserves_action_and_did() {
+        let (ad, kp) = make_signed_ad("Hotel Agent", "schema:ReserveAction");
+        let def = ad_to_federation_def(&ad);
+        assert_eq!(def.action, "schema:ReserveAction");
+        assert_eq!(def.agent_did.as_deref(), Some(kp.did().as_str()));
+    }
+
+    #[test]
+    fn ad_to_federation_def_preserves_capability_fields() {
+        let (ad, _kp) = make_signed_ad("Geo Agent", "schema:FindAction");
+        let def = ad_to_federation_def(&ad);
+        assert_eq!(def.object_types, vec!["schema:Thing"]);
+        assert_eq!(def.returns, vec!["schema:Result"]);
+        assert!(def.requires_disclosure.is_empty());
+    }
+
+    #[test]
+    fn verify_key_from_did_roundtrip() {
+        let kp = PrincipalKeypair::generate();
+        let vk = verify_key_from_did(&kp.did()).expect("valid did:key");
+        assert_eq!(vk.as_bytes(), kp.verifying_key().as_bytes());
+    }
+
+    /// After `ad_to_federation_def()` the resulting `DynamicAgentDef` must be
+    /// immediately visible to `IntentIndex` (BM25).  This is the core invariant
+    /// that closes the federation-agent BM25 gap: an approved remote agent is
+    /// indistinguishable from a local catalog agent from the router's perspective.
+    #[test]
+    fn approved_federation_def_is_visible_to_bm25() {
+        use pap_agents::IntentIndex;
+
+        let kp = PrincipalKeypair::generate();
+        let mut ad = AgentAdvertisement::new(
+            "FedWeather",
+            "Fed Provider",
+            kp.did(),
+            vec!["schema:CheckAction".to_string()],
+            vec!["schema:Place".to_string()],
+            vec![],
+            vec!["schema:WeatherForecast".to_string()],
+        );
+        ad.signed_by = kp.did();
+        ad.sign(kp.signing_key()).expect("Ed25519 always works");
+
+        let mut def = ad_to_federation_def(&ad);
+        // Give the def a rich description so BM25 has tokens to score.
+        def.description =
+            "Real-time weather forecast temperature humidity wind conditions any location."
+                .to_string();
+        def.llm_instructions =
+            "You are a weather assistant. weather temperature forecast.".to_string();
+
+        let catalog = vec![def];
+        let index = IntentIndex::new(&catalog);
+        let m = index
+            .classify("weather in Tokyo", 0.25)
+            .expect("federation agent must appear in BM25 index");
+        assert_eq!(m.agent_name.as_deref(), Some("FedWeather"));
+        assert_eq!(m.action, "schema:CheckAction");
+    }
 }
