@@ -34,6 +34,7 @@ members = [
     "examples/protocol-envelope",
     "examples/tee-attestation",
     "examples/selective-disclosure-decay",
+    "examples/intent-routing",
     "examples/bluefield-loopback",
 ]
 
