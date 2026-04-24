@@ -440,6 +440,71 @@ mod tests {
     }
 
     #[test]
+    fn bm25_resolved_action_drives_full_handshake() {
+        let catalog = build_catalog();
+        let (action, preferred_agent, query) = route_intent("weather in Berlin", &catalog);
+        assert_eq!(action, "schema:CheckAction");
+        assert_eq!(preferred_agent, "Open-Meteo Weather");
+        assert_eq!(query, "weather in Berlin");
+
+        let principal = PrincipalKeypair::generate();
+        let orchestrator = PrincipalKeypair::generate();
+        let agent_op = PrincipalKeypair::generate();
+        let ttl = Utc::now() + Duration::hours(1);
+
+        let mut root = Mandate::issue_root(
+            principal.did(),
+            orchestrator.did(),
+            Scope::new(vec![ScopeAction::new(&action)]),
+            DisclosureSet::empty(),
+            ttl,
+        );
+        root.sign(principal.signing_key()).unwrap();
+        assert!(root.verify(&principal.verifying_key()).is_ok());
+
+        let mut ad = AgentAdvertisement::new(
+            &preferred_agent,
+            "Open-Meteo",
+            &agent_op.did(),
+            vec![action.clone()],
+            vec!["schema:Place".into()],
+            vec![],
+            vec!["schema:WeatherForecast".into()],
+        );
+        ad.sign(agent_op.signing_key()).unwrap();
+        let mut registry = MarketplaceRegistry::new();
+        registry.register(ad).unwrap();
+        let matches = registry.query_satisfiable(&action, &[]);
+        assert!(!matches.is_empty());
+
+        let mut token =
+            CapabilityToken::mint(agent_op.did(), action.clone(), orchestrator.did(), ttl);
+        token.sign(orchestrator.signing_key()).unwrap();
+
+        let mut session =
+            Session::initiate(&token, &agent_op.did(), &orchestrator.verifying_key()).unwrap();
+        let init_kp = SessionKeypair::generate();
+        let recv_kp = SessionKeypair::generate();
+        session.open(init_kp.did(), recv_kp.did()).unwrap();
+        session.execute().unwrap();
+
+        let mut receipt = TransactionReceipt::from_session(
+            &session,
+            vec![],
+            vec!["operator:executed".into()],
+            format!("{action} executed"),
+            "schema:WeatherForecast returned".into(),
+        )
+        .unwrap();
+        receipt.co_sign(init_kp.signing_key());
+        receipt.co_sign(recv_kp.signing_key());
+        receipt
+            .verify_both(&init_kp.verifying_key(), &recv_kp.verifying_key())
+            .expect("co-signed receipt must verify");
+        session.close().unwrap();
+    }
+
+    #[test]
     fn every_prompt_resolves_to_a_schema_action() {
         let catalog = build_catalog();
         let cases = [
