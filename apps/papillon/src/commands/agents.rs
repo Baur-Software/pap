@@ -665,7 +665,7 @@ mod tests {
         let mut ad = AgentAdvertisement::new(
             name,
             "Test Provider",
-            &kp.did(),
+            kp.did(),
             vec![action.to_string()],
             vec!["schema:Thing".to_string()],
             vec![],
@@ -740,7 +740,7 @@ mod tests {
         let mut ad = AgentAdvertisement::new(
             "FedWeather",
             "Fed Provider",
-            &kp.did(),
+            kp.did(),
             vec!["schema:CheckAction".to_string()],
             vec!["schema:Place".to_string()],
             vec![],
