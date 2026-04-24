@@ -17,6 +17,47 @@ use pap_core::session::{CapabilityToken, Session};
 use pap_did::{DidDocument, PrincipalKeypair, SessionKeypair};
 use pap_marketplace::{AgentAdvertisement, MarketplaceRegistry};
 
+const BM25_THRESHOLD: f32 = 0.25;
+
+/// Route a user prompt through the 2-level intent pipeline.
+///
+/// Returns `(action_type, preferred_agent_name, effective_query)`.
+///
+/// Level 1 — deterministic URL fast-path  (~0µs, no catalog needed).
+/// Level 2 — BM25 semantic index over the agent catalog (~50µs).
+/// Fallback — `schema:SearchAction` / DuckDuckGo when BM25 confidence is
+///            below threshold.  In production Papillon fires a live PAP
+///            handshake with a discovered `schema:AnalyzeAction` federation
+///            agent at this point — see `apps/papillon/src/commands/canvas/intent.rs`.
+fn route_intent(prompt: &str, catalog: &[DynamicAgentDef]) -> (String, String, String) {
+    // ── Level 1: URL fast-path ────────────────────────────────────────────
+    let (l1_action, l1_agent, query) = papillon_shared::intent::detect_intent(prompt);
+    if l1_action != "schema:AnalyzeAction" {
+        return (l1_action.to_owned(), l1_agent.to_owned(), query);
+    }
+
+    // ── Level 2: BM25 semantic index ──────────────────────────────────────
+    let index = pap_agents::IntentIndex::new(catalog);
+    if let Some(m) = index.classify(prompt, BM25_THRESHOLD) {
+        return (
+            m.action,
+            m.agent_name.unwrap_or_default(),
+            m.cleaned_query,
+        );
+    }
+
+    // ── Fallback: web search ──────────────────────────────────────────────
+    // BM25 found no confident match.  In production this is where Papillon
+    // executes a silent PAP handshake with a `schema:AnalyzeAction` agent
+    // (HuggingFace NLU or on-device LLM) to classify the intent.
+    // For this self-contained example we go straight to the universal fallback.
+    (
+        "schema:SearchAction".to_owned(),
+        "DuckDuckGo Search".to_owned(),
+        prompt.to_owned(),
+    )
+}
+
 fn main() {}
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
@@ -190,5 +231,24 @@ mod tests {
         let idx = pap_agents::IntentIndex::new(&catalog);
         let result = idx.classify("explain quantum entanglement", 0.25);
         assert!(result.is_none(), "open-ended query must fall through BM25");
+    }
+
+    #[test]
+    fn every_prompt_resolves_to_a_schema_action() {
+        let catalog = build_catalog();
+        let cases = [
+            ("https://papillon.example.com", "schema:ReadAction"),
+            ("weather in Berlin", "schema:CheckAction"),
+            ("find handmade candles", "schema:SearchAction"),
+            ("book a hotel in Paris", "schema:ReserveAction"),
+            ("explain quantum entanglement", "schema:SearchAction"), // BM25 None → DuckDuckGo fallback
+        ];
+        for (prompt, expected_action) in cases {
+            let (action, _, _) = route_intent(prompt, &catalog);
+            assert_eq!(
+                action, expected_action,
+                "prompt '{prompt}' should route to {expected_action}, got {action}"
+            );
+        }
     }
 }
