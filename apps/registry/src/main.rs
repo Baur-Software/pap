@@ -513,4 +513,79 @@ mod tests {
         // Should not error — just warn at runtime.
         assert!(check_auth_config(&cfg).is_ok());
     }
+
+    // ── Edge cases: check_auth_config ─────────────────────────────────────────
+
+    /// An empty-string token is `Some("")` — not None.
+    /// `check_auth_config` must NOT warn or fail for an empty token,
+    /// because the operator explicitly set the env var (even if poorly).
+    /// The security gap of an empty token is separate from the "no token" gap.
+    #[test]
+    fn empty_string_token_not_treated_as_unset() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+        env::set_var("PAP_REGISTRY_ADMIN_TOKEN", "");
+
+        let cfg = Config::from_env();
+        // admin_token is Some("") — not None — so check_auth_config must not bail.
+        assert!(
+            cfg.admin_token.is_some(),
+            "empty-string token must be Some(\"\"), not None"
+        );
+        // Even with require_auth=true, Some("") satisfies the presence check
+        // (the token is set, just empty — that's an operator misconfiguration
+        // addressed separately, not by this guard).
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+        let cfg2 = Config::from_env();
+        assert!(
+            check_auth_config(&cfg2).is_ok(),
+            "Some(\"\") token with require_auth=true must not fail the startup guard"
+        );
+
+        clear_auth_env();
+    }
+
+    /// require_auth=true with a non-empty token must always be Ok.
+    #[test]
+    fn require_auth_true_with_token_never_fails() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+        env::set_var(
+            "PAP_REGISTRY_ADMIN_TOKEN",
+            "a-very-long-and-random-secret-token-value",
+        );
+
+        let cfg = Config::from_env();
+        let result = check_auth_config(&cfg);
+        assert!(
+            result.is_ok(),
+            "non-empty token with require_auth must succeed"
+        );
+
+        clear_auth_env();
+    }
+
+    /// Error message must specifically mention `PAP_REGISTRY_ADMIN_TOKEN` so
+    /// operators know exactly which variable to set.
+    #[test]
+    fn error_message_names_the_missing_variable() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_auth_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "true");
+
+        let cfg = Config::from_env();
+        let err = check_auth_config(&cfg).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("PAP_REGISTRY_ADMIN_TOKEN"),
+            "error must name PAP_REGISTRY_ADMIN_TOKEN; got: {msg}"
+        );
+        assert!(
+            msg.contains("PAP_REGISTRY_REQUIRE_AUTH"),
+            "error must name PAP_REGISTRY_REQUIRE_AUTH; got: {msg}"
+        );
+
+        clear_auth_env();
+    }
 }
