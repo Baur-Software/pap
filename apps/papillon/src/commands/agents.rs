@@ -724,4 +724,42 @@ mod tests {
         let vk = verify_key_from_did(&kp.did()).expect("valid did:key");
         assert_eq!(vk.as_bytes(), kp.verifying_key().as_bytes());
     }
+
+    /// After `ad_to_federation_def()` the resulting `DynamicAgentDef` must be
+    /// immediately visible to `IntentIndex` (BM25).  This is the core invariant
+    /// that closes the federation-agent BM25 gap: an approved remote agent is
+    /// indistinguishable from a local catalog agent from the router's perspective.
+    #[test]
+    fn approved_federation_def_is_visible_to_bm25() {
+        use pap_agents::IntentIndex;
+
+        let kp = PrincipalKeypair::generate();
+        let mut ad = AgentAdvertisement::new(
+            "FedWeather",
+            "Fed Provider",
+            &kp.did(),
+            vec!["schema:CheckAction".to_string()],
+            vec!["schema:Place".to_string()],
+            vec![],
+            vec!["schema:WeatherForecast".to_string()],
+        );
+        ad.signed_by = kp.did();
+        ad.sign(kp.signing_key()).expect("Ed25519 always works");
+
+        let mut def = ad_to_federation_def(&ad);
+        // Give the def a rich description so BM25 has tokens to score.
+        def.description =
+            "Real-time weather forecast temperature humidity wind conditions any location."
+                .to_string();
+        def.llm_instructions = "You are a weather assistant. weather temperature forecast."
+            .to_string();
+
+        let catalog = vec![def];
+        let index = IntentIndex::new(&catalog);
+        let m = index
+            .classify("weather in Tokyo", 0.25)
+            .expect("federation agent must appear in BM25 index");
+        assert_eq!(m.agent_name.as_deref(), Some("FedWeather"));
+        assert_eq!(m.action, "schema:CheckAction");
+    }
 }
