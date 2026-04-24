@@ -39,11 +39,7 @@ fn route_intent(prompt: &str, catalog: &[DynamicAgentDef]) -> (String, String, S
     // ── Level 2: BM25 semantic index ──────────────────────────────────────
     let index = pap_agents::IntentIndex::new(catalog);
     if let Some(m) = index.classify(prompt, BM25_THRESHOLD) {
-        return (
-            m.action,
-            m.agent_name.unwrap_or_default(),
-            m.cleaned_query,
-        );
+        return (m.action, m.agent_name.unwrap_or_default(), m.cleaned_query);
     }
 
     // ── Fallback: web search ──────────────────────────────────────────────
@@ -123,8 +119,7 @@ fn main() {
     // ── Full pipeline: BM25 → PAP handshake ──────────────────────────────
     println!("── Full pipeline: BM25 routing → PAP handshake ─────────────────────");
     let demo_prompt = "weather in Berlin";
-    let (resolved_action, preferred_agent, effective_query) =
-        route_intent(demo_prompt, &catalog);
+    let (resolved_action, preferred_agent, effective_query) = route_intent(demo_prompt, &catalog);
     println!("  User prompt     : \"{demo_prompt}\"");
     println!("  Resolved action : {resolved_action}");
     println!(
@@ -410,7 +405,9 @@ mod tests {
     fn bm25_weather_routes_to_check_action() {
         let catalog = build_catalog();
         let idx = pap_agents::IntentIndex::new(&catalog);
-        let m = idx.classify("weather in Tokyo", 0.25).expect("should match");
+        let m = idx
+            .classify("weather in Tokyo", 0.25)
+            .expect("should match");
         assert_eq!(m.action, "schema:CheckAction");
         assert_eq!(m.agent_name.as_deref(), Some("Open-Meteo Weather"));
     }
@@ -428,8 +425,7 @@ mod tests {
 
     #[test]
     fn url_fast_path_returns_read_action() {
-        let (action, agent, _) =
-            papillon_shared::intent::detect_intent("https://example.com");
+        let (action, agent, _) = papillon_shared::intent::detect_intent("https://example.com");
         assert_eq!(action, "schema:ReadAction");
         assert_eq!(agent, "Web Page Reader");
     }
@@ -471,7 +467,7 @@ mod tests {
         let mut ad = AgentAdvertisement::new(
             &preferred_agent,
             "Open-Meteo",
-            &agent_op.did(),
+            agent_op.did(),
             vec![action.clone()],
             vec!["schema:Place".into()],
             vec![],

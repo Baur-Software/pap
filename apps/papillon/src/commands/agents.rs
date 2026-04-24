@@ -679,7 +679,10 @@ mod tests {
     #[test]
     fn source_to_str_covers_all_variants() {
         assert_eq!(source_to_str(&DynamicAgentSource::Catalog), "catalog");
-        assert_eq!(source_to_str(&DynamicAgentSource::UserCreated), "user_created");
+        assert_eq!(
+            source_to_str(&DynamicAgentSource::UserCreated),
+            "user_created"
+        );
         assert_eq!(source_to_str(&DynamicAgentSource::Generated), "generated");
         assert_eq!(source_to_str(&DynamicAgentSource::Federation), "federation");
     }
@@ -751,8 +754,8 @@ mod tests {
         def.description =
             "Real-time weather forecast temperature humidity wind conditions any location."
                 .to_string();
-        def.llm_instructions = "You are a weather assistant. weather temperature forecast."
-            .to_string();
+        def.llm_instructions =
+            "You are a weather assistant. weather temperature forecast.".to_string();
 
         let catalog = vec![def];
         let index = IntentIndex::new(&catalog);
