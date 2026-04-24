@@ -1695,6 +1695,314 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
+    // ── Edge cases: FTS query length boundaries ───────────────────────────────
+
+    /// 511-character query — one below the limit — must succeed.
+    #[tokio::test]
+    async fn search_accepts_query_one_below_limit() {
+        let app = test_router(None).await;
+        let q = "a".repeat(511);
+        let req = Request::builder()
+            .method("GET")
+            .uri(&format!("/api/agents?q={q}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "511-byte query must be accepted (below 512-byte cap)"
+        );
+    }
+
+    /// 513-character query — one above the limit — must be rejected.
+    #[tokio::test]
+    async fn search_rejects_query_one_above_limit() {
+        let app = test_router(None).await;
+        let q = "a".repeat(513);
+        let req = Request::builder()
+            .method("GET")
+            .uri(&format!("/api/agents?q={q}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "513-byte query must be rejected (above 512-byte cap)"
+        );
+        let json = body_json(resp.into_body()).await;
+        let msg = json["error"].as_str().unwrap_or("");
+        assert!(
+            msg.contains("512"),
+            "error must mention the 512-byte limit; got: {msg}"
+        );
+    }
+
+    /// Empty query string — no `q` parameter — must succeed with a full listing.
+    #[tokio::test]
+    async fn search_without_query_returns_ok() {
+        let app = test_router(None).await;
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/agents")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    // ── Edge cases: pagination boundaries ─────────────────────────────────────
+
+    /// `per_page=0` is clamped to 1 (the minimum).
+    #[tokio::test]
+    async fn per_page_zero_is_clamped_to_one() {
+        let app = test_router(None).await;
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/agents?per_page=0")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["per_page"], 1, "per_page=0 must be clamped to 1");
+    }
+
+    /// `per_page=201` is clamped to 200 (the maximum).
+    #[tokio::test]
+    async fn per_page_above_max_is_clamped_to_200() {
+        let app = test_router(None).await;
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/agents?per_page=201")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["per_page"], 200, "per_page=201 must be clamped to 200");
+    }
+
+    /// Large `page` value with empty DB — must return 200 with empty items.
+    #[tokio::test]
+    async fn large_page_number_on_empty_db_returns_empty_list() {
+        let app = test_router(None).await;
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/agents?page=999999")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp.into_body()).await;
+        assert!(
+            json["items"].as_array().map_or(false, |a| a.is_empty()),
+            "out-of-range page must return empty items list"
+        );
+    }
+
+    // ── Edge cases: auth with empty-string token ──────────────────────────────
+
+    /// When the server is configured with `admin_token = Some("")`, a request
+    /// that sends `Authorization: Bearer ` (empty bearer) must be admitted —
+    /// constant_time_eq("", "") is true.
+    #[tokio::test]
+    async fn empty_token_admitted_by_empty_bearer() {
+        let app = test_router(Some("")).await;
+        let req = Request::get("/api/status")
+            .header(header::AUTHORIZATION, "Bearer ")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "empty bearer token must match empty configured token"
+        );
+    }
+
+    /// When the server is configured with `admin_token = Some("")`, a request
+    /// without ANY Authorization header must be rejected — extract_bearer returns
+    /// None, and is_authorized(None) with Some("") returns false.
+    #[tokio::test]
+    async fn empty_token_server_rejects_missing_bearer() {
+        let app = test_router(Some("")).await;
+        let req = Request::get("/api/status").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "missing bearer token must be rejected even when server token is empty string"
+        );
+    }
+
+    // ── Edge cases: Authorization header edge cases ────────────────────────────
+
+    /// `Bearer` with a trailing space and the token — extract_bearer strips
+    /// exactly the `"Bearer "` prefix, so `"Bearer  token"` would yield `" token"`.
+    #[test]
+    fn extract_bearer_extra_whitespace_in_token_is_preserved() {
+        let mut map = HeaderMap::new();
+        // "Bearer  token" — note double space.
+        map.insert(
+            header::AUTHORIZATION,
+            "Bearer  token-with-leading-space".parse().unwrap(),
+        );
+        // strip_prefix("Bearer ") leaves " token-with-leading-space" (leading space preserved)
+        assert_eq!(
+            extract_bearer(&map),
+            Some(" token-with-leading-space"),
+            "strip_prefix strips exactly one space after Bearer"
+        );
+    }
+
+    #[test]
+    fn extract_bearer_lowercase_bearer_not_matched() {
+        // HTTP headers are case-insensitive in transport but our extractor does
+        // an exact `strip_prefix("Bearer ")` — lowercase must NOT match.
+        let mut map = HeaderMap::new();
+        map.insert(header::AUTHORIZATION, "bearer mytoken".parse().unwrap());
+        assert_eq!(
+            extract_bearer(&map),
+            None,
+            "lowercase 'bearer' must not match — scheme is case-sensitive"
+        );
+    }
+
+    #[test]
+    fn extract_bearer_only_bearer_keyword_returns_empty_token() {
+        // "Bearer " (trailing space only, no token) — strip_prefix succeeds
+        // and yields "".
+        let mut map = HeaderMap::new();
+        map.insert(header::AUTHORIZATION, "Bearer ".parse().unwrap());
+        assert_eq!(
+            extract_bearer(&map),
+            Some(""),
+            "Bearer with no token value yields empty string"
+        );
+    }
+
+    // ── Edge cases: SSRF — all blocked schemes ────────────────────────────────
+
+    #[tokio::test]
+    async fn post_peers_rejects_localhost_hostname() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://localhost/",
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "localhost peer endpoint must be rejected with 400"
+        );
+    }
+
+    #[tokio::test]
+    async fn post_peers_rejects_cgnat_endpoint() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://100.64.0.1/",
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "CGNAT (100.64.x.x) peer endpoint must be rejected with 400"
+        );
+    }
+
+    #[tokio::test]
+    async fn post_peers_rejects_ipv6_loopback() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://[::1]/",
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "IPv6 loopback peer endpoint must be rejected with 400"
+        );
+    }
+
+    #[tokio::test]
+    async fn post_peers_rejects_dot_local_hostname() {
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://registry.local/",
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            ".local hostname peer endpoint must be rejected with 400"
+        );
+    }
+
+    #[tokio::test]
+    async fn post_peers_error_body_does_not_reveal_internal_details() {
+        // When a peer endpoint is rejected, the error must say "unsafe peer endpoint"
+        // but must NOT include raw DB strings or internal implementation details.
+        let app = test_router(None).await;
+        let body = serde_json::json!({
+            "did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+            "endpoint": "https://127.0.0.1/",
+            "bypass_policy": true,
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/peers")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let json = body_json(resp.into_body()).await;
+        let err = json["error"].as_str().unwrap_or("");
+        assert!(
+            err.contains("unsafe peer endpoint"),
+            "error must say 'unsafe peer endpoint'; got: {err}"
+        );
+        // Must not contain raw SQL or internal stack traces
+        assert!(!err.contains("SELECT"), "must not contain SQL");
+        assert!(!err.contains("sqlx"), "must not expose sqlx");
+        assert!(!err.contains("unwrap"), "must not expose Rust internals");
+    }
+
     #[tokio::test]
     async fn register_oversized_ad_json_returns_413() {
         let app = test_router(None).await;
