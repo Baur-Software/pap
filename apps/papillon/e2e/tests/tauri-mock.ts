@@ -91,6 +91,11 @@ window.__TAURI__ = {
     _backedUp: false,
     _successors: [],
     _mandates: {},
+    _retryCount: 0,
+    _reshapeCount: 0,
+    _lastReshapeText: null,
+    _approveCount: 0,
+    _rejectCount: 0,
     _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
@@ -515,6 +520,87 @@ window.__TAURI__ = {
             block = typedBlock('FlightReservation', { reservationNumber: 'PX-4892', underName: { name: 'Ada Lovelace' }, departureAirport: 'SFO', arrivalAirport: 'JFK', departureDate: '2026-06-01', departureTime: '09:15', arrivalTime: '17:45', airline: 'United', totalPrice: 382.00 });
           } else if (promptText.includes('__hotel') || promptText.includes('mock:hotel')) {
             block = typedBlock('LodgingReservation', { reservationNumber: 'H-78321', underName: { name: 'Grace Hopper' }, name: 'The Grand Pacific', checkinDate: '2026-07-10', checkoutDate: '2026-07-13', totalPrice: 540.00 });
+          } else if (promptText.includes('mock:recipe') || promptText.includes('__recipe')) {
+            block = typedBlock('Recipe', { name: 'Chocolate Chip Cookies', author: { name: 'Joy of Cooking' }, recipeYield: '36 cookies', totalTime: 'PT45M', recipeIngredient: ['2 cups flour', '1 cup sugar', '1 cup chocolate chips'], description: 'Classic chocolate chip cookies.' });
+          } else if (promptText.includes('mock:softwareapp') || promptText.includes('__softwareapp')) {
+            block = typedBlock('SoftwareApplication', { name: 'VS Code', applicationCategory: 'DeveloperApplication', operatingSystem: 'Windows, macOS, Linux', offers: { price: '0', priceCurrency: 'USD' }, aggregateRating: { ratingValue: '4.8' }, description: 'Free source code editor by Microsoft.' });
+          } else if (promptText.includes('mock:localbusiness') || promptText.includes('__localbusiness')) {
+            block = typedBlock('LocalBusiness', { name: 'Blue Bottle Coffee', address: { streetAddress: '300 Webster St', addressLocality: 'Oakland', addressRegion: 'CA' }, telephone: '+1-510-653-3394', openingHours: 'Mo-Fr 07:00-18:00', aggregateRating: { ratingValue: '4.6' } });
+          } else if (promptText.includes('mock:question') || promptText.includes('__question')) {
+            block = typedBlock('Question', { name: 'What is the capital of France?', acceptedAnswer: { text: 'The capital of France is Paris.' }, answerCount: 42 });
+          } else if (promptText.includes('mock:howto') || promptText.includes('__howto')) {
+            block = typedBlock('HowTo', { name: 'How to make coffee', totalTime: 'PT5M', step: [{ name: 'Grind beans', text: 'Grind 20g of coffee beans.' }, { name: 'Brew', text: 'Pour 300ml of 93°C water over grounds.' }] });
+          } else if (promptText.includes('mock:dataset') || promptText.includes('__dataset')) {
+            block = typedBlock('Dataset', { name: 'Global Temperature Anomalies 1880-2024', creator: { name: 'NASA GISS' }, license: 'https://creativecommons.org/licenses/by/4.0/', datePublished: '2024-01-15', description: 'Monthly global surface temperature anomalies.' });
+          } else if (promptText.includes('mock:trip') || promptText.includes('__trip')) {
+            block = typedBlock('Trip', { name: 'Tokyo to Kyoto Shinkansen', itinerary: [{ name: 'Tokyo Station' }, { name: 'Kyoto Station' }], provider: { name: 'JR East' }, offers: { price: '13850', priceCurrency: 'JPY' } });
+          } else if (promptText.includes('mock:failed') || promptText.includes('__failed')) {
+            var phaseMatch = promptText.match(/(?:mock:failed-|__failed-)(\d)/);
+            var failPhase = phaseMatch ? parseInt(phaseMatch[1]) : 2;
+            var failBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Failed: { phase: failPhase, reason: 'Mock failure at phase ' + failPhase + ': agent refused mandate scope' } },
+              schema_type: null,
+              content: null,
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: failBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:ghost-full') || promptText.includes('__ghost-full')) {
+            var fullGhostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email', 'passport_number'], returns_preview: ['FlightReservation', 'BoardingPass'] } },
+              schema_type: null,
+              content: null,
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: fullGhostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:ghost') || promptText.includes('__ghost')) {
+            var ghostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email'], returns_preview: ['FlightReservation'] } },
+              schema_type: null,
+              content: null,
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: ghostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:linked') || promptText.includes('__linked')) {
+            var linkedBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: null,
+              content: { result: 'Linked block content.' },
+              linked_block_ids: ['prior-block-id'],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: linkedBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:awaiting') || promptText.includes('__awaiting')) {
+            var awaitingBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { AwaitingApproval: { plan: { action: 'schema:SearchAction', selected_agent_name: 'TravelAgent', selected_agent_did: 'did:key:z6MkAgent999', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], approval_request_id: 'req-mock-001', ttl_hours: 1 } } },
+              schema_type: null,
+              content: null,
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: awaitingBlock }); }, 200);
+            return null;
           } else {
             // Generic answer block for non-typed prompts
             block = {
@@ -535,8 +621,29 @@ window.__TAURI__ = {
           return null;
         }
 
-        case 'canvas_reshape':
+        case 'canvas_reshape': {
+          window.__TAURI__.core._reshapeCount = (window.__TAURI__.core._reshapeCount || 0) + 1;
+          window.__TAURI__.core._lastReshapeText = (args && args.text) || null;
+          const reshapeBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
+          setTimeout(function() {
+            window.__TAURI__.event.emit('block_resolved', {
+              block: {
+                id: reshapeBlockId,
+                prompt_id: 'p-reshape',
+                state: 'Resolved',
+                schema_type: null,
+                content: { result: 'Reshaped: ' + (window.__TAURI__.core._lastReshapeText || '') },
+                linked_block_ids: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }
+            });
+          }, 200);
+          return { status: 'ok', block_id: reshapeBlockId };
+        }
+
         case 'canvas_retry': {
+          window.__TAURI__.core._retryCount = (window.__TAURI__.core._retryCount || 0) + 1;
           const retryBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
           setTimeout(function() {
             window.__TAURI__.event.emit('block_resolved', {
@@ -553,6 +660,31 @@ window.__TAURI__ = {
             });
           }, 200);
           return null;
+        }
+
+        case 'canvas_approve_block': {
+          const isApproved = (args && (args.approved !== false));
+          if (isApproved) {
+            window.__TAURI__.core._approveCount = (window.__TAURI__.core._approveCount || 0) + 1;
+          } else {
+            window.__TAURI__.core._rejectCount = (window.__TAURI__.core._rejectCount || 0) + 1;
+          }
+          const approveBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
+          setTimeout(function() {
+            window.__TAURI__.event.emit('block_resolved', {
+              block: {
+                id: approveBlockId,
+                prompt_id: 'p-approved',
+                state: 'Resolved',
+                schema_type: 'FlightReservation',
+                content: { result: { '@type': 'FlightReservation', flightNumber: 'PX-0042', departureAirport: 'SFO', arrivalAirport: 'JFK' } },
+                linked_block_ids: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }
+            });
+          }, 200);
+          return { status: 'ok' };
         }
 
         case 'load_builtin_model':
@@ -910,6 +1042,75 @@ window.__TAURI__ = {
             planBlock = typedBlock2('FlightReservation', { reservationNumber: 'PX-4892', underName: { name: 'Ada Lovelace' }, departureAirport: 'SFO', arrivalAirport: 'JFK', departureDate: '2026-06-01', departureTime: '09:15', arrivalTime: '17:45', airline: 'United', totalPrice: 382.00 });
           } else if (promptText.includes('mock:hotel') || promptText.includes('__hotel')) {
             planBlock = typedBlock2('LodgingReservation', { reservationNumber: 'H-78321', underName: { name: 'Grace Hopper' }, name: 'The Grand Pacific', checkinDate: '2026-07-10', checkoutDate: '2026-07-13', totalPrice: 540.00 });
+          } else if (promptText.includes('mock:recipe') || promptText.includes('__recipe')) {
+            planBlock = typedBlock2('Recipe', { name: 'Chocolate Chip Cookies', author: { name: 'Joy of Cooking' }, recipeYield: '36 cookies', totalTime: 'PT45M', recipeIngredient: ['2 cups flour', '1 cup sugar', '1 cup chocolate chips'], description: 'Classic chocolate chip cookies.' });
+          } else if (promptText.includes('mock:softwareapp') || promptText.includes('__softwareapp')) {
+            planBlock = typedBlock2('SoftwareApplication', { name: 'VS Code', applicationCategory: 'DeveloperApplication', operatingSystem: 'Windows, macOS, Linux', offers: { price: '0', priceCurrency: 'USD' }, aggregateRating: { ratingValue: '4.8' }, description: 'Free source code editor by Microsoft.' });
+          } else if (promptText.includes('mock:localbusiness') || promptText.includes('__localbusiness')) {
+            planBlock = typedBlock2('LocalBusiness', { name: 'Blue Bottle Coffee', address: { streetAddress: '300 Webster St', addressLocality: 'Oakland', addressRegion: 'CA' }, telephone: '+1-510-653-3394', openingHours: 'Mo-Fr 07:00-18:00', aggregateRating: { ratingValue: '4.6' } });
+          } else if (promptText.includes('mock:question') || promptText.includes('__question')) {
+            planBlock = typedBlock2('Question', { name: 'What is the capital of France?', acceptedAnswer: { text: 'The capital of France is Paris.' }, answerCount: 42 });
+          } else if (promptText.includes('mock:howto') || promptText.includes('__howto')) {
+            planBlock = typedBlock2('HowTo', { name: 'How to make coffee', totalTime: 'PT5M', step: [{ name: 'Grind beans', text: 'Grind 20g of coffee beans.' }, { name: 'Brew', text: 'Pour 300ml of 93°C water over grounds.' }] });
+          } else if (promptText.includes('mock:dataset') || promptText.includes('__dataset')) {
+            planBlock = typedBlock2('Dataset', { name: 'Global Temperature Anomalies 1880-2024', creator: { name: 'NASA GISS' }, license: 'https://creativecommons.org/licenses/by/4.0/', datePublished: '2024-01-15', description: 'Monthly global surface temperature anomalies.' });
+          } else if (promptText.includes('mock:trip') || promptText.includes('__trip')) {
+            planBlock = typedBlock2('Trip', { name: 'Tokyo to Kyoto Shinkansen', itinerary: [{ name: 'Tokyo Station' }, { name: 'Kyoto Station' }], provider: { name: 'JR East' }, offers: { price: '13850', priceCurrency: 'JPY' } });
+          } else if (promptText.includes('mock:failed') || promptText.includes('__failed')) {
+            var planPhaseMatch = promptText.match(/(?:mock:failed-|__failed-)(\d)/);
+            var planFailPhase = planPhaseMatch ? parseInt(planPhaseMatch[1]) : 2;
+            var planFailBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Failed: { phase: planFailPhase, reason: 'Mock failure at phase ' + planFailPhase + ': agent refused mandate scope' } },
+              schema_type: null, content: null, linked_block_ids: [],
+              created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planFailBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:ghost-full') || promptText.includes('__ghost-full')) {
+            var planFullGhostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email', 'passport_number'], returns_preview: ['FlightReservation', 'BoardingPass'] } },
+              schema_type: null, content: null,
+              linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planFullGhostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:ghost') || promptText.includes('__ghost')) {
+            var planGhostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email'], returns_preview: ['FlightReservation'] } },
+              schema_type: null, content: null,
+              linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planGhostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:linked') || promptText.includes('__linked')) {
+            var planLinkedBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: null,
+              content: { result: 'Linked block content.' },
+              linked_block_ids: ['prior-block-id'],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planLinkedBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:awaiting') || promptText.includes('__awaiting')) {
+            var planAwaitingBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { AwaitingApproval: { plan: { action: 'schema:SearchAction', selected_agent_name: 'TravelAgent', selected_agent_did: 'did:key:z6MkAgent999', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], approval_request_id: 'req-mock-002', ttl_hours: 1 } } },
+              schema_type: null, content: null,
+              linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planAwaitingBlock }); }, 200);
+            return null;
           } else {
             planBlock = {
               id: blockId,

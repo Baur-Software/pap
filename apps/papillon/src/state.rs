@@ -10,8 +10,8 @@
 // are shared by reference across clone_for_background() so that mutations in the
 // background clone are visible to the main state and vice versa.
 //
-// TODO: Migrate remaining std::sync::RwLock fields to tokio::sync::RwLock in a
-// future pass once all read sites are audited for async context safety.
+// std::sync::RwLock fields are used from synchronous contexts only.
+// Remaining migration to tokio::sync::RwLock requires auditing all read sites.
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
