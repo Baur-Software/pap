@@ -36,7 +36,7 @@ jobs:
               - 'Cargo.toml'
               - 'Cargo.lock'
             e2e:
-              - 'e2e/**'
+              - 'apps/papillon/apps/papillon/e2e/**'
               - 'apps/**'
               - 'crates/**'
               - 'Cargo.toml'
@@ -473,27 +473,27 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: apps/papillon/e2e/package-lock.json
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
       - name: Install npm dependencies
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npm ci
       - name: Install Playwright browsers
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
       - name: Install Playwright system deps only
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
       - name: Run smoke tests
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npx playwright test tests/smoke.spec.ts --workers=1
       - name: Upload test results
         if: always()
@@ -501,8 +501,8 @@ jobs:
         with:
           name: smoke-test-results
           path: |
-            e2e/test-results/
-            e2e/playwright-report/
+            apps/papillon/e2e/test-results/
+            apps/papillon/e2e/playwright-report/
           retention-days: 7
 
   chrysalis-e2e-tier2:
@@ -559,32 +559,32 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: apps/papillon/e2e/package-lock.json
 
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         id: playwright-cache-tier2
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
 
       - name: Install npm dependencies
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npm ci
 
       - name: Install Playwright browsers
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache-tier2.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
 
       - name: Install Playwright system deps only
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache-tier2.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
       - name: Run Tier 2 functional tests
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         env:
           BASE_URL: http://localhost:${{ env.CHRYSALIS_PORT }}
         run: npx playwright test tests/tier2-functional.spec.ts --workers=1 --reporter=line
@@ -603,8 +603,8 @@ jobs:
         with:
           name: chrysalis-tier2-results
           path: |
-            e2e/test-results/
-            e2e/playwright-report/
+            apps/papillon/e2e/test-results/
+            apps/papillon/e2e/playwright-report/
           retention-days: 7
 
   chrysalis-e2e:
@@ -629,23 +629,23 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: apps/papillon/e2e/package-lock.json
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         id: playwright-cache-chrysalis
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
       - name: Install npm dependencies
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npm ci
       - name: Install Playwright browsers
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache-chrysalis.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
       - name: Install Playwright system deps only
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache-chrysalis.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
@@ -656,7 +656,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: e2e/Dockerfile.ci-chrysalis
+          file: apps/papillon/e2e/Dockerfile.ci-chrysalis
           push: false
           load: true
           tags: chrysalis-ci:latest
@@ -672,18 +672,18 @@ jobs:
             -e ALLOWED_ORIGINS='*' \
             chrysalis-ci:latest
       - name: Wait for Chrysalis to be healthy
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npx wait-on http://localhost:8080/federation/identity --timeout 60000
 
       # ── Run Chrysalis integration tests ───────────────────────────────────
       - name: Run Chrysalis integration tests
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         env:
           CHRYSALIS_URL: http://localhost:8080
         run: npx playwright test tests/chrysalis-integration.spec.ts --workers=1
 
       - name: Run Tier 3 canary tests
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         env:
           CHRYSALIS_URL: http://localhost:8080
         run: npx playwright test tests/canary.spec.ts --workers=1 --reporter=line
@@ -698,6 +698,6 @@ jobs:
         with:
           name: chrysalis-e2e-results
           path: |
-            e2e/test-results/
-            e2e/playwright-report/
+            apps/papillon/e2e/test-results/
+            apps/papillon/e2e/playwright-report/
           retention-days: 7

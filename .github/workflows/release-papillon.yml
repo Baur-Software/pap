@@ -699,13 +699,13 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: |
           npm install -D @playwright/test
           npx playwright install --with-deps chromium
 
       - name: Run canary health checks
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npx playwright test tests/canary.spec.ts --reporter=html
         timeout-minutes: 15
 

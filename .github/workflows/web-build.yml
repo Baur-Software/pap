@@ -77,32 +77,32 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: apps/papillon/e2e/package-lock.json
 
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json', 'e2e/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json', 'e2e/package.json') }}
           restore-keys: playwright-${{ runner.os }}-
 
       - name: Install npm dependencies
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npm ci
 
       - name: Install Playwright browsers
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
 
       - name: Install Playwright system deps only
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
       - name: Run web standalone smoke tests
-        working-directory: e2e
+        working-directory: apps/papillon/e2e
         run: npx playwright test tests/web-standalone.spec.ts --workers=1
 
       - name: Upload test results
@@ -111,8 +111,8 @@ jobs:
         with:
           name: web-smoke-test-results
           path: |
-            e2e/test-results/
-            e2e/playwright-report/
+            apps/papillon/e2e/test-results/
+            apps/papillon/e2e/playwright-report/
           retention-days: 7
 
   web-check:
