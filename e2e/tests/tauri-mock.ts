@@ -515,6 +515,20 @@ window.__TAURI__ = {
             block = typedBlock('FlightReservation', { reservationNumber: 'PX-4892', underName: { name: 'Ada Lovelace' }, departureAirport: 'SFO', arrivalAirport: 'JFK', departureDate: '2026-06-01', departureTime: '09:15', arrivalTime: '17:45', airline: 'United', totalPrice: 382.00 });
           } else if (promptText.includes('__hotel') || promptText.includes('mock:hotel')) {
             block = typedBlock('LodgingReservation', { reservationNumber: 'H-78321', underName: { name: 'Grace Hopper' }, name: 'The Grand Pacific', checkinDate: '2026-07-10', checkoutDate: '2026-07-13', totalPrice: 540.00 });
+          } else if (promptText.includes('mock:recipe') || promptText.includes('__recipe')) {
+            block = typedBlock('Recipe', { name: 'Chocolate Chip Cookies', author: { name: 'Joy of Cooking' }, recipeYield: '36 cookies', totalTime: 'PT45M', recipeIngredient: ['2 cups flour', '1 cup sugar', '1 cup chocolate chips'], description: 'Classic chocolate chip cookies.' });
+          } else if (promptText.includes('mock:softwareapp') || promptText.includes('__softwareapp')) {
+            block = typedBlock('SoftwareApplication', { name: 'VS Code', applicationCategory: 'DeveloperApplication', operatingSystem: 'Windows, macOS, Linux', offers: { price: '0', priceCurrency: 'USD' }, aggregateRating: { ratingValue: '4.8' }, description: 'Free source code editor by Microsoft.' });
+          } else if (promptText.includes('mock:localbusiness') || promptText.includes('__localbusiness')) {
+            block = typedBlock('LocalBusiness', { name: 'Blue Bottle Coffee', address: { streetAddress: '300 Webster St', addressLocality: 'Oakland', addressRegion: 'CA' }, telephone: '+1-510-653-3394', openingHours: 'Mo-Fr 07:00-18:00', aggregateRating: { ratingValue: '4.6' } });
+          } else if (promptText.includes('mock:question') || promptText.includes('__question')) {
+            block = typedBlock('Question', { name: 'What is the capital of France?', acceptedAnswer: { text: 'The capital of France is Paris.' }, answerCount: 42 });
+          } else if (promptText.includes('mock:howto') || promptText.includes('__howto')) {
+            block = typedBlock('HowTo', { name: 'How to make coffee', totalTime: 'PT5M', step: [{ name: 'Grind beans', text: 'Grind 20g of coffee beans.' }, { name: 'Brew', text: 'Pour 300ml of 93°C water over grounds.' }] });
+          } else if (promptText.includes('mock:dataset') || promptText.includes('__dataset')) {
+            block = typedBlock('Dataset', { name: 'Global Temperature Anomalies 1880-2024', creator: { name: 'NASA GISS' }, license: 'https://creativecommons.org/licenses/by/4.0/', datePublished: '2024-01-15', description: 'Monthly global surface temperature anomalies.' });
+          } else if (promptText.includes('mock:trip') || promptText.includes('__trip')) {
+            block = typedBlock('Trip', { name: 'Tokyo to Kyoto Shinkansen', itinerary: [{ name: 'Tokyo Station' }, { name: 'Kyoto Station' }], provider: { name: 'JR East' }, offers: { price: '13850', priceCurrency: 'JPY' } });
           } else {
             // Generic answer block for non-typed prompts
             block = {
@@ -910,6 +924,20 @@ window.__TAURI__ = {
             planBlock = typedBlock2('FlightReservation', { reservationNumber: 'PX-4892', underName: { name: 'Ada Lovelace' }, departureAirport: 'SFO', arrivalAirport: 'JFK', departureDate: '2026-06-01', departureTime: '09:15', arrivalTime: '17:45', airline: 'United', totalPrice: 382.00 });
           } else if (promptText.includes('mock:hotel') || promptText.includes('__hotel')) {
             planBlock = typedBlock2('LodgingReservation', { reservationNumber: 'H-78321', underName: { name: 'Grace Hopper' }, name: 'The Grand Pacific', checkinDate: '2026-07-10', checkoutDate: '2026-07-13', totalPrice: 540.00 });
+          } else if (promptText.includes('mock:recipe') || promptText.includes('__recipe')) {
+            planBlock = typedBlock2('Recipe', { name: 'Chocolate Chip Cookies', author: { name: 'Joy of Cooking' }, recipeYield: '36 cookies', totalTime: 'PT45M', recipeIngredient: ['2 cups flour', '1 cup sugar', '1 cup chocolate chips'], description: 'Classic chocolate chip cookies.' });
+          } else if (promptText.includes('mock:softwareapp') || promptText.includes('__softwareapp')) {
+            planBlock = typedBlock2('SoftwareApplication', { name: 'VS Code', applicationCategory: 'DeveloperApplication', operatingSystem: 'Windows, macOS, Linux', offers: { price: '0', priceCurrency: 'USD' }, aggregateRating: { ratingValue: '4.8' }, description: 'Free source code editor by Microsoft.' });
+          } else if (promptText.includes('mock:localbusiness') || promptText.includes('__localbusiness')) {
+            planBlock = typedBlock2('LocalBusiness', { name: 'Blue Bottle Coffee', address: { streetAddress: '300 Webster St', addressLocality: 'Oakland', addressRegion: 'CA' }, telephone: '+1-510-653-3394', openingHours: 'Mo-Fr 07:00-18:00', aggregateRating: { ratingValue: '4.6' } });
+          } else if (promptText.includes('mock:question') || promptText.includes('__question')) {
+            planBlock = typedBlock2('Question', { name: 'What is the capital of France?', acceptedAnswer: { text: 'The capital of France is Paris.' }, answerCount: 42 });
+          } else if (promptText.includes('mock:howto') || promptText.includes('__howto')) {
+            planBlock = typedBlock2('HowTo', { name: 'How to make coffee', totalTime: 'PT5M', step: [{ name: 'Grind beans', text: 'Grind 20g of coffee beans.' }, { name: 'Brew', text: 'Pour 300ml of 93°C water over grounds.' }] });
+          } else if (promptText.includes('mock:dataset') || promptText.includes('__dataset')) {
+            planBlock = typedBlock2('Dataset', { name: 'Global Temperature Anomalies 1880-2024', creator: { name: 'NASA GISS' }, license: 'https://creativecommons.org/licenses/by/4.0/', datePublished: '2024-01-15', description: 'Monthly global surface temperature anomalies.' });
+          } else if (promptText.includes('mock:trip') || promptText.includes('__trip')) {
+            planBlock = typedBlock2('Trip', { name: 'Tokyo to Kyoto Shinkansen', itinerary: [{ name: 'Tokyo Station' }, { name: 'Kyoto Station' }], provider: { name: 'JR East' }, offers: { price: '13850', priceCurrency: 'JPY' } });
           } else {
             planBlock = {
               id: blockId,
