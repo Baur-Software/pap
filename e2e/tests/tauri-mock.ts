@@ -92,6 +92,8 @@ window.__TAURI__ = {
     _successors: [],
     _mandates: {},
     _retryCount: 0,
+    _reshapeCount: 0,
+    _lastReshapeText: null,
     _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
@@ -549,9 +551,9 @@ window.__TAURI__ = {
             var ghostBlock = {
               id: blockId,
               prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
-              state: 'Ghost',
-              schema_type: 'FlightReservation',
-              content: { preview_schema: 'FlightReservation', disclosure_scope: ['email', 'name'], returns: ['FlightReservation'] },
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email'], returns_preview: ['FlightReservation'] } },
+              schema_type: null,
+              content: null,
               linked_block_ids: [],
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -562,9 +564,9 @@ window.__TAURI__ = {
             var awaitingBlock = {
               id: blockId,
               prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
-              state: 'AwaitingApproval',
-              schema_type: 'FlightReservation',
-              content: { mandate_preview: { agent_did: 'did:key:z6MkAgent999', agent_name: 'TravelAgent', action_type: 'travel.book', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], ttl_hours: 1 } },
+              state: { AwaitingApproval: { plan: { action: 'schema:SearchAction', selected_agent_name: 'TravelAgent', selected_agent_did: 'did:key:z6MkAgent999', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], approval_request_id: 'req-mock-001', ttl_hours: 1 } } },
+              schema_type: null,
+              content: null,
               linked_block_ids: [],
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -591,7 +593,27 @@ window.__TAURI__ = {
           return null;
         }
 
-        case 'canvas_reshape':
+        case 'canvas_reshape': {
+          window.__TAURI__.core._reshapeCount = (window.__TAURI__.core._reshapeCount || 0) + 1;
+          window.__TAURI__.core._lastReshapeText = (args && args.text) || null;
+          const reshapeBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
+          setTimeout(function() {
+            window.__TAURI__.event.emit('block_resolved', {
+              block: {
+                id: reshapeBlockId,
+                prompt_id: 'p-reshape',
+                state: 'Resolved',
+                schema_type: null,
+                content: { result: 'Reshaped: ' + (window.__TAURI__.core._lastReshapeText || '') },
+                linked_block_ids: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }
+            });
+          }, 200);
+          return { status: 'ok', block_id: reshapeBlockId };
+        }
+
         case 'canvas_retry': {
           window.__TAURI__.core._retryCount = (window.__TAURI__.core._retryCount || 0) + 1;
           const retryBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
@@ -997,8 +1019,8 @@ window.__TAURI__ = {
             var planGhostBlock = {
               id: blockId,
               prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
-              state: 'Ghost', schema_type: 'FlightReservation',
-              content: { preview_schema: 'FlightReservation', disclosure_scope: ['email', 'name'], returns: ['FlightReservation'] },
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email'], returns_preview: ['FlightReservation'] } },
+              schema_type: null, content: null,
               linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
             };
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planGhostBlock }); }, 200);
@@ -1007,8 +1029,8 @@ window.__TAURI__ = {
             var planAwaitingBlock = {
               id: blockId,
               prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
-              state: 'AwaitingApproval', schema_type: 'FlightReservation',
-              content: { mandate_preview: { agent_did: 'did:key:z6MkAgent999', agent_name: 'TravelAgent', action_type: 'travel.book', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], ttl_hours: 1 } },
+              state: { AwaitingApproval: { plan: { action: 'schema:SearchAction', selected_agent_name: 'TravelAgent', selected_agent_did: 'did:key:z6MkAgent999', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], approval_request_id: 'req-mock-002', ttl_hours: 1 } } },
+              schema_type: null, content: null,
               linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
             };
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planAwaitingBlock }); }, 200);
