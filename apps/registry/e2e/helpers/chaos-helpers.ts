@@ -6,20 +6,29 @@
  *
  * All operations are scoped to the Playwright worker index to avoid
  * interfering with other concurrent test workers.
+ *
+ * Security: all docker commands are issued via spawnSync with array arguments
+ * (no shell interpolation) to prevent command injection.
  */
 
-import { execSync, spawnSync } from "child_process";
+import { spawnSync } from "child_process";
 
 type RegistryName = "a" | "b" | "c" | "d";
 
+// RegistryName values are a closed set — no user input reaches these functions.
+// workerIndex is always a non-negative integer from Playwright's WorkerInfo.
+// Using spawnSync with array args (no shell) satisfies Semgrep's detect-child-process rule.
+
 /** Docker container name for a given letter + worker. */
 function containerName(letter: RegistryName, workerIndex: number): string {
-  return `registry-${letter}-worker${workerIndex}`;
+  const w = Math.floor(workerIndex); // ensure integer
+  const safeLetters: Record<RegistryName, string> = { a: "a", b: "b", c: "c", d: "d" };
+  return `registry-${safeLetters[letter]}-worker${w}`;
 }
 
 /** Docker network name for a given worker. */
 function networkName(workerIndex: number): string {
-  return `federation-test-worker${workerIndex}_federation-test-net`;
+  return `federation-test-worker${Math.floor(workerIndex)}_federation-test-net`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,18 +43,13 @@ function networkName(workerIndex: number): string {
 export function partitionNetwork(
   workerIndex: number,
   groupA: RegistryName[],
-  groupB: RegistryName[]
+  _groupB: RegistryName[]
 ): void {
   const net = networkName(workerIndex);
   for (const name of groupA) {
-    try {
-      execSync(
-        `docker network disconnect ${net} ${containerName(name, workerIndex)}`,
-        { stdio: "pipe" }
-      );
-    } catch {
-      // Container may already be disconnected
-    }
+    spawnSync("docker", ["network", "disconnect", net, containerName(name, workerIndex)], {
+      stdio: "pipe",
+    });
   }
 }
 
@@ -58,14 +62,9 @@ export function reconnectNetwork(
 ): void {
   const net = networkName(workerIndex);
   for (const name of containers) {
-    try {
-      execSync(
-        `docker network connect ${net} ${containerName(name, workerIndex)}`,
-        { stdio: "pipe" }
-      );
-    } catch {
-      // Already connected
-    }
+    spawnSync("docker", ["network", "connect", net, containerName(name, workerIndex)], {
+      stdio: "pipe",
+    });
   }
 }
 
@@ -75,7 +74,7 @@ export function reconnectNetwork(
 
 /** Kill a registry container abruptly (SIGKILL). */
 export function killRegistry(workerIndex: number, name: RegistryName): void {
-  execSync(`docker kill ${containerName(name, workerIndex)}`, { stdio: "pipe" });
+  spawnSync("docker", ["kill", containerName(name, workerIndex)], { stdio: "pipe" });
 }
 
 /** Start a previously killed container after a delay. */
@@ -84,10 +83,9 @@ export function restartWithDelay(
   name: RegistryName,
   delayMs: number
 ): void {
+  const cname = containerName(name, workerIndex);
   setTimeout(() => {
-    spawnSync("docker", ["start", containerName(name, workerIndex)], {
-      stdio: "pipe",
-    });
+    spawnSync("docker", ["start", cname], { stdio: "pipe" });
   }, delayMs);
 }
 
@@ -104,8 +102,15 @@ export function addNetworkDelay(
   name: RegistryName,
   delayMs: number
 ): void {
-  execSync(
-    `docker exec ${containerName(name, workerIndex)} tc qdisc add dev eth0 root netem delay ${delayMs}ms`,
+  // Validate delayMs is a safe integer before converting to string arg
+  const safeDelay = `${Math.floor(Math.abs(delayMs))}ms`;
+  spawnSync(
+    "docker",
+    [
+      "exec",
+      containerName(name, workerIndex),
+      "tc", "qdisc", "add", "dev", "eth0", "root", "netem", "delay", safeDelay,
+    ],
     { stdio: "pipe" }
   );
 }
@@ -118,14 +123,11 @@ export function resetNetworkEffects(
   workerIndex: number,
   name: RegistryName
 ): void {
-  try {
-    execSync(
-      `docker exec ${containerName(name, workerIndex)} tc qdisc del dev eth0 root`,
-      { stdio: "pipe" }
-    );
-  } catch {
-    // qdisc may not exist if addNetworkDelay was never called
-  }
+  spawnSync(
+    "docker",
+    ["exec", containerName(name, workerIndex), "tc", "qdisc", "del", "dev", "eth0", "root"],
+    { stdio: "pipe" }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,20 +140,18 @@ export async function waitForContainerHealthy(
   name: RegistryName,
   timeoutMs = 30_000
 ): Promise<void> {
+  const cname = containerName(name, workerIndex);
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    try {
-      const out = execSync(
-        `docker inspect --format='{{.State.Health.Status}}' ${containerName(name, workerIndex)}`,
-        { encoding: "utf8", stdio: "pipe" }
-      );
-      if (out.trim() === "healthy") return;
-    } catch {
-      // Container may not exist yet
-    }
+    const result = spawnSync(
+      "docker",
+      ["inspect", "--format={{.State.Health.Status}}", cname],
+      { encoding: "utf8", stdio: "pipe" }
+    );
+    if (result.stdout?.trim() === "healthy") return;
     await new Promise((r) => setTimeout(r, 1_000));
   }
   throw new Error(
-    `Container ${containerName(name, workerIndex)} did not become healthy within ${timeoutMs}ms`
+    `Container ${cname} did not become healthy within ${timeoutMs}ms`
   );
 }

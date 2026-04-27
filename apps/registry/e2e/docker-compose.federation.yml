@@ -7,11 +7,15 @@ version: "3.9"
 # Overridden per-worker by PAP_PORT_A/B/C/D env vars passed from docker-helpers.ts.
 #
 # All instances use tmpfs for fast ephemeral storage; no data survives a cluster stop.
+# Security hardening: read_only root FS + no-new-privileges on all services.
 
 services:
   registry-a:
     image: pap-registry:latest
     container_name: registry-a-worker0
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     environment:
       PAP_REGISTRY_NO_TLS: "true"
       LEPTOS_SITE_ROOT: /app/site
@@ -21,6 +25,7 @@ services:
       - "${PAP_PORT_A:-7900}:7890"
     tmpfs:
       - /data
+      - /tmp
     healthcheck:
       test: ["CMD", "curl", "-fk", "https://localhost:7890/federation/identity"]
       interval: 3s
@@ -32,6 +37,9 @@ services:
   registry-b:
     image: pap-registry:latest
     container_name: registry-b-worker0
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     environment:
       PAP_REGISTRY_NO_TLS: "true"
       LEPTOS_SITE_ROOT: /app/site
@@ -42,6 +50,7 @@ services:
       - "${PAP_PORT_B:-7901}:7890"
     tmpfs:
       - /data
+      - /tmp
     volumes:
       - ./seed-agents:/app/seed-agents:ro
     healthcheck:
@@ -55,6 +64,9 @@ services:
   registry-c:
     image: pap-registry:latest
     container_name: registry-c-worker0
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     environment:
       PAP_REGISTRY_NO_TLS: "true"
       LEPTOS_SITE_ROOT: /app/site
@@ -64,6 +76,7 @@ services:
       - "${PAP_PORT_C:-7902}:7890"
     tmpfs:
       - /data
+      - /tmp
     healthcheck:
       test: ["CMD", "curl", "-fk", "https://localhost:7890/federation/identity"]
       interval: 3s
@@ -75,6 +88,9 @@ services:
   registry-d:
     image: pap-registry:latest
     container_name: registry-d-worker0
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     environment:
       PAP_REGISTRY_NO_TLS: "true"
       LEPTOS_SITE_ROOT: /app/site
@@ -84,6 +100,7 @@ services:
       - "${PAP_PORT_D:-7903}:7890"
     tmpfs:
       - /data
+      - /tmp
     healthcheck:
       test: ["CMD", "curl", "-fk", "https://localhost:7890/federation/identity"]
       interval: 3s

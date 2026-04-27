@@ -213,8 +213,16 @@ export async function publishAgentViaAPI(
 export function readSeedAgent(filename: string): string {
   const fs = require("fs") as typeof import("fs");
   const p = require("path") as typeof import("path");
-  return fs.readFileSync(
-    p.join(__dirname, "..", "seed-agents", filename),
-    "utf8"
-  );
+  // Reject any filename containing path separators or traversal sequences
+  // to prevent path traversal (Semgrep path-join-resolve-traversal).
+  if (/[/\\]|\.\./.test(filename)) {
+    throw new Error(`readSeedAgent: invalid filename '${filename}'`);
+  }
+  const seedDir = p.resolve(__dirname, "..", "seed-agents");
+  const fullPath = p.resolve(seedDir, filename);
+  // Verify resolved path stays within the seed-agents directory
+  if (!fullPath.startsWith(seedDir + p.sep) && fullPath !== seedDir) {
+    throw new Error(`readSeedAgent: path traversal detected for '${filename}'`);
+  }
+  return fs.readFileSync(fullPath, "utf8");
 }

@@ -10,7 +10,7 @@
  *   worker 3: A=7930, B=7931, C=7932, D=7933
  */
 
-import { execSync, spawnSync } from "child_process";
+import { spawnSync } from "child_process";
 import * as path from "path";
 
 const COMPOSE_FILE = path.join(__dirname, "..", "docker-compose.federation.yml");
@@ -128,14 +128,16 @@ export function getRegistryLogs(
   name: RegistryName,
   lines = 100
 ): string {
-  try {
-    return execSync(
-      `docker logs --tail ${lines} ${containerName(name, workerIndex)}`,
-      { encoding: "utf8" }
-    );
-  } catch {
-    return `[could not get logs for ${containerName(name, workerIndex)}]`;
+  const cname = containerName(name, workerIndex);
+  const result = spawnSync(
+    "docker",
+    ["logs", "--tail", String(Math.floor(lines)), cname],
+    { encoding: "utf8", stdio: "pipe" }
+  );
+  if (result.error || result.status !== 0) {
+    return `[could not get logs for ${cname}]`;
   }
+  return (result.stdout ?? "") + (result.stderr ?? "");
 }
 
 /** Poll a registry until it responds on /federation/identity (max 30s). */
