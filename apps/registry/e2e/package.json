@@ -1,0 +1,18 @@
+{
+  "name": "pap-registry-federation-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright federation E2E test suite for pap-registry",
+  "scripts": {
+    "test": "npx playwright test tests/federation-sync.spec.ts",
+    "test:headed": "npx playwright test tests/federation-sync.spec.ts --headed",
+    "test:debug": "npx playwright test tests/federation-sync.spec.ts --debug",
+    "test:chaos": "RUN_CHAOS_TESTS=true npx playwright test tests/federation-chaos.spec.ts",
+    "test:all": "npx playwright test",
+    "install:browsers": "npx playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@types/node": "^20.0.0"
+  }
+}

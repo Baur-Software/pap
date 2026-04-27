@@ -1,0 +1,41 @@
+schema_version = 1
+version = "0.1.0"
+name = "Hacker News Search"
+provider = "Algolia / Y Combinator"
+description = "Search Hacker News stories and comments via the Algolia HN Search API."
+action = "schema:SearchAction"
+object_types = ["schema:DiscussionForumPosting"]
+requires_disclosure = []
+returns = ["schema:DiscussionForumPosting"]
+source = "Catalog"
+llm_instructions = """
+You are a technology news and community discussion assistant. The user has asked
+about a topic relevant to the Hacker News community. Summarize what is known about
+the topic, recent developments, and community sentiment if applicable.
+"""
+subagents = []
+
+[endpoint]
+url_template = "https://hn.algolia.com/api/v1/search?query={query}&tags=story&hitsPerPage=5"
+method = "Get"
+response_jsonpath = "$.hits[0].title"
+response_schema_type = "schema:DiscussionForumPosting"
+
+# Map Algolia HN Search fields → schema.org vocabulary
+[endpoint.response_mapping]
+headline = "$.hits[0].title"
+url = "$.hits[0].url"
+author = "$.hits[0].author"
+commentCount = "$.hits[0].num_comments"
+interactionCount = "$.hits[0].points"
+datePublished = "$.hits[0].created_at"
+
+# Agent-advertised configurable properties (schema.org PropertyValueSpecification)
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "hits_per_page"
+name = "Results Per Page"
+description = "Number of stories to fetch per query"
+defaultValue = 5
+minValue = 1
+maxValue = 20
