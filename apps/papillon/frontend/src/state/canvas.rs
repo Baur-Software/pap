@@ -85,6 +85,10 @@ pub struct CanvasState {
     /// Components can subscribe to this instead of the full `canvases` vec
     /// to react to specific event types without unnecessary re-renders.
     pub last_event: RwSignal<Option<CanvasEvent>>,
+    /// Live workflow graph for the active canvas (MAP = auto-derived; DESIGN = authored).
+    pub workflow_graph: RwSignal<papillon_shared::WorkflowGraph>,
+    /// Whether the Workflow tab is in Map or Design sub-mode.
+    pub workflow_mode: RwSignal<papillon_shared::WorkflowMode>,
 }
 
 impl Default for CanvasState {
@@ -103,6 +107,8 @@ impl Default for CanvasState {
             requested_expansion: RwSignal::new(None),
             block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
             last_event: RwSignal::new(None),
+            workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
+            workflow_mode: RwSignal::new(papillon_shared::WorkflowMode::default()),
         }
     }
 }
@@ -1484,6 +1490,22 @@ mod tests {
         let block_id = "xyz".to_string();
         let result = format!("{}{{{{block:{}}}}}", current, block_id);
         assert_eq!(result, "search for {{block:xyz}}");
+    }
+
+    // ── WorkflowGraph / WorkflowMode defaults ────────────────────────────────
+
+    #[test]
+    fn workflow_graph_default_is_empty() {
+        let g = papillon_shared::WorkflowGraph::default();
+        assert!(g.nodes.is_empty());
+        assert!(g.edges.is_empty());
+        assert!(!g.is_designed);
+    }
+
+    #[test]
+    fn workflow_mode_default_is_map() {
+        let m = papillon_shared::WorkflowMode::default();
+        assert_eq!(m, papillon_shared::WorkflowMode::Map);
     }
 
 }
