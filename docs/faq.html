@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <script>!function(){var t=localStorage.getItem('pap-theme');if(t)document.documentElement.dataset.theme=t}()</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FAQ — Principal Agent Protocol</title>
   <meta name="description" content="Honest answers to the hardest technical and enterprise questions about PAP — trust model, cryptography, governance, latency, compliance, and developer experience." />
   <meta property="og:title" content="FAQ — Principal Agent Protocol" />
-  <meta property="og:description" content="13 hard questions about PAP, answered honestly. Trust model, cryptographic limitations, enterprise identity, regulatory compliance, and Python integration." />
+  <meta property="og:description" content="15 hard questions about PAP, answered honestly. Enterprise identity, compliance, integration, OAuth comparison, trust model, cryptographic limitations, and developer experience." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="FAQ — Principal Agent Protocol" />
-  <meta name="twitter:description" content="13 hard questions about PAP, answered honestly." />
+  <meta name="twitter:description" content="15 hard questions about PAP, answered honestly." />
   <meta name="twitter:image" content="https://baur-software.github.io/pap/assets/images/og-card.png" />
   <link rel="icon" type="image/x-icon" href="./favicon.ico" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -62,7 +63,7 @@
       Every protocol has real limitations. PAP's are documented here, alongside what's
       currently implemented, what's on the roadmap, and where the open design questions live.
     </p>
-    <p class="hero-note">13 questions · reviewed April 2026</p>
+    <p class="hero-note">15 questions · reviewed April 2026</p>
   </div>
 </section>
 
@@ -73,24 +74,24 @@
     <!-- Category filter -->
     <div class="filter-row reveal">
       <button class="filter-pill active" data-cat="all">All</button>
-      <button class="filter-pill" data-cat="trust">Trust Model</button>
-      <button class="filter-pill" data-cat="crypto">Cryptography</button>
-      <button class="filter-pill" data-cat="governance">Governance</button>
-      <button class="filter-pill" data-cat="latency">Latency</button>
+      <button class="filter-pill" data-cat="enterprise">Enterprise</button>
       <button class="filter-pill" data-cat="compliance">Compliance</button>
       <button class="filter-pill" data-cat="dx">Developer UX</button>
-      <button class="filter-pill" data-cat="enterprise">Enterprise</button>
+      <button class="filter-pill" data-cat="trust">Trust Model</button>
+      <button class="filter-pill" data-cat="crypto">Cryptography</button>
+      <button class="filter-pill" data-cat="latency">Latency</button>
+      <button class="filter-pill" data-cat="governance">Governance</button>
     </div>
 
     <div class="faq-list" id="faq-list">
 
-      <!-- 1 -->
-      <div class="faq-item reveal" data-cat="trust">
+      <!-- 1 (old 1) -->
+      <div class="faq-item reveal" data-cat="enterprise">
         <button class="faq-q" aria-expanded="false">
           <div class="faq-q-left">
             <span class="faq-num">01</span>
             <div class="faq-q-text">
-              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
               Does PAP work with our company's existing identity system — SSO, Active Directory, SAML?
             </div>
           </div>
@@ -109,514 +110,11 @@
         </div>
       </div>
 
-      <!-- 2 -->
-      <div class="faq-item reveal reveal-delay-1" data-cat="crypto">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">02</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-crypto">Cryptography</span></div>
-              Could an agent build a profile of me just from seeing which data fields were requested, even without the actual values?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            PAP gives you two controls for this. First, enable OHTTP in Settings — it wraps every request in RFC 9458 HPKE so even the relay hop sees nothing, not the query structure, not the property list. Second, set <code>no_retention: true</code> on any disclosure entry where you need the receiving agent to discard its copy of the receipt. When that flag is set, PAP requires the agent to run in a TEE — the retention constraint becomes cryptographically binding, not a promise. The risk isn't gone without these settings, but with them it's fully addressed.
-          </p>
-          <p>
-            <strong>The underlying concern — and why both controls matter.</strong>
-            Each agent in
-            <code>pap-agents</code> declares exactly what it needs via
-            <code>AgentMeta.requires_disclosure</code>
-            (<code>crates/pap-agents/src/executor.rs</code>) — those property names are embedded
-            in the Mandate's <code>DisclosureSet</code> during Phase 2 of the handshake, bounding
-            the scope of what the agent is permitted to receive. The Phase 3 disclosure payload
-            carries the query inside that scope boundary.
-            <a href="#gloss-sd-jwt" class="gloss">SD-JWT</a> (<code>pap-credential/src/sd_jwt.rs</code>)
-            hides claim <em>values</em> via per-claim salted hashes and is available as an optional
-            enhancement for credential-bearing payloads, but is not used in the current query
-            handshake path — claim <em>structure</em> is not hidden. The
-            <strong>recipient agent</strong> always learns which property slots were disclosed;
-            that is the intent of the handshake. Network-level visibility is configurable:
-            OHTTP (RFC 9458, HPKE DHKEM-X25519 + AES-128-GCM) is a setting in Papillon and
-            Chrysalis — when enabled, relay operators and passive observers see nothing.
-            Without it, transport encryption is present but query structure is visible to
-            the relay hop.
-          </p>
-          <p>
-            Receipts store property <em>references</em>, never values: <code>pap-core/src/receipt.rs</code>
-            holds <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — strings like
-            <code>"schema:Person.name"</code>. The receiving agent holds a co-signed copy after
-            every session. Across multiple sessions the pattern of which properties a principal
-            discloses to that agent can become a quasi-identifier even without any value leaving.
-            The <code>no_retention</code> flag on <code>DisclosureEntry</code>
-            (<code>pap-core/src/scope.rs</code>) addresses this: when set, the handshake requires
-            TEE attestation from the receiving agent before proceeding, making receipt discard
-            auditable rather than contractual.
-          </p>
-          <p>
-            In healthcare and financial services, <em>which</em> properties were accessed is frequently
-            PHI or material non-public information in its own right — both controls are worth
-            enabling by default in those contexts.
-          </p>
-          <p>
-            <strong>What we're watching:</strong> The <a href="https://privacybydesign.foundation/irma-english/" target="_blank" rel="noopener">IRMA/Yivi</a>
-            ZKP-based approach provides stronger structural privacy guarantees using W3C VCs.
-            A future spec section will evaluate ZKP-based disclosure as an optional enhancement
-            for cases where even TEE-attested no-retention is insufficient.
-          </p>
-        </div>
-      </div>
-
-      <!-- 3 -->
-      <div class="faq-item reveal reveal-delay-2" data-cat="governance">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">03</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-governance">Governance</span></div>
-              Who runs the privacy relay, and could it become a new central chokepoint?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            The relay runs wherever you deploy it — colocated with your own node, not on Baur Software infrastructure. If you don't configure one, the protocol falls back to a direct connection: <code>relay_url</code> is optional, and when it's absent, the handshake continues without it. Privacy degrades — query structure becomes visible at the relay hop — but the session never breaks, and scope enforcement, expiring mandates, and co-signed receipts all work exactly the same.
-          </p>
-          <p>
-            <strong><a href="#gloss-ohttp" class="gloss">OHTTP</a> relay capability is built into
-            <a href="#gloss-papillon" class="gloss">Papillon</a> and
-            <a href="#gloss-chrysalis" class="gloss">Chrysalis</a> — it runs
-            colocated with each deployment, not on Baur Software infrastructure.</strong>
-            When OHTTP is configured, there is no external relay operator to capture traffic.
-            The decentralization is topological: the relay lives alongside your own node.
-          </p>
-          <p>
-            <code>relay_url</code> in <code>pap-transport/src/ohttp.rs</code> is typed
-            <code>Option&lt;String&gt;</code>. When absent, the protocol falls back to a direct
-            connection — privacy degrades but the handshake never breaks. The core guarantees
-            (SD-JWT selective disclosure, ephemeral session DIDs, deny-by-default mandates)
-            do not depend on OHTTP being enabled.
-          </p>
-          <p>
-            When the relay is active, it uses
-            <a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">RFC 9458</a>
-            HPKE: DHKEM(X25519, HKDF-SHA256) + AES-128-GCM (RFC 9180). Relay operators and
-            passive observers cannot link IP addresses to query content or SD-JWT disclosure
-            structure.
-          </p>
-        </div>
-      </div>
-
-      <!-- 4 -->
-      <div class="faq-item reveal" data-cat="governance">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">04</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-governance">Governance</span></div>
-              What stops someone from flooding the network with fake agents?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            Getting a fake agent into the Chrysalis mesh takes real calendar time, not just compute. A new peer needs three vouches from existing members, each of whom can only vouch for three peers per year — and must themselves have been active for at least 90 days before they can vouch for anyone. New peers spend 60 days in a probationary state. The trust graph also checks path diversity: if your three vouchers all trace back through the same cluster of ancestors, the registration is rejected. You can't manufacture trust quickly; you have to earn it slowly.
-          </p>
-          <p>
-            <strong>Vouch-based peer admission.</strong> Joining the Chrysalis mesh is not free —
-            it requires existing trusted peers to stake their reputation on you.
-            <code>pap-federation/src/registry.rs</code> enforces:
-          </p>
-          <p>
-            <strong>3 vouches required</strong> to register a new peer.
-            Each existing peer may issue at most <strong>3 vouches per year</strong> — a rate budget that
-            makes flooding expensive. A peer must be registered for at least
-            <strong>90 days</strong> before it can vouch for anyone.
-            New peers enter a <strong>60-day probationary period</strong> with limited permissions.
-          </p>
-          <p>
-            Diverse trust paths (<code>require_diverse_paths</code>) are specified in the policy struct
-            and are being enforced now — ensuring N vouchers don't all route through the same
-            small set of ancestors, preventing a captured clique from bootstrapping unlimited new peers.
-          </p>
-          <p>
-            This is a social-graph approach rather than proof-of-stake or proof-of-work. The rate
-            constraints make a Sybil flood expensive in terms of calendar time and peer relationships,
-            not compute or tokens.
-          </p>
-        </div>
-      </div>
-
-      <!-- 5 -->
-      <div class="faq-item reveal reveal-delay-1" data-cat="governance">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">05</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-governance">Governance</span></div>
-              Google basically co-created Schema.org. Doesn't that give them leverage over PAP?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            The protocol doesn't depend on Schema.org being controlled by anyone in particular. The action field in a mandate is a plain string — any namespace-prefixed identifier is valid. Schema.org is the default because it's widely understood and makes agents discoverable to everyone, but a financial compliance action, a FHIR operation, or a lab protocol step can be expressed as <code>operator:FhirReadAction</code> without touching Schema.org at all. The governance capture risk is real for the interoperability layer — agents that want to be universally discoverable benefit from Schema.org alignment. Agents targeting a specific vertical can use the <code>operator:</code> namespace freely.
-          </p>
-          <p>
-            Schema.org is a <strong>collaborative, open-community project</strong> founded by Google,
-            Microsoft, Yahoo, and Yandex to create a shared structured-data vocabulary. The schema
-            is community-governed; contributions come from across the web industry.
-            Google drives significant adoption through rich-result support, but it does not have unilateral
-            control over the vocabulary.
-          </p>
-          <p>
-            <strong>The protocol is not locked to Schema.org.</strong>
-            <code>ScopeAction.action</code> in <code>crates/pap-core/src/scope.rs</code> is a
-            plain string — any namespace-prefixed URI is valid. Spec §17.6 reserves three
-            prefixes: <code>schema:</code> (Schema.org, standard interoperability baseline),
-            <code>operator:</code> (implementation-defined, for agent operator custom vocabulary),
-            and <code>pap:</code> (reserved for PAP specification extensions). A financial
-            compliance action, a FHIR operation, or a laboratory protocol step can be expressed
-            as <code>operator:FhirReadAction</code> or <code>pap:ClinicalTrialEnrollAction</code>
-            without touching Schema.org at all.
-          </p>
-          <p>
-            <code>crates/pap-core/src/extensions.rs</code> implements spec sections 9.1–9.4:
-            Continuity Tokens (cross-session encrypted state, §9.3) and Auto-Approval Policies
-            (§9.4) are the first shipped protocol-level extensions. The <code>conditions</code>
-            field in <code>ScopeAction</code> is an opaque JSON map for arbitrary
-            protocol-level constraints not representable in Schema.org. Dynamic agent definitions
-            (<code>crates/pap-agents/src/dynamic.rs</code>) accept any action and return-type
-            strings, so custom-vocabulary agents ship without a spec change.
-          </p>
-          <p>
-            The governance capture risk is real for the <em>interoperability layer</em> —
-            agents that want to be universally discoverable benefit from Schema.org alignment.
-            Agents targeting a specific vertical or operator deployment can use the
-            <code>operator:</code> namespace freely. Schema.org is the default, not the ceiling.
-          </p>
-        </div>
-      </div>
-
-      <!-- 6 -->
-      <div class="faq-item reveal reveal-delay-2" data-cat="trust">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">06</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-trust">Trust Model</span></div>
-              Could a malicious agent sneak around your restrictions by breaking one big ask into many small ones?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            The mandate chain enforces scope cryptographically at every delegation step. Each child's scope must be a strict subset of its parent's, its TTL can't exceed its parent's, and the whole chain is hash-linked so nothing can be forged or reordered. An agent cannot ask for more than it was granted, regardless of how the request is phrased. The narrower residual risk: a sequence of zero-disclosure micro-actions — each individually below the approval threshold — could collectively achieve something a single equivalent request would have surfaced for review. The cryptographic bounds still hold at each step. The gap is at the semantic layer, not the authorization layer.
-          </p>
-          <p>
-            <a href="#gloss-scope" class="gloss">Scope containment</a> is <strong>cryptographically enforced at every delegation step</strong>.
-            <code>pap-core/src/scope.rs</code> <code>contains()</code> verifies that a child
-            <a href="#gloss-mandate" class="gloss">mandate</a>'s
-            action set is a strict subset of its parent's. <code>mandate.rs</code> <code>verify_chain()</code>
-            binds each delegation to its parent by hash — you cannot forge a valid chain that expands scope.
-            TTL cannot exceed the parent mandate either.
-          </p>
-          <p>
-            Auto-approval has a further constraint: it triggers <strong>only when
-            <code>requires_disclosure.is_empty()</code></strong> (<code>canvas.rs</code>). No action that
-            requires any disclosure from the principal can be auto-approved — the user always sees
-            the approval gate.
-          </p>
-          <p>
-            The narrower residual risk: a sequence of <em>zero-disclosure</em> sub-actions that individually
-            pass auto-approval could collectively achieve an effect that a single equivalent request
-            would have surfaced for explicit consent. The cryptographic scope bounds still apply to each
-            step; the gap is at the semantic composition layer.
-          </p>
-        </div>
-      </div>
-
-      <!-- 7 -->
-      <div class="faq-item reveal" data-cat="trust">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">07</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-trust">Trust Model</span></div>
-              Can't someone trick PAP with a prompt injection attack?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            The parts of PAP that enforce what an agent can do are cryptographic, not textual. Your device-signed key authorizes scope — no injected text can change that. The routing step has three layers: direct URL detection (deterministic), BM25 scoring (pure math — k1=1.5, b=0.75, no model), and on-device LLM fallback only when confidence drops below 0.35. Even at the LLM layer, the output must match one of a fixed list of permitted action strings from the agent catalog — a hallucinated action that isn't on the list is discarded. The model receives your query text and the list of allowed action types. It cannot see your mandate, your session keys, or any prior disclosed values.
-          </p>
-          <p>
-            <strong>The premise needs clarifying.</strong> Papillon's intent router is a
-            <strong>three-level deterministic chain</strong> — no LLM is in the path until
-            the optional third level:
-          </p>
-          <ol style="margin: 0.75em 0 0.75em 1.5em; line-height: 1.8">
-            <li><strong>URL fast path</strong> (~0 µs) — <code>papillon-shared/src/intent.rs</code>
-                detects <code>pap://</code>, <code>pap+https://</code>, and HTTPS URLs and dispatches
-                them directly without touching the semantic layers.</li>
-            <li><strong>BM25 semantic index</strong> (~50 µs) — <code>pap-agents/src/intent_index.rs</code>
-                scores the user query against every agent's catalog descriptor using Okapi BM25
-                (k1 = 1.5, b = 0.75, pure Rust, zero external deps). Scores are summed per
-                <code>schema:</code> action group; the winning group drives routing, and the
-                highest-scoring individual agent within that group becomes the preferred local agent.
-                No network, no model weights.</li>
-            <li><strong>On-Device AI fallback</strong> (~100 ms) — when BM25 confidence is below
-                threshold, the query goes to a local model (Candle, never a cloud API). The query
-                arrives in a delimited <code>[INST]…[/INST]</code> conversation role; the preamble
-                is the user's own memex history (trusted data), not external content.</li>
-          </ol>
-          <p>
-            The 6-phase PAP handshake enforces scope cryptographically after routing.
-            Prompt injection has <strong>no effect on levels 1 or 2</strong> — they are
-            deterministic programs, not generation models. Level 3 uses an on-device,
-            sandboxed model with zero disclosure requirements of its own.
-          </p>
-          <p>
-            An LLM appears in exactly two places, both <em>after</em> the handshake:
-          </p>
-          <p>
-            <strong>On-Device AI fallback</strong> — described above as level 3.
-          </p>
-          <p>
-            <strong>Pipeline Synthesizer</strong> — an optional post-execution node that merges
-            multi-agent results using the local model. This runs after all disclosure and execution
-            is complete; it cannot retroactively change what was disclosed.
-          </p>
-          <p>
-            Prompt injection risk is <strong>none in the main handshake path</strong>, and <strong>low
-            in the local LLM path</strong> — the model is on-device, sandboxed, and operates with
-            zero disclosure requirements of its own.
-          </p>
-        </div>
-      </div>
-
-      <!-- 8 -->
-      <div class="faq-item reveal reveal-delay-1" data-cat="latency">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">08</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-latency">Latency</span></div>
-              How fast is PAP in the real world — what are the actual latency numbers?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            The loopback benchmarks — 2,000 runs each, 200 warmup — show full session lifecycle at 130 µs p50 / 500 µs p99, and a three-level mandate chain verification at 138.5 µs p50 / 480 µs p99. Those are on a single machine with no network hop, so they're best-case numbers. Real latency adds network RTT at each of the six protocol phases. One detail worth understanding: the HTTP path treats each phase as an independent POST and can be retried per-phase if a connection drops. The WebSocket path shares one persistent connection across all six phases — a drop requires starting a new session. Neither path is fail-open; errors propagate immediately to the caller.
-          </p>
-          <p>
-            Measured loopback numbers from CI (<code>benches/baseline.json</code>):
-            full session lifecycle <strong>130 µs p50 / 500 µs p99</strong> (target &lt;20 ms),
-            depth-3 mandate chain verification <strong>138.5 µs p50 / 480 µs p99</strong>.
-            The Criterion suite runs a 55% regression gate on p50 and a 50% gate on p99 —
-            thresholds calibrated for GitHub-hosted runner variance, not relaxed protocol limits.
-            p99 benchmarks are in <code>benches/benches/p99.rs</code> with CI regression guards.
-          </p>
-          <p>
-            Two edge cases worth understanding:
-          </p>
-          <p>
-            <strong>Network drop mid-handshake</strong> — behavior depends on which transport
-            is in use. <strong>HTTP (stateless):</strong> each phase is an independent POST;
-            a connection failure surfaces as a <code>TransportError::ConnectionFailed</code>
-            immediately. The request either reached the server and was processed, or it didn't —
-            the caller retries or aborts. <strong>WebSocket (stateful):</strong> all six phases
-            share one persistent connection; a connection drop terminates the session handler
-            and the session is abandoned. Neither transport is fail-open — the error propagates
-            to the caller. The distinction that matters is idempotency: the HTTP path can be
-            retried per-phase; the WebSocket path requires starting a new session. The residual
-            concern for high-value agents is a server-side session stuck in a non-<code>Closed</code>
-            state after a client drop — orphaned ephemeral keys and partial mandate state that
-            expire with the mandate TTL.
-          </p>
-          <p>
-            <strong>TTL expiry:</strong> mandate TTL is checked at every
-            <code>verify_chain()</code> call (<code>mandate.rs</code>), which occurs at
-            each phase boundary. A mandate close to its expiry when the session opens may
-            pass the Phase 1 check but fail at Phase 4 execution if the TTL ticks over
-            between phases. No built-in grace period or mid-flight renewal path exists today.
-          </p>
-        </div>
-      </div>
-
-      <!-- 9 -->
-      <div class="faq-item reveal reveal-delay-2" data-cat="compliance">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">09</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-compliance">Compliance</span></div>
-              Does PAP satisfy GDPR, HIPAA, and financial regulations out of the box?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            The hard parts are protocol invariants, not configuration. There's no central PAP server — nothing to breach at the platform level. Every session runs under a time-limited permission that decays on its own (Active → Degraded → ReadOnly → Suspended). Receipts store which <em>types</em> of data were accessed — <code>"schema:Person.dateOfBirth"</code> — never actual values. The episode store is local SQLite under your control. For stricter requirements — HIPAA no-retention policies, MiFID audit windows — those are configurable at deployment. Set <code>no_retention: true</code> on a disclosure entry and the protocol requires the receiving agent to run in a TEE, making the retention constraint cryptographically auditable rather than contractual.
-          </p>
-          <p>
-            Receipts contain <strong>property references only, never values</strong>
-            (<code>pap-core/src/receipt.rs</code>: <code>Vec&lt;String&gt;</code> of strings like
-            <code>"schema:Person.name"</code>). Each party holds their own copy locally —
-            receipts are never stored by a platform. There is no central data controller.
-            The compliance behaviors below are <strong>programmable at the deployment layer</strong>,
-            not gaps in the spec.
-          </p>
-          <p>
-            <strong>GDPR Article 17 (right to erasure):</strong> The episode store
-            (<code>episode_db.rs</code>) is a local SQLite database under the principal's
-            sole control. A GDPR-compliant deployment can implement a retention policy or
-            deletion API directly against the local DB — there is no platform or third party
-            to coordinate with. Immutability of the co-signed receipt is the default because
-            it provides the strongest accountability, but the deployment controls the store.
-          </p>
-          <p>
-            <strong>HIPAA Minimum Necessary:</strong> Property type references in receipts
-            can themselves constitute PHI. Knowing <code>MedicalCondition</code> was disclosed
-            reveals a medical relationship even without the value. A PAP-HIPAA deployment
-            profile can restrict which <code>schema:</code> types are loggable and configure
-            receipt retention periods — the mandate scope mechanism already enforces property-type
-            minimisation at handshake time.
-          </p>
-          <p>
-            <strong>MiFID II / Dodd-Frank:</strong> Ephemeral session DIDs are the default
-            for privacy; a regulated deployment can configure session DID persistence and
-            set mandate TTL to cover 7-year reconstruction windows. The protocol does not
-            prevent long retention — it makes short retention the default. Financial agent
-            deployments configure what they need.
-          </p>
-        </div>
-      </div>
-
-      <!-- 10 -->
-      <div class="faq-item reveal" data-cat="dx">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">10</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-dx">Developer UX</span></div>
-              How do I use PAP with Python, LangChain, or CrewAI?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            Full PyO3 bindings ship today. Async works correctly — the GIL is released during <code>await</code>, so concurrent handshakes don't block each other in asyncio pipelines. There's an integration guide covering LangChain, CrewAI, and MCP.
-          </p>
-          <p>
-            <strong>Install from PyPI (recommended):</strong>
-          </p>
-          <pre><code>pip install pap-protocol</code></pre>
-          <p>
-            Pre-built wheels are available for Linux x86_64/aarch64, macOS universal2, and Windows x64 — no Rust toolchain required.
-          </p>
-          <p>
-            <strong>Full PyO3 bindings ship today.</strong> <code>crates/pap-python/src/lib.rs</code>
-            (1,595 lines) exposes the complete PAP API with both blocking methods and
-            <em>async variants</em> for all transport steps. The async path uses PyO3 0.24
-            <code>experimental-async</code>, which releases the GIL during <code>await</code> — making
-            concurrent handshakes work correctly in <code>asyncio</code> agent pipelines without
-            <code>to_thread()</code> wrapping.
-          </p>
-          <p>
-            A comprehensive integration guide covers LangChain, CrewAI, and MCP with 1,293 lines
-            of annotated examples:
-            <code>docs/integration-guides/langchain-crewai-mcp.md</code>.
-            The TypeScript equivalent — <code>packages/pap-ts</code> — is a pure native async
-            implementation with zero Rust dependency, for reference.
-          </p>
-          <p>
-            <strong>Building from source</strong> (for contributors or unreleased branches):
-            <code>cd crates/pap-python &amp;&amp; pip install maturin &amp;&amp; maturin develop --release</code>
-          </p>
-        </div>
-      </div>
-
-      <!-- 11 -->
-      <div class="faq-item reveal" data-cat="enterprise">
-        <button class="faq-q" aria-expanded="false">
-          <div class="faq-q-left">
-            <span class="faq-num">11</span>
-            <div class="faq-q-text">
-              <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
-              If the AI model gets compromised, does your whole security model fall apart?
-            </div>
-          </div>
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="faq-body">
-          <p>
-            No — and the reason is that the model is structurally isolated from anything security-critical. It has one job: pick one of the action strings you handed it. It receives your query text and a list of permitted action types from the agent catalog. It cannot see your mandate, your session keys, your principal identity, or any previously disclosed values. Its output must match one of the strings it was given — a hallucinated action is discarded. What the model controls is routing: which catalog agent handles your query. What it cannot touch is the mandate that governs what that agent is allowed to do. Those are signed by your device-bound key, which the model never sees. If you prefer no model at all, <code>LlmProvider::None</code> gives you the full protocol running deterministically.
-          </p>
-          <p>
-            <strong>The LLM touches exactly one function in the PAP stack.</strong>
-            The <code>LlmClient</code> trait in <code>crates/pap-agents/src/llm.rs</code> exposes two methods:
-            <code>classify_intent(text, candidate_actions)</code> and <code>complete(system, user)</code>.
-            That's the entire surface. The model receives the user's query string and a pre-computed list
-            of allowed <code>schema:*Action</code> strings. It does not receive — and cannot request —
-            mandate contents, scope, TTL, session DIDs, disclosure sets, or the principal's keypair.
-          </p>
-          <p>
-            <strong>Its output is validated before use.</strong> The return value of
-            <code>classify_intent</code> must match one of the strings in <code>candidate_actions</code>.
-            A hallucinated action that isn't on the list is discarded. The model controls which
-            catalog agent handles the query. It cannot alter the mandate that governs what that agent
-            is allowed to do — mandates are signed by the principal's device-bound Ed25519 key,
-            which the model never sees.
-          </p>
-          <p>
-            <strong>The four canonical LLM attack paths:</strong>
-            <strong>Prompt injection</strong> — succeeds only at routing the query to the wrong catalog
-            agent; it cannot forge the Ed25519 signature that authorizes scope. <strong>Context
-            exfiltration</strong> — the model only receives query text, never the mandate or session keys.
-            <strong>Session correlation</strong> — each session generates a fresh
-            <a href="#gloss-session-did" class="gloss">ephemeral session DID</a> discarded
-            at close; the model sees the query text, never the session DID. <strong>Scope escalation</strong>
-            — child mandates are cryptographically constrained to a subset of their parent's scope
-            (<code>Scope::deny_all()</code> baseline, <code>contains()</code> enforcement);
-            no model output can extend this.
-          </p>
-          <p>
-            <strong>The default is on-device.</strong> <code>LlmProvider::BuiltIn</code> runs inference
-            locally via Candle — no network call, no external endpoint, no logs leaving the device.
-            External providers (Mistral, Ollama, OpenAI-compatible) require the user to explicitly
-            configure an API key and endpoint URL. Even with an external provider, only query text
-            travels to the endpoint. For deployments requiring network-layer query privacy,
-            OHTTP (RFC 9458) with real HPKE decouples the IP address from the request content.
-          </p>
-          <p>
-            <strong>The LLM is also optional.</strong> The full 6-phase PAP handshake executes
-            deterministically via URL fast-path and BM25 semantic index without any model.
-            Setting <code>LlmProvider::None</code> gives a fully functional, cryptographically
-            sound protocol runtime. The model enhances intent resolution for ambiguous queries;
-            it gates no security decision.
-          </p>
-        </div>
-      </div>
-
-      <!-- 12 -->
+      <!-- 2 (old 12) -->
       <div class="faq-item reveal reveal-delay-1" data-cat="enterprise">
         <button class="faq-q" aria-expanded="false">
           <div class="faq-q-left">
-            <span class="faq-num">12</span>
+            <span class="faq-num">02</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
               Our security team requires Okta or Azure AD. Is there an integration path?
@@ -673,11 +171,11 @@
         </div>
       </div>
 
-      <!-- 13 -->
+      <!-- 3 (old 13) -->
       <div class="faq-item reveal reveal-delay-2" data-cat="enterprise">
         <button class="faq-q" aria-expanded="false">
           <div class="faq-q-left">
-            <span class="faq-num">13</span>
+            <span class="faq-num">03</span>
             <div class="faq-q-text">
               <div><span class="faq-badge badge-enterprise">Enterprise</span></div>
               We're in healthcare or financial services. How does PAP fit our compliance requirements?
@@ -748,6 +246,608 @@
             All public-data agents require zero personal disclosure
             (<code>requires_disclosure: []</code>), giving you a no-PHI-exposure baseline to
             build from.
+          </p>
+        </div>
+      </div>
+
+      <!-- 4 (old 9) -->
+      <div class="faq-item reveal" data-cat="compliance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">04</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-compliance">Compliance</span></div>
+              Does PAP satisfy GDPR, HIPAA, and financial regulations out of the box?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            The hard parts are protocol invariants, not configuration. There's no central PAP server — nothing to breach at the platform level. Every session runs under a time-limited permission that decays on its own (Active → Degraded → ReadOnly → Suspended). Receipts store which <em>types</em> of data were accessed — <code>"schema:Person.dateOfBirth"</code> — never actual values. The episode store is local SQLite under your control. For stricter requirements — HIPAA no-retention policies, MiFID audit windows — those are configurable at deployment. Set <code>no_retention: true</code> on a disclosure entry and the protocol requires the receiving agent to run in a TEE, making the retention constraint cryptographically auditable rather than contractual.
+          </p>
+          <p>
+            Receipts contain <strong>property references only, never values</strong>
+            (<code>pap-core/src/receipt.rs</code>: <code>Vec&lt;String&gt;</code> of strings like
+            <code>"schema:Person.name"</code>). Each party holds their own copy locally —
+            receipts are never stored by a platform. There is no central data controller.
+            The compliance behaviors below are <strong>programmable at the deployment layer</strong>,
+            not gaps in the spec.
+          </p>
+          <p>
+            <strong>GDPR Article 17 (right to erasure):</strong> The episode store
+            (<code>episode_db.rs</code>) is a local SQLite database under the principal's
+            sole control. A GDPR-compliant deployment can implement a retention policy or
+            deletion API directly against the local DB — there is no platform or third party
+            to coordinate with. Immutability of the co-signed receipt is the default because
+            it provides the strongest accountability, but the deployment controls the store.
+          </p>
+          <p>
+            <strong>HIPAA Minimum Necessary:</strong> Property type references in receipts
+            can themselves constitute PHI. Knowing <code>MedicalCondition</code> was disclosed
+            reveals a medical relationship even without the value. A PAP-HIPAA deployment
+            profile can restrict which <code>schema:</code> types are loggable and configure
+            receipt retention periods — the mandate scope mechanism already enforces property-type
+            minimisation at handshake time.
+          </p>
+          <p>
+            <strong>MiFID II / Dodd-Frank:</strong> Ephemeral session DIDs are the default
+            for privacy; a regulated deployment can configure session DID persistence and
+            set mandate TTL to cover 7-year reconstruction windows. The protocol does not
+            prevent long retention — it makes short retention the default. Financial agent
+            deployments configure what they need.
+          </p>
+        </div>
+      </div>
+
+      <!-- 5 (NEW) -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="dx">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">05</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-dx">Developer UX</span></div>
+              What does it take to integrate PAP into an existing agentic stack?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            Meaningful work, not a one-liner. PAP doesn't sit on top of your stack — it sits <em>below</em> it, as the trust layer your orchestration calls into before any agent executes. That means wrapping your existing agent dispatch paths with mandate issuance, connecting your session handling to the 6-phase handshake, and deciding how much of Chrysalis you self-host alongside your current infrastructure. None of that is inherently complicated, but it requires deliberate architecture, not a drop-in install.
+          </p>
+          <p>
+            <strong>The fastest path in is Python:</strong>
+          </p>
+          <pre><code>pip install pap-protocol</code></pre>
+          <p>
+            Pre-built wheels for Linux x86_64/aarch64, macOS universal2, and Windows x64 — no Rust toolchain needed. From there, <code>docs/integration-guides/langchain-crewai-mcp.md</code> walks through wiring PAP mandate issuance into a LangChain chain, a CrewAI crew, or an MCP server. The guide is 1,293 lines of annotated examples covering async, concurrent handshakes, and error propagation.
+          </p>
+          <p>
+            <strong>SDK coverage across languages:</strong> The core is Rust (<code>crates/pap-core/</code>), but production bindings exist for TypeScript (<code>packages/pap-ts/</code>, pure native async, zero Rust dependency), Python (PyO3, async-safe), C (<code>crates/pap-c/</code>, stable cdylib/staticlib), C# (via the C FFI layer), and Java (via the C FFI layer). If your stack is one of those, you're not writing FFI yourself.
+          </p>
+          <p>
+            <strong>What the integration actually involves:</strong>
+          </p>
+          <p>
+            <em>Mandate issuance</em> — wrap your existing "start agent task" calls to issue a PAP mandate first. The mandate specifies agent DID, action type, required disclosures, and TTL. Your orchestrator holds the principal's Ed25519 keypair and signs it. This is the core integration point.
+          </p>
+          <p>
+            <em>Chrysalis registry</em> — self-hostable alongside your current infrastructure. You can run a single-node Chrysalis deployment for your own agents before joining the federated mesh. The admission controls (vouching, probationary periods) are configurable per-deployment. <a href="chrysalis.html">Chrysalis docs →</a>
+          </p>
+          <p>
+            <em>Handshake transport</em> — HTTP or WebSocket. Both are standard. The HTTP path is stateless per-phase (retry-safe); the WebSocket path shares one connection across all six phases (lower overhead for interactive sessions). Swap in your existing transport client.
+          </p>
+          <p>
+            <strong>For production deployments at scale</strong>, we work directly with teams on the integration — evaluating existing agent architecture, defining the mandate issuance points, and delivering working implementations. <a href="get-pap.html">Work with us →</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- 6 (NEW) -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="trust">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">06</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              What's the difference between PAP and just using OAuth scopes + audit logs?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            This is the right question to ask, because at first glance they do look similar. OAuth scopes define what an access token permits. Audit logs record what happened. PAP mandates define what this specific request permits — and co-signed receipts record what happened bilaterally, during the session, signed by both parties. The structural difference is when enforcement happens and who holds the proof.
+          </p>
+          <p>
+            <strong>OAuth is issuance-time policy. PAP is request-time cryptographic scope.</strong>
+          </p>
+          <p>
+            An OAuth access token is issued at login with a fixed scope (e.g. <code>read:contacts write:calendar</code>). Every request made with that token during its lifetime can use the full scope — regardless of which specific action is being taken, which agent is handling it, or how much data the current operation actually requires. Scope is set once at the authorization server, not per-request.
+          </p>
+          <p>
+            A PAP mandate is issued <em>per request</em>, signed by the principal's device-bound Ed25519 key. It specifies the exact agent DID, the exact <code>schema:*Action</code> type permitted, the exact set of data properties the agent may see (nothing more), and a TTL. An agent that receives a mandate for <code>schema:SearchAction</code> cannot use it to perform <code>schema:CreateAction</code>, even if both are conceptually within the user's overall permissions. Scope is cryptographically bound to the individual request.
+          </p>
+          <p>
+            <strong>OAuth tokens are bearer tokens. PAP mandates are principal-signed and hash-linked.</strong>
+          </p>
+          <p>
+            An OAuth bearer token can be used by any holder — if it's stolen or forwarded, the recipient has full access until expiry. The authorization server cannot distinguish the original caller from a downstream service holding the same token.
+          </p>
+          <p>
+            A PAP mandate is signed by the principal's <code>did:key</code> and hash-linked to its parent in the delegation chain (<code>mandate.rs</code> <code>verify_chain()</code>). A delegated mandate — one an orchestrator issues to a sub-agent — is cryptographically constrained to be a strict subset of its parent's scope and TTL (<code>Scope::contains()</code>). You cannot forward a mandate and silently expand what it permits. The chain is immutable and verifiable.
+          </p>
+          <p>
+            <strong>Audit logs are after-the-fact. Co-signed receipts are bilateral and produced during the session.</strong>
+          </p>
+          <p>
+            An audit log is written by the service — unilaterally, after execution. It records what the service says happened. The principal has no cryptographic proof of what was actually disclosed or executed; they have to trust the service's log.
+          </p>
+          <p>
+            A PAP <a href="#gloss-receipt" class="gloss">co-signed receipt</a> is produced at Phase 5 of the handshake, before the session closes. Both the orchestrator and the agent sign it. Both parties hold a local copy. It records which property types were disclosed (never values), which action was executed, and links to the mandate that authorized it. Neither party can later deny what occurred — and no platform holds the receipts. They're local to the participants.
+          </p>
+          <p>
+            <strong>OAuth doesn't bound multi-step agent delegation. PAP's chain containment does.</strong>
+          </p>
+          <p>
+            When an orchestrator delegates to a sub-agent, which delegates to another sub-agent, OAuth has no mechanism to enforce that each step stays within the original scope. Each layer can be issued its own token with potentially broader permissions, or tokens can be forwarded with the full original scope intact. The authorization model is flat.
+          </p>
+          <p>
+            PAP mandate chains are cryptographically monotone-decreasing: scope at step N+1 is always a strict subset of scope at step N. A child mandate cannot add permissions its parent doesn't have. This is enforced in <code>pap-core/src/scope.rs</code> at every <code>verify_chain()</code> call — it's not a policy setting. Multi-step agent pipelines cannot silently accumulate permissions as the chain grows.
+          </p>
+        </div>
+      </div>
+
+      <!-- 7 (old 7) -->
+      <div class="faq-item reveal" data-cat="trust">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">07</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              Can't someone trick PAP with a prompt injection attack?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            The parts of PAP that enforce what an agent can do are cryptographic, not textual. Your device-signed key authorizes scope — no injected text can change that. The routing step has three layers: direct URL detection (deterministic), BM25 scoring (pure math — k1=1.5, b=0.75, no model), and on-device LLM fallback only when confidence drops below 0.35. Even at the LLM layer, the output must match one of a fixed list of permitted action strings from the agent catalog — a hallucinated action that isn't on the list is discarded. The model receives your query text and the list of allowed action types. It cannot see your mandate, your session keys, or any prior disclosed values.
+          </p>
+          <p>
+            <strong>The premise needs clarifying.</strong> Papillon's intent router is a
+            <strong>three-level deterministic chain</strong> — no LLM is in the path until
+            the optional third level:
+          </p>
+          <ol style="margin: 0.75em 0 0.75em 1.5em; line-height: 1.8">
+            <li><strong>URL fast path</strong> (~0 µs) — <code>papillon-shared/src/intent.rs</code>
+                detects <code>pap://</code>, <code>pap+https://</code>, and HTTPS URLs and dispatches
+                them directly without touching the semantic layers.</li>
+            <li><strong>BM25 semantic index</strong> (~50 µs) — <code>pap-agents/src/intent_index.rs</code>
+                scores the user query against every agent's catalog descriptor using Okapi BM25
+                (k1 = 1.5, b = 0.75, pure Rust, zero external deps). Scores are summed per
+                <code>schema:</code> action group; the winning group drives routing, and the
+                highest-scoring individual agent within that group becomes the preferred local agent.
+                No network, no model weights.</li>
+            <li><strong>On-Device AI fallback</strong> (~100 ms) — when BM25 confidence is below
+                threshold, the query goes to a local model (Candle, never a cloud API). The query
+                arrives in a delimited <code>[INST]…[/INST]</code> conversation role; the preamble
+                is the user's own memex history (trusted data), not external content.</li>
+          </ol>
+          <p>
+            The 6-phase PAP handshake enforces scope cryptographically after routing.
+            Prompt injection has <strong>no effect on levels 1 or 2</strong> — they are
+            deterministic programs, not generation models. Level 3 uses an on-device,
+            sandboxed model with zero disclosure requirements of its own.
+          </p>
+          <p>
+            An LLM appears in exactly two places, both <em>after</em> the handshake:
+          </p>
+          <p>
+            <strong>On-Device AI fallback</strong> — described above as level 3.
+          </p>
+          <p>
+            <strong>Pipeline Synthesizer</strong> — an optional post-execution node that merges
+            multi-agent results using the local model. This runs after all disclosure and execution
+            is complete; it cannot retroactively change what was disclosed.
+          </p>
+          <p>
+            Prompt injection risk is <strong>none in the main handshake path</strong>, and <strong>low
+            in the local LLM path</strong> — the model is on-device, sandboxed, and operates with
+            zero disclosure requirements of its own.
+          </p>
+        </div>
+      </div>
+
+      <!-- 8 (old 11) -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="trust">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">08</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              If the AI model gets compromised, does your whole security model fall apart?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            No — and the reason is that the model is structurally isolated from anything security-critical. It has one job: pick one of the action strings you handed it. It receives your query text and a list of permitted action types from the agent catalog. It cannot see your mandate, your session keys, your principal identity, or any previously disclosed values. Its output must match one of the strings it was given — a hallucinated action is discarded. What the model controls is routing: which catalog agent handles your query. What it cannot touch is the mandate that governs what that agent is allowed to do. Those are signed by your device-bound key, which the model never sees. If you prefer no model at all, <code>LlmProvider::None</code> gives you the full protocol running deterministically.
+          </p>
+          <p>
+            <strong>The LLM touches exactly one function in the PAP stack.</strong>
+            The <code>LlmClient</code> trait in <code>crates/pap-agents/src/llm.rs</code> exposes two methods:
+            <code>classify_intent(text, candidate_actions)</code> and <code>complete(system, user)</code>.
+            That's the entire surface. The model receives the user's query string and a pre-computed list
+            of allowed <code>schema:*Action</code> strings. It does not receive — and cannot request —
+            mandate contents, scope, TTL, session DIDs, disclosure sets, or the principal's keypair.
+          </p>
+          <p>
+            <strong>Its output is validated before use.</strong> The return value of
+            <code>classify_intent</code> must match one of the strings in <code>candidate_actions</code>.
+            A hallucinated action that isn't on the list is discarded. The model controls which
+            catalog agent handles the query. It cannot alter the mandate that governs what that agent
+            is allowed to do — mandates are signed by the principal's device-bound Ed25519 key,
+            which the model never sees.
+          </p>
+          <p>
+            <strong>The four canonical LLM attack paths:</strong>
+            <strong>Prompt injection</strong> — succeeds only at routing the query to the wrong catalog
+            agent; it cannot forge the Ed25519 signature that authorizes scope. <strong>Context
+            exfiltration</strong> — the model only receives query text, never the mandate or session keys.
+            <strong>Session correlation</strong> — each session generates a fresh
+            <a href="#gloss-session-did" class="gloss">ephemeral session DID</a> discarded
+            at close; the model sees the query text, never the session DID. <strong>Scope escalation</strong>
+            — child mandates are cryptographically constrained to a subset of their parent's scope
+            (<code>Scope::deny_all()</code> baseline, <code>contains()</code> enforcement);
+            no model output can extend this.
+          </p>
+          <p>
+            <strong>The default is on-device.</strong> <code>LlmProvider::BuiltIn</code> runs inference
+            locally via Candle — no network call, no external endpoint, no logs leaving the device.
+            External providers (Mistral, Ollama, OpenAI-compatible) require the user to explicitly
+            configure an API key and endpoint URL. Even with an external provider, only query text
+            travels to the endpoint. For deployments requiring network-layer query privacy,
+            OHTTP (RFC 9458) with real HPKE decouples the IP address from the request content.
+          </p>
+          <p>
+            <strong>The LLM is also optional.</strong> The full 6-phase PAP handshake executes
+            deterministically via URL fast-path and BM25 semantic index without any model.
+            Setting <code>LlmProvider::None</code> gives a fully functional, cryptographically
+            sound protocol runtime. The model enhances intent resolution for ambiguous queries;
+            it gates no security decision.
+          </p>
+        </div>
+      </div>
+
+      <!-- 9 (old 6) -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="trust">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">09</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-trust">Trust Model</span></div>
+              Could a malicious agent sneak around your restrictions by breaking one big ask into many small ones?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            The mandate chain enforces scope cryptographically at every delegation step. Each child's scope must be a strict subset of its parent's, its TTL can't exceed its parent's, and the whole chain is hash-linked so nothing can be forged or reordered. An agent cannot ask for more than it was granted, regardless of how the request is phrased. The narrower residual risk: a sequence of zero-disclosure micro-actions — each individually below the approval threshold — could collectively achieve something a single equivalent request would have surfaced for review. The cryptographic bounds still hold at each step. The gap is at the semantic layer, not the authorization layer.
+          </p>
+          <p>
+            <a href="#gloss-scope" class="gloss">Scope containment</a> is <strong>cryptographically enforced at every delegation step</strong>.
+            <code>pap-core/src/scope.rs</code> <code>contains()</code> verifies that a child
+            <a href="#gloss-mandate" class="gloss">mandate</a>'s
+            action set is a strict subset of its parent's. <code>mandate.rs</code> <code>verify_chain()</code>
+            binds each delegation to its parent by hash — you cannot forge a valid chain that expands scope.
+            TTL cannot exceed the parent mandate either.
+          </p>
+          <p>
+            Auto-approval has a further constraint: it triggers <strong>only when
+            <code>requires_disclosure.is_empty()</code></strong> (<code>canvas.rs</code>). No action that
+            requires any disclosure from the principal can be auto-approved — the user always sees
+            the approval gate.
+          </p>
+          <p>
+            The narrower residual risk: a sequence of <em>zero-disclosure</em> sub-actions that individually
+            pass auto-approval could collectively achieve an effect that a single equivalent request
+            would have surfaced for explicit consent. The cryptographic scope bounds still apply to each
+            step; the gap is at the semantic composition layer.
+          </p>
+        </div>
+      </div>
+
+      <!-- 10 (old 8) -->
+      <div class="faq-item reveal" data-cat="latency">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">10</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-latency">Latency</span></div>
+              How fast is PAP in the real world — what are the actual latency numbers?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            The loopback benchmarks — 2,000 runs each, 200 warmup — show full session lifecycle at 130 µs p50 / 500 µs p99, and a three-level mandate chain verification at 138.5 µs p50 / 480 µs p99. Those are on a single machine with no network hop, so they're best-case numbers. Real latency adds network RTT at each of the six protocol phases. One detail worth understanding: the HTTP path treats each phase as an independent POST and can be retried per-phase if a connection drops. The WebSocket path shares one persistent connection across all six phases — a drop requires starting a new session. Neither path is fail-open; errors propagate immediately to the caller.
+          </p>
+          <p>
+            Measured loopback numbers from CI (<code>benches/baseline.json</code>):
+            full session lifecycle <strong>130 µs p50 / 500 µs p99</strong> (target &lt;20 ms),
+            depth-3 mandate chain verification <strong>138.5 µs p50 / 480 µs p99</strong>.
+            The Criterion suite runs a 55% regression gate on p50 and a 50% gate on p99 —
+            thresholds calibrated for GitHub-hosted runner variance, not relaxed protocol limits.
+            p99 benchmarks are in <code>benches/benches/p99.rs</code> with CI regression guards.
+          </p>
+          <p>
+            Two edge cases worth understanding:
+          </p>
+          <p>
+            <strong>Network drop mid-handshake</strong> — behavior depends on which transport
+            is in use. <strong>HTTP (stateless):</strong> each phase is an independent POST;
+            a connection failure surfaces as a <code>TransportError::ConnectionFailed</code>
+            immediately. The request either reached the server and was processed, or it didn't —
+            the caller retries or aborts. <strong>WebSocket (stateful):</strong> all six phases
+            share one persistent connection; a connection drop terminates the session handler
+            and the session is abandoned. Neither transport is fail-open — the error propagates
+            to the caller. The distinction that matters is idempotency: the HTTP path can be
+            retried per-phase; the WebSocket path requires starting a new session. The residual
+            concern for high-value agents is a server-side session stuck in a non-<code>Closed</code>
+            state after a client drop — orphaned ephemeral keys and partial mandate state that
+            expire with the mandate TTL.
+          </p>
+          <p>
+            <strong>TTL expiry:</strong> mandate TTL is checked at every
+            <code>verify_chain()</code> call (<code>mandate.rs</code>), which occurs at
+            each phase boundary. A mandate close to its expiry when the session opens may
+            pass the Phase 1 check but fail at Phase 4 execution if the TTL ticks over
+            between phases. No built-in grace period or mid-flight renewal path exists today.
+          </p>
+        </div>
+      </div>
+
+      <!-- 11 (old 10) -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="dx">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">11</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-dx">Developer UX</span></div>
+              How do I use PAP with Python, LangChain, or CrewAI?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            Full PyO3 bindings ship today. Async works correctly — the GIL is released during <code>await</code>, so concurrent handshakes don't block each other in asyncio pipelines. There's an integration guide covering LangChain, CrewAI, and MCP.
+          </p>
+          <p>
+            <strong>Install from PyPI (recommended):</strong>
+          </p>
+          <pre><code>pip install pap-protocol</code></pre>
+          <p>
+            Pre-built wheels are available for Linux x86_64/aarch64, macOS universal2, and Windows x64 — no Rust toolchain required.
+          </p>
+          <p>
+            <strong>Full PyO3 bindings ship today.</strong> <code>crates/pap-python/src/lib.rs</code>
+            (1,595 lines) exposes the complete PAP API with both blocking methods and
+            <em>async variants</em> for all transport steps. The async path uses PyO3 0.24
+            <code>experimental-async</code>, which releases the GIL during <code>await</code> — making
+            concurrent handshakes work correctly in <code>asyncio</code> agent pipelines without
+            <code>to_thread()</code> wrapping.
+          </p>
+          <p>
+            A comprehensive integration guide covers LangChain, CrewAI, and MCP with 1,293 lines
+            of annotated examples:
+            <code>docs/integration-guides/langchain-crewai-mcp.md</code>.
+            The TypeScript equivalent — <code>packages/pap-ts</code> — is a pure native async
+            implementation with zero Rust dependency, for reference.
+          </p>
+          <p>
+            <strong>Building from source</strong> (for contributors or unreleased branches):
+            <code>cd crates/pap-python &amp;&amp; pip install maturin &amp;&amp; maturin develop --release</code>
+          </p>
+        </div>
+      </div>
+
+      <!-- 12 (old 2) -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="crypto">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">12</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-crypto">Cryptography</span></div>
+              Could an agent build a profile of me just from seeing which data fields were requested, even without the actual values?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            PAP gives you two controls for this. First, enable OHTTP in Settings — it wraps every request in RFC 9458 HPKE so even the relay hop sees nothing, not the query structure, not the property list. Second, set <code>no_retention: true</code> on any disclosure entry where you need the receiving agent to discard its copy of the receipt. When that flag is set, PAP requires the agent to run in a TEE — the retention constraint becomes cryptographically binding, not a promise. The risk isn't gone without these settings, but with them it's fully addressed.
+          </p>
+          <p>
+            <strong>The underlying concern — and why both controls matter.</strong>
+            Each agent in
+            <code>pap-agents</code> declares exactly what it needs via
+            <code>AgentMeta.requires_disclosure</code>
+            (<code>crates/pap-agents/src/executor.rs</code>) — those property names are embedded
+            in the Mandate's <code>DisclosureSet</code> during Phase 2 of the handshake, bounding
+            the scope of what the agent is permitted to receive. The Phase 3 disclosure payload
+            carries the query inside that scope boundary.
+            <a href="#gloss-sd-jwt" class="gloss">SD-JWT</a> (<code>pap-credential/src/sd_jwt.rs</code>)
+            hides claim <em>values</em> via per-claim salted hashes and is available as an optional
+            enhancement for credential-bearing payloads, but is not used in the current query
+            handshake path — claim <em>structure</em> is not hidden. The
+            <strong>recipient agent</strong> always learns which property slots were disclosed;
+            that is the intent of the handshake. Network-level visibility is configurable:
+            OHTTP (RFC 9458, HPKE DHKEM-X25519 + AES-128-GCM) is a setting in Papillon and
+            Chrysalis — when enabled, relay operators and passive observers see nothing.
+            Without it, transport encryption is present but query structure is visible to
+            the relay hop.
+          </p>
+          <p>
+            Receipts store property <em>references</em>, never values: <code>pap-core/src/receipt.rs</code>
+            holds <code>disclosed_by_initiator: Vec&lt;String&gt;</code> — strings like
+            <code>"schema:Person.name"</code>. The receiving agent holds a co-signed copy after
+            every session. Across multiple sessions the pattern of which properties a principal
+            discloses to that agent can become a quasi-identifier even without any value leaving.
+            The <code>no_retention</code> flag on <code>DisclosureEntry</code>
+            (<code>pap-core/src/scope.rs</code>) addresses this: when set, the handshake requires
+            TEE attestation from the receiving agent before proceeding, making receipt discard
+            auditable rather than contractual.
+          </p>
+          <p>
+            In healthcare and financial services, <em>which</em> properties were accessed is frequently
+            PHI or material non-public information in its own right — both controls are worth
+            enabling by default in those contexts.
+          </p>
+          <p>
+            <strong>What we're watching:</strong> The <a href="https://privacybydesign.foundation/irma-english/" target="_blank" rel="noopener">IRMA/Yivi</a>
+            ZKP-based approach provides stronger structural privacy guarantees using W3C VCs.
+            A future spec section will evaluate ZKP-based disclosure as an optional enhancement
+            for cases where even TEE-attested no-retention is insufficient.
+          </p>
+        </div>
+      </div>
+
+      <!-- 13 (old 3) -->
+      <div class="faq-item reveal" data-cat="governance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">13</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-governance">Governance</span></div>
+              Who runs the privacy relay, and could it become a new central chokepoint?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            The relay runs wherever you deploy it — colocated with your own node, not on Baur Software infrastructure. If you don't configure one, the protocol falls back to a direct connection: <code>relay_url</code> is optional, and when it's absent, the handshake continues without it. Privacy degrades — query structure becomes visible at the relay hop — but the session never breaks, and scope enforcement, expiring mandates, and co-signed receipts all work exactly the same.
+          </p>
+          <p>
+            <strong><a href="#gloss-ohttp" class="gloss">OHTTP</a> relay capability is built into
+            <a href="#gloss-papillon" class="gloss">Papillon</a> and
+            <a href="#gloss-chrysalis" class="gloss">Chrysalis</a> — it runs
+            colocated with each deployment, not on Baur Software infrastructure.</strong>
+            When OHTTP is configured, there is no external relay operator to capture traffic.
+            The decentralization is topological: the relay lives alongside your own node.
+          </p>
+          <p>
+            <code>relay_url</code> in <code>pap-transport/src/ohttp.rs</code> is typed
+            <code>Option&lt;String&gt;</code>. When absent, the protocol falls back to a direct
+            connection — privacy degrades but the handshake never breaks. The core guarantees
+            (SD-JWT selective disclosure, ephemeral session DIDs, deny-by-default mandates)
+            do not depend on OHTTP being enabled.
+          </p>
+          <p>
+            When the relay is active, it uses
+            <a href="https://www.rfc-editor.org/rfc/rfc9458" target="_blank" rel="noopener">RFC 9458</a>
+            HPKE: DHKEM(X25519, HKDF-SHA256) + AES-128-GCM (RFC 9180). Relay operators and
+            passive observers cannot link IP addresses to query content or SD-JWT disclosure
+            structure.
+          </p>
+        </div>
+      </div>
+
+      <!-- 14 (old 4) -->
+      <div class="faq-item reveal reveal-delay-1" data-cat="governance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">14</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-governance">Governance</span></div>
+              What stops someone from flooding the network with fake agents?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            Getting a fake agent into the Chrysalis mesh takes real calendar time, not just compute. A new peer needs three vouches from existing members, each of whom can only vouch for three peers per year — and must themselves have been active for at least 90 days before they can vouch for anyone. New peers spend 60 days in a probationary state. The trust graph also checks path diversity: if your three vouchers all trace back through the same cluster of ancestors, the registration is rejected. You can't manufacture trust quickly; you have to earn it slowly.
+          </p>
+          <p>
+            <strong>Vouch-based peer admission.</strong> Joining the Chrysalis mesh is not free —
+            it requires existing trusted peers to stake their reputation on you.
+            <code>pap-federation/src/registry.rs</code> enforces:
+          </p>
+          <p>
+            <strong>3 vouches required</strong> to register a new peer.
+            Each existing peer may issue at most <strong>3 vouches per year</strong> — a rate budget that
+            makes flooding expensive. A peer must be registered for at least
+            <strong>90 days</strong> before it can vouch for anyone.
+            New peers enter a <strong>60-day probationary period</strong> with limited permissions.
+          </p>
+          <p>
+            Diverse trust paths (<code>require_diverse_paths</code>) are specified in the policy struct
+            and are being enforced now — ensuring N vouchers don't all route through the same
+            small set of ancestors, preventing a captured clique from bootstrapping unlimited new peers.
+          </p>
+          <p>
+            This is a social-graph approach rather than proof-of-stake or proof-of-work. The rate
+            constraints make a Sybil flood expensive in terms of calendar time and peer relationships,
+            not compute or tokens.
+          </p>
+        </div>
+      </div>
+
+      <!-- 15 (old 5) -->
+      <div class="faq-item reveal reveal-delay-2" data-cat="governance">
+        <button class="faq-q" aria-expanded="false">
+          <div class="faq-q-left">
+            <span class="faq-num">15</span>
+            <div class="faq-q-text">
+              <div><span class="faq-badge badge-governance">Governance</span></div>
+              Google basically co-created Schema.org. Doesn't that give them leverage over PAP?
+            </div>
+          </div>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-body">
+          <p>
+            The protocol doesn't depend on Schema.org being controlled by anyone in particular. The action field in a mandate is a plain string — any namespace-prefixed identifier is valid. Schema.org is the default because it's widely understood and makes agents discoverable to everyone, but a financial compliance action, a FHIR operation, or a lab protocol step can be expressed as <code>operator:FhirReadAction</code> without touching Schema.org at all. The governance capture risk is real for the interoperability layer — agents that want to be universally discoverable benefit from Schema.org alignment. Agents targeting a specific vertical can use the <code>operator:</code> namespace freely.
+          </p>
+          <p>
+            Schema.org is a <strong>collaborative, open-community project</strong> founded by Google,
+            Microsoft, Yahoo, and Yandex to create a shared structured-data vocabulary. The schema
+            is community-governed; contributions come from across the web industry.
+            Google drives significant adoption through rich-result support, but it does not have unilateral
+            control over the vocabulary.
+          </p>
+          <p>
+            <strong>The protocol is not locked to Schema.org.</strong>
+            <code>ScopeAction.action</code> in <code>crates/pap-core/src/scope.rs</code> is a
+            plain string — any namespace-prefixed URI is valid. Spec §17.6 reserves three
+            prefixes: <code>schema:</code> (Schema.org, standard interoperability baseline),
+            <code>operator:</code> (implementation-defined, for agent operator custom vocabulary),
+            and <code>pap:</code> (reserved for PAP specification extensions). A financial
+            compliance action, a FHIR operation, or a laboratory protocol step can be expressed
+            as <code>operator:FhirReadAction</code> or <code>pap:ClinicalTrialEnrollAction</code>
+            without touching Schema.org at all.
+          </p>
+          <p>
+            <code>crates/pap-core/src/extensions.rs</code> implements spec sections 9.1–9.4:
+            Continuity Tokens (cross-session encrypted state, §9.3) and Auto-Approval Policies
+            (§9.4) are the first shipped protocol-level extensions. The <code>conditions</code>
+            field in <code>ScopeAction</code> is an opaque JSON map for arbitrary
+            protocol-level constraints not representable in Schema.org. Dynamic agent definitions
+            (<code>crates/pap-agents/src/dynamic.rs</code>) accept any action and return-type
+            strings, so custom-vocabulary agents ship without a spec change.
+          </p>
+          <p>
+            The governance capture risk is real for the <em>interoperability layer</em> —
+            agents that want to be universally discoverable benefit from Schema.org alignment.
+            Agents targeting a specific vertical or operator deployment can use the
+            <code>operator:</code> namespace freely. Schema.org is the default, not the ceiling.
           </p>
         </div>
       </div>

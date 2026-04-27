@@ -4875,6 +4875,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pap-intent-routing"
+version = "0.8.2"
+dependencies = [
+ "chrono",
+ "pap-agents",
+ "pap-core",
+ "pap-did",
+ "pap-marketplace",
+ "papillon-shared",
+ "serde_json",
+]
+
+[[package]]
 name = "pap-marketplace"
 version = "0.8.2"
 dependencies = [

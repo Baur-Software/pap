@@ -250,6 +250,7 @@ pub fn run() {
             commands::agents::publish_agent,
             commands::agents::unpublish_agent,
             commands::agents::save_trait_beacon_profile,
+            commands::agents::approve_federation_agent,
             commands::webauthn::begin_registration,
             commands::webauthn::complete_registration,
             commands::webauthn::begin_authentication,

@@ -465,4 +465,251 @@ mod tests {
         let cfg = Config::from_env();
         assert!(!cfg.reset_db_confirmed());
     }
+
+    // ── Edge cases: admin_token empty string ──────────────────────────────────
+
+    /// An empty-string token is `Some("")`, NOT `None`.
+    /// This is a documented footgun: operators who set `PAP_REGISTRY_ADMIN_TOKEN=""`
+    /// get `Some("")` which bypasses the `admin_token.is_none()` warning in
+    /// `check_auth_config`, yet the empty token still provides no real security
+    /// because any caller who sends `Authorization: Bearer ` would be admitted.
+    #[test]
+    fn admin_token_empty_string_is_some_not_none() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_ADMIN_TOKEN", "");
+
+        let cfg = Config::from_env();
+        // Empty-string env var comes through as Some("") — NOT None.
+        assert_eq!(cfg.admin_token.as_deref(), Some(""));
+        assert!(cfg.admin_token.is_some(), "empty string must not be None");
+
+        env::remove_var("PAP_REGISTRY_ADMIN_TOKEN");
+    }
+
+    // ── Edge cases: port boundaries ───────────────────────────────────────────
+
+    #[test]
+    fn port_max_valid_u16() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_PORT", "65535");
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.port, 65535);
+
+        env::remove_var("PAP_REGISTRY_PORT");
+    }
+
+    #[test]
+    fn port_overflow_u16_falls_back_to_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        // 65536 overflows u16::MAX (65535) — parse::<u16>() returns Err
+        env::set_var("PAP_REGISTRY_PORT", "65536");
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.port, 7890, "overflow must fall back to default 7890");
+
+        env::remove_var("PAP_REGISTRY_PORT");
+    }
+
+    #[test]
+    fn port_zero_parses_and_is_accepted() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_PORT", "0");
+
+        let cfg = Config::from_env();
+        // Port 0 is a valid u16 — the OS picks an ephemeral port when bound.
+        assert_eq!(cfg.port, 0);
+
+        env::remove_var("PAP_REGISTRY_PORT");
+    }
+
+    // ── Edge cases: rate limit zero values ────────────────────────────────────
+
+    /// `PAP_REGISTRY_RATE_LIMIT_RPS=0` parses as 0 — NOT the default 20.
+    /// Note: tower-governor with per_second(0) will panic at startup.
+    /// This test documents the parsing behaviour; callers must validate > 0.
+    #[test]
+    fn rate_limit_rps_zero_parses_as_zero_not_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RATE_LIMIT_RPS", "0");
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.rate_limit_rps, 0, "zero is a valid parse result");
+
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
+    }
+
+    #[test]
+    fn rate_limit_burst_zero_parses_as_zero_not_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RATE_LIMIT_BURST", "0");
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.rate_limit_burst, 0, "zero is a valid parse result");
+
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_BURST");
+    }
+
+    #[test]
+    fn rate_limit_rps_u64_max_parses() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RATE_LIMIT_RPS", &u64::MAX.to_string());
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.rate_limit_rps, u64::MAX);
+
+        env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
+    }
+
+    // ── Edge cases: max_body_bytes zero / very large ───────────────────────────
+
+    #[test]
+    fn max_body_bytes_zero_parses_as_zero() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_MAX_BODY_BYTES", "0");
+
+        let cfg = Config::from_env();
+        // Zero is valid (means all bodies are rejected).
+        assert_eq!(cfg.max_body_bytes, 0);
+
+        env::remove_var("PAP_REGISTRY_MAX_BODY_BYTES");
+    }
+
+    #[test]
+    fn max_body_bytes_negative_string_falls_back_to_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        // "-1" fails parse::<usize>() on all platforms (usize is unsigned)
+        env::set_var("PAP_REGISTRY_MAX_BODY_BYTES", "-1");
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_body_bytes, DEFAULT_MAX_BODY_BYTES);
+
+        env::remove_var("PAP_REGISTRY_MAX_BODY_BYTES");
+    }
+
+    // ── Edge cases: reset_db_confirm case insensitivity ───────────────────────
+
+    #[test]
+    fn reset_db_confirm_uppercase_works() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "YES-I-UNDERSTAND");
+
+        let cfg = Config::from_env();
+        assert!(
+            cfg.reset_db_confirmed(),
+            "uppercase YES-I-UNDERSTAND must be accepted"
+        );
+
+        env::remove_var("PAP_REGISTRY_RESET_DB");
+        env::remove_var("PAP_REGISTRY_RESET_DB_CONFIRM");
+    }
+
+    #[test]
+    fn reset_db_confirm_mixed_case_works() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "Yes-I-Understand");
+
+        let cfg = Config::from_env();
+        assert!(
+            cfg.reset_db_confirmed(),
+            "mixed-case Yes-I-Understand must be accepted"
+        );
+
+        env::remove_var("PAP_REGISTRY_RESET_DB");
+        env::remove_var("PAP_REGISTRY_RESET_DB_CONFIRM");
+    }
+
+    #[test]
+    fn reset_db_confirm_wrong_phrase_not_accepted() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "yes-please");
+
+        let cfg = Config::from_env();
+        assert!(
+            !cfg.reset_db_confirmed(),
+            "wrong confirmation phrase must not activate reset"
+        );
+
+        env::remove_var("PAP_REGISTRY_RESET_DB");
+        env::remove_var("PAP_REGISTRY_RESET_DB_CONFIRM");
+    }
+
+    #[test]
+    fn reset_db_confirm_empty_string_not_accepted() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_RESET_DB", "true");
+        env::set_var("PAP_REGISTRY_RESET_DB_CONFIRM", "");
+
+        let cfg = Config::from_env();
+        assert!(
+            !cfg.reset_db_confirmed(),
+            "empty confirmation string must not activate reset"
+        );
+
+        env::remove_var("PAP_REGISTRY_RESET_DB");
+        env::remove_var("PAP_REGISTRY_RESET_DB_CONFIRM");
+    }
+
+    // ── Edge cases: require_auth case insensitivity and "1" value ────────────
+
+    #[test]
+    fn require_auth_accepts_numeric_one() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "1");
+
+        let cfg = Config::from_env();
+        assert!(
+            cfg.require_auth,
+            "PAP_REGISTRY_REQUIRE_AUTH=1 must enable require_auth"
+        );
+
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+    }
+
+    #[test]
+    fn require_auth_false_string_not_accepted() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_REQUIRE_AUTH", "false");
+
+        let cfg = Config::from_env();
+        assert!(
+            !cfg.require_auth,
+            "PAP_REGISTRY_REQUIRE_AUTH=false must leave require_auth false"
+        );
+
+        env::remove_var("PAP_REGISTRY_REQUIRE_AUTH");
+    }
+
+    // ── Edge cases: no_tls boolean parsing ───────────────────────────────────
+
+    #[test]
+    fn no_tls_accepts_numeric_one() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        clear_registry_env();
+        env::set_var("PAP_REGISTRY_NO_TLS", "1");
+
+        let cfg = Config::from_env();
+        assert!(cfg.no_tls, "PAP_REGISTRY_NO_TLS=1 must enable no_tls");
+        assert!(cfg.public_endpoint.starts_with("http://"));
+
+        env::remove_var("PAP_REGISTRY_NO_TLS");
+    }
 }

@@ -1,0 +1,18 @@
+[package]
+name        = "pap-intent-routing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "pap-intent-routing"
+path = "src/main.rs"
+
+[dependencies]
+pap-did         = { workspace = true }
+pap-core        = { workspace = true }
+pap-marketplace = { workspace = true }
+pap-agents      = { workspace = true }
+papillon-shared = { workspace = true }
+chrono          = { workspace = true }
+serde_json      = { workspace = true }
