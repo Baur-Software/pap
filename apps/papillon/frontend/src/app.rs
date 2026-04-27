@@ -17,7 +17,7 @@ use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
 use crate::service::{PapillonService, TauriService, WebService};
-use crate::state::canvas::CanvasState;
+use crate::state::canvas::{CanvasState, derive_map_graph};
 use crate::state::catalog::CatalogState;
 use crate::state::dataset::DatasetState;
 use crate::state::identity::IdentityState;
@@ -116,6 +116,15 @@ pub fn App() -> impl IntoView {
     Effect::new(move || {
         let agents = registry_state.agents.get();
         catalog_state.refresh(&agents);
+    });
+
+    // Derive MAP workflow graph reactively from the active canvas blocks.
+    // Re-runs whenever blocks change; skipped in DESIGN mode to preserve authored graph.
+    Effect::new(move || {
+        if canvas_state.workflow_mode.get() == papillon_shared::WorkflowMode::Map {
+            let blocks = canvas_state.current_canvas_blocks().get();
+            canvas_state.workflow_graph.set(derive_map_graph(&blocks));
+        }
     });
 
     // Keep the renderer registry in sync with user-defined templates.
