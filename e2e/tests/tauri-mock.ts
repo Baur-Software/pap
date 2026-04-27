@@ -91,6 +91,7 @@ window.__TAURI__ = {
     _backedUp: false,
     _successors: [],
     _mandates: {},
+    _retryCount: 0,
     _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
@@ -529,6 +530,47 @@ window.__TAURI__ = {
             block = typedBlock('Dataset', { name: 'Global Temperature Anomalies 1880-2024', creator: { name: 'NASA GISS' }, license: 'https://creativecommons.org/licenses/by/4.0/', datePublished: '2024-01-15', description: 'Monthly global surface temperature anomalies.' });
           } else if (promptText.includes('mock:trip') || promptText.includes('__trip')) {
             block = typedBlock('Trip', { name: 'Tokyo to Kyoto Shinkansen', itinerary: [{ name: 'Tokyo Station' }, { name: 'Kyoto Station' }], provider: { name: 'JR East' }, offers: { price: '13850', priceCurrency: 'JPY' } });
+          } else if (promptText.includes('mock:failed') || promptText.includes('__failed')) {
+            var phaseMatch = promptText.match(/(?:mock:failed-|__failed-)(\d)/);
+            var failPhase = phaseMatch ? parseInt(phaseMatch[1]) : 2;
+            var failBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Failed: { phase: failPhase, reason: 'Mock failure at phase ' + failPhase + ': agent refused mandate scope' } },
+              schema_type: null,
+              content: null,
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: failBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:ghost') || promptText.includes('__ghost')) {
+            var ghostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Ghost',
+              schema_type: 'FlightReservation',
+              content: { preview_schema: 'FlightReservation', disclosure_scope: ['email', 'name'], returns: ['FlightReservation'] },
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: ghostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:awaiting') || promptText.includes('__awaiting')) {
+            var awaitingBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'AwaitingApproval',
+              schema_type: 'FlightReservation',
+              content: { mandate_preview: { agent_did: 'did:key:z6MkAgent999', agent_name: 'TravelAgent', action_type: 'travel.book', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], ttl_hours: 1 } },
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: awaitingBlock }); }, 200);
+            return null;
           } else {
             // Generic answer block for non-typed prompts
             block = {
@@ -551,6 +593,7 @@ window.__TAURI__ = {
 
         case 'canvas_reshape':
         case 'canvas_retry': {
+          window.__TAURI__.core._retryCount = (window.__TAURI__.core._retryCount || 0) + 1;
           const retryBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
           setTimeout(function() {
             window.__TAURI__.event.emit('block_resolved', {
@@ -938,6 +981,38 @@ window.__TAURI__ = {
             planBlock = typedBlock2('Dataset', { name: 'Global Temperature Anomalies 1880-2024', creator: { name: 'NASA GISS' }, license: 'https://creativecommons.org/licenses/by/4.0/', datePublished: '2024-01-15', description: 'Monthly global surface temperature anomalies.' });
           } else if (promptText.includes('mock:trip') || promptText.includes('__trip')) {
             planBlock = typedBlock2('Trip', { name: 'Tokyo to Kyoto Shinkansen', itinerary: [{ name: 'Tokyo Station' }, { name: 'Kyoto Station' }], provider: { name: 'JR East' }, offers: { price: '13850', priceCurrency: 'JPY' } });
+          } else if (promptText.includes('mock:failed') || promptText.includes('__failed')) {
+            var planPhaseMatch = promptText.match(/(?:mock:failed-|__failed-)(\d)/);
+            var planFailPhase = planPhaseMatch ? parseInt(planPhaseMatch[1]) : 2;
+            var planFailBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Failed: { phase: planFailPhase, reason: 'Mock failure at phase ' + planFailPhase + ': agent refused mandate scope' } },
+              schema_type: null, content: null, linked_block_ids: [],
+              created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planFailBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:ghost') || promptText.includes('__ghost')) {
+            var planGhostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Ghost', schema_type: 'FlightReservation',
+              content: { preview_schema: 'FlightReservation', disclosure_scope: ['email', 'name'], returns: ['FlightReservation'] },
+              linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planGhostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:awaiting') || promptText.includes('__awaiting')) {
+            var planAwaitingBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'AwaitingApproval', schema_type: 'FlightReservation',
+              content: { mandate_preview: { agent_did: 'did:key:z6MkAgent999', agent_name: 'TravelAgent', action_type: 'travel.book', requires_disclosure: ['name', 'email'], returns: ['FlightReservation'], ttl_hours: 1 } },
+              linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planAwaitingBlock }); }, 200);
+            return null;
           } else {
             planBlock = {
               id: blockId,
