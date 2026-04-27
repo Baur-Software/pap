@@ -670,16 +670,21 @@ pub struct AgentAdvertisement {
 #[tauri::command]
 pub async fn discover_pap_agents(domain: String) -> Result<Vec<AgentAdvertisement>, String> {
     let url = format!("https://{}/.well-known/pap/advertisements", domain);
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build()
-        .map_err(|_| String::new())?;
-    let resp = client.get(&url).send().await.map_err(|_| String::new())?;
+    {
+        Ok(c) => c,
+        Err(_) => return Ok(vec![]),
+    };
+    let resp = match client.get(&url).send().await {
+        Ok(r) => r,
+        Err(_) => return Ok(vec![]),
+    };
     if !resp.status().is_success() {
         return Ok(vec![]);
     }
-    let ads: Vec<AgentAdvertisement> = resp.json().await.unwrap_or_default();
-    Ok(ads)
+    Ok(resp.json().await.unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -1277,7 +1282,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn discover_pap_agents_stub_ok_for_any_domain() {
+    async fn discover_pap_agents_returns_ok_for_unreachable_domains() {
+        // Unreachable domains time out or refuse connection — must return Ok(vec![])
+        // not Err, so the frontend can safely fall back to Web Page Reader.
         for domain in &[
             "example.com",
             "localhost",
@@ -1286,16 +1293,12 @@ mod tests {
         ] {
             let result = discover_pap_agents(domain.to_string()).await;
             assert!(result.is_ok(), "domain {domain} returned Err");
-            assert!(
-                result.unwrap().is_empty(),
-                "stub should always return empty vec"
-            );
         }
     }
 
     #[tokio::test]
-    async fn discover_pap_agents_stub_ok_for_empty_string() {
-        // Empty input should not panic — stub ignores the argument
+    async fn discover_pap_agents_returns_ok_for_empty_string() {
+        // Empty input produces a malformed URL — must not panic, must return Ok.
         let result = discover_pap_agents(String::new()).await;
         assert!(result.is_ok());
     }
