@@ -1,117 +1,215 @@
 use leptos::prelude::*;
-use papillon_shared::{BlockState, CanvasBlock, EdgeState, IntentPlan, PortRef, WorkflowEdge};
+use papillon_shared::{
+    BlockState, CanvasBlock, EdgeState, IntentPlan, WorkflowEdge, WorkflowMode, WorkflowNode,
+};
+use wasm_bindgen_futures::spawn_local;
 
+#[allow(unused_imports)]
+use js_sys;
+
+use crate::bridge;
 use crate::state::canvas::{CanvasSide, CanvasState};
 
-/// Back-face orchestration trace.
+/// Workflow tab — MAP/DESIGN dual-mode pipeline builder.
 ///
-/// Replaces the former MAP/DESIGN pipeline builder. Shows a live per-block trace
-/// of the PAP handshake: resolving phases, awaiting-approval plans with disclosure
-/// details, completed outcomes, and failures — one entry per active canvas block.
-///
-/// Clicking "→ view block" on any entry flips to the front face and requests
-/// expansion of that block.
+/// * **MAP mode** (default): reactive graph derived from active canvas blocks.
+///   Shows one node per resolved/resolving block, edges from `{{block:ID}}` refs and
+///   `linked_block_ids`, and inline approval cards for `Proposed` edges.
+/// * **DESIGN mode**: interactive canvas where users author a workflow from scratch —
+///   add agent nodes, draw wires, then run the designed pipeline.
 #[component]
 pub fn CanvasWorkflowPipeline() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let blocks = canvas_state.current_canvas_blocks();
-    let has_blocks = move || !blocks.get().is_empty();
+
+    let mode = canvas_state.workflow_mode;
 
     view! {
-        <div class="wf-trace-panel">
-            <div class="wf-trace-header">
-                <span class="wf-trace-title">"ORCHESTRATION"</span>
+        <div class="wf-panel">
+            // Mode toggle bar
+            <div class="wf-mode-toggle">
+                <button
+                    class=move || {
+                        if mode.get() == WorkflowMode::Map {
+                            "wf-mode-btn active"
+                        } else {
+                            "wf-mode-btn"
+                        }
+                    }
+                    on:click=move |_| mode.set(WorkflowMode::Map)
+                >
+                    "MAP"
+                </button>
+                <button
+                    class=move || {
+                        if mode.get() == WorkflowMode::Design {
+                            "wf-mode-btn active"
+                        } else {
+                            "wf-mode-btn"
+                        }
+                    }
+                    on:click=move |_| mode.set(WorkflowMode::Design)
+                >
+                    "DESIGN"
+                </button>
             </div>
+
+            // Mode bodies
             <Show
-                when=has_blocks
-                fallback=|| view! {
-                    <div class="wf-trace-empty">
-                        <p>"No active orchestration."</p>
-                        <p class="wf-trace-empty-hint">"Run a prompt to see the trace."</p>
-                    </div>
-                }
+                when=move || mode.get() == WorkflowMode::Map
+                fallback=move || view! { <WorkflowDesignMode /> }
             >
-                <div class="wf-trace-list">
-                    <For
-                        each=move || blocks.get()
-                        key=|b| format!("{}@{}", b.id, b.updated_at)
-                        children=move |block| view! { <TraceEntry block=block /> }
-                    />
-                </div>
+                <WorkflowMapMode />
             </Show>
         </div>
     }
 }
 
-/// A single block's trace entry in the orchestration panel.
+// ─────────────────────────────────────────────────────────────────────────────
+// MAP MODE
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// MAP mode — renders the reactive workflow graph derived from canvas blocks.
 #[component]
-fn TraceEntry(block: CanvasBlock) -> impl IntoView {
+fn WorkflowMapMode() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let block_id = block.id.clone();
-    let bid_jump = block_id.clone();
+    let graph = canvas_state.workflow_graph;
 
-    let prompt_preview = block
-        .prompt_text
-        .as_deref()
-        .map(|t| {
-            if t.chars().count() > 60 {
-                let truncated: String = t.chars().take(60).collect();
-                format!("{truncated}\u{2026}")
-            } else {
-                t.to_string()
-            }
-        })
-        .unwrap_or_default();
-
-    let (state_class, state_label, inline_text) = derive_block_trace(&block);
-
-    let approval_plan = if let BlockState::AwaitingApproval { plan } = &block.state {
-        Some(plan.clone())
-    } else {
-        None
-    };
-    let agent_did = block.agent_did.clone();
+    let has_nodes = move || !graph.get().nodes.is_empty();
 
     view! {
-        <div class=format!("wf-trace-entry {state_class}")>
-            <div class="wf-trace-entry-header">
-                <span class="wf-trace-prompt">{prompt_preview}</span>
-                <span class=format!("wf-trace-state-badge {state_class}")>{state_label}</span>
+        <div class="wf-graph-canvas">
+            <Show
+                when=has_nodes
+                fallback=|| view! {
+                    <div class="wf-graph-empty">
+                        <p>"No workflow graph yet."</p>
+                        <p class="wf-graph-empty-hint">
+                            "Run prompts on the canvas — blocks appear here as nodes."
+                        </p>
+                    </div>
+                }
+            >
+                <div class="wf-graph-row">
+                    // Nodes
+                    <For
+                        each=move || graph.get().nodes
+                        key=|n| n.id.clone()
+                        children=move |node| view! { <WorkflowNodeCard node=node /> }
+                    />
+                </div>
+                // Edges / approval cards
+                <For
+                    each=move || graph.get().edges
+                    key=|e| e.id.clone()
+                    children=move |edge| view! { <MapEdgeRow edge=edge /> }
+                />
+            </Show>
+        </div>
+    }
+}
+
+/// Renders a single workflow node card in MAP mode.
+#[component]
+fn WorkflowNodeCard(node: WorkflowNode) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let node_id = node.id.clone();
+
+    // Derive badge state from the graph; fall back to block state if needed.
+    // For MAP mode, node.id == block.id, so we look up the block.
+    let badge_class = {
+        let nid = node_id.clone();
+        move || {
+            let blocks = canvas_state.current_canvas_blocks().get();
+            if let Some(block) = blocks.iter().find(|b| b.id == nid) {
+                match &block.state {
+                    BlockState::Resolved => "wf-node-badge resolved",
+                    BlockState::Resolving { .. } => "wf-node-badge running",
+                    BlockState::Failed { .. } => "wf-node-badge failed",
+                    _ => "wf-node-badge pending",
+                }
+            } else {
+                "wf-node-badge pending"
+            }
+        }
+    };
+
+    let badge_label = {
+        let nid = node_id.clone();
+        move || {
+            let blocks = canvas_state.current_canvas_blocks().get();
+            if let Some(block) = blocks.iter().find(|b| b.id == nid) {
+                match &block.state {
+                    BlockState::Resolved => "done",
+                    BlockState::Resolving { .. } => "running",
+                    BlockState::Failed { .. } => "failed",
+                    BlockState::AwaitingApproval { .. } => "awaiting",
+                    BlockState::Ghost { .. } => "preview",
+                    _ => "pending",
+                }
+            } else {
+                "pending"
+            }
+        }
+    };
+
+    let agent_label = node
+        .agent_name
+        .clone()
+        .unwrap_or_else(|| node.intent.clone());
+
+    let jump_id = node_id.clone();
+
+    view! {
+        <div class="wf-node">
+            <div class="wf-node-header">
+                <span class="wf-node-emoji">"🤖"</span>
+                <span class="wf-node-name">{agent_label}</span>
+                <span class=badge_class>{badge_label}</span>
             </div>
 
-            // Animated phase label for Resolving blocks; description text for others
-            {inline_text.map(|label| view! {
-                <div class="wf-trace-phase">
-                    <span class="wf-phase-dot wf-phase-dot-pulse" />
-                    <span class="wf-trace-phase-label">{label}</span>
-                </div>
+            // Action type URI
+            {(!node.action_type.is_empty()).then(|| view! {
+                <div class="wf-node-uri">{node.action_type.clone()}</div>
             })}
 
-            // Agent DID — shown as a truncated monospaced chip when available
-            {agent_did.map(|did| {
-                let truncated = if did.len() > 28 {
-                    format!("{}\u{2026}", &did[..28])
-                } else {
-                    did.clone()
-                };
+            // Input ports
+            {(!node.input_ports.is_empty()).then(|| {
+                let ports = node.input_ports.clone();
                 view! {
-                    <div class="wf-trace-agent">
-                        <span class="wf-trace-did">{truncated}</span>
+                    <div class="wf-node-section">
+                        {ports.into_iter().map(|p| view! {
+                            <div class="wf-port-row">
+                                <span class="wf-port-dot" />
+                                <span class="wf-port-label">{p.label.clone()}</span>
+                                <span class="wf-port-schema">{p.path.clone()}</span>
+                            </div>
+                        }).collect::<Vec<_>>()}
                     </div>
                 }
             })}
 
-            // Inline approval plan for AwaitingApproval blocks
-            {approval_plan.map(|plan| {
-                view! { <ApprovalPlanInline plan=plan /> }
+            // Output ports
+            {(!node.output_ports.is_empty()).then(|| {
+                let ports = node.output_ports.clone();
+                view! {
+                    <div class="wf-node-section">
+                        {ports.into_iter().map(|p| view! {
+                            <div class="wf-port-row">
+                                <span class="wf-port-dot wf-port-dot-output" />
+                                <span class="wf-port-label">{p.label.clone()}</span>
+                                <span class="wf-port-schema">{p.path.clone()}</span>
+                            </div>
+                        }).collect::<Vec<_>>()}
+                    </div>
+                }
             })}
 
-            // Jump to block on front face
+            // Jump to block
             <button
                 class="wf-trace-jump"
                 on:click=move |_| {
                     canvas_state.canvas_side.set(CanvasSide::Front);
-                    canvas_state.requested_expansion.set(Some(bid_jump.clone()));
+                    canvas_state.requested_expansion.set(Some(jump_id.clone()));
                 }
             >
                 "\u{2192} view block"
@@ -120,15 +218,264 @@ fn TraceEntry(block: CanvasBlock) -> impl IntoView {
     }
 }
 
+/// Renders one edge row — a visual wire plus an inline approval card for Proposed edges.
+#[component]
+fn MapEdgeRow(edge: WorkflowEdge) -> impl IntoView {
+    let edge_class = match edge.state {
+        EdgeState::Confirmed => "wf-edge wf-edge-confirmed",
+        EdgeState::Proposed => "wf-edge wf-edge-proposed",
+        EdgeState::Blocked => "wf-edge wf-edge-blocked",
+        EdgeState::Unconnected => "wf-edge wf-edge-unconnected",
+    };
+
+    let memex_badge = edge.memex_remembered;
+    let is_proposed = edge.state == EdgeState::Proposed;
+    let edge_for_card = edge.clone();
+
+    view! {
+        <div class=edge_class>
+            <div class="wf-edge-line">
+                <span class="wf-edge-from">{edge.from_port.label.clone()}</span>
+                <span class="wf-edge-arrow">"→"</span>
+                <span class="wf-edge-to">{edge.to_port.label.clone()}</span>
+                {memex_badge.then(|| view! {
+                    <span class="wf-edge-memex">"🧠 remembered"</span>
+                })}
+            </div>
+            {is_proposed.then(move || view! {
+                <MapApprovalCard edge=edge_for_card />
+            })}
+        </div>
+    }
+}
+
+/// Inline approval card for a Proposed edge — shown when the memex has no pre-approval.
+/// The user can allow once, always allow (writes to memex), or deny (agent substitution).
+#[component]
+fn MapApprovalCard(edge: WorkflowEdge) -> impl IntoView {
+    let from_label = edge.from_port.label.clone();
+    let from_path = edge.from_port.path.clone();
+    let to_label = edge.to_port.label.clone();
+    let from_node = edge.from_node_id.clone();
+    let to_node = edge.to_node_id.clone();
+
+    // "Always allow" — store memex approval record via Tauri IPC
+    let always_allow = {
+        let from_node = from_node.clone();
+        let to_node = to_node.clone();
+        let from_path = from_path.clone();
+        move |_| {
+            let from_node = from_node.clone();
+            let to_node = to_node.clone();
+            let from_path = from_path.clone();
+            spawn_local(async move {
+                let args = serde_json::json!({
+                    "from_node_id": from_node,
+                    "to_node_id": to_node,
+                    "property_path": from_path,
+                });
+                let _ =
+                    bridge::invoke::<serde_json::Value, ()>("store_workflow_approval", &args)
+                        .await;
+            });
+        }
+    };
+
+    view! {
+        <div class="wf-approval-card">
+            <div class="wf-approval-card-title">"Approval required"</div>
+            <div class="wf-approval-card-agent">{to_label}</div>
+            <div class="wf-approval-card-disclosure">
+                <span class="wf-approval-icon">"\u{1f512} "</span>
+                <span>{from_label.clone()}</span>
+                <span class="wf-approval-path">" — "</span>
+                <span>{from_path.clone()}</span>
+            </div>
+            <div class="wf-approval-card-actions">
+                <button class="wf-approval-btn wf-approval-allow">"Allow once"</button>
+                <button
+                    class="wf-approval-btn wf-approval-always"
+                    on:click=always_allow
+                >
+                    "Always allow \u{1f9e0}"
+                </button>
+                <button class="wf-approval-btn wf-approval-deny">"Deny"</button>
+            </div>
+        </div>
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DESIGN MODE
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// DESIGN mode — interactive blank canvas for authoring agent pipelines.
+#[component]
+fn WorkflowDesignMode() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let graph = canvas_state.workflow_graph;
+
+    // New node intent text
+    let new_intent: RwSignal<String> = RwSignal::new(String::new());
+
+    let do_add_node = move || {
+        let intent = new_intent.get_untracked();
+        if intent.trim().is_empty() {
+            return;
+        }
+        let id = format!("design-{}", js_sys::Math::random().to_bits());
+        let node = WorkflowNode {
+            id,
+            node_type: papillon_shared::PipelineNodeType::Agent,
+            intent: intent.clone(),
+            agent_name: None,
+            agent_did: None,
+            pap_uri: None,
+            action_type: String::new(),
+            input_ports: vec![],
+            output_ports: vec![],
+            template_override: None,
+            position_x: 0.0,
+            position_y: 0.0,
+        };
+        graph.update(|g| {
+            g.is_designed = true;
+            g.nodes.push(node);
+        });
+        new_intent.set(String::new());
+    };
+    let add_node = move |_: web_sys::MouseEvent| do_add_node();
+    let add_node_keydown = move |e: web_sys::KeyboardEvent| {
+        if e.key() == "Enter" {
+            do_add_node();
+        }
+    };
+
+    let run_workflow = move |_| {
+        let g = graph.get_untracked();
+        if g.nodes.is_empty() {
+            return;
+        }
+        spawn_local(async move {
+            let _ =
+                bridge::invoke::<serde_json::Value, ()>("run_designed_workflow", &serde_json::json!({
+                    "nodes": serde_json::to_value(&g.nodes).unwrap_or_default(),
+                    "edges": serde_json::to_value(&g.edges).unwrap_or_default(),
+                }))
+                .await;
+        });
+    };
+
+    let save_workflow = move |_| {
+        let g = graph.get_untracked();
+        spawn_local(async move {
+            let _ =
+                bridge::invoke::<serde_json::Value, ()>("save_workflow_design", &serde_json::json!({
+                    "nodes": serde_json::to_value(&g.nodes).unwrap_or_default(),
+                    "edges": serde_json::to_value(&g.edges).unwrap_or_default(),
+                }))
+                .await;
+        });
+    };
+
+    let has_nodes = move || !graph.get().nodes.is_empty();
+
+    view! {
+        <div class="wf-design-layout">
+            // Tools strip
+            <div class="wf-design-tools">
+                <input
+                    class="wf-node-intent-input"
+                    type="text"
+                    placeholder="Describe what this agent should do…"
+                    prop:value=move || new_intent.get()
+                    on:input=move |e| new_intent.set(event_target_value(&e))
+                    on:keydown=add_node_keydown
+                />
+                <button
+                    class="wf-design-tool-btn wf-design-add"
+                    on:click=add_node
+                >
+                    "+ Add node"
+                </button>
+                <button
+                    class="wf-design-tool-btn wf-design-run"
+                    on:click=run_workflow
+                    disabled=move || !has_nodes()
+                >
+                    "▶ Run"
+                </button>
+                <button
+                    class="wf-design-tool-btn wf-design-save"
+                    on:click=save_workflow
+                    disabled=move || !has_nodes()
+                >
+                    "Save"
+                </button>
+            </div>
+
+            // Node list
+            <div class="wf-graph-canvas">
+                <Show
+                    when=has_nodes
+                    fallback=|| view! {
+                        <div class="wf-graph-empty">
+                            <p>"Design canvas is empty."</p>
+                            <p class="wf-graph-empty-hint">
+                                "Add nodes above to build a multi-agent pipeline."
+                            </p>
+                        </div>
+                    }
+                >
+                    <div class="wf-graph-row">
+                        <For
+                            each=move || graph.get().nodes
+                            key=|n| n.id.clone()
+                            children=move |node| {
+                                let nid = node.id.clone();
+                                let intent = node.intent.clone();
+                                let agent = node.agent_name.clone().unwrap_or_default();
+                                view! {
+                                    <div class="wf-node">
+                                        <div class="wf-node-header">
+                                            <span class="wf-node-emoji">"🤖"</span>
+                                            <span class="wf-node-name">
+                                                {if agent.is_empty() { intent } else { agent }}
+                                            </span>
+                                        </div>
+                                        <button
+                                            class="wf-trace-jump"
+                                            on:click=move |_| {
+                                                let nid = nid.clone();
+                                                graph.update(|g| g.nodes.retain(|n| n.id != nid));
+                                            }
+                                        >
+                                            "✕ remove"
+                                        </button>
+                                    </div>
+                                }
+                            }
+                        />
+                    </div>
+                </Show>
+            </div>
+        </div>
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORCHESTRATION TRACE (back-face)
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// Derive display properties from a block's current state.
 /// Returns (CSS modifier class, badge label, optional inline description text).
-pub(crate) fn derive_block_trace(block: &CanvasBlock) -> (&'static str, &'static str, Option<String>) {
+pub(crate) fn derive_block_trace(
+    block: &CanvasBlock,
+) -> (&'static str, &'static str, Option<String>) {
     match &block.state {
-        BlockState::Resolving { phase_label, .. } => (
-            "trace-resolving",
-            "resolving",
-            Some(phase_label.clone()),
-        ),
+        BlockState::Resolving { phase_label, .. } => {
+            ("trace-resolving", "resolving", Some(phase_label.clone()))
+        }
         BlockState::AwaitingApproval { .. } => ("trace-awaiting", "awaiting approval", None),
         BlockState::Ghost { agent_name, .. } => (
             "trace-ghost",
@@ -136,20 +483,15 @@ pub(crate) fn derive_block_trace(block: &CanvasBlock) -> (&'static str, &'static
             Some(format!("Agent: {agent_name}")),
         ),
         BlockState::Resolved => ("trace-resolved", "done", None),
-        BlockState::Failed { reason, .. } => (
-            "trace-failed",
-            "failed",
-            Some(reason.clone()),
-        ),
+        BlockState::Failed { reason, .. } => ("trace-failed", "failed", Some(reason.clone())),
         BlockState::Outcome { .. } => ("trace-resolved", "outcome", None),
         _ => ("trace-pending", "pending", None),
     }
 }
 
-/// Inline approval plan summary shown inside a `trace-awaiting` entry.
-/// Displays agent name, required disclosures, return types, and mandate TTL.
+/// Inline approval plan summary — shown inside a `trace-awaiting` entry.
 #[component]
-fn ApprovalPlanInline(plan: IntentPlan) -> impl IntoView {
+pub fn ApprovalPlanInline(plan: IntentPlan) -> impl IntoView {
     view! {
         <div class="wf-approval-plan">
             <div class="wf-plan-agent-row">
@@ -175,16 +517,11 @@ fn ApprovalPlanInline(plan: IntentPlan) -> impl IntoView {
 }
 
 /// Inline approval card shown at a paused edge during workflow execution.
-/// Appears when a new (output_type, input_type, agent_did) wire has no memex pre-approval.
 #[component]
 pub fn EdgeApprovalCard(
-    /// The edge that is paused awaiting approval
     edge: WorkflowEdge,
-    /// Callback fired on "Allow this once" — resume with current agent, no memex write
     on_allow_once: Callback<()>,
-    /// Callback fired on "Always allow" — writes ApprovalRecord, then resumes
     on_always_allow: Callback<()>,
-    /// Callback fired on "Deny" — orchestrator finds substitute agent
     on_deny: Callback<()>,
 ) -> impl IntoView {
     let from_label = edge.from_port.label.clone();
@@ -193,7 +530,6 @@ pub fn EdgeApprovalCard(
 
     view! {
         <div class="wf-approval-card">
-            // Agent identity header
             <div class="wf-approval-agent">
                 <span class="wf-approval-icon">"\u{1f916}"</span>
                 <div class="wf-approval-agent-info">
@@ -201,8 +537,6 @@ pub fn EdgeApprovalCard(
                 </div>
                 <span class="wf-tee-badge">"\u{2713} TEE"</span>
             </div>
-
-            // Plain English disclosure description
             <p class="wf-approval-prompt">"This agent will receive:"</p>
             <div class="wf-disclosure-list">
                 <div class="wf-disclosure-item">
@@ -211,13 +545,9 @@ pub fn EdgeApprovalCard(
                     <span class="wf-disclosure-check">"\u{2713}"</span>
                 </div>
             </div>
-
-            // What the agent will NOT see
             <div class="wf-approval-redacted">
                 "\u{1f512} Will not see: your name, email, payment details, or any other data."
             </div>
-
-            // Action buttons
             <div class="wf-approval-actions">
                 <button
                     class="wf-approval-btn wf-approval-allow-once"
