@@ -669,11 +669,17 @@ pub struct AgentAdvertisement {
 /// fall back to Web Page Reader".
 #[tauri::command]
 pub async fn discover_pap_agents(domain: String) -> Result<Vec<AgentAdvertisement>, String> {
-    // TODO: implement HTTP GET to https://{domain}/.well-known/pap/advertisements
-    // with a ~2 s connect timeout, then deserialize the JSON body.
-    // For now return an empty list so the frontend wiring is in place.
-    let _ = domain;
-    Ok(vec![])
+    let url = format!("https://{}/.well-known/pap/advertisements", domain);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .map_err(|_| String::new())?;
+    let resp = client.get(&url).send().await.map_err(|_| String::new())?;
+    if !resp.status().is_success() {
+        return Ok(vec![]);
+    }
+    let ads: Vec<AgentAdvertisement> = resp.json().await.unwrap_or_default();
+    Ok(ads)
 }
 
 #[cfg(test)]
