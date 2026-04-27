@@ -94,6 +94,8 @@ window.__TAURI__ = {
     _retryCount: 0,
     _reshapeCount: 0,
     _lastReshapeText: null,
+    _approveCount: 0,
+    _rejectCount: 0,
     _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
@@ -547,6 +549,19 @@ window.__TAURI__ = {
             };
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: failBlock }); }, 200);
             return null;
+          } else if (promptText.includes('mock:ghost-full') || promptText.includes('__ghost-full')) {
+            var fullGhostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email', 'passport_number'], returns_preview: ['FlightReservation', 'BoardingPass'] } },
+              schema_type: null,
+              content: null,
+              linked_block_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: fullGhostBlock }); }, 200);
+            return null;
           } else if (promptText.includes('mock:ghost') || promptText.includes('__ghost')) {
             var ghostBlock = {
               id: blockId,
@@ -559,6 +574,19 @@ window.__TAURI__ = {
               updated_at: new Date().toISOString(),
             };
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: ghostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:linked') || promptText.includes('__linked')) {
+            var linkedBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: null,
+              content: { result: 'Linked block content.' },
+              linked_block_ids: ['prior-block-id'],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: linkedBlock }); }, 200);
             return null;
           } else if (promptText.includes('mock:awaiting') || promptText.includes('__awaiting')) {
             var awaitingBlock = {
@@ -632,6 +660,31 @@ window.__TAURI__ = {
             });
           }, 200);
           return null;
+        }
+
+        case 'canvas_approve_block': {
+          const isApproved = (args && (args.approved !== false));
+          if (isApproved) {
+            window.__TAURI__.core._approveCount = (window.__TAURI__.core._approveCount || 0) + 1;
+          } else {
+            window.__TAURI__.core._rejectCount = (window.__TAURI__.core._rejectCount || 0) + 1;
+          }
+          const approveBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
+          setTimeout(function() {
+            window.__TAURI__.event.emit('block_resolved', {
+              block: {
+                id: approveBlockId,
+                prompt_id: 'p-approved',
+                state: 'Resolved',
+                schema_type: 'FlightReservation',
+                content: { result: { '@type': 'FlightReservation', flightNumber: 'PX-0042', departureAirport: 'SFO', arrivalAirport: 'JFK' } },
+                linked_block_ids: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }
+            });
+          }, 200);
+          return { status: 'ok' };
         }
 
         case 'load_builtin_model':
@@ -1015,6 +1068,16 @@ window.__TAURI__ = {
             };
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planFailBlock }); }, 200);
             return null;
+          } else if (promptText.includes('mock:ghost-full') || promptText.includes('__ghost-full')) {
+            var planFullGhostBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: { Ghost: { agent_name: 'TravelAgent', action_type: 'travel.book', disclosure_preview: ['name', 'email', 'passport_number'], returns_preview: ['FlightReservation', 'BoardingPass'] } },
+              schema_type: null, content: null,
+              linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planFullGhostBlock }); }, 200);
+            return null;
           } else if (promptText.includes('mock:ghost') || promptText.includes('__ghost')) {
             var planGhostBlock = {
               id: blockId,
@@ -1024,6 +1087,19 @@ window.__TAURI__ = {
               linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
             };
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planGhostBlock }); }, 200);
+            return null;
+          } else if (promptText.includes('mock:linked') || promptText.includes('__linked')) {
+            var planLinkedBlock = {
+              id: blockId,
+              prompt_id: (args && (args.prompt_id || args.promptId)) || 'p-mock',
+              state: 'Resolved',
+              schema_type: null,
+              content: { result: 'Linked block content.' },
+              linked_block_ids: ['prior-block-id'],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planLinkedBlock }); }, 200);
             return null;
           } else if (promptText.includes('mock:awaiting') || promptText.includes('__awaiting')) {
             var planAwaitingBlock = {
