@@ -303,6 +303,14 @@ export const PeersPage = {
 
     // Wait for modal to close (success: modal disappears; error: modal stays with .error-banner)
     await expect(page.locator(".modal")).not.toBeVisible({ timeout: 15_000 });
+
+    // Trigger sync immediately — federation sync is NOT automatic (no background timer).
+    // The peer was just added; we must explicitly kick off a sync so agents propagate.
+    // Use the API directly (no UI interaction needed) since we already have the DID.
+    const syncUrl = `${baseUrl}/api/peers/${encodeURIComponent(peerDid)}/sync`;
+    await fetch(syncUrl, { method: "POST" }).catch(() => {
+      // Non-fatal: peer was added, sync will be retried on next health check
+    });
   },
 
   /** Returns an array of { endpoint, status } for all visible peers. */
