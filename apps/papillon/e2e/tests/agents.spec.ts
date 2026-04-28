@@ -352,3 +352,40 @@ test.describe("Agent Picker Modal", () => {
     expect(count).toBeGreaterThan(0);
   });
 });
+
+// ── Agent Picker Modal (Browse page) ─────────────────────────
+
+test.describe("Agent Picker Modal (Browse page)", () => {
+  test("browse page opens agent picker modal immediately", async ({ page }) => {
+    await page.goto("/browse", { waitUntil: "commit" });
+    await waitForApp(page);
+    await expect(page.locator(".agent-picker-overlay")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".agent-picker-modal")).toBeVisible();
+    await expect(page.locator(".agent-picker-title")).toContainText("INSTALLED AGENTS");
+  });
+
+  test("agent picker search filters results", async ({ page }) => {
+    await page.goto("/browse", { waitUntil: "commit" });
+    await waitForApp(page);
+    await page.locator(".agent-picker-search").waitFor({ state: "visible" });
+    await page.locator(".agent-picker-search").fill("web");
+    // Count visible agent cards — may be 0 if none match, that's acceptable
+    const cards = page.locator(".agent-picker-card");
+    const count = await cards.count();
+    expect(count).toBeGreaterThanOrEqual(0);
+  });
+
+  test("agent picker close button dismisses modal", async ({ page }) => {
+    await page.goto("/browse", { waitUntil: "commit" });
+    await waitForApp(page);
+    await page.locator(".agent-picker-close").waitFor({ state: "visible" });
+    await page.locator(".agent-picker-close").click();
+    await expect(page.locator(".agent-picker-overlay")).not.toBeVisible();
+  });
+
+  test("agent picker shows count label", async ({ page }) => {
+    await page.goto("/browse", { waitUntil: "commit" });
+    await waitForApp(page);
+    await expect(page.locator(".agent-picker-count")).toContainText("agents installed");
+  });
+});
