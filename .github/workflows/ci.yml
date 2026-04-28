@@ -17,7 +17,7 @@ env:
 jobs:
   changes:
     name: Detect changed paths
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     if: github.event_name == 'pull_request'
     outputs:
       code: ${{ steps.filter.outputs.code }}
@@ -44,7 +44,7 @@ jobs:
 
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
       - name: Install system dependencies
@@ -60,7 +60,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
       - name: Install system dependencies
@@ -74,7 +74,7 @@ jobs:
 
   bluefield-mock:
     name: Check + Test pap-bluefield (mock, no hardware)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -87,7 +87,7 @@ jobs:
 
   test-registry:
     name: Test (registry SSR)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
     steps:
@@ -103,7 +103,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
       - name: Install system dependencies
@@ -120,7 +120,7 @@ jobs:
 
   fmt:
     name: Format
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -130,7 +130,7 @@ jobs:
 
   build-extension:
     name: Build (browser extension)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes]
     if: |
       always() &&
@@ -178,7 +178,7 @@ jobs:
 
   registry-probe:
     name: Registry smoke (startup probe)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes]
     if: |
       always() &&
@@ -210,7 +210,7 @@ jobs:
 
   run-example:
     name: Run example (pap-search-example)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes]
     if: |
       always() &&
@@ -229,7 +229,7 @@ jobs:
 
   docker-workspace:
     name: Docker workspace consistency
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
       - name: Validate Dockerfile workspace members
@@ -237,7 +237,7 @@ jobs:
 
   build-wasm:
     name: Build WASM (Papillon frontend)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes]
     if: |
       always() &&
@@ -272,7 +272,7 @@ jobs:
 
   build-registry-image:
     name: Build registry Docker image
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes]
     if: |
       always() &&
@@ -307,7 +307,7 @@ jobs:
 
   bench:
     name: Benchmark (regression gate)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes]
     if: |
       always() &&
@@ -417,7 +417,7 @@ jobs:
 
   test-java-bindings:
     name: Test (Java JNA bindings)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     # TODO: add JDK 21 matrix (strategy.matrix.java: [17, 21]) once
     # the Gradle build is validated against JDK 21 on all platforms.
     steps:
@@ -455,7 +455,7 @@ jobs:
 
   smoke-test:
     name: Smoke Test (Papillon Desktop App)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes, build-wasm]
     if: |
       always() &&
@@ -507,7 +507,7 @@ jobs:
 
   chrysalis-e2e-tier2:
     name: E2E Tier 2 (Chrysalis functional tests)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes, build-wasm, build-registry-image]
     if: |
       always() &&
@@ -609,7 +609,7 @@ jobs:
 
   chrysalis-e2e:
     name: Chrysalis Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: [changes, build-wasm]
     if: |
       always() &&

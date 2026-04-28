@@ -20,7 +20,7 @@ on:
 jobs:
   deny:
     name: cargo-deny
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2

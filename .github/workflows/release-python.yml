@@ -27,7 +27,7 @@ jobs:
   # ── 1. Detect new version and create tag ──────────────────────────────────
   check-version:
     name: Check version
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
       version: ${{ steps.check.outputs.version }}
@@ -116,7 +116,7 @@ jobs:
     name: Build sdist
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
 
@@ -140,7 +140,7 @@ jobs:
     name: GitHub Release
     needs: [check-version, build-wheels, build-sdist]
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
 
@@ -191,7 +191,7 @@ jobs:
     name: Publish to PyPI
     needs: [check-version, build-wheels, build-sdist]
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     environment:
       name: pypi
       url: https://pypi.org/project/pap-protocol/${{ needs.check-version.outputs.version }}/
