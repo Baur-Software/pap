@@ -85,6 +85,10 @@ pub struct CanvasState {
     /// Components can subscribe to this instead of the full `canvases` vec
     /// to react to specific event types without unnecessary re-renders.
     pub last_event: RwSignal<Option<CanvasEvent>>,
+    /// Live workflow graph for the active canvas (MAP = auto-derived; DESIGN = authored).
+    pub workflow_graph: RwSignal<papillon_shared::WorkflowGraph>,
+    /// Whether the Workflow tab is in Map or Design sub-mode.
+    pub workflow_mode: RwSignal<papillon_shared::WorkflowMode>,
 }
 
 impl Default for CanvasState {
@@ -103,7 +107,122 @@ impl Default for CanvasState {
             requested_expansion: RwSignal::new(None),
             block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
             last_event: RwSignal::new(None),
+            workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
+            workflow_mode: RwSignal::new(papillon_shared::WorkflowMode::default()),
         }
+    }
+}
+
+/// Derive a `WorkflowGraph` from a slice of canvas blocks.
+///
+/// Nodes: one per block (label from prompt_text or schema_type, position left-to-right).
+/// Edges: scan each block's `prompt_text` for `{{block:<id>}}` references; also scan
+/// `linked_block_ids`. Each reference becomes a `WorkflowEdge` with `EdgeState::Unconnected`.
+pub fn derive_map_graph(blocks: &[CanvasBlock]) -> papillon_shared::WorkflowGraph {
+    use papillon_shared::{
+        types::PipelineNodeType, EdgeState, PortRef, WorkflowEdge, WorkflowGraph, WorkflowNode,
+    };
+
+    let nodes: Vec<WorkflowNode> = blocks
+        .iter()
+        .enumerate()
+        .map(|(i, b)| {
+            // Use agent_name extracted from Ghost/AwaitingApproval state, or fall back
+            // to schema_type, or truncated prompt text.
+            let (agent_name, action_type) = match &b.state {
+                papillon_shared::BlockState::Ghost {
+                    agent_name,
+                    action_type,
+                    ..
+                } => (Some(agent_name.clone()), action_type.clone()),
+                papillon_shared::BlockState::AwaitingApproval { plan } => (
+                    Some(plan.selected_agent_name.clone()),
+                    plan.action.clone(),
+                ),
+                _ => (None, String::new()),
+            };
+            WorkflowNode {
+                id: b.id.clone(),
+                node_type: PipelineNodeType::Agent,
+                intent: b.prompt_text.clone().unwrap_or_default(),
+                agent_name,
+                agent_did: b.agent_did.clone(),
+                pap_uri: None,
+                action_type,
+                input_ports: vec![],
+                output_ports: vec![],
+                template_override: None,
+                position_x: (i as f64) * 320.0,
+                position_y: 0.0,
+            }
+        })
+        .collect();
+
+    let mut edges: Vec<WorkflowEdge> = Vec::new();
+    let mut edge_counter: u32 = 0;
+
+    for block in blocks {
+        // Extract {{block:ID}} refs from prompt text
+        let prompt = block.prompt_text.as_deref().unwrap_or("");
+        let mut remaining = prompt;
+        while let Some(start) = remaining.find("{{block:") {
+            remaining = &remaining[start + 8..];
+            if let Some(end) = remaining.find("}}") {
+                let ref_id = &remaining[..end];
+                if !ref_id.is_empty() && blocks.iter().any(|b| b.id == ref_id) {
+                    edge_counter += 1;
+                    edges.push(WorkflowEdge {
+                        id: format!("map-edge-{edge_counter}"),
+                        from_node_id: ref_id.to_string(),
+                        from_port: PortRef {
+                            path: String::new(),
+                            label: String::new(),
+                            required: false,
+                        },
+                        to_node_id: block.id.clone(),
+                        to_port: PortRef {
+                            path: String::new(),
+                            label: String::new(),
+                            required: false,
+                        },
+                        state: EdgeState::Unconnected,
+                        memex_remembered: false,
+                    });
+                }
+                remaining = &remaining[end + 2..];
+            } else {
+                break;
+            }
+        }
+        // Also capture linked_block_ids edges
+        for linked_id in &block.linked_block_ids {
+            if blocks.iter().any(|b| &b.id == linked_id) {
+                edge_counter += 1;
+                edges.push(WorkflowEdge {
+                    id: format!("map-linked-{edge_counter}"),
+                    from_node_id: linked_id.clone(),
+                    from_port: PortRef {
+                        path: String::new(),
+                        label: String::new(),
+                        required: false,
+                    },
+                    to_node_id: block.id.clone(),
+                    to_port: PortRef {
+                        path: String::new(),
+                        label: String::new(),
+                        required: false,
+                    },
+                    state: EdgeState::Unconnected,
+                    memex_remembered: false,
+                });
+            }
+        }
+    }
+
+    WorkflowGraph {
+        nodes,
+        edges,
+        is_designed: false,
     }
 }
 
@@ -1484,6 +1603,85 @@ mod tests {
         let block_id = "xyz".to_string();
         let result = format!("{}{{{{block:{}}}}}", current, block_id);
         assert_eq!(result, "search for {{block:xyz}}");
+    }
+
+    // ── WorkflowGraph / WorkflowMode defaults ────────────────────────────────
+
+    #[test]
+    fn workflow_graph_default_is_empty() {
+        let g = papillon_shared::WorkflowGraph::default();
+        assert!(g.nodes.is_empty());
+        assert!(g.edges.is_empty());
+        assert!(!g.is_designed);
+    }
+
+    #[test]
+    fn workflow_mode_default_is_map() {
+        let m = papillon_shared::WorkflowMode::default();
+        assert_eq!(m, papillon_shared::WorkflowMode::Map);
+    }
+
+    // ── derive_map_graph ──────────────────────────────────────────────────────
+
+    fn make_block(id: &str, prompt: &str) -> papillon_shared::CanvasBlock {
+        papillon_shared::CanvasBlock {
+            id: id.to_string(),
+            prompt_id: id.to_string(),
+            prompt_text: Some(prompt.to_string()),
+            state: papillon_shared::BlockState::Resolved,
+            schema_type: None,
+            content: None,
+            linked_block_ids: vec![],
+            agent_did: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+            mandate_expires_at: None,
+            preference_guided: false,
+            auto_expand: false,
+            retention_warning: None,
+        }
+    }
+
+    #[test]
+    fn derive_map_graph_creates_edge_from_block_ref() {
+        let block_a = make_block("aaa", "search for flights");
+        let block_b = make_block("bbb", "book using {{block:aaa}}");
+        let blocks = vec![block_a, block_b];
+        let graph = super::derive_map_graph(&blocks);
+        assert_eq!(graph.nodes.len(), 2);
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.edges[0].from_node_id, "aaa");
+        assert_eq!(graph.edges[0].to_node_id, "bbb");
+    }
+
+    #[test]
+    fn derive_map_graph_no_refs_means_no_edges() {
+        let block_a = make_block("aaa", "search");
+        let block_b = make_block("bbb", "book");
+        let blocks = vec![block_a, block_b];
+        let graph = super::derive_map_graph(&blocks);
+        assert_eq!(graph.nodes.len(), 2);
+        assert_eq!(graph.edges.len(), 0);
+    }
+
+    #[test]
+    fn derive_map_graph_linked_block_ids_creates_edge() {
+        let block_a = make_block("aaa", "search");
+        let mut block_b = make_block("bbb", "summarize");
+        block_b.linked_block_ids = vec!["aaa".to_string()];
+        let blocks = vec![block_a, block_b];
+        let graph = super::derive_map_graph(&blocks);
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.edges[0].from_node_id, "aaa");
+        assert_eq!(graph.edges[0].to_node_id, "bbb");
+    }
+
+    #[test]
+    fn derive_map_graph_empty_blocks_is_empty_graph() {
+        let graph = super::derive_map_graph(&[]);
+        assert!(graph.nodes.is_empty());
+        assert!(graph.edges.is_empty());
+        assert!(!graph.is_designed);
     }
 
 }

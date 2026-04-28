@@ -29,11 +29,14 @@ use papillon_shared::{
 
 pub mod hooks;
 pub mod tauri_service;
+#[cfg(target_arch = "wasm32")]
 pub mod web_identity;
+#[cfg(target_arch = "wasm32")]
 pub mod web_service;
 
 pub use hooks::use_papillon_service;
 pub use tauri_service::TauriService;
+#[cfg(target_arch = "wasm32")]
 pub use web_service::WebService;
 
 /// Trait defining all service operations for Papillon frontend.

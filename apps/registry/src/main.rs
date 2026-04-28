@@ -294,6 +294,26 @@ async fn main() -> anyhow::Result<()> {
     // ── Leptos configuration ──────────────────────────────────────────────────
     let leptos_options = get_configuration(None).unwrap().leptos_options;
 
+    // Extract CSS path info before leptos_options is moved.
+    // Read site_root from LEPTOS_SITE_ROOT env var if set, otherwise use leptos_options.
+    // This handles Docker deployments where the site dir is mounted at a different path.
+    let css_path = {
+        let site_root = std::env::var("LEPTOS_SITE_ROOT")
+            .unwrap_or_else(|_| leptos_options.site_root.to_string());
+        let leptos_css = std::path::PathBuf::from(&site_root)
+            .join(leptos_options.site_pkg_dir.as_ref())
+            .join("pap-registry-ui.css");
+        tracing::debug!("Checking CSS at: {}", leptos_css.display());
+        tracing::debug!("CSS exists: {}", leptos_css.exists());
+        if leptos_css.exists() {
+            leptos_css
+        } else {
+            tracing::warn!("Built CSS not found, falling back to source");
+            std::path::PathBuf::from("apps/registry/styles/main.css")
+        }
+    };
+    info!("Serving CSS from {}", css_path.display());
+
     // ── Routers ───────────────────────────────────────────────────────────────
 
     // Federation protocol routes (PAP-compatible).
@@ -348,19 +368,6 @@ async fn main() -> anyhow::Result<()> {
     // Docker:    /app → /app/assets  (set PAP_ASSETS_DIR=/app/assets)
     let assets_dir =
         std::env::var("PAP_ASSETS_DIR").unwrap_or_else(|_| "apps/registry/assets".into());
-
-    // CSS: cargo-leptos writes to target/site/pkg/pap-registry-ui.css.
-    // When running via plain `cargo run` that file doesn't exist, so fall
-    // back to the source stylesheet at apps/registry/styles/main.css.
-    let css_path = {
-        let leptos_css = std::path::PathBuf::from("target/site/pkg/pap-registry-ui.css");
-        if leptos_css.exists() {
-            leptos_css
-        } else {
-            std::path::PathBuf::from("apps/registry/styles/main.css")
-        }
-    };
-    info!("Serving CSS from {}", css_path.display());
 
     // Mount each agent's PAP handshake endpoints under /agents/{slug}/
     let mut agent_router = Router::new();

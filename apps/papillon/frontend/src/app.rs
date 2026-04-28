@@ -16,8 +16,10 @@ use crate::pages::canvas::CanvasPage;
 use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
-use crate::service::{PapillonService, TauriService, WebService};
-use crate::state::canvas::CanvasState;
+use crate::service::{PapillonService, TauriService};
+#[cfg(target_arch = "wasm32")]
+use crate::service::WebService;
+use crate::state::canvas::{CanvasState, derive_map_graph};
 use crate::state::catalog::CatalogState;
 use crate::state::dataset::DatasetState;
 use crate::state::identity::IdentityState;
@@ -118,6 +120,15 @@ pub fn App() -> impl IntoView {
         catalog_state.refresh(&agents);
     });
 
+    // Derive MAP workflow graph reactively from the active canvas blocks.
+    // Re-runs whenever blocks change; skipped in DESIGN mode to preserve authored graph.
+    Effect::new(move || {
+        if canvas_state.workflow_mode.get() == papillon_shared::WorkflowMode::Map {
+            let blocks = canvas_state.current_canvas_blocks().get();
+            canvas_state.workflow_graph.set(derive_map_graph(&blocks));
+        }
+    });
+
     // Keep the renderer registry in sync with user-defined templates.
     // First run seeds registered_keys from the hardcoded shipped types; subsequent
     // runs extend the registry when agents or users create new templates.
@@ -133,11 +144,7 @@ pub fn App() -> impl IntoView {
     // Provide PapillonService context — prevents panic in WASM handshake path.
     // Tauri mode: TauriService delegates to native backend via IPC.
     // Browser mode: WebService starts empty, then loads from IndexedDB asynchronously.
-    let service: Arc<dyn PapillonService> = if bridge::tauri_available() {
-        Arc::new(TauriService)
-    } else {
-        Arc::new(WebService::empty())
-    };
+    let service: Arc<dyn PapillonService> = make_service();
     provide_context(service.clone());
 
     // Load persisted canvases from SQLite on startup (Tauri mode only).
@@ -393,5 +400,25 @@ pub fn App() -> impl IntoView {
                 </div>
             </Show>
         </Router>
+    }
+}
+
+/// Construct the correct PapillonService for the current build target.
+///
+/// In Tauri mode (native binary) we always use TauriService regardless of
+/// `bridge::tauri_available()` at runtime, because `WebService` is only
+/// compiled for `wasm32`. In pure-WASM browser builds `WebService` is used.
+fn make_service() -> Arc<dyn crate::service::PapillonService> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if crate::bridge::tauri_available() {
+            Arc::new(crate::service::TauriService)
+        } else {
+            Arc::new(crate::service::WebService::empty())
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Arc::new(crate::service::TauriService)
     }
 }

@@ -18,6 +18,8 @@ services:
       # SQLite DB path inside the container (persisted via the registry_data volume).
       # To use Postgres instead, mount a db.yml file with driver: postgres + url.
       PAP_REGISTRY_DB: "/data/registry.db"
+      # Leptos site root for CSS/WASM assets
+      LEPTOS_SITE_ROOT: "/app/site"
       # Uncomment to protect admin API routes with a Bearer token:
       # PAP_REGISTRY_ADMIN_TOKEN: "change-me-before-deploying"
       # Uncomment ONCE to recover from "migration was previously applied but
