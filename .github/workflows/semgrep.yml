@@ -44,7 +44,7 @@ permissions:
 jobs:
   semgrep:
     name: Semgrep
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep
     if: github.actor != 'dependabot[bot]'
