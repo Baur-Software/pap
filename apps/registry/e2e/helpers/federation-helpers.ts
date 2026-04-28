@@ -6,9 +6,223 @@
  *   apps/registry/src/ui/pages/agents.rs
  *   apps/registry/src/ui/pages/dashboard.rs
  *   apps/registry/src/ui/pages/agent_designer.rs
+ *
+ * Agent publication uses the /federation/announce endpoint with properly
+ * signed AgentAdvertisement JSON (Ed25519, did:key format) — no TOML, no
+ * admin bearer token required.
  */
 
 import { Page, expect } from "@playwright/test";
+import * as crypto from "crypto";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Agent advertisement signing utilities
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Base58btc encode (Bitcoin alphabet). */
+function base58Encode(bytes: Uint8Array): string {
+  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let num = BigInt(0);
+  for (const byte of bytes) {
+    num = num * BigInt(256) + BigInt(byte);
+  }
+  let encoded = "";
+  while (num > BigInt(0)) {
+    encoded = ALPHABET[Number(num % BigInt(58))] + encoded;
+    num = num / BigInt(58);
+  }
+  // Leading 0-bytes map to '1'
+  for (const byte of bytes) {
+    if (byte === 0) {
+      encoded = "1" + encoded;
+    } else {
+      break;
+    }
+  }
+  return encoded;
+}
+
+/**
+ * Derive a did:key identifier from an Ed25519 public key (32 bytes).
+ * Format: did:key:z<base58btc([0xed, 0x01] ++ pubkey_bytes)>
+ * Matches pap-did::public_key_to_did() in Rust.
+ */
+function publicKeyToDid(pubKeyBytes: Uint8Array): string {
+  const prefixed = new Uint8Array(2 + pubKeyBytes.length);
+  prefixed[0] = 0xed;
+  prefixed[1] = 0x01;
+  prefixed.set(pubKeyBytes, 2);
+  return "did:key:z" + base58Encode(prefixed);
+}
+
+/** URL-safe base64 without padding (matches base64::URL_SAFE_NO_PAD in Rust). */
+function base64urlNoPad(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64url");
+}
+
+/**
+ * Build canonical JSON bytes for signing.
+ * Mirrors canonical_bytes() in crates/pap-marketplace/src/advertisement.rs.
+ * Only identity/capability fields — signature, metrics, configurable_properties excluded.
+ */
+function canonicalBytes(ad: Record<string, unknown>): Buffer {
+  const canonical = {
+    "@context": ad["@context"],
+    "@type": ad["@type"],
+    name: ad.name,
+    version: ad.version,
+    provider: ad.provider,
+    capability: ad.capability,
+    object_types: ad.object_types,
+    requires_disclosure: ad.requires_disclosure,
+    returns: ad.returns,
+    ttl_min: ad.ttl_min,
+    signed_by: ad.signed_by,
+  };
+  return Buffer.from(JSON.stringify(canonical));
+}
+
+/** Spec for creating a test agent advertisement. */
+export interface TestAgentSpec {
+  name: string;
+  providerName?: string;
+  capability?: string[];
+  objectTypes?: string[];
+  requiresDisclosure?: string[];
+  returns?: string[];
+  ttlMin?: number;
+}
+
+/**
+ * Create a signed AgentAdvertisement JSON object.
+ * Generates a fresh Ed25519 key pair for each call, matching the Rust signing logic.
+ */
+export function createSignedAdvertisement(spec: TestAgentSpec): Record<string, unknown> {
+  // Generate fresh Ed25519 key pair
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
+
+  // Extract raw 32-byte public key from DER-encoded SubjectPublicKeyInfo
+  const pubKeyDer = publicKey.export({ type: "spki", format: "der" }) as Buffer;
+  const pubKeyBytes = new Uint8Array(pubKeyDer.slice(-32));
+
+  // Derive DID
+  const did = publicKeyToDid(pubKeyBytes);
+
+  // Build unsigned advertisement
+  const ad: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "schema:Service",
+    name: spec.name,
+    version: "0.1.0",
+    provider: {
+      "@type": "schema:Organization",
+      name: spec.providerName ?? "E2E Test Provider",
+      did,
+    },
+    capability: spec.capability ?? ["schema:SearchAction"],
+    object_types: spec.objectTypes ?? ["schema:Thing"],
+    requires_disclosure: spec.requiresDisclosure ?? [],
+    returns: spec.returns ?? ["schema:Thing"],
+    ttl_min: spec.ttlMin ?? 300,
+    signed_by: did,
+    // algorithm serializes as "EdDSA" (matches #[serde(rename = "EdDSA")] in Rust)
+    algorithm: "EdDSA",
+    signature: null,
+  };
+
+  // Sign the canonical bytes
+  const msgBytes = canonicalBytes(ad);
+  const sigBuffer = crypto.sign(null, msgBytes, privateKey) as Buffer;
+  ad.signature = base64urlNoPad(new Uint8Array(sigBuffer));
+
+  return ad;
+}
+
+/**
+ * Publish an agent to a registry via the federation announce protocol.
+ *
+ * Creates a fresh Ed25519 keypair, builds a signed AgentAdvertisement,
+ * and POSTs to /federation/announce as FederationMessage::Announce.
+ * No bearer token required; the registry accepts federation announcements
+ * from any peer with a valid Ed25519 signature.
+ */
+export async function publishAgentViaAPI(
+  baseUrl: string,
+  agentSpec: TestAgentSpec
+): Promise<void> {
+  const advertisement = createSignedAdvertisement(agentSpec);
+
+  // FederationMessage uses #[serde(tag = "type")], so variant name is in "type" field
+  const body = JSON.stringify({ type: "Announce", advertisement });
+
+  const res = await fetch(`${baseUrl}/federation/announce`, {
+    method: "POST",
+    body,
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!res.ok) {
+    const responseBody = await res.text().catch(() => "");
+    throw new Error(
+      `publishAgentViaAPI failed: ${res.status} ${res.statusText}\n${responseBody}`
+    );
+  }
+
+  const ack = (await res.json()) as Record<string, unknown>;
+  if (ack["type"] === "AnnounceAck" && ack["accepted"] === false) {
+    throw new Error(
+      `publishAgentViaAPI: registry rejected advertisement (hash: ${String(ack["hash"])}). ` +
+        "Signature verification failed."
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-defined test agent specs
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Named test agent specs matching the catalog agents used in test scenarios. */
+export const TestAgents = {
+  hackerNewsSearch: (): TestAgentSpec => ({
+    name: "Hacker News Search",
+    providerName: "Algolia / Y Combinator",
+    capability: ["schema:SearchAction"],
+    objectTypes: ["schema:DiscussionForumPosting"],
+    returns: ["schema:DiscussionForumPosting"],
+  }),
+
+  dockerHubSearch: (): TestAgentSpec => ({
+    name: "Docker Hub Image Search",
+    providerName: "Docker Inc.",
+    capability: ["schema:SearchAction"],
+    objectTypes: ["schema:SoftwareApplication"],
+    returns: ["schema:SoftwareApplication"],
+  }),
+
+  githubReposSearch: (): TestAgentSpec => ({
+    name: "GitHub Repository Search",
+    providerName: "GitHub Inc.",
+    capability: ["schema:SearchAction"],
+    objectTypes: ["schema:SoftwareSourceCode"],
+    returns: ["schema:SoftwareSourceCode"],
+  }),
+
+  npmPackageSearch: (): TestAgentSpec => ({
+    name: "npm Package Search",
+    providerName: "npm Inc.",
+    capability: ["schema:SearchAction"],
+    objectTypes: ["schema:SoftwareApplication"],
+    returns: ["schema:SoftwareApplication"],
+  }),
+
+  customSearch: (providerName: string): TestAgentSpec => ({
+    name: "Custom Search",
+    providerName,
+    capability: ["schema:SearchAction"],
+    objectTypes: ["schema:Thing"],
+    returns: ["schema:Thing"],
+  }),
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PeersPage
@@ -96,7 +310,7 @@ export const AgentsPage = {
 
   /**
    * Poll until an agent with the given name appears in the list.
-   * Uses exponential backoff: 100ms → 200ms → 500ms → 1s → 2s → 5s.
+   * Uses exponential backoff: 100ms to 200ms to 500ms to 1s to 2s to 5s.
    */
   async waitForAgentInList(
     page: Page,
@@ -164,18 +378,18 @@ export const AgentDesignerPage = {
       capabilities?: string;
     }
   ): Promise<void> {
-    await page.locator('[name=name]').fill(data.name);
+    await page.locator("[name=name]").fill(data.name);
     if (data.provider_name) {
-      await page.locator('[name=provider_name]').fill(data.provider_name);
+      await page.locator("[name=provider_name]").fill(data.provider_name);
     }
     if (data.capabilities) {
-      await page.locator('[name=capabilities]').fill(data.capabilities);
+      await page.locator("[name=capabilities]").fill(data.capabilities);
     }
   },
 
   /** Submit the agent designer form. */
   async publish(page: Page): Promise<void> {
-    await page.locator('button[type=submit], .btn.btn-primary').last().click();
+    await page.locator("button[type=submit], .btn.btn-primary").last().click();
     // Wait for success or redirect
     await Promise.race([
       page.waitForURL((url) => !url.pathname.includes("/new"), { timeout: 10_000 }),
@@ -183,46 +397,3 @@ export const AgentDesignerPage = {
     ]);
   },
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// API helpers (bypasses UI for seeding)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Publish an agent via the registry's admin API (TOML body).
- * Uses the /admin/agents endpoint expected to exist on the registry.
- */
-export async function publishAgentViaAPI(
-  baseUrl: string,
-  agentToml: string
-): Promise<void> {
-  const res = await fetch(`${baseUrl}/admin/agents`, {
-    method: "POST",
-    body: agentToml,
-    headers: { "Content-Type": "application/toml" },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(
-      `publishAgentViaAPI failed: ${res.status} ${res.statusText}\n${body}`
-    );
-  }
-}
-
-/** Read the content of a seed agent TOML file. */
-export function readSeedAgent(filename: string): string {
-  const fs = require("fs") as typeof import("fs");
-  const p = require("path") as typeof import("path");
-  // Reject any filename containing path separators or traversal sequences
-  // to prevent path traversal (Semgrep path-join-resolve-traversal).
-  if (/[/\\]|\.\./.test(filename)) {
-    throw new Error(`readSeedAgent: invalid filename '${filename}'`);
-  }
-  const seedDir = p.resolve(__dirname, "..", "seed-agents");
-  const fullPath = p.resolve(seedDir, filename);
-  // Verify resolved path stays within the seed-agents directory
-  if (!fullPath.startsWith(seedDir + p.sep) && fullPath !== seedDir) {
-    throw new Error(`readSeedAgent: path traversal detected for '${filename}'`);
-  }
-  return fs.readFileSync(fullPath, "utf8");
-}

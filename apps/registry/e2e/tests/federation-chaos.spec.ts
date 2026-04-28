@@ -24,6 +24,8 @@ import {
   PeersPage,
   AgentsPage,
   publishAgentViaAPI,
+  TestAgents,
+  TestAgentSpec,
 } from "../helpers/federation-helpers";
 import {
   partitionNetwork,
@@ -40,24 +42,6 @@ test.skip(
   !process.env.RUN_CHAOS_TESTS,
   "Set RUN_CHAOS_TESTS=true to enable chaos tests"
 );
-
-const GITHUB_REPOS_TOML = (() => {
-  const fs = require("fs") as typeof import("fs");
-  const path = require("path") as typeof import("path");
-  return fs.readFileSync(
-    path.join(__dirname, "../../../../crates/pap-agents/catalog/culture/github_repos.toml"),
-    "utf8"
-  );
-})();
-
-const NPM_REGISTRY_TOML = (() => {
-  const fs = require("fs") as typeof import("fs");
-  const path = require("path") as typeof import("path");
-  return fs.readFileSync(
-    path.join(__dirname, "../../../../crates/pap-agents/catalog/developer/npm_registry.toml"),
-    "utf8"
-  );
-})();
 
 test.describe("Federation Chaos", () => {
   let workerIndex: number;
@@ -105,9 +89,8 @@ test.describe("Federation Chaos", () => {
     partitionNetwork(workerIndex, ["a", "b"], ["c", "d"]);
 
     // Publish on each side of the partition
-    await publishAgentViaAPI(urlA, GITHUB_REPOS_TOML);
-    // C/D side uses npm
-    await publishAgentViaAPI(urlC, NPM_REGISTRY_TOML);
+    await publishAgentViaAPI(urlA, TestAgents.githubReposSearch());
+    await publishAgentViaAPI(urlC, TestAgents.npmPackageSearch());
 
     // Each half should sync within its partition
     await AgentsPage.waitForAgentInList(pageB, urlB, "GitHub Repository Search");
@@ -124,19 +107,17 @@ test.describe("Federation Chaos", () => {
   // ── Test 7: Cascading Failure ─────────────────────────────────────────────
 
   test("Test 7 — Cascading failure: killing B isolates D from A; restart B restores sync", async () => {
-    // Build chain A→B→C→D
+    // Build chain A to B to C to D
     await PeersPage.addPeer(pageA, urlA, urlB);
     await PeersPage.addPeer(pageB, urlB, urlC);
     await PeersPage.addPeer(pageC, urlC, urlD);
 
     // Publish on A
-    await publishAgentViaAPI(urlA, GITHUB_REPOS_TOML);
+    await publishAgentViaAPI(urlA, TestAgents.githubReposSearch());
     await AgentsPage.waitForAgentInList(pageB, urlB, "GitHub Repository Search");
 
-    // Kill B — D should no longer receive new agents from A's side
+    // Kill B
     killRegistry(workerIndex, "b");
-
-    // Wait for B to be gone
     await new Promise((r) => setTimeout(r, 2_000));
 
     // Restart B after 1s delay
@@ -144,7 +125,7 @@ test.describe("Federation Chaos", () => {
     await waitForContainerHealthy(workerIndex, "b", 30_000);
 
     // After restart, publish npm on A — should reach D via B after B recovers
-    await publishAgentViaAPI(urlA, NPM_REGISTRY_TOML);
+    await publishAgentViaAPI(urlA, TestAgents.npmPackageSearch());
     await AgentsPage.waitForAgentInList(pageD, urlD, "npm Package Search", 45_000);
   });
 
@@ -155,15 +136,14 @@ test.describe("Federation Chaos", () => {
     addNetworkDelay(workerIndex, "b", 5_000);
 
     try {
-      // Peer A↔B and A↔C
+      // Peer A to B and A to C
       await PeersPage.addPeer(pageA, urlA, urlB);
       await PeersPage.addPeer(pageA, urlA, urlC);
 
       // Publish on C
-      await publishAgentViaAPI(urlC, GITHUB_REPOS_TOML);
+      await publishAgentViaAPI(urlC, TestAgents.githubReposSearch());
 
       // A should sync from C despite B being slow
-      // Timeout is 30s — should complete well before that
       await AgentsPage.waitForAgentInList(pageA, urlA, "GitHub Repository Search", 30_000);
     } finally {
       resetNetworkEffects(workerIndex, "b");
@@ -173,57 +153,23 @@ test.describe("Federation Chaos", () => {
   // ── Test 9: Concurrent Conflict ───────────────────────────────────────────
 
   test("Test 9 — Concurrent conflict: parallel publishes of same-named agent are handled deterministically", async () => {
-    const sameNameA = `
-schema_version = 1
-version = "0.1.0"
-name = "Concurrent Agent"
-provider = "Alpha Registry"
-description = "Published on A during conflict test"
-action = "schema:SearchAction"
-object_types = ["schema:Thing"]
-requires_disclosure = []
-returns = ["schema:Thing"]
-source = "Custom"
-subagents = []
-[endpoint]
-url_template = "https://alpha.example.com/search?q={query}"
-method = "Get"
-response_jsonpath = "$.results[0]"
-response_schema_type = "schema:Thing"
-`;
-
-    const sameNameB = `
-schema_version = 1
-version = "0.1.0"
-name = "Concurrent Agent"
-provider = "Beta Registry"
-description = "Published on B during conflict test"
-action = "schema:SearchAction"
-object_types = ["schema:Thing"]
-requires_disclosure = []
-returns = ["schema:Thing"]
-source = "Custom"
-subagents = []
-[endpoint]
-url_template = "https://beta.example.com/search?q={query}"
-method = "Get"
-response_jsonpath = "$.results[0]"
-response_schema_type = "schema:Thing"
-`;
+    // Two agents with the same name but different providers (different keypairs = different hash)
+    const agentAlpha = TestAgents.customSearch("Alpha Registry");
+    const agentBeta = TestAgents.customSearch("Beta Registry");
 
     // Publish simultaneously on A and B
     await Promise.all([
-      publishAgentViaAPI(urlA, sameNameA),
-      publishAgentViaAPI(urlB, sameNameB),
+      publishAgentViaAPI(urlA, agentAlpha),
+      publishAgentViaAPI(urlB, agentBeta),
     ]);
 
-    // Peer A↔B
+    // Peer A to B
     await PeersPage.addPeer(pageA, urlA, urlB);
 
     // Wait for sync
     await new Promise((r) => setTimeout(r, 5_000));
 
-    // Both registries should have a deterministic result — at least 1 agent named "Concurrent Agent"
+    // Both registries should have at least 1 "Custom Search" agent
     const countA = await AgentsPage.getAgentCount(pageA, urlA);
     const countB = await AgentsPage.getAgentCount(pageB, urlB);
 
@@ -236,41 +182,29 @@ response_schema_type = "schema:Thing"
   test("Test 10 — Resource exhaustion: 100-agent bulk publish on A syncs to D without 5xx errors", async () => {
     const errors: string[] = [];
 
-    // Publish 100 unique agents on A
-    const publishPromises = Array.from({ length: 100 }, (_, i) => {
-      const agentToml = `
-schema_version = 1
-version = "0.1.0"
-name = "Bulk Agent ${i + 1}"
-provider = "Stress Test"
-description = "Synthetic agent ${i + 1} for resource exhaustion test"
-action = "schema:SearchAction"
-object_types = ["schema:Thing"]
-requires_disclosure = []
-returns = ["schema:Thing"]
-source = "Catalog"
-subagents = []
-[endpoint]
-url_template = "https://stress.example.com/agent${i + 1}?q={query}"
-method = "Get"
-response_jsonpath = "$.result"
-response_schema_type = "schema:Thing"
-`;
-      return publishAgentViaAPI(urlA, agentToml).catch((err: Error) => {
-        errors.push(err.message);
+    // Publish 100 unique agents on A in batches of 10
+    for (let batch = 0; batch < 10; batch++) {
+      const batchPromises = Array.from({ length: 10 }, (_, j) => {
+        const i = batch * 10 + j;
+        const spec: TestAgentSpec = {
+          name: `Bulk Agent ${i + 1}`,
+          providerName: "Stress Test",
+          capability: ["schema:SearchAction"],
+          objectTypes: ["schema:Thing"],
+          returns: ["schema:Thing"],
+        };
+        return publishAgentViaAPI(urlA, spec).catch((err: Error) => {
+          errors.push(err.message);
+        });
       });
-    });
-
-    // Publish in batches of 10 to avoid connection exhaustion
-    for (let i = 0; i < publishPromises.length; i += 10) {
-      await Promise.all(publishPromises.slice(i, i + 10));
+      await Promise.all(batchPromises);
     }
 
     // No 5xx errors during bulk publish
     const serverErrors = errors.filter((e) => e.includes("5"));
     expect(serverErrors).toHaveLength(0);
 
-    // Peer D → A
+    // Peer D to A
     await PeersPage.addPeer(pageD, urlD, urlA);
 
     // D should eventually receive the last bulk agent
