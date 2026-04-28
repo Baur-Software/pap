@@ -3,6 +3,8 @@ use tauri::State;
 
 use crate::db::prelude::DatabaseOps;
 use crate::error::PapillonError;
+use std::sync::atomic::Ordering;
+
 use crate::state::{AppState, LOCAL_REGISTRY_URL};
 use papillon_shared::{AgentInfo, PeerInfo, RegistryInfo};
 
@@ -526,7 +528,7 @@ pub fn get_node_info(state: State<'_, AppState>) -> Result<serde_json::Value, Pa
     Ok(serde_json::json!({
         "did": did,
         "endpoint": *endpoint,
-        "port": state.federation_port,
+        "port": state.federation_port.load(Ordering::Relaxed),
         "cert_fingerprint": *fingerprint,
         "agent_count": registry.len(),
         "peer_count": registry.peers().len(),
