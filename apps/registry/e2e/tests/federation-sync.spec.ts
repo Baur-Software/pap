@@ -196,13 +196,16 @@ test.describe("Federation Sync", () => {
       await publishAgentViaAPI(urlC, TestAgents.hackerNewsSearch());
       await publishAgentViaAPI(urlD, TestAgents.dockerHubSearch());
 
-      // Build full mesh: 6 pairs (sequential per page to avoid UI races)
-      await PeersPage.addPeer(pageA, urlA, urlB);
-      await PeersPage.addPeer(pageA, urlA, urlC);
-      await PeersPage.addPeer(pageA, urlA, urlD);
-      await PeersPage.addPeer(pageB, urlB, urlC);
-      await PeersPage.addPeer(pageB, urlB, urlD);
-      await PeersPage.addPeer(pageC, urlC, urlD);
+      // Build full mesh using hub-and-spoke: A pulls from B, C, D first
+      // (making A a hub with all 4 agents), then B, C, D each pull from A.
+      // This guarantees every registry reaches all 4 agents with 6 addPeer
+      // calls (sequential per page to avoid UI races on shared page objects).
+      await PeersPage.addPeer(pageA, urlA, urlB); // A ← B
+      await PeersPage.addPeer(pageA, urlA, urlC); // A ← C
+      await PeersPage.addPeer(pageA, urlA, urlD); // A ← D (A now has all 4)
+      await PeersPage.addPeer(pageB, urlB, urlA); // B ← A (B gets all 4)
+      await PeersPage.addPeer(pageC, urlC, urlA); // C ← A (C gets all 4)
+      await PeersPage.addPeer(pageD, urlD, urlA); // D ← A (D gets all 4)
 
       // After full mesh sync, each registry should have all 4 agents
       await AgentsPage.waitForAgentInList(pageA, urlA, "npm Package Search");
