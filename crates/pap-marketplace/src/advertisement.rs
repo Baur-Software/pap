@@ -337,7 +337,10 @@ mod tests {
         assert!(!ad.supports_action("schema:PayAction"));
         // Wildcard "*" matches all agents regardless of declared capability —
         // used by the federation sync query endpoint to retrieve all ads.
-        assert!(ad.supports_action("*"), "wildcard '*' must match all agents");
+        assert!(
+            ad.supports_action("*"),
+            "wildcard '*' must match all agents"
+        );
     }
 
     #[test]
