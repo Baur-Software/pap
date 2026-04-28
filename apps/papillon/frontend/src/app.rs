@@ -16,7 +16,7 @@ use crate::pages::canvas::CanvasPage;
 use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
-use crate::service::{PapillonService, TauriService};
+use crate::service::PapillonService;
 #[cfg(target_arch = "wasm32")]
 use crate::service::WebService;
 use crate::state::canvas::{CanvasState, derive_map_graph};
