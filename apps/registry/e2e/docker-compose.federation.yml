@@ -25,6 +25,7 @@ services:
       LEPTOS_SITE_ROOT: /app/site
       PAP_REGISTRY_DB: /data/registry.db
       LEPTOS_SITE_ADDR: "0.0.0.0:7890"
+      PAP_REGISTRY_ENDPOINT: "http://registry-a:7890"
     ports:
       - "${PAP_PORT_A:-7900}:7890"
     tmpfs:
@@ -48,6 +49,7 @@ services:
       LEPTOS_SITE_ROOT: /app/site
       PAP_REGISTRY_DB: /data/registry.db
       LEPTOS_SITE_ADDR: "0.0.0.0:7890"
+      PAP_REGISTRY_ENDPOINT: "http://registry-b:7890"
     ports:
       - "${PAP_PORT_B:-7901}:7890"
     tmpfs:
@@ -71,6 +73,7 @@ services:
       LEPTOS_SITE_ROOT: /app/site
       PAP_REGISTRY_DB: /data/registry.db
       LEPTOS_SITE_ADDR: "0.0.0.0:7890"
+      PAP_REGISTRY_ENDPOINT: "http://registry-c:7890"
     ports:
       - "${PAP_PORT_C:-7902}:7890"
     tmpfs:
@@ -94,6 +97,7 @@ services:
       LEPTOS_SITE_ROOT: /app/site
       PAP_REGISTRY_DB: /data/registry.db
       LEPTOS_SITE_ADDR: "0.0.0.0:7890"
+      PAP_REGISTRY_ENDPOINT: "http://registry-d:7890"
     ports:
       - "${PAP_PORT_D:-7903}:7890"
     tmpfs:

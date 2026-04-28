@@ -257,13 +257,16 @@ export const PeersPage = {
   /**
    * Add a peer via the UI.
    *
-   * The Add Peer modal has 3 .form-input fields in order:
-   *   1. Peer DID (did:key:z...)
-   *   2. Endpoint URL (https://...)
-   *   3. TLS Certificate Fingerprint (optional)
+   * The Add Peer modal requires:
+   *   - [0] Peer DID (did:key:z...) — REQUIRED by the UI
+   *   - [1] Endpoint URL            — REQUIRED
+   *   - [2] TLS Certificate Fingerprint — optional
    *
-   * On success: modal closes and peer list reloads. No .success-banner appears
-   * for addPeer — success is indicated by the modal disappearing.
+   * We fetch the target peer's DID from its /federation/identity endpoint
+   * before opening the modal, since the DID is required by the form.
+   *
+   * On success: modal closes and peer list reloads.
+   * No .success-banner for addPeer — success = modal disappears.
    */
   async addPeer(
     page: Page,
@@ -271,6 +274,19 @@ export const PeersPage = {
     endpoint: string,
     _trustMode = "tofu"
   ): Promise<void> {
+    // Fetch the target peer's DID from its federation identity endpoint
+    const identityUrl = `${endpoint}/federation/identity`;
+    const identityRes = await fetch(identityUrl);
+    if (!identityRes.ok) {
+      throw new Error(
+        `addPeer: could not fetch peer identity from ${identityUrl}: ${identityRes.status}`
+      );
+    }
+    const identity = (await identityRes.json()) as { did: string; endpoint: string };
+    const peerDid = identity.did;
+    // Use the self-reported endpoint so the registry stores the correct address
+    const peerEndpoint = identity.endpoint || endpoint;
+
     await this.navigate(page, baseUrl);
 
     // Open the add peer modal
@@ -278,9 +294,9 @@ export const PeersPage = {
     await expect(page.locator(".modal")).toBeVisible();
 
     // The modal has 3 .form-input fields: [0]=DID, [1]=Endpoint, [2]=TLS fingerprint
-    // Fill the Endpoint URL field (second input)
     const inputs = page.locator(".modal .form-input");
-    await inputs.nth(1).fill(endpoint);
+    await inputs.nth(0).fill(peerDid);
+    await inputs.nth(1).fill(peerEndpoint);
 
     // Submit
     await page.locator(".modal-actions .btn.btn-primary").click();
