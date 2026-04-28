@@ -16,7 +16,7 @@ env:
 jobs:
   web-build:
     name: Build Web Target
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -61,7 +61,7 @@ jobs:
 
   web-smoke-test:
     name: Smoke Test (Standalone Web Build)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     needs: web-build
     steps:
       - uses: actions/checkout@v6
@@ -117,7 +117,7 @@ jobs:
 
   web-check:
     name: Check Web Target Compilation
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -140,7 +140,7 @@ jobs:
 
   web-clippy:
     name: Clippy (WASM target)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -164,7 +164,7 @@ jobs:
 
   web-test:
     name: Test Web Build
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     needs: web-build
     steps:
       - uses: actions/checkout@v6
@@ -186,7 +186,7 @@ jobs:
 
   web-unit-test:
     name: Test papillon-shared (WASM backend)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
