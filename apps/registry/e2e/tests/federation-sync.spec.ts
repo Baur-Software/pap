@@ -85,14 +85,17 @@ test.describe("Federation Sync", () => {
       await publishAgentViaAPI(urlB, TestAgents.hackerNewsSearch());
       await publishAgentViaAPI(urlB, TestAgents.dockerHubSearch());
 
-      // Peer A to B (A adds B as peer — triggers sync)
+      // Peer A→B (A adds B as peer — A syncs FROM B, getting B's agents)
       await PeersPage.addPeer(pageA, urlA, urlB);
 
       // After sync: A should see B's agents
       await AgentsPage.waitForAgentInList(pageA, urlA, "Hacker News Search");
       await AgentsPage.waitForAgentInList(pageA, urlA, "Docker Hub Image Search");
 
-      // B should see A's agents
+      // Peer B→A (B adds A as peer — B syncs FROM A, getting A's agents)
+      await PeersPage.addPeer(pageB, urlB, urlA);
+
+      // After B syncs from A: B should see A's agents
       await AgentsPage.waitForAgentInList(pageB, urlB, "GitHub Repository Search");
       await AgentsPage.waitForAgentInList(pageB, urlB, "npm Package Search");
     } catch (e) {
@@ -108,11 +111,17 @@ test.describe("Federation Sync", () => {
       // Publish GitHub Repository Search on A
       await publishAgentViaAPI(urlA, TestAgents.githubReposSearch());
 
-      // Build chain: A to C, C to D
-      await PeersPage.addPeer(pageA, urlA, urlC);
-      await PeersPage.addPeer(pageC, urlC, urlD);
+      // Build chain: C syncs from A (C gets A's agent), D syncs from C (D gets C's agent)
+      // Direction: C adds A → C pulls from A; D adds C → D pulls from C.
+      await PeersPage.addPeer(pageC, urlC, urlA);
 
-      // D should eventually receive A's agent via transitive sync
+      // C should now have GitHub Repository Search (pulled from A)
+      await AgentsPage.waitForAgentInList(pageC, urlC, "GitHub Repository Search", 15_000);
+
+      // D adds C → D pulls from C (which now has A's agent)
+      await PeersPage.addPeer(pageD, urlD, urlC);
+
+      // D should eventually receive A's agent via transitive sync through C
       await AgentsPage.waitForAgentInList(pageD, urlD, "GitHub Repository Search", 30_000);
     } catch (e) {
       await dumpLogsOnFailure(workerIndex);
@@ -128,8 +137,10 @@ test.describe("Federation Sync", () => {
       await publishAgentViaAPI(urlA, TestAgents.customSearch("Provider Alpha"));
       await publishAgentViaAPI(urlB, TestAgents.customSearch("Provider Beta"));
 
-      // Peer A to B
+      // A syncs FROM B → A gets Provider Beta's agent (A already has Provider Alpha)
       await PeersPage.addPeer(pageA, urlA, urlB);
+      // B syncs FROM A → B gets Provider Alpha's agent (B already has Provider Beta)
+      await PeersPage.addPeer(pageB, urlB, urlA);
 
       // Wait for sync to propagate
       await new Promise((r) => setTimeout(r, 3_000));
@@ -154,18 +165,20 @@ test.describe("Federation Sync", () => {
       await publishAgentViaAPI(urlA, TestAgents.githubReposSearch());
       await publishAgentViaAPI(urlB, TestAgents.npmPackageSearch());
 
-      await PeersPage.addPeer(pageA, urlA, urlB);
-      await PeersPage.addPeer(pageB, urlB, urlC);
+      // B syncs from A → B gets GitHub agent; C syncs from A → C gets GitHub agent
+      await PeersPage.addPeer(pageB, urlB, urlA);
+      await PeersPage.addPeer(pageC, urlC, urlA);
+      await PeersPage.addPeer(pageC, urlC, urlB);
 
-      // Wait for mesh to propagate
+      // Wait for mesh to propagate — C should have A's agent
       await AgentsPage.waitForAgentInList(pageC, urlC, "GitHub Repository Search");
 
-      // D joins late — connect to all three
+      // D joins late — syncs from all three
       await PeersPage.addPeer(pageD, urlD, urlA);
       await PeersPage.addPeer(pageD, urlD, urlB);
       await PeersPage.addPeer(pageD, urlD, urlC);
 
-      // D should receive all agents
+      // D should receive all agents from the established mesh
       await AgentsPage.waitForAgentInList(pageD, urlD, "GitHub Repository Search");
     } catch (e) {
       await dumpLogsOnFailure(workerIndex);
@@ -183,16 +196,12 @@ test.describe("Federation Sync", () => {
       await publishAgentViaAPI(urlC, TestAgents.hackerNewsSearch());
       await publishAgentViaAPI(urlD, TestAgents.dockerHubSearch());
 
-      // Build full mesh: 6 pairs
-      await Promise.all([
-        PeersPage.addPeer(pageA, urlA, urlB),
-        PeersPage.addPeer(pageA, urlA, urlC),
-        PeersPage.addPeer(pageA, urlA, urlD),
-      ]);
-      await Promise.all([
-        PeersPage.addPeer(pageB, urlB, urlC),
-        PeersPage.addPeer(pageB, urlB, urlD),
-      ]);
+      // Build full mesh: 6 pairs (sequential per page to avoid UI races)
+      await PeersPage.addPeer(pageA, urlA, urlB);
+      await PeersPage.addPeer(pageA, urlA, urlC);
+      await PeersPage.addPeer(pageA, urlA, urlD);
+      await PeersPage.addPeer(pageB, urlB, urlC);
+      await PeersPage.addPeer(pageB, urlB, urlD);
       await PeersPage.addPeer(pageC, urlC, urlD);
 
       // After full mesh sync, each registry should have all 4 agents

@@ -388,13 +388,14 @@ export const AgentsPage = {
     while (Date.now() - start < timeoutMs) {
       await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
 
+      // AgentsPage renders .agent-card elements with .agent-name inside
       const found = await page
-        .locator(".agent-row, tr, li")
+        .locator(".agent-card, .agent-name, .agent-row")
         .filter({ hasText: agentName })
         .count();
       if (found > 0) return;
 
-      // Also check page text as a fallback
+      // Fallback: check raw page text (catches SSR-rendered content)
       const content = await page.content();
       if (content.includes(agentName)) return;
 
@@ -408,17 +409,19 @@ export const AgentsPage = {
     );
   },
 
-  /** Get the agent count from the dashboard stat card. */
+  /** Get the agent count by counting .agent-card elements on the /agents page. */
   async getAgentCount(page: Page, baseUrl: string): Promise<number> {
+    await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
+    const count = await page.locator(".agent-card").count();
+    if (count > 0) return count;
+    // Fallback: try dashboard stat card
     await page.goto(`${baseUrl}`, { waitUntil: "networkidle" });
     const tealStat = page.locator(".stat-value.teal");
     if ((await tealStat.count()) > 0) {
       const text = await tealStat.first().textContent();
       return parseInt(text?.trim() ?? "0", 10);
     }
-    // Fallback: count rows on agents page
-    await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
-    return page.locator(".agent-row, .agent-list-item").count();
+    return 0;
   },
 };
 

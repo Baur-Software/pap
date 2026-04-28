@@ -234,8 +234,12 @@ impl AgentAdvertisement {
     }
 
     /// Check if this agent can perform a given Schema.org action.
+    ///
+    /// Passing `"*"` as the action matches all agents regardless of their
+    /// declared capability — used by the federation sync query endpoint
+    /// (`/federation/query?action=*`) to retrieve every advertisement from a peer.
     pub fn supports_action(&self, action: &str) -> bool {
-        self.capability.iter().any(|c| c == action)
+        action == "*" || self.capability.iter().any(|c| c == action)
     }
 
     /// Check if the disclosure requirements can be satisfied by the given
@@ -331,6 +335,9 @@ mod tests {
         let (ad, _) = make_search_ad();
         assert!(ad.supports_action("schema:SearchAction"));
         assert!(!ad.supports_action("schema:PayAction"));
+        // Wildcard "*" matches all agents regardless of declared capability —
+        // used by the federation sync query endpoint to retrieve all ads.
+        assert!(ad.supports_action("*"), "wildcard '*' must match all agents");
     }
 
     #[test]
