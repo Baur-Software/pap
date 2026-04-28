@@ -8,6 +8,9 @@
  *   worker 1: A=7910, B=7911, C=7912, D=7913
  *   worker 2: A=7920, B=7921, C=7922, D=7923
  *   worker 3: A=7930, B=7931, C=7932, D=7933
+ *
+ * Registry services are started with PAP_REGISTRY_NO_TLS=true so they serve
+ * plain HTTP. All URLs and health checks use http://, not https://.
  */
 
 import { spawnSync } from "child_process";
@@ -28,17 +31,23 @@ export function registryPort(
   return BASE_PORT + workerIndex * PORT_STRIDE + offset;
 }
 
-/** Base URL for a given registry letter and worker index. */
+/** Base URL for a given registry letter and worker index (plain HTTP — NO_TLS mode). */
 export function registryUrl(
   letter: RegistryName,
   workerIndex: number
 ): string {
-  return `https://localhost:${registryPort(letter, workerIndex)}`;
+  return `http://localhost:${registryPort(letter, workerIndex)}`;
 }
 
-/** Docker container name for a given letter + worker. */
+/**
+ * Docker container name for a given letter + worker.
+ * Matches Docker Compose's auto-naming: {project}-{service}-1
+ * where project = federation-test-worker{workerIndex}.
+ */
 function containerName(letter: RegistryName, workerIndex: number): string {
-  return `registry-${letter}-worker${workerIndex}`;
+  const w = Math.floor(workerIndex);
+  const safeLetters: Record<RegistryName, string> = { a: "a", b: "b", c: "c", d: "d" };
+  return `federation-test-worker${w}-registry-${safeLetters[letter]}-1`;
 }
 
 /** Build the env overrides for docker compose so ports don't collide between workers. */
@@ -48,8 +57,6 @@ function portEnv(workerIndex: number): Record<string, string> {
     PAP_PORT_B: String(registryPort("b", workerIndex)),
     PAP_PORT_C: String(registryPort("c", workerIndex)),
     PAP_PORT_D: String(registryPort("d", workerIndex)),
-    // Override container names so multiple workers don't conflict
-    COMPOSE_PROJECT_NAME: `federation-test-worker${workerIndex}`,
   };
 }
 
@@ -146,8 +153,6 @@ async function waitForRegistry(url: string, timeoutMs = 30_000): Promise<void> {
   while (Date.now() - start < timeoutMs) {
     try {
       const res = await fetch(`${url}/federation/identity`, {
-        // @ts-ignore — Node 18 fetch doesn't support rejectUnauthorized directly;
-        // use the global agent approach below for real TLS skip
         signal: AbortSignal.timeout(2_000),
       });
       if (res.ok) return;

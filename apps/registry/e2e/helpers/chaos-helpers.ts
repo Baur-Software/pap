@@ -23,7 +23,7 @@ type RegistryName = "a" | "b" | "c" | "d";
 function containerName(letter: RegistryName, workerIndex: number): string {
   const w = Math.floor(workerIndex); // ensure integer
   const safeLetters: Record<RegistryName, string> = { a: "a", b: "b", c: "c", d: "d" };
-  return `registry-${safeLetters[letter]}-worker${w}`;
+  return `federation-test-worker${w}-registry-${safeLetters[letter]}-1`;
 }
 
 /** Docker network name for a given worker. */
