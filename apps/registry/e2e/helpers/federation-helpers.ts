@@ -63,23 +63,43 @@ function base64urlNoPad(bytes: Uint8Array): string {
 /**
  * Build canonical JSON bytes for signing.
  * Mirrors canonical_bytes() in crates/pap-marketplace/src/advertisement.rs.
- * Only identity/capability fields — signature, metrics, configurable_properties excluded.
+ *
+ * CRITICAL: serde_json::json!({}) uses BTreeMap (alphabetical key order).
+ * We must produce the same byte sequence, so we sort all object keys.
+ *
+ * Top-level keys sorted: @context, @type, capability, name, object_types,
+ *   provider, requires_disclosure, returns, signed_by, ttl_min, version
+ * Provider keys sorted: @type, did, name
  */
+function sortedJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortedJson);
+  }
+  if (value !== null && typeof value === "object") {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      sorted[key] = sortedJson((value as Record<string, unknown>)[key]);
+    }
+    return sorted;
+  }
+  return value;
+}
+
 function canonicalBytes(ad: Record<string, unknown>): Buffer {
-  const canonical = {
+  const canonical: Record<string, unknown> = {
     "@context": ad["@context"],
     "@type": ad["@type"],
-    name: ad.name,
-    version: ad.version,
-    provider: ad.provider,
     capability: ad.capability,
+    name: ad.name,
     object_types: ad.object_types,
+    provider: ad.provider,
     requires_disclosure: ad.requires_disclosure,
     returns: ad.returns,
-    ttl_min: ad.ttl_min,
     signed_by: ad.signed_by,
+    ttl_min: ad.ttl_min,
+    version: ad.version,
   };
-  return Buffer.from(JSON.stringify(canonical));
+  return Buffer.from(JSON.stringify(sortedJson(canonical)));
 }
 
 /** Spec for creating a test agent advertisement. */
