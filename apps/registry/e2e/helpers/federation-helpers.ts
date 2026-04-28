@@ -256,14 +256,20 @@ export const PeersPage = {
 
   /**
    * Add a peer via the UI.
-   * Clicks ".btn.btn-primary" (Add Peer), fills the endpoint input,
-   * submits, and waits for ".success-banner".
+   *
+   * The Add Peer modal has 3 .form-input fields in order:
+   *   1. Peer DID (did:key:z...)
+   *   2. Endpoint URL (https://...)
+   *   3. TLS Certificate Fingerprint (optional)
+   *
+   * On success: modal closes and peer list reloads. No .success-banner appears
+   * for addPeer — success is indicated by the modal disappearing.
    */
   async addPeer(
     page: Page,
     baseUrl: string,
     endpoint: string,
-    trustMode = "tofu"
+    _trustMode = "tofu"
   ): Promise<void> {
     await this.navigate(page, baseUrl);
 
@@ -271,20 +277,16 @@ export const PeersPage = {
     await page.locator(".btn.btn-primary").first().click();
     await expect(page.locator(".modal")).toBeVisible();
 
-    // Fill endpoint
-    await page.locator(".form-input[name=endpoint], .form-input").first().fill(endpoint);
-
-    // Set trust mode if a selector exists
-    const trustSelect = page.locator("select[name=trust_mode], select.trust-mode");
-    if ((await trustSelect.count()) > 0) {
-      await trustSelect.selectOption(trustMode);
-    }
+    // The modal has 3 .form-input fields: [0]=DID, [1]=Endpoint, [2]=TLS fingerprint
+    // Fill the Endpoint URL field (second input)
+    const inputs = page.locator(".modal .form-input");
+    await inputs.nth(1).fill(endpoint);
 
     // Submit
     await page.locator(".modal-actions .btn.btn-primary").click();
 
-    // Wait for success
-    await expect(page.locator(".success-banner")).toBeVisible({ timeout: 10_000 });
+    // Wait for modal to close (success: modal disappears; error: modal stays with .error-banner)
+    await expect(page.locator(".modal")).not.toBeVisible({ timeout: 15_000 });
   },
 
   /** Returns an array of { endpoint, status } for all visible peers. */
