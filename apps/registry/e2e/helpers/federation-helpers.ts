@@ -249,24 +249,33 @@ export const TestAgents = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const PeersPage = {
-  /** Navigate to the Peers page on a registry. */
+  /**
+   * Navigate to the Federation Admin page on a registry.
+   *
+   * We use /admin/federation (not /peers) because its AddPeerModal has a
+   * "Sync agents immediately after adding" checkbox — this triggers sync
+   * automatically upon success, which is required since the registry has
+   * no background sync timer.
+   */
   async navigate(page: Page, baseUrl: string): Promise<void> {
-    await page.goto(`${baseUrl}/peers`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/admin/federation`, { waitUntil: "networkidle" });
   },
 
   /**
-   * Add a peer via the UI.
+   * Add a peer via the Federation Admin UI.
    *
-   * The Add Peer modal requires:
-   *   - [0] Peer DID (did:key:z...) — REQUIRED by the UI
+   * Uses /admin/federation which has a "Sync agents immediately after adding"
+   * checkbox.  Checking this box triggers an automatic sync after the peer is
+   * added, propagating agents without requiring a separate API call.
+   *
+   * The Add Peer modal on /admin/federation has:
+   *   - [0] Peer DID (did:key:z...) — REQUIRED
    *   - [1] Endpoint URL            — REQUIRED
    *   - [2] TLS Certificate Fingerprint — optional
+   *   - checkbox: "Sync agents immediately after adding"
    *
-   * We fetch the target peer's DID from its /federation/identity endpoint
-   * before opening the modal, since the DID is required by the form.
-   *
-   * On success: modal closes and peer list reloads.
-   * No .success-banner for addPeer — success = modal disappears.
+   * On success: modal closes, success banner appears ("Peer added and synced —
+   * N new agents.").  We wait for the modal to disappear.
    */
   async addPeer(
     page: Page,
@@ -284,7 +293,7 @@ export const PeersPage = {
     }
     const identity = (await identityRes.json()) as { did: string; endpoint: string };
     const peerDid = identity.did;
-    // Use the self-reported endpoint so the registry stores the correct address
+    // Use the self-reported endpoint so the registry stores the correct Docker-internal address
     const peerEndpoint = identity.endpoint || endpoint;
 
     await this.navigate(page, baseUrl);
@@ -298,18 +307,26 @@ export const PeersPage = {
     await inputs.nth(0).fill(peerDid);
     await inputs.nth(1).fill(peerEndpoint);
 
+    // Check "Sync agents immediately after adding" checkbox
+    const syncCheckbox = page.locator(".modal #sync-after-add");
+    if (await syncCheckbox.count() > 0) {
+      const isChecked = await syncCheckbox.isChecked();
+      if (!isChecked) {
+        await syncCheckbox.check();
+      }
+    }
+
     // Submit
     await page.locator(".modal-actions .btn.btn-primary").click();
 
     // Wait for modal to close (success: modal disappears; error: modal stays with .error-banner)
     await expect(page.locator(".modal")).not.toBeVisible({ timeout: 15_000 });
 
-    // Trigger sync immediately — federation sync is NOT automatic (no background timer).
-    // The peer was just added; we must explicitly kick off a sync so agents propagate.
-    // Use the API directly (no UI interaction needed) since we already have the DID.
-    const syncUrl = `${baseUrl}/api/peers/${encodeURIComponent(peerDid)}/sync`;
-    await fetch(syncUrl, { method: "POST" }).catch(() => {
-      // Non-fatal: peer was added, sync will be retried on next health check
+    // Wait for the sync to complete — the page shows a success banner with sync count
+    // Give sync up to 10s to complete (Docker networking latency is usually <1s)
+    await page.locator(".success-banner").waitFor({ timeout: 10_000 }).catch(() => {
+      // Non-fatal: banner may have already faded or sync may still be in progress.
+      // The waitForAgentInList poll will catch the agents when they arrive.
     });
   },
 
