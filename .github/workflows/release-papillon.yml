@@ -29,7 +29,7 @@ env:
 jobs:
   # ── 1. Detect new version and create tag ─────────────────────────────────────
   check-version:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
       version: ${{ steps.check.outputs.version }}
@@ -62,7 +62,7 @@ jobs:
   create-release:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create.outputs.result }}
     steps:
@@ -413,7 +413,7 @@ jobs:
   build-mobile-android:
     needs: [check-version, create-release, build-web]
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
@@ -560,7 +560,7 @@ jobs:
   build-web:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -592,7 +592,7 @@ jobs:
   publish-npm:
     needs: [check-version, build-web]
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -622,7 +622,7 @@ jobs:
   publish-docker:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     permissions:
       packages: write
     steps:
@@ -661,7 +661,7 @@ jobs:
       (needs.build-mobile-android.result == 'success' || needs.build-mobile-android.result == 'skipped') &&
       (needs.publish-npm.result == 'success' || needs.publish-npm.result == 'skipped') &&
       (needs.publish-docker.result == 'success' || needs.publish-docker.result == 'skipped')
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
@@ -682,7 +682,7 @@ jobs:
   canary-verify:
     name: Post-Deploy Canary Verification
     needs: [publish-release, build-web]
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     if: success()
     steps:
       - uses: actions/checkout@v6
