@@ -664,6 +664,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         router()
             .with_state(state)
@@ -855,6 +856,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -910,6 +912,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -956,6 +959,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -1020,6 +1024,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -1091,6 +1096,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -1136,6 +1142,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -1224,6 +1231,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -1301,6 +1309,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -1445,6 +1454,7 @@ mod tests {
             max_ads_per_principal: 2,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -1604,6 +1614,7 @@ mod tests {
             max_ads_per_principal: 1,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router().with_state(state);
 
@@ -2042,6 +2053,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
         };
         let app = router()
             .with_state(state)

@@ -11,7 +11,36 @@ pub struct RegistryStatus {
     pub cert_fingerprint: String,
     pub agent_count: usize,
     pub peer_count: usize,
+    pub peer_active: usize,
+    pub peer_probationary: usize,
     pub version: String,
+}
+
+/// Summary item for the dashboard sync-log feed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncSummaryItem {
+    pub peer_did: String,
+    pub ts: String,
+    pub outcome: String,
+    pub merged_count: usize,
+    pub error: Option<String>,
+}
+
+/// Snapshot of federation endpoint hit counts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndpointCounts {
+    pub federation_identity: u64,
+    pub federation_query: u64,
+    pub federation_announce: u64,
+    pub federation_peers: u64,
+}
+
+/// Sync event count bucketed by hour (last 12 h, newest last).
+/// `counts[i]` is the number of sync events that occurred in hour bucket `i`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncBuckets {
+    /// 12 buckets, index 0 = oldest hour, index 11 = current partial hour.
+    pub counts: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,9 +123,19 @@ pub async fn get_status() -> Result<RegistryStatus, ServerFnError> {
     if !state.is_authorized(extract_bearer(&headers)) {
         return Err(ServerFnError::new("unauthorized"));
     }
-    let (agent_count, peer_count) = {
+    let (agent_count, peer_count, peer_active, peer_probationary) = {
+        use pap_federation::peer::PeerStatus;
         let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
-        (registry.len(), registry.peers().len())
+        let peers = registry.peers();
+        let n_active = peers
+            .iter()
+            .filter(|p| p.status == PeerStatus::Active)
+            .count();
+        let n_probationary = peers
+            .iter()
+            .filter(|p| p.status == PeerStatus::Probationary)
+            .count();
+        (registry.len(), peers.len(), n_active, n_probationary)
     };
     Ok(RegistryStatus {
         did: state.node_did.clone(),
@@ -104,6 +143,8 @@ pub async fn get_status() -> Result<RegistryStatus, ServerFnError> {
         cert_fingerprint: state.cert_fingerprint.clone(),
         agent_count,
         peer_count,
+        peer_active,
+        peer_probationary,
         version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
@@ -680,4 +721,92 @@ pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnEr
         errors,
         catalog_path: catalog_path_str,
     })
+}
+
+/// Return federation endpoint hit counts for the dashboard.
+#[server]
+pub async fn get_endpoint_counts() -> Result<EndpointCounts, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let [identity, query, announce, peers] = state.endpoint_counters.snapshot();
+    Ok(EndpointCounts {
+        federation_identity: identity,
+        federation_query: query,
+        federation_announce: announce,
+        federation_peers: peers,
+    })
+}
+
+/// Bucket all sync events across all peers into 12 one-hour windows (last 12 h).
+#[server]
+pub async fn get_sync_buckets() -> Result<SyncBuckets, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let now = chrono::Utc::now();
+    let mut counts = vec![0u32; 12];
+
+    for (_, ev) in state.sync_log.all_events_flat() {
+        if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) {
+            let age_secs = (now - ts.with_timezone(&chrono::Utc)).num_seconds();
+            if age_secs >= 0 && age_secs < 12 * 3600 {
+                let bucket = (11 - (age_secs / 3600)) as usize;
+                if bucket < 12 {
+                    counts[bucket] += 1;
+                }
+            }
+        }
+    }
+
+    Ok(SyncBuckets { counts })
+}
+
+/// Return the most-recent sync event per peer for the dashboard feed.
+#[server]
+pub async fn get_sync_summary() -> Result<Vec<SyncSummaryItem>, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let items = state
+        .sync_log
+        .all_latest()
+        .into_iter()
+        .map(|(peer_did, ev)| SyncSummaryItem {
+            peer_did,
+            ts: ev.ts,
+            outcome: ev.outcome,
+            merged_count: ev.merged_count,
+            error: ev.error,
+        })
+        .collect();
+
+    Ok(items)
 }

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use pap_federation::registry::FederatedRegistry;
@@ -45,6 +46,51 @@ impl SyncEventLog {
             .map(|d| d.iter().cloned().collect())
             .unwrap_or_default()
     }
+
+    /// Return the most-recent event per peer, newest-first by timestamp.
+    pub fn all_latest(&self) -> Vec<(String, SyncEvent)> {
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut out: Vec<(String, SyncEvent)> = map
+            .iter()
+            .filter_map(|(did, deque)| deque.front().map(|e| (did.clone(), e.clone())))
+            .collect();
+        out.sort_by(|a, b| b.1.ts.cmp(&a.1.ts));
+        out
+    }
+
+    /// Return all events across all peers, newest-first by timestamp.
+    pub fn all_events_flat(&self) -> Vec<(String, SyncEvent)> {
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut out: Vec<(String, SyncEvent)> = map
+            .iter()
+            .flat_map(|(did, deque)| deque.iter().map(move |e| (did.clone(), e.clone())))
+            .collect();
+        out.sort_by(|a, b| b.1.ts.cmp(&a.1.ts));
+        out
+    }
+}
+
+// ── EndpointCounters ───────────────────────────────────────────────────────
+
+/// Per-endpoint hit counters shared across all request handlers.
+/// Each counter is a lock-free atomic u64 — increment on every inbound hit.
+#[derive(Default)]
+pub struct EndpointCounters {
+    pub federation_identity: AtomicU64,
+    pub federation_query: AtomicU64,
+    pub federation_announce: AtomicU64,
+    pub federation_peers: AtomicU64,
+}
+
+impl EndpointCounters {
+    pub fn snapshot(&self) -> [u64; 4] {
+        [
+            self.federation_identity.load(Ordering::Relaxed),
+            self.federation_query.load(Ordering::Relaxed),
+            self.federation_announce.load(Ordering::Relaxed),
+            self.federation_peers.load(Ordering::Relaxed),
+        ]
+    }
 }
 
 // ── AppState ───────────────────────────────────────────────────────────────
@@ -69,6 +115,8 @@ pub struct AppState {
     /// Each entry is an exact origin string, e.g. `"https://app.example.com"`.
     /// An empty list means allow nothing (safe default until seeded).
     pub cors_allowed_origins: Arc<RwLock<Vec<String>>>,
+    /// Hit counters for federation endpoints, incremented by middleware.
+    pub endpoint_counters: Arc<EndpointCounters>,
 }
 
 impl AppState {
@@ -90,6 +138,7 @@ impl AppState {
             max_ads_per_principal: config.max_ads_per_principal,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins,
+            endpoint_counters: Arc::new(EndpointCounters::default()),
         }
     }
 
@@ -127,6 +176,7 @@ mod tests {
             max_ads_per_principal: 100,
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
+            endpoint_counters: Arc::new(EndpointCounters::default()),
         }
     }
 
