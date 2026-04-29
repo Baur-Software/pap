@@ -14,6 +14,7 @@
 // Remaining migration to tokio::sync::RwLock requires auditing all read sites.
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU16;
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::challenge_store::IdentityChallengeStore;
@@ -40,9 +41,6 @@ use pap_agents::{build_agents, load_catalog, AgentExecutor, SimpleAgent};
 use papillon_shared::{PersonalContext, ProfileMetadata};
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
-
-/// Default port for the federation + agent TLS server.
-pub const DEFAULT_FEDERATION_PORT: u16 = 7890;
 
 /// Application state managed by Tauri.
 pub struct AppState {
@@ -99,7 +97,10 @@ pub struct AppState {
     /// rather than creating a disconnected empty copy.
     pub endpoint_registry: Arc<RwLock<EndpointRegistry>>,
     /// Port the TLS federation+agent server listens on.
-    pub federation_port: u16,
+    /// Starts at 0; the OS assigns a free ephemeral port at startup and
+    /// `start_federation_server_async` stores the actual port here.
+    /// Wrapped in Arc so `clone_for_background()` shares the same value.
+    pub federation_port: Arc<AtomicU16>,
     /// The node's TLS-secured endpoint, e.g. `https://0.0.0.0:7890`.
     /// Set after the server starts.
     pub node_endpoint: RwLock<String>,
@@ -221,7 +222,7 @@ impl AppState {
             ),
             local_agents: self.local_agents.clone(),
             endpoint_registry: self.endpoint_registry.clone(), // shared Arc — mutations visible to both sides
-            federation_port: self.federation_port,
+            federation_port: self.federation_port.clone(), // shared Arc — port write in server startup propagates to all clones
             node_endpoint: RwLock::new(
                 self.node_endpoint
                     .read()
@@ -535,7 +536,7 @@ impl AppState {
             data_dir: RwLock::new(PathBuf::new()),
             local_agents: handlers,
             endpoint_registry: Arc::new(RwLock::new(EndpointRegistry::new())),
-            federation_port: DEFAULT_FEDERATION_PORT,
+            federation_port: Arc::new(AtomicU16::new(0)), // 0 = OS chooses an ephemeral port at startup
             node_endpoint: RwLock::new(String::new()),
             node_cert_fingerprint: RwLock::new(String::new()),
             local_pap_urls: RwLock::new(Vec::new()),

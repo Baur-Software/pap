@@ -12,7 +12,7 @@ pub mod keypair_store;
 pub mod profiles_db;
 pub mod state;
 
-use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
 
 use episode_store::EpisodeStore;
 use keypair_store::KeypairStore;
@@ -309,7 +309,18 @@ async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn s
         .write()
         .unwrap_or_else(|e| e.into_inner()) = identity.fingerprint.clone();
 
-    let port = state.federation_port;
+    // Bind to port 0 so the OS assigns a free ephemeral port — no collisions
+    // with Chrysalis (7890) or any other service on the machine.
+    let listener = std::net::TcpListener::bind("0.0.0.0:0")
+        .map_err(|e| format!("Failed to bind federation server socket: {e}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("Failed to read bound port: {e}"))?
+        .port();
+
+    // Persist the actual port so other parts of the app (and clones) can read it
+    state.federation_port.store(port, Ordering::Relaxed);
+
     let endpoint = format!("https://0.0.0.0:{port}");
     *state
         .node_endpoint
@@ -337,15 +348,15 @@ async fn start_federation_server_async(state: &AppState) -> Result<(), Box<dyn s
     // Build axum-server TLS config from the node identity
     let tls_config = axum_server::tls_rustls::RustlsConfig::from_config(identity.server_config);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-
-    // Spawn the server on a background tokio task
+    // Spawn the server on a background tokio task using the already-bound listener
     tokio::spawn(async move {
-        if let Err(e) = axum_server::bind_rustls(addr, tls_config)
-            .serve(router.into_make_service())
-            .await
-        {
-            eprintln!("Federation server error: {e}");
+        match axum_server::from_tcp_rustls(listener, tls_config) {
+            Ok(server) => {
+                if let Err(e) = server.serve(router.into_make_service()).await {
+                    eprintln!("Federation server error: {e}");
+                }
+            }
+            Err(e) => eprintln!("Federation server bind error: {e}"),
         }
     });
 

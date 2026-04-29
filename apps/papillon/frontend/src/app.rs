@@ -11,6 +11,7 @@ use crate::bridge;
 use crate::components::setup_wizard::SetupWizard;
 use crate::components::topbar::TopBar;
 use crate::pages::activity::ActivityPage;
+use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
 // home.rs removed — canvas at "/" IS the home screen
 use crate::pages::receipts::ReceiptsPage;
@@ -30,7 +31,7 @@ use crate::state::renderer::RendererState;
 use crate::state::templates::TemplatesState;
 use crate::components::canvas_aside::AsideOpen;
 use papillon_shared::{
-    BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, Template,
+    BlockEvent, IdentityInfo, OrchestratorStatus, ProfileMetadata, RecoveryStatus, Template,
 };
 
 #[component]
@@ -112,6 +113,24 @@ pub fn App() -> impl IntoView {
     provide_context(show_settings);
     let aside_open: RwSignal<bool> = RwSignal::new(false);
     provide_context(AsideOpen(aside_open));
+
+    // Check recovery status on startup — show renewal wizard if old shards were used.
+    // Only runs in Tauri mode; browser mode has no backend recovery commands.
+    if bridge::tauri_available() {
+        spawn_local(async move {
+            if let Ok(status) =
+                bridge::invoke_no_args::<RecoveryStatus>("get_recovery_status").await
+            {
+                if status.needs_renewal {
+                    // Old shards are spent — principal must issue new ones.
+                    recovery_state.needs_renewal.set(true);
+                    recovery_state.show_setup.set(true);
+                } else if !status.configured {
+                    recovery_state.show_setup.set(true);
+                }
+            }
+        });
+    }
 
     // Keep catalog in sync with the registry agent list.
     // Runs immediately and re-runs whenever registry_state.agents changes.
@@ -373,6 +392,7 @@ pub fn App() -> impl IntoView {
                 <main class="app-main">
                     <Routes fallback=|| "Page not found.">
                         <Route path=path!("/") view=CanvasPage />
+                        <Route path=path!("/browse") view=BrowsePage />
                         <Route path=path!("/scenario/:id") view=ScenarioPage />
                         <Route path=path!("/activity") view=ActivityPage />
                         <Route path=path!("/receipts") view=ReceiptsPage />
