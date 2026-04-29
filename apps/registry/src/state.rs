@@ -45,6 +45,17 @@ impl SyncEventLog {
             .map(|d| d.iter().cloned().collect())
             .unwrap_or_default()
     }
+
+    /// Return the most-recent event per peer, newest-first by timestamp.
+    pub fn all_latest(&self) -> Vec<(String, SyncEvent)> {
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut out: Vec<(String, SyncEvent)> = map
+            .iter()
+            .filter_map(|(did, deque)| deque.front().map(|e| (did.clone(), e.clone())))
+            .collect();
+        out.sort_by(|a, b| b.1.ts.cmp(&a.1.ts));
+        out
+    }
 }
 
 // ── AppState ───────────────────────────────────────────────────────────────

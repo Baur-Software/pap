@@ -11,7 +11,19 @@ pub struct RegistryStatus {
     pub cert_fingerprint: String,
     pub agent_count: usize,
     pub peer_count: usize,
+    pub peer_active: usize,
+    pub peer_probationary: usize,
     pub version: String,
+}
+
+/// Summary item for the dashboard sync-log feed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncSummaryItem {
+    pub peer_did: String,
+    pub ts: String,
+    pub outcome: String,
+    pub merged_count: usize,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,9 +106,19 @@ pub async fn get_status() -> Result<RegistryStatus, ServerFnError> {
     if !state.is_authorized(extract_bearer(&headers)) {
         return Err(ServerFnError::new("unauthorized"));
     }
-    let (agent_count, peer_count) = {
+    let (agent_count, peer_count, peer_active, peer_probationary) = {
+        use pap_federation::peer::PeerStatus;
         let registry = state.registry.lock().unwrap_or_else(|e| e.into_inner());
-        (registry.len(), registry.peers().len())
+        let peers = registry.peers();
+        let n_active = peers
+            .iter()
+            .filter(|p| p.status == PeerStatus::Active)
+            .count();
+        let n_probationary = peers
+            .iter()
+            .filter(|p| p.status == PeerStatus::Probationary)
+            .count();
+        (registry.len(), peers.len(), n_active, n_probationary)
     };
     Ok(RegistryStatus {
         did: state.node_did.clone(),
@@ -104,6 +126,8 @@ pub async fn get_status() -> Result<RegistryStatus, ServerFnError> {
         cert_fingerprint: state.cert_fingerprint.clone(),
         agent_count,
         peer_count,
+        peer_active,
+        peer_probationary,
         version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
@@ -680,4 +704,35 @@ pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnEr
         errors,
         catalog_path: catalog_path_str,
     })
+}
+
+/// Return the most-recent sync event per peer for the dashboard feed.
+#[server]
+pub async fn get_sync_summary() -> Result<Vec<SyncSummaryItem>, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let items = state
+        .sync_log
+        .all_latest()
+        .into_iter()
+        .map(|(peer_did, ev)| SyncSummaryItem {
+            peer_did,
+            ts: ev.ts,
+            outcome: ev.outcome,
+            merged_count: ev.merged_count,
+            error: ev.error,
+        })
+        .collect();
+
+    Ok(items)
 }
