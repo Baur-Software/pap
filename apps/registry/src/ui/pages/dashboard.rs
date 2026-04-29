@@ -1,11 +1,15 @@
 use leptos::prelude::*;
 
-use crate::ui::api::{self, RegistryStatus, SyncSummaryItem};
+use crate::ui::api::{
+    self, EndpointCounts, RegistryStatus, SyncBuckets, SyncSummaryItem,
+};
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
     let status = Resource::new(|| (), |_| api::get_status());
     let sync_summary = Resource::new(|| (), |_| api::get_sync_summary());
+    let endpoint_counts = Resource::new(|| (), |_| api::get_endpoint_counts());
+    let sync_buckets = Resource::new(|| (), |_| api::get_sync_buckets());
 
     view! {
         <div class="page">
@@ -20,10 +24,10 @@ pub fn DashboardPage() -> impl IntoView {
                         <div class="error-banner">"Failed to load status: " {e.to_string()}</div>
                     }.into_any(),
                     Ok(s) => {
-                        let sync = sync_summary.get()
-                            .and_then(|r| r.ok())
-                            .unwrap_or_default();
-                        view! { <DashboardView s=s sync=sync /> }.into_any()
+                        let sync  = sync_summary.get().and_then(|r| r.ok()).unwrap_or_default();
+                        let counts = endpoint_counts.get().and_then(|r| r.ok());
+                        let buckets = sync_buckets.get().and_then(|r| r.ok());
+                        view! { <DashboardView s=s sync=sync counts=counts buckets=buckets /> }.into_any()
                     }
                 })}
             </Suspense>
@@ -32,13 +36,35 @@ pub fn DashboardPage() -> impl IntoView {
 }
 
 #[component]
-fn DashboardView(s: RegistryStatus, sync: Vec<SyncSummaryItem>) -> impl IntoView {
+fn DashboardView(
+    s: RegistryStatus,
+    sync: Vec<SyncSummaryItem>,
+    counts: Option<EndpointCounts>,
+    buckets: Option<SyncBuckets>,
+) -> impl IntoView {
     let peer_sub = format!(
         "{} active · {} probationary",
-        s.peer_active,
-        s.peer_probationary
+        s.peer_active, s.peer_probationary
     );
     let sync_empty = sync.is_empty();
+
+    // Build bar heights (0–100) from real sync bucket counts.
+    let sync_bar_heights: Vec<u8> = match &buckets {
+        None => vec![0u8; 12],
+        Some(b) => {
+            let max = b.counts.iter().copied().max().unwrap_or(0);
+            b.counts
+                .iter()
+                .map(|&c| {
+                    if max == 0 {
+                        0u8
+                    } else {
+                        ((c as f32 / max as f32) * 100.0).round() as u8
+                    }
+                })
+                .collect()
+        }
+    };
 
     view! {
         // ── STAT GRID ────────────────────────────────────────────────────────
@@ -53,54 +79,15 @@ fn DashboardView(s: RegistryStatus, sync: Vec<SyncSummaryItem>) -> impl IntoView
                 <div class="stat-sub">{peer_sub}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label" id="lbl-sessions">"pap:// Sessions (1h)"</div>
-                <div class="stat-value gold" aria-labelledby="lbl-sessions">"—"</div>
-                <div class="stat-sub">"Rolling 60-min window"</div>
+                <div class="stat-label" id="lbl-queries">"Fed. Queries (all-time)"</div>
+                {
+                    let q = counts.as_ref().map(|c| c.federation_query).unwrap_or(0);
+                    view! { <div class="stat-value gold" aria-labelledby="lbl-queries">{format_count(q)}</div> }
+                }
             </div>
             <div class="stat-card">
                 <div class="stat-label" id="lbl-ver">"Version"</div>
                 <div class="stat-value mono" aria-labelledby="lbl-ver">{s.version.clone()}</div>
-            </div>
-        </div>
-
-        // ── TRAFFIC ──────────────────────────────────────────────────────────
-        <h2 class="section-header">"Inbound pap:// Traffic"</h2>
-        <div class="two-col">
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">"Sessions over time"</span>
-                    <span class="card-badge">"last 12h · 1h buckets"</span>
-                </div>
-                <div class="card-body">
-                    <BarChart
-                        label="pap:// sessions / hour"
-                        color="purple"
-                        heights=vec![28,42,36,55,62,50,70,66,80,74,90,100]
-                    />
-                    <BarChart
-                        label="agent queries from clients / hour"
-                        color="teal"
-                        heights=vec![40,55,44,68,75,60,82,78,92,85,96,100]
-                    />
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">"PAP Handshake Funnel"</span>
-                    <span class="card-badge">"last 1h"</span>
-                </div>
-                <div class="card-body" role="region" aria-label="PAP 6-phase handshake completion rates">
-                    <PhaseRow num="①" name="Token Presentation"   pct=100 />
-                    <PhaseRow num="②" name="DID Exchange"         pct=99  />
-                    <PhaseRow num="③" name="Selective Disclosure" pct=97  />
-                    <PhaseRow num="④" name="Agent Execution"      pct=95  />
-                    <PhaseRow num="⑤" name="Co-Signed Receipt"    pct=90  />
-                    <PhaseRow num="⑥" name="Session Close"        pct=82  />
-                    <div class="funnel-footer">
-                        <span>"Funnel data available once session counters are instrumented"</span>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -114,9 +101,9 @@ fn DashboardView(s: RegistryStatus, sync: Vec<SyncSummaryItem>) -> impl IntoView
                 </div>
                 <div class="card-body">
                     <BarChart
-                        label="syncs / hour"
+                        label="syncs / hour (last 12 h)"
                         color="gold"
-                        heights=vec![40,20,80,30,60,50,70,45,90,55,65,75]
+                        heights=sync_bar_heights
                     />
                     <SyncFeed items=sync empty=sync_empty />
                 </div>
@@ -125,16 +112,26 @@ fn DashboardView(s: RegistryStatus, sync: Vec<SyncSummaryItem>) -> impl IntoView
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">"Federation Endpoints"</span>
-                    <span class="card-badge gold">"inbound protocol surface"</span>
+                    <span class="card-badge gold">"hit counts · all-time"</span>
                 </div>
                 <div class="card-body">
                     <p style="font-size:12px; color:var(--text-3); margin-bottom:var(--sp-md)">
                         "Other registries and Papillon clients connect at:"
                     </p>
-                    <EndpointRow method="GET"  path="/federation/identity"       desc="Node identity & cert" />
-                    <EndpointRow method="GET"  path="/federation/query?action=…" desc="Query by Schema.org action" />
-                    <EndpointRow method="POST" path="/federation/announce"        desc="Receive agent advertisement" />
-                    <EndpointRow method="GET"  path="/federation/peers"           desc="Known peer list" />
+                    {
+                        let c = counts.clone().unwrap_or(EndpointCounts {
+                            federation_identity: 0,
+                            federation_query: 0,
+                            federation_announce: 0,
+                            federation_peers: 0,
+                        });
+                        view! {
+                            <EndpointRow method="GET"  path="/federation/identity"       desc="Node identity & cert"        hits=c.federation_identity />
+                            <EndpointRow method="GET"  path="/federation/query?action=…" desc="Query by Schema.org action"  hits=c.federation_query />
+                            <EndpointRow method="POST" path="/federation/announce"        desc="Receive agent advertisement" hits=c.federation_announce />
+                            <EndpointRow method="GET"  path="/federation/peers"           desc="Known peer list"            hits=c.federation_peers />
+                        }
+                    }
                 </div>
             </div>
         </div>
@@ -153,6 +150,16 @@ fn DashboardView(s: RegistryStatus, sync: Vec<SyncSummaryItem>) -> impl IntoView
                 <span class="val">{s.endpoint.clone()}</span>
             </div>
         </div>
+    }
+}
+
+fn format_count(n: u64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}k", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
     }
 }
 
@@ -200,6 +207,7 @@ fn BarChart(label: &'static str, color: &'static str, heights: Vec<u8>) -> impl 
             <div class="mini-chart-label">{label}</div>
             <div class="bar-row" aria-hidden="true">
                 {heights.into_iter().map(|h| {
+                    let h = h.max(2); // keep bars visible even at zero
                     view! { <div class=format!("bar {color}") style=format!("height:{}%", h)></div> }
                 }).collect_view()}
             </div>
@@ -211,34 +219,14 @@ fn BarChart(label: &'static str, color: &'static str, heights: Vec<u8>) -> impl 
 }
 
 #[component]
-fn PhaseRow(num: &'static str, name: &'static str, pct: u8) -> impl IntoView {
-    view! {
-        <div class="phase-row">
-            <span class="phase-num" aria-hidden="true">{num}</span>
-            <span class="phase-name">{name}</span>
-            <div
-                class="phase-bar-track"
-                role="progressbar"
-                aria-valuenow=pct
-                aria-valuemin=0
-                aria-valuemax=100
-                aria-label=format!("{pct}%")
-            >
-                <div class="phase-bar-fill" style=format!("width:{}%", pct)></div>
-            </div>
-            <span class="phase-pct">{format!("{}%", pct)}</span>
-        </div>
-    }
-}
-
-#[component]
-fn EndpointRow(method: &'static str, path: &'static str, desc: &'static str) -> impl IntoView {
+fn EndpointRow(method: &'static str, path: &'static str, desc: &'static str, hits: u64) -> impl IntoView {
     let method_class = if method == "GET" { "method get" } else { "method post" };
     view! {
         <div class="endpoint-row">
             <span class=method_class>{method}</span>
             <span class="epath">{path}</span>
             <span class="edesc">{desc}</span>
+            <span class="hit-count">{format_count(hits)}</span>
         </div>
     }
 }

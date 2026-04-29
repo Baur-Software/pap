@@ -1104,6 +1104,14 @@ body {
 
 .edesc { color: var(--text-3); font-size: 11px; }
 
+.hit-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  margin-left: var(--sp-sm);
+  flex-shrink: 0;
+}
+
 /* --- Identity row --- */
 .identity-row {
   display: flex;

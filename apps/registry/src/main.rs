@@ -5,8 +5,9 @@ use std::sync::{Arc, Mutex, RwLock};
 use anyhow::Context as _;
 
 use axum::extract::DefaultBodyLimit;
+use axum::middleware::{self, Next};
 use axum::routing::get;
-use axum::Router;
+use axum::{extract::Request, Router};
 use leptos::config::get_configuration;
 use pap_registry::state::SETTING_CORS_ORIGINS;
 use tower_governor::{
@@ -317,6 +318,7 @@ async fn main() -> anyhow::Result<()> {
     // ── Routers ───────────────────────────────────────────────────────────────
 
     // Federation protocol routes (PAP-compatible).
+    let fed_counters = app_state.endpoint_counters.clone();
     let federation_router = FederationServer::new(
         registry.clone(),
         config.port,
@@ -324,7 +326,26 @@ async fn main() -> anyhow::Result<()> {
         config.public_endpoint.clone(),
         cert_fingerprint,
     )
-    .router();
+    .router()
+    .layer(middleware::from_fn(move |req: Request, next: Next| {
+        let counters = fed_counters.clone();
+        async move {
+            use std::sync::atomic::Ordering;
+            let path = req.uri().path().to_owned();
+            let method = req.method().clone();
+            let resp = next.run(req).await;
+            if path == "/federation/identity" {
+                counters.federation_identity.fetch_add(1, Ordering::Relaxed);
+            } else if path.starts_with("/federation/query") {
+                counters.federation_query.fetch_add(1, Ordering::Relaxed);
+            } else if path == "/federation/announce" && method == axum::http::Method::POST {
+                counters.federation_announce.fetch_add(1, Ordering::Relaxed);
+            } else if path == "/federation/peers" {
+                counters.federation_peers.fetch_add(1, Ordering::Relaxed);
+            }
+            resp
+        }
+    }));
 
     // Admin API routes.
     let admin_router = routes::admin::router().with_state(app_state.clone());

@@ -26,6 +26,23 @@ pub struct SyncSummaryItem {
     pub error: Option<String>,
 }
 
+/// Snapshot of federation endpoint hit counts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndpointCounts {
+    pub federation_identity: u64,
+    pub federation_query: u64,
+    pub federation_announce: u64,
+    pub federation_peers: u64,
+}
+
+/// Sync event count bucketed by hour (last 12 h, newest last).
+/// `counts[i]` is the number of sync events that occurred in hour bucket `i`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncBuckets {
+    /// 12 buckets, index 0 = oldest hour, index 11 = current partial hour.
+    pub counts: Vec<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Provider {
     #[serde(rename = "@type")]
@@ -704,6 +721,63 @@ pub async fn install_catalog_agents() -> Result<CatalogInstallResult, ServerFnEr
         errors,
         catalog_path: catalog_path_str,
     })
+}
+
+/// Return federation endpoint hit counts for the dashboard.
+#[server]
+pub async fn get_endpoint_counts() -> Result<EndpointCounts, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let [identity, query, announce, peers] = state.endpoint_counters.snapshot();
+    Ok(EndpointCounts {
+        federation_identity: identity,
+        federation_query: query,
+        federation_announce: announce,
+        federation_peers: peers,
+    })
+}
+
+/// Bucket all sync events across all peers into 12 one-hour windows (last 12 h).
+#[server]
+pub async fn get_sync_buckets() -> Result<SyncBuckets, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let now = chrono::Utc::now();
+    let mut counts = vec![0u32; 12];
+
+    for (_, ev) in state.sync_log.all_events_flat() {
+        if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) {
+            let age_secs = (now - ts.with_timezone(&chrono::Utc)).num_seconds();
+            if age_secs >= 0 && age_secs < 12 * 3600 {
+                let bucket = (11 - (age_secs / 3600)) as usize;
+                if bucket < 12 {
+                    counts[bucket] += 1;
+                }
+            }
+        }
+    }
+
+    Ok(SyncBuckets { counts })
 }
 
 /// Return the most-recent sync event per peer for the dashboard feed.
