@@ -42,7 +42,6 @@ use papillon_shared::{PersonalContext, ProfileMetadata};
 
 pub const LOCAL_REGISTRY_URL: &str = "pap://local";
 
-
 /// Application state managed by Tauri.
 pub struct AppState {
     pub signer: RwLock<Option<Box<dyn PrincipalSigner + Send + Sync>>>,
