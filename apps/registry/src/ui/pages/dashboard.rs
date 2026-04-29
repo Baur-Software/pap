@@ -1,8 +1,6 @@
 use leptos::prelude::*;
 
-use crate::ui::api::{
-    self, EndpointCounts, RegistryStatus, SyncBuckets, SyncSummaryItem,
-};
+use crate::ui::api::{self, EndpointCounts, RegistryStatus, SyncBuckets, SyncSummaryItem};
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -219,8 +217,17 @@ fn BarChart(label: &'static str, color: &'static str, heights: Vec<u8>) -> impl 
 }
 
 #[component]
-fn EndpointRow(method: &'static str, path: &'static str, desc: &'static str, hits: u64) -> impl IntoView {
-    let method_class = if method == "GET" { "method get" } else { "method post" };
+fn EndpointRow(
+    method: &'static str,
+    path: &'static str,
+    desc: &'static str,
+    hits: u64,
+) -> impl IntoView {
+    let method_class = if method == "GET" {
+        "method get"
+    } else {
+        "method post"
+    };
     view! {
         <div class="endpoint-row">
             <span class=method_class>{method}</span>

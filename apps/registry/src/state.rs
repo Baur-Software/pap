@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex, RwLock};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
 
 use pap_federation::registry::FederatedRegistry;
 use serde::{Deserialize, Serialize};
