@@ -55,9 +55,28 @@
 // Closed — session closed, ephemeral keys discarded.
 #define PAP_SESSION_CLOSED 3
 
+// ExecutionState integer constants returned by `pap_spawner_poll_state`.
+#define PAP_EXEC_STATE_PENDING 0
+
+#define PAP_EXEC_STATE_RUNNING 1
+
+#define PAP_EXEC_STATE_COMPLETED 2
+
+#define PAP_EXEC_STATE_TIMED_OUT 3
+
+#define PAP_EXEC_STATE_KILLED 4
+
+#define PAP_EXEC_STATE_FAILED 5
+
 typedef struct PapAdvertisement PapAdvertisement;
 
 typedef struct PapAgentList PapAgentList;
+
+typedef struct PapAgentSpawner PapAgentSpawner;
+
+typedef struct PapAttestationReceipt PapAttestationReceipt;
+
+typedef struct PapCapabilityPolicy PapCapabilityPolicy;
 
 typedef struct PapCapabilityToken PapCapabilityToken;
 
@@ -76,6 +95,10 @@ typedef struct PapEcashSpentRegistry PapEcashSpentRegistry;
 
 // Opaque handle wrapping an [`EcashToken`] (serial + unblinded signature).
 typedef struct PapEcashToken PapEcashToken;
+
+typedef struct PapExecutionContext PapExecutionContext;
+
+typedef struct PapExecutionHandle PapExecutionHandle;
 
 typedef struct PapMandate PapMandate;
 
@@ -834,5 +857,180 @@ int pap_ecash_redeem(const char *mint_public_pem,
 // `ptr` must be a pointer previously returned by one of those functions (or
 // NULL). `len` must be the exact length reported by that call.
 void pap_bytes_free(uint8_t *ptr, uintptr_t len);
+
+// Create a default CapabilityPolicy (deny-all, 30s timeout).
+struct PapCapabilityPolicy *pap_capability_policy_new(void);
+
+// Free a PapCapabilityPolicy. Passing NULL is a no-op.
+// # Safety
+// `p` must be a pointer previously returned by `pap_capability_policy_new`.
+void pap_capability_policy_free(struct PapCapabilityPolicy *p);
+
+// Set execution timeout in seconds. Returns 0 on success, -1 on null input.
+int pap_capability_policy_set_timeout(struct PapCapabilityPolicy *p, uint64_t secs);
+
+// Set whether network access is permitted. `allowed` non-zero means true.
+int pap_capability_policy_set_network(struct PapCapabilityPolicy *p, int allowed);
+
+// Set whether filesystem access is permitted. `allowed` non-zero means true.
+int pap_capability_policy_set_filesystem(struct PapCapabilityPolicy *p, int allowed);
+
+// Set whether subprocess spawning is permitted. `allowed` non-zero means true.
+int pap_capability_policy_set_subprocess(struct PapCapabilityPolicy *p, int allowed);
+
+// Create an ExecutionContext with identity fields set and empty encrypted payloads.
+// Populate payloads with `pap_sandbox_encrypt` before passing to `pap_spawner_spawn`.
+//
+// # Safety
+// All pointer arguments must be valid, null-terminated C strings.
+struct PapExecutionContext *pap_execution_context_new(const char *agent_did,
+                                                      const char *agent_name,
+                                                      const char *action_type,
+                                                      const char *session_id);
+
+// Free a PapExecutionContext. Passing NULL is a no-op.
+// # Safety
+// `ctx` must be a pointer previously returned by `pap_execution_context_new`.
+void pap_execution_context_free(struct PapExecutionContext *ctx);
+
+// Create the platform-appropriate sandbox spawner.
+// Returns NULL on failure; call `pap_last_error_message()` for details.
+struct PapAgentSpawner *pap_spawner_new(void);
+
+// Free a PapAgentSpawner. Passing NULL is a no-op.
+// # Safety
+// `s` must be a pointer previously returned by `pap_spawner_new`.
+void pap_spawner_free(struct PapAgentSpawner *s);
+
+// Spawn a sandboxed agent execution.
+// Writes the new handle to `*out_handle` on success.
+// Returns 0 on success, -1 on error (call `pap_last_error_message` for details).
+//
+// # Safety
+// `spawner`, `policy`, `context`, and `out_handle` must be valid non-null pointers.
+int pap_spawner_spawn(const struct PapAgentSpawner *spawner,
+                      const struct PapCapabilityPolicy *policy,
+                      const struct PapExecutionContext *context,
+                      struct PapExecutionHandle **out_handle);
+
+// Free a PapExecutionHandle. Passing NULL is a no-op.
+// # Safety
+// `h` must be a pointer previously returned by `pap_spawner_spawn`.
+void pap_execution_handle_free(struct PapExecutionHandle *h);
+
+// Poll the state of a running sandbox. Returns a PAP_EXEC_STATE_* constant,
+// or -1 on error (call `pap_last_error_message` for details).
+//
+// # Safety
+// `spawner` and `handle` must be valid non-null pointers.
+int pap_spawner_poll_state(const struct PapAgentSpawner *spawner,
+                           const struct PapExecutionHandle *handle);
+
+// Terminate a running sandbox.
+// Returns 0 on success, -1 on error.
+//
+// # Safety
+// `spawner`, `handle`, and `reason` must be valid non-null pointers.
+int pap_spawner_terminate(const struct PapAgentSpawner *spawner,
+                          const struct PapExecutionHandle *handle,
+                          const char *reason);
+
+// Collect the attestation receipt after a completed sandbox execution.
+// Writes the receipt to `*out_receipt` on success.
+// Returns 0 on success, -1 on error.
+//
+// The caller owns the returned receipt and must free it with
+// `pap_attestation_receipt_free`.
+//
+// # Safety
+// `spawner`, `handle`, and `out_receipt` must be valid non-null pointers.
+int pap_spawner_collect_receipt(const struct PapAgentSpawner *spawner,
+                                const struct PapExecutionHandle *handle,
+                                struct PapAttestationReceipt **out_receipt);
+
+// Return the session_id field. Caller must free with `pap_string_free`.
+// # Safety
+// `r` must be a valid non-null pointer.
+char *pap_attestation_receipt_session_id(const struct PapAttestationReceipt *r);
+
+// Return the agent_did field. Caller must free with `pap_string_free`.
+// # Safety
+// `r` must be a valid non-null pointer.
+char *pap_attestation_receipt_agent_did(const struct PapAttestationReceipt *r);
+
+// Return the result_hash field. Caller must free with `pap_string_free`.
+// # Safety
+// `r` must be a valid non-null pointer.
+char *pap_attestation_receipt_result_hash(const struct PapAttestationReceipt *r);
+
+// Return the exit_code field.
+// # Safety
+// `r` must be a valid non-null pointer.
+int pap_attestation_receipt_exit_code(const struct PapAttestationReceipt *r);
+
+// Return 1 if the execution was aborted, 0 otherwise. Returns -1 on null input.
+// # Safety
+// `r` must be a valid non-null pointer.
+int pap_attestation_receipt_aborted(const struct PapAttestationReceipt *r);
+
+// Return the execution_duration_ms field.
+// # Safety
+// `r` must be a valid non-null pointer.
+uint64_t pap_attestation_receipt_duration_ms(const struct PapAttestationReceipt *r);
+
+// Return the full receipt as a JSON string. Caller must free with `pap_string_free`.
+// Returns NULL on serialization error.
+// # Safety
+// `r` must be a valid non-null pointer.
+char *pap_attestation_receipt_to_json(const struct PapAttestationReceipt *r);
+
+// Free a PapAttestationReceipt. Passing NULL is a no-op.
+// # Safety
+// `r` must be a pointer previously returned by `pap_spawner_collect_receipt`.
+void pap_attestation_receipt_free(struct PapAttestationReceipt *r);
+
+// AES-256-GCM encryption.
+//
+// Writes ciphertext to `*out_ciphertext` (length in `*out_ciphertext_len`)
+// and nonce to `*out_nonce` (length in `*out_nonce_len`).
+// Caller must free both buffers with `pap_sandbox_bytes_free`.
+//
+// `key` must be exactly 32 bytes.
+// Returns 0 on success, -1 on error.
+//
+// # Safety
+// All pointer arguments must be valid.
+int pap_sandbox_encrypt(const uint8_t *plaintext,
+                        uintptr_t plaintext_len,
+                        const uint8_t *key_32,
+                        uint8_t **out_ciphertext,
+                        uintptr_t *out_ciphertext_len,
+                        uint8_t **out_nonce,
+                        uintptr_t *out_nonce_len);
+
+// AES-256-GCM decryption.
+//
+// Writes plaintext to `*out_plaintext` (length in `*out_plaintext_len`).
+// Caller must free with `pap_sandbox_bytes_free`.
+//
+// `key` must be exactly 32 bytes.
+// Returns 0 on success, -1 on error (authentication failure or bad nonce length).
+//
+// # Safety
+// All pointer arguments must be valid.
+int pap_sandbox_decrypt(const uint8_t *ciphertext,
+                        uintptr_t ciphertext_len,
+                        const uint8_t *key_32,
+                        const uint8_t *nonce,
+                        uintptr_t nonce_len,
+                        uint8_t **out_plaintext,
+                        uintptr_t *out_plaintext_len);
+
+// Free a byte buffer returned by `pap_sandbox_encrypt` or `pap_sandbox_decrypt`.
+//
+// # Safety
+// `ptr` must be a pointer previously returned by one of those functions,
+// and `len` must be the length that was written to the corresponding `*_len` out-parameter.
+void pap_sandbox_bytes_free(uint8_t *ptr, uintptr_t len);
 
 #endif  /* PAP_H */
