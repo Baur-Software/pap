@@ -246,8 +246,10 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn passthrough_when_disabled() {
+    #[test]
+    fn passthrough_when_disabled() {
+        // sandbox_enabled=false: execute() delegates directly to inner handler,
+        // no async spawner involved — safe to call from a plain #[test].
         let wrapper = SandboxedHandlerWrapper::new(
             Arc::new(EchoHandler),
             Arc::new(NoopSpawner),
@@ -262,19 +264,31 @@ mod tests {
         assert_eq!(result.unwrap()["name"], "echo");
     }
 
-    #[tokio::test]
-    async fn sandboxed_path_falls_through_to_inner_when_noop_spawner() {
-        let wrapper = SandboxedHandlerWrapper::new(
-            Arc::new(EchoHandler),
-            Arc::new(NoopSpawner),
-            CapabilityPolicy::default(),
-            true,
-            "did:key:z0",
-            "EchoAgent",
-            "schema:SearchAction",
-        );
+    #[test]
+    fn sandboxed_path_falls_through_to_inner_when_noop_spawner() {
+        // execute_sandboxed() calls Handle::current().block_on() — requires a
+        // tokio runtime on the thread.  In production this is satisfied because
+        // AgentServer calls execute() via spawn_blocking (runtime present).
+        // In tests we build a runtime explicitly and drive execute() from a
+        // blocking thread spawned inside it, mirroring that exact contract.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async {
+            tokio::task::spawn_blocking(move || {
+                let wrapper = SandboxedHandlerWrapper::new(
+                    Arc::new(EchoHandler),
+                    Arc::new(NoopSpawner),
+                    CapabilityPolicy::default(),
+                    true,
+                    "did:key:z0",
+                    "EchoAgent",
+                    "schema:SearchAction",
+                );
+                wrapper.execute("test-session")
+            })
+            .await
+            .expect("spawn_blocking did not panic")
+        });
         // NoopSpawner returns PlatformUnsupported — should surface as TransportError.
-        let result = wrapper.execute("test-session");
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("sandbox") || msg.contains("platform"));

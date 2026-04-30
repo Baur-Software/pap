@@ -37,6 +37,9 @@ COPY crates/pap-agents           ./crates/pap-agents
 # pap-test-utils is a dev-dep of pap-transport; cargo needs the crate present
 # in the workspace to resolve the manifest even during a release build.
 COPY crates/pap-test-utils       ./crates/pap-test-utils
+# pap-sandbox is an optional dep of pap-registry (ssr feature); the crate must
+# be present for cargo to resolve the workspace manifest.
+COPY crates/pap-sandbox          ./crates/pap-sandbox
 
 # The registry app (server + UI in one crate)
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
@@ -55,7 +58,6 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-ecash"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
     -e '/^[[:space:]]*"crates\/pap-bluefield"/d' \
-    -e '/^[[:space:]]*"crates\/pap-sandbox"/d' \
     -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
@@ -101,6 +103,7 @@ COPY crates/pap-proto            ./crates/pap-proto
 COPY crates/pap-transport        ./crates/pap-transport
 COPY crates/pap-agents           ./crates/pap-agents
 COPY crates/pap-test-utils       ./crates/pap-test-utils
+COPY crates/pap-sandbox          ./crates/pap-sandbox
 
 COPY apps/registry/Cargo.toml ./apps/registry/Cargo.toml
 COPY apps/registry/src        ./apps/registry/src
@@ -111,7 +114,6 @@ RUN sed -i \
     -e '/^[[:space:]]*"crates\/pap-ecash"/d' \
     -e '/^[[:space:]]*"crates\/pap-wasm"/d' \
     -e '/^[[:space:]]*"crates\/pap-bluefield"/d' \
-    -e '/^[[:space:]]*"crates\/pap-sandbox"/d' \
     -e '/^[[:space:]]*"crates\/pap-test-utils"/d' \
     -e '/^[[:space:]]*"crates\/papillon-shared"/d' \
     -e '/^[[:space:]]*"apps\/papillon"/d' \
