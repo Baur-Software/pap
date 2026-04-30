@@ -780,6 +780,64 @@ pub async fn get_sync_buckets() -> Result<SyncBuckets, ServerFnError> {
     Ok(SyncBuckets { counts })
 }
 
+// ── Per-agent sandbox toggle ──────────────────────────────────────────────────
+
+/// Return whether sandbox execution is enabled for the given agent hash.
+/// Defaults to `true` (sandboxed) if no setting has been persisted.
+#[server]
+pub async fn get_agent_sandbox_enabled(hash: String) -> Result<bool, ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::{AppState, SETTING_SANDBOX_DISABLED_PREFIX};
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let key = format!("{SETTING_SANDBOX_DISABLED_PREFIX}{hash}");
+    let disabled = state
+        .store
+        .load_setting(&key)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map(|v| v == "true")
+        .unwrap_or(false);
+    Ok(!disabled)
+}
+
+/// Persist the sandbox-enabled state for a given agent hash.
+/// Takes effect for the *next* request — the running server does not
+/// hot-reload routes, so a restart is needed to apply changes.
+#[server]
+pub async fn set_agent_sandbox_enabled(hash: String, enabled: bool) -> Result<(), ServerFnError> {
+    use crate::routes::admin::extract_bearer;
+    use crate::state::{AppState, SETTING_SANDBOX_DISABLED_PREFIX};
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
+    let key = format!("{SETTING_SANDBOX_DISABLED_PREFIX}{hash}");
+    // Store the disabled flag ("true" = disabled) so the default (missing
+    // key) maps to enabled — new agents get sandboxed without any DB write.
+    let value = if enabled { "false" } else { "true" };
+    state
+        .store
+        .save_setting(&key, value)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(())
+}
+
 /// Return the most-recent sync event per peer for the dashboard feed.
 #[server]
 pub async fn get_sync_summary() -> Result<Vec<SyncSummaryItem>, ServerFnError> {

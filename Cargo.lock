@@ -5012,6 +5012,7 @@ dependencies = [
  "pap-did",
  "pap-federation",
  "pap-marketplace",
+ "pap-sandbox",
  "pap-transport",
  "percent-encoding",
  "rand 0.8.6",

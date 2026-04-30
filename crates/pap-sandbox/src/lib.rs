@@ -1,4 +1,5 @@
 pub mod error;
+pub mod handler_wrapper;
 pub mod ipc;
 pub mod memory;
 pub mod os_capabilities;
@@ -14,6 +15,7 @@ mod tests;
 pub mod tauri_commands;
 
 pub use error::SandboxError;
+pub use handler_wrapper::SandboxedHandlerWrapper;
 pub use ipc::{decrypt, encrypt, ExecutionContext, ExecutionResult};
 pub use memory::SecureBuffer;
 pub use os_capabilities::{detect as detect_os_capabilities, OsCapabilities};

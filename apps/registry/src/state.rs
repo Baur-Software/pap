@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use pap_federation::registry::FederatedRegistry;
+use pap_sandbox::AgentSpawner;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -98,6 +99,10 @@ impl EndpointCounters {
 /// The settings key used to persist the CORS origin allowlist.
 pub const SETTING_CORS_ORIGINS: &str = "cors_allowed_origins";
 
+/// Settings key prefix for per-agent sandbox disable flag.
+/// Full key: `"sandbox_disabled:{agent_hash}"`.
+pub const SETTING_SANDBOX_DISABLED_PREFIX: &str = "sandbox_disabled:";
+
 /// Shared application state passed into all route handlers.
 #[derive(Clone)]
 pub struct AppState {
@@ -112,11 +117,11 @@ pub struct AppState {
     pub sync_log: SyncEventLog,
     /// Live CORS origin allowlist — persisted in the `settings` table and
     /// updated at runtime without restarting the server.
-    /// Each entry is an exact origin string, e.g. `"https://app.example.com"`.
-    /// An empty list means allow nothing (safe default until seeded).
     pub cors_allowed_origins: Arc<RwLock<Vec<String>>>,
     /// Hit counters for federation endpoints, incremented by middleware.
     pub endpoint_counters: Arc<EndpointCounters>,
+    /// Platform-appropriate sandbox spawner — shared across all agent execution paths.
+    pub sandbox_spawner: Arc<dyn AgentSpawner>,
 }
 
 impl AppState {
@@ -127,6 +132,7 @@ impl AppState {
         config: &Config,
         cert_fingerprint: String,
         cors_allowed_origins: Arc<RwLock<Vec<String>>>,
+        sandbox_spawner: Arc<dyn AgentSpawner>,
     ) -> Self {
         Self {
             registry,
@@ -139,6 +145,7 @@ impl AppState {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins,
             endpoint_counters: Arc::new(EndpointCounters::default()),
+            sandbox_spawner,
         }
     }
 
@@ -177,6 +184,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         }
     }
 

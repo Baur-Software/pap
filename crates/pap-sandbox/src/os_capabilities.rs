@@ -183,7 +183,7 @@ fn probe_mlock() -> bool {
     // Try to mlock a single page. If EPERM or ENOMEM (RLIMIT_MEMLOCK=0),
     // mlock is not usable. We test with a 1-byte allocation; the kernel
     // rounds to page size anyway.
-    let data = vec![0u8; 1];
+    let data = [0u8; 1];
     let ret = unsafe { libc::mlock(data.as_ptr() as *const libc::c_void, data.len()) };
     if ret == 0 {
         // unlock immediately — we only wanted to probe availability
