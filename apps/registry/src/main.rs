@@ -422,23 +422,29 @@ async fn main() -> anyhow::Result<()> {
             .iter()
             .find(|ad| ad.name == *name)
             .cloned();
-        let Some(agent_ad) = agent_ad else {
-            // No advertisement registered for this handler — skip mounting it.
-            // Without an advertisement we cannot derive a stable hash for the
-            // per-agent sandbox setting key, and all missing-ad agents would
-            // collapse to the same degenerate key "sandbox_disabled:".
+        // Derive a stable sandbox settings key from the advertisement hash when
+        // available, or fall back to the agent name so that agents without an
+        // advertisement still each get their own distinct key (not a shared "").
+        // A missing advertisement is unusual but valid — warn so operators can
+        // investigate, but still mount the agent.
+        if agent_ad.is_none() {
             tracing::warn!(
-                "Skipping agent '{}': no advertisement found in registry",
+                "Agent '{}' has no advertisement in the registry; \
+                 mounting with defaults (no DID, generic action type)",
                 name
             );
-            continue;
-        };
-        let agent_hash = agent_ad.hash();
-        let agent_did = agent_ad.provider.did.clone();
+        }
+        let agent_hash = agent_ad
+            .as_ref()
+            .map(|ad| ad.hash())
+            .unwrap_or_else(|| format!("name:{name}"));
+        let agent_did = agent_ad
+            .as_ref()
+            .map(|ad| ad.provider.did.clone())
+            .unwrap_or_default();
         let action_type = agent_ad
-            .capability
-            .first()
-            .cloned()
+            .as_ref()
+            .and_then(|ad| ad.capability.first().cloned())
             .unwrap_or_else(|| "schema:Action".to_string());
 
         let setting_key = format!("{SETTING_SANDBOX_DISABLED_PREFIX}{agent_hash}");
