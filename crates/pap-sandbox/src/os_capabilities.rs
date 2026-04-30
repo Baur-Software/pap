@@ -119,7 +119,7 @@ fn probe_seccomp() -> bool {
 
 // ── pledge (BSD) ─────────────────────────────────────────────────────────────
 
-#[cfg(any(target_os = "openbsd"))]
+#[cfg(target_os = "openbsd")]
 fn probe_pledge() -> bool {
     // On OpenBSD, pledge() is always available in userspace.
     true

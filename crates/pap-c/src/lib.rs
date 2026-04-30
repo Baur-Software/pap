@@ -3757,6 +3757,6 @@ pub unsafe extern "C" fn pap_sandbox_decrypt(
 #[no_mangle]
 pub unsafe extern "C" fn pap_sandbox_bytes_free(ptr: *mut u8, len: usize) {
     if !ptr.is_null() {
-        drop(unsafe { Box::from_raw(std::slice::from_raw_parts_mut(ptr, len)) });
+        drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len)) });
     }
 }
