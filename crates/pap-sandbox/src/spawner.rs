@@ -33,25 +33,11 @@ impl ExecutionHandle {
 #[serde(tag = "state")]
 pub enum ExecutionState {
     Pending,
-    Running {
-        pid: u32,
-        elapsed_ms: u64,
-    },
-    Completed {
-        exit_code: i32,
-        elapsed_ms: u64,
-    },
-    TimedOut {
-        elapsed_ms: u64,
-    },
-    Killed {
-        reason: String,
-        elapsed_ms: u64,
-    },
-    Failed {
-        reason: String,
-        elapsed_ms: u64,
-    },
+    Running { pid: u32, elapsed_ms: u64 },
+    Completed { exit_code: i32, elapsed_ms: u64 },
+    TimedOut { elapsed_ms: u64 },
+    Killed { reason: String, elapsed_ms: u64 },
+    Failed { reason: String, elapsed_ms: u64 },
 }
 
 /// Platform abstraction for sandboxed process spawning.
@@ -74,8 +60,7 @@ pub trait AgentSpawner: Send + Sync {
     async fn poll_state(&self, handle: &ExecutionHandle) -> Result<ExecutionState, SandboxError>;
 
     /// Terminate a running sandbox immediately.
-    async fn terminate(&self, handle: &ExecutionHandle, reason: &str)
-        -> Result<(), SandboxError>;
+    async fn terminate(&self, handle: &ExecutionHandle, reason: &str) -> Result<(), SandboxError>;
 
     /// Retrieve the execution result and capability attestation receipt.
     /// Only valid after `poll_state` returns `Completed`.

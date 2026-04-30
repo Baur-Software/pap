@@ -79,10 +79,7 @@ impl AgentSpawner for MacosSpawner {
         )
         .arg("--sandbox-worker")
         .arg("--policy")
-        .arg(
-            serde_json::to_string(&policy)
-                .map_err(|e| SandboxError::IpcError(e.to_string()))?,
-        )
+        .arg(serde_json::to_string(&policy).map_err(|e| SandboxError::IpcError(e.to_string()))?)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -149,11 +146,7 @@ impl AgentSpawner for MacosSpawner {
         }
     }
 
-    async fn terminate(
-        &self,
-        handle: &ExecutionHandle,
-        reason: &str,
-    ) -> Result<(), SandboxError> {
+    async fn terminate(&self, handle: &ExecutionHandle, reason: &str) -> Result<(), SandboxError> {
         let mut procs = self.processes.write().await;
         if let Some(mut record) = procs.remove(&handle.id) {
             record

@@ -24,9 +24,8 @@ impl SecureBuffer {
             if self.data.is_empty() {
                 return true;
             }
-            let ret = unsafe {
-                libc::mlock(self.data.as_ptr() as *const libc::c_void, self.data.len())
-            };
+            let ret =
+                unsafe { libc::mlock(self.data.as_ptr() as *const libc::c_void, self.data.len()) };
             self.locked = ret == 0;
         }
         self.locked
