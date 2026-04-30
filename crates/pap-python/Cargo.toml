@@ -16,6 +16,7 @@ pap-core = { workspace = true }
 pap-credential = { workspace = true }
 pap-marketplace = { workspace = true }
 pap-transport = { workspace = true }
+pap-sandbox = { workspace = true }
 
 pyo3 = { version = "0.24", features = ["extension-module", "abi3-py38", "experimental-async"] }
 chrono = { workspace = true }

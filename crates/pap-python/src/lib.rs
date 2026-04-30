@@ -1676,6 +1676,662 @@ impl AgentClient {
 }
 
 // ===========================================================================
+// pap-sandbox: CapabilityPolicy
+// ===========================================================================
+
+/// Capability constraints applied to a sandboxed agent execution.
+///
+/// Controls timeout, network, filesystem, and subprocess permissions, plus
+/// platform-specific enforcement options (seccomp, pledge, entitlements).
+#[pyclass(name = "CapabilityPolicy", module = "pap._pap")]
+#[derive(Clone)]
+pub struct PyCapabilityPolicy {
+    pub inner: pap_sandbox::CapabilityPolicy,
+}
+
+#[pymethods]
+impl PyCapabilityPolicy {
+    /// Create a capability policy with the given constraints.
+    ///
+    /// Defaults match the deny-by-default posture:
+    /// - timeout: 30 seconds
+    /// - network, filesystem, subprocess: all denied
+    /// - signature validation: required
+    #[new]
+    #[pyo3(
+        signature = (
+            execution_timeout_secs = 30,
+            network_allowed = false,
+            filesystem_allowed = false,
+            subprocess_allowed = false,
+            require_signature_validation = true,
+            category = None
+        )
+    )]
+    fn new(
+        execution_timeout_secs: u64,
+        network_allowed: bool,
+        filesystem_allowed: bool,
+        subprocess_allowed: bool,
+        require_signature_validation: bool,
+        category: Option<String>,
+    ) -> Self {
+        Self {
+            inner: pap_sandbox::CapabilityPolicy {
+                execution_timeout_secs,
+                network_allowed,
+                filesystem_allowed,
+                subprocess_allowed,
+                require_signature_validation,
+                category: category.unwrap_or_else(|| "default".to_string()),
+                ..Default::default()
+            },
+        }
+    }
+
+    #[getter]
+    fn execution_timeout_secs(&self) -> u64 {
+        self.inner.execution_timeout_secs
+    }
+
+    #[getter]
+    fn network_allowed(&self) -> bool {
+        self.inner.network_allowed
+    }
+
+    #[getter]
+    fn filesystem_allowed(&self) -> bool {
+        self.inner.filesystem_allowed
+    }
+
+    #[getter]
+    fn subprocess_allowed(&self) -> bool {
+        self.inner.subprocess_allowed
+    }
+
+    #[getter]
+    fn require_signature_validation(&self) -> bool {
+        self.inner.require_signature_validation
+    }
+
+    #[getter]
+    fn category(&self) -> String {
+        self.inner.category.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CapabilityPolicy(timeout={}s, network={}, filesystem={}, subprocess={})",
+            self.inner.execution_timeout_secs,
+            self.inner.network_allowed,
+            self.inner.filesystem_allowed,
+            self.inner.subprocess_allowed
+        )
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: MemoryProtection
+// ===========================================================================
+
+/// Memory protection flags recorded in a capability proof.
+#[pyclass(name = "MemoryProtection", module = "pap._pap")]
+#[derive(Clone)]
+pub struct PyMemoryProtection {
+    pub inner: pap_sandbox::MemoryProtection,
+}
+
+#[pymethods]
+impl PyMemoryProtection {
+    #[getter]
+    fn mlock_applied(&self) -> bool {
+        self.inner.mlock_applied
+    }
+
+    #[getter]
+    fn encryption_used(&self) -> bool {
+        self.inner.encryption_used
+    }
+
+    #[getter]
+    fn sensitive_buffers_wiped(&self) -> bool {
+        self.inner.sensitive_buffers_wiped
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "MemoryProtection(mlock={}, encrypted={}, wiped={})",
+            self.inner.mlock_applied, self.inner.encryption_used, self.inner.sensitive_buffers_wiped
+        )
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: CapabilityProof
+// ===========================================================================
+
+/// Proof that specific capability constraints were enforced during execution.
+#[pyclass(name = "CapabilityProof", module = "pap._pap")]
+#[derive(Clone)]
+pub struct PyCapabilityProof {
+    pub inner: pap_sandbox::CapabilityProof,
+}
+
+#[pymethods]
+impl PyCapabilityProof {
+    #[getter]
+    fn seccomp_rules_hash(&self) -> Option<String> {
+        self.inner.seccomp_rules_hash.clone()
+    }
+
+    #[getter]
+    fn pledge_promises(&self) -> Option<String> {
+        self.inner.pledge_promises.clone()
+    }
+
+    #[getter]
+    fn entitlements_applied(&self) -> Option<Vec<String>> {
+        self.inner.entitlements_applied.clone()
+    }
+
+    /// Returns a `MemoryProtection` describing the memory constraints applied.
+    #[getter]
+    fn memory_protection(&self) -> PyMemoryProtection {
+        PyMemoryProtection {
+            inner: self.inner.memory_protection.clone(),
+        }
+    }
+
+    #[getter]
+    fn timeout_enforced_secs(&self) -> u64 {
+        self.inner.timeout_enforced_secs
+    }
+
+    #[getter]
+    fn network_blocked(&self) -> bool {
+        self.inner.network_blocked
+    }
+
+    #[getter]
+    fn filesystem_restricted(&self) -> bool {
+        self.inner.filesystem_restricted
+    }
+
+    #[getter]
+    fn subprocess_blocked(&self) -> bool {
+        self.inner.subprocess_blocked
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CapabilityProof(timeout={}s, network_blocked={}, fs_restricted={}, subprocess_blocked={})",
+            self.inner.timeout_enforced_secs,
+            self.inner.network_blocked,
+            self.inner.filesystem_restricted,
+            self.inner.subprocess_blocked
+        )
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: AttestationReceipt
+// ===========================================================================
+
+/// Cryptographically attestable record of a completed (or aborted) agent execution.
+///
+/// Embedded in phase 5 co-signing: the principal signs this to produce a
+/// transaction-level proof of enforcement constraints.
+#[pyclass(name = "AttestationReceipt", module = "pap._pap")]
+#[derive(Clone)]
+pub struct PyAttestationReceipt {
+    pub inner: pap_sandbox::AttestationReceipt,
+}
+
+#[pymethods]
+impl PyAttestationReceipt {
+    #[getter]
+    fn session_id(&self) -> String {
+        self.inner.session_id.clone()
+    }
+
+    #[getter]
+    fn agent_did(&self) -> String {
+        self.inner.agent_did.clone()
+    }
+
+    #[getter]
+    fn agent_name(&self) -> String {
+        self.inner.agent_name.clone()
+    }
+
+    #[getter]
+    fn action_type(&self) -> String {
+        self.inner.action_type.clone()
+    }
+
+    #[getter]
+    fn execution_duration_ms(&self) -> u64 {
+        self.inner.execution_duration_ms
+    }
+
+    #[getter]
+    fn result_hash(&self) -> String {
+        self.inner.result_hash.clone()
+    }
+
+    #[getter]
+    fn exit_code(&self) -> i32 {
+        self.inner.exit_code
+    }
+
+    #[getter]
+    fn aborted(&self) -> bool {
+        self.inner.aborted
+    }
+
+    #[getter]
+    fn abort_reason(&self) -> Option<String> {
+        self.inner.abort_reason.clone()
+    }
+
+    /// Returns the `CapabilityProof` showing which OS constraints were applied.
+    #[getter]
+    fn capability_enforcement(&self) -> PyCapabilityProof {
+        PyCapabilityProof {
+            inner: self.inner.capability_enforcement.clone(),
+        }
+    }
+
+    /// The receipt timestamp as an ISO 8601 / RFC 3339 string.
+    fn timestamp_iso(&self) -> String {
+        self.inner.timestamp.to_rfc3339()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "AttestationReceipt(session='{}', agent='{}', aborted={}, exit_code={})",
+            self.inner.session_id,
+            self.inner.agent_name,
+            self.inner.aborted,
+            self.inner.exit_code
+        )
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: ExecutionHandle
+// ===========================================================================
+
+/// Opaque handle to a spawned sandbox process.
+///
+/// Pass this to `SandboxSpawner.poll_state`, `terminate`, and `collect_result`.
+#[pyclass(name = "ExecutionHandle", module = "pap._pap")]
+#[derive(Clone)]
+pub struct PyExecutionHandle {
+    pub inner: pap_sandbox::ExecutionHandle,
+}
+
+#[pymethods]
+impl PyExecutionHandle {
+    /// Unique execution ID (UUID v4 string).
+    #[getter]
+    fn id(&self) -> String {
+        self.inner.id.clone()
+    }
+
+    /// DID of the agent that was spawned.
+    #[getter]
+    fn agent_did(&self) -> String {
+        self.inner.agent_did.clone()
+    }
+
+    /// Human-readable name of the agent.
+    #[getter]
+    fn agent_name(&self) -> String {
+        self.inner.agent_name.clone()
+    }
+
+    /// Spawn timestamp as an ISO 8601 / RFC 3339 string.
+    fn spawned_at_iso(&self) -> String {
+        self.inner.spawned_at.to_rfc3339()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ExecutionHandle(id='{}', agent='{}')",
+            self.inner.id, self.inner.agent_name
+        )
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: ExecutionContext
+// ===========================================================================
+
+/// Encrypted execution context to pass into the sandbox.
+///
+/// Create with `ExecutionContext(agent_did, agent_name, action_type, session_id)`.
+/// All encrypted payload fields default to empty bytes; populate them by calling
+/// `sandbox_encrypt` separately and then assigning the attributes.
+#[pyclass(name = "ExecutionContext", module = "pap._pap")]
+pub struct PyExecutionContext {
+    pub inner: pap_sandbox::ExecutionContext,
+}
+
+#[pymethods]
+impl PyExecutionContext {
+    /// Create a new execution context with the identity fields set.
+    ///
+    /// The encrypted payload fields (query_enc, disclosure_enc,
+    /// session_token_enc, nonce, ephemeral_public_key) default to empty
+    /// `bytes` objects. Use `sandbox_encrypt` to populate them before
+    /// calling `SandboxSpawner.spawn`.
+    #[new]
+    fn new(
+        agent_did: String,
+        agent_name: String,
+        action_type: String,
+        session_id: String,
+    ) -> Self {
+        Self {
+            inner: pap_sandbox::ExecutionContext {
+                query_enc: Vec::new(),
+                disclosure_enc: Vec::new(),
+                session_token_enc: Vec::new(),
+                nonce: Vec::new(),
+                ephemeral_public_key: Vec::new(),
+                agent_did,
+                agent_name,
+                action_type,
+                session_id,
+            },
+        }
+    }
+
+    #[getter]
+    fn agent_did(&self) -> String {
+        self.inner.agent_did.clone()
+    }
+
+    #[getter]
+    fn agent_name(&self) -> String {
+        self.inner.agent_name.clone()
+    }
+
+    #[getter]
+    fn action_type(&self) -> String {
+        self.inner.action_type.clone()
+    }
+
+    #[getter]
+    fn session_id(&self) -> String {
+        self.inner.session_id.clone()
+    }
+
+    #[getter]
+    fn query_enc(&self) -> Vec<u8> {
+        self.inner.query_enc.clone()
+    }
+
+    #[setter]
+    fn set_query_enc(&mut self, v: Vec<u8>) {
+        self.inner.query_enc = v;
+    }
+
+    #[getter]
+    fn disclosure_enc(&self) -> Vec<u8> {
+        self.inner.disclosure_enc.clone()
+    }
+
+    #[setter]
+    fn set_disclosure_enc(&mut self, v: Vec<u8>) {
+        self.inner.disclosure_enc = v;
+    }
+
+    #[getter]
+    fn session_token_enc(&self) -> Vec<u8> {
+        self.inner.session_token_enc.clone()
+    }
+
+    #[setter]
+    fn set_session_token_enc(&mut self, v: Vec<u8>) {
+        self.inner.session_token_enc = v;
+    }
+
+    #[getter]
+    fn nonce(&self) -> Vec<u8> {
+        self.inner.nonce.clone()
+    }
+
+    #[setter]
+    fn set_nonce(&mut self, v: Vec<u8>) {
+        self.inner.nonce = v;
+    }
+
+    #[getter]
+    fn ephemeral_public_key(&self) -> Vec<u8> {
+        self.inner.ephemeral_public_key.clone()
+    }
+
+    #[setter]
+    fn set_ephemeral_public_key(&mut self, v: Vec<u8>) {
+        self.inner.ephemeral_public_key = v;
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ExecutionContext(agent_did='{}', action='{}')",
+            self.inner.agent_did, self.inner.action_type
+        )
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: ExecutionResult
+// ===========================================================================
+
+/// Encrypted result returned from the sandbox.
+///
+/// Call `sandbox_decrypt(result.result_enc, key, result.nonce)` to
+/// recover the plaintext JSON.
+#[pyclass(name = "ExecutionResult", module = "pap._pap")]
+#[derive(Clone)]
+pub struct PyExecutionResult {
+    pub inner: pap_sandbox::ExecutionResult,
+}
+
+#[pymethods]
+impl PyExecutionResult {
+    /// Encrypted result bytes.
+    #[getter]
+    fn result_enc(&self) -> Vec<u8> {
+        self.inner.result_enc.clone()
+    }
+
+    /// Nonce needed to decrypt `result_enc`.
+    #[getter]
+    fn nonce(&self) -> Vec<u8> {
+        self.inner.nonce.clone()
+    }
+
+    /// The capability attestation receipt included with the result.
+    #[getter]
+    fn receipt(&self) -> PyAttestationReceipt {
+        PyAttestationReceipt {
+            inner: self.inner.receipt.clone(),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ExecutionResult(result_enc_len={}, receipt={})",
+            self.inner.result_enc.len(),
+            self.inner.receipt.session_id
+        )
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: SandboxSpawner
+// ===========================================================================
+
+/// Platform-aware sandbox spawner.
+///
+/// Obtain an instance with `sandbox_new_spawner()`.
+///
+/// `unsendable` because the underlying OS handle state is not `Send`
+/// on all platforms, and we use the global runtime for all blocking calls.
+#[pyclass(name = "SandboxSpawner", module = "pap._pap", unsendable)]
+pub struct PySandboxSpawner {
+    inner: Box<dyn pap_sandbox::AgentSpawner>,
+}
+
+#[pymethods]
+impl PySandboxSpawner {
+    /// Spawn a sandboxed agent process.
+    ///
+    /// Returns an `ExecutionHandle` you can poll or terminate.
+    fn spawn(
+        &self,
+        policy: PyRef<PyCapabilityPolicy>,
+        context: PyRef<PyExecutionContext>,
+    ) -> PyResult<PyExecutionHandle> {
+        let policy_clone = policy.inner.clone();
+        let context_clone = context.inner.clone();
+        let handle = RT
+            .block_on(self.inner.spawn(policy_clone, context_clone))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        Ok(PyExecutionHandle { inner: handle })
+    }
+
+    /// Poll the current execution state of a running sandbox.
+    ///
+    /// Returns a dict with a `"state"` key and variant-specific fields:
+    ///
+    /// - `{"state": "Pending"}`
+    /// - `{"state": "Running", "pid": int, "elapsed_ms": int}`
+    /// - `{"state": "Completed", "exit_code": int, "elapsed_ms": int}`
+    /// - `{"state": "TimedOut", "elapsed_ms": int}`
+    /// - `{"state": "Killed", "reason": str, "elapsed_ms": int}`
+    /// - `{"state": "Failed", "reason": str, "elapsed_ms": int}`
+    fn poll_state<'py>(
+        &self,
+        py: Python<'py>,
+        handle: PyRef<PyExecutionHandle>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyDict>> {
+        let handle_clone = handle.inner.clone();
+        let state = RT
+            .block_on(self.inner.poll_state(&handle_clone))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let d = pyo3::types::PyDict::new(py);
+        match state {
+            pap_sandbox::ExecutionState::Pending => {
+                d.set_item("state", "Pending")?;
+            }
+            pap_sandbox::ExecutionState::Running { pid, elapsed_ms } => {
+                d.set_item("state", "Running")?;
+                d.set_item("pid", pid)?;
+                d.set_item("elapsed_ms", elapsed_ms)?;
+            }
+            pap_sandbox::ExecutionState::Completed {
+                exit_code,
+                elapsed_ms,
+            } => {
+                d.set_item("state", "Completed")?;
+                d.set_item("exit_code", exit_code)?;
+                d.set_item("elapsed_ms", elapsed_ms)?;
+            }
+            pap_sandbox::ExecutionState::TimedOut { elapsed_ms } => {
+                d.set_item("state", "TimedOut")?;
+                d.set_item("elapsed_ms", elapsed_ms)?;
+            }
+            pap_sandbox::ExecutionState::Killed { reason, elapsed_ms } => {
+                d.set_item("state", "Killed")?;
+                d.set_item("reason", reason)?;
+                d.set_item("elapsed_ms", elapsed_ms)?;
+            }
+            pap_sandbox::ExecutionState::Failed { reason, elapsed_ms } => {
+                d.set_item("state", "Failed")?;
+                d.set_item("reason", reason)?;
+                d.set_item("elapsed_ms", elapsed_ms)?;
+            }
+        }
+        Ok(d)
+    }
+
+    /// Terminate a running sandbox immediately.
+    ///
+    /// `reason` is recorded in the attestation receipt.
+    fn terminate(&self, handle: PyRef<PyExecutionHandle>, reason: &str) -> PyResult<()> {
+        let handle_clone = handle.inner.clone();
+        RT.block_on(self.inner.terminate(&handle_clone, reason))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Retrieve the execution result and capability attestation receipt.
+    ///
+    /// Only valid after `poll_state` returns `{"state": "Completed", ...}`.
+    /// Returns `(ExecutionResult, AttestationReceipt)`.
+    fn collect_result(
+        &self,
+        handle: PyRef<PyExecutionHandle>,
+    ) -> PyResult<(PyExecutionResult, PyAttestationReceipt)> {
+        let handle_clone = handle.inner.clone();
+        let (result, receipt) = RT
+            .block_on(self.inner.collect_result(&handle_clone))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        Ok((
+            PyExecutionResult { inner: result },
+            PyAttestationReceipt { inner: receipt },
+        ))
+    }
+
+    fn __repr__(&self) -> String {
+        "SandboxSpawner()".to_string()
+    }
+}
+
+// ===========================================================================
+// pap-sandbox: free functions
+// ===========================================================================
+
+/// Encrypt plaintext with AES-256-GCM using a 32-byte key.
+///
+/// Returns `(ciphertext: bytes, nonce: bytes)`.
+/// The nonce must be stored alongside the ciphertext for decryption.
+#[pyfunction]
+fn sandbox_encrypt(plaintext: &[u8], key: &[u8]) -> PyResult<(Vec<u8>, Vec<u8>)> {
+    let key_arr: &[u8; 32] = key.try_into().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err("key must be exactly 32 bytes for AES-256-GCM")
+    })?;
+    pap_sandbox::encrypt(plaintext, key_arr)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+/// Decrypt ciphertext with AES-256-GCM using a 32-byte key and the nonce
+/// returned by `sandbox_encrypt`.
+///
+/// Returns the plaintext bytes.
+#[pyfunction]
+fn sandbox_decrypt(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> PyResult<Vec<u8>> {
+    let key_arr: &[u8; 32] = key.try_into().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err("key must be exactly 32 bytes for AES-256-GCM")
+    })?;
+    pap_sandbox::decrypt(ciphertext, key_arr, nonce)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+/// Create the platform-appropriate sandbox spawner.
+///
+/// Raises `RuntimeError` on unsupported platforms.
+#[pyfunction]
+fn sandbox_new_spawner() -> PyResult<PySandboxSpawner> {
+    let inner = pap_sandbox::new_spawner()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    Ok(PySandboxSpawner { inner })
+}
+
+// ===========================================================================
 // Module registration
 // ===========================================================================
 
@@ -1726,6 +2382,19 @@ fn _pap(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Transport
     m.add_class::<AgentClient>()?;
+
+    // Sandbox
+    m.add_class::<PyCapabilityPolicy>()?;
+    m.add_class::<PyMemoryProtection>()?;
+    m.add_class::<PyCapabilityProof>()?;
+    m.add_class::<PyAttestationReceipt>()?;
+    m.add_class::<PyExecutionHandle>()?;
+    m.add_class::<PyExecutionContext>()?;
+    m.add_class::<PyExecutionResult>()?;
+    m.add_class::<PySandboxSpawner>()?;
+    m.add_function(wrap_pyfunction!(sandbox_encrypt, m)?)?;
+    m.add_function(wrap_pyfunction!(sandbox_decrypt, m)?)?;
+    m.add_function(wrap_pyfunction!(sandbox_new_spawner, m)?)?;
 
     Ok(())
 }

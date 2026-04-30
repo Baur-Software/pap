@@ -7,7 +7,7 @@ use crate::receipt::AttestationReceipt;
 /// Encrypted execution context sent from parent to sandbox child.
 /// All sensitive fields are encrypted with an ephemeral key;
 /// the child decrypts only when needed for agent invocation.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionContext {
     /// Encrypted query bytes.
     pub query_enc: Vec<u8>,

@@ -3160,3 +3160,606 @@ mod tests {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Sandbox execution bindings
+// ---------------------------------------------------------------------------
+
+pub struct PapCapabilityPolicy {
+    inner: pap_sandbox::CapabilityPolicy,
+}
+pub struct PapExecutionHandle {
+    inner: pap_sandbox::ExecutionHandle,
+}
+pub struct PapExecutionContext {
+    inner: pap_sandbox::ExecutionContext,
+}
+pub struct PapAttestationReceipt {
+    inner: pap_sandbox::AttestationReceipt,
+}
+pub struct PapAgentSpawner {
+    inner: Box<dyn pap_sandbox::AgentSpawner>,
+    rt: tokio::runtime::Runtime,
+}
+
+/// ExecutionState integer constants returned by `pap_spawner_poll_state`.
+pub const PAP_EXEC_STATE_PENDING: i32 = 0;
+pub const PAP_EXEC_STATE_RUNNING: i32 = 1;
+pub const PAP_EXEC_STATE_COMPLETED: i32 = 2;
+pub const PAP_EXEC_STATE_TIMED_OUT: i32 = 3;
+pub const PAP_EXEC_STATE_KILLED: i32 = 4;
+pub const PAP_EXEC_STATE_FAILED: i32 = 5;
+
+// ── CapabilityPolicy ──────────────────────────────────────────────────────────
+
+/// Create a default CapabilityPolicy (deny-all, 30s timeout).
+#[no_mangle]
+pub extern "C" fn pap_capability_policy_new() -> *mut PapCapabilityPolicy {
+    Box::into_raw(Box::new(PapCapabilityPolicy {
+        inner: pap_sandbox::CapabilityPolicy::default(),
+    }))
+}
+
+/// Free a PapCapabilityPolicy. Passing NULL is a no-op.
+/// # Safety
+/// `p` must be a pointer previously returned by `pap_capability_policy_new`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_capability_policy_free(p: *mut PapCapabilityPolicy) {
+    if !p.is_null() {
+        drop(unsafe { Box::from_raw(p) });
+    }
+}
+
+/// Set execution timeout in seconds. Returns 0 on success, -1 on null input.
+#[no_mangle]
+pub unsafe extern "C" fn pap_capability_policy_set_timeout(
+    p: *mut PapCapabilityPolicy,
+    secs: u64,
+) -> c_int {
+    if p.is_null() {
+        set_last_error("pap_capability_policy_set_timeout: null pointer");
+        return -1;
+    }
+    unsafe { (*p).inner.execution_timeout_secs = secs };
+    0
+}
+
+/// Set whether network access is permitted. `allowed` non-zero means true.
+#[no_mangle]
+pub unsafe extern "C" fn pap_capability_policy_set_network(
+    p: *mut PapCapabilityPolicy,
+    allowed: c_int,
+) -> c_int {
+    if p.is_null() {
+        set_last_error("pap_capability_policy_set_network: null pointer");
+        return -1;
+    }
+    unsafe { (*p).inner.network_allowed = allowed != 0 };
+    0
+}
+
+/// Set whether filesystem access is permitted. `allowed` non-zero means true.
+#[no_mangle]
+pub unsafe extern "C" fn pap_capability_policy_set_filesystem(
+    p: *mut PapCapabilityPolicy,
+    allowed: c_int,
+) -> c_int {
+    if p.is_null() {
+        set_last_error("pap_capability_policy_set_filesystem: null pointer");
+        return -1;
+    }
+    unsafe { (*p).inner.filesystem_allowed = allowed != 0 };
+    0
+}
+
+/// Set whether subprocess spawning is permitted. `allowed` non-zero means true.
+#[no_mangle]
+pub unsafe extern "C" fn pap_capability_policy_set_subprocess(
+    p: *mut PapCapabilityPolicy,
+    allowed: c_int,
+) -> c_int {
+    if p.is_null() {
+        set_last_error("pap_capability_policy_set_subprocess: null pointer");
+        return -1;
+    }
+    unsafe { (*p).inner.subprocess_allowed = allowed != 0 };
+    0
+}
+
+// ── ExecutionContext ──────────────────────────────────────────────────────────
+
+/// Create an ExecutionContext with identity fields set and empty encrypted payloads.
+/// Populate payloads with `pap_sandbox_encrypt` before passing to `pap_spawner_spawn`.
+///
+/// # Safety
+/// All pointer arguments must be valid, null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn pap_execution_context_new(
+    agent_did: *const c_char,
+    agent_name: *const c_char,
+    action_type: *const c_char,
+    session_id: *const c_char,
+) -> *mut PapExecutionContext {
+    if agent_did.is_null() || agent_name.is_null() || action_type.is_null() || session_id.is_null()
+    {
+        set_last_error("pap_execution_context_new: null argument");
+        return std::ptr::null_mut();
+    }
+    let agent_did = match unsafe { CStr::from_ptr(agent_did) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error("pap_execution_context_new: invalid utf-8 in agent_did");
+            return std::ptr::null_mut();
+        }
+    };
+    let agent_name = match unsafe { CStr::from_ptr(agent_name) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error("pap_execution_context_new: invalid utf-8 in agent_name");
+            return std::ptr::null_mut();
+        }
+    };
+    let action_type = match unsafe { CStr::from_ptr(action_type) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error("pap_execution_context_new: invalid utf-8 in action_type");
+            return std::ptr::null_mut();
+        }
+    };
+    let session_id = match unsafe { CStr::from_ptr(session_id) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error("pap_execution_context_new: invalid utf-8 in session_id");
+            return std::ptr::null_mut();
+        }
+    };
+    Box::into_raw(Box::new(PapExecutionContext {
+        inner: pap_sandbox::ExecutionContext {
+            query_enc: Vec::new(),
+            disclosure_enc: Vec::new(),
+            session_token_enc: Vec::new(),
+            nonce: Vec::new(),
+            ephemeral_public_key: Vec::new(),
+            agent_did,
+            agent_name,
+            action_type,
+            session_id,
+        },
+    }))
+}
+
+/// Free a PapExecutionContext. Passing NULL is a no-op.
+/// # Safety
+/// `ctx` must be a pointer previously returned by `pap_execution_context_new`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_execution_context_free(ctx: *mut PapExecutionContext) {
+    if !ctx.is_null() {
+        drop(unsafe { Box::from_raw(ctx) });
+    }
+}
+
+// ── Spawner ───────────────────────────────────────────────────────────────────
+
+/// Create the platform-appropriate sandbox spawner.
+/// Returns NULL on failure; call `pap_last_error_message()` for details.
+#[no_mangle]
+pub extern "C" fn pap_spawner_new() -> *mut PapAgentSpawner {
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(r) => r,
+        Err(e) => {
+            set_last_error(&format!("pap_spawner_new: runtime: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    match pap_sandbox::new_spawner() {
+        Ok(inner) => Box::into_raw(Box::new(PapAgentSpawner { inner, rt })),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a PapAgentSpawner. Passing NULL is a no-op.
+/// # Safety
+/// `s` must be a pointer previously returned by `pap_spawner_new`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_spawner_free(s: *mut PapAgentSpawner) {
+    if !s.is_null() {
+        drop(unsafe { Box::from_raw(s) });
+    }
+}
+
+/// Spawn a sandboxed agent execution.
+/// Writes the new handle to `*out_handle` on success.
+/// Returns 0 on success, -1 on error (call `pap_last_error_message` for details).
+///
+/// # Safety
+/// `spawner`, `policy`, `context`, and `out_handle` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn pap_spawner_spawn(
+    spawner: *const PapAgentSpawner,
+    policy: *const PapCapabilityPolicy,
+    context: *const PapExecutionContext,
+    out_handle: *mut *mut PapExecutionHandle,
+) -> c_int {
+    if spawner.is_null() || policy.is_null() || context.is_null() || out_handle.is_null() {
+        set_last_error("pap_spawner_spawn: null argument");
+        return -1;
+    }
+    let s = unsafe { &*spawner };
+    let pol = unsafe { (*policy).inner.clone() };
+    let ctx = unsafe { (*context).inner.clone() };
+    match s.rt.block_on(s.inner.spawn(pol, ctx)) {
+        Ok(handle) => {
+            unsafe { *out_handle = Box::into_raw(Box::new(PapExecutionHandle { inner: handle })) };
+            0
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Free a PapExecutionHandle. Passing NULL is a no-op.
+/// # Safety
+/// `h` must be a pointer previously returned by `pap_spawner_spawn`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_execution_handle_free(h: *mut PapExecutionHandle) {
+    if !h.is_null() {
+        drop(unsafe { Box::from_raw(h) });
+    }
+}
+
+/// Poll the state of a running sandbox. Returns a PAP_EXEC_STATE_* constant,
+/// or -1 on error (call `pap_last_error_message` for details).
+///
+/// # Safety
+/// `spawner` and `handle` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn pap_spawner_poll_state(
+    spawner: *const PapAgentSpawner,
+    handle: *const PapExecutionHandle,
+) -> c_int {
+    if spawner.is_null() || handle.is_null() {
+        set_last_error("pap_spawner_poll_state: null argument");
+        return -1;
+    }
+    let s = unsafe { &*spawner };
+    let h = unsafe { &(*handle).inner };
+    match s.rt.block_on(s.inner.poll_state(h)) {
+        Ok(pap_sandbox::ExecutionState::Pending) => PAP_EXEC_STATE_PENDING,
+        Ok(pap_sandbox::ExecutionState::Running { .. }) => PAP_EXEC_STATE_RUNNING,
+        Ok(pap_sandbox::ExecutionState::Completed { .. }) => PAP_EXEC_STATE_COMPLETED,
+        Ok(pap_sandbox::ExecutionState::TimedOut { .. }) => PAP_EXEC_STATE_TIMED_OUT,
+        Ok(pap_sandbox::ExecutionState::Killed { .. }) => PAP_EXEC_STATE_KILLED,
+        Ok(pap_sandbox::ExecutionState::Failed { .. }) => PAP_EXEC_STATE_FAILED,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Terminate a running sandbox.
+/// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// `spawner`, `handle`, and `reason` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn pap_spawner_terminate(
+    spawner: *const PapAgentSpawner,
+    handle: *const PapExecutionHandle,
+    reason: *const c_char,
+) -> c_int {
+    if spawner.is_null() || handle.is_null() || reason.is_null() {
+        set_last_error("pap_spawner_terminate: null argument");
+        return -1;
+    }
+    let s = unsafe { &*spawner };
+    let h = unsafe { &(*handle).inner };
+    let reason_str = match unsafe { CStr::from_ptr(reason) }.to_str() {
+        Ok(r) => r,
+        Err(_) => {
+            set_last_error("pap_spawner_terminate: invalid utf-8 in reason");
+            return -1;
+        }
+    };
+    match s.rt.block_on(s.inner.terminate(h, reason_str)) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Collect the attestation receipt after a completed sandbox execution.
+/// Writes the receipt to `*out_receipt` on success.
+/// Returns 0 on success, -1 on error.
+///
+/// The caller owns the returned receipt and must free it with
+/// `pap_attestation_receipt_free`.
+///
+/// # Safety
+/// `spawner`, `handle`, and `out_receipt` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn pap_spawner_collect_receipt(
+    spawner: *const PapAgentSpawner,
+    handle: *const PapExecutionHandle,
+    out_receipt: *mut *mut PapAttestationReceipt,
+) -> c_int {
+    if spawner.is_null() || handle.is_null() || out_receipt.is_null() {
+        set_last_error("pap_spawner_collect_receipt: null argument");
+        return -1;
+    }
+    let s = unsafe { &*spawner };
+    let h = unsafe { &(*handle).inner };
+    match s.rt.block_on(s.inner.collect_result(h)) {
+        Ok((_result, receipt)) => {
+            unsafe {
+                *out_receipt =
+                    Box::into_raw(Box::new(PapAttestationReceipt { inner: receipt }))
+            };
+            0
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+// ── AttestationReceipt accessors ──────────────────────────────────────────────
+
+/// Return the session_id field. Caller must free with `pap_string_free`.
+/// # Safety
+/// `r` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_session_id(
+    r: *const PapAttestationReceipt,
+) -> *mut c_char {
+    if r.is_null() {
+        return std::ptr::null_mut();
+    }
+    CString::new(unsafe { (*r).inner.session_id.as_str() })
+        .map(|cs| cs.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Return the agent_did field. Caller must free with `pap_string_free`.
+/// # Safety
+/// `r` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_agent_did(
+    r: *const PapAttestationReceipt,
+) -> *mut c_char {
+    if r.is_null() {
+        return std::ptr::null_mut();
+    }
+    CString::new(unsafe { (*r).inner.agent_did.as_str() })
+        .map(|cs| cs.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Return the result_hash field. Caller must free with `pap_string_free`.
+/// # Safety
+/// `r` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_result_hash(
+    r: *const PapAttestationReceipt,
+) -> *mut c_char {
+    if r.is_null() {
+        return std::ptr::null_mut();
+    }
+    CString::new(unsafe { (*r).inner.result_hash.as_str() })
+        .map(|cs| cs.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Return the exit_code field.
+/// # Safety
+/// `r` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_exit_code(
+    r: *const PapAttestationReceipt,
+) -> c_int {
+    if r.is_null() {
+        return -1;
+    }
+    unsafe { (*r).inner.exit_code }
+}
+
+/// Return 1 if the execution was aborted, 0 otherwise. Returns -1 on null input.
+/// # Safety
+/// `r` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_aborted(
+    r: *const PapAttestationReceipt,
+) -> c_int {
+    if r.is_null() {
+        return -1;
+    }
+    if unsafe { (*r).inner.aborted } {
+        1
+    } else {
+        0
+    }
+}
+
+/// Return the execution_duration_ms field.
+/// # Safety
+/// `r` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_duration_ms(
+    r: *const PapAttestationReceipt,
+) -> u64 {
+    if r.is_null() {
+        return 0;
+    }
+    unsafe { (*r).inner.execution_duration_ms }
+}
+
+/// Return the full receipt as a JSON string. Caller must free with `pap_string_free`.
+/// Returns NULL on serialization error.
+/// # Safety
+/// `r` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_to_json(
+    r: *const PapAttestationReceipt,
+) -> *mut c_char {
+    if r.is_null() {
+        return std::ptr::null_mut();
+    }
+    match serde_json::to_string(&unsafe { &(*r).inner }) {
+        Ok(s) => CString::new(s)
+            .map(|cs| cs.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(e) => {
+            set_last_error(&e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a PapAttestationReceipt. Passing NULL is a no-op.
+/// # Safety
+/// `r` must be a pointer previously returned by `pap_spawner_collect_receipt`.
+#[no_mangle]
+pub unsafe extern "C" fn pap_attestation_receipt_free(r: *mut PapAttestationReceipt) {
+    if !r.is_null() {
+        drop(unsafe { Box::from_raw(r) });
+    }
+}
+
+// ── Encryption utilities ──────────────────────────────────────────────────────
+
+/// AES-256-GCM encryption.
+///
+/// Writes ciphertext to `*out_ciphertext` (length in `*out_ciphertext_len`)
+/// and nonce to `*out_nonce` (length in `*out_nonce_len`).
+/// Caller must free both buffers with `pap_sandbox_bytes_free`.
+///
+/// `key` must be exactly 32 bytes.
+/// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn pap_sandbox_encrypt(
+    plaintext: *const u8,
+    plaintext_len: usize,
+    key_32: *const u8,
+    out_ciphertext: *mut *mut u8,
+    out_ciphertext_len: *mut usize,
+    out_nonce: *mut *mut u8,
+    out_nonce_len: *mut usize,
+) -> c_int {
+    if plaintext.is_null()
+        || key_32.is_null()
+        || out_ciphertext.is_null()
+        || out_ciphertext_len.is_null()
+        || out_nonce.is_null()
+        || out_nonce_len.is_null()
+    {
+        set_last_error("pap_sandbox_encrypt: null argument");
+        return -1;
+    }
+    let pt = unsafe { std::slice::from_raw_parts(plaintext, plaintext_len) };
+    let key_slice = unsafe { std::slice::from_raw_parts(key_32, 32) };
+    let key: [u8; 32] = match key_slice.try_into() {
+        Ok(k) => k,
+        Err(_) => {
+            set_last_error("pap_sandbox_encrypt: key must be 32 bytes");
+            return -1;
+        }
+    };
+    match pap_sandbox::encrypt(pt, &key) {
+        Ok((ct, nonce)) => {
+            let ct_len = ct.len();
+            let nonce_len = nonce.len();
+            let ct_ptr = ct.into_boxed_slice();
+            let nonce_ptr = nonce.into_boxed_slice();
+            unsafe {
+                *out_ciphertext = Box::into_raw(ct_ptr) as *mut u8;
+                *out_ciphertext_len = ct_len;
+                *out_nonce = Box::into_raw(nonce_ptr) as *mut u8;
+                *out_nonce_len = nonce_len;
+            }
+            0
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// AES-256-GCM decryption.
+///
+/// Writes plaintext to `*out_plaintext` (length in `*out_plaintext_len`).
+/// Caller must free with `pap_sandbox_bytes_free`.
+///
+/// `key` must be exactly 32 bytes.
+/// Returns 0 on success, -1 on error (authentication failure or bad nonce length).
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn pap_sandbox_decrypt(
+    ciphertext: *const u8,
+    ciphertext_len: usize,
+    key_32: *const u8,
+    nonce: *const u8,
+    nonce_len: usize,
+    out_plaintext: *mut *mut u8,
+    out_plaintext_len: *mut usize,
+) -> c_int {
+    if ciphertext.is_null()
+        || key_32.is_null()
+        || nonce.is_null()
+        || out_plaintext.is_null()
+        || out_plaintext_len.is_null()
+    {
+        set_last_error("pap_sandbox_decrypt: null argument");
+        return -1;
+    }
+    let ct = unsafe { std::slice::from_raw_parts(ciphertext, ciphertext_len) };
+    let key_slice = unsafe { std::slice::from_raw_parts(key_32, 32) };
+    let key: [u8; 32] = match key_slice.try_into() {
+        Ok(k) => k,
+        Err(_) => {
+            set_last_error("pap_sandbox_decrypt: key must be 32 bytes");
+            return -1;
+        }
+    };
+    let nonce_slice = unsafe { std::slice::from_raw_parts(nonce, nonce_len) };
+    match pap_sandbox::decrypt(ct, &key, nonce_slice) {
+        Ok(pt) => {
+            let pt_len = pt.len();
+            let pt_ptr = pt.into_boxed_slice();
+            unsafe {
+                *out_plaintext = Box::into_raw(pt_ptr) as *mut u8;
+                *out_plaintext_len = pt_len;
+            }
+            0
+        }
+        Err(e) => {
+            set_last_error(&e.to_string());
+            -1
+        }
+    }
+}
+
+/// Free a byte buffer returned by `pap_sandbox_encrypt` or `pap_sandbox_decrypt`.
+///
+/// # Safety
+/// `ptr` must be a pointer previously returned by one of those functions,
+/// and `len` must be the length that was written to the corresponding `*_len` out-parameter.
+#[no_mangle]
+pub unsafe extern "C" fn pap_sandbox_bytes_free(ptr: *mut u8, len: usize) {
+    if !ptr.is_null() {
+        drop(unsafe { Box::from_raw(std::slice::from_raw_parts_mut(ptr, len)) });
+    }
+}
