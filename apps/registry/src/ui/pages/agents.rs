@@ -168,7 +168,8 @@ fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl I
 
     let removing = move || remove_action.pending().get();
 
-    // Sandbox toggle — loaded once, toggled live.
+    // Sandbox toggle — persisted to DB immediately but only takes effect
+    // on the next server restart (routes are built once at startup).
     let sandbox_enabled = RwSignal::new(true); // default; refreshed below
     let sandbox_loading = RwSignal::new(true);
     let sandbox_error = RwSignal::new(None::<String>);
@@ -224,8 +225,9 @@ fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl I
                                     type="checkbox"
                                     prop:checked=move || sandbox_enabled.get()
                                     on:change=on_sandbox_toggle.clone()
+                                    title="Sandbox enforcement for this agent (restart required to apply)"
                                 />
-                                <span style="font-size:11px; color: var(--text-2)">"Sandbox"</span>
+                                <span style="font-size:11px; color: var(--text-2)">"Sandbox*"</span>
                             </label>
                         }.into_any()
                     }}

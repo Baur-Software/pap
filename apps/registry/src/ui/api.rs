@@ -229,6 +229,18 @@ pub async fn sign_advertisement(
     use base64::Engine;
     use ed25519_dalek::SigningKey;
 
+    use crate::routes::admin::extract_bearer;
+    use crate::state::AppState;
+    use axum::http::HeaderMap;
+
+    let headers: HeaderMap = leptos_axum::extract()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let state = use_context::<AppState>().ok_or_else(|| ServerFnError::new("no state"))?;
+    if !state.is_authorized(extract_bearer(&headers)) {
+        return Err(ServerFnError::new("unauthorized"));
+    }
+
     // Decode private key from base64
     let private_key_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(&private_key_b64)

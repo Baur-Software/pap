@@ -422,14 +422,23 @@ async fn main() -> anyhow::Result<()> {
             .iter()
             .find(|ad| ad.name == *name)
             .cloned();
-        let agent_hash = agent_ad.as_ref().map(|ad| ad.hash()).unwrap_or_default();
-        let agent_did = agent_ad
-            .as_ref()
-            .map(|ad| ad.provider.did.clone())
-            .unwrap_or_default();
+        let Some(agent_ad) = agent_ad else {
+            // No advertisement registered for this handler — skip mounting it.
+            // Without an advertisement we cannot derive a stable hash for the
+            // per-agent sandbox setting key, and all missing-ad agents would
+            // collapse to the same degenerate key "sandbox_disabled:".
+            tracing::warn!(
+                "Skipping agent '{}': no advertisement found in registry",
+                name
+            );
+            continue;
+        };
+        let agent_hash = agent_ad.hash();
+        let agent_did = agent_ad.provider.did.clone();
         let action_type = agent_ad
-            .as_ref()
-            .and_then(|ad| ad.capability.first().cloned())
+            .capability
+            .first()
+            .cloned()
             .unwrap_or_else(|| "schema:Action".to_string());
 
         let setting_key = format!("{SETTING_SANDBOX_DISABLED_PREFIX}{agent_hash}");
@@ -441,6 +450,15 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or(false);
         let sandbox_enabled = !sandbox_disabled;
 
+        // TODO(future): per-agent CapabilityPolicy should be loaded from the
+        // advertisement metadata or a policy DB row via CapabilityPolicy::resolve()
+        // so agents that need network/filesystem access can declare it.  All
+        // agents currently run under the same deny-by-default policy.
+        //
+        // TODO(future): sandbox_enabled is read once at startup.  To make the
+        // admin-UI toggle take effect without a restart, move the per-agent flag
+        // into AppState behind an Arc<RwLock<HashMap<String, bool>>> and read it
+        // at execution time rather than at route-mount time.
         let wrapped: std::sync::Arc<dyn pap_transport::handler::AgentHandler> =
             std::sync::Arc::new(SandboxedHandlerWrapper::new(
                 handler.clone(),
