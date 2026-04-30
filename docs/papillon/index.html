@@ -381,6 +381,18 @@
       </div>
 
       <div class="tech-card">
+        <span class="tech-badge tech-badge-rose">Security</span>
+        <div class="tech-icon">&#x1F512;</div>
+        <div class="tech-title">Execution Sandbox</div>
+        <p class="tech-desc">Every agent runs in an isolated OS process with kernel-enforced capability restrictions &mdash; seccomp-BPF on Linux, pledge(2) on BSD, entitlements on macOS. Execution context (query, disclosures, session token) is AES-256-GCM encrypted before crossing the process boundary and mlock'd to physical RAM. The principal's phase 5 co-signature now covers the capability constraints applied, not just the result &mdash; every execution produces cryptographic proof of its own enforcement boundary.</p>
+        <div class="tech-facts">
+          <span class="tech-fact">seccomp / pledge / entitlements</span>
+          <span class="tech-fact">mlock + AES-256-GCM IPC</span>
+          <span class="tech-fact">co-signed capability proof</span>
+        </div>
+      </div>
+
+      <div class="tech-card">
         <span class="tech-badge tech-badge-teal">Canvas</span>
         <div class="tech-icon">&#x1F5BC;&#xFE0F;</div>
         <div class="tech-title">The Canvas</div>
