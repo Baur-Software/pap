@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 
 use crate::ui::api::{self, AgentEntry};
 
@@ -167,6 +168,25 @@ fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl I
 
     let removing = move || remove_action.pending().get();
 
+    // Sandbox toggle — state is pre-loaded in list_agents to avoid per-card
+    // server function calls during SSR (which serialized N DB round-trips).
+    // Persisted immediately on toggle but only takes effect on server restart.
+    let sandbox_enabled = RwSignal::new(entry.sandbox_enabled);
+    let sandbox_error = RwSignal::new(None::<String>);
+    let on_sandbox_toggle = {
+        let hash_for_toggle = hash.clone();
+        move |_| {
+            let new_val = !sandbox_enabled.get_untracked();
+            let hash = hash_for_toggle.clone();
+            spawn_local(async move {
+                match api::set_agent_sandbox_enabled(hash, new_val).await {
+                    Ok(()) => sandbox_enabled.set(new_val),
+                    Err(e) => sandbox_error.set(Some(e.to_string())),
+                }
+            });
+        }
+    };
+
     view! {
         <div class="agent-card">
             <div style="display:flex; justify-content:space-between; align-items:flex-start">
@@ -176,17 +196,34 @@ fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl I
                         {provider_name} " · " {provider_did}
                     </div>
                 </div>
-                <button
-                    class="btn btn-danger btn-sm"
-                    disabled=removing
-                    on:click=move |_| { remove_action.dispatch(()); }
-                >
-                    {move || if removing() { "…" } else { "Remove" }}
-                </button>
+                <div style="display:flex; gap: var(--sp-sm); align-items:center">
+                    // Sandbox toggle — state arrives pre-loaded in the entry prop.
+                    <label
+                        title="Toggle OS-level sandbox isolation (restart required to apply)"
+                        style="display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none"
+                    >
+                        <input
+                            type="checkbox"
+                            prop:checked=move || sandbox_enabled.get()
+                            on:change=on_sandbox_toggle.clone()
+                        />
+                        <span style="font-size:11px; color: var(--text-2)">"Sandbox*"</span>
+                    </label>
+                    <button
+                        class="btn btn-danger btn-sm"
+                        disabled=removing
+                        on:click=move |_| { remove_action.dispatch(()); }
+                    >
+                        {move || if removing() { "…" } else { "Remove" }}
+                    </button>
+                </div>
             </div>
 
             {move || error.get().map(|e| view! {
                 <div class="error-banner" style="margin-top: var(--sp-xs)">{e}</div>
+            })}
+            {move || sandbox_error.get().map(|e| view! {
+                <div class="error-banner" style="margin-top: var(--sp-xs)">"Sandbox toggle: " {e}</div>
             })}
 
             <div class="agent-meta">

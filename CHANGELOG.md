@@ -1,5 +1,47 @@
 ## [Unreleased]
 
+## [0.8.3] - 2026-04-30
+
+### Added
+
+- **pap-sandbox**: New standalone crate providing OS-level execution isolation for
+  agent processes. Each agent invocation spawns a sandboxed child process with
+  capability restrictions enforced at the kernel level:
+  - **Linux**: seccomp-BPF syscall allowlist derived from `CapabilityPolicy` flags;
+    seccomp rules hash embedded in `CapabilityProof` for verifiable enforcement
+  - **BSD**: pledge(2) promise string applied pre-execution; exact promises
+    recorded in the attestation receipt
+  - **macOS**: Sandbox.framework entitlements applied; entitlement list in receipt
+  - **Windows**: Job Object limits (memory, CPU, I/O) with VirtualLock memory
+    protection
+- **pap-sandbox**: `SecureBuffer` — `mlock(2)` pins execution context pages to
+  physical RAM; `Zeroize` on drop prevents sensitive data lingering in freed pages
+  or swapping to disk while the buffer is alive
+- **pap-sandbox**: AES-256-GCM encrypted IPC — execution context (query,
+  disclosure set, session token) is encrypted before crossing the process boundary;
+  the sandbox child decrypts only at invocation time, then zeroes the plaintext
+- **pap-sandbox**: `AttestationReceipt` + `CapabilityProof` — the full enforcement
+  boundary (seccomp hash, pledge promises, memory protection flags, timeout enforced)
+  is embedded in the PAP phase 5 co-signed receipt. The principal's signature now
+  cryptographically binds to the sandbox constraints, not just the result hash.
+  Every execution produces a transaction-level proof: "this agent ran under these
+  constraints, co-signed by principal DID X"
+- **pap-sandbox**: Three-tier `CapabilityPolicy` cascade — agent-specific override
+  > category default > global default; policy stored per-agent in Papillon's DB
+- **pap-sandbox**: Five Tauri IPC commands for runtime sandbox control:
+  `sandbox_spawn_execution`, `sandbox_get_execution_state`,
+  `sandbox_force_terminate`, `sandbox_get_receipt`, `sandbox_default_policy`
+- **papillon**: Sandbox spawner registered as managed Tauri state at startup;
+  falls back to `NoopSpawner` with structured errors on unsupported platforms
+- **docs**: `pap/index.html` updated with `pap-sandbox` crate card; crate count
+  updated to 11
+
+### Security
+
+- Agent execution context is never resident in unprotected process memory; mlock +
+  AES-256-GCM encryption ensure sensitive fields (query, disclosure set, session
+  token) cannot be read by other processes or recovered from swap
+
 ## [0.8.2] - 2026-04-18
 
 ### Added

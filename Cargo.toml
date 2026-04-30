@@ -20,6 +20,7 @@ members = [
     "crates/pap-credential-store",
     "crates/pap-test-utils",
     "crates/papillon-shared",
+    "crates/pap-sandbox",
     "apps/papillon",
     "apps/registry",
     "benches",
@@ -63,6 +64,7 @@ pap-credential-store = { path = "crates/pap-credential-store" }
 pap-ecash = { path = "crates/pap-ecash" }
 pap-test-utils = { path = "crates/pap-test-utils" }
 papillon-shared = { path = "crates/papillon-shared" }
+pap-sandbox = { path = "crates/pap-sandbox" }
 
 blind-rsa-signatures = "0.14"
 rsa = { version = "0.9", features = ["pem"] }

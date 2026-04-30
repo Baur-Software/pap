@@ -24,7 +24,8 @@ use pap_federation::server::FederationServer;
 use pap_registry::config::Config;
 use pap_registry::db::{DbConfig, NodeIdentity, RegistryStore};
 use pap_registry::routes;
-use pap_registry::state::AppState;
+use pap_registry::state::{AppState, SETTING_SANDBOX_DISABLED_PREFIX};
+use pap_sandbox::{CapabilityPolicy, SandboxedHandlerWrapper};
 use pap_transport::server::AgentServer;
 
 /// Validate the authentication configuration at startup.
@@ -283,6 +284,22 @@ async fn main() -> anyhow::Result<()> {
     info!("CORS: allowed origins = {:?}", cors_origins);
     let cors_allowed_origins: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(cors_origins));
 
+    // Sandbox spawner — falls back to NoopSpawner when OS support is absent.
+    let sandbox_spawner: std::sync::Arc<dyn pap_sandbox::AgentSpawner> =
+        match pap_sandbox::new_spawner() {
+            Ok(s) => {
+                info!(
+                    "Sandbox spawner initialized ({})",
+                    pap_sandbox::detect_os_capabilities().platform
+                );
+                std::sync::Arc::from(s)
+            }
+            Err(e) => {
+                tracing::warn!("Sandbox unavailable on this platform ({e}); agent execution will run unsandboxed");
+                std::sync::Arc::new(pap_sandbox::spawner::NoopSpawner)
+            }
+        };
+
     let app_state = AppState::new(
         registry.clone(),
         store.clone(),
@@ -290,6 +307,7 @@ async fn main() -> anyhow::Result<()> {
         &config,
         cert_fingerprint.clone(),
         cors_allowed_origins.clone(),
+        sandbox_spawner.clone(),
     );
 
     // ── Leptos configuration ──────────────────────────────────────────────────
@@ -390,10 +408,75 @@ async fn main() -> anyhow::Result<()> {
     let assets_dir =
         std::env::var("PAP_ASSETS_DIR").unwrap_or_else(|_| "apps/registry/assets".into());
 
-    // Mount each agent's PAP handshake endpoints under /agents/{slug}/
+    // Mount each agent's PAP handshake endpoints under /agents/{slug}/.
+    // Each handler is wrapped in SandboxedHandlerWrapper; sandboxing is on
+    // by default and can be disabled per-agent via the admin UI (stored in
+    // the settings KV table as "sandbox_disabled:{hash}").
     let mut agent_router = Router::new();
     for (name, handler) in &agent_set.handlers {
-        let agent_server = AgentServer::new(handler.clone(), 0);
+        // Determine sandbox-enabled state: default true, disabled only if
+        // the setting is explicitly "true".
+        let agent_ad = agent_set
+            .registry
+            .all_advertisements()
+            .iter()
+            .find(|ad| ad.name == *name)
+            .cloned();
+        // Derive a stable sandbox settings key from the advertisement hash when
+        // available, or fall back to the agent name so that agents without an
+        // advertisement still each get their own distinct key (not a shared "").
+        // A missing advertisement is unusual but valid — warn so operators can
+        // investigate, but still mount the agent.
+        if agent_ad.is_none() {
+            tracing::warn!(
+                "Agent '{}' has no advertisement in the registry; \
+                 mounting with defaults (no DID, generic action type)",
+                name
+            );
+        }
+        let agent_hash = agent_ad
+            .as_ref()
+            .map(|ad| ad.hash())
+            .unwrap_or_else(|| format!("name:{name}"));
+        let agent_did = agent_ad
+            .as_ref()
+            .map(|ad| ad.provider.did.clone())
+            .unwrap_or_default();
+        let action_type = agent_ad
+            .as_ref()
+            .and_then(|ad| ad.capability.first().cloned())
+            .unwrap_or_else(|| "schema:Action".to_string());
+
+        let setting_key = format!("{SETTING_SANDBOX_DISABLED_PREFIX}{agent_hash}");
+        let sandbox_disabled = store
+            .load_setting(&setting_key)
+            .await
+            .unwrap_or(None)
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        let sandbox_enabled = !sandbox_disabled;
+
+        // TODO(future): per-agent CapabilityPolicy should be loaded from the
+        // advertisement metadata or a policy DB row via CapabilityPolicy::resolve()
+        // so agents that need network/filesystem access can declare it.  All
+        // agents currently run under the same deny-by-default policy.
+        //
+        // TODO(future): sandbox_enabled is read once at startup.  To make the
+        // admin-UI toggle take effect without a restart, move the per-agent flag
+        // into AppState behind an Arc<RwLock<HashMap<String, bool>>> and read it
+        // at execution time rather than at route-mount time.
+        let wrapped: std::sync::Arc<dyn pap_transport::handler::AgentHandler> =
+            std::sync::Arc::new(SandboxedHandlerWrapper::new(
+                handler.clone(),
+                sandbox_spawner.clone(),
+                CapabilityPolicy::default(),
+                sandbox_enabled,
+                agent_did,
+                name.clone(),
+                action_type,
+            ));
+
+        let agent_server = AgentServer::new(wrapped, 0);
         let slug = name.to_lowercase().replace(' ', "-");
         agent_router = agent_router.nest(&format!("/agents/{slug}"), agent_server.router());
     }
