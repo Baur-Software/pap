@@ -3499,8 +3499,7 @@ pub unsafe extern "C" fn pap_spawner_collect_receipt(
     match s.rt.block_on(s.inner.collect_result(h)) {
         Ok((_result, receipt)) => {
             unsafe {
-                *out_receipt =
-                    Box::into_raw(Box::new(PapAttestationReceipt { inner: receipt }))
+                *out_receipt = Box::into_raw(Box::new(PapAttestationReceipt { inner: receipt }))
             };
             0
         }
@@ -3575,9 +3574,7 @@ pub unsafe extern "C" fn pap_attestation_receipt_exit_code(
 /// # Safety
 /// `r` must be a valid non-null pointer.
 #[no_mangle]
-pub unsafe extern "C" fn pap_attestation_receipt_aborted(
-    r: *const PapAttestationReceipt,
-) -> c_int {
+pub unsafe extern "C" fn pap_attestation_receipt_aborted(r: *const PapAttestationReceipt) -> c_int {
     if r.is_null() {
         return -1;
     }

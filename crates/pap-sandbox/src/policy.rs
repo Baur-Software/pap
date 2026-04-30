@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+use crate::os_capabilities;
+use crate::receipt::{CapabilityProof, MemoryProtection};
+
 /// Capability constraints applied to a sandboxed agent execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapabilityPolicy {
@@ -52,6 +55,53 @@ impl CapabilityPolicy {
         agent_override
             .or(category_default)
             .unwrap_or(global_default)
+    }
+
+    /// Build a `CapabilityProof` reflecting what will *actually* be enforced
+    /// on this OS — the intersection of what this policy requests and what the
+    /// OS can deliver at runtime.
+    ///
+    /// Use this when constructing an `AttestationReceipt` so the receipt only
+    /// claims enforcement for mechanisms that actually applied.
+    pub fn effective_enforcement(&self) -> CapabilityProof {
+        let caps = os_capabilities::detect();
+
+        let seccomp_hash = if caps.seccomp_available {
+            self.seccomp_rules.as_deref().map(|r| {
+                use sha2::{Digest, Sha256};
+                hex::encode(Sha256::digest(r.as_bytes()))
+            })
+        } else {
+            None
+        };
+
+        let pledge = if caps.pledge_available {
+            Some(self.effective_pledge_promises())
+        } else {
+            None
+        };
+
+        let entitlements = if caps.sandbox_framework_available {
+            self.entitlements.clone()
+        } else {
+            None
+        };
+
+        CapabilityProof {
+            seccomp_rules_hash: seccomp_hash,
+            pledge_promises: pledge,
+            entitlements_applied: entitlements,
+            memory_protection: MemoryProtection {
+                mlock_applied: caps.mlock_available,
+                encryption_used: true,
+                sensitive_buffers_wiped: true,
+            },
+            timeout_enforced_secs: self.execution_timeout_secs,
+            network_blocked: !self.network_allowed && caps.network_restriction_available,
+            filesystem_restricted: !self.filesystem_allowed
+                && caps.filesystem_restriction_available,
+            subprocess_blocked: !self.subprocess_allowed && caps.process_spawn_available,
+        }
     }
 
     /// Return the pledge(2) promises string derived from boolean flags,

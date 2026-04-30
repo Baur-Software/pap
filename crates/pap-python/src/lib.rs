@@ -1801,7 +1801,9 @@ impl PyMemoryProtection {
     fn __repr__(&self) -> String {
         format!(
             "MemoryProtection(mlock={}, encrypted={}, wiped={})",
-            self.inner.mlock_applied, self.inner.encryption_used, self.inner.sensitive_buffers_wiped
+            self.inner.mlock_applied,
+            self.inner.encryption_used,
+            self.inner.sensitive_buffers_wiped
         )
     }
 }
@@ -1950,10 +1952,7 @@ impl PyAttestationReceipt {
     fn __repr__(&self) -> String {
         format!(
             "AttestationReceipt(session='{}', agent='{}', aborted={}, exit_code={})",
-            self.inner.session_id,
-            self.inner.agent_name,
-            self.inner.aborted,
-            self.inner.exit_code
+            self.inner.session_id, self.inner.agent_name, self.inner.aborted, self.inner.exit_code
         )
     }
 }
@@ -2027,12 +2026,7 @@ impl PyExecutionContext {
     /// `bytes` objects. Use `sandbox_encrypt` to populate them before
     /// calling `SandboxSpawner.spawn`.
     #[new]
-    fn new(
-        agent_did: String,
-        agent_name: String,
-        action_type: String,
-        session_id: String,
-    ) -> Self {
+    fn new(agent_did: String, agent_name: String, action_type: String, session_id: String) -> Self {
         Self {
             inner: pap_sandbox::ExecutionContext {
                 query_enc: Vec::new(),
