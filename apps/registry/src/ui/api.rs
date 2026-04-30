@@ -74,6 +74,14 @@ pub struct AgentAdvertisement {
 pub struct AgentEntry {
     pub hash: String,
     pub ad: AgentAdvertisement,
+    /// Sandbox isolation is enabled for this agent (default: true).
+    /// Populated server-side in list_agents so the UI needs no extra round-trip.
+    #[serde(default = "default_true")]
+    pub sandbox_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -175,8 +183,26 @@ pub async fn list_agents(
     // JSON round-trip: server AgentEntry (pap_marketplace ad) → wire JSON → ui AgentEntry
     let items_json =
         serde_json::to_string(&db_page.items).map_err(|e| ServerFnError::new(e.to_string()))?;
-    let items: Vec<AgentEntry> =
+    let mut items: Vec<AgentEntry> =
         serde_json::from_str(&items_json).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // Populate sandbox_enabled in one pass rather than letting each AgentCard
+    // fire an individual get_agent_sandbox_enabled server function call, which
+    // serializes N DB round-trips into the SSR path and causes timeouts.
+    {
+        use crate::state::SETTING_SANDBOX_DISABLED_PREFIX;
+        for entry in &mut items {
+            let key = format!("{SETTING_SANDBOX_DISABLED_PREFIX}{}", entry.hash);
+            let disabled = state
+                .store
+                .load_setting(&key)
+                .await
+                .unwrap_or(None)
+                .map(|v| v == "true")
+                .unwrap_or(false);
+            entry.sandbox_enabled = !disabled;
+        }
+    }
 
     let total_pages = ((db_page.total as u32).saturating_add(per_page - 1))
         .checked_div(per_page)

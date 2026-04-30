@@ -168,26 +168,11 @@ fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl I
 
     let removing = move || remove_action.pending().get();
 
-    // Sandbox toggle — persisted to DB immediately but only takes effect
-    // on the next server restart (routes are built once at startup).
-    let sandbox_enabled = RwSignal::new(true); // default; refreshed below
-    let sandbox_loading = RwSignal::new(true);
+    // Sandbox toggle — state is pre-loaded in list_agents to avoid per-card
+    // server function calls during SSR (which serialized N DB round-trips).
+    // Persisted immediately on toggle but only takes effect on server restart.
+    let sandbox_enabled = RwSignal::new(entry.sandbox_enabled);
     let sandbox_error = RwSignal::new(None::<String>);
-    {
-        let hash_for_load = hash.clone();
-        spawn_local(async move {
-            match api::get_agent_sandbox_enabled(hash_for_load).await {
-                Ok(enabled) => {
-                    sandbox_enabled.set(enabled);
-                    sandbox_loading.set(false);
-                }
-                Err(e) => {
-                    sandbox_error.set(Some(e.to_string()));
-                    sandbox_loading.set(false);
-                }
-            }
-        });
-    }
     let on_sandbox_toggle = {
         let hash_for_toggle = hash.clone();
         move |_| {
@@ -212,25 +197,18 @@ fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl I
                     </div>
                 </div>
                 <div style="display:flex; gap: var(--sp-sm); align-items:center">
-                    // Sandbox toggle
-                    {move || if sandbox_loading.get() {
-                        view! { <span style="font-size:11px; color: var(--text-3)">"…"</span> }.into_any()
-                    } else {
-                        view! {
-                            <label
-                                title="Toggle OS-level sandbox isolation for this agent"
-                                style="display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none"
-                            >
-                                <input
-                                    type="checkbox"
-                                    prop:checked=move || sandbox_enabled.get()
-                                    on:change=on_sandbox_toggle.clone()
-                                    title="Sandbox enforcement for this agent (restart required to apply)"
-                                />
-                                <span style="font-size:11px; color: var(--text-2)">"Sandbox*"</span>
-                            </label>
-                        }.into_any()
-                    }}
+                    // Sandbox toggle — state arrives pre-loaded in the entry prop.
+                    <label
+                        title="Toggle OS-level sandbox isolation (restart required to apply)"
+                        style="display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none"
+                    >
+                        <input
+                            type="checkbox"
+                            prop:checked=move || sandbox_enabled.get()
+                            on:change=on_sandbox_toggle.clone()
+                        />
+                        <span style="font-size:11px; color: var(--text-2)">"Sandbox*"</span>
+                    </label>
                     <button
                         class="btn btn-danger btn-sm"
                         disabled=removing
