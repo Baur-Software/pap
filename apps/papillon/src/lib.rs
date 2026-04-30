@@ -14,6 +14,9 @@ pub mod state;
 
 use std::sync::atomic::Ordering;
 
+use pap_sandbox::tauri_commands as sandbox_commands;
+use pap_sandbox::tauri_commands::SandboxCommandState;
+
 use episode_store::EpisodeStore;
 use keypair_store::KeypairStore;
 use pap_did::PrincipalKeypair;
@@ -136,6 +139,20 @@ pub fn run() {
             app.manage(episode_store);
 
             app.manage(app_state);
+
+            // Register the platform-appropriate sandbox spawner.
+            // Falls back to a no-op spawner so commands compile and return
+            // structured errors rather than crashing on unsupported platforms.
+            let sandbox_state = match pap_sandbox::new_spawner() {
+                Ok(spawner) => SandboxCommandState { spawner },
+                Err(e) => {
+                    eprintln!("WARN papillon: pap-sandbox unavailable on this platform — {e}");
+                    SandboxCommandState {
+                        spawner: Box::new(pap_sandbox::spawner::NoopSpawner),
+                    }
+                }
+            };
+            app.manage(sandbox_state);
 
             // Spawn federation server on a separate thread with its own tokio runtime.
             // This avoids blocking the Tauri main thread and provides the async context
@@ -264,6 +281,11 @@ pub fn run() {
             commands::chat::join_group_chat,
             commands::chat::record_chat_message,
             commands::chat::mark_message_delivered,
+            sandbox_commands::sandbox_spawn_execution,
+            sandbox_commands::sandbox_get_execution_state,
+            sandbox_commands::sandbox_force_terminate,
+            sandbox_commands::sandbox_get_receipt,
+            sandbox_commands::sandbox_default_policy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");
