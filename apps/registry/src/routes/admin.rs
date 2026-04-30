@@ -665,6 +665,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         router()
             .with_state(state)
@@ -857,6 +858,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -913,6 +915,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -960,6 +963,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -1025,6 +1029,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -1097,6 +1102,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -1143,6 +1149,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -1232,6 +1239,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -1310,6 +1318,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -1455,6 +1464,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -1615,6 +1625,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router().with_state(state);
 
@@ -2054,6 +2065,7 @@ mod tests {
             sync_log: SyncEventLog::default(),
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
+            sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
         };
         let app = router()
             .with_state(state)

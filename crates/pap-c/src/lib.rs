@@ -2626,545 +2626,6 @@ pub unsafe extern "C" fn pap_bytes_free(ptr: *mut u8, len: usize) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::CString;
-
-    /// Helper: create a CString and return its pointer. The CString is returned
-    /// so the caller can keep it alive for the duration of the FFI call.
-    fn c(s: &str) -> CString {
-        CString::new(s).unwrap()
-    }
-
-    /// Helper: create a signed PapAdvertisement via FFI functions.
-    /// Returns (ad, keypair) — caller must free both.
-    unsafe fn make_signed_ad_ffi(
-        name: &str,
-        capabilities: &[&str],
-        requires_disclosure: &[&str],
-    ) -> (*mut PapAdvertisement, *mut PapPrincipalKeypair) {
-        let kp = pap_keypair_generate();
-        assert!(!kp.is_null());
-
-        let name_c = c(name);
-        let provider_c = c("TestCorp");
-        let did_ptr = pap_keypair_did(kp);
-        assert!(!did_ptr.is_null());
-
-        let cap_cstrings: Vec<CString> = capabilities.iter().map(|s| c(s)).collect();
-        let cap_ptrs: Vec<*const c_char> = cap_cstrings.iter().map(|s| s.as_ptr()).collect();
-
-        let disc_cstrings: Vec<CString> = requires_disclosure.iter().map(|s| c(s)).collect();
-        let disc_ptrs: Vec<*const c_char> = disc_cstrings.iter().map(|s| s.as_ptr()).collect();
-
-        let empty: Vec<*const c_char> = vec![];
-
-        let ad = unsafe {
-            pap_advertisement_new(
-                name_c.as_ptr(),
-                provider_c.as_ptr(),
-                did_ptr,
-                cap_ptrs.as_ptr(),
-                cap_ptrs.len(),
-                empty.as_ptr(),
-                0,
-                disc_ptrs.as_ptr(),
-                disc_ptrs.len(),
-                empty.as_ptr(),
-                0,
-            )
-        };
-        assert!(!ad.is_null());
-
-        // Free the DID string we borrowed for construction
-        unsafe { pap_string_free(did_ptr) };
-
-        let rc = unsafe { pap_advertisement_sign(ad, kp) };
-        assert_eq!(rc, 0);
-
-        (ad, kp)
-    }
-
-    #[test]
-    fn client_new_and_free() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-        assert!(!client.is_null());
-        unsafe { pap_marketplace_client_free(client) };
-        // Null free is a no-op
-        unsafe { pap_marketplace_client_free(std::ptr::null_mut()) };
-    }
-
-    #[test]
-    fn client_new_null_url_returns_null() {
-        let client = pap_marketplace_client_new(std::ptr::null());
-        assert!(client.is_null());
-        let err = pap_last_error();
-        assert!(!err.is_null());
-        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
-        assert!(msg.contains("null"), "error: {msg}");
-        unsafe { pap_string_free(err) };
-    }
-
-    #[test]
-    fn query_empty_registry_returns_empty_list() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-        assert!(!client.is_null());
-
-        let query = c(r#"{"action": "schema:SearchAction"}"#);
-        let list = pap_marketplace_query(client, query.as_ptr());
-        assert!(!list.is_null());
-        assert_eq!(pap_agent_list_len(list), 0);
-
-        unsafe { pap_agent_list_free(list) };
-        unsafe { pap_marketplace_client_free(client) };
-    }
-
-    #[test]
-    fn register_and_query_by_action() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-
-        let (ad, kp) = unsafe { make_signed_ad_ffi("Search Agent", &["schema:SearchAction"], &[]) };
-
-        let rc = unsafe { pap_marketplace_client_register(client, ad) };
-        assert_eq!(rc, 0);
-
-        let query = c(r#"{"action": "schema:SearchAction"}"#);
-        let list = pap_marketplace_query(client, query.as_ptr());
-        assert!(!list.is_null());
-        assert_eq!(pap_agent_list_len(list), 1);
-
-        // Check DID
-        let did = pap_agent_list_get_did(list, 0);
-        assert!(!did.is_null());
-        let did_str = unsafe { CStr::from_ptr(did) }.to_str().unwrap();
-        assert!(did_str.starts_with("did:key:z"), "DID: {did_str}");
-
-        // Check name
-        let name = pap_agent_list_get_name(list, 0);
-        assert!(!name.is_null());
-        let name_str = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
-        assert_eq!(name_str, "Search Agent");
-
-        unsafe { pap_agent_list_free(list) };
-        unsafe { pap_advertisement_free(ad) };
-        unsafe { pap_keypair_free(kp) };
-        unsafe { pap_marketplace_client_free(client) };
-    }
-
-    #[test]
-    fn query_satisfiable_filters_by_disclosure() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-
-        let (ad1, kp1) =
-            unsafe { make_signed_ad_ffi("Open Search", &["schema:SearchAction"], &[]) };
-        let (ad2, kp2) = unsafe {
-            make_signed_ad_ffi(
-                "Restricted Search",
-                &["schema:SearchAction"],
-                &["schema:Person.name"],
-            )
-        };
-
-        unsafe {
-            assert_eq!(pap_marketplace_client_register(client, ad1), 0);
-            assert_eq!(pap_marketplace_client_register(client, ad2), 0);
-        }
-
-        // Without available_properties key → query_by_action → both match
-        let q1 = c(r#"{"action": "schema:SearchAction"}"#);
-        let list1 = pap_marketplace_query(client, q1.as_ptr());
-        assert_eq!(pap_agent_list_len(list1), 2);
-        unsafe { pap_agent_list_free(list1) };
-
-        // With empty available_properties → query_satisfiable → only open matches
-        let q2 = c(r#"{"action": "schema:SearchAction", "available_properties": []}"#);
-        let list2 = pap_marketplace_query(client, q2.as_ptr());
-        assert_eq!(pap_agent_list_len(list2), 1);
-        let name = pap_agent_list_get_name(list2, 0);
-        let name_str = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
-        assert_eq!(name_str, "Open Search");
-        unsafe { pap_agent_list_free(list2) };
-
-        // With required property → both match
-        let q3 = c(
-            r#"{"action": "schema:SearchAction", "available_properties": ["schema:Person.name"]}"#,
-        );
-        let list3 = pap_marketplace_query(client, q3.as_ptr());
-        assert_eq!(pap_agent_list_len(list3), 2);
-        unsafe { pap_agent_list_free(list3) };
-
-        unsafe {
-            pap_advertisement_free(ad1);
-            pap_advertisement_free(ad2);
-            pap_keypair_free(kp1);
-            pap_keypair_free(kp2);
-            pap_marketplace_client_free(client);
-        }
-    }
-
-    #[test]
-    fn agent_list_out_of_bounds_returns_null() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-
-        let (ad, kp) = unsafe { make_signed_ad_ffi("Agent", &["schema:SearchAction"], &[]) };
-        unsafe { pap_marketplace_client_register(client, ad) };
-
-        let query = c(r#"{"action": "schema:SearchAction"}"#);
-        let list = pap_marketplace_query(client, query.as_ptr());
-        assert_eq!(pap_agent_list_len(list), 1);
-
-        // Index 0 works
-        assert!(!pap_agent_list_get_did(list, 0).is_null());
-        assert!(!pap_agent_list_get_name(list, 0).is_null());
-
-        // Index 1 is out of bounds
-        assert!(pap_agent_list_get_did(list, 1).is_null());
-        let err = pap_last_error();
-        assert!(!err.is_null());
-        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
-        assert!(msg.contains("out of bounds"), "error: {msg}");
-        unsafe { pap_string_free(err) };
-
-        assert!(pap_agent_list_get_name(list, 1).is_null());
-
-        unsafe {
-            pap_agent_list_free(list);
-            pap_advertisement_free(ad);
-            pap_keypair_free(kp);
-            pap_marketplace_client_free(client);
-        }
-    }
-
-    #[test]
-    fn agent_list_null_returns_safely() {
-        assert_eq!(pap_agent_list_len(std::ptr::null()), 0);
-        assert!(pap_agent_list_get_did(std::ptr::null(), 0).is_null());
-        assert!(pap_agent_list_get_name(std::ptr::null(), 0).is_null());
-    }
-
-    #[test]
-    fn query_invalid_json_returns_null() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-
-        let bad = c("not json");
-        let list = pap_marketplace_query(client, bad.as_ptr());
-        assert!(list.is_null());
-
-        let err = pap_last_error();
-        assert!(!err.is_null());
-        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
-        assert!(msg.contains("invalid capability JSON"), "error: {msg}");
-        unsafe { pap_string_free(err) };
-
-        unsafe { pap_marketplace_client_free(client) };
-    }
-
-    #[test]
-    fn query_missing_action_field_returns_null() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-
-        let bad = c("{}");
-        let list = pap_marketplace_query(client, bad.as_ptr());
-        assert!(list.is_null());
-
-        let err = pap_last_error();
-        assert!(!err.is_null());
-        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
-        assert!(msg.contains("action"), "error: {msg}");
-        unsafe { pap_string_free(err) };
-
-        unsafe { pap_marketplace_client_free(client) };
-    }
-
-    #[test]
-    fn pap_last_error_alias_works() {
-        // Trigger an error
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-        let bad = c("not json");
-        let list = pap_marketplace_query(client, bad.as_ptr());
-        assert!(list.is_null());
-
-        // pap_last_error() returns the message
-        let err = pap_last_error();
-        assert!(!err.is_null());
-        unsafe { pap_string_free(err) };
-
-        // Second call returns null (consumed)
-        let err2 = pap_last_error();
-        assert!(err2.is_null());
-
-        unsafe { pap_marketplace_client_free(client) };
-    }
-
-    #[test]
-    fn register_unsigned_ad_fails() {
-        let url = c("https://registry.example.com");
-        let client = pap_marketplace_client_new(url.as_ptr());
-
-        let name = c("Unsigned Agent");
-        let provider = c("Corp");
-        let did = c("did:key:zunsigned");
-        let cap_str = c("schema:SearchAction");
-        let caps: Vec<*const c_char> = vec![cap_str.as_ptr()];
-        let empty: Vec<*const c_char> = vec![];
-
-        let ad = unsafe {
-            pap_advertisement_new(
-                name.as_ptr(),
-                provider.as_ptr(),
-                did.as_ptr(),
-                caps.as_ptr(),
-                1,
-                empty.as_ptr(),
-                0,
-                empty.as_ptr(),
-                0,
-                empty.as_ptr(),
-                0,
-            )
-        };
-        assert!(!ad.is_null());
-
-        // Don't sign — register should fail
-        let rc = unsafe { pap_marketplace_client_register(client, ad) };
-        assert_eq!(rc, -1);
-
-        let err = pap_last_error();
-        assert!(!err.is_null());
-        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
-        assert!(msg.contains("signed"), "error: {msg}");
-        unsafe { pap_string_free(err) };
-
-        unsafe {
-            pap_advertisement_free(ad);
-            pap_marketplace_client_free(client);
-        }
-    }
-
-    #[test]
-    fn get_last_error_returns_zero_when_no_error() {
-        let mut out: *mut c_char = std::ptr::null_mut();
-        let result = unsafe { pap_get_last_error(&mut out as *mut _) };
-        assert_eq!(result, 0);
-        assert!(out.is_null());
-    }
-
-    // -------------------------------------------------------------------------
-    // pap_get_last_error / pap_last_error_message tests
-    // -------------------------------------------------------------------------
-
-    /// Trigger an error via pap_mandate_from_json (invalid JSON), then verify
-    /// pap_get_last_error returns 1 and writes the error message.
-    #[test]
-    fn get_last_error_returns_one_when_error_set() {
-        let bad_json = c("not valid json at all");
-        // pap_mandate_from_json sets an error and returns null on bad input.
-        let m = pap_mandate_from_json(bad_json.as_ptr());
-        assert!(m.is_null(), "expected null from invalid JSON");
-
-        let mut out: *mut c_char = std::ptr::null_mut();
-        let result = unsafe { pap_get_last_error(&mut out as *mut _) };
-        assert_eq!(result, 1, "expected 1 (error present)");
-        assert!(
-            !out.is_null(),
-            "out should be non-null when error is present"
-        );
-
-        let msg = unsafe { std::ffi::CStr::from_ptr(out) }
-            .to_str()
-            .expect("error message should be valid UTF-8");
-        assert!(!msg.is_empty(), "error message should not be empty");
-
-        unsafe { pap_string_free(out) };
-    }
-
-    /// After reading the error with pap_get_last_error, a second call should
-    /// return 0 (the error is consumed on read — no double-read).
-    #[test]
-    fn get_last_error_consumes_error_on_read() {
-        // Trigger an error
-        let bad_json = c("{invalid}");
-        let m = pap_mandate_from_json(bad_json.as_ptr());
-        assert!(m.is_null());
-
-        // First read — error should be present
-        let mut out: *mut c_char = std::ptr::null_mut();
-        let first = unsafe { pap_get_last_error(&mut out as *mut _) };
-        assert_eq!(first, 1);
-        assert!(!out.is_null());
-        unsafe { pap_string_free(out) };
-
-        // Second read — error should be consumed, nothing to report
-        let mut out2: *mut c_char = std::ptr::null_mut();
-        let second = unsafe { pap_get_last_error(&mut out2 as *mut _) };
-        assert_eq!(second, 0, "error should be consumed after first read");
-        assert!(out2.is_null());
-    }
-
-    /// Passing a null out-param to pap_get_last_error should still return 1
-    /// (error exists) but must not crash or write through a null pointer.
-    #[test]
-    fn get_last_error_with_null_out_param() {
-        // Trigger an error
-        let bad_json = c("totally not json");
-        let m = pap_mandate_from_json(bad_json.as_ptr());
-        assert!(m.is_null());
-
-        // Pass null as out_msg — must not crash
-        let result = unsafe { pap_get_last_error(std::ptr::null_mut()) };
-        assert_eq!(result, 1, "should return 1 even when out_msg is null");
-
-        // Error is consumed even with a null out param — subsequent call returns 0
-        let mut out: *mut c_char = std::ptr::null_mut();
-        let second = unsafe { pap_get_last_error(&mut out as *mut _) };
-        assert_eq!(second, 0);
-        assert!(out.is_null());
-    }
-
-    /// pap_last_error_message() should return the error string and consume it;
-    /// a second call should return null.
-    #[test]
-    fn pap_last_error_message_consumes_error_on_read() {
-        // Trigger an error
-        let bad_json = c("{}broken");
-        let m = pap_mandate_from_json(bad_json.as_ptr());
-        assert!(m.is_null());
-
-        // First call — non-null
-        let msg1 = pap_last_error_message();
-        assert!(
-            !msg1.is_null(),
-            "pap_last_error_message should return non-null when error exists"
-        );
-        unsafe { pap_string_free(msg1) };
-
-        // Second call — null (consumed)
-        let msg2 = pap_last_error_message();
-        assert!(
-            msg2.is_null(),
-            "pap_last_error_message should return null after error is consumed"
-        );
-    }
-
-    /// pap_string_free(NULL) must be a no-op and must not panic.
-    #[test]
-    fn pap_string_free_null_is_safe() {
-        // This must not crash.
-        unsafe { pap_string_free(std::ptr::null_mut()) };
-    }
-
-    /// pap_mandate_from_json with invalid JSON must return null and set an error.
-    #[test]
-    fn mandate_from_json_invalid_returns_null_and_sets_error() {
-        // First consume any stale error from a prior test on this thread.
-        let _ = pap_last_error_message();
-
-        let bad = c("this is not a mandate");
-        let m = pap_mandate_from_json(bad.as_ptr());
-        assert!(
-            m.is_null(),
-            "pap_mandate_from_json should return null for invalid JSON"
-        );
-
-        // The error should have been set
-        let mut out: *mut c_char = std::ptr::null_mut();
-        let rc = unsafe { pap_get_last_error(&mut out as *mut _) };
-        assert_eq!(
-            rc, 1,
-            "an error should be set after a failed pap_mandate_from_json"
-        );
-        assert!(!out.is_null());
-        unsafe { pap_string_free(out) };
-    }
-
-    /// pap_keypair_generate() must return a non-null handle; pap_keypair_free()
-    /// must not panic on a valid handle. Null-free must also be a no-op.
-    #[test]
-    fn keypair_generate_and_free_roundtrip() {
-        let kp = pap_keypair_generate();
-        assert!(
-            !kp.is_null(),
-            "pap_keypair_generate should return a valid handle"
-        );
-        // Free the handle — must not crash
-        unsafe { pap_keypair_free(kp) };
-        // Freeing null is also a no-op
-        unsafe { pap_keypair_free(std::ptr::null_mut()) };
-    }
-
-    /// pap_session_keypair_generate() must return a non-null handle;
-    /// pap_session_keypair_free() must not panic on a valid or null handle.
-    #[test]
-    fn session_keypair_generate_and_free_roundtrip() {
-        let kp = pap_session_keypair_generate();
-        assert!(
-            !kp.is_null(),
-            "pap_session_keypair_generate should return a valid handle"
-        );
-        // Free the handle — must not crash
-        unsafe { pap_session_keypair_free(kp) };
-        // Freeing null is also a no-op
-        unsafe { pap_session_keypair_free(std::ptr::null_mut()) };
-    }
-
-    /// pap_last_error_message_tl() and pap_last_error_message() are both aliases
-    /// that consume the error. Verify both behave identically: return non-null
-    /// after an error is set, then return null on the next call.
-    #[test]
-    fn pap_last_error_message_tl_equivalent_to_pap_last_error_message() {
-        // --- Round 1: use pap_last_error_message_tl ---
-        let bad1 = c("bad json for tl test");
-        let m1 = pap_mandate_from_json(bad1.as_ptr());
-        assert!(m1.is_null());
-
-        let tl_msg = pap_last_error_message_tl();
-        assert!(
-            !tl_msg.is_null(),
-            "pap_last_error_message_tl should return non-null when error exists"
-        );
-        unsafe { pap_string_free(tl_msg) };
-
-        // Error should now be consumed
-        let tl_msg2 = pap_last_error_message_tl();
-        assert!(
-            tl_msg2.is_null(),
-            "pap_last_error_message_tl should return null after consumption"
-        );
-
-        // --- Round 2: use pap_last_error_message ---
-        let bad2 = c("also bad json for message test");
-        let m2 = pap_mandate_from_json(bad2.as_ptr());
-        assert!(m2.is_null());
-
-        let msg = pap_last_error_message();
-        assert!(
-            !msg.is_null(),
-            "pap_last_error_message should return non-null when error exists"
-        );
-        unsafe { pap_string_free(msg) };
-
-        // Error should now be consumed
-        let msg2 = pap_last_error_message();
-        assert!(
-            msg2.is_null(),
-            "pap_last_error_message should return null after consumption"
-        );
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Sandbox execution bindings
-// ---------------------------------------------------------------------------
-
 pub struct PapCapabilityPolicy {
     inner: pap_sandbox::CapabilityPolicy,
 }
@@ -3758,5 +3219,540 @@ pub unsafe extern "C" fn pap_sandbox_decrypt(
 pub unsafe extern "C" fn pap_sandbox_bytes_free(ptr: *mut u8, len: usize) {
     if !ptr.is_null() {
         drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len)) });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    /// Helper: create a CString and return its pointer. The CString is returned
+    /// so the caller can keep it alive for the duration of the FFI call.
+    fn c(s: &str) -> CString {
+        CString::new(s).unwrap()
+    }
+
+    /// Helper: create a signed PapAdvertisement via FFI functions.
+    /// Returns (ad, keypair) — caller must free both.
+    unsafe fn make_signed_ad_ffi(
+        name: &str,
+        capabilities: &[&str],
+        requires_disclosure: &[&str],
+    ) -> (*mut PapAdvertisement, *mut PapPrincipalKeypair) {
+        let kp = pap_keypair_generate();
+        assert!(!kp.is_null());
+
+        let name_c = c(name);
+        let provider_c = c("TestCorp");
+        let did_ptr = pap_keypair_did(kp);
+        assert!(!did_ptr.is_null());
+
+        let cap_cstrings: Vec<CString> = capabilities.iter().map(|s| c(s)).collect();
+        let cap_ptrs: Vec<*const c_char> = cap_cstrings.iter().map(|s| s.as_ptr()).collect();
+
+        let disc_cstrings: Vec<CString> = requires_disclosure.iter().map(|s| c(s)).collect();
+        let disc_ptrs: Vec<*const c_char> = disc_cstrings.iter().map(|s| s.as_ptr()).collect();
+
+        let empty: Vec<*const c_char> = vec![];
+
+        let ad = unsafe {
+            pap_advertisement_new(
+                name_c.as_ptr(),
+                provider_c.as_ptr(),
+                did_ptr,
+                cap_ptrs.as_ptr(),
+                cap_ptrs.len(),
+                empty.as_ptr(),
+                0,
+                disc_ptrs.as_ptr(),
+                disc_ptrs.len(),
+                empty.as_ptr(),
+                0,
+            )
+        };
+        assert!(!ad.is_null());
+
+        // Free the DID string we borrowed for construction
+        unsafe { pap_string_free(did_ptr) };
+
+        let rc = unsafe { pap_advertisement_sign(ad, kp) };
+        assert_eq!(rc, 0);
+
+        (ad, kp)
+    }
+
+    #[test]
+    fn client_new_and_free() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+        assert!(!client.is_null());
+        unsafe { pap_marketplace_client_free(client) };
+        // Null free is a no-op
+        unsafe { pap_marketplace_client_free(std::ptr::null_mut()) };
+    }
+
+    #[test]
+    fn client_new_null_url_returns_null() {
+        let client = pap_marketplace_client_new(std::ptr::null());
+        assert!(client.is_null());
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("null"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+    }
+
+    #[test]
+    fn query_empty_registry_returns_empty_list() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+        assert!(!client.is_null());
+
+        let query = c(r#"{"action": "schema:SearchAction"}"#);
+        let list = pap_marketplace_query(client, query.as_ptr());
+        assert!(!list.is_null());
+        assert_eq!(pap_agent_list_len(list), 0);
+
+        unsafe { pap_agent_list_free(list) };
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn register_and_query_by_action() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let (ad, kp) = unsafe { make_signed_ad_ffi("Search Agent", &["schema:SearchAction"], &[]) };
+
+        let rc = unsafe { pap_marketplace_client_register(client, ad) };
+        assert_eq!(rc, 0);
+
+        let query = c(r#"{"action": "schema:SearchAction"}"#);
+        let list = pap_marketplace_query(client, query.as_ptr());
+        assert!(!list.is_null());
+        assert_eq!(pap_agent_list_len(list), 1);
+
+        // Check DID
+        let did = pap_agent_list_get_did(list, 0);
+        assert!(!did.is_null());
+        let did_str = unsafe { CStr::from_ptr(did) }.to_str().unwrap();
+        assert!(did_str.starts_with("did:key:z"), "DID: {did_str}");
+
+        // Check name
+        let name = pap_agent_list_get_name(list, 0);
+        assert!(!name.is_null());
+        let name_str = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
+        assert_eq!(name_str, "Search Agent");
+
+        unsafe { pap_agent_list_free(list) };
+        unsafe { pap_advertisement_free(ad) };
+        unsafe { pap_keypair_free(kp) };
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn query_satisfiable_filters_by_disclosure() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let (ad1, kp1) =
+            unsafe { make_signed_ad_ffi("Open Search", &["schema:SearchAction"], &[]) };
+        let (ad2, kp2) = unsafe {
+            make_signed_ad_ffi(
+                "Restricted Search",
+                &["schema:SearchAction"],
+                &["schema:Person.name"],
+            )
+        };
+
+        unsafe {
+            assert_eq!(pap_marketplace_client_register(client, ad1), 0);
+            assert_eq!(pap_marketplace_client_register(client, ad2), 0);
+        }
+
+        // Without available_properties key → query_by_action → both match
+        let q1 = c(r#"{"action": "schema:SearchAction"}"#);
+        let list1 = pap_marketplace_query(client, q1.as_ptr());
+        assert_eq!(pap_agent_list_len(list1), 2);
+        unsafe { pap_agent_list_free(list1) };
+
+        // With empty available_properties → query_satisfiable → only open matches
+        let q2 = c(r#"{"action": "schema:SearchAction", "available_properties": []}"#);
+        let list2 = pap_marketplace_query(client, q2.as_ptr());
+        assert_eq!(pap_agent_list_len(list2), 1);
+        let name = pap_agent_list_get_name(list2, 0);
+        let name_str = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
+        assert_eq!(name_str, "Open Search");
+        unsafe { pap_agent_list_free(list2) };
+
+        // With required property → both match
+        let q3 = c(
+            r#"{"action": "schema:SearchAction", "available_properties": ["schema:Person.name"]}"#,
+        );
+        let list3 = pap_marketplace_query(client, q3.as_ptr());
+        assert_eq!(pap_agent_list_len(list3), 2);
+        unsafe { pap_agent_list_free(list3) };
+
+        unsafe {
+            pap_advertisement_free(ad1);
+            pap_advertisement_free(ad2);
+            pap_keypair_free(kp1);
+            pap_keypair_free(kp2);
+            pap_marketplace_client_free(client);
+        }
+    }
+
+    #[test]
+    fn agent_list_out_of_bounds_returns_null() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let (ad, kp) = unsafe { make_signed_ad_ffi("Agent", &["schema:SearchAction"], &[]) };
+        unsafe { pap_marketplace_client_register(client, ad) };
+
+        let query = c(r#"{"action": "schema:SearchAction"}"#);
+        let list = pap_marketplace_query(client, query.as_ptr());
+        assert_eq!(pap_agent_list_len(list), 1);
+
+        // Index 0 works
+        assert!(!pap_agent_list_get_did(list, 0).is_null());
+        assert!(!pap_agent_list_get_name(list, 0).is_null());
+
+        // Index 1 is out of bounds
+        assert!(pap_agent_list_get_did(list, 1).is_null());
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("out of bounds"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        assert!(pap_agent_list_get_name(list, 1).is_null());
+
+        unsafe {
+            pap_agent_list_free(list);
+            pap_advertisement_free(ad);
+            pap_keypair_free(kp);
+            pap_marketplace_client_free(client);
+        }
+    }
+
+    #[test]
+    fn agent_list_null_returns_safely() {
+        assert_eq!(pap_agent_list_len(std::ptr::null()), 0);
+        assert!(pap_agent_list_get_did(std::ptr::null(), 0).is_null());
+        assert!(pap_agent_list_get_name(std::ptr::null(), 0).is_null());
+    }
+
+    #[test]
+    fn query_invalid_json_returns_null() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let bad = c("not json");
+        let list = pap_marketplace_query(client, bad.as_ptr());
+        assert!(list.is_null());
+
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("invalid capability JSON"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn query_missing_action_field_returns_null() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let bad = c("{}");
+        let list = pap_marketplace_query(client, bad.as_ptr());
+        assert!(list.is_null());
+
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("action"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn pap_last_error_alias_works() {
+        // Trigger an error
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+        let bad = c("not json");
+        let list = pap_marketplace_query(client, bad.as_ptr());
+        assert!(list.is_null());
+
+        // pap_last_error() returns the message
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        unsafe { pap_string_free(err) };
+
+        // Second call returns null (consumed)
+        let err2 = pap_last_error();
+        assert!(err2.is_null());
+
+        unsafe { pap_marketplace_client_free(client) };
+    }
+
+    #[test]
+    fn register_unsigned_ad_fails() {
+        let url = c("https://registry.example.com");
+        let client = pap_marketplace_client_new(url.as_ptr());
+
+        let name = c("Unsigned Agent");
+        let provider = c("Corp");
+        let did = c("did:key:zunsigned");
+        let cap_str = c("schema:SearchAction");
+        let caps: Vec<*const c_char> = vec![cap_str.as_ptr()];
+        let empty: Vec<*const c_char> = vec![];
+
+        let ad = unsafe {
+            pap_advertisement_new(
+                name.as_ptr(),
+                provider.as_ptr(),
+                did.as_ptr(),
+                caps.as_ptr(),
+                1,
+                empty.as_ptr(),
+                0,
+                empty.as_ptr(),
+                0,
+                empty.as_ptr(),
+                0,
+            )
+        };
+        assert!(!ad.is_null());
+
+        // Don't sign — register should fail
+        let rc = unsafe { pap_marketplace_client_register(client, ad) };
+        assert_eq!(rc, -1);
+
+        let err = pap_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("signed"), "error: {msg}");
+        unsafe { pap_string_free(err) };
+
+        unsafe {
+            pap_advertisement_free(ad);
+            pap_marketplace_client_free(client);
+        }
+    }
+
+    #[test]
+    fn get_last_error_returns_zero_when_no_error() {
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let result = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(result, 0);
+        assert!(out.is_null());
+    }
+
+    // -------------------------------------------------------------------------
+    // pap_get_last_error / pap_last_error_message tests
+    // -------------------------------------------------------------------------
+
+    /// Trigger an error via pap_mandate_from_json (invalid JSON), then verify
+    /// pap_get_last_error returns 1 and writes the error message.
+    #[test]
+    fn get_last_error_returns_one_when_error_set() {
+        let bad_json = c("not valid json at all");
+        // pap_mandate_from_json sets an error and returns null on bad input.
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null(), "expected null from invalid JSON");
+
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let result = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(result, 1, "expected 1 (error present)");
+        assert!(
+            !out.is_null(),
+            "out should be non-null when error is present"
+        );
+
+        let msg = unsafe { std::ffi::CStr::from_ptr(out) }
+            .to_str()
+            .expect("error message should be valid UTF-8");
+        assert!(!msg.is_empty(), "error message should not be empty");
+
+        unsafe { pap_string_free(out) };
+    }
+
+    /// After reading the error with pap_get_last_error, a second call should
+    /// return 0 (the error is consumed on read — no double-read).
+    #[test]
+    fn get_last_error_consumes_error_on_read() {
+        // Trigger an error
+        let bad_json = c("{invalid}");
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null());
+
+        // First read — error should be present
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let first = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(first, 1);
+        assert!(!out.is_null());
+        unsafe { pap_string_free(out) };
+
+        // Second read — error should be consumed, nothing to report
+        let mut out2: *mut c_char = std::ptr::null_mut();
+        let second = unsafe { pap_get_last_error(&mut out2 as *mut _) };
+        assert_eq!(second, 0, "error should be consumed after first read");
+        assert!(out2.is_null());
+    }
+
+    /// Passing a null out-param to pap_get_last_error should still return 1
+    /// (error exists) but must not crash or write through a null pointer.
+    #[test]
+    fn get_last_error_with_null_out_param() {
+        // Trigger an error
+        let bad_json = c("totally not json");
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null());
+
+        // Pass null as out_msg — must not crash
+        let result = unsafe { pap_get_last_error(std::ptr::null_mut()) };
+        assert_eq!(result, 1, "should return 1 even when out_msg is null");
+
+        // Error is consumed even with a null out param — subsequent call returns 0
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let second = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(second, 0);
+        assert!(out.is_null());
+    }
+
+    /// pap_last_error_message() should return the error string and consume it;
+    /// a second call should return null.
+    #[test]
+    fn pap_last_error_message_consumes_error_on_read() {
+        // Trigger an error
+        let bad_json = c("{}broken");
+        let m = pap_mandate_from_json(bad_json.as_ptr());
+        assert!(m.is_null());
+
+        // First call — non-null
+        let msg1 = pap_last_error_message();
+        assert!(
+            !msg1.is_null(),
+            "pap_last_error_message should return non-null when error exists"
+        );
+        unsafe { pap_string_free(msg1) };
+
+        // Second call — null (consumed)
+        let msg2 = pap_last_error_message();
+        assert!(
+            msg2.is_null(),
+            "pap_last_error_message should return null after error is consumed"
+        );
+    }
+
+    /// pap_string_free(NULL) must be a no-op and must not panic.
+    #[test]
+    fn pap_string_free_null_is_safe() {
+        // This must not crash.
+        unsafe { pap_string_free(std::ptr::null_mut()) };
+    }
+
+    /// pap_mandate_from_json with invalid JSON must return null and set an error.
+    #[test]
+    fn mandate_from_json_invalid_returns_null_and_sets_error() {
+        // First consume any stale error from a prior test on this thread.
+        let _ = pap_last_error_message();
+
+        let bad = c("this is not a mandate");
+        let m = pap_mandate_from_json(bad.as_ptr());
+        assert!(
+            m.is_null(),
+            "pap_mandate_from_json should return null for invalid JSON"
+        );
+
+        // The error should have been set
+        let mut out: *mut c_char = std::ptr::null_mut();
+        let rc = unsafe { pap_get_last_error(&mut out as *mut _) };
+        assert_eq!(
+            rc, 1,
+            "an error should be set after a failed pap_mandate_from_json"
+        );
+        assert!(!out.is_null());
+        unsafe { pap_string_free(out) };
+    }
+
+    /// pap_keypair_generate() must return a non-null handle; pap_keypair_free()
+    /// must not panic on a valid handle. Null-free must also be a no-op.
+    #[test]
+    fn keypair_generate_and_free_roundtrip() {
+        let kp = pap_keypair_generate();
+        assert!(
+            !kp.is_null(),
+            "pap_keypair_generate should return a valid handle"
+        );
+        // Free the handle — must not crash
+        unsafe { pap_keypair_free(kp) };
+        // Freeing null is also a no-op
+        unsafe { pap_keypair_free(std::ptr::null_mut()) };
+    }
+
+    /// pap_session_keypair_generate() must return a non-null handle;
+    /// pap_session_keypair_free() must not panic on a valid or null handle.
+    #[test]
+    fn session_keypair_generate_and_free_roundtrip() {
+        let kp = pap_session_keypair_generate();
+        assert!(
+            !kp.is_null(),
+            "pap_session_keypair_generate should return a valid handle"
+        );
+        // Free the handle — must not crash
+        unsafe { pap_session_keypair_free(kp) };
+        // Freeing null is also a no-op
+        unsafe { pap_session_keypair_free(std::ptr::null_mut()) };
+    }
+
+    /// pap_last_error_message_tl() and pap_last_error_message() are both aliases
+    /// that consume the error. Verify both behave identically: return non-null
+    /// after an error is set, then return null on the next call.
+    #[test]
+    fn pap_last_error_message_tl_equivalent_to_pap_last_error_message() {
+        // --- Round 1: use pap_last_error_message_tl ---
+        let bad1 = c("bad json for tl test");
+        let m1 = pap_mandate_from_json(bad1.as_ptr());
+        assert!(m1.is_null());
+
+        let tl_msg = pap_last_error_message_tl();
+        assert!(
+            !tl_msg.is_null(),
+            "pap_last_error_message_tl should return non-null when error exists"
+        );
+        unsafe { pap_string_free(tl_msg) };
+
+        // Error should now be consumed
+        let tl_msg2 = pap_last_error_message_tl();
+        assert!(
+            tl_msg2.is_null(),
+            "pap_last_error_message_tl should return null after consumption"
+        );
+
+        // --- Round 2: use pap_last_error_message ---
+        let bad2 = c("also bad json for message test");
+        let m2 = pap_mandate_from_json(bad2.as_ptr());
+        assert!(m2.is_null());
+
+        let msg = pap_last_error_message();
+        assert!(
+            !msg.is_null(),
+            "pap_last_error_message should return non-null when error exists"
+        );
+        unsafe { pap_string_free(msg) };
+
+        // Error should now be consumed
+        let msg2 = pap_last_error_message();
+        assert!(
+            msg2.is_null(),
+            "pap_last_error_message should return null after consumption"
+        );
     }
 }
