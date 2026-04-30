@@ -5054,6 +5054,7 @@ dependencies = [
  "tauri",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
  "uuid",
  "x25519-dalek",
  "zeroize",
