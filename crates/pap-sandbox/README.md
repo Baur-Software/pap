@@ -332,27 +332,18 @@ cargo test test_entitlements_network_block -- --nocapture
 cargo test test_job_objects_cpu_limit -- --nocapture
 ```
 
-## Performance & Overhead
+## Performance
 
-Sandbox execution adds minimal overhead:
+Sandbox execution introduces process spawning overhead:
 
-| Operation | Overhead | Notes |
-|-----------|----------|-------|
-| Process spawn | ~5-10ms | Async, includes capability loading |
-| Policy evaluation | <1ms | Cached, cascade is O(1) |
-| Context encryption | ~1-2ms | AES-256-GCM per-message |
-| Poll cycle | <1ms | Non-blocking, runs in async loop |
-| Memory mlock | ~0.5-1ms | One-time, per spawned process |
+- **Process spawn** is the dominant cost—OS-dependent (Linux ~5-10ms, varies by hardware)
+- **Capability enforcement** (seccomp, pledge, entitlements) is loaded at spawn time, not per-syscall
+- **Encryption/decryption** of execution context uses AES-256-GCM (fast, hardware-accelerated on modern CPUs)
+- **Policy evaluation** is O(1)—cascade resolution is a simple fallback chain
 
-For a typical 100ms agent execution, total overhead is ~15-20ms (15-20% impact on short tasks, negligible on longer operations). This can be tuned per policy:
+The actual overhead depends heavily on OS and hardware. Measure on your target platform before tuning. Process spawning dominates; other operations are negligible compared to typical agent execution time.
 
-```rust
-let policy = CapabilityPolicy {
-    execution_timeout_secs: 60,
-    mlock_enabled: false,  // Skip mlock for less sensitive agents
-    ..Default::default()
-};
-```
+For mission-critical latency paths, sandbox can be disabled per-agent via policy (trusted internal agents, etc.). Tradeoff: no isolation, but attestation receipts still include this fact for audit visibility.
 
 ## Security Model
 
@@ -397,12 +388,12 @@ Auditable: "Show me all executions of agent X under policy Y signed by principal
 
 ## Platform Support
 
-| Platform | Status | Isolation | Overhead | Notes |
-|----------|--------|-----------|----------|-------|
-| **Linux** | ✅ Production | seccomp-bpf | 5-8% | Deny-list + allowlist filters |
-| **BSD** | ✅ Production | pledge(2) | 2-4% | Simpler, covers most use cases |
-| **macOS** | ✅ Production | Entitlements + SIP | 8-12% | Depends on user SIP settings |
-| **Windows** | ✅ Production | Job Objects | 3-6% | Requires Windows 6.1+ |
+| Platform | Status | Isolation | Notes |
+|----------|--------|-----------|-------|
+| **Linux** | ✅ Production | seccomp-bpf | BPF filters (deny-list + allowlist) |
+| **BSD** | ✅ Production | pledge(2) | Simpler capability model, covers most use cases |
+| **macOS** | ✅ Production | Entitlements + SIP | Security settings depend on user configuration |
+| **Windows** | ✅ Production | Job Objects | Resource limits, process isolation |
 
 Fallback: If sandbox fails to initialize, agent runs unsandboxed but receipt includes warning for audit visibility.
 
