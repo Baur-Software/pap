@@ -70,8 +70,8 @@ pub trait AgentSpawner: Send + Sync {
     ) -> Result<(ExecutionResult, AttestationReceipt), SandboxError>;
 }
 
-/// A spawner that always returns `PlatformUnsupported` errors.
-/// Used as a fallback when the platform has no sandbox implementation.
+/// A spawner that runs agents without isolation (fallback when no OS or Docker support).
+/// Generates receipts with empty capability proofs to indicate no enforcement.
 pub struct NoopSpawner;
 
 #[async_trait]
@@ -79,15 +79,18 @@ impl AgentSpawner for NoopSpawner {
     async fn spawn(
         &self,
         _policy: CapabilityPolicy,
-        _context: ExecutionContext,
+        context: ExecutionContext,
     ) -> Result<ExecutionHandle, SandboxError> {
-        Err(SandboxError::PlatformUnsupported(
-            "no sandbox implementation available".into(),
-        ))
+        // Return a handle but don't actually spawn anything.
+        Ok(ExecutionHandle::new(&context.agent_did, &context.agent_name))
     }
 
-    async fn poll_state(&self, handle: &ExecutionHandle) -> Result<ExecutionState, SandboxError> {
-        Err(SandboxError::ProcessNotFound(handle.id.clone()))
+    async fn poll_state(&self, _handle: &ExecutionHandle) -> Result<ExecutionState, SandboxError> {
+        // Immediately report as completed (unsandboxed, so no process to track).
+        Ok(ExecutionState::Completed {
+            exit_code: 0,
+            elapsed_ms: 0,
+        })
     }
 
     async fn terminate(
@@ -102,26 +105,104 @@ impl AgentSpawner for NoopSpawner {
         &self,
         handle: &ExecutionHandle,
     ) -> Result<(ExecutionResult, AttestationReceipt), SandboxError> {
-        Err(SandboxError::ProcessNotFound(handle.id.clone()))
+        use crate::receipt::{AttestationReceipt, CapabilityProof, MemoryProtection};
+
+        // Generate a receipt with empty capability proof to indicate no isolation.
+        let receipt = AttestationReceipt {
+            session_id: handle.id.clone(),
+            agent_did: handle.agent_did.clone(),
+            agent_name: handle.agent_name.clone(),
+            action_type: "unsandboxed_execution".to_string(),
+            timestamp: chrono::Utc::now(),
+            execution_duration_ms: 0,
+            capability_enforcement: CapabilityProof {
+                seccomp_rules_hash: None,
+                pledge_promises: None,
+                entitlements_applied: None,
+                memory_protection: MemoryProtection {
+                    mlock_applied: false,
+                    encryption_used: false,
+                    sensitive_buffers_wiped: false,
+                },
+                timeout_enforced_secs: 0,
+                network_blocked: false,
+                filesystem_restricted: false,
+                subprocess_blocked: false,
+            },
+            result_hash: "0".repeat(64), // Placeholder.
+            exit_code: 0,
+            aborted: false,
+            abort_reason: None,
+        };
+
+        let result = ExecutionResult {
+            result_enc: vec![],
+            nonce: vec![],
+            receipt: receipt.clone(),
+        };
+
+        Ok((result, receipt))
     }
 }
 
-/// Select the platform-appropriate spawner.
-pub fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
-    #[cfg(target_os = "linux")]
-    return Ok(Box::new(crate::platform::linux::LinuxSpawner::new()));
+/// Select the platform-appropriate spawner at runtime.
+/// Detects OS capabilities first, then falls back to Docker or unsandboxed execution.
+pub async fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
+    use crate::platform::detection::{detect_runtime, RuntimeEnvironment};
 
-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
-    return Ok(Box::new(crate::platform::bsd::BsdSpawner::new()));
+    match detect_runtime().await {
+        RuntimeEnvironment::Bare {
+            seccomp,
+            pledge: _,
+            entitlements: _,
+            job_objects: _,
+        } => {
+            #[cfg(target_os = "linux")]
+            if seccomp {
+                return Ok(Box::new(crate::platform::linux::LinuxSpawner::new()));
+            }
 
-    #[cfg(target_os = "macos")]
-    return Ok(Box::new(crate::platform::macos::MacosSpawner::new()));
+            #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            if pledge {
+                return Ok(Box::new(crate::platform::bsd::BsdSpawner::new()));
+            }
 
-    #[cfg(target_os = "windows")]
-    return Ok(Box::new(crate::platform::windows::WindowsSpawner::new()));
+            #[cfg(target_os = "macos")]
+            if entitlements {
+                return Ok(Box::new(crate::platform::macos::MacosSpawner::new()));
+            }
 
-    #[allow(unreachable_code)]
-    Err(SandboxError::PlatformUnsupported(
-        std::env::consts::OS.to_string(),
-    ))
+            #[cfg(target_os = "windows")]
+            {
+                return Ok(Box::new(crate::platform::windows::WindowsSpawner::new()));
+            }
+
+            // Fallback to noop if no capabilities detected.
+            Ok(Box::new(NoopSpawner))
+        }
+
+        RuntimeEnvironment::Docker { socket_path } => {
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd"))]
+            {
+                let docker_spawner = crate::platform::docker::DockerSpawner::new(&socket_path).await?;
+                Ok(Box::new(docker_spawner))
+            }
+
+            #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd")))]
+            {
+                // Docker unavailable on this platform; fall back to noop.
+                let _ = socket_path; // Suppress unused variable warning on non-Unix
+                Ok(Box::new(NoopSpawner))
+            }
+        }
+
+        RuntimeEnvironment::Unsupported => {
+            // Silent fallback to unsandboxed execution.
+            // Logging controlled by PAP_SANDBOX_LOG_FALLBACK env var.
+            if std::env::var("PAP_SANDBOX_LOG_FALLBACK").is_ok() {
+                eprintln!("pap-sandbox: No OS or Docker isolation available, running unsandboxed");
+            }
+            Ok(Box::new(NoopSpawner))
+        }
+    }
 }

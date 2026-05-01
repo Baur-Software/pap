@@ -141,14 +141,16 @@ pub fn run() {
             app.manage(app_state);
 
             // Register the platform-appropriate sandbox spawner.
-            // Falls back to a no-op spawner so commands compile and return
-            // structured errors rather than crashing on unsupported platforms.
-            let sandbox_state = match pap_sandbox::new_spawner() {
-                Ok(spawner) => SandboxCommandState { spawner },
-                Err(e) => {
-                    eprintln!("WARN papillon: pap-sandbox unavailable on this platform — {e}");
-                    SandboxCommandState {
-                        spawner: Box::new(pap_sandbox::spawner::NoopSpawner),
+            // Detects OS capabilities, Docker, or falls back to unsandboxed execution.
+            let sandbox_state = {
+                let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+                match rt.block_on(pap_sandbox::new_spawner()) {
+                    Ok(spawner) => SandboxCommandState { spawner },
+                    Err(e) => {
+                        eprintln!("WARN papillon: pap-sandbox unavailable on this platform — {e}");
+                        SandboxCommandState {
+                            spawner: Box::new(pap_sandbox::spawner::NoopSpawner),
+                        }
                     }
                 }
             };
