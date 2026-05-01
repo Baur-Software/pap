@@ -180,11 +180,22 @@ fn AgentsTab() -> impl IntoView {
                 <span class="source-count">{agent_count}</span>
             </div>
             <div class="agents-list">
-                <For
-                    each=filtered_agents
-                    key=|a| format!("{}-{}", a.name, a.content_hash)
-                    children=|agent| view! { <AgentCard agent=agent /> }
-                />
+                <Show
+                    when=move || agent_count() != 0
+                    fallback=|| view! {
+                        <div class="agents-empty-state">
+                            <span class="agents-empty-icon">"\u{26a1}"</span>
+                            <span class="agents-empty-text">"No agents loaded."</span>
+                            <span class="agents-empty-hint">"Connect to a registry from the Browse page."</span>
+                        </div>
+                    }
+                >
+                    <For
+                        each=filtered_agents
+                        key=|a| format!("{}-{}", a.name, a.content_hash)
+                        children=|agent| view! { <AgentCard agent=agent /> }
+                    />
+                </Show>
             </div>
         </div>
     }

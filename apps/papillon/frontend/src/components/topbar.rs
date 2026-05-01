@@ -75,7 +75,7 @@ pub fn TopBar() -> impl IntoView {
                     class="canvas-flip-toggle"
                     on:click=toggle_side
                 >
-                    {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
+                    {move || if is_back() { "\u{27f3} Canvas" } else { "\u{27f3} Workflow" }}
                 </button>
                 {
                     let aside = use_context::<AsideOpen>();

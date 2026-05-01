@@ -452,8 +452,21 @@ impl PapillonService for WebService {
             }
         }
 
-        // The registry catalog was seeded in new(). initialize() is called
-        // post-construction, so no additional seeding is required here.
+        // Seed the embedded catalog if the registry is still empty.
+        // This handles the `WebService::empty()` construction path used by the
+        // browser-mode app startup — `empty()` creates an unseeded in-memory
+        // registry, so we seed here on first call to `initialize()`.
+        // Safe to hold MutexGuard across await: WASM is single-threaded.
+        #[cfg(feature = "wasm")]
+        {
+            let mut registry = self
+                .registry
+                .lock()
+                .map_err(|e| format!("registry lock: {e}"))?;
+            if registry.agent_count() == 0 {
+                let _ = registry.seed_default_catalog().await;
+            }
+        }
 
         Ok(())
     }

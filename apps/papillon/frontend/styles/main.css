@@ -6883,6 +6883,20 @@ body {
   gap: 6px;
 }
 
+/* ── Agents empty state ──────────────────────────────────────────────────── */
+.agents-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 16px;
+  color: var(--text-muted, rgba(255,255,255,0.35));
+  text-align: center;
+}
+.agents-empty-icon { font-size: 28px; }
+.agents-empty-text { font-size: 13px; font-weight: 500; }
+.agents-empty-hint { font-size: 11px; opacity: 0.7; }
+
 /* ── Agent Card (Sources panel) ─────────────────────────────────────────── */
 .agent-card {
   background: var(--surface-2, rgba(255,255,255,0.04));

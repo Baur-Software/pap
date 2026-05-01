@@ -198,9 +198,19 @@ pub fn App() -> impl IntoView {
             // No backend orchestrator in browser mode
             orchestrator.status.set(OrchestratorStatus::Unconfigured);
 
-            // Browser mode has no embedded registry — the user connects to
-            // one from the Browse page (standalone registry app or remote).
-            // Nothing to auto-connect to here.
+            // Seed RegistryState.agents from the embedded local catalog so the
+            // Agents tab and WASM handshake have agents on first load without a
+            // Browse-page round-trip. Uses the service directly to avoid the
+            // browser-mode fetch path in RegistryState::connect_to() which would
+            // try to HTTP-GET "https://local/api/browse" and fail.
+            if let Ok(agents) = svc.list_registry_agents("pap://local").await {
+                registry_state.info.set(Some(papillon_shared::RegistryInfo {
+                    url: "pap://local".to_owned(),
+                    agent_count: agents.len(),
+                    peer_count: 0,
+                }));
+                registry_state.agents.set(agents);
+            }
         });
     }
 

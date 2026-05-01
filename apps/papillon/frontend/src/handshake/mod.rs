@@ -381,7 +381,7 @@ pub async fn run_prompt(
     let (action_type, preferred_agent, query) = intent::detect_intent(&text);
 
     // 3. Resolve agent from RegistryState (populated via Browse page)
-    let agents = registry.agents.get();
+    let agents = registry.agents.get_untracked();
 
     let agent = agents
         .iter()
