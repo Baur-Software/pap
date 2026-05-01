@@ -594,12 +594,12 @@ impl AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        // Fallback: use temp databases (data lost on restart).
+        // Fallback: use in-memory databases (data lost on restart).
         // In production, lib.rs uses AppState::new() with app_data_dir.
-        let db =
-            crate::db::open_db(&PathBuf::from("papillon.db")).expect("failed to open fallback db");
-        let profiles_db = ProfilesDatabase::open(&PathBuf::from("profiles.db"))
-            .expect("failed to open fallback profiles db");
+        // Using in-memory dbs avoids lock contention in parallel test execution.
+        let db = crate::db::NativeDatabase::open_memory().expect("failed to open fallback db");
+        let profiles_db =
+            ProfilesDatabase::open_memory().expect("failed to open fallback profiles db");
         let episode_db = EpisodeDb::open_in_memory().expect("failed to open in-memory episode_db");
         Self::with_db(
             Arc::new(db),
