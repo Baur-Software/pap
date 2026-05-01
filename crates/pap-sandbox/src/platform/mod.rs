@@ -1,3 +1,8 @@
+pub mod detection;
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd"))]
+pub mod docker;
+
 #[cfg(target_os = "linux")]
 pub mod linux;
 

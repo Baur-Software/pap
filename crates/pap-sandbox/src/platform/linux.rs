@@ -3,7 +3,8 @@
 //! Capability enforcement:
 //! - seccomp deny-all + allowlist derived from CapabilityPolicy
 //! - process is killed by SIGKILL on timeout or user termination
-//! - IPC via Unix pipe pair (stdout/stdin of child)
+//!
+//! IPC via stdin (parent→child: ExecutionContext JSON) and stdout (child→parent: ExecutionResult JSON).
 
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -12,6 +13,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;
 
 use crate::error::SandboxError;
@@ -40,14 +42,10 @@ impl LinuxSpawner {
     }
 
     fn build_seccomp_hash(policy: &CapabilityPolicy) -> Option<String> {
-        // Derive a deterministic hash from the policy flags —
-        // this is what gets embedded in the CapabilityProof.
-        // Real deployments would hash the actual BPF bytecode loaded into the kernel.
         if let Some(ref rules) = policy.seccomp_rules {
             let digest = Sha256::digest(rules.as_bytes());
             Some(hex::encode(digest))
         } else {
-            // Hash the boolean policy flags as a fingerprint.
             let repr = format!(
                 "linux:net={},fs={},proc={},timeout={}",
                 policy.network_allowed,
@@ -76,6 +74,60 @@ impl LinuxSpawner {
             subprocess_blocked: !policy.subprocess_allowed,
         }
     }
+
+    async fn reap_child_output(
+        &self,
+        handle_id: &str,
+        mut child: tokio::process::Child,
+        exit_code: i32,
+        elapsed_ms: u64,
+        _policy: &CapabilityPolicy,
+    ) -> ExecutionState {
+        let stdout_data = match child.stdout.take() {
+            Some(stdout) => {
+                use tokio::io::AsyncReadExt;
+                let mut buf = Vec::new();
+                let mut reader = tokio::io::BufReader::new(stdout);
+                match reader.read_to_end(&mut buf).await {
+                    Ok(_) => buf,
+                    Err(_) => vec![],
+                }
+            }
+            None => vec![],
+        };
+
+        if exit_code != 0 || stdout_data.is_empty() {
+            return ExecutionState::Failed {
+                reason: format!(
+                    "child exited with code {exit_code}, stdout {} bytes",
+                    stdout_data.len()
+                ),
+                elapsed_ms,
+            };
+        }
+
+        match serde_json::from_slice::<ExecutionResult>(&stdout_data) {
+            Ok(exec_result) => {
+                let receipt = exec_result.receipt.clone();
+                let mut results = self.results.write().await;
+                results.insert(handle_id.to_string(), (exec_result, receipt));
+                ExecutionState::Completed {
+                    exit_code,
+                    elapsed_ms,
+                }
+            }
+            Err(e) => {
+                let _ = e;
+                ExecutionState::Failed {
+                    reason: format!(
+                        "child exited OK but stdout is not valid ExecutionResult JSON ({} bytes)",
+                        stdout_data.len()
+                    ),
+                    elapsed_ms,
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -87,14 +139,10 @@ impl AgentSpawner for LinuxSpawner {
     ) -> Result<ExecutionHandle, SandboxError> {
         let handle = ExecutionHandle::new(&context.agent_did, &context.agent_name);
 
-        // Serialize context to pass to child over stdin.
         let context_json =
             serde_json::to_string(&context).map_err(|e| SandboxError::IpcError(e.to_string()))?;
 
-        // Spawn the pap-sandbox-worker binary (or current binary with --sandbox-worker flag).
-        // The worker reads context from stdin, applies seccomp, executes the agent,
-        // and writes ExecutionResult to stdout.
-        let child = tokio::process::Command::new(
+        let mut child = tokio::process::Command::new(
             std::env::current_exe().unwrap_or_else(|_| "pap-sandbox-worker".into()),
         )
         .arg("--sandbox-worker")
@@ -107,57 +155,71 @@ impl AgentSpawner for LinuxSpawner {
         .spawn()
         .map_err(|e| SandboxError::SpawnError(e.to_string()))?;
 
+        // Write ExecutionContext JSON to child stdin, then close it so the child
+        // sees EOF and can proceed with execution.
+        {
+            let stdin = child
+                .stdin
+                .as_mut()
+                .ok_or_else(|| SandboxError::IpcError("failed to open child stdin pipe".into()))?;
+            stdin
+                .write_all(context_json.as_bytes())
+                .await
+                .map_err(|e| {
+                    SandboxError::IpcError(format!("failed to write to child stdin: {e}"))
+                })?;
+            stdin
+                .shutdown()
+                .await
+                .map_err(|e| SandboxError::IpcError(format!("failed to close child stdin: {e}")))?;
+        }
+        // stdin is now closed — child will read EOF and begin execution.
+
         let record = ProcessRecord {
             child,
             started: Instant::now(),
-            policy: policy.clone(),
+            policy,
         };
 
         let mut procs = self.processes.write().await;
         procs.insert(handle.id.clone(), record);
 
-        // Write context to child stdin asynchronously.
-        // In a full implementation this would use tokio::io::AsyncWriteExt.
-        // For now we log the spawn for wiring purposes.
-        let _ = context_json; // used when full IPC is wired
-
         Ok(handle)
     }
 
     async fn poll_state(&self, handle: &ExecutionHandle) -> Result<ExecutionState, SandboxError> {
-        let results = self.results.read().await;
-        if results.contains_key(&handle.id) {
-            return Ok(ExecutionState::Completed {
-                exit_code: 0,
-                elapsed_ms: 0,
-            });
+        {
+            let results = self.results.read().await;
+            if let Some((ref result, _)) = results.get(&handle.id) {
+                let exit_code = result.receipt.exit_code;
+                return Ok(ExecutionState::Completed {
+                    exit_code,
+                    elapsed_ms: result.receipt.execution_duration_ms,
+                });
+            }
         }
-        drop(results);
 
         let mut procs = self.processes.write().await;
         if let Some(record) = procs.get_mut(&handle.id) {
             let elapsed_ms = record.started.elapsed().as_millis() as u64;
 
-            // Check if timeout exceeded.
             if elapsed_ms > record.policy.execution_timeout_secs * 1000 {
                 let _ = record.child.kill().await;
                 procs.remove(&handle.id);
                 return Ok(ExecutionState::TimedOut { elapsed_ms });
             }
 
-            // Try to reap the process non-blockingly.
             match record.child.try_wait() {
                 Ok(Some(status)) => {
                     let code = status.code().unwrap_or(-1);
-                    let elapsed = elapsed_ms;
-                    procs.remove(&handle.id);
-                    return Ok(ExecutionState::Completed {
-                        exit_code: code,
-                        elapsed_ms: elapsed,
-                    });
+                    let policy = record.policy.clone();
+                    let child = procs.remove(&handle.id).unwrap().child;
+                    drop(procs);
+                    return Ok(self
+                        .reap_child_output(&handle.id, child, code, elapsed_ms, &policy)
+                        .await);
                 }
                 Ok(None) => {
-                    // Still running.
                     let pid = record.child.id().unwrap_or(0);
                     return Ok(ExecutionState::Running { pid, elapsed_ms });
                 }
@@ -183,15 +245,13 @@ impl AgentSpawner for LinuxSpawner {
                 .await
                 .map_err(|e| SandboxError::SpawnError(e.to_string()))?;
         }
-        // Store an aborted receipt so collect_result can return something meaningful.
-        let elapsed_ms = 0u64;
         let proof = Self::build_proof(&CapabilityPolicy::default());
         let receipt = AttestationReceipt::killed(
             handle.id.clone(),
             handle.agent_did.clone(),
             handle.agent_name.clone(),
             "unknown".to_string(),
-            elapsed_ms,
+            0,
             reason.to_string(),
             proof,
         );

@@ -1,0 +1,82 @@
+version: "3.9"
+
+# Full PAP stack with agent isolation in Docker.
+#
+# On host:
+#   docker-compose up
+#
+# Papillon will be available at http://localhost:8080
+#
+# When agents execute, pap-sandbox detects:
+# 1. Running in Docker (/.dockerenv exists)
+# 2. /var/run/docker.sock is mounted and accessible
+# 3. Uses DockerSpawner to spawn agent containers with restricted capabilities
+#
+# Agent isolation via Docker flags:
+# - --network=none (no network access unless explicitly allowed)
+# - --cap-drop=SYS_FORK/SYS_CLONE (no subprocess spawning unless allowed)
+# - --read-only root filesystem (unless filesystem_allowed=true)
+# - --memory=256m (resource limits)
+
+services:
+  # Papillon: reference PAP client and agent orchestrator
+  papillon:
+    image: baursoftware/papillon:latest
+    container_name: papillon
+    ports:
+      - "8080:8080"
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    volumes:
+      # CRITICAL: Mount Docker socket for sibling container spawning
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Optional: Mount config/data volume for persistence
+      # - papillon-data:/app/data
+    environment:
+      # Enable Docker spawner for agents (auto-detected, but can be explicit)
+      - PAP_SANDBOX_DOCKER_ENABLED=true
+      # Optional: log platform detection (helpful for debugging)
+      - PAP_SANDBOX_LOG_FALLBACK=0
+      # Optionally set RUST_LOG for agent execution debugging
+      # - RUST_LOG=debug
+    depends_on:
+      - registry
+    networks:
+      - pap-network
+
+  # Chrysalis: federated agent registry
+  registry:
+    image: baursoftware/chrysalis:latest
+    container_name: chrysalis-registry
+    ports:
+      - "3000:3000"
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    environment:
+      # Enable Docker spawner for agent execution
+      - PAP_SANDBOX_DOCKER_ENABLED=true
+      - PAP_SANDBOX_LOG_FALLBACK=0
+      # Registry database
+      - DATABASE_URL=sqlite:///app/registry.db
+    volumes:
+      # CRITICAL: Mount Docker socket for sibling container spawning
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Registry data persistence
+      - registry-data:/app
+    networks:
+      - pap-network
+
+  # Optional: pap-agent-runner image (on-demand agent executor)
+  # This image is pulled by pap-sandbox when agents need to execute.
+  # See Dockerfile for build instructions.
+  # Agents typically don't run as services; they spawn on-demand via Docker API.
+
+volumes:
+  papillon-data:
+  registry-data:
+
+networks:
+  pap-network:
+    driver: bridge

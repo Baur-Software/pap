@@ -3,6 +3,7 @@
 //! Uses process-level entitlements and the macOS Sandbox.framework where available.
 //! Falls back to basic process isolation (kill_on_drop + timeout) when
 //! entitlement hardening is unavailable (e.g. in unsigned dev builds).
+//! IPC via stdin (parent→child: ExecutionContext JSON) and stdout (child→parent: ExecutionResult JSON).
 
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;
 
 use crate::error::SandboxError;
@@ -42,7 +44,6 @@ impl MacosSpawner {
             seccomp_rules_hash: None,
             pledge_promises: None,
             entitlements_applied: policy.entitlements.clone().or_else(|| {
-                // Default entitlements derived from policy flags.
                 let mut ents = vec!["com.apple.security.app-sandbox".to_string()];
                 if policy.network_allowed {
                     ents.push("com.apple.security.network.client".to_string());
@@ -63,6 +64,56 @@ impl MacosSpawner {
             subprocess_blocked: !policy.subprocess_allowed,
         }
     }
+
+    async fn reap_child_output(
+        &self,
+        handle_id: &str,
+        mut child: tokio::process::Child,
+        exit_code: i32,
+        elapsed_ms: u64,
+    ) -> ExecutionState {
+        let stdout_data = match child.stdout.take() {
+            Some(stdout) => {
+                use tokio::io::AsyncReadExt;
+                let mut buf = Vec::new();
+                let mut reader = tokio::io::BufReader::new(stdout);
+                match reader.read_to_end(&mut buf).await {
+                    Ok(_) => buf,
+                    Err(_) => vec![],
+                }
+            }
+            None => vec![],
+        };
+
+        if exit_code != 0 || stdout_data.is_empty() {
+            return ExecutionState::Failed {
+                reason: format!(
+                    "child exited with code {exit_code}, stdout {} bytes",
+                    stdout_data.len()
+                ),
+                elapsed_ms,
+            };
+        }
+
+        match serde_json::from_slice::<ExecutionResult>(&stdout_data) {
+            Ok(exec_result) => {
+                let receipt = exec_result.receipt.clone();
+                let mut results = self.results.write().await;
+                results.insert(handle_id.to_string(), (exec_result, receipt));
+                ExecutionState::Completed {
+                    exit_code,
+                    elapsed_ms,
+                }
+            }
+            Err(_) => ExecutionState::Failed {
+                reason: format!(
+                    "child exited OK but stdout is not valid ExecutionResult JSON ({} bytes)",
+                    stdout_data.len()
+                ),
+                elapsed_ms,
+            },
+        }
+    }
 }
 
 #[async_trait]
@@ -74,7 +125,10 @@ impl AgentSpawner for MacosSpawner {
     ) -> Result<ExecutionHandle, SandboxError> {
         let handle = ExecutionHandle::new(&context.agent_did, &context.agent_name);
 
-        let child = tokio::process::Command::new(
+        let context_json =
+            serde_json::to_string(&context).map_err(|e| SandboxError::IpcError(e.to_string()))?;
+
+        let mut child = tokio::process::Command::new(
             std::env::current_exe().unwrap_or_else(|_| "pap-sandbox-worker".into()),
         )
         .arg("--sandbox-worker")
@@ -87,7 +141,22 @@ impl AgentSpawner for MacosSpawner {
         .spawn()
         .map_err(|e| SandboxError::SpawnError(e.to_string()))?;
 
-        let _ = context;
+        {
+            let stdin = child
+                .stdin
+                .as_mut()
+                .ok_or_else(|| SandboxError::IpcError("failed to open child stdin pipe".into()))?;
+            stdin
+                .write_all(context_json.as_bytes())
+                .await
+                .map_err(|e| {
+                    SandboxError::IpcError(format!("failed to write to child stdin: {e}"))
+                })?;
+            stdin
+                .shutdown()
+                .await
+                .map_err(|e| SandboxError::IpcError(format!("failed to close child stdin: {e}")))?;
+        }
 
         let mut procs = self.processes.write().await;
         procs.insert(
@@ -103,14 +172,15 @@ impl AgentSpawner for MacosSpawner {
     }
 
     async fn poll_state(&self, handle: &ExecutionHandle) -> Result<ExecutionState, SandboxError> {
-        let results = self.results.read().await;
-        if results.contains_key(&handle.id) {
-            return Ok(ExecutionState::Completed {
-                exit_code: 0,
-                elapsed_ms: 0,
-            });
+        {
+            let results = self.results.read().await;
+            if let Some((ref result, _)) = results.get(&handle.id) {
+                return Ok(ExecutionState::Completed {
+                    exit_code: result.receipt.exit_code,
+                    elapsed_ms: result.receipt.execution_duration_ms,
+                });
+            }
         }
-        drop(results);
 
         let mut procs = self.processes.write().await;
         if let Some(record) = procs.get_mut(&handle.id) {
@@ -123,11 +193,11 @@ impl AgentSpawner for MacosSpawner {
             match record.child.try_wait() {
                 Ok(Some(status)) => {
                     let code = status.code().unwrap_or(-1);
-                    procs.remove(&handle.id);
-                    Ok(ExecutionState::Completed {
-                        exit_code: code,
-                        elapsed_ms,
-                    })
+                    let child = procs.remove(&handle.id).unwrap().child;
+                    drop(procs);
+                    Ok(self
+                        .reap_child_output(&handle.id, child, code, elapsed_ms)
+                        .await)
                 }
                 Ok(None) => {
                     let pid = record.child.id().unwrap_or(0);

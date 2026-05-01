@@ -143,19 +143,12 @@ impl SandboxedHandlerWrapper {
             .block_on(self.spawner.collect_result(&exec_handle))
             .map_err(sandbox_to_transport)?;
 
-        // When result_enc is empty the spawner ran the spawn/poll/receipt
-        // lifecycle but did not return encrypted output (IPC not yet fully
-        // wired for this spawner implementation).  Fall through to the inner
-        // handler so the full PAP protocol still completes correctly.
-        // NOTE: this bypasses the cryptographic isolation boundary — only
-        // spawners that populate result_enc provide actual IPC isolation.
         if exec_result.result_enc.is_empty() {
-            tracing::warn!(
-                session_id,
-                "sandbox spawner returned no encrypted result; \
-                 falling back to unsandboxed inner handler execution"
-            );
-            return self.inner.execute(session_id);
+            return Err(TransportError::ServerError(
+                "sandbox spawner returned no encrypted result — \
+                 IPC pipeline broken, refusing to fall back to unsandboxed execution"
+                    .into(),
+            ));
         }
 
         // The result is decrypted with the same ephemeral_key used for
@@ -278,14 +271,9 @@ mod tests {
     }
 
     #[test]
-    fn sandboxed_path_errors_on_platform_unsupported() {
-        // NoopSpawner::spawn() returns PlatformUnsupported; execute_sandboxed()
-        // must surface this as a TransportError rather than panicking.
-        // execute_sandboxed() calls Handle::current().block_on() — requires a
-        // tokio runtime on the thread.  In production this is satisfied because
-        // AgentServer calls execute() via spawn_blocking (runtime present).
-        // Replicate that contract here: build an explicit runtime and drive
-        // execute() from inside spawn_blocking.
+    fn sandboxed_path_with_noop_surfaces_error() {
+        // NoopSpawner::spawn() returns PlatformUnsupported — sandbox failures
+        // must surface as errors, never silently fall back to unsandboxed execution.
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async {
             tokio::task::spawn_blocking(move || {
@@ -303,8 +291,11 @@ mod tests {
             .await
             .expect("spawn_blocking did not panic")
         });
-        assert!(result.is_err());
+        assert!(result.is_err(), "NoopSpawner must error, not silently pass");
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("sandbox") || msg.contains("platform"));
+        assert!(
+            msg.contains("sandbox") || msg.contains("platform"),
+            "error should mention sandbox/platform, got: {msg}"
+        );
     }
 }

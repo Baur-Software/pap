@@ -2320,7 +2320,8 @@ fn sandbox_decrypt(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> PyResult<Vec<
 /// Raises `RuntimeError` on unsupported platforms.
 #[pyfunction]
 fn sandbox_new_spawner() -> PyResult<PySandboxSpawner> {
-    let inner = pap_sandbox::new_spawner()
+    let inner = RT
+        .block_on(pap_sandbox::new_spawner())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     Ok(PySandboxSpawner { inner })
 }

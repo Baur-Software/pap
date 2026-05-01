@@ -358,8 +358,6 @@ impl ProfilesDatabase {
     }
 }
 
-/// Test-only: in-memory ProfilesDatabase for unit tests across the crate.
-#[cfg(test)]
 impl ProfilesDatabase {
     pub fn open_memory() -> Result<Self, crate::error::PapillonError> {
         let conn = Connection::open_in_memory()

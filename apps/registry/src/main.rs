@@ -284,9 +284,9 @@ async fn main() -> anyhow::Result<()> {
     info!("CORS: allowed origins = {:?}", cors_origins);
     let cors_allowed_origins: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(cors_origins));
 
-    // Sandbox spawner — falls back to NoopSpawner when OS support is absent.
+    // Sandbox spawner — detects OS capabilities, Docker, or falls back to unsandboxed.
     let sandbox_spawner: std::sync::Arc<dyn pap_sandbox::AgentSpawner> =
-        match pap_sandbox::new_spawner() {
+        match pap_sandbox::new_spawner().await {
             Ok(s) => {
                 info!(
                     "Sandbox spawner initialized ({})",

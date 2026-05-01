@@ -70,8 +70,8 @@ pub trait AgentSpawner: Send + Sync {
     ) -> Result<(ExecutionResult, AttestationReceipt), SandboxError>;
 }
 
-/// A spawner that always returns `PlatformUnsupported` errors.
-/// Used as a fallback when the platform has no sandbox implementation.
+/// Fallback spawner when no sandbox implementation is available.
+/// Every method returns an error — sandbox failures are never silenced.
 pub struct NoopSpawner;
 
 #[async_trait]
@@ -82,7 +82,7 @@ impl AgentSpawner for NoopSpawner {
         _context: ExecutionContext,
     ) -> Result<ExecutionHandle, SandboxError> {
         Err(SandboxError::PlatformUnsupported(
-            "no sandbox implementation available".into(),
+            "no sandbox implementation available (no OS capabilities, no Docker socket)".into(),
         ))
     }
 
@@ -106,22 +106,71 @@ impl AgentSpawner for NoopSpawner {
     }
 }
 
-/// Select the platform-appropriate spawner.
-pub fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
-    #[cfg(target_os = "linux")]
-    return Ok(Box::new(crate::platform::linux::LinuxSpawner::new()));
+/// Select the platform-appropriate spawner at runtime.
+///
+/// Capability booleans come from real OS probing via `os_capabilities::detect()`,
+/// not compile-time `#[cfg]`. The `#[cfg]` gates below are only needed because
+/// the spawner *types* (LinuxSpawner, BsdSpawner, etc.) are conditionally compiled.
+pub async fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
+    use crate::platform::detection::{detect_runtime, RuntimeEnvironment};
 
-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
-    return Ok(Box::new(crate::platform::bsd::BsdSpawner::new()));
+    match detect_runtime().await {
+        RuntimeEnvironment::Bare {
+            seccomp,
+            pledge,
+            entitlements,
+            job_objects,
+        } => {
+            // Suppress unused-variable warnings for capabilities whose spawner
+            // types aren't compiled on this target.
+            let _ = (&seccomp, &pledge, &entitlements, &job_objects);
 
-    #[cfg(target_os = "macos")]
-    return Ok(Box::new(crate::platform::macos::MacosSpawner::new()));
+            #[cfg(target_os = "linux")]
+            if seccomp {
+                return Ok(Box::new(crate::platform::linux::LinuxSpawner::new()));
+            }
 
-    #[cfg(target_os = "windows")]
-    return Ok(Box::new(crate::platform::windows::WindowsSpawner::new()));
+            #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            if pledge {
+                return Ok(Box::new(crate::platform::bsd::BsdSpawner::new()));
+            }
 
-    #[allow(unreachable_code)]
-    Err(SandboxError::PlatformUnsupported(
-        std::env::consts::OS.to_string(),
-    ))
+            #[cfg(target_os = "macos")]
+            if entitlements {
+                return Ok(Box::new(crate::platform::macos::MacosSpawner::new()));
+            }
+
+            #[cfg(target_os = "windows")]
+            if job_objects {
+                return Ok(Box::new(crate::platform::windows::WindowsSpawner::new()));
+            }
+
+            #[allow(unreachable_code)]
+            Err(SandboxError::PlatformUnsupported(format!(
+                "OS capabilities detected but no spawner matched ({}): seccomp={seccomp}, pledge={pledge}, entitlements={entitlements}, job_objects={job_objects}",
+                std::env::consts::OS
+            )))
+        }
+
+        RuntimeEnvironment::Docker { socket_path } => {
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd"))]
+            {
+                let docker_spawner =
+                    crate::platform::docker::DockerSpawner::new(&socket_path).await?;
+                Ok(Box::new(docker_spawner))
+            }
+
+            #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd")))]
+            {
+                let _ = socket_path;
+                Err(SandboxError::PlatformUnsupported(
+                    "Docker socket detected but bollard not available on this platform".into(),
+                ))
+            }
+        }
+
+        RuntimeEnvironment::Unsupported => Err(SandboxError::PlatformUnsupported(
+            "no sandbox implementation available: no OS capabilities, no Docker socket".into(),
+        )),
+    }
 }
