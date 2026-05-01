@@ -906,17 +906,36 @@ impl CanvasState {
     /// blocks to `Resolving { phase: 2, .. }` and Proposed edges to `Confirmed`.
     /// The existing Tauri event listeners and backend commands handle actual execution.
     pub fn render_workflow(&self) {
+        // Re-entrancy guard: skip if approvals are already in flight.
+        if !self.approval_in_flight.get_untracked().is_empty() {
+            return;
+        }
+
         let current_id = match self.current_canvas_id.get_untracked() {
             Some(id) => id,
             None => return,
         };
 
         // Step 1: Auto-approve all Ghost / AwaitingApproval blocks on the active canvas.
+        // Collect (block_id, approval_request_id) pairs from AwaitingApproval blocks
+        // so we can notify the backend after the closure completes.
+        let mut approval_pairs: Vec<(String, String)> = Vec::new();
         self.canvases.update(|cs| {
             if let Some(canvas) = cs.iter_mut().find(|c| c.id == current_id) {
                 for block in canvas.blocks.iter_mut() {
                     match &block.state {
-                        BlockState::Ghost { .. } | BlockState::AwaitingApproval { .. } => {
+                        BlockState::AwaitingApproval { plan } => {
+                            approval_pairs.push((
+                                block.id.clone(),
+                                plan.approval_request_id.clone(),
+                            ));
+                            block.state = BlockState::Resolving {
+                                phase: 2,
+                                phase_label: "Auto-approved...".into(),
+                            };
+                            block.updated_at = now_iso();
+                        }
+                        BlockState::Ghost { .. } => {
                             block.state = BlockState::Resolving {
                                 phase: 2,
                                 phase_label: "Auto-approved...".into(),
@@ -929,6 +948,12 @@ impl CanvasState {
                 canvas.updated_at = now_iso();
             }
         });
+
+        // Notify the backend for each AwaitingApproval block so the oneshot
+        // channel is resolved and the handshake can proceed.
+        for (block_id, approval_request_id) in approval_pairs {
+            self.approve_block(block_id, approval_request_id);
+        }
 
         // Step 2: Auto-approve all Proposed workflow edges.
         self.workflow_graph.update(|graph| {

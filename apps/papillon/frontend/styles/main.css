@@ -6754,7 +6754,7 @@ body {
 
 /* ── Canvas render button ────────────────────────────────────────────────── */
 .canvas-render-btn {
-  background: var(--brand-purple, #6c5ce7);
+  background: var(--purple, #6c5ce7);
   color: #fff;
   border: none;
   border-radius: 6px;

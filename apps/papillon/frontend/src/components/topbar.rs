@@ -5,6 +5,8 @@ use leptos_router::hooks::use_location;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
+use papillon_shared::BlockState;
+
 use crate::components::canvas_aside::AsideOpen;
 use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::catalog::CatalogState;
@@ -49,7 +51,12 @@ pub fn TopBar() -> impl IntoView {
             <div class="topbar-end">
                 {
                     let blocks = canvas_state.current_canvas_blocks();
-                    let has_blocks = Memo::new(move |_| !blocks.get().is_empty());
+                    let has_pending = Memo::new(move |_| {
+                        blocks.get().iter().any(|b| matches!(
+                            &b.state,
+                            BlockState::Ghost { .. } | BlockState::AwaitingApproval { .. }
+                        ))
+                    });
                     let on_render = move |_: leptos::ev::MouseEvent| {
                         canvas_state.render_workflow();
                     };
@@ -57,7 +64,7 @@ pub fn TopBar() -> impl IntoView {
                         <button
                             class="canvas-render-btn"
                             on:click=on_render
-                            disabled=move || !has_blocks.get()
+                            disabled=move || !has_pending.get()
                             title="Auto-approve all pending blocks and render"
                         >
                             "\u{25b6} Render"
