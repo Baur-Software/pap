@@ -8226,6 +8226,211 @@ body {
     background: rgba(232,112,106,0.1);
 }
 
+/* ── Save/Load/Import toolbar button active state ──────────────────────────── */
+.wf-design-bar-btn.active {
+    background: var(--purple-muted);
+    border-color: var(--purple);
+    color: var(--purple);
+}
+.wf-design-bar-btn.wf-design-load {
+    border-color: var(--border);
+    color: var(--text-2);
+}
+.wf-design-bar-btn.wf-design-import {
+    border-color: var(--border);
+    color: var(--text-2);
+}
+
+/* ── Save workflow dialog (inline below tools bar) ─────────────────────────── */
+.wf-save-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+    animation: wf-dialog-slide 0.15s ease-out;
+}
+.wf-save-dialog-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+}
+.wf-save-dialog-input {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-1);
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color 0.15s;
+    max-width: 400px;
+}
+.wf-save-dialog-input:focus {
+    border-color: var(--purple);
+}
+.wf-save-dialog-desc {
+    color: var(--text-2);
+}
+.wf-save-dialog-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ── Import workflow dialog ────────────────────────────────────────────────── */
+.wf-import-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+    animation: wf-dialog-slide 0.15s ease-out;
+}
+.wf-import-textarea {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--text-1);
+    font-family: var(--font-mono);
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    max-height: 200px;
+    transition: border-color 0.15s;
+}
+.wf-import-textarea:focus {
+    border-color: var(--purple);
+}
+.wf-import-status {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.wf-import-error {
+    color: var(--coral);
+    background: rgba(232,112,106,0.08);
+    border: 1px solid rgba(232,112,106,0.2);
+}
+.wf-import-success {
+    color: var(--teal);
+    background: rgba(0,184,148,0.08);
+    border: 1px solid rgba(0,184,148,0.2);
+}
+
+/* ── Templates list (used in Load dialog and bottom section) ───────────────── */
+.wf-templates-section {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-2);
+    flex-shrink: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.wf-templates-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.wf-template-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-1);
+    transition: border-color 0.15s, background 0.15s;
+    cursor: pointer;
+}
+.wf-template-card:hover {
+    border-color: var(--purple);
+    background: var(--bg-2);
+}
+.wf-template-card-full {
+    padding: 8px 12px;
+}
+.wf-template-card-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.wf-template-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-1);
+    font-family: var(--font-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wf-template-desc {
+    font-size: 11px;
+    color: var(--text-2);
+    font-family: var(--font-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wf-template-meta {
+    font-size: 10px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+}
+.wf-template-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.wf-template-action-btn {
+    font-size: 9px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--text-3);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: all 0.12s;
+    white-space: nowrap;
+}
+.wf-template-action-btn:hover {
+    color: var(--purple);
+    border-color: var(--purple);
+    background: rgba(108,92,231,0.06);
+}
+.wf-template-delete:hover {
+    color: var(--coral);
+    border-color: var(--coral);
+    background: rgba(232,112,106,0.06);
+}
+
+/* Dialog slide-in animation */
+@keyframes wf-dialog-slide {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* ═══════════════════════════════════════════════════════════
    SYNTHESIS INDICATOR — rendering agent loading state
    ═══════════════════════════════════════════════════════════ */

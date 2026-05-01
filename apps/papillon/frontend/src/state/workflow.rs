@@ -3,6 +3,7 @@ use papillon_shared::{
     BlockState, Canvas, EdgeState, PipelineNodeType, PortRef, WorkflowEdge, WorkflowGraph,
     WorkflowMode, WorkflowNode,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// Extract block IDs from `{{block:ID}}` patterns in prompt text.
@@ -37,8 +38,22 @@ pub struct EdgeDrag {
     pub from_port_idx: usize,
 }
 
+/// A saved workflow template — persisted to settings DB or localStorage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowTemplate {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub nodes: Vec<WorkflowNode>,
+    pub edges: Vec<WorkflowEdge>,
+    pub gates: Vec<WorkflowGate>,
+    pub version: u32,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// An approval gate inserted between two nodes on a given edge.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowGate {
     pub id: String,
     /// The edge this gate is attached to (edge.id).
@@ -47,7 +62,7 @@ pub struct WorkflowGate {
 }
 
 /// Gate approval strategy.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GateMode {
     /// Pause execution until the principal explicitly approves.
     Manual,
@@ -83,6 +98,8 @@ pub struct WorkflowState {
     pub dragging_edge: RwSignal<Option<EdgeDrag>>,
     /// Approval gates placed on edges in the design graph.
     pub gates: RwSignal<Vec<WorkflowGate>>,
+    /// Saved workflow templates — persisted via Tauri IPC or localStorage fallback.
+    pub saved_templates: RwSignal<Vec<WorkflowTemplate>>,
 }
 
 impl WorkflowState {
@@ -94,12 +111,152 @@ impl WorkflowState {
             design_edges: RwSignal::new(Vec::new()),
             dragging_edge: RwSignal::new(None),
             gates: RwSignal::new(Vec::new()),
+            saved_templates: RwSignal::new(Vec::new()),
         }
     }
 
     /// Cancel any in-progress edge drag.
     pub fn cancel_wiring(&self) {
         self.dragging_edge.set(None);
+    }
+
+    // ── Template management ─────────────────────────────────────────────────
+
+    /// Generate an ISO 8601 timestamp for the current instant.
+    fn now_iso() -> String {
+        js_sys::Date::new_0()
+            .to_iso_string()
+            .as_string()
+            .unwrap_or_default()
+    }
+
+    /// Save the current design graph (nodes, edges, gates) as a named template.
+    pub fn save_current_workflow(&self, name: String, description: String, graph: &WorkflowGraph) {
+        let id = format!("tpl-{}", js_sys::Math::random().to_bits());
+        let now = Self::now_iso();
+        let template = WorkflowTemplate {
+            id,
+            name,
+            description,
+            nodes: graph.nodes.clone(),
+            edges: graph.edges.clone(),
+            gates: self.gates.get_untracked(),
+            version: 1,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.saved_templates.update(|ts| ts.push(template));
+        self.persist_templates();
+    }
+
+    /// Load a saved template into the design graph by template ID.
+    /// Returns `true` if the template was found and loaded.
+    pub fn load_template(&self, template_id: &str, graph: RwSignal<WorkflowGraph>) -> bool {
+        let templates = self.saved_templates.get_untracked();
+        if let Some(tpl) = templates.iter().find(|t| t.id == template_id) {
+            graph.set(WorkflowGraph {
+                nodes: tpl.nodes.clone(),
+                edges: tpl.edges.clone(),
+                is_designed: true,
+            });
+            self.gates.set(tpl.gates.clone());
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Delete a saved template by ID.
+    pub fn delete_template(&self, template_id: &str) {
+        self.saved_templates
+            .update(|ts| ts.retain(|t| t.id != template_id));
+        self.persist_templates();
+    }
+
+    /// Export a template as a JSON string for sharing.
+    pub fn export_template_json(&self, template_id: &str) -> Option<String> {
+        let templates = self.saved_templates.get_untracked();
+        templates
+            .iter()
+            .find(|t| t.id == template_id)
+            .and_then(|t| serde_json::to_string_pretty(t).ok())
+    }
+
+    /// Import a template from a JSON string. Returns an error message on failure.
+    pub fn import_template_json(&self, json: &str) -> Result<(), String> {
+        let mut tpl: WorkflowTemplate =
+            serde_json::from_str(json).map_err(|e| format!("Invalid JSON: {e}"))?;
+        // Assign a new ID to avoid collisions with existing templates.
+        tpl.id = format!("tpl-{}", js_sys::Math::random().to_bits());
+        tpl.updated_at = Self::now_iso();
+        self.saved_templates.update(|ts| ts.push(tpl));
+        self.persist_templates();
+        Ok(())
+    }
+
+    /// Persist templates to localStorage (fallback when Tauri is unavailable).
+    /// When Tauri is available the save is issued via IPC in a spawn_local call.
+    fn persist_templates(&self) {
+        let templates = self.saved_templates.get_untracked();
+        let json = serde_json::to_string(&templates).unwrap_or_default();
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use crate::bridge;
+            if bridge::tauri_available() {
+                // Fire-and-forget Tauri IPC save
+                let json_for_ipc = json.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let args = serde_json::json!({ "templates_json": json_for_ipc });
+                    let _ = bridge::invoke::<serde_json::Value, ()>(
+                        "save_workflow_templates",
+                        &args,
+                    )
+                    .await;
+                });
+            } else if let Some(storage) = web_sys::window()
+                .and_then(|w| w.local_storage().ok().flatten())
+            {
+                let _ = storage.set_item("papillon_workflow_templates", &json);
+            }
+        }
+    }
+
+    /// Load templates from Tauri IPC or localStorage on startup.
+    /// Call once during initialization.
+    pub fn hydrate_templates(&self) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use crate::bridge;
+            let saved_templates = self.saved_templates;
+            if bridge::tauri_available() {
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Ok(json_str) = bridge::invoke_no_args::<String>(
+                        "list_workflow_templates",
+                    )
+                    .await
+                    {
+                        if let Ok(templates) =
+                            serde_json::from_str::<Vec<WorkflowTemplate>>(&json_str)
+                        {
+                            saved_templates.set(templates);
+                        }
+                    }
+                });
+            } else if let Some(storage) = web_sys::window()
+                .and_then(|w| w.local_storage().ok().flatten())
+            {
+                if let Ok(Some(json_str)) =
+                    storage.get_item("papillon_workflow_templates")
+                {
+                    if let Ok(templates) =
+                        serde_json::from_str::<Vec<WorkflowTemplate>>(&json_str)
+                    {
+                        saved_templates.set(templates);
+                    }
+                }
+            }
+        }
     }
 
     /// Check whether adding an edge from `from_id` to `to_id` would create a

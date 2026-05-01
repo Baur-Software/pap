@@ -10,7 +10,7 @@ use js_sys;
 
 use crate::bridge;
 use crate::state::canvas::{CanvasSide, CanvasState};
-use crate::state::workflow::{EdgeDrag, GateMode, WorkflowGate, WorkflowState};
+use crate::state::workflow::{EdgeDrag, GateMode, WorkflowGate, WorkflowState, WorkflowTemplate};
 
 /// Workflow tab — MAP/DESIGN dual-mode pipeline builder.
 ///
@@ -311,6 +311,15 @@ fn MapApprovalCard(edge: WorkflowEdge) -> impl IntoView {
 // DESIGN MODE
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Which inline dialog is currently open in the design toolbar.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum DesignDialog {
+    None,
+    Save,
+    Load,
+    Import,
+}
+
 /// DESIGN mode — interactive canvas for authoring agent pipelines with port-based
 /// wiring, approval gates, and cycle detection.
 #[component]
@@ -320,6 +329,8 @@ fn WorkflowDesignMode() -> impl IntoView {
 
     // Create and provide WorkflowState for wiring/gate state within design mode.
     let wf_state = WorkflowState::new();
+    // Hydrate saved templates from persistence on mount.
+    wf_state.hydrate_templates();
     provide_context(wf_state);
 
     // ── New node intent input ────────────────────────────────────────────────
@@ -367,9 +378,14 @@ fn WorkflowDesignMode() -> impl IntoView {
     };
 
     // ── Global ESC handler for cancelling wiring mode ────────────────────────
+    let active_dialog: RwSignal<DesignDialog> = RwSignal::new(DesignDialog::None);
     let esc_handler = move |e: web_sys::KeyboardEvent| {
         if e.key() == "Escape" {
-            wf_state.cancel_wiring();
+            if active_dialog.get_untracked() != DesignDialog::None {
+                active_dialog.set(DesignDialog::None);
+            } else {
+                wf_state.cancel_wiring();
+            }
         }
     };
 
@@ -381,7 +397,7 @@ fn WorkflowDesignMode() -> impl IntoView {
         }
     };
 
-    // ── Run and Save ─────────────────────────────────────────────────────────
+    // ── Run ──────────────────────────────────────────────────────────────────
     let run_workflow = move |_| {
         let g = graph.get_untracked();
         if g.nodes.is_empty() {
@@ -397,25 +413,42 @@ fn WorkflowDesignMode() -> impl IntoView {
         });
     };
 
-    let save_workflow = move |_| {
-        let g = graph.get_untracked();
-        spawn_local(async move {
-            let _ =
-                bridge::invoke::<serde_json::Value, ()>("save_workflow_design", &serde_json::json!({
-                    "nodes": serde_json::to_value(&g.nodes).unwrap_or_default(),
-                    "edges": serde_json::to_value(&g.edges).unwrap_or_default(),
-                }))
-                .await;
+    // ── Save / Load / Import dialog toggles ──────────────────────────────────
+    let toggle_save = move |_| {
+        active_dialog.update(|d| {
+            *d = if *d == DesignDialog::Save {
+                DesignDialog::None
+            } else {
+                DesignDialog::Save
+            };
+        });
+    };
+    let toggle_load = move |_| {
+        active_dialog.update(|d| {
+            *d = if *d == DesignDialog::Load {
+                DesignDialog::None
+            } else {
+                DesignDialog::Load
+            };
+        });
+    };
+    let toggle_import = move |_| {
+        active_dialog.update(|d| {
+            *d = if *d == DesignDialog::Import {
+                DesignDialog::None
+            } else {
+                DesignDialog::Import
+            };
         });
     };
 
     let has_nodes = move || !graph.get().nodes.is_empty();
     let has_edges = move || !graph.get().edges.is_empty();
+    let has_templates = move || !wf_state.saved_templates.get().is_empty();
 
     // ── Cycle detection ──────────────────────────────────────────────────────
     let has_cycle = move || {
         let g = graph.get();
-        // Check all edges for cycles using iterative DFS
         for edge in &g.edges {
             if wf_state.would_create_cycle(&edge.from_node_id, &edge.to_node_id, &g) {
                 return true;
@@ -433,7 +466,7 @@ fn WorkflowDesignMode() -> impl IntoView {
             on:keydown=esc_handler
             tabindex="0"
         >
-            // Tools strip — intent input, add/run/save buttons
+            // Tools strip — intent input, add/run/save/load/import buttons
             <div class="wf-design-tools-bar">
                 <input
                     class="wf-node-intent-input wf-design-intent"
@@ -457,11 +490,42 @@ fn WorkflowDesignMode() -> impl IntoView {
                     "\u{25b6} Run"
                 </button>
                 <button
-                    class="wf-design-bar-btn wf-design-save"
-                    on:click=save_workflow
+                    class=move || {
+                        if active_dialog.get() == DesignDialog::Save {
+                            "wf-design-bar-btn wf-design-save active"
+                        } else {
+                            "wf-design-bar-btn wf-design-save"
+                        }
+                    }
+                    on:click=toggle_save
                     disabled=move || !has_nodes()
                 >
                     "Save"
+                </button>
+                <button
+                    class=move || {
+                        if active_dialog.get() == DesignDialog::Load {
+                            "wf-design-bar-btn wf-design-load active"
+                        } else {
+                            "wf-design-bar-btn wf-design-load"
+                        }
+                    }
+                    on:click=toggle_load
+                    disabled=move || !has_templates()
+                >
+                    "Load"
+                </button>
+                <button
+                    class=move || {
+                        if active_dialog.get() == DesignDialog::Import {
+                            "wf-design-bar-btn wf-design-import active"
+                        } else {
+                            "wf-design-bar-btn wf-design-import"
+                        }
+                    }
+                    on:click=toggle_import
+                >
+                    "Import"
                 </button>
 
                 // Wiring mode indicator
@@ -469,6 +533,17 @@ fn WorkflowDesignMode() -> impl IntoView {
                     <span class="wf-wiring-indicator">"Wiring\u{2026} click an input port or press ESC"</span>
                 </Show>
             </div>
+
+            // ── Inline dialogs below tools bar ──────────────────────────────
+            <Show when=move || active_dialog.get() == DesignDialog::Save>
+                <SaveWorkflowDialog active_dialog=active_dialog />
+            </Show>
+            <Show when=move || active_dialog.get() == DesignDialog::Load>
+                <LoadWorkflowDialog active_dialog=active_dialog />
+            </Show>
+            <Show when=move || active_dialog.get() == DesignDialog::Import>
+                <ImportWorkflowDialog active_dialog=active_dialog />
+            </Show>
 
             // Cycle warning badge
             <Show when=has_cycle>
@@ -515,6 +590,307 @@ fn WorkflowDesignMode() -> impl IntoView {
                         </div>
                     </Show>
                 </Show>
+            </div>
+
+            // ── Saved templates list below the graph ────────────────────────
+            <Show when=has_templates>
+                <WorkflowTemplatesList />
+            </Show>
+        </div>
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SAVE / LOAD / IMPORT DIALOGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Inline save dialog — appears below the toolbar when "Save" is toggled.
+#[component]
+fn SaveWorkflowDialog(active_dialog: RwSignal<DesignDialog>) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let graph = canvas_state.workflow_graph;
+    let wf_state = expect_context::<WorkflowState>();
+
+    let save_name: RwSignal<String> = RwSignal::new(String::new());
+    let save_desc: RwSignal<String> = RwSignal::new(String::new());
+
+    let on_save = move |_| {
+        let name = save_name.get_untracked();
+        if name.trim().is_empty() {
+            return;
+        }
+        let desc = save_desc.get_untracked();
+        let g = graph.get_untracked();
+        wf_state.save_current_workflow(name, desc, &g);
+        save_name.set(String::new());
+        save_desc.set(String::new());
+        active_dialog.set(DesignDialog::None);
+    };
+
+    let on_cancel = move |_| {
+        active_dialog.set(DesignDialog::None);
+    };
+
+    view! {
+        <div class="wf-save-dialog">
+            <div class="wf-save-dialog-title">"Save as template"</div>
+            <input
+                class="wf-save-dialog-input"
+                type="text"
+                placeholder="Workflow name"
+                prop:value=move || save_name.get()
+                on:input=move |e| save_name.set(event_target_value(&e))
+            />
+            <input
+                class="wf-save-dialog-input wf-save-dialog-desc"
+                type="text"
+                placeholder="Description (optional)"
+                prop:value=move || save_desc.get()
+                on:input=move |e| save_desc.set(event_target_value(&e))
+            />
+            <div class="wf-save-dialog-actions">
+                <button
+                    class="wf-design-bar-btn wf-design-add"
+                    on:click=on_save
+                    disabled=move || save_name.get().trim().is_empty()
+                >
+                    "Save template"
+                </button>
+                <button class="wf-design-bar-btn" on:click=on_cancel>
+                    "Cancel"
+                </button>
+            </div>
+        </div>
+    }
+}
+
+/// Inline load dialog — dropdown of saved templates.
+#[component]
+fn LoadWorkflowDialog(active_dialog: RwSignal<DesignDialog>) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let graph = canvas_state.workflow_graph;
+    let wf_state = expect_context::<WorkflowState>();
+
+    let status_msg: RwSignal<String> = RwSignal::new(String::new());
+
+    view! {
+        <div class="wf-save-dialog">
+            <div class="wf-save-dialog-title">"Load template"</div>
+            <Show when=move || !status_msg.get().is_empty()>
+                <div class="wf-import-status wf-import-success">{move || status_msg.get()}</div>
+            </Show>
+            <div class="wf-templates-list">
+                <For
+                    each=move || wf_state.saved_templates.get()
+                    key=|t| t.id.clone()
+                    children=move |tpl: WorkflowTemplate| {
+                        let tpl_id_for_load = tpl.id.clone();
+                        let tpl_id_for_delete = tpl.id.clone();
+                        let tpl_id_for_export = tpl.id.clone();
+                        let tpl_name = tpl.name.clone();
+                        let node_count = tpl.nodes.len();
+                        let version = tpl.version;
+                        let updated = tpl.updated_at.chars().take(10).collect::<String>();
+
+                        view! {
+                            <div class="wf-template-card">
+                                <div
+                                    class="wf-template-card-main"
+                                    on:click=move |_| {
+                                        wf_state.load_template(&tpl_id_for_load, graph);
+                                        active_dialog.set(DesignDialog::None);
+                                    }
+                                >
+                                    <span class="wf-template-name">{tpl_name}</span>
+                                    <span class="wf-template-meta">
+                                        {format!("{node_count} nodes \u{00b7} v{version} \u{00b7} {updated}")}
+                                    </span>
+                                </div>
+                                <div class="wf-template-card-actions">
+                                    <button
+                                        class="wf-template-action-btn"
+                                        title="Export JSON"
+                                        on:click=move |e| {
+                                            e.stop_propagation();
+                                            if let Some(json) = wf_state.export_template_json(&tpl_id_for_export) {
+                                                // Copy to clipboard
+                                                if let Some(window) = web_sys::window() {
+                                                    if let Ok(nav) = js_sys::Reflect::get(
+                                                        &window,
+                                                        &wasm_bindgen::JsValue::from_str("navigator"),
+                                                    ) {
+                                                        if let Ok(clipboard) = js_sys::Reflect::get(
+                                                            &nav,
+                                                            &wasm_bindgen::JsValue::from_str("clipboard"),
+                                                        ) {
+                                                            let _ = js_sys::Reflect::get(
+                                                                &clipboard,
+                                                                &wasm_bindgen::JsValue::from_str("writeText"),
+                                                            )
+                                                            .and_then(|write_fn| {
+                                                                let write_fn: js_sys::Function = write_fn.into();
+                                                                write_fn.call1(
+                                                                    &clipboard,
+                                                                    &wasm_bindgen::JsValue::from_str(&json),
+                                                                )
+                                                            });
+                                                        }
+                                                    }
+                                                }
+                                                status_msg.set("Copied to clipboard".into());
+                                            }
+                                        }
+                                    >
+                                        "Export"
+                                    </button>
+                                    <button
+                                        class="wf-template-action-btn wf-template-delete"
+                                        title="Delete template"
+                                        on:click=move |e| {
+                                            e.stop_propagation();
+                                            wf_state.delete_template(&tpl_id_for_delete);
+                                        }
+                                    >
+                                        "\u{2715}"
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
+                />
+            </div>
+            <button
+                class="wf-design-bar-btn"
+                on:click=move |_| active_dialog.set(DesignDialog::None)
+            >
+                "Close"
+            </button>
+        </div>
+    }
+}
+
+/// Inline import dialog — textarea for pasting JSON.
+#[component]
+fn ImportWorkflowDialog(active_dialog: RwSignal<DesignDialog>) -> impl IntoView {
+    let wf_state = expect_context::<WorkflowState>();
+
+    let import_json: RwSignal<String> = RwSignal::new(String::new());
+    let import_error: RwSignal<String> = RwSignal::new(String::new());
+    let import_success: RwSignal<bool> = RwSignal::new(false);
+
+    let on_import = move |_| {
+        let json = import_json.get_untracked();
+        if json.trim().is_empty() {
+            import_error.set("Paste a template JSON to import.".into());
+            return;
+        }
+        match wf_state.import_template_json(&json) {
+            Ok(()) => {
+                import_json.set(String::new());
+                import_error.set(String::new());
+                import_success.set(true);
+            }
+            Err(msg) => {
+                import_error.set(msg);
+                import_success.set(false);
+            }
+        }
+    };
+
+    view! {
+        <div class="wf-import-dialog">
+            <div class="wf-save-dialog-title">"Import template from JSON"</div>
+            <textarea
+                class="wf-import-textarea"
+                placeholder="Paste workflow template JSON here\u{2026}"
+                prop:value=move || import_json.get()
+                on:input=move |e| {
+                    import_json.set(event_target_value(&e));
+                    import_error.set(String::new());
+                    import_success.set(false);
+                }
+            />
+            <Show when=move || !import_error.get().is_empty()>
+                <div class="wf-import-status wf-import-error">{move || import_error.get()}</div>
+            </Show>
+            <Show when=move || import_success.get()>
+                <div class="wf-import-status wf-import-success">"Template imported successfully."</div>
+            </Show>
+            <div class="wf-save-dialog-actions">
+                <button
+                    class="wf-design-bar-btn wf-design-add"
+                    on:click=on_import
+                    disabled=move || import_json.get().trim().is_empty()
+                >
+                    "Import"
+                </button>
+                <button
+                    class="wf-design-bar-btn"
+                    on:click=move |_| active_dialog.set(DesignDialog::None)
+                >
+                    "Cancel"
+                </button>
+            </div>
+        </div>
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKFLOW TEMPLATES LIST
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A persistent list of saved templates shown below the design canvas.
+#[component]
+fn WorkflowTemplatesList() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let graph = canvas_state.workflow_graph;
+    let wf_state = expect_context::<WorkflowState>();
+
+    view! {
+        <div class="wf-templates-section">
+            <div class="wf-design-edges-title">"Saved templates"</div>
+            <div class="wf-templates-list">
+                <For
+                    each=move || wf_state.saved_templates.get()
+                    key=|t| t.id.clone()
+                    children=move |tpl: WorkflowTemplate| {
+                        let tpl_id_for_load = tpl.id.clone();
+                        let tpl_id_for_delete = tpl.id.clone();
+                        let tpl_name = tpl.name.clone();
+                        let tpl_desc = tpl.description.clone();
+                        let node_count = tpl.nodes.len();
+                        let edge_count = tpl.edges.len();
+                        let version = tpl.version;
+
+                        view! {
+                            <div class="wf-template-card wf-template-card-full">
+                                <div class="wf-template-card-main"
+                                    on:click=move |_| {
+                                        wf_state.load_template(&tpl_id_for_load, graph);
+                                    }
+                                >
+                                    <span class="wf-template-name">{tpl_name}</span>
+                                    {(!tpl_desc.is_empty()).then(|| view! {
+                                        <span class="wf-template-desc">{tpl_desc.clone()}</span>
+                                    })}
+                                    <span class="wf-template-meta">
+                                        {format!("{node_count} nodes \u{00b7} {edge_count} edges \u{00b7} v{version}")}
+                                    </span>
+                                </div>
+                                <button
+                                    class="wf-template-action-btn wf-template-delete"
+                                    title="Delete"
+                                    on:click=move |e| {
+                                        e.stop_propagation();
+                                        wf_state.delete_template(&tpl_id_for_delete);
+                                    }
+                                >
+                                    "\u{2715}"
+                                </button>
+                            </div>
+                        }
+                    }
+                />
             </div>
         </div>
     }
