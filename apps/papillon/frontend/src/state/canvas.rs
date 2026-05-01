@@ -93,6 +93,10 @@ pub struct CanvasState {
     /// Written by `PropertyForm` on every input change; read by `render_workflow`
     /// and `approve_block` to include user-supplied disclosure values.
     pub block_form_values: RwSignal<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
+    /// True while the rendering agent is synthesizing workflow results.
+    /// Set in `render_workflow()`, cleared when an Outcome block is created
+    /// or when synthesis completes with no result.
+    pub synthesis_pending: RwSignal<bool>,
 }
 
 impl Default for CanvasState {
@@ -114,6 +118,7 @@ impl Default for CanvasState {
             workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
             workflow_mode: RwSignal::new(papillon_shared::WorkflowMode::default()),
             block_form_values: RwSignal::new(std::collections::HashMap::new()),
+            synthesis_pending: RwSignal::new(false),
         }
     }
 }
@@ -948,6 +953,96 @@ impl CanvasState {
         });
     }
 
+    /// Synthesize resolved blocks on the current canvas into an Outcome block.
+    ///
+    /// Reads the current blocks and workflow graph, runs the rendering agent
+    /// heuristic, and — if a synthesis result is produced — inserts (or updates)
+    /// an Outcome block at the top of the canvas stream.
+    ///
+    /// This is synchronous: if blocks are still resolving, synthesis will produce
+    /// `None` and `synthesis_pending` stays `true` until the next call (triggered
+    /// by `apply_block_event` when later blocks resolve).
+    pub fn synthesize_canvas_results(&self) {
+        let current_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => {
+                self.synthesis_pending.set(false);
+                return;
+            }
+        };
+
+        let blocks: Vec<CanvasBlock> = self
+            .canvases
+            .get_untracked()
+            .iter()
+            .find(|c| c.id == current_id)
+            .map(|c| c.blocks.clone())
+            .unwrap_or_default();
+
+        let graph = self.workflow_graph.get_untracked();
+
+        match crate::state::rendering_agent::synthesize_workflow_results(&blocks, &graph) {
+            Some(synthesis) => {
+                let outcome_id = format!("outcome-{}", current_id);
+                let now = now_iso();
+
+                self.canvases.update(|cs| {
+                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == current_id) {
+                        // Upsert: update an existing Outcome block or prepend a new one.
+                        if let Some(existing) = canvas
+                            .blocks
+                            .iter_mut()
+                            .find(|b| b.id == outcome_id)
+                        {
+                            existing.state = BlockState::Outcome {
+                                provenance_block_ids: synthesis.source_block_ids.clone(),
+                            };
+                            existing.schema_type = Some(synthesis.schema_type.clone());
+                            existing.content = Some(synthesis.content.clone());
+                            existing.updated_at = now.clone();
+                        } else {
+                            let outcome_block = CanvasBlock {
+                                id: outcome_id.clone(),
+                                prompt_id: String::new(),
+                                prompt_text: None,
+                                state: BlockState::Outcome {
+                                    provenance_block_ids: synthesis.source_block_ids.clone(),
+                                },
+                                schema_type: Some(synthesis.schema_type.clone()),
+                                content: Some(synthesis.content.clone()),
+                                linked_block_ids: Vec::new(),
+                                agent_did: None,
+                                mandate_expires_at: None,
+                                preference_guided: false,
+                                auto_expand: false,
+                                retention_warning: None,
+                                created_at: now.clone(),
+                                updated_at: now,
+                            };
+                            // Prepend after any Guide block (position 0 is reserved for Guide).
+                            let insert_pos = canvas
+                                .blocks
+                                .iter()
+                                .position(|b| !b.id.starts_with("guide-"))
+                                .unwrap_or(0);
+                            canvas.blocks.insert(insert_pos, outcome_block);
+                        }
+                        canvas.updated_at = now_iso();
+                    }
+                });
+
+                self.last_event.set(Some(CanvasEvent::BlockOutcome {
+                    block_id: outcome_id,
+                }));
+                self.synthesis_pending.set(false);
+            }
+            None => {
+                // No synthesis possible yet (blocks still resolving, or < 2 resolved).
+                // Keep synthesis_pending true — apply_block_event will re-trigger.
+            }
+        }
+    }
+
     /// Power-user "just do it" trigger: auto-approves every pending block and
     /// workflow edge, then flips to the rendered (front) face.
     ///
@@ -1016,6 +1111,12 @@ impl CanvasState {
 
         // Step 3: Flip to the rendered (front) face.
         self.canvas_side.set(CanvasSide::Front);
+
+        // Step 4: Trigger rendering agent synthesis.
+        // Mark pending so the SynthesisIndicator shows while blocks resolve.
+        self.synthesis_pending.set(true);
+        // Attempt immediate synthesis (works if 2+ blocks are already resolved).
+        self.synthesize_canvas_results();
     }
 
     /// Approve an AwaitingApproval block — sends the decision to the backend
@@ -1197,6 +1298,11 @@ impl CanvasState {
         };
         if let Some(evt) = typed_event {
             self.last_event.set(Some(evt));
+        }
+
+        // Re-attempt synthesis when a block resolves and synthesis is pending.
+        if matches!(&update.state, BlockState::Resolved) && self.synthesis_pending.get_untracked() {
+            self.synthesize_canvas_results();
         }
 
         // Trigger guide generation outside the borrow of canvases.

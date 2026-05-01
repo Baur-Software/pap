@@ -8,6 +8,23 @@ use crate::components::canvas_empty_state::CanvasEmptyState;
 use crate::components::hitl_gate::HitlGate;
 use crate::state::canvas::{CanvasSide, CanvasState};
 
+/// Loading indicator shown at the top of the canvas stream while the
+/// rendering agent synthesizes workflow results into an Outcome block.
+#[component]
+fn SynthesisIndicator() -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let pending = canvas_state.synthesis_pending;
+
+    view! {
+        <Show when=move || pending.get()>
+            <div class="synthesis-indicator">
+                <div class="synthesis-spinner" />
+                <span>"Synthesizing workflow results..."</span>
+            </div>
+        </Show>
+    }
+}
+
 #[component]
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
@@ -66,6 +83,7 @@ pub fn CanvasPage() -> impl IntoView {
                 <div class="canvas-face front">
                     <div class="canvas-page-with-aside">
                         <div class="canvas-stream">
+                            <SynthesisIndicator />
                             <Show
                                 when=has_blocks
                                 fallback=move || view! { <CanvasEmptyState /> }

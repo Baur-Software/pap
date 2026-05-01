@@ -6,5 +6,6 @@ pub mod orchestrator;
 pub mod recovery;
 pub mod registry;
 pub mod renderer;
+pub mod rendering_agent;
 pub mod templates;
 pub mod workflow;
