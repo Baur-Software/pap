@@ -1,5 +1,7 @@
 use leptos::prelude::*;
 use papillon_shared::CanvasBlock;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 
 use crate::components::block_renderer::BlockRenderer;
 use crate::components::canvas_aside::CanvasAside;
@@ -89,6 +91,104 @@ pub fn CanvasPage() -> impl IntoView {
 
     let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
 
+    // ── Workflow graph sync ─────────────────────────────────────────────
+    // Keep the MAP-mode workflow graph in sync as blocks resolve or change.
+    Effect::new(move || {
+        let current_blocks = blocks.get();
+        let graph = crate::state::canvas::derive_map_graph(&current_blocks);
+        canvas_state.workflow_graph.set(graph);
+    });
+
+    // ── Global keyboard shortcuts ───────────────────────────────────────
+    // Registered on `window` so they work regardless of focus target.
+    // Shortcuts that act on a specific block only fire when a block is focused.
+    {
+        let cs = canvas_state;
+        let on_keydown = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
+            let key = e.key();
+            let ctrl_or_meta = e.ctrl_key() || e.meta_key();
+
+            // Ctrl/Cmd+K — focus the address bar
+            if ctrl_or_meta && key == "k" {
+                e.prevent_default();
+                e.stop_propagation();
+                cs.focus_prompt.update(|n| *n += 1);
+                return;
+            }
+
+            // Ctrl/Cmd+Z — undo last action
+            if ctrl_or_meta && key == "z" && !e.shift_key() {
+                e.prevent_default();
+                cs.undo();
+                return;
+            }
+
+            // Escape — clear selection, close modals, cancel wiring
+            if key == "Escape" {
+                cs.focused_block_id.set(None);
+                cs.hitl_pending.set(None);
+                cs.reshape_block_id.set(None);
+                return;
+            }
+
+            // Block-specific shortcuts — only when a block has focus
+            if let Some(block_id) = cs.focused_block_id.get_untracked() {
+                // Delete / Backspace — delete focused block
+                if key == "Delete" || key == "Backspace" {
+                    // Don't intercept when typing in an input/textarea
+                    if let Some(target) = e.target() {
+                        if let Ok(el) = target.dyn_into::<web_sys::HtmlElement>() {
+                            let tag = el.tag_name().to_uppercase();
+                            if tag == "INPUT" || tag == "TEXTAREA" || el.is_content_editable() {
+                                return;
+                            }
+                        }
+                    }
+                    e.prevent_default();
+                    cs.delete_block(&block_id);
+                    return;
+                }
+
+                // Shift+P — toggle pin on focused block
+                if e.shift_key() && key == "P" {
+                    e.prevent_default();
+                    cs.toggle_pin(&block_id);
+                    return;
+                }
+            }
+        });
+
+        web_sys::window()
+            .unwrap()
+            .add_event_listener_with_callback("keydown", on_keydown.as_ref().unchecked_ref())
+            .unwrap();
+        on_keydown.forget(); // Leak — lives as long as the page
+    }
+
+    // ── Drop zone handlers ──────────────────────────────────────────────
+    let on_dragover = move |e: web_sys::DragEvent| {
+        e.prevent_default();
+    };
+    let on_drop = move |e: web_sys::DragEvent| {
+        e.prevent_default();
+        if let Some(dt) = e.data_transfer() {
+            if let Ok(text) = dt.get_data("text/plain") {
+                if text.contains("{{block:") {
+                    // Extract block ID from {{block:ID}} pattern
+                    if let Some(start) = text.find("{{block:") {
+                        let after = &text[start + 8..];
+                        if let Some(end) = after.find("}}") {
+                            let ref_id = &after[..end];
+                            if !ref_id.is_empty() {
+                                canvas_state.insert_block_ref(ref_id.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
     view! {
         <HitlGate />
 
@@ -101,7 +201,11 @@ pub fn CanvasPage() -> impl IntoView {
                 // Front face: rendered blocks + collapsible aside.
                 <div class="canvas-face front">
                     <div class="canvas-page-with-aside">
-                        <div class="canvas-stream">
+                        <div
+                            class="canvas-stream"
+                            on:dragover=on_dragover
+                            on:drop=on_drop
+                        >
                             <SynthesisIndicator />
                             <Show
                                 when=has_blocks

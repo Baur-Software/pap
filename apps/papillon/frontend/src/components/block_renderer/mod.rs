@@ -221,6 +221,8 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
 
             let block_class_owned = block_class.to_string();
             let block_id_for_class = block.id.clone();
+            let block_id_for_focus = block.id.clone();
+            let block_id_for_blur = block.id.clone();
             view! {
         <div
             class=move || {
@@ -239,6 +241,16 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
             role="article"
             tabindex="0"
             on:click=on_click
+            on:focus=move |_| {
+                canvas_state.focused_block_id.set(Some(block_id_for_focus.clone()));
+            }
+            on:blur=move |_| {
+                // Only clear if this block is still the focused one (avoids race
+                // with another block's focus event that fires before this blur).
+                if canvas_state.focused_block_id.get_untracked().as_deref() == Some(&block_id_for_blur) {
+                    canvas_state.focused_block_id.set(None);
+                }
+            }
         >
             // Block controls toolbar — appears on hover for resolved/outcome blocks.
             <Show when=move || is_resolved>

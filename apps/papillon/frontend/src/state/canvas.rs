@@ -18,6 +18,16 @@ pub enum CanvasSide {
     Back,
 }
 
+/// Undoable action stored on the undo stack.
+/// Currently only block deletion is reversible.
+#[derive(Clone, Debug)]
+pub enum UndoAction {
+    DeleteBlock { canvas_id: String, block: CanvasBlock },
+}
+
+/// Maximum number of undo actions retained.
+const UNDO_STACK_LIMIT: usize = 20;
+
 /// Typed canvas lifecycle events emitted by [`CanvasState::apply_block_event`]
 /// and note mutation methods. Components can subscribe to `last_event` instead
 /// of the full `canvases` vec to react to specific event types without triggering
@@ -101,6 +111,11 @@ pub struct CanvasState {
     pub pinned_blocks: RwSignal<std::collections::HashSet<String>>,
     /// Block IDs that the user has archived — shown in compact form.
     pub archived_blocks: RwSignal<std::collections::HashSet<String>>,
+    /// Undo stack for reversible actions (block deletions). Capped at [`UNDO_STACK_LIMIT`].
+    pub undo_stack: RwSignal<Vec<UndoAction>>,
+    /// The block currently focused via Tab / click (has keyboard focus via tabindex).
+    /// Keyboard shortcuts that act on a specific block (Delete, Shift+P) read this.
+    pub focused_block_id: RwSignal<Option<String>>,
 }
 
 impl Default for CanvasState {
@@ -125,6 +140,8 @@ impl Default for CanvasState {
             synthesis_pending: RwSignal::new(false),
             pinned_blocks: RwSignal::new(std::collections::HashSet::new()),
             archived_blocks: RwSignal::new(std::collections::HashSet::new()),
+            undo_stack: RwSignal::new(Vec::new()),
+            focused_block_id: RwSignal::new(None),
         }
     }
 }
@@ -562,18 +579,69 @@ impl CanvasState {
     }
 
     /// Remove a block from the current canvas by ID.
+    /// The deleted block is pushed onto the undo stack so Ctrl+Z can restore it.
     pub fn delete_block(&self, block_id: &str) {
         let block_id = block_id.to_string();
         let canvas_id = match self.current_canvas_id.get_untracked() {
             Some(id) => id,
             None => return,
         };
+
+        // Snapshot the block before removal so it can be restored via undo.
+        let snapshot: Option<CanvasBlock> = self
+            .canvases
+            .get_untracked()
+            .iter()
+            .find(|c| c.id == canvas_id)
+            .and_then(|c| c.blocks.iter().find(|b| b.id == block_id).cloned());
+
         self.canvases.update(|cs| {
             if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
                 canvas.blocks.retain(|b| b.id != block_id);
                 canvas.updated_at = now_iso();
             }
         });
+
+        if let Some(block) = snapshot {
+            self.undo_stack.update(|stack| {
+                stack.push(UndoAction::DeleteBlock {
+                    canvas_id: canvas_id.clone(),
+                    block,
+                });
+                // Cap at limit — drop oldest entries.
+                if stack.len() > UNDO_STACK_LIMIT {
+                    let excess = stack.len() - UNDO_STACK_LIMIT;
+                    stack.drain(..excess);
+                }
+            });
+        }
+
+        self.last_event.set(Some(CanvasEvent::BlockDeleted {
+            block_id,
+            canvas_id,
+        }));
+    }
+
+    /// Pop the last action from the undo stack and reverse it.
+    /// Currently only supports restoring deleted blocks.
+    pub fn undo(&self) {
+        let action = self.undo_stack.try_update(|stack| stack.pop()).flatten();
+        match action {
+            Some(UndoAction::DeleteBlock { canvas_id, block }) => {
+                let restored_id = block.id.clone();
+                self.canvases.update(|cs| {
+                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                        canvas.blocks.push(block);
+                        canvas.updated_at = now_iso();
+                    }
+                });
+                self.last_event.set(Some(CanvasEvent::BlockCreated {
+                    block_id: restored_id,
+                    canvas_id,
+                }));
+            }
+            None => {} // Nothing to undo
+        }
     }
 
     /// Delete a canvas by ID. If it was the active canvas, select the previous one.
