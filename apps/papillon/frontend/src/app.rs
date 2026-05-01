@@ -10,6 +10,7 @@ use crate::bridge;
 
 use crate::components::setup_wizard::SetupWizard;
 use crate::components::topbar::TopBar;
+use crate::orchestrator_runtime::fallback_status_for_config;
 use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
 use crate::pages::canvas::CanvasPage;
@@ -17,9 +18,7 @@ use crate::pages::canvas::CanvasPage;
 use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
 use crate::pages::settings::SettingsPage;
-use crate::service::{PapillonService, TauriService};
-#[cfg(target_arch = "wasm32")]
-use crate::service::WebService;
+use crate::service::PapillonService;
 use crate::state::canvas::{CanvasState, derive_map_graph};
 use crate::state::catalog::CatalogState;
 use crate::state::dataset::DatasetState;
@@ -139,13 +138,10 @@ pub fn App() -> impl IntoView {
         catalog_state.refresh(&agents);
     });
 
-    // Derive MAP workflow graph reactively from the active canvas blocks.
-    // Re-runs whenever blocks change; skipped in DESIGN mode to preserve authored graph.
+    // Derive the workflow graph reactively from the active canvas blocks.
     Effect::new(move || {
-        if canvas_state.workflow_mode.get() == papillon_shared::WorkflowMode::Map {
-            let blocks = canvas_state.current_canvas_blocks().get();
-            canvas_state.workflow_graph.set(derive_map_graph(&blocks));
-        }
+        let blocks = canvas_state.current_canvas_blocks().get();
+        canvas_state.workflow_graph.set(derive_map_graph(&blocks));
     });
 
     // Keep the renderer registry in sync with user-defined templates.
@@ -177,7 +173,7 @@ pub fn App() -> impl IntoView {
     if !bridge::tauri_available() {
         let identity = identity_state;
         let orchestrator = orchestrator_state;
-        let svc = service;
+        let svc = service.clone();
         spawn_local(async move {
             // Load profiles and identity from IndexedDB (auto-creates default if needed)
             if let Err(e) = svc.initialize().await {
@@ -195,19 +191,45 @@ pub fn App() -> impl IntoView {
                 identity.info.set(Some(info));
             }
 
-            // No backend orchestrator in browser mode
-            orchestrator.status.set(OrchestratorStatus::Unconfigured);
+            if let Ok(config) = svc.get_orchestrator_config().await {
+                orchestrator.config.set(config.clone());
+                orchestrator.status.set(fallback_status_for_config(&config));
+            } else {
+                orchestrator.status.set(OrchestratorStatus::Unconfigured);
+            }
 
-            // Browser mode has no embedded registry — the user connects to
-            // one from the Browse page (standalone registry app or remote).
-            // Nothing to auto-connect to here.
+            if let Ok(status) = svc.get_orchestrator_status().await {
+                orchestrator.status.set(status);
+            }
+
+            if let Ok(setup_state) = svc.get_setup_state().await {
+                orchestrator.setup_state.set(Some(setup_state));
+            }
+
+            // Browser mode ships with a seeded local catalog, and the workflow
+            // prompt path depends on that catalog being visible immediately.
+            registry_state.connect_to("pap://local");
         });
     }
 
+    // Browser/static preview mode should still feel like a real canvas surface.
+    // Seed one blank canvas so the inline rename control and workflow shell
+    // appear even without the Tauri-backed database path.
+    Effect::new(move || {
+        if bridge::tauri_available() {
+            return;
+        }
+        if canvas_state.canvases.get().is_empty() && canvas_state.current_canvas_id.get().is_none() {
+            canvas_state.new_canvas();
+        }
+    });
+
     // Auto-load profiles and identity on startup (Tauri path)
+    let service_for_tauri_boot = service.clone();
     Effect::new(move || {
         let identity = identity_state;
         let orchestrator = orchestrator_state;
+        let svc = service_for_tauri_boot.clone();
         if !bridge::tauri_available() {
             return;
         }
@@ -231,11 +253,17 @@ pub fn App() -> impl IntoView {
             }
             identity.loading.set(false);
 
+            if let Ok(config) = svc.get_orchestrator_config().await {
+                orchestrator.config.set(config);
+            }
+
             // Load orchestrator status
-            if let Ok(status) =
-                bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status").await
-            {
+            if let Ok(status) = svc.get_orchestrator_status().await {
                 orchestrator.status.set(status);
+            }
+
+            if let Ok(setup_state) = svc.get_setup_state().await {
+                orchestrator.setup_state.set(Some(setup_state));
             }
 
             // Auto-connect to the local registry so agents are immediately
@@ -277,6 +305,7 @@ pub fn App() -> impl IntoView {
     // This effect triggers when the DID changes, indicating a profile switch
     // When DID changes, we must reset all profile-scoped state to maintain isolation
     let previous_did = RwSignal::new(None::<String>);
+    let service_for_profile_switch = service.clone();
     Effect::new(move || {
         let current_did = identity_state.info.get().map(|i| i.did.clone());
         // Use get_untracked to avoid infinite reactive cycle:
@@ -307,12 +336,16 @@ pub fn App() -> impl IntoView {
 
                 // Reload orchestrator config for new profile
                 let orchestrator = orchestrator_state;
+                let svc = service_for_profile_switch.clone();
                 spawn_local(async move {
-                    if let Ok(status) =
-                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status")
-                            .await
-                    {
+                    if let Ok(config) = svc.get_orchestrator_config().await {
+                        orchestrator.config.set(config);
+                    }
+                    if let Ok(status) = svc.get_orchestrator_status().await {
                         orchestrator.status.set(status);
+                    }
+                    if let Ok(setup_state) = svc.get_setup_state().await {
+                        orchestrator.setup_state.set(Some(setup_state));
                     }
                 });
 

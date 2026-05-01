@@ -91,6 +91,7 @@ window.__TAURI__ = {
     _backedUp: false,
     _successors: [],
     _mandates: {},
+    _approvalBlocks: {},
     _retryCount: 0,
     _reshapeCount: 0,
     _lastReshapeText: null,
@@ -599,6 +600,7 @@ window.__TAURI__ = {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
+            window.__TAURI__.core._approvalBlocks['req-mock-001'] = blockId;
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: awaitingBlock }); }, 200);
             return null;
           } else {
@@ -669,21 +671,27 @@ window.__TAURI__ = {
           } else {
             window.__TAURI__.core._rejectCount = (window.__TAURI__.core._rejectCount || 0) + 1;
           }
-          const approveBlockId = (args && (args.block_id || args.blockId)) || 'block-1';
-          setTimeout(function() {
-            window.__TAURI__.event.emit('block_resolved', {
-              block: {
-                id: approveBlockId,
-                prompt_id: 'p-approved',
-                state: 'Resolved',
-                schema_type: 'FlightReservation',
-                content: { result: { '@type': 'FlightReservation', flightNumber: 'PX-0042', departureAirport: 'SFO', arrivalAirport: 'JFK' } },
-                linked_block_ids: [],
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              }
-            });
-          }, 200);
+          const approvalRequestId = args && (args.approvalRequestId || args.approval_request_id);
+          const approveBlockId =
+            (args && (args.block_id || args.blockId)) ||
+            (approvalRequestId && window.__TAURI__.core._approvalBlocks[approvalRequestId]) ||
+            'block-1';
+          if (isApproved) {
+            setTimeout(function() {
+              window.__TAURI__.event.emit('block_resolved', {
+                block: {
+                  id: approveBlockId,
+                  prompt_id: 'p-approved',
+                  state: 'Resolved',
+                  schema_type: 'FlightReservation',
+                  content: { result: { '@type': 'FlightReservation', flightNumber: 'PX-0042', departureAirport: 'SFO', arrivalAirport: 'JFK' } },
+                  linked_block_ids: [],
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }
+              });
+            }, 200);
+          }
           return { status: 'ok' };
         }
 
@@ -1109,6 +1117,7 @@ window.__TAURI__ = {
               schema_type: null, content: null,
               linked_block_ids: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
             };
+            window.__TAURI__.core._approvalBlocks['req-mock-002'] = blockId;
             setTimeout(function() { window.__TAURI__.event.emit('block_resolved', { block: planAwaitingBlock }); }, 200);
             return null;
           } else {

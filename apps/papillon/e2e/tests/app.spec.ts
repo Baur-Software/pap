@@ -20,8 +20,8 @@ test.describe("App shell", () => {
   test("shows workflow toggle button in top bar right zone", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    // Status dot replaced by canvas flip-toggle; default label is "⟳ Workflow"
     await expect(page.locator(".canvas-flip-toggle")).toContainText("Workflow");
+    await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 
   test("brand button opens slide panel with nav items", async ({ page }) => {
@@ -59,8 +59,9 @@ test.describe("Canvas page", () => {
     // Seed canvas has blocks — create a new empty canvas via brand dropdown
     await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
-    await expect(page.locator(".canvas-empty-state")).toBeVisible();
-    await expect(page.locator(".agent-tile").first()).toBeVisible();
+    await expect(page.locator(".canvas-rendered-placeholder-title")).toContainText(
+      "Approve your workflow before rendering"
+    );
   });
 
   test("shows address bar prompt when orchestrator is ready", async ({ page }) => {
@@ -68,6 +69,7 @@ test.describe("Canvas page", () => {
     await waitForApp(page);
     // The prompt input is now the topbar address bar, not an inline canvas element
     await expect(page.locator(".topbar-address-input")).toBeVisible();
+    await expect(page.locator(".canvas-dock-toggle")).toContainText("Orchestrator");
   });
 
   test("address bar input accepts text", async ({ page }) => {

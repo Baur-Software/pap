@@ -5,13 +5,18 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::components::profile_avatar::ProfileAvatar;
+use crate::orchestrator_runtime::{
+    builtin_models_for_runtime, default_builtin_model_id, fallback_status_for_config,
+    normalize_builtin_model_id,
+};
+use crate::service::use_papillon_service;
 use crate::state::identity::IdentityState;
 use crate::state::orchestrator::OrchestratorState;
 use crate::state::recovery::RecoveryState;
 
 mod templates_tab;
 use papillon_shared::{
-    builtin_model_catalog, ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
+    ExportedKey, KeyBackupStatus, LlmProvider, ModelAvailability,
     OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RecoverySetupResult, RecoveryStatus,
     RegistryInfo,
 };
@@ -169,10 +174,12 @@ pub fn SettingsPage() -> impl IntoView {
 
 #[component]
 fn GeneralTab() -> impl IntoView {
+    let service = use_papillon_service();
     let orchestrator = expect_context::<OrchestratorState>();
+    let is_tauri = bridge::tauri_available();
     let selected = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("gemma-4-e2b".to_string());
-    let builtin_models = RwSignal::new(builtin_model_catalog());
+    let builtin_model = RwSignal::new(default_builtin_model_id(is_tauri));
+    let builtin_models = RwSignal::new(builtin_models_for_runtime(is_tauri));
     let mistral_key = RwSignal::new(String::new());
     let mistral_model = RwSignal::new("mistral-small-latest".to_string());
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
@@ -194,7 +201,7 @@ fn GeneralTab() -> impl IntoView {
         match &config.inference_substrate {
             LlmProvider::BuiltIn { model_id } => {
                 selected.set("builtin".into());
-                builtin_model.set(model_id.clone());
+                builtin_model.set(normalize_builtin_model_id(model_id, is_tauri));
             }
             LlmProvider::Mistral { api_key, model } => {
                 selected.set("mistral".into());
@@ -240,9 +247,10 @@ fn GeneralTab() -> impl IntoView {
     });
 
     let save = move |_| {
+        let svc = service.clone();
         let provider = match selected.get().as_str() {
             "builtin" => LlmProvider::BuiltIn {
-                model_id: builtin_model.get(),
+                model_id: normalize_builtin_model_id(&builtin_model.get(), is_tauri),
             },
             "mistral" => LlmProvider::Mistral {
                 api_key: mistral_key.get(),
@@ -274,27 +282,18 @@ fn GeneralTab() -> impl IntoView {
         spawn_local(async move {
             save_error.set(None);
             saved_msg.set(false);
-            match bridge::invoke::<serde_json::Value, OrchestratorConfig>(
-                "configure_orchestrator",
-                &serde_json::json!({ "config": config }),
-            )
-            .await
-            {
+            match svc.configure_orchestrator(&config).await {
                 Ok(saved_config) => {
-                    orchestrator.config.set(saved_config);
+                    orchestrator.config.set(saved_config.clone());
                     saved_msg.set(true);
-                    // Refresh sidebar status (model is now loaded if BuiltIn)
-                    if let Ok(status) =
-                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status")
-                            .await
-                    {
-                        orchestrator.status.set(status);
-                    }
+                    let status = svc
+                        .get_orchestrator_status()
+                        .await
+                        .unwrap_or_else(|_| fallback_status_for_config(&saved_config));
+                    orchestrator.status.set(status);
                 }
                 Err(e) => {
-                    let msg = if e.contains("Tauri IPC") {
-                        "Could not save settings \u{2014} backend unavailable.".to_string()
-                    } else if e.contains("model not found") || e.contains("Tokenizer not found") {
+                    let msg = if e.contains("model not found") || e.contains("Tokenizer not found") {
                         "Model files not downloaded. Use the Download button above first."
                             .to_string()
                     } else {
@@ -374,7 +373,13 @@ fn GeneralTab() -> impl IntoView {
                 on:change=move |ev| selected.set(event_target_value(&ev))
                 prop:value=move || selected.get()
             >
-                <option value="builtin">"Built-in (Recommended)"</option>
+                <option value="builtin">
+                    {if is_tauri {
+                        "Built-in (Recommended)"
+                    } else {
+                        "Built-in browser model"
+                    }}
+                </option>
                 <option value="mistral">"Mistral API"</option>
                 <option value="ollama">"Ollama (local)"</option>
                 <option value="huggingface">"HuggingFace Inference API"</option>
@@ -404,7 +409,11 @@ fn GeneralTab() -> impl IntoView {
                         />
                     </select>
                     <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                        "Ships with the app. Runs entirely on-device \u{2014} no network calls."
+                        {if is_tauri {
+                            "Runs on this device \u{2014} no network calls."
+                        } else {
+                            "Runs in this browser client using a web-compatible local model."
+                        }}
                     </p>
 
                     // Model availability status
@@ -415,15 +424,13 @@ fn GeneralTab() -> impl IntoView {
                         let is_checking = avail.is_empty() && bridge::tauri_available();
 
                         if !bridge::tauri_available() {
-                            // Browser context — suggest extension
                             view! {
                                 <div style="background: rgba(108, 92, 231, 0.08); border: 1px solid rgba(108, 92, 231, 0.3); border-radius: 6px; padding: 10px 12px; margin-top: 8px;">
                                     <p style="font-size: 12px; font-weight: 600; color: var(--brand); margin-bottom: 4px;">
-                                        "Browser extension required"
+                                        "Built-in browser model"
                                     </p>
                                     <p style="font-size: 12px; color: var(--text-secondary);">
-                                        "On-device inference requires the Papillon desktop app. "
-                                        "Install the browser extension to connect pap:// URLs to your local instance."
+                                        "This uses a web-compatible local model that runs in the browser client."
                                     </p>
                                 </div>
                             }.into_any()
@@ -1424,6 +1431,7 @@ fn ProfilesTab() -> impl IntoView {
 
 #[component]
 fn MandateBuilderTab() -> impl IntoView {
+    let service = use_papillon_service();
     let orchestrator = expect_context::<OrchestratorState>();
     let ttl_hours = RwSignal::new(8u64);
     let auto_approve_zero = RwSignal::new(true);
@@ -1438,6 +1446,7 @@ fn MandateBuilderTab() -> impl IntoView {
     });
 
     let save = move |_| {
+        let svc = service.clone();
         saved_msg.set(false);
         save_error.set(None);
         let cfg = OrchestratorConfig {
@@ -1447,22 +1456,18 @@ fn MandateBuilderTab() -> impl IntoView {
             intent_confidence_threshold: orchestrator.config.get().intent_confidence_threshold,
         };
         spawn_local(async move {
-            match bridge::invoke::<serde_json::Value, OrchestratorConfig>(
-                "configure_orchestrator",
-                &serde_json::json!({ "config": cfg }),
-            )
-            .await
-            {
+            match svc.configure_orchestrator(&cfg).await {
                 Ok(saved_cfg) => {
-                    orchestrator.config.set(saved_cfg);
+                    orchestrator.config.set(saved_cfg.clone());
+                    let status = svc
+                        .get_orchestrator_status()
+                        .await
+                        .unwrap_or_else(|_| fallback_status_for_config(&saved_cfg));
+                    orchestrator.status.set(status);
                     saved_msg.set(true);
                 }
                 Err(e) => {
-                    save_error.set(Some(if e.contains("Tauri IPC") {
-                        "Could not save \u{2014} backend unavailable.".to_string()
-                    } else {
-                        format!("Save failed: {e}")
-                    }));
+                    save_error.set(Some(format!("Save failed: {e}")));
                 }
             }
         });

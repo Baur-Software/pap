@@ -1,29 +1,31 @@
 use leptos::prelude::*;
-use papillon_shared::CanvasBlock;
+use papillon_shared::{BlockState, CanvasBlock};
 
 use crate::components::block_renderer::BlockRenderer;
-use crate::components::canvas_aside::CanvasAside;
 use crate::components::canvas_back_face::CanvasBackFace;
-use crate::components::canvas_empty_state::CanvasEmptyState;
+use crate::components::canvas_surface_title::CanvasSurfaceTitle;
 use crate::components::hitl_gate::HitlGate;
 use crate::state::canvas::{CanvasSide, CanvasState};
 
 #[component]
 pub fn CanvasPage() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
-    let aside_open = use_context::<crate::components::canvas_aside::AsideOpen>()
-        .expect("AsideOpen provided at app root")
-        .0;
 
     // Use a Memo so grouped_blocks only rebuilds when the active canvas's blocks
     // actually change — not when unrelated canvases or signals fire.
     let blocks = canvas_state.current_canvas_blocks();
 
-    let has_blocks = move || !blocks.get().is_empty();
-
+    let rendered_blocks = move || {
+        blocks
+            .get()
+            .into_iter()
+            .filter(|block| matches!(block.state, BlockState::Resolved | BlockState::Outcome { .. }))
+            .collect::<Vec<_>>()
+    };
+    let has_rendered_blocks = move || !rendered_blocks().is_empty();
     // Group blocks by semantic links for rendering
     let grouped_blocks = move || {
-        let all_blocks = blocks.get();
+        let all_blocks = rendered_blocks();
         let mut rendered: Vec<BlockGroup> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -64,41 +66,42 @@ pub fn CanvasPage() -> impl IntoView {
             >
                 // Front face: rendered blocks + collapsible aside.
                 <div class="canvas-face front">
-                    <div class="canvas-page-with-aside">
-                        <div class="canvas-stream">
-                            <Show
-                                when=has_blocks
-                                fallback=move || view! { <CanvasEmptyState /> }
-                            >
-                                <For
-                                    each=grouped_blocks
-                                    key=|g| match g {
-                                        BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
-                                        BlockGroup::Linked(bs) => bs
-                                            .iter()
-                                            .map(|b| format!("{}@{}", b.id, b.updated_at))
-                                            .collect::<Vec<_>>()
-                                            .join("-"),
-                                    }
-                                    children=move |group| {
-                                        match group {
-                                            BlockGroup::Single(block) => {
-                                                view! { <BlockRenderer block_id=block.id /> }.into_any()
+                    <div class="canvas-stream">
+                        <CanvasSurfaceTitle />
+                        <Show when=move || !has_rendered_blocks()>
+                            <div class="canvas-surface-status">"Approve workflow to render"</div>
+                        </Show>
+                        <Show when=has_rendered_blocks>
+                            <For
+                                each=grouped_blocks
+                                key=|g| match g {
+                                    BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
+                                    BlockGroup::Linked(bs) => bs
+                                        .iter()
+                                        .map(|b| format!("{}@{}", b.id, b.updated_at))
+                                        .collect::<Vec<_>>()
+                                        .join("-"),
+                                }
+                                children=move |group| {
+                                    match group {
+                                        BlockGroup::Single(block) => {
+                                            view! { <BlockRenderer block_id=block.id /> }.into_any()
+                                        }
+                                        BlockGroup::Linked(blocks) => {
+                                            view! {
+                                                <div class="block-group">
+                                                    {blocks.into_iter().map(|block| {
+                                                        view! { <BlockRenderer block_id=block.id /> }
+                                                    }).collect::<Vec<_>>()}
+                                                </div>
                                             }
-                                            BlockGroup::Linked(blocks) => {
-                                                view! {
-                                                    <div class="block-group">
-                                                        {blocks.into_iter().map(|block| {
-                                                            view! { <BlockRenderer block_id=block.id /> }
-                                                        }).collect::<Vec<_>>()}
-                                                    </div>
-                                                }
-                                                .into_any()
-                                            }
+                                            .into_any()
                                         }
                                     }
-                                />
-                            </Show>
+                                }
+                            />
+                        </Show>
+                        <Show when=has_rendered_blocks>
                             <button
                                 class="add-note-btn"
                                 title="Add a note"
@@ -106,12 +109,11 @@ pub fn CanvasPage() -> impl IntoView {
                             >
                                 "+ Note"
                             </button>
-                        </div>
-                        <CanvasAside open=aside_open />
+                        </Show>
                     </div>
                 </div>
 
-                // Back face: three-tab panel — Sources / Build / History.
+                // Back face: workflow-side surfaces.
                 <div class="canvas-face back">
                     <CanvasBackFace />
                 </div>

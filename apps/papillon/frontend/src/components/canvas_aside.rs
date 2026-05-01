@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use papillon_shared::OrchestratorStatus;
 
-use crate::components::canvas_chat_thread::CanvasChatThread;
+use crate::components::canvas_ghost_run_panel::CanvasGhostRunPanel;
 use crate::state::canvas::CanvasState;
 use crate::state::orchestrator::OrchestratorState;
 
@@ -11,30 +11,40 @@ use crate::state::orchestrator::OrchestratorState;
 #[derive(Clone, Copy)]
 pub struct AsideOpen(pub RwSignal<bool>);
 
-#[derive(Clone, Copy, PartialEq)]
-enum AsideMode {
-    None,
-    Plan,
-    Auto,
+#[component]
+pub fn CanvasAsideDockToggle(open: RwSignal<bool>) -> impl IntoView {
+    let orchestrator = expect_context::<OrchestratorState>();
+
+    let status_class = move || match orchestrator.status.get() {
+        OrchestratorStatus::Ready => "is-ready",
+        OrchestratorStatus::Disconnected => "is-offline",
+        OrchestratorStatus::Unconfigured => "is-setup",
+        OrchestratorStatus::Downloading { .. } => "is-working",
+    };
+
+    view! {
+        <Show when=move || !open.get()>
+            <button
+                class="canvas-dock-toggle"
+                type="button"
+                title="Open the orchestrator dock"
+                aria-label="Open orchestrator dock"
+                on:click=move |_| open.set(true)
+            >
+                <span class=move || format!("canvas-dock-toggle-dot {}", status_class()) />
+                <span class="canvas-dock-toggle-label">"Orchestrator"</span>
+            </button>
+        </Show>
+    }
 }
 
 /// Collapsible right aside for the canvas front face.
-/// Contains:
-/// - First-run tip explaining Papillon (dismissible, persisted to localStorage)
-/// - Plan / Auto mode buttons (only when LLM is configured)
-/// - Conversation / chat history via `CanvasChatThread`
-///
-/// The aside starts collapsed (`open` defaults to `false`). It exposes an X
-/// close button to collapse itself. The topbar toggle button uses the
-/// `AsideOpen` newtype context (see above) to avoid ambiguity with the
-/// `show_settings: RwSignal<bool>` context provided at the app root.
+/// Presents the orchestrator as a first-class dock beside the rendered canvas.
 #[component]
 pub fn CanvasAside(open: RwSignal<bool>) -> impl IntoView {
     let orchestrator = expect_context::<OrchestratorState>();
     let canvas_state = expect_context::<CanvasState>();
-    let mode: RwSignal<AsideMode> = RwSignal::new(AsideMode::None);
 
-    // Show tip until dismissed — persisted in localStorage under "papillon_aside_tip_dismissed"
     let show_tip = RwSignal::new({
         web_sys::window()
             .and_then(|w| w.local_storage().ok().flatten())
@@ -51,15 +61,20 @@ pub fn CanvasAside(open: RwSignal<bool>) -> impl IntoView {
         }
     };
 
-    let has_llm = move || matches!(orchestrator.status.get(), OrchestratorStatus::Ready);
-
-    let has_messages = move || {
-        let active_id = canvas_state.current_canvas_id.get();
+    let canvas_name = move || {
         canvas_state
-            .canvas_messages
-            .get()
-            .iter()
-            .any(|m| active_id.as_deref() == Some(m.canvas_id.as_str()))
+            .current_canvas()
+            .map(|canvas| canvas.name)
+            .unwrap_or_else(|| "Canvas".into())
+    };
+
+    let workflow_count = move || canvas_state.current_canvas_blocks().get().len();
+
+    let orchestrator_status = move || match orchestrator.status.get() {
+        papillon_shared::OrchestratorStatus::Ready => "On-device intent planner ready",
+        papillon_shared::OrchestratorStatus::Disconnected => "Planner offline",
+        papillon_shared::OrchestratorStatus::Unconfigured => "Planner needs setup",
+        papillon_shared::OrchestratorStatus::Downloading { .. } => "Planner is downloading",
     };
 
     view! {
@@ -68,61 +83,36 @@ pub fn CanvasAside(open: RwSignal<bool>) -> impl IntoView {
             class:collapsed=move || !open.get()
         >
             <div class="canvas-aside-header">
-                <span class="canvas-aside-title">"CANVAS"</span>
+                <div class="canvas-aside-heading">
+                    <span class="canvas-aside-title">"ORCHESTRATOR"</span>
+                    <span class="canvas-aside-subtitle">{canvas_name}</span>
+                </div>
                 <button
                     class="canvas-aside-close"
                     on:click=move |_| open.set(false)
-                    aria-label="Close aside"
+                    aria-label="Close orchestrator"
                 >"\u{00d7}"</button>
             </div>
 
             <div class="canvas-aside-body">
-                // First-run tip
                 <Show when=move || show_tip.get()>
                     <div class="canvas-aside-tip">
-                        "Papillon is an intent browser. Type what you want to know or do — it finds and runs the right agent on your behalf, with your explicit approval over what data is shared."
+                        "The dock is where Papillon surfaces approvals, agent choices, and workflow activity so the rendered surface stays clean."
                         <button class="canvas-aside-tip-dismiss" on:click=dismiss_tip>
                             "Got it, dismiss"
                         </button>
                     </div>
                 </Show>
 
-                // Plan / Auto mode (only when LLM is available)
-                <Show when=has_llm>
-                    <div class="canvas-aside-modes">
-                        <div class="canvas-aside-mode-label">"AI MODE"</div>
-                        <button
-                            class="canvas-aside-mode-btn"
-                            class:active=move || mode.get() == AsideMode::Plan
-                            on:click=move |_| {
-                                mode.update(|m| {
-                                    *m = if *m == AsideMode::Plan { AsideMode::None } else { AsideMode::Plan };
-                                });
-                            }
-                            title="Collect context on which agents to add and how properties connect, then present a plan."
-                        >
-                            "\u{1f4cb} Plan mode"
-                        </button>
-                        <button
-                            class="canvas-aside-mode-btn"
-                            class:active=move || mode.get() == AsideMode::Auto
-                            on:click=move |_| {
-                                mode.update(|m| {
-                                    *m = if *m == AsideMode::Auto { AsideMode::None } else { AsideMode::Auto };
-                                });
-                            }
-                            title="Immediately add advertised agent blocks and run automatically."
-                        >
-                            "\u{26a1} Auto mode"
-                        </button>
+                <div class="canvas-aside-status-card">
+                    <div class="canvas-aside-status-label">"Status"</div>
+                    <div class="canvas-aside-status-copy">{orchestrator_status}</div>
+                    <div class="canvas-aside-status-meta">
+                        {move || format!("{} workflow steps on this canvas", workflow_count())}
                     </div>
-                </Show>
+                </div>
 
-                // Chat history (only when messages exist for the active canvas)
-                <Show when=has_messages>
-                    <div class="canvas-aside-chat-label">"CONVERSATION"</div>
-                    <CanvasChatThread />
-                </Show>
+                <CanvasGhostRunPanel compact=true />
             </div>
         </div>
     }
