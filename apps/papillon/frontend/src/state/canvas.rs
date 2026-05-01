@@ -394,6 +394,50 @@ impl CanvasState {
         });
     }
 
+    /// Create a Ghost block on the current canvas from an `AgentInfo` entry.
+    ///
+    /// Ghost blocks represent a "dry run" preview of what an agent will see and
+    /// return before any data moves. The user can inspect disclosure scope and
+    /// approve or reject via the standard approval flow.
+    pub fn create_ghost_block(&self, agent: &papillon_shared::AgentInfo) {
+        let canvas_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+        let block = CanvasBlock {
+            id: generate_id(),
+            prompt_id: generate_id(),
+            prompt_text: None,
+            state: BlockState::Ghost {
+                agent_name: agent.name.clone(),
+                action_type: agent.capabilities.first().cloned().unwrap_or_default(),
+                disclosure_preview: agent.requires_disclosure.clone(),
+                returns_preview: agent.returns.clone(),
+            },
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            agent_did: agent.agent_did.clone(),
+            mandate_expires_at: None,
+            preference_guided: false,
+            auto_expand: false,
+            retention_warning: None,
+            created_at: now_iso(),
+            updated_at: now_iso(),
+        };
+        let block_id = block.id.clone();
+        self.canvases.update(|cs| {
+            if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                canvas.blocks.push(block);
+                canvas.updated_at = now_iso();
+            }
+        });
+        self.last_event.set(Some(CanvasEvent::BlockCreated {
+            block_id,
+            canvas_id,
+        }));
+    }
+
     /// Seed the first-ever canvas with live agent queries so the app
     /// opens with real content resolving through the handshake pipeline.
     ///

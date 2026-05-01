@@ -1,20 +1,57 @@
 use leptos::prelude::*;
-use papillon_shared::{BlockState, CanvasBlock};
+use papillon_shared::{AgentInfo, BlockState, CanvasBlock};
 
 use crate::state::canvas::CanvasState;
+use crate::state::registry::RegistryState;
 use crate::state::templates::TemplatesState;
 
-/// Side-panel listing all resolved/outcome blocks on the current canvas as
-/// draggable chips.  Each chip lets the user:
+/// Side-panel with two tabs: **Blocks** (resolved/outcome/note blocks as
+/// draggable chips) and **Agents** (browsable agent catalog with search and
+/// disclosure filter).
 ///
-/// - **Click** — insert `{{block:ID}}` into the topbar address bar (composing
-///   the block's result as context for a new prompt).
-/// - **Drag** — drag the chip onto any text input; the `text/plain` payload is
-///   the `{{block:ID}}` reference string.
-/// - **Reshape** — open the inline picker and choose a different template to
-///   re-render the block's content without re-running the agent.
+/// - The Blocks tab preserves the existing chip behaviour (click to insert
+///   `{{block:ID}}`, drag to compose, reshape via template picker).
+/// - The Agents tab reads from `RegistryState.agents`, supports text search
+///   and a "Zero Disclosure Only" toggle, and creates Ghost blocks on click.
 #[component]
 pub fn SourcePanel() -> impl IntoView {
+    let active_tab: RwSignal<&'static str> = RwSignal::new("blocks");
+
+    view! {
+        <div class="source-panel">
+            <div class="source-panel-tabs" role="tablist">
+                <button
+                    class="source-tab"
+                    class:source-tab--active=move || active_tab.get() == "blocks"
+                    role="tab"
+                    on:click=move |_| active_tab.set("blocks")
+                >
+                    "Blocks"
+                </button>
+                <button
+                    class="source-tab"
+                    class:source-tab--active=move || active_tab.get() == "agents"
+                    role="tab"
+                    on:click=move |_| active_tab.set("agents")
+                >
+                    "Agents"
+                </button>
+            </div>
+            <Show when=move || active_tab.get() == "blocks">
+                <BlocksTab />
+            </Show>
+            <Show when=move || active_tab.get() == "agents">
+                <AgentsTab />
+            </Show>
+        </div>
+    }
+}
+
+// ── Blocks Tab ──────────────────────────────────────────────────────────────
+
+/// Original resolved-blocks chip list, extracted into its own component.
+#[component]
+fn BlocksTab() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
 
     let resolved_blocks = move || {
@@ -24,7 +61,12 @@ pub fn SourcePanel() -> impl IntoView {
                 c.blocks
                     .into_iter()
                     .filter(|b| {
-                        matches!(b.state, BlockState::Resolved | BlockState::Outcome { .. } | BlockState::Note { .. })
+                        matches!(
+                            b.state,
+                            BlockState::Resolved
+                                | BlockState::Outcome { .. }
+                                | BlockState::Note { .. }
+                        )
                     })
                     .collect::<Vec<_>>()
             })
@@ -32,7 +74,7 @@ pub fn SourcePanel() -> impl IntoView {
     };
 
     view! {
-        <div class="source-panel">
+        <div class="source-panel-blocks-tab">
             <div class="source-panel-header">
                 <span class="source-panel-title">"Sources"</span>
                 <span class="source-count">{move || resolved_blocks().len()}</span>
@@ -47,6 +89,195 @@ pub fn SourcePanel() -> impl IntoView {
         </div>
     }
 }
+
+// ── Agents Tab ──────────────────────────────────────────────────────────────
+
+/// Browsable agent catalog with text search and disclosure filter.
+#[component]
+fn AgentsTab() -> impl IntoView {
+    let registry = expect_context::<RegistryState>();
+
+    let search_query: RwSignal<String> = RwSignal::new(String::new());
+    let zero_disclosure_only: RwSignal<bool> = RwSignal::new(false);
+
+    // Derive filtered agent list as a reactive closure.
+    // We use a closure instead of Memo because AgentInfo does not implement
+    // PartialEq (required by Memo).
+    let filtered_agents = move || {
+        let agents = registry.agents.get();
+        let query = search_query.get().to_lowercase();
+        let zd_only = zero_disclosure_only.get();
+
+        agents
+            .into_iter()
+            .filter(|a| {
+                // Zero-disclosure filter
+                if zd_only && !a.requires_disclosure.is_empty() {
+                    return false;
+                }
+                // Text search (name + capabilities + category, case-insensitive)
+                if !query.is_empty() {
+                    let name_match = a.name.to_lowercase().contains(&query);
+                    let cap_match = a.capabilities.iter().any(|c| c.to_lowercase().contains(&query));
+                    let cat_match = a.category.to_lowercase().contains(&query);
+                    if !(name_match || cap_match || cat_match) {
+                        return false;
+                    }
+                }
+                true
+            })
+            .collect::<Vec<AgentInfo>>()
+    };
+
+    let agent_count = move || {
+        let agents = registry.agents.get();
+        let query = search_query.get().to_lowercase();
+        let zd_only = zero_disclosure_only.get();
+
+        agents
+            .iter()
+            .filter(|a| {
+                if zd_only && !a.requires_disclosure.is_empty() {
+                    return false;
+                }
+                if !query.is_empty() {
+                    let name_match = a.name.to_lowercase().contains(&query);
+                    let cap_match = a.capabilities.iter().any(|c| c.to_lowercase().contains(&query));
+                    let cat_match = a.category.to_lowercase().contains(&query);
+                    if !(name_match || cap_match || cat_match) {
+                        return false;
+                    }
+                }
+                true
+            })
+            .count()
+    };
+
+    view! {
+        <div class="source-panel-agents-tab">
+            <div class="agents-filter-bar">
+                <input
+                    class="agents-search-input"
+                    type="text"
+                    placeholder="Search agents..."
+                    prop:value=move || search_query.get()
+                    on:input=move |e| search_query.set(event_target_value(&e))
+                />
+                <label class="agents-disclosure-toggle">
+                    <input
+                        type="checkbox"
+                        prop:checked=move || zero_disclosure_only.get()
+                        on:change=move |e| {
+                            let checked = event_target_checked(&e);
+                            zero_disclosure_only.set(checked);
+                        }
+                    />
+                    <span class="agents-disclosure-toggle-label">"Zero Disclosure"</span>
+                </label>
+            </div>
+            <div class="agents-list-header">
+                <span class="source-panel-title">"Agents"</span>
+                <span class="source-count">{agent_count}</span>
+            </div>
+            <div class="agents-list">
+                <For
+                    each=filtered_agents
+                    key=|a| format!("{}-{}", a.name, a.content_hash)
+                    children=|agent| view! { <AgentCard agent=agent /> }
+                />
+            </div>
+        </div>
+    }
+}
+
+/// Helper to extract a checkbox's checked state from a change event.
+fn event_target_checked(e: &leptos::ev::Event) -> bool {
+    use wasm_bindgen::JsCast;
+    e.target()
+        .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+        .map(|el| el.checked())
+        .unwrap_or(false)
+}
+
+// ── Agent Card ──────────────────────────────────────────────────────────────
+
+/// Compact agent card for the Sources panel Agents tab.
+/// Shows name, category, capabilities, disclosure badges, and trust indicator.
+/// Click to create a Ghost block on the active canvas.
+#[component]
+fn AgentCard(agent: AgentInfo) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let agent_for_click = agent.clone();
+
+    let name = agent.name.clone();
+    let category = agent.category.clone();
+    let is_local = agent.endpoint.is_none();
+
+    let capabilities: Vec<String> = agent
+        .capabilities
+        .iter()
+        .take(3) // Show at most 3 to keep cards compact
+        .map(|c| c.trim_start_matches("schema:").to_string())
+        .collect();
+    let remaining_caps = if agent.capabilities.len() > 3 {
+        Some(format!("+{}", agent.capabilities.len() - 3))
+    } else {
+        None
+    };
+
+    let zero_disclosure = agent.requires_disclosure.is_empty();
+    let disclosure_props: Vec<String> = agent
+        .requires_disclosure
+        .iter()
+        .take(3)
+        .cloned()
+        .collect();
+
+    let on_click = move |_| {
+        canvas_state.create_ghost_block(&agent_for_click);
+    };
+
+    view! {
+        <div class="agent-card" on:click=on_click>
+            <div class="agent-card-header">
+                <span class="agent-card-name">{name}</span>
+                {if !category.is_empty() {
+                    view! { <span class="agent-card-category">{category}</span> }.into_any()
+                } else {
+                    view! { <span></span> }.into_any()
+                }}
+            </div>
+            <div class="agent-card-capabilities">
+                {capabilities.into_iter().map(|cap| view! {
+                    <span class="agent-card-cap-badge">{cap}</span>
+                }).collect::<Vec<_>>()}
+                {remaining_caps.map(|r| view! {
+                    <span class="agent-card-cap-badge agent-card-cap-overflow">{r}</span>
+                })}
+            </div>
+            <div class="agent-card-footer">
+                <div class="agent-card-disclosure">
+                    {if zero_disclosure {
+                        view! { <span class="agent-card-disclosure-badge agent-card-disclosure--zero">"Zero Disclosure"</span> }.into_any()
+                    } else {
+                        view! {
+                            <span class="agent-card-disclosure-badges">
+                                {disclosure_props.into_iter().map(|p| view! {
+                                    <span class="agent-card-disclosure-badge agent-card-disclosure--required">{p}</span>
+                                }).collect::<Vec<_>>()}
+                            </span>
+                        }.into_any()
+                    }}
+                </div>
+                <span class=if is_local { "agent-card-trust agent-card-trust--local" } else { "agent-card-trust agent-card-trust--federated" }>
+                    {if is_local { "Local" } else { "Federated" }}
+                </span>
+            </div>
+        </div>
+    }
+}
+
+// ── Source Chip (existing) ──────────────────────────────────────────────────
 
 /// A single chip representing one resolved block.
 #[component]
@@ -65,8 +296,8 @@ fn SourceChip(block: CanvasBlock) -> impl IntoView {
         block.content
             .as_ref()
             .and_then(|c| c.get("title").and_then(|t| t.as_str()))
-            .map(|t| format!("✏ {}", t))
-            .unwrap_or_else(|| "✏ Note".to_string())
+            .map(|t| format!("\u{270f} {}", t))
+            .unwrap_or_else(|| "\u{270f} Note".to_string())
     } else {
         block
             .content
@@ -137,7 +368,7 @@ fn SourceChip(block: CanvasBlock) -> impl IntoView {
                 } else {
                     view! { <span></span> }.into_any()
                 }}
-                {ttl_badge.map(|cls| view! { <span class=cls>"●"</span> }.into_any())}
+                {ttl_badge.map(|cls| view! { <span class=cls>"\u{25cf}"</span> }.into_any())}
             </div>
             <button
                 class="source-chip-reshape"
@@ -150,7 +381,7 @@ fn SourceChip(block: CanvasBlock) -> impl IntoView {
                 "\u{27f3}"
             </button>
 
-            // Reshape picker — visible only when the user clicks the ⟳ button.
+            // Reshape picker — visible only when the user clicks the button.
             <Show when=move || show_reshape.get()>
                 <div class="reshape-picker">
                     <select
