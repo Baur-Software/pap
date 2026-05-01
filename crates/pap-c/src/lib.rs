@@ -2812,7 +2812,7 @@ pub extern "C" fn pap_spawner_new() -> *mut PapAgentSpawner {
             return std::ptr::null_mut();
         }
     };
-    match pap_sandbox::new_spawner() {
+    match rt.block_on(pap_sandbox::new_spawner()) {
         Ok(inner) => Box::into_raw(Box::new(PapAgentSpawner { inner, rt })),
         Err(e) => {
             set_last_error(&e.to_string());
