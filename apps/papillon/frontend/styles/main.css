@@ -7828,3 +7828,400 @@ body {
     background: var(--gold);
     animation: wf-edge-pulse 1.2s ease-in-out infinite;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DESIGN MODE — Enhanced Workflow Designer
+   Port-based wiring, approval gates, cycle detection
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.wf-design-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    outline: none;
+}
+
+/* Tools bar — horizontal strip above the canvas */
+.wf-design-tools-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+.wf-design-intent {
+    flex: 1;
+    min-width: 180px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-2);
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+.wf-design-intent:focus {
+    background: var(--bg-3);
+    border-color: var(--purple);
+    color: var(--text-1);
+}
+.wf-design-bar-btn {
+    padding: 5px 14px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-1);
+    color: var(--text-2);
+    font-family: var(--font-body);
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.wf-design-bar-btn:hover {
+    background: var(--bg-3);
+    border-color: var(--purple);
+    color: var(--text-1);
+}
+.wf-design-bar-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.wf-design-bar-btn.wf-design-add {
+    background: rgba(108,92,231,0.1);
+    border-color: var(--purple);
+    color: var(--purple);
+}
+.wf-design-bar-btn.wf-design-add:hover {
+    background: rgba(108,92,231,0.2);
+}
+.wf-design-bar-btn.wf-design-run {
+    background: rgba(0,184,148,0.1);
+    border-color: var(--teal);
+    color: var(--teal);
+}
+.wf-design-bar-btn.wf-design-run:hover {
+    background: rgba(0,184,148,0.2);
+}
+
+/* Wiring mode indicator */
+.wf-wiring-indicator {
+    font-size: 10px;
+    color: var(--gold);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    background: rgba(240,160,48,0.08);
+    border: 1px solid rgba(240,160,48,0.25);
+    border-radius: 4px;
+    animation: wf-edge-pulse 1.5s ease-in-out infinite;
+}
+
+/* Cycle warning badge */
+.wf-cycle-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: rgba(240,160,48,0.08);
+    border-bottom: 1px solid rgba(240,160,48,0.2);
+    color: var(--gold);
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 0.03em;
+}
+
+/* Design canvas area */
+.wf-design-canvas {
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Design node cards row */
+.wf-design-nodes-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    min-height: 120px;
+}
+
+/* Enhanced design node card */
+.wf-design-node {
+    width: 240px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.wf-design-node:hover {
+    border-color: var(--purple);
+    box-shadow: 0 0 16px rgba(108,92,231,0.08);
+}
+
+/* Node remove button (inline in header) */
+.wf-design-node-remove {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: color 0.12s, background 0.12s;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.wf-design-node-remove:hover {
+    color: var(--coral);
+    background: rgba(232,112,106,0.1);
+}
+
+/* Port sections inside design node */
+.wf-design-ports-section {
+    padding: 4px 0;
+    border-top: 1px solid var(--border-subtle);
+}
+.wf-design-ports-label {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    padding: 2px 10px 1px;
+}
+
+/* Design-mode port rows — interactive */
+.wf-design-port {
+    cursor: pointer;
+    padding: 4px 10px;
+    transition: background 0.12s;
+    border-radius: 0;
+}
+.wf-design-port:hover {
+    background: rgba(108,92,231,0.06);
+}
+
+/* Input port: dot on the left */
+.wf-design-port-input {
+    flex-direction: row;
+}
+.wf-design-port-input .wf-port-dot-input {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg-2);
+    flex-shrink: 0;
+    margin-right: 6px;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Output port: dot on the right */
+.wf-design-port-output {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+.wf-design-port-output .wf-port-dot-output {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg-2);
+    flex-shrink: 0;
+    margin-left: 6px;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Highlight compatible input ports during wiring */
+.wf-port-highlight .wf-port-dot-input {
+    border-color: var(--teal);
+    background: rgba(0,184,148,0.15);
+    box-shadow: 0 0 8px rgba(0,184,148,0.25);
+    animation: wf-port-glow 1.2s ease-in-out infinite;
+}
+
+/* Active source output port styling */
+.wf-port-active-source .wf-port-dot-output {
+    border-color: var(--purple);
+    background: var(--purple);
+    box-shadow: 0 0 10px rgba(108,92,231,0.35);
+}
+
+@keyframes wf-port-glow {
+    0%   { box-shadow: 0 0 6px rgba(0,184,148,0.2); }
+    50%  { box-shadow: 0 0 12px rgba(0,184,148,0.4); }
+    100% { box-shadow: 0 0 6px rgba(0,184,148,0.2); }
+}
+
+/* ── Design-mode edge rows ─────────────────────────────────────────────────── */
+
+.wf-design-edges-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.wf-design-edges-title {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    padding: 0 2px 4px;
+}
+.wf-design-edge-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-1);
+    transition: border-color 0.15s, background 0.15s;
+    cursor: context-menu;
+}
+.wf-design-edge-row:hover {
+    background: var(--bg-2);
+}
+
+/* Edge state color coding — left accent border */
+.wf-design-edge-confirmed {
+    border-left: 3px solid var(--teal);
+}
+.wf-design-edge-proposed {
+    border-left: 3px solid var(--gold);
+}
+.wf-design-edge-blocked {
+    border-left: 3px solid var(--coral);
+}
+.wf-design-edge-unconnected {
+    border-left: 3px solid var(--border);
+}
+
+.wf-design-edge-wire {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+.wf-design-edge-from,
+.wf-design-edge-to {
+    font-size: 11px;
+    color: var(--text-2);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wf-design-edge-arrow {
+    color: var(--text-3);
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.wf-design-edge-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.wf-design-edge-hint {
+    font-size: 9px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.wf-design-edge-row:hover .wf-design-edge-hint {
+    opacity: 0.7;
+}
+
+/* "Add Gate" button on edges */
+.wf-design-add-gate-btn {
+    font-size: 9px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    color: var(--purple);
+    background: rgba(108,92,231,0.08);
+    border: 1px solid rgba(108,92,231,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    opacity: 0;
+    white-space: nowrap;
+}
+.wf-design-edge-row:hover .wf-design-add-gate-btn {
+    opacity: 1;
+}
+.wf-design-add-gate-btn:hover {
+    background: rgba(108,92,231,0.16);
+    border-color: var(--purple);
+}
+
+/* ── Inline gate configuration ─────────────────────────────────────────────── */
+
+.wf-design-gate-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 6px;
+    background: rgba(108,92,231,0.06);
+    border: 1px solid rgba(108,92,231,0.15);
+    border-radius: 5px;
+}
+.wf-design-gate-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.wf-design-gate-select {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-2);
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 4px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.12s;
+}
+.wf-design-gate-select:focus {
+    border-color: var(--purple);
+}
+.wf-design-gate-remove {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 1px 3px;
+    border-radius: 3px;
+    transition: color 0.12s, background 0.12s;
+    line-height: 1;
+}
+.wf-design-gate-remove:hover {
+    color: var(--coral);
+    background: rgba(232,112,106,0.1);
+}

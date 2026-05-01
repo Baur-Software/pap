@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use papillon_shared::{
-    BlockState, CanvasBlock, EdgeState, IntentPlan, WorkflowEdge, WorkflowMode, WorkflowNode,
+    BlockState, CanvasBlock, EdgeState, IntentPlan, PortRef, WorkflowEdge, WorkflowMode,
+    WorkflowNode,
 };
 use wasm_bindgen_futures::spawn_local;
 
@@ -9,6 +10,7 @@ use js_sys;
 
 use crate::bridge;
 use crate::state::canvas::{CanvasSide, CanvasState};
+use crate::state::workflow::{EdgeDrag, GateMode, WorkflowGate, WorkflowState};
 
 /// Workflow tab — MAP/DESIGN dual-mode pipeline builder.
 ///
@@ -309,13 +311,18 @@ fn MapApprovalCard(edge: WorkflowEdge) -> impl IntoView {
 // DESIGN MODE
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// DESIGN mode — interactive blank canvas for authoring agent pipelines.
+/// DESIGN mode — interactive canvas for authoring agent pipelines with port-based
+/// wiring, approval gates, and cycle detection.
 #[component]
 fn WorkflowDesignMode() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let graph = canvas_state.workflow_graph;
 
-    // New node intent text
+    // Create and provide WorkflowState for wiring/gate state within design mode.
+    let wf_state = WorkflowState::new();
+    provide_context(wf_state);
+
+    // ── New node intent input ────────────────────────────────────────────────
     let new_intent: RwSignal<String> = RwSignal::new(String::new());
 
     let do_add_node = move || {
@@ -332,8 +339,16 @@ fn WorkflowDesignMode() -> impl IntoView {
             agent_did: None,
             pap_uri: None,
             action_type: String::new(),
-            input_ports: vec![],
-            output_ports: vec![],
+            input_ports: vec![PortRef {
+                path: "input".into(),
+                label: "data".into(),
+                required: false,
+            }],
+            output_ports: vec![PortRef {
+                path: "output".into(),
+                label: "result".into(),
+                required: false,
+            }],
             template_override: None,
             position_x: 0.0,
             position_y: 0.0,
@@ -351,6 +366,22 @@ fn WorkflowDesignMode() -> impl IntoView {
         }
     };
 
+    // ── Global ESC handler for cancelling wiring mode ────────────────────────
+    let esc_handler = move |e: web_sys::KeyboardEvent| {
+        if e.key() == "Escape" {
+            wf_state.cancel_wiring();
+        }
+    };
+
+    // ── Cancel wiring when clicking non-port area ────────────────────────────
+    let bg_click = move |_: web_sys::MouseEvent| {
+        // Only cancel if we are actually wiring
+        if wf_state.dragging_edge.get_untracked().is_some() {
+            wf_state.cancel_wiring();
+        }
+    };
+
+    // ── Run and Save ─────────────────────────────────────────────────────────
     let run_workflow = move |_| {
         let g = graph.get_untracked();
         if g.nodes.is_empty() {
@@ -379,43 +410,75 @@ fn WorkflowDesignMode() -> impl IntoView {
     };
 
     let has_nodes = move || !graph.get().nodes.is_empty();
+    let has_edges = move || !graph.get().edges.is_empty();
+
+    // ── Cycle detection ──────────────────────────────────────────────────────
+    let has_cycle = move || {
+        let g = graph.get();
+        // Check all edges for cycles using iterative DFS
+        for edge in &g.edges {
+            if wf_state.would_create_cycle(&edge.from_node_id, &edge.to_node_id, &g) {
+                return true;
+            }
+        }
+        false
+    };
+
+    // ── Wiring mode indicator ────────────────────────────────────────────────
+    let is_wiring = move || wf_state.dragging_edge.get().is_some();
 
     view! {
-        <div class="wf-design-layout">
-            // Tools strip
-            <div class="wf-design-tools">
+        <div
+            class="wf-design-layout"
+            on:keydown=esc_handler
+            tabindex="0"
+        >
+            // Tools strip — intent input, add/run/save buttons
+            <div class="wf-design-tools-bar">
                 <input
-                    class="wf-node-intent-input"
+                    class="wf-node-intent-input wf-design-intent"
                     type="text"
-                    placeholder="Describe what this agent should do…"
+                    placeholder="Describe what this agent should do\u{2026}"
                     prop:value=move || new_intent.get()
                     on:input=move |e| new_intent.set(event_target_value(&e))
                     on:keydown=add_node_keydown
                 />
                 <button
-                    class="wf-design-tool-btn wf-design-add"
+                    class="wf-design-bar-btn wf-design-add"
                     on:click=add_node
                 >
                     "+ Add node"
                 </button>
                 <button
-                    class="wf-design-tool-btn wf-design-run"
+                    class="wf-design-bar-btn wf-design-run"
                     on:click=run_workflow
                     disabled=move || !has_nodes()
                 >
-                    "▶ Run"
+                    "\u{25b6} Run"
                 </button>
                 <button
-                    class="wf-design-tool-btn wf-design-save"
+                    class="wf-design-bar-btn wf-design-save"
                     on:click=save_workflow
                     disabled=move || !has_nodes()
                 >
                     "Save"
                 </button>
+
+                // Wiring mode indicator
+                <Show when=is_wiring>
+                    <span class="wf-wiring-indicator">"Wiring\u{2026} click an input port or press ESC"</span>
+                </Show>
             </div>
 
-            // Node list
-            <div class="wf-graph-canvas">
+            // Cycle warning badge
+            <Show when=has_cycle>
+                <div class="wf-cycle-warning">
+                    "\u{26a0} Cyclic workflow (max 100 iterations)"
+                </div>
+            </Show>
+
+            // Design canvas area
+            <div class="wf-graph-canvas wf-design-canvas" on:click=bg_click>
                 <Show
                     when=has_nodes
                     fallback=|| view! {
@@ -427,38 +490,339 @@ fn WorkflowDesignMode() -> impl IntoView {
                         </div>
                     }
                 >
-                    <div class="wf-graph-row">
+                    // Node cards row
+                    <div class="wf-graph-row wf-design-nodes-row">
                         <For
                             each=move || graph.get().nodes
                             key=|n| n.id.clone()
                             children=move |node| {
-                                let nid = node.id.clone();
-                                let intent = node.intent.clone();
-                                let agent = node.agent_name.clone().unwrap_or_default();
-                                view! {
-                                    <div class="wf-node">
-                                        <div class="wf-node-header">
-                                            <span class="wf-node-emoji">"🤖"</span>
-                                            <span class="wf-node-name">
-                                                {if agent.is_empty() { intent } else { agent }}
-                                            </span>
-                                        </div>
-                                        <button
-                                            class="wf-trace-jump"
-                                            on:click=move |_| {
-                                                let nid = nid.clone();
-                                                graph.update(|g| g.nodes.retain(|n| n.id != nid));
-                                            }
-                                        >
-                                            "✕ remove"
-                                        </button>
-                                    </div>
-                                }
+                                view! { <DesignNodeCard node=node /> }
                             }
                         />
                     </div>
+
+                    // Edge rows
+                    <Show when=has_edges>
+                        <div class="wf-design-edges-section">
+                            <div class="wf-design-edges-title">"Connections"</div>
+                            <For
+                                each=move || graph.get().edges
+                                key=|e| e.id.clone()
+                                children=move |edge| {
+                                    view! { <DesignEdgeRow edge=edge /> }
+                                }
+                            />
+                        </div>
+                    </Show>
                 </Show>
             </div>
+        </div>
+    }
+}
+
+/// A single node card in DESIGN mode — shows header, input ports (left), output ports (right),
+/// and a remove button. Ports are interactive for wiring.
+#[component]
+fn DesignNodeCard(node: WorkflowNode) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let graph = canvas_state.workflow_graph;
+    let wf_state = expect_context::<WorkflowState>();
+
+    let node_id = node.id.clone();
+    let intent = node.intent.clone();
+    let agent = node.agent_name.clone().unwrap_or_default();
+    let display_name = if agent.is_empty() {
+        intent.clone()
+    } else {
+        agent
+    };
+
+    let input_ports = node.input_ports.clone();
+    let output_ports = node.output_ports.clone();
+
+    let nid_remove = node_id.clone();
+
+    view! {
+        <div class="wf-node wf-design-node">
+            <div class="wf-node-header">
+                <span class="wf-node-emoji">"\u{1f916}"</span>
+                <span class="wf-node-name">{display_name}</span>
+                <button
+                    class="wf-design-node-remove"
+                    on:click=move |e| {
+                        e.stop_propagation();
+                        let nid = nid_remove.clone();
+                        graph.update(|g| {
+                            // Remove node and any edges referencing it
+                            g.nodes.retain(|n| n.id != nid);
+                            g.edges.retain(|e| e.from_node_id != nid && e.to_node_id != nid);
+                        });
+                        // Remove any gates on deleted edges
+                        let current_edges = graph.get_untracked();
+                        let edge_ids: Vec<String> = current_edges.edges.iter().map(|e| e.id.clone()).collect();
+                        wf_state.gates.update(|gates| {
+                            gates.retain(|g| edge_ids.contains(&g.preceding_edge_id));
+                        });
+                    }
+                >
+                    "\u{2715}"
+                </button>
+            </div>
+
+            // Input ports (left side)
+            {(!input_ports.is_empty()).then(|| {
+                let node_id_for_inputs = node_id.clone();
+                let ports = input_ports.clone();
+                view! {
+                    <div class="wf-design-ports-section wf-design-ports-input">
+                        <div class="wf-design-ports-label">"INPUTS"</div>
+                        {ports.into_iter().enumerate().map(|(idx, port)| {
+                            let nid = node_id_for_inputs.clone();
+                            let is_wiring = move || wf_state.dragging_edge.get().is_some();
+                            let port_label = port.label.clone();
+                            let port_path = port.path.clone();
+                            view! {
+                                <div
+                                    class=move || {
+                                        if is_wiring() {
+                                            "wf-port-row wf-design-port wf-design-port-input wf-port-highlight"
+                                        } else {
+                                            "wf-port-row wf-design-port wf-design-port-input"
+                                        }
+                                    }
+                                    on:click=move |e| {
+                                        e.stop_propagation();
+                                        // Complete wiring: connect from dragged output to this input
+                                        if let Some(drag) = wf_state.dragging_edge.get_untracked() {
+                                            let g = graph.get_untracked();
+                                            // Find the source node's output port
+                                            if let Some(src_node) = g.nodes.iter().find(|n| n.id == drag.from_node_id) {
+                                                if let Some(src_port) = src_node.output_ports.get(drag.from_port_idx) {
+                                                    let target_nid = nid.clone();
+                                                    let target_node = g.nodes.iter().find(|n| n.id == target_nid);
+                                                    if let Some(target_node) = target_node {
+                                                        if let Some(target_port) = target_node.input_ports.get(idx) {
+                                                            let edge_id = format!("{}-{}->{}_{}", drag.from_node_id, drag.from_port_idx, target_nid, idx);
+                                                            let new_edge = WorkflowEdge {
+                                                                id: edge_id,
+                                                                from_node_id: drag.from_node_id.clone(),
+                                                                from_port: src_port.clone(),
+                                                                to_node_id: target_nid,
+                                                                to_port: target_port.clone(),
+                                                                state: EdgeState::Proposed,
+                                                                memex_remembered: false,
+                                                            };
+                                                            graph.update(|g| g.edges.push(new_edge));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            wf_state.cancel_wiring();
+                                        }
+                                    }
+                                >
+                                    <span class="wf-port-dot wf-port-dot-input" />
+                                    <span class="wf-port-label">{port_label}</span>
+                                    <span class="wf-port-schema">{port_path}</span>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()}
+                    </div>
+                }
+            })}
+
+            // Output ports (right side)
+            {(!output_ports.is_empty()).then(|| {
+                let node_id_for_outputs = node_id.clone();
+                let ports = output_ports.clone();
+                view! {
+                    <div class="wf-design-ports-section wf-design-ports-output">
+                        <div class="wf-design-ports-label">"OUTPUTS"</div>
+                        {ports.into_iter().enumerate().map(|(idx, port)| {
+                            let nid_for_check = node_id_for_outputs.clone();
+                            let nid_for_click = node_id_for_outputs.clone();
+                            let port_label = port.label.clone();
+                            let port_path = port.path.clone();
+                            let is_active_source = move || {
+                                if let Some(drag) = wf_state.dragging_edge.get() {
+                                    drag.from_node_id == nid_for_check && drag.from_port_idx == idx
+                                } else {
+                                    false
+                                }
+                            };
+                            view! {
+                                <div
+                                    class=move || {
+                                        if is_active_source() {
+                                            "wf-port-row wf-design-port wf-design-port-output wf-port-active-source"
+                                        } else {
+                                            "wf-port-row wf-design-port wf-design-port-output"
+                                        }
+                                    }
+                                    on:click=move |e| {
+                                        e.stop_propagation();
+                                        // Start wiring from this output port
+                                        wf_state.dragging_edge.set(Some(EdgeDrag {
+                                            from_node_id: nid_for_click.clone(),
+                                            from_port_idx: idx,
+                                        }));
+                                    }
+                                >
+                                    <span class="wf-port-label">{port_label}</span>
+                                    <span class="wf-port-schema">{port_path}</span>
+                                    <span class="wf-port-dot wf-port-dot-output" />
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()}
+                    </div>
+                }
+            })}
+        </div>
+    }
+}
+
+/// Renders a single design-mode edge row with port labels, color coding, gate controls,
+/// and right-click deletion.
+#[component]
+fn DesignEdgeRow(edge: WorkflowEdge) -> impl IntoView {
+    let canvas_state = expect_context::<CanvasState>();
+    let graph = canvas_state.workflow_graph;
+    let wf_state = expect_context::<WorkflowState>();
+
+    let edge_id = edge.id.clone();
+    let edge_id_for_delete = edge_id.clone();
+    let edge_id_for_gate = edge_id.clone();
+    let edge_id_for_gate_check = edge_id.clone();
+    let edge_id_for_gate_render = edge_id.clone();
+
+    let edge_class = match edge.state {
+        EdgeState::Confirmed => "wf-design-edge-row wf-design-edge-confirmed",
+        EdgeState::Proposed => "wf-design-edge-row wf-design-edge-proposed",
+        EdgeState::Blocked => "wf-design-edge-row wf-design-edge-blocked",
+        EdgeState::Unconnected => "wf-design-edge-row wf-design-edge-unconnected",
+    };
+
+    let from_label = edge.from_port.label.clone();
+    let to_label = edge.to_port.label.clone();
+
+    // Right-click to delete edge
+    let on_context_menu = move |e: web_sys::MouseEvent| {
+        e.prevent_default();
+        let eid = edge_id_for_delete.clone();
+        graph.update(|g| g.edges.retain(|e| e.id != eid));
+        // Also remove gates on this edge
+        let eid2 = eid.clone();
+        wf_state.gates.update(|gates| {
+            gates.retain(|g| g.preceding_edge_id != eid2);
+        });
+    };
+
+    // Check if this edge already has a gate (reactive)
+    let has_gate = move || {
+        let eid = edge_id_for_gate_check.clone();
+        wf_state.gates.get().iter().any(|g| g.preceding_edge_id == eid)
+    };
+
+    // Gate actions section — rendered conditionally
+    let gate_section = move || {
+        if has_gate() {
+            let eid = edge_id_for_gate_render.clone();
+            view! { <DesignGateInline edge_id=eid /> }.into_any()
+        } else {
+            let eid = edge_id_for_gate.clone();
+            view! {
+                <button
+                    class="wf-design-add-gate-btn"
+                    on:click=move |e| {
+                        e.stop_propagation();
+                        let gate_id = format!("gate-{}", js_sys::Math::random().to_bits());
+                        let gate = WorkflowGate {
+                            id: gate_id,
+                            preceding_edge_id: eid.clone(),
+                            mode: GateMode::Manual,
+                        };
+                        wf_state.gates.update(|gates| gates.push(gate));
+                    }
+                >
+                    "+ Gate"
+                </button>
+            }
+            .into_any()
+        }
+    };
+
+    view! {
+        <div class=edge_class on:contextmenu=on_context_menu>
+            <div class="wf-design-edge-wire">
+                <span class="wf-design-edge-from">{from_label}</span>
+                <span class="wf-design-edge-arrow">"\u{2192}"</span>
+                <span class="wf-design-edge-to">{to_label}</span>
+            </div>
+            <div class="wf-design-edge-actions">
+                {gate_section}
+                <span class="wf-design-edge-hint">"right-click to delete"</span>
+            </div>
+        </div>
+    }
+}
+
+/// Inline gate configuration — shown on an edge when a gate has been added.
+#[component]
+fn DesignGateInline(edge_id: String) -> impl IntoView {
+    let wf_state = expect_context::<WorkflowState>();
+    let eid_for_memo = edge_id.clone();
+    let eid_for_remove = edge_id.clone();
+    let eid_for_select = edge_id.clone();
+
+    // Reactive memo for the current gate mode label — avoids closure-move issues.
+    let gate_mode_label: Memo<String> = Memo::new(move |_| {
+        let eid = eid_for_memo.clone();
+        wf_state
+            .gates
+            .get()
+            .iter()
+            .find(|g| g.preceding_edge_id == eid)
+            .map(|g| format!("{}", g.mode))
+            .unwrap_or_else(|| "Manual".into())
+    });
+
+    // Change gate mode via select
+    let on_mode_change = move |e: web_sys::Event| {
+        let value = event_target_value(&e);
+        let eid = eid_for_select.clone();
+        wf_state.gates.update(|gates| {
+            if let Some(gate) = gates.iter_mut().find(|g| g.preceding_edge_id == eid) {
+                gate.mode = match value.as_str() {
+                    "auto5" => GateMode::AutoApprove { after_minutes: 5 },
+                    "auto15" => GateMode::AutoApprove { after_minutes: 15 },
+                    "auto30" => GateMode::AutoApprove { after_minutes: 30 },
+                    _ => GateMode::Manual,
+                };
+            }
+        });
+    };
+
+    let on_remove = move |e: web_sys::MouseEvent| {
+        e.stop_propagation();
+        let eid = eid_for_remove.clone();
+        wf_state.gates.update(|gates| {
+            gates.retain(|g| g.preceding_edge_id != eid);
+        });
+    };
+
+    view! {
+        <div class="wf-design-gate-inline">
+            <span class="wf-design-gate-icon">"\u{1f6e1}\u{fe0f}"</span>
+            <select
+                class="wf-design-gate-select"
+                on:change=on_mode_change
+            >
+                <option value="manual" selected=move || gate_mode_label.get() == "Manual">"Manual"</option>
+                <option value="auto5" selected=move || gate_mode_label.get() == "Auto (5 min)">"Auto (5 min)"</option>
+                <option value="auto15" selected=move || gate_mode_label.get() == "Auto (15 min)">"Auto (15 min)"</option>
+                <option value="auto30" selected=move || gate_mode_label.get() == "Auto (30 min)">"Auto (30 min)"</option>
+            </select>
+            <button class="wf-design-gate-remove" on:click=on_remove>"\u{2715}"</button>
         </div>
     }
 }
