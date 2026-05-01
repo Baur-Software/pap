@@ -2,6 +2,7 @@ pub(crate) mod dataset_template;
 pub(crate) mod declarative;
 pub(crate) mod field_classify;
 mod generic;
+pub(crate) mod property_form;
 mod receipt;
 pub(crate) mod registry;
 pub(crate) mod renderer;
@@ -18,6 +19,7 @@ pub use registry::RendererRegistry;
 
 use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::renderer::RendererState;
+use property_form::PropertyForm;
 
 /// Per-block reactive UI context provided by [`BlockRenderer`].
 /// Consume via `expect_context::<BlockContext>()` in any descendant component.
@@ -247,8 +249,10 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                     let agent = agent_name.clone();
                     let action = action_type.clone();
                     let disclosures = disclosure_preview.clone();
+                    let disclosures_for_form = disclosure_preview.clone();
                     let returns = returns_preview.clone();
                     let disclosures_empty = disclosures.is_empty();
+                    let disclosures_form_empty = disclosures_for_form.is_empty();
                     let returns_empty = returns.is_empty();
                     view! {
                         <div class="ghost-header">
@@ -279,6 +283,12 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                                 </div>
                             </Show>
                         </div>
+                        <Show when=move || !disclosures_form_empty>
+                            <PropertyForm
+                                disclosure_fields=disclosures_for_form.clone()
+                                block_id=block_ctx.id.get_value()
+                            />
+                        </Show>
                     }.into_any()
                 }
                 BlockState::AwaitingApproval { plan } => {

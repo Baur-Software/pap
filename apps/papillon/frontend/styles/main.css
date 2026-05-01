@@ -2762,6 +2762,99 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   PROPERTY FORM — Ghost block disclosure inputs
+   ═══════════════════════════════════════════════════════════ */
+
+.property-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-sm);
+    padding: var(--sp-sm) 0;
+    margin-top: var(--sp-xs);
+    border-top: 1px solid var(--border);
+}
+
+.property-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2xs);
+}
+
+.property-form-label {
+    font: var(--text-label);
+    font-family: var(--font-mono);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.property-form-input {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 6px var(--sp-sm);
+    font: var(--text-ui);
+    font-family: var(--font-body);
+    color: var(--text-1);
+    transition: border-color 0.15s ease;
+}
+
+.property-form-input:focus {
+    border-color: var(--purple);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--purple-muted);
+}
+
+.property-form-input::placeholder {
+    color: var(--text-3);
+    opacity: 0.6;
+}
+
+/* Block reference autocomplete dropdown */
+.block-ref-dropdown {
+    position: absolute;
+    z-index: 10;
+    left: 0;
+    right: 0;
+    margin-top: var(--sp-2xs);
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    max-height: 120px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.block-ref-option {
+    padding: var(--sp-xs) var(--sp-sm);
+    cursor: pointer;
+    font: var(--text-small);
+    font-family: var(--font-mono);
+    color: var(--text-2);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-xs);
+    transition: background 0.1s ease;
+}
+
+.block-ref-option:hover {
+    background: var(--purple);
+    color: #fff;
+}
+
+.block-ref-id {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.block-ref-label {
+    opacity: 0.6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════
    SCOPE BADGES — mandate disclosure/returns indicators
    ═══════════════════════════════════════════════════════════ */
 

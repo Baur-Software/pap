@@ -89,6 +89,10 @@ pub struct CanvasState {
     pub workflow_graph: RwSignal<papillon_shared::WorkflowGraph>,
     /// Whether the Workflow tab is in Map or Design sub-mode.
     pub workflow_mode: RwSignal<papillon_shared::WorkflowMode>,
+    /// Maps block_id -> { property_name -> value } for Ghost block property forms.
+    /// Written by `PropertyForm` on every input change; read by `render_workflow`
+    /// and `approve_block` to include user-supplied disclosure values.
+    pub block_form_values: RwSignal<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
 }
 
 impl Default for CanvasState {
@@ -109,6 +113,7 @@ impl Default for CanvasState {
             last_event: RwSignal::new(None),
             workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
             workflow_mode: RwSignal::new(papillon_shared::WorkflowMode::default()),
+            block_form_values: RwSignal::new(std::collections::HashMap::new()),
         }
     }
 }
