@@ -144,12 +144,15 @@ COPY --from=builder /build/target/release/pap-registry ./pap-registry
 COPY --from=builder /build/target/site ./site
 # Static assets (icon, favicon, logo)
 COPY --from=builder /build/apps/registry/assets ./assets
+# Catalog TOML files for the "Install Catalog Agents" admin action
+COPY --from=builder /build/crates/pap-agents/catalog ./catalog
 
 ENV PAP_REGISTRY_HOST=0.0.0.0
 ENV PAP_ASSETS_DIR=/app/assets
 ENV PAP_REGISTRY_PORT=7890
 ENV PAP_REGISTRY_DB=/data/registry.db
 ENV LEPTOS_SITE_ROOT=/app/site
+ENV PAP_CATALOG_PATH=/app/catalog
 
 VOLUME ["/data"]
 
