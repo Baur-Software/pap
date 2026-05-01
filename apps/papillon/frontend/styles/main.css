@@ -8458,3 +8458,107 @@ body {
 @keyframes synthesis-spin {
     to { transform: rotate(360deg); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   BLOCK CONTROLS — hover toolbar for pin/copy/dup/archive/delete
+   ═══════════════════════════════════════════════════════════ */
+
+.block-controls {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 5;
+}
+
+.canvas-block:hover .block-controls {
+    opacity: 1;
+}
+
+.block-control-btn {
+    background: var(--bg-2, rgba(0,0,0,0.3));
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font: var(--text-small);
+    font-size: 0.72rem;
+    color: var(--text-3, #8a8a8a);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+
+.block-control-btn:hover {
+    background: var(--purple, #6c5ce7);
+    color: #fff;
+}
+
+.block-control-btn.active {
+    background: var(--purple, #6c5ce7);
+    color: #fff;
+}
+
+.block-control-btn.confirm {
+    background: var(--coral, #e17055);
+    color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PINNED BLOCK — left accent bar, hide reshape/retry buttons
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-block--pinned {
+    border-left: 3px solid var(--purple, #6c5ce7);
+}
+
+.canvas-block--pinned .block-expand-btn,
+.canvas-block--pinned .source-chip-reshape {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ARCHIVED BLOCK — compact bar form
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-block--archived {
+    max-height: 32px;
+    overflow: hidden;
+    opacity: 0.6;
+    cursor: pointer;
+    padding: 4px 12px;
+}
+
+.canvas-block--archived:hover {
+    opacity: 0.8;
+}
+
+.canvas-block--archived .block-controls {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ARCHIVE SECTION — collapsible "Past" at bottom of stream
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-archive-section {
+    margin-top: var(--sp-md, 16px);
+    border-top: 1px solid var(--border, rgba(255,255,255,0.1));
+    padding-top: var(--sp-sm, 8px);
+}
+
+.archive-toggle {
+    background: none;
+    border: none;
+    color: var(--text-3, #8a8a8a);
+    cursor: pointer;
+    font: var(--text-ui);
+    font-size: 0.8rem;
+    padding: 4px 0;
+    transition: color 0.12s;
+}
+
+.archive-toggle:hover {
+    color: var(--text-1, #e8e8e8);
+}

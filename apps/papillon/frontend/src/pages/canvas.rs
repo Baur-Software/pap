@@ -38,14 +38,13 @@ pub fn CanvasPage() -> impl IntoView {
 
     let has_blocks = move || !blocks.get().is_empty();
 
-    // Group blocks by semantic links for rendering
-    let grouped_blocks = move || {
-        let all_blocks = blocks.get();
+    // Helper: group blocks by semantic links, filtering by an ID set predicate.
+    let group_blocks = |all_blocks: &[CanvasBlock], include: &dyn Fn(&str) -> bool| -> Vec<BlockGroup> {
         let mut rendered: Vec<BlockGroup> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-        for block in &all_blocks {
-            if seen.contains(&block.id) {
+        for block in all_blocks {
+            if seen.contains(&block.id) || !include(&block.id) {
                 continue;
             }
             seen.insert(block.id.clone());
@@ -55,7 +54,7 @@ pub fn CanvasPage() -> impl IntoView {
             } else {
                 let mut group = vec![block.clone()];
                 for linked_id in &block.linked_block_ids {
-                    if !seen.contains(linked_id) {
+                    if !seen.contains(linked_id) && include(linked_id) {
                         if let Some(linked) = all_blocks.iter().find(|b| b.id == *linked_id) {
                             seen.insert(linked.id.clone());
                             group.push(linked.clone());
@@ -66,6 +65,26 @@ pub fn CanvasPage() -> impl IntoView {
             }
         }
         rendered
+    };
+
+    // Active blocks: not in the archived set.
+    let active_blocks = move || {
+        let all = blocks.get();
+        let archived = canvas_state.archived_blocks.get();
+        group_blocks(&all, &|id| !archived.contains(id))
+    };
+
+    // Archived blocks: in the archived set.
+    let archived_blocks = move || {
+        let all = blocks.get();
+        let archived = canvas_state.archived_blocks.get();
+        group_blocks(&all, &|id| archived.contains(id))
+    };
+
+    let has_archived = move || !archived_blocks().is_empty();
+    let archive_expanded = RwSignal::new(false);
+    let archived_count = move || {
+        canvas_state.archived_blocks.get().len()
     };
 
     let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
@@ -89,7 +108,7 @@ pub fn CanvasPage() -> impl IntoView {
                                 fallback=move || view! { <CanvasEmptyState /> }
                             >
                                 <For
-                                    each=grouped_blocks
+                                    each=active_blocks
                                     key=|g| match g {
                                         BlockGroup::Single(b) => format!("{}@{}", b.id, b.updated_at),
                                         BlockGroup::Linked(bs) => bs
@@ -116,6 +135,53 @@ pub fn CanvasPage() -> impl IntoView {
                                         }
                                     }
                                 />
+                                // Archive section — shown when there are archived blocks.
+                                <Show when=has_archived>
+                                    <div class="canvas-archive-section">
+                                        <button
+                                            class="archive-toggle"
+                                            on:click=move |_| archive_expanded.update(|v| *v = !*v)
+                                        >
+                                            {move || {
+                                                if archive_expanded.get() {
+                                                    "\u{25bc} Past".to_string()
+                                                } else {
+                                                    format!("\u{25b6} Past ({} archived)", archived_count())
+                                                }
+                                            }}
+                                        </button>
+                                        <Show when=move || archive_expanded.get()>
+                                            <For
+                                                each=archived_blocks
+                                                key=|g| match g {
+                                                    BlockGroup::Single(b) => format!("arch-{}@{}", b.id, b.updated_at),
+                                                    BlockGroup::Linked(bs) => bs
+                                                        .iter()
+                                                        .map(|b| format!("arch-{}@{}", b.id, b.updated_at))
+                                                        .collect::<Vec<_>>()
+                                                        .join("-"),
+                                                }
+                                                children=move |group| {
+                                                    match group {
+                                                        BlockGroup::Single(block) => {
+                                                            view! { <BlockRenderer block_id=block.id /> }.into_any()
+                                                        }
+                                                        BlockGroup::Linked(blocks) => {
+                                                            view! {
+                                                                <div class="block-group">
+                                                                    {blocks.into_iter().map(|block| {
+                                                                        view! { <BlockRenderer block_id=block.id /> }
+                                                                    }).collect::<Vec<_>>()}
+                                                                </div>
+                                                            }
+                                                            .into_any()
+                                                        }
+                                                    }
+                                                }
+                                            />
+                                        </Show>
+                                    </div>
+                                </Show>
                             </Show>
                             <button
                                 class="add-note-btn"

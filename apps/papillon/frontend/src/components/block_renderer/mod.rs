@@ -1,3 +1,4 @@
+mod block_controls;
 pub(crate) mod dataset_template;
 pub(crate) mod declarative;
 pub(crate) mod field_classify;
@@ -19,6 +20,7 @@ pub use registry::RendererRegistry;
 
 use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::renderer::RendererState;
+use block_controls::BlockControls;
 use property_form::PropertyForm;
 
 /// Per-block reactive UI context provided by [`BlockRenderer`].
@@ -218,20 +220,32 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
             };
 
             let block_class_owned = block_class.to_string();
+            let block_id_for_class = block.id.clone();
             view! {
         <div
             class=move || {
+                let mut cls = block_class_owned.clone();
                 if is_resolved && block_ctx.expanded.get() {
-                    format!("{} canvas-block--expanded", block_class_owned)
-                } else {
-                    block_class_owned.clone()
+                    cls.push_str(" canvas-block--expanded");
                 }
+                if canvas_state.pinned_blocks.get().contains(&block_id_for_class) {
+                    cls.push_str(" canvas-block--pinned");
+                }
+                if canvas_state.archived_blocks.get().contains(&block_id_for_class) {
+                    cls.push_str(" canvas-block--archived");
+                }
+                cls
             }
             role="article"
             tabindex="0"
             on:click=on_click
         >
+            // Block controls toolbar — appears on hover for resolved/outcome blocks.
+            <Show when=move || is_resolved>
+                <BlockControls />
+            </Show>
             // Expand / collapse toggle — appears on hover for resolved blocks.
+            // Hidden when block is pinned (CSS handles via .canvas-block--pinned .block-expand-btn).
             <Show when=move || is_resolved>
                 <button
                     class="block-expand-btn"

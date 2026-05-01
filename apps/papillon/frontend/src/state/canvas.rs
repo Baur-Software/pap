@@ -97,6 +97,10 @@ pub struct CanvasState {
     /// Set in `render_workflow()`, cleared when an Outcome block is created
     /// or when synthesis completes with no result.
     pub synthesis_pending: RwSignal<bool>,
+    /// Block IDs that the user has pinned — prevents reshape/retry.
+    pub pinned_blocks: RwSignal<std::collections::HashSet<String>>,
+    /// Block IDs that the user has archived — shown in compact form.
+    pub archived_blocks: RwSignal<std::collections::HashSet<String>>,
 }
 
 impl Default for CanvasState {
@@ -119,6 +123,8 @@ impl Default for CanvasState {
             workflow_mode: RwSignal::new(papillon_shared::WorkflowMode::default()),
             block_form_values: RwSignal::new(std::collections::HashMap::new()),
             synthesis_pending: RwSignal::new(false),
+            pinned_blocks: RwSignal::new(std::collections::HashSet::new()),
+            archived_blocks: RwSignal::new(std::collections::HashSet::new()),
         }
     }
 }
@@ -350,6 +356,81 @@ impl CanvasState {
     pub fn expand_block(&self, block_id: String) {
         self.canvas_side.set(CanvasSide::Front);
         self.requested_expansion.set(Some(block_id));
+    }
+
+    /// Toggle whether a block is pinned. Pinned blocks cannot be reshaped or retried.
+    pub fn toggle_pin(&self, block_id: &str) {
+        self.pinned_blocks.update(|set| {
+            let id = block_id.to_string();
+            if !set.remove(&id) {
+                set.insert(id);
+            }
+        });
+    }
+
+    /// Toggle whether a block is archived. Archived blocks are shown in compact form
+    /// at the bottom of the canvas in the "Past" section.
+    pub fn toggle_archive(&self, block_id: &str) {
+        self.archived_blocks.update(|set| {
+            let id = block_id.to_string();
+            if !set.remove(&id) {
+                set.insert(id);
+            }
+        });
+    }
+
+    /// Duplicate a block — creates a new block with a fresh ID but copies
+    /// the prompt text and form values from the source block.
+    pub fn duplicate_block(&self, block_id: &str) {
+        let canvas_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+        let source = self
+            .canvases
+            .get_untracked()
+            .iter()
+            .flat_map(|c| c.blocks.iter())
+            .find(|b| b.id == block_id)
+            .cloned();
+        if let Some(src) = source {
+            let new_id = generate_id();
+            let now = now_iso();
+            let mut dup = src.clone();
+            dup.id = new_id.clone();
+            dup.prompt_id = generate_id();
+            dup.created_at = now.clone();
+            dup.updated_at = now;
+            // Copy form values if present
+            let form_vals = self
+                .block_form_values
+                .get_untracked()
+                .get(block_id)
+                .cloned();
+            if let Some(vals) = form_vals {
+                self.block_form_values.update(|map| {
+                    map.insert(new_id.clone(), vals);
+                });
+            }
+            self.canvases.update(|cs| {
+                if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                    canvas.blocks.push(dup);
+                    canvas.updated_at = now_iso();
+                }
+            });
+            self.last_event.set(Some(CanvasEvent::BlockCreated {
+                block_id: new_id,
+                canvas_id,
+            }));
+        }
+    }
+
+    /// Copy `{{block:ID}}` to the clipboard for block referencing.
+    pub fn copy_block_ref(&self, block_id: &str) {
+        let text = format!("{{{{block:{}}}}}", block_id);
+        if let Some(window) = web_sys::window() {
+            let _ = window.navigator().clipboard().write_text(&text);
+        }
     }
 
     /// Append a `{{block:ID}}` reference to the current topbar prefill prompt.
