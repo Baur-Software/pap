@@ -25,6 +25,9 @@ services:
     container_name: papillon
     ports:
       - "8080:8080"
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
     volumes:
       # CRITICAL: Mount Docker socket for sibling container spawning
       - /var/run/docker.sock:/var/run/docker.sock
@@ -48,6 +51,9 @@ services:
     container_name: chrysalis-registry
     ports:
       - "3000:3000"
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
     environment:
       # Enable Docker spawner for agent execution
       - PAP_SANDBOX_DOCKER_ENABLED=true

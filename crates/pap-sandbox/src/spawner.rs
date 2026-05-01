@@ -155,7 +155,8 @@ pub async fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
         RuntimeEnvironment::Docker { socket_path } => {
             #[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd"))]
             {
-                let docker_spawner = crate::platform::docker::DockerSpawner::new(&socket_path).await?;
+                let docker_spawner =
+                    crate::platform::docker::DockerSpawner::new(&socket_path).await?;
                 Ok(Box::new(docker_spawner))
             }
 
@@ -168,10 +169,8 @@ pub async fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
             }
         }
 
-        RuntimeEnvironment::Unsupported => {
-            Err(SandboxError::PlatformUnsupported(
-                "no sandbox implementation available: no OS capabilities, no Docker socket".into(),
-            ))
-        }
+        RuntimeEnvironment::Unsupported => Err(SandboxError::PlatformUnsupported(
+            "no sandbox implementation available: no OS capabilities, no Docker socket".into(),
+        )),
     }
 }

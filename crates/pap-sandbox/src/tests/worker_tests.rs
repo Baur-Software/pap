@@ -213,7 +213,10 @@ fn policy_serializes_for_cli_arg() {
     let policy = CapabilityPolicy::default();
     let json = serde_json::to_string(&policy).unwrap();
     let recovered: CapabilityPolicy = serde_json::from_str(&json).unwrap();
-    assert_eq!(recovered.execution_timeout_secs, policy.execution_timeout_secs);
+    assert_eq!(
+        recovered.execution_timeout_secs,
+        policy.execution_timeout_secs
+    );
     assert_eq!(recovered.network_allowed, policy.network_allowed);
     assert_eq!(recovered.filesystem_allowed, policy.filesystem_allowed);
     assert_eq!(recovered.subprocess_allowed, policy.subprocess_allowed);
@@ -225,7 +228,10 @@ fn context_with_wrong_key_length_would_fail_decryption() {
     ctx.ephemeral_public_key = vec![0u8; 16]; // wrong length
 
     let result: Result<[u8; 32], _> = ctx.ephemeral_public_key.as_slice().try_into();
-    assert!(result.is_err(), "16-byte key must fail conversion to [u8; 32]");
+    assert!(
+        result.is_err(),
+        "16-byte key must fail conversion to [u8; 32]"
+    );
 }
 
 #[test]
@@ -235,5 +241,8 @@ fn context_with_tampered_ciphertext_fails_decryption() {
 
     ctx.query_enc[0] ^= 0xFF;
     let result = decrypt(&ctx.query_enc, &key, &ctx.nonce);
-    assert!(result.is_err(), "tampered ciphertext must fail AES-GCM auth");
+    assert!(
+        result.is_err(),
+        "tampered ciphertext must fail AES-GCM auth"
+    );
 }

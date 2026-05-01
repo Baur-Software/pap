@@ -142,13 +142,16 @@ impl AgentSpawner for MacosSpawner {
         .map_err(|e| SandboxError::SpawnError(e.to_string()))?;
 
         {
-            let stdin = child.stdin.as_mut().ok_or_else(|| {
-                SandboxError::IpcError("failed to open child stdin pipe".into())
-            })?;
+            let stdin = child
+                .stdin
+                .as_mut()
+                .ok_or_else(|| SandboxError::IpcError("failed to open child stdin pipe".into()))?;
             stdin
                 .write_all(context_json.as_bytes())
                 .await
-                .map_err(|e| SandboxError::IpcError(format!("failed to write to child stdin: {e}")))?;
+                .map_err(|e| {
+                    SandboxError::IpcError(format!("failed to write to child stdin: {e}"))
+                })?;
             stdin
                 .shutdown()
                 .await

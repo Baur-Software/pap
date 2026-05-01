@@ -71,8 +71,7 @@ where
         .try_into()
         .map_err(|_| SandboxError::EncryptionError("ephemeral key must be 32 bytes".into()))?;
 
-    let query_bytes =
-        crate::ipc::decrypt(&context.query_enc, &ephemeral_key, &context.nonce)?;
+    let query_bytes = crate::ipc::decrypt(&context.query_enc, &ephemeral_key, &context.nonce)?;
     let session_id = String::from_utf8(query_bytes)
         .map_err(|e| SandboxError::IpcError(format!("invalid session_id UTF-8: {e}")))?;
 
@@ -131,9 +130,9 @@ fn parse_policy_from_args() -> Result<CapabilityPolicy, SandboxError> {
         .position(|a| a == "--policy")
         .ok_or_else(|| SandboxError::IpcError("missing --policy argument".into()))?;
 
-    let policy_json = args.get(policy_idx + 1).ok_or_else(|| {
-        SandboxError::IpcError("--policy requires a JSON value".into())
-    })?;
+    let policy_json = args
+        .get(policy_idx + 1)
+        .ok_or_else(|| SandboxError::IpcError("--policy requires a JSON value".into()))?;
 
     serde_json::from_str(policy_json)
         .map_err(|e| SandboxError::IpcError(format!("invalid policy JSON: {e}")))
@@ -146,7 +145,9 @@ fn read_context_from_stdin() -> Result<ExecutionContext, SandboxError> {
         .map_err(|e| SandboxError::IpcError(format!("failed to read stdin: {e}")))?;
 
     if buf.is_empty() {
-        return Err(SandboxError::IpcError("empty stdin — no execution context received".into()));
+        return Err(SandboxError::IpcError(
+            "empty stdin — no execution context received".into(),
+        ));
     }
 
     serde_json::from_str(&buf)

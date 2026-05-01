@@ -36,8 +36,8 @@ pub struct DockerSpawner {
 }
 
 impl DockerSpawner {
-    pub async fn new(socket_path: &str) -> Result<Self, SandboxError> {
-        let client = Docker::connect_with_unix_socket(socket_path)
+    pub async fn new(_socket_path: &str) -> Result<Self, SandboxError> {
+        let client = Docker::connect_with_unix_defaults()
             .map_err(|e| SandboxError::SpawnError(format!("failed to connect to Docker: {e}")))?;
 
         Ok(Self {
@@ -141,7 +141,7 @@ impl AgentSpawner for DockerSpawner {
                 } else {
                     "none".to_string()
                 }),
-                read_only: Some(!policy.filesystem_allowed),
+                readonly_rootfs: Some(!policy.filesystem_allowed),
                 cap_drop: if policy.subprocess_allowed {
                     None
                 } else {
@@ -222,8 +222,8 @@ impl AgentSpawner for DockerSpawner {
 
             // Container exited — read stdout and parse ExecutionResult.
             let container_id = record.container_id.clone();
-            let policy = record.policy.clone();
-            let docker_flags = record.docker_flags.clone();
+            let _policy = record.policy.clone();
+            let _docker_flags = record.docker_flags.clone();
             drop(containers);
 
             let stdout_data = self.read_container_stdout(&container_id).await?;
@@ -263,11 +263,7 @@ impl AgentSpawner for DockerSpawner {
         Ok(ExecutionState::Pending)
     }
 
-    async fn terminate(
-        &self,
-        handle: &ExecutionHandle,
-        reason: &str,
-    ) -> Result<(), SandboxError> {
+    async fn terminate(&self, handle: &ExecutionHandle, reason: &str) -> Result<(), SandboxError> {
         let containers = self.containers.read().await;
         let record = containers
             .get(&handle.id)

@@ -3,7 +3,8 @@
 //! Capability enforcement:
 //! - seccomp deny-all + allowlist derived from CapabilityPolicy
 //! - process is killed by SIGKILL on timeout or user termination
-//! - IPC via stdin (parent→child: ExecutionContext JSON) and stdout (child→parent: ExecutionResult JSON)
+//!
+//! IPC via stdin (parent→child: ExecutionContext JSON) and stdout (child→parent: ExecutionResult JSON).
 
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -80,7 +81,7 @@ impl LinuxSpawner {
         mut child: tokio::process::Child,
         exit_code: i32,
         elapsed_ms: u64,
-        policy: &CapabilityPolicy,
+        _policy: &CapabilityPolicy,
     ) -> ExecutionState {
         let stdout_data = match child.stdout.take() {
             Some(stdout) => {
@@ -157,13 +158,16 @@ impl AgentSpawner for LinuxSpawner {
         // Write ExecutionContext JSON to child stdin, then close it so the child
         // sees EOF and can proceed with execution.
         {
-            let stdin = child.stdin.as_mut().ok_or_else(|| {
-                SandboxError::IpcError("failed to open child stdin pipe".into())
-            })?;
+            let stdin = child
+                .stdin
+                .as_mut()
+                .ok_or_else(|| SandboxError::IpcError("failed to open child stdin pipe".into()))?;
             stdin
                 .write_all(context_json.as_bytes())
                 .await
-                .map_err(|e| SandboxError::IpcError(format!("failed to write to child stdin: {e}")))?;
+                .map_err(|e| {
+                    SandboxError::IpcError(format!("failed to write to child stdin: {e}"))
+                })?;
             stdin
                 .shutdown()
                 .await

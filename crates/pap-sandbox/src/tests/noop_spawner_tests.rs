@@ -21,7 +21,9 @@ mod tests {
     #[tokio::test]
     async fn test_noop_spawner_spawn_returns_error() {
         let spawner = NoopSpawner;
-        let result = spawner.spawn(CapabilityPolicy::default(), test_context()).await;
+        let result = spawner
+            .spawn(CapabilityPolicy::default(), test_context())
+            .await;
 
         assert!(result.is_err(), "NoopSpawner::spawn must error");
         let msg = result.unwrap_err().to_string();
