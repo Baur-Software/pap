@@ -373,6 +373,9 @@ export const AgentsPage = {
 
   /**
    * Poll until an agent with the given name appears in the list.
+   * Types the agent name into the search filter input so results are scoped
+   * regardless of how many total agents are registered (avoids pagination issues
+   * when the catalog is pre-seeded with hundreds of agents).
    * Uses exponential backoff: 100ms to 200ms to 500ms to 1s to 2s to 5s.
    */
   async waitForAgentInList(
@@ -387,6 +390,14 @@ export const AgentsPage = {
 
     while (Date.now() - start < timeoutMs) {
       await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
+
+      // Type the agent name into the search filter so the list is scoped,
+      // avoiding false negatives when results are paginated across many agents.
+      const searchInput = page.locator(".filter-input");
+      if (await searchInput.isVisible()) {
+        await searchInput.fill(agentName);
+        await page.waitForTimeout(300); // let reactive re-render settle
+      }
 
       // AgentsPage renders .agent-card elements with .agent-name inside
       const found = await page
