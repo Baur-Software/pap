@@ -6,54 +6,58 @@ mod tests {
     async fn test_detect_runtime_returns_valid_environment() {
         let runtime = detect_runtime().await;
 
+        // Must return one of the three variants — never panic.
         match runtime {
-            RuntimeEnvironment::Bare { .. } => {
-                // Expected on native platforms
-            }
-            RuntimeEnvironment::Docker { socket_path } => {
-                // Expected if running in Docker with socket mounted
+            RuntimeEnvironment::Bare { .. } => {}
+            RuntimeEnvironment::Docker { ref socket_path } => {
                 assert!(!socket_path.is_empty());
             }
-            RuntimeEnvironment::Unsupported => {
-                // Less common, but possible on obscure platforms
-            }
+            RuntimeEnvironment::Unsupported => {}
         }
     }
 
     #[tokio::test]
-    async fn test_detect_runtime_consistent() {
+    async fn test_detect_runtime_is_deterministic() {
         let runtime1 = detect_runtime().await;
         let runtime2 = detect_runtime().await;
 
-        // Subsequent calls should return the same variant
-        // (may have different values if socket paths vary, but type should match)
-        std::mem::discriminant(&runtime1) == std::mem::discriminant(&runtime2);
+        assert_eq!(
+            std::mem::discriminant(&runtime1),
+            std::mem::discriminant(&runtime2),
+            "detect_runtime must return the same variant on repeated calls"
+        );
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
-    async fn test_bare_platform_has_capabilities() {
+    async fn test_linux_reports_seccomp() {
         let runtime = detect_runtime().await;
+        if let RuntimeEnvironment::Bare { seccomp, .. } = runtime {
+            assert!(seccomp, "Linux bare metal must report seccomp capability");
+        }
+        // If Docker, that's also valid — we're in a container
+    }
 
-        if let RuntimeEnvironment::Bare {
-            seccomp,
-            pledge,
-            entitlements,
-            job_objects,
-        } = runtime
-        {
-            // At least one capability should be true on a real platform.
-            let has_any = seccomp || pledge || entitlements || job_objects;
-            #[cfg(any(
-                target_os = "linux",
-                target_os = "freebsd",
-                target_os = "openbsd",
-                target_os = "netbsd",
-                target_os = "macos",
-                target_os = "windows"
-            ))]
+    #[cfg(target_os = "windows")]
+    #[tokio::test]
+    async fn test_windows_reports_job_objects() {
+        let runtime = detect_runtime().await;
+        if let RuntimeEnvironment::Bare { job_objects, .. } = runtime {
             assert!(
-                has_any,
-                "Expected at least one capability on supported platform"
+                job_objects,
+                "Windows bare metal must report job_objects capability"
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn test_macos_reports_entitlements() {
+        let runtime = detect_runtime().await;
+        if let RuntimeEnvironment::Bare { entitlements, .. } = runtime {
+            assert!(
+                entitlements,
+                "macOS bare metal must report entitlements capability"
             );
         }
     }
