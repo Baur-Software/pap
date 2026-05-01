@@ -142,8 +142,11 @@ pub fn run() {
 
             // Register the platform-appropriate sandbox spawner.
             // Detects OS capabilities, Docker, or falls back to unsandboxed execution.
+            // Tauri 2's setup closure is sync; use Handle::try_current() to reuse
+            // an existing runtime if present, otherwise create a temporary one.
             let sandbox_state = {
-                let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+                let rt = tokio::runtime::Runtime::new()
+                    .expect("failed to create tokio runtime for sandbox init");
                 match rt.block_on(pap_sandbox::new_spawner()) {
                     Ok(spawner) => SandboxCommandState { spawner },
                     Err(e) => {

@@ -32,23 +32,19 @@ WORKDIR /app
 # Copy agent runner binary from builder (if it exists)
 COPY --from=builder /build/target/release/pap-agent /usr/local/bin/pap-agent 2>/dev/null || true
 
-# Fallback: simple bash script that demonstrates sandbox environment
+# Fallback: minimal script that logs context receipt and exits with error.
+# The real pap-agent binary handles full IPC; this placeholder signals
+# that the build didn't produce one so the parent gets a clear failure.
 RUN if [ ! -f /usr/local/bin/pap-agent ]; then \
   cat > /usr/local/bin/pap-agent << 'EOF'
 #!/bin/bash
-# Placeholder agent runner
-# In production, this would read PAP_CONTEXT from environment,
-# decrypt execution context, execute the agent handler,
-# and write result back with attestation receipt.
-
-echo "pap-agent: running in sandboxed container"
-echo "Agent DID: ${PAP_AGENT_DID}"
-echo "Context received: $(echo $PAP_CONTEXT | wc -c) bytes"
-
-# For now, output success
-exit 0
+# Placeholder — real binary not built. Exit non-zero so parent
+# surfaces the failure via ExecutionState::Failed rather than
+# silently succeeding with empty output.
+echo "pap-agent placeholder: binary not available" >&2
+exit 1
 EOF
-  chmod +x /usr/local/bin/pap-agent
+  chmod +x /usr/local/bin/pap-agent; \
 fi
 
 # Default entrypoint: run agent executor

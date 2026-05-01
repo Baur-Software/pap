@@ -2,8 +2,8 @@
 //!
 //! When running inside a container with Docker socket mounted, agents spawn as
 //! sibling containers (not nested) with capability constraints mapped to docker run flags.
-//! The container runs the worker binary which reads ExecutionContext from PAP_CONTEXT env
-//! and writes ExecutionResult JSON to stdout.
+//! The container runs the worker binary which reads ExecutionContext from the PAP_CONTEXT
+//! env var and writes ExecutionResult JSON to stdout.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -48,13 +48,12 @@ impl DockerSpawner {
     }
 
     fn build_docker_flags(policy: &CapabilityPolicy) -> Vec<String> {
-        let mut flags = Vec::new();
+        let mut flags = vec!["--cap-drop=ALL".to_string()];
         if !policy.network_allowed {
             flags.push("--network=none".to_string());
         }
-        if !policy.subprocess_allowed {
-            flags.push("--cap-drop=SYS_FORK".to_string());
-            flags.push("--cap-drop=SYS_CLONE".to_string());
+        if policy.network_allowed {
+            flags.push("--cap-add=NET_RAW".to_string());
         }
         if !policy.filesystem_allowed {
             flags.push("--read-only".to_string());
@@ -132,9 +131,7 @@ impl AgentSpawner for DockerSpawner {
                 format!("PAP_CONTEXT={context_json}"),
                 format!("PAP_AGENT_DID={}", context.agent_did),
             ]),
-            attach_stdin: Some(true),
             attach_stdout: Some(true),
-            open_stdin: Some(true),
             host_config: Some(HostConfig {
                 network_mode: Some(if policy.network_allowed {
                     "bridge".to_string()
@@ -142,10 +139,11 @@ impl AgentSpawner for DockerSpawner {
                     "none".to_string()
                 }),
                 readonly_rootfs: Some(!policy.filesystem_allowed),
-                cap_drop: if policy.subprocess_allowed {
-                    None
+                cap_drop: Some(vec!["ALL".to_string()]),
+                cap_add: if policy.network_allowed {
+                    Some(vec!["NET_RAW".to_string()])
                 } else {
-                    Some(vec!["SYS_FORK".to_string(), "SYS_CLONE".to_string()])
+                    None
                 },
                 memory: Some(256i64 * 1024 * 1024),
                 ..Default::default()
@@ -220,44 +218,47 @@ impl AgentSpawner for DockerSpawner {
                 return Ok(ExecutionState::TimedOut { elapsed_ms });
             }
 
-            // Container exited — read stdout and parse ExecutionResult.
+            // Container exited — read stdout, parse ExecutionResult, then clean up.
             let container_id = record.container_id.clone();
-            let _policy = record.policy.clone();
-            let _docker_flags = record.docker_flags.clone();
             drop(containers);
 
             let stdout_data = self.read_container_stdout(&container_id).await?;
 
-            if exit_code != 0 || stdout_data.is_empty() {
-                return Ok(ExecutionState::Failed {
+            let state = if exit_code != 0 || stdout_data.is_empty() {
+                ExecutionState::Failed {
                     reason: format!(
                         "container exited with code {exit_code}, stdout {} bytes",
                         stdout_data.len()
                     ),
                     elapsed_ms,
-                });
-            }
-
-            match serde_json::from_slice::<ExecutionResult>(&stdout_data) {
-                Ok(exec_result) => {
-                    let receipt = exec_result.receipt.clone();
-                    let mut results = self.results.write().await;
-                    results.insert(handle.id.clone(), (exec_result, receipt));
-                    return Ok(ExecutionState::Completed {
-                        exit_code,
-                        elapsed_ms,
-                    });
                 }
-                Err(_) => {
-                    return Ok(ExecutionState::Failed {
+            } else {
+                match serde_json::from_slice::<ExecutionResult>(&stdout_data) {
+                    Ok(exec_result) => {
+                        let receipt = exec_result.receipt.clone();
+                        let mut results = self.results.write().await;
+                        results.insert(handle.id.clone(), (exec_result, receipt));
+                        ExecutionState::Completed {
+                            exit_code,
+                            elapsed_ms,
+                        }
+                    }
+                    Err(_) => ExecutionState::Failed {
                         reason: format!(
                             "container exited OK but stdout is not valid ExecutionResult JSON ({} bytes)",
                             stdout_data.len()
                         ),
                         elapsed_ms,
-                    });
+                    },
                 }
-            }
+            };
+
+            // Clean up: remove container from Docker daemon and our tracking map.
+            let _ = self.client.remove_container(&container_id, None).await;
+            let mut containers = self.containers.write().await;
+            containers.remove(&handle.id);
+
+            return Ok(state);
         }
 
         Ok(ExecutionState::Pending)

@@ -61,8 +61,8 @@ where
     // 1. Parse --policy from args.
     let policy = parse_policy_from_args()?;
 
-    // 2. Read ExecutionContext from stdin.
-    let context = read_context_from_stdin()?;
+    // 2. Read ExecutionContext (env var for Docker, stdin for native).
+    let context = read_context()?;
 
     // 3. Decrypt the query using ephemeral key (simplified: key is in-band).
     let ephemeral_key: [u8; 32] = context
@@ -138,7 +138,14 @@ fn parse_policy_from_args() -> Result<CapabilityPolicy, SandboxError> {
         .map_err(|e| SandboxError::IpcError(format!("invalid policy JSON: {e}")))
 }
 
-fn read_context_from_stdin() -> Result<ExecutionContext, SandboxError> {
+fn read_context() -> Result<ExecutionContext, SandboxError> {
+    // Docker spawner passes context via PAP_CONTEXT env var;
+    // native spawners write to stdin. Check env first, fall back to stdin.
+    if let Ok(env_ctx) = std::env::var("PAP_CONTEXT") {
+        return serde_json::from_str(&env_ctx)
+            .map_err(|e| SandboxError::IpcError(format!("invalid PAP_CONTEXT JSON: {e}")));
+    }
+
     let mut buf = String::new();
     io::stdin()
         .read_to_string(&mut buf)
@@ -146,7 +153,7 @@ fn read_context_from_stdin() -> Result<ExecutionContext, SandboxError> {
 
     if buf.is_empty() {
         return Err(SandboxError::IpcError(
-            "empty stdin — no execution context received".into(),
+            "empty stdin and no PAP_CONTEXT env — no execution context received".into(),
         ));
     }
 

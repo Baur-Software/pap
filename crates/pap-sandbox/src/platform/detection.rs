@@ -54,6 +54,11 @@ pub async fn detect_runtime() -> RuntimeEnvironment {
             entitlements,
             job_objects,
         }
+    } else if let Some(socket) = find_docker_socket().await {
+        // Bare-metal host without native sandbox capabilities but Docker is available.
+        RuntimeEnvironment::Docker {
+            socket_path: socket,
+        }
     } else {
         RuntimeEnvironment::Unsupported
     }
