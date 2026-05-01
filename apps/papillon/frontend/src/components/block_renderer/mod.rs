@@ -288,7 +288,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                         <div class="ghost-scope">
                             <Show when=move || !disclosures_empty>
                                 <div class="ghost-disclosure">
-                                    <span class="ghost-scope-label">"Will see"</span>
+                                    <span class="ghost-scope-label">"Needs from you"</span>
                                     <div class="scope-badges">
                                         {disclosures.iter().map(|d| {
                                             let d = d.clone();
@@ -299,7 +299,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                             </Show>
                             <Show when=move || !returns_empty>
                                 <div class="ghost-returns">
-                                    <span class="ghost-scope-label">"Will return"</span>
+                                    <span class="ghost-scope-label">"You'll get"</span>
                                     <div class="scope-badges">
                                         {returns.iter().map(|r| {
                                             let r = r.clone();
@@ -334,9 +334,8 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                     let cs_approve = canvas_state;
                     let cs_reject = canvas_state;
 
-                    // Button labels vary by disclosure risk.
-                    let approve_label = if has_disclosure { "[ GRANT ACCESS ]" } else { "[ ALLOW ]" };
-                    let reject_label = if has_disclosure { "[ DENY ]" } else { "[ DECLINE ]" };
+                    let approve_label = if has_disclosure { "Allow" } else { "Allow" };
+                    let reject_label = if has_disclosure { "Decline" } else { "Decline" };
 
                     // TTL from the plan (sourced from orchestrator config at plan-build time).
                     let ttl_hours = plan.ttl_hours;
@@ -368,20 +367,19 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
 
                     view! {
                         <div class="awaiting-approval-header">
-                            <span class="approval-header-label">"AGENT REQUEST"</span>
                             <span class="approval-agent-name">{agent_name}</span>
-                            <span class="approval-action-sep">"·"</span>
+                            <span class="approval-action-sep">"wants to"</span>
                             <span class="approval-action-label">{action_label}</span>
                         </div>
 
-                        <div class="awaiting-approval-section-label">"WILL RETURN"</div>
+                        <div class="awaiting-approval-section-label">"You'll get"</div>
                         <div class="approval-schema-type">{skeleton_type_label}</div>
                         <div class="awaiting-approval-skeleton-wrap">
                             {skeleton_view}
                         </div>
 
                         <Show when=move || has_disclosure>
-                            <div class="awaiting-approval-section-label">"WILL NEED FROM YOU"</div>
+                            <div class="awaiting-approval-section-label">"Needs from you"</div>
                             <div class="awaiting-approval-disclosure">
                                 {disclosure_items.iter().map(|item| {
                                     let label = item
@@ -395,10 +393,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                         </Show>
 
                         <div class="awaiting-approval-mandate-note">
-                            {format!("DATA VALID  \u{007e}{}h  \u{00b7}  refresh any time", ttl_hours)}
-                        </div>
-                        <div class="awaiting-approval-mandate-note">
-                            "PERMISSION REVOKES  when the time above runs out"
+                            {format!("Access lasts \u{007e}{}h \u{00b7} renew any time", ttl_hours)}
                         </div>
 
                         <div class="awaiting-approval-actions">
@@ -527,8 +522,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                             </Show>
                             <Show when=move || is_zero_disclosure>
                                 <div class="block-zero-disclosure">
-                                    <span class="scope-badge zero-disclosure">"zero disclosure"</span>
-                                    <span class="block-zd-note">"no data left this device"</span>
+                                    <span class="scope-badge zero-disclosure">"no data shared"</span>
                                 </div>
                             </Show>
                             <Show when=move || has_ttl>
@@ -569,7 +563,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                         <PhaseDots current_phase=phase failed=true />
                         <div class="block-failed-info">
                             <span class="block-failed-msg">
-                                {format!("Failed at phase {}: {}", phase, reason)}
+                                {reason.clone()}
                             </span>
                             <div class="block-failed-actions">
                                 <button class="btn-retry" on:click=on_retry>"Retry"</button>
