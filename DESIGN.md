@@ -177,5 +177,5 @@ The inline prompt is embedded in the canvas, not overlayed. The `Cmd+K` overlay 
 1. **Purple is the brand.** Always.
 2. **Wing spectrum for semantics.** Teal = trust. Gold = working. Coral = broken.
 3. **Text only rendering.** No innerHTML. No user-controlled HTML.
-4. **On-device first.** Default architecture runs inference locally.
-5. **Zero-trust is visible.** Disclosure status, phase dots, and block states make the handshake observable.
+4. **On-device first.** Default architecture runs inference locally. Agents execute in sandboxed isolation.
+5. **Zero-trust is visible.** Disclosure status, execution constraints, and block states make the handshake observable. Every receipt shows what was allowed to happen.

@@ -34,17 +34,23 @@ Existing agent protocols fail here because they were designed for single-operato
 - **LangGraph, CrewAI, OpenAI SDK** default to monolithic context: every agent sees everything. No mechanism to send less.
 - **The structural failure:** When an API in the chain is compromised, the attacker gets the full principal context (credit cards, travel history, medical data, everything the orchestrator knew).
 
-Sandboxing constrains *what an agent can do*. It does not constrain *what it can see*. You cannot solve a disclosure problem with execution controls.
+**The false dichotomy:** Sandboxing constrains *what an agent can do*. Disclosure controls constrain *what it can see*. Both are required. You cannot solve a disclosure problem with execution controls alone—but you also cannot solve execution compromise with disclosure controls alone.
 
 ## The Design
 
-PAP makes it the protocol's problem.
+PAP seals the entire stack: both request (input) and execution (output/behavior).
 
 The human principal is the root of trust. Every agent carries a cryptographically verifiable mandate. Sessions are ephemeral by design. Context disclosure is enforced by protocol, not policy. The cloud is a stateless utility, not a relationship that accumulates principal context.
 
-**PAP's answer:** Protocol-enforced selective disclosure via SD-JWT. An agent receives only the properties its mandate permits—undisclosed claims don't exist on the wire. A compromised hotel API gets check-in, checkout, city. That's the blast radius. Not defense-in-depth. Protocol design.
+**Two-boundary security model:**
 
-Every session is ephemeral and unlinked to principal identity. Both parties co-sign receipts recording *which properties were disclosed*, never their values. The agent forgets everything at session close.
+1. **Request boundary (disclosure)** — Protocol-enforced selective disclosure via SD-JWT. An agent receives only the properties its mandate permits—undisclosed claims don't exist on the wire. A compromised hotel API gets check-in, checkout, city. That's the blast radius.
+
+2. **Execution boundary (sandbox)** — OS-level capability enforcement (seccomp, pledge, entitlements, job objects) seals what the agent can actually *do*. Network access blocked. Filesystem access restricted. Subprocess spawning prevented. Even if an agent is compromised or malicious code is injected, the execution environment makes it extremely hard to cause damage.
+
+**Together:** Minimum data surface + maximum execution constraints. The attacker gets less to work with, and less they can do with it.
+
+Every session is ephemeral and unlinked to principal identity. Both parties co-sign receipts recording *which properties were disclosed* and *what constraints were enforced*, never the values. The agent forgets everything at session close.
 
 **No new cryptography. No token economy. No central registry.**
 
@@ -71,10 +77,12 @@ Five constraints enforced at the protocol level:
 
 ### Papillon — Desktop Agent Canvas
 
-One canvas. Many agents. Your rules. Papillon is a Tauri desktop app that lets you compose specialized AI agents — each scoped by a cryptographic mandate, each running in its own ephemeral session. Preview their plans, approve their actions, verify their results. No agent ever sees your full context.
+One canvas. Many agents. Your rules. Papillon is a Tauri desktop app that lets you compose specialized AI agents — each scoped by a cryptographic mandate, each running in its own sandboxed, ephemeral session. Preview their plans, approve their actions, verify their results. No agent ever sees your full context. Every agent runs under enforced capability constraints.
 
 - **Built-in LLM support** with on-demand model downloading
 - **Canvas-based agent orchestration** with PAP mandates enforcing scope
+- **Sandboxed execution** with OS-level capability enforcement (seccomp/pledge/entitlements)
+- **Cryptographic attestation** — every execution co-signed with proof of constraints applied
 - **WebAuthn device-bound identity** — your keys never leave your hardware
 - **Deep-link protocol** (`pap://`, `pap+https://`, `pap+wss://`)
 
@@ -86,9 +94,10 @@ just papillon              # or: cd apps/papillon && cargo tauri dev
 
 ### Chrysalis — Federated Agent Registry
 
-Publish your agent. Let any canvas find it. Chrysalis is a self-hostable federated registry node. Deploy one to make your agents discoverable, or form a mesh with other nodes via the federation protocol.
+Publish your agent. Let any canvas find it. Chrysalis is a self-hostable federated registry node. Deploy one to make your agents discoverable, or form a mesh with other nodes via the federation protocol. Every agent in the registry is executed with sandboxed isolation and capability attestation.
 
 - **Axum + Leptos SSR** — server-rendered web UI, admin REST API, federation endpoints
+- **Per-agent sandbox control** — enable/disable execution isolation per agent with cryptographic enforcement proof
 - **SQLite or Postgres** — single-node or clustered deployments
 - **Ed25519 signature verification** at ingest — unsigned or tampered advertisements rejected
 - **TLS fingerprint pinning** — no CA dependency; DIDs are the trust root
@@ -331,13 +340,14 @@ An open agent network needs a registry for discovery, pre-session disclosure mat
 |---------|-----|-----|-----|-----|
 | **Trust Root** | Platform entity | Model + tools | Enterprise gateway | Human principal |
 | **Protocol Enforces Disclosure?** | No ("opacity principle") | No (spec says aspirational) | No | Yes (SD-JWT structural guarantee) |
+| **Execution Isolation** | No | No | No | Yes (OS sandbox + capability attestation) |
 | **Session Ephemerality** | No | Stateful | Stateless option | Ephemeral DIDs, keys always discarded |
 | **Selective Disclosure** | No (all or nothing) | No (all or nothing) | No (all or nothing) | Yes (per-field, cryptographic) |
 | **Mandate Chain Verification** | No | No | No | Yes (recursive scope/TTL bounds) |
 | **Agent-to-Agent Negotiation** | Yes | No (tool access only) | Yes | Yes |
 | **Economic Primitives** | No | No | No | Ecash / Lightning proofs, receipts |
-| **Marketplace Discovery** | Agent Cards (centralized) | None | HTTP (centralized) | Federated, federated (Chrysalis) |
-| **Audit Trail** | No | No | No | Co-signed receipts (property refs only) |
+| **Marketplace Discovery** | Agent Cards (centralized) | None | HTTP (centralized) | Federated (Chrysalis) |
+| **Audit Trail** | No | No | No | Co-signed receipts (disclosure + constraint proof) |
 | **Multi-Language Support** | No | Limited | Limited | Rust, Python, JS/TS, C, C#, Java |
 
 ## Performance

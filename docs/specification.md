@@ -59,20 +59,25 @@ Appendices:
 Existing agent-to-agent protocols authenticate agents as platform
 entities, not as delegates of human principals. None enforce context
 minimization at the protocol level. Disclosure is
-implementation-dependent. Session ephemerality is undefined. Economic
-models underneath these protocols are compatible with platform
-capture through cloud compute metering.
+implementation-dependent. Session ephemerality is undefined. Execution
+isolation is absent—agents run in the same address space as the
+orchestrator or other services, creating blast radius problems even
+when disclosure is minimized. Economic models underneath these
+protocols are compatible with platform capture through cloud compute
+metering.
 
 ### 1.2. Design Goals
 
 PAP is designed to satisfy the following goals:
 
 1. The human principal is the root of trust for every transaction.
-2. Context disclosure is enforced by the protocol, not by policy.
-3. Sessions are ephemeral by design; no persistent correlation.
-4. Delegation is hierarchical with cryptographically enforced bounds.
-5. No novel cryptography, no token economy, no central registry.
-6. Any compliant implementation MUST be buildable from this document
+2. Context disclosure is enforced by the protocol at the request boundary (via SD-JWT).
+3. Execution is isolated at the process boundary via OS-level capabilities.
+4. Sessions are ephemeral by design; no persistent correlation.
+5. Delegation is hierarchical with cryptographically enforced bounds.
+6. Co-signed receipts prove both disclosure scope and execution constraints.
+7. No novel cryptography, no token economy, no central registry.
+8. Any compliant implementation MUST be buildable from this document
    alone, without reference to a specific programming language.
 
 ### 1.3. Protocol Overview
@@ -81,10 +86,12 @@ A PAP transaction involves:
 
 - A **human principal** who holds a device-bound keypair.
 - An **orchestrator agent** operating under a root mandate.
-- One or more **downstream agents** operating under delegated mandates.
+- One or more **downstream agents** operating under delegated mandates, each executing in sandboxed isolation.
 - A **marketplace** for agent discovery and disclosure filtering.
 - A **6-phase session handshake** between pairs of agents.
-- **Co-signed receipts** recording property references, never values.
+- **Request boundary security** via SD-JWT selective disclosure (minimize what the agent sees).
+- **Execution boundary security** via OS sandboxing (minimize what the agent can do).
+- **Co-signed receipts** recording property references and enforcement proof, never values.
 
 ---
 
