@@ -559,6 +559,58 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                     let on_dismiss = move |_| {
                         canvas_state.delete_block(&dismiss_block_id);
                     };
+
+                    // Discovery state: no enabled agent can handle this intent.
+                    // Extract the action type from the standard error message.
+                    if reason.starts_with("No agent available for") {
+                        // Parse: "No agent available for 'SearchAction'. Navigate to a registry first."
+                        let action_hint = reason
+                            .trim_start_matches("No agent available for '")
+                            .split('\'')
+                            .next()
+                            .unwrap_or("this")
+                            .trim_start_matches("schema:")
+                            .to_string();
+                        let action_hint2 = action_hint.clone();
+                        let dismiss_id2 = block_ctx.id.get_value();
+                        let on_dismiss2 = move |_| {
+                            canvas_state.delete_block(&dismiss_id2);
+                        };
+                        let on_browse = move |_: leptos::ev::MouseEvent| {
+                            if let Some(win) = web_sys::window() {
+                                let _ = win.location().set_href("/browse");
+                            }
+                        };
+                        let on_retry2 = on_retry;
+                        return view! {
+                            <div class="block-discovery">
+                                <div class="discovery-icon">"✦"</div>
+                                <div class="discovery-body">
+                                    <p class="discovery-heading">
+                                        "No agent can do this yet"
+                                    </p>
+                                    <p class="discovery-hint">
+                                        {format!("Papillon found no enabled agent for \u{201c}{}\u{201d}. Add one from the registry.", action_hint)}
+                                    </p>
+                                </div>
+                                <div class="discovery-actions">
+                                    <button class="discovery-btn-primary" on:click=on_browse>
+                                        "Browse agents"
+                                    </button>
+                                    <button class="btn-retry discovery-btn-secondary" on:click=on_retry2>
+                                        "Retry"
+                                    </button>
+                                    <button class="btn-dismiss discovery-btn-dismiss" on:click=on_dismiss2 title="Dismiss">
+                                        {format!("\u{00d7}")}
+                                    </button>
+                                </div>
+                                <div class="discovery-edu">
+                                    {format!("Adding an agent for \u{201c}{}\u{201d} does not approve access to your personal data.", action_hint2)}
+                                </div>
+                            </div>
+                        }.into_any();
+                    }
+
                     view! {
                         <PhaseDots current_phase=phase failed=true />
                         <div class="block-failed-info">

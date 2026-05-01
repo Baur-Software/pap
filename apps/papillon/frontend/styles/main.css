@@ -2656,6 +2656,94 @@ body {
     color: var(--text-2);
 }
 
+/* Discovery block — "nothing can do this yet" */
+.canvas-block.failed .block-discovery,
+.block-discovery {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-sm);
+    padding: var(--sp-md);
+}
+
+.discovery-icon {
+    font-size: 22px;
+    color: var(--purple);
+    line-height: 1;
+}
+
+.discovery-heading {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin: 0;
+}
+
+.discovery-hint {
+    font-size: 12px;
+    color: var(--text-muted, rgba(255,255,255,0.5));
+    margin: 2px 0 0;
+}
+
+.discovery-actions {
+    display: flex;
+    gap: var(--sp-xs);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.discovery-btn-primary {
+    background: var(--purple);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm, 6px);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.discovery-btn-primary:hover {
+    opacity: 0.85;
+}
+
+.discovery-btn-secondary {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    border-radius: var(--radius-sm, 6px);
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.discovery-btn-secondary:hover {
+    border-color: var(--text-2);
+}
+
+.discovery-btn-dismiss {
+    background: none;
+    border: none;
+    color: var(--text-muted, rgba(255,255,255,0.35));
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    margin-left: auto;
+    line-height: 1;
+}
+
+.discovery-btn-dismiss:hover {
+    color: var(--text-2);
+}
+
+.discovery-edu {
+    font-size: 11px;
+    color: var(--text-muted, rgba(255,255,255,0.35));
+    padding-top: var(--sp-xs);
+    border-top: 1px solid var(--border);
+    line-height: 1.5;
+}
+
 /* Inline re-prompt input */
 .block-reprompt {
     margin-top: var(--sp-sm);
