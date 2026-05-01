@@ -101,6 +101,12 @@
     --r-sm: 4px;
     --r-md: 8px;
     --r-lg: 12px;
+    --r-xl: 20px;
+
+    /* Elevation */
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.18);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.28);
+    --shadow-lg: 0 8px 28px rgba(0,0,0,0.38);
 
     /* Layout */
     --sidebar-width: 64px;
@@ -2490,17 +2496,26 @@ body {
     border-radius: var(--r-md);
     padding: var(--sp-md);
     max-width: var(--block-max-width);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
     position: relative;
+    box-shadow: var(--shadow-sm);
 }
 
 .canvas-block:hover {
-    border-color: rgba(108, 92, 231, 0.3);
+    border-color: rgba(108, 92, 231, 0.35);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
 }
 
 .canvas-block:focus-within {
     outline: 2px solid var(--purple);
     outline-offset: 2px;
+    box-shadow: var(--shadow-md);
+}
+
+/* Resolved blocks: slightly lighter surface, give them identity */
+.canvas-block:not(.ghost):not(.awaiting-approval):not(.resolving):not(.failed) {
+    background: var(--bg-1);
 }
 
 .canvas-block.resolving {
@@ -2657,31 +2672,44 @@ body {
 }
 
 /* Discovery block — "nothing can do this yet" */
+.canvas-block.failed {
+    border-color: var(--border);
+    box-shadow: var(--shadow-sm);
+}
+
 .canvas-block.failed .block-discovery,
 .block-discovery {
     display: flex;
     flex-direction: column;
     gap: var(--sp-sm);
-    padding: var(--sp-md);
 }
 
 .discovery-icon {
-    font-size: 22px;
+    font-size: 18px;
     color: var(--purple);
     line-height: 1;
 }
 
+.discovery-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
 .discovery-heading {
+    font-family: var(--font-display);
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-1);
     margin: 0;
+    letter-spacing: -0.01em;
 }
 
 .discovery-hint {
     font-size: 12px;
-    color: var(--text-muted, rgba(255,255,255,0.5));
-    margin: 2px 0 0;
+    color: var(--text-2);
+    line-height: 1.5;
+    margin: 0;
 }
 
 .discovery-actions {
@@ -2689,59 +2717,70 @@ body {
     gap: var(--sp-xs);
     align-items: center;
     flex-wrap: wrap;
+    padding-top: var(--sp-xs);
 }
 
 .discovery-btn-primary {
     background: var(--purple);
     color: #fff;
     border: none;
-    border-radius: var(--radius-sm, 6px);
-    padding: 6px 14px;
+    border-radius: var(--r-sm);
+    padding: 7px 14px;
+    font-family: var(--font-body);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: background 0.15s, box-shadow 0.15s;
 }
 
 .discovery-btn-primary:hover {
-    opacity: 0.85;
+    background: var(--purple-hover);
+    box-shadow: 0 0 0 3px var(--purple-glow);
 }
 
 .discovery-btn-secondary {
     background: none;
     border: 1px solid var(--border);
     color: var(--text-2);
-    border-radius: var(--radius-sm, 6px);
-    padding: 5px 12px;
+    border-radius: var(--r-sm);
+    padding: 6px 12px;
+    font-family: var(--font-body);
     font-size: 12px;
     cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
 }
 
 .discovery-btn-secondary:hover {
     border-color: var(--text-2);
+    color: var(--text-1);
 }
 
 .discovery-btn-dismiss {
     background: none;
     border: none;
-    color: var(--text-muted, rgba(255,255,255,0.35));
-    font-size: 16px;
+    color: var(--text-3);
+    font-size: 14px;
     cursor: pointer;
-    padding: 2px 6px;
+    padding: 4px 6px;
     margin-left: auto;
     line-height: 1;
+    border-radius: var(--r-sm);
+    transition: color 0.15s, background 0.15s;
 }
 
 .discovery-btn-dismiss:hover {
-    color: var(--text-2);
+    color: var(--text-1);
+    background: var(--bg-2);
 }
 
 .discovery-edu {
+    font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--text-muted, rgba(255,255,255,0.35));
-    padding-top: var(--sp-xs);
-    border-top: 1px solid var(--border);
+    color: var(--text-3);
+    padding-top: var(--sp-sm);
+    border-top: 1px solid var(--border-subtle);
     line-height: 1.5;
+    letter-spacing: 0.01em;
 }
 
 /* Inline re-prompt input */
@@ -2802,42 +2841,55 @@ body {
    ═══════════════════════════════════════════════════════════ */
 
 .canvas-block.ghost {
-    border: 2px dashed var(--purple-muted);
-    background: transparent;
-    opacity: 0.75;
+    border: 1px solid rgba(108, 92, 231, 0.35);
+    background: rgba(108, 92, 231, 0.04);
+    box-shadow: inset 0 0 0 1px rgba(108, 92, 231, 0.08);
 }
 
 .canvas-block.ghost:hover {
-    opacity: 1;
-    border-color: var(--purple);
+    border-color: rgba(108, 92, 231, 0.6);
+    background: rgba(108, 92, 231, 0.07);
 }
 
 .ghost-header {
     display: flex;
-    align-items: center;
-    gap: var(--sp-sm);
-    margin-bottom: var(--sp-xs);
+    align-items: baseline;
+    gap: var(--sp-xs);
+    margin-bottom: var(--sp-sm);
 }
 
 .ghost-agent {
     font: var(--text-ui);
-    font-family: var(--font-body);
-    font-weight: 600;
-    color: var(--text-2);
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--text-1);
+    font-size: 14px;
 }
 
 .ghost-action {
     font: var(--text-label);
     font-family: var(--font-mono);
-    letter-spacing: var(--ls-label);
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--purple);
+    font-size: 10px;
+    background: var(--purple-muted);
+    padding: 1px 6px;
+    border-radius: var(--r-sm);
+    border: 1px solid rgba(108, 92, 231, 0.2);
 }
 
 .ghost-scope {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-xs);
+    gap: var(--sp-sm);
+}
+
+.ghost-disclosure,
+.ghost-returns {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-sm);
 }
 
 .ghost-scope-label {
@@ -2846,7 +2898,10 @@ body {
     letter-spacing: var(--ls-label);
     text-transform: uppercase;
     color: var(--text-3);
-    margin-right: var(--sp-xs);
+    font-size: 10px;
+    white-space: nowrap;
+    min-width: 80px;
+    padding-top: 3px;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -5278,35 +5333,40 @@ body {
 }
 
 .hitl-reject-btn {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    padding: 8px 20px;
-    border: 1px solid rgba(232,112,106,0.4);
-    border-radius: 3px;
-    background: rgba(232,112,106,0.06);
-    color: var(--coral, #e8706a);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    padding: 9px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text-2);
     cursor: pointer;
+    transition: all 0.15s;
 }
 .hitl-reject-btn:hover {
-    background: rgba(232,112,106,0.15);
-    border-color: rgba(232,112,106,0.7);
+    background: rgba(232,112,106,0.1);
+    border-color: var(--coral);
+    color: var(--coral);
 }
 
 .hitl-authorize-btn {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    padding: 8px 20px;
-    border: 1px solid rgba(0,217,166,0.5);
-    border-radius: 3px;
-    background: rgba(0,217,166,0.08);
-    color: var(--sys-green, #00d9a6);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+    padding: 9px 20px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: var(--purple);
+    color: #fff;
     cursor: pointer;
+    transition: all 0.15s;
 }
 .hitl-authorize-btn:hover {
-    background: rgba(0,217,166,0.18);
-    border-color: rgba(0,217,166,0.8);
+    background: var(--purple-hover);
+    box-shadow: 0 0 0 3px var(--purple-glow);
 }
 
 .hitl-footnote {
@@ -5354,14 +5414,14 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: var(--sp-3xl) var(--sp-xl);
-    gap: var(--sp-md);
+    padding: var(--sp-2xl) var(--sp-xl);
+    gap: var(--sp-lg);
 }
 
 /* Agent capability tiles shown in the canvas empty state */
 .agent-tiles {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     gap: var(--sp-sm);
     width: 100%;
     max-width: 720px;
@@ -5371,55 +5431,74 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: var(--sp-2xs);
     padding: var(--sp-sm) var(--sp-md);
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
+    background: var(--surface-card-bg);
+    border: 1px solid var(--surface-card-border);
     border-radius: var(--r-md);
     cursor: pointer;
     text-align: left;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.12s;
 }
 
 .agent-tile:hover {
-    background: rgba(108, 92, 231, 0.12);
-    border-color: var(--purple);
+    background: var(--purple-muted);
+    border-color: rgba(108, 92, 231, 0.35);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
 }
 
 .agent-tile-label {
-    font: var(--text-small);
+    font-family: var(--font-body);
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-1);
-    letter-spacing: 0.03em;
+    letter-spacing: 0.01em;
 }
 
 .agent-tile-example {
-    font: var(--text-small);
+    font-family: var(--font-body);
+    font-size: 11px;
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+    line-height: 1.4;
 }
 
 /* ─── AwaitingApproval block ─── */
 .canvas-block.awaiting-approval {
-    border: 1px dashed var(--purple);
+    border: 1px solid rgba(108, 92, 231, 0.45);
     border-radius: var(--r-lg);
     padding: var(--sp-md);
-    background: transparent;
+    background: rgba(108, 92, 231, 0.05);
+    box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.1), var(--shadow-sm);
 }
 
 .awaiting-approval-header {
     display: flex;
-    align-items: center;
-    gap: var(--sp-sm);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
+    align-items: baseline;
+    gap: var(--sp-xs);
     margin-bottom: var(--sp-md);
-    font-family: var(--font-mono);
+}
+
+.approval-agent-name {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+.approval-action-sep {
+    font-size: 13px;
+    color: var(--text-3);
+}
+
+.approval-action-label {
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--text-2);
 }
 
 .awaiting-approval-section-label {
@@ -5432,14 +5511,16 @@ body {
 }
 
 .awaiting-approval-skeleton-wrap {
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--r-md);
     padding: var(--sp-sm);
     margin-bottom: var(--sp-md);
-    opacity: 0.45;
+    opacity: 0.35;
     pointer-events: none;
     overflow: hidden;
-    max-height: 160px;
+    max-height: 120px;
+    -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
 }
 
 .awaiting-approval-disclosure {
@@ -5450,10 +5531,11 @@ body {
 }
 
 .awaiting-approval-mandate-note {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-3);
     font-family: var(--font-mono);
     margin-bottom: var(--sp-md);
+    letter-spacing: 0.02em;
 }
 
 .awaiting-approval-actions {
@@ -5461,7 +5543,7 @@ body {
     justify-content: space-between;
     gap: var(--sp-sm);
     padding-top: var(--sp-md);
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid rgba(108, 92, 231, 0.15);
 }
 
 .awaiting-approval-actions .hitl-reject-btn {
@@ -5474,24 +5556,13 @@ body {
 
 /* ═══════════════════════════════════════════════════════════
    APPROVAL BLOCK HEADER — agent-centric framing
+   (Main styles live in .awaiting-approval-header above)
    ═══════════════════════════════════════════════════════════ */
 
 .approval-header-label {
     font-weight: 600;
     color: var(--purple);
     letter-spacing: var(--ls-label);
-}
-
-.approval-agent-name {
-    color: var(--text-1);
-}
-
-.approval-action-sep {
-    opacity: 0.4;
-}
-
-.approval-action-label {
-    color: var(--text-3);
 }
 
 /* Schema type label above skeleton preview */
@@ -7209,18 +7280,27 @@ body {
 
 /* ── Canvas flip toggle button ───────────────────────────────────────────── */
 .canvas-flip-toggle {
-  font-size: 12px;
-  color: var(--text-muted, #6b7280);
-  background: var(--surface-2, rgba(255,255,255,0.06));
-  border: 1px solid var(--border-subtle, rgba(255,255,255,0.1));
-  border-radius: 6px;
-  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: var(--text-3);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 5px 12px;
   cursor: pointer;
   transition: all 0.15s;
+  letter-spacing: 0.01em;
 }
 .canvas-flip-toggle:hover {
-  color: var(--purple, #6c5ce7);
-  border-color: var(--purple, #6c5ce7);
+  color: var(--purple);
+  border-color: rgba(108, 92, 231, 0.4);
+  background: var(--purple-muted);
+}
+.canvas-flip-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 12px 2px;
 }
 
 /* ── Canvas render button ────────────────────────────────────────────────── */
@@ -8534,19 +8614,86 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   GUIDE BLOCKS — system suggestions and onboarding hints
+   ═══════════════════════════════════════════════════════════ */
+
+.canvas-block.guide-block {
+    background: rgba(108, 92, 231, 0.04);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    box-shadow: none;
+}
+
+.canvas-block.guide-block:hover {
+    border-color: rgba(108, 92, 231, 0.35);
+    transform: none;
+    box-shadow: none;
+}
+
+.guide-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-sm);
+    margin-bottom: var(--sp-sm);
+}
+
+.guide-icon {
+    color: var(--purple);
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.guide-summary {
+    font: var(--text-ui);
+    font-family: var(--font-body);
+    color: var(--text-2);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.guide-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-xs);
+    padding-top: var(--sp-xs);
+}
+
+.guide-suggestion-pill {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: 5px 14px;
+    font: var(--text-ui);
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.guide-suggestion-pill:hover {
+    background: var(--purple-muted);
+    border-color: rgba(108, 92, 231, 0.4);
+    color: var(--purple);
+}
+
+/* ═══════════════════════════════════════════════════════════
    SYNTHESIS INDICATOR — rendering agent loading state
    ═══════════════════════════════════════════════════════════ */
 .synthesis-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
-    margin: 8px 0;
-    background: var(--purple-muted, rgba(108,92,231,0.08));
-    border: 1px solid var(--purple, #6c5ce7);
-    border-radius: var(--radius-md, 8px);
+    padding: 10px 14px;
+    margin: 4px 0;
+    background: var(--purple-muted);
+    border: 1px solid rgba(108, 92, 231, 0.3);
+    border-radius: var(--r-md);
     font: var(--text-ui);
-    color: var(--purple, #6c5ce7);
+    font-size: 12px;
+    color: var(--purple);
+    opacity: 0.85;
 }
 .synthesis-spinner {
     width: 16px;
