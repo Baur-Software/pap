@@ -278,9 +278,9 @@ mod tests {
     }
 
     #[test]
-    fn sandboxed_path_errors_on_platform_unsupported() {
-        // NoopSpawner::spawn() returns PlatformUnsupported; execute_sandboxed()
-        // must surface this as a TransportError rather than panicking.
+    fn sandboxed_path_with_noop_succeeds_without_isolation() {
+        // NoopSpawner is a graceful fallback when no OS or Docker isolation is available.
+        // It successfully executes agents but without capability constraints.
         // execute_sandboxed() calls Handle::current().block_on() — requires a
         // tokio runtime on the thread.  In production this is satisfied because
         // AgentServer calls execute() via spawn_blocking (runtime present).
@@ -303,8 +303,10 @@ mod tests {
             .await
             .expect("spawn_blocking did not panic")
         });
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("sandbox") || msg.contains("platform"));
+        // NoopSpawner should succeed (no isolation, but execution allowed for audit trail).
+        assert!(
+            result.is_ok(),
+            "NoopSpawner should return Ok (graceful fallback)"
+        );
     }
 }
