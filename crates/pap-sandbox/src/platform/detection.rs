@@ -1,6 +1,13 @@
 //! Runtime platform detection: OS capabilities vs Docker vs unsupported.
+//!
+//! Uses `os_capabilities::detect()` for real feature probing instead of
+//! compile-time `#[cfg]` gating. A Linux binary running in a restricted
+//! container where seccomp is blocked will correctly report `seccomp: false`
+//! and fall through to Docker or error — not silently assume it works.
 
 use std::path::Path;
+
+use crate::os_capabilities;
 
 /// The runtime environment detected at startup.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,10 +26,13 @@ pub enum RuntimeEnvironment {
 }
 
 /// Detect the current runtime environment.
+///
+/// Probes actual OS capabilities at runtime via `os_capabilities::detect()`
+/// rather than assuming availability based on compile target. This means a
+/// Linux binary where seccomp is blocked (e.g. inside a restricted container)
+/// correctly falls through to Docker spawning or returns Unsupported.
 pub async fn detect_runtime() -> RuntimeEnvironment {
-    // Check if we're in a container.
     if is_in_container() {
-        // Try to find Docker socket.
         if let Some(socket) = find_docker_socket().await {
             return RuntimeEnvironment::Docker {
                 socket_path: socket,
@@ -30,49 +40,23 @@ pub async fn detect_runtime() -> RuntimeEnvironment {
         }
     }
 
-    // Check OS capabilities based on compile-time platform.
-    #[cfg(target_os = "linux")]
-    {
-        return RuntimeEnvironment::Bare {
-            seccomp: true,
-            pledge: false,
-            entitlements: false,
-            job_objects: false,
-        };
-    }
+    let caps = os_capabilities::detect();
 
-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
-    {
-        return RuntimeEnvironment::Bare {
-            seccomp: false,
-            pledge: true,
-            entitlements: false,
-            job_objects: false,
-        };
-    }
+    let seccomp = caps.seccomp_available;
+    let pledge = caps.pledge_available;
+    let entitlements = caps.sandbox_framework_available;
+    let job_objects = caps.job_objects_available;
 
-    #[cfg(target_os = "macos")]
-    {
-        return RuntimeEnvironment::Bare {
-            seccomp: false,
-            pledge: false,
-            entitlements: true,
-            job_objects: false,
-        };
+    if seccomp || pledge || entitlements || job_objects {
+        RuntimeEnvironment::Bare {
+            seccomp,
+            pledge,
+            entitlements,
+            job_objects,
+        }
+    } else {
+        RuntimeEnvironment::Unsupported
     }
-
-    #[cfg(target_os = "windows")]
-    {
-        return RuntimeEnvironment::Bare {
-            seccomp: false,
-            pledge: false,
-            entitlements: false,
-            job_objects: true,
-        };
-    }
-
-    #[allow(unreachable_code)]
-    RuntimeEnvironment::Unsupported
 }
 
 /// Check if we're running inside a container.

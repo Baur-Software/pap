@@ -107,17 +107,24 @@ impl AgentSpawner for NoopSpawner {
 }
 
 /// Select the platform-appropriate spawner at runtime.
-/// Detects OS capabilities first, then falls back to Docker or unsandboxed execution.
+///
+/// Capability booleans come from real OS probing via `os_capabilities::detect()`,
+/// not compile-time `#[cfg]`. The `#[cfg]` gates below are only needed because
+/// the spawner *types* (LinuxSpawner, BsdSpawner, etc.) are conditionally compiled.
 pub async fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
     use crate::platform::detection::{detect_runtime, RuntimeEnvironment};
 
     match detect_runtime().await {
         RuntimeEnvironment::Bare {
             seccomp,
-            pledge: _,
-            entitlements: _,
-            job_objects: _,
+            pledge,
+            entitlements,
+            job_objects,
         } => {
+            // Suppress unused-variable warnings for capabilities whose spawner
+            // types aren't compiled on this target.
+            let _ = (&seccomp, &pledge, &entitlements, &job_objects);
+
             #[cfg(target_os = "linux")]
             if seccomp {
                 return Ok(Box::new(crate::platform::linux::LinuxSpawner::new()));
@@ -134,13 +141,13 @@ pub async fn new_spawner() -> Result<Box<dyn AgentSpawner>, SandboxError> {
             }
 
             #[cfg(target_os = "windows")]
-            {
+            if job_objects {
                 return Ok(Box::new(crate::platform::windows::WindowsSpawner::new()));
             }
 
             #[allow(unreachable_code)]
             Err(SandboxError::PlatformUnsupported(format!(
-                "OS reports bare metal but no capabilities detected ({})",
+                "OS capabilities detected but no spawner matched ({}): seccomp={seccomp}, pledge={pledge}, entitlements={entitlements}, job_objects={job_objects}",
                 std::env::consts::OS
             )))
         }

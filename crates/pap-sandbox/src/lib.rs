@@ -7,6 +7,7 @@ pub mod platform;
 pub mod policy;
 pub mod receipt;
 pub mod spawner;
+pub mod worker;
 
 #[cfg(test)]
 mod tests;

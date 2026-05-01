@@ -2,6 +2,7 @@
 //!
 //! On OpenBSD/FreeBSD: pledge() restricts the syscall surface to the declared promises.
 //! The child process calls pledge() immediately after fork, before any agent code runs.
+//! IPC via stdin (parent→child: ExecutionContext JSON) and stdout (child→parent: ExecutionResult JSON).
 
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -9,6 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;
 
 use crate::error::SandboxError;
@@ -52,6 +54,56 @@ impl BsdSpawner {
             subprocess_blocked: !policy.subprocess_allowed,
         }
     }
+
+    async fn reap_child_output(
+        &self,
+        handle_id: &str,
+        mut child: tokio::process::Child,
+        exit_code: i32,
+        elapsed_ms: u64,
+    ) -> ExecutionState {
+        let stdout_data = match child.stdout.take() {
+            Some(stdout) => {
+                use tokio::io::AsyncReadExt;
+                let mut buf = Vec::new();
+                let mut reader = tokio::io::BufReader::new(stdout);
+                match reader.read_to_end(&mut buf).await {
+                    Ok(_) => buf,
+                    Err(_) => vec![],
+                }
+            }
+            None => vec![],
+        };
+
+        if exit_code != 0 || stdout_data.is_empty() {
+            return ExecutionState::Failed {
+                reason: format!(
+                    "child exited with code {exit_code}, stdout {} bytes",
+                    stdout_data.len()
+                ),
+                elapsed_ms,
+            };
+        }
+
+        match serde_json::from_slice::<ExecutionResult>(&stdout_data) {
+            Ok(exec_result) => {
+                let receipt = exec_result.receipt.clone();
+                let mut results = self.results.write().await;
+                results.insert(handle_id.to_string(), (exec_result, receipt));
+                ExecutionState::Completed {
+                    exit_code,
+                    elapsed_ms,
+                }
+            }
+            Err(_) => ExecutionState::Failed {
+                reason: format!(
+                    "child exited OK but stdout is not valid ExecutionResult JSON ({} bytes)",
+                    stdout_data.len()
+                ),
+                elapsed_ms,
+            },
+        }
+    }
 }
 
 #[async_trait]
@@ -64,7 +116,10 @@ impl AgentSpawner for BsdSpawner {
         let handle = ExecutionHandle::new(&context.agent_did, &context.agent_name);
         let promises = policy.effective_pledge_promises();
 
-        let child = tokio::process::Command::new(
+        let context_json =
+            serde_json::to_string(&context).map_err(|e| SandboxError::IpcError(e.to_string()))?;
+
+        let mut child = tokio::process::Command::new(
             std::env::current_exe().unwrap_or_else(|_| "pap-sandbox-worker".into()),
         )
         .arg("--sandbox-worker")
@@ -79,7 +134,19 @@ impl AgentSpawner for BsdSpawner {
         .spawn()
         .map_err(|e| SandboxError::SpawnError(e.to_string()))?;
 
-        let _ = context; // wired when full IPC is implemented
+        {
+            let stdin = child.stdin.as_mut().ok_or_else(|| {
+                SandboxError::IpcError("failed to open child stdin pipe".into())
+            })?;
+            stdin
+                .write_all(context_json.as_bytes())
+                .await
+                .map_err(|e| SandboxError::IpcError(format!("failed to write to child stdin: {e}")))?;
+            stdin
+                .shutdown()
+                .await
+                .map_err(|e| SandboxError::IpcError(format!("failed to close child stdin: {e}")))?;
+        }
 
         let mut procs = self.processes.write().await;
         procs.insert(
@@ -95,14 +162,15 @@ impl AgentSpawner for BsdSpawner {
     }
 
     async fn poll_state(&self, handle: &ExecutionHandle) -> Result<ExecutionState, SandboxError> {
-        let results = self.results.read().await;
-        if results.contains_key(&handle.id) {
-            return Ok(ExecutionState::Completed {
-                exit_code: 0,
-                elapsed_ms: 0,
-            });
+        {
+            let results = self.results.read().await;
+            if let Some((ref result, _)) = results.get(&handle.id) {
+                return Ok(ExecutionState::Completed {
+                    exit_code: result.receipt.exit_code,
+                    elapsed_ms: result.receipt.execution_duration_ms,
+                });
+            }
         }
-        drop(results);
 
         let mut procs = self.processes.write().await;
         if let Some(record) = procs.get_mut(&handle.id) {
@@ -115,11 +183,11 @@ impl AgentSpawner for BsdSpawner {
             match record.child.try_wait() {
                 Ok(Some(status)) => {
                     let code = status.code().unwrap_or(-1);
-                    procs.remove(&handle.id);
-                    return Ok(ExecutionState::Completed {
-                        exit_code: code,
-                        elapsed_ms,
-                    });
+                    let child = procs.remove(&handle.id).unwrap().child;
+                    drop(procs);
+                    return Ok(self
+                        .reap_child_output(&handle.id, child, code, elapsed_ms)
+                        .await);
                 }
                 Ok(None) => {
                     let pid = record.child.id().unwrap_or(0);

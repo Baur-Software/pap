@@ -2,17 +2,18 @@
 //!
 //! When running inside a container with Docker socket mounted, agents spawn as
 //! sibling containers (not nested) with capability constraints mapped to docker run flags.
+//! The container runs the worker binary which reads ExecutionContext from PAP_CONTEXT env
+//! and writes ExecutionResult JSON to stdout.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use bollard::container::{Config, CreateContainerOptions, StartContainerOptions};
-use bollard::image::PullImageOptions;
+use bollard::container::{Config, CreateContainerOptions, LogsOptions};
 use bollard::models::HostConfig;
 use bollard::Docker;
-use sha2::{Digest, Sha256};
+use futures_util::StreamExt;
 use tokio::sync::RwLock;
 
 use crate::error::SandboxError;
@@ -37,7 +38,7 @@ pub struct DockerSpawner {
 impl DockerSpawner {
     pub async fn new(socket_path: &str) -> Result<Self, SandboxError> {
         let client = Docker::connect_with_unix_socket(socket_path)
-            .map_err(|e| SandboxError::SpawnError(format!("Failed to connect to Docker: {}", e)))?;
+            .map_err(|e| SandboxError::SpawnError(format!("failed to connect to Docker: {e}")))?;
 
         Ok(Self {
             client,
@@ -46,50 +47,29 @@ impl DockerSpawner {
         })
     }
 
-    /// Build a list of Docker run flags from the capability policy.
     fn build_docker_flags(policy: &CapabilityPolicy) -> Vec<String> {
         let mut flags = Vec::new();
-
-        // Network isolation.
         if !policy.network_allowed {
             flags.push("--network=none".to_string());
         }
-
-        // Process/subprocess isolation.
         if !policy.subprocess_allowed {
             flags.push("--cap-drop=SYS_FORK".to_string());
             flags.push("--cap-drop=SYS_CLONE".to_string());
         }
-
-        // Filesystem: if not explicitly allowed, use read-only root.
         if !policy.filesystem_allowed {
             flags.push("--read-only".to_string());
         }
-
-        // CPU/memory limits (simplified; in production use precise values from policy).
-        if policy.execution_timeout_secs > 0 {
-            // Docker timeout via --pids-limit or --memory constraints.
-            flags.push(format!("--memory=256m")); // Example: 256MB limit.
-        }
-
+        flags.push("--memory=256m".to_string());
         flags
     }
 
-    /// Build a Docker flags hash for the receipt.
-    fn build_docker_flags_hash(flags: &[String]) -> String {
-        let repr = flags.join("\n");
-        let digest = Sha256::digest(repr.as_bytes());
-        hex::encode(digest)
-    }
-
-    /// Build capability proof for Docker execution.
-    fn build_proof(policy: &CapabilityPolicy, flags: Vec<String>) -> CapabilityProof {
+    fn build_proof(policy: &CapabilityPolicy, _flags: &[String]) -> CapabilityProof {
         CapabilityProof {
             seccomp_rules_hash: None,
             pledge_promises: None,
             entitlements_applied: None,
             memory_protection: MemoryProtection {
-                mlock_applied: false, // Docker handles memory isolation differently.
+                mlock_applied: false,
                 encryption_used: true,
                 sensitive_buffers_wiped: true,
             },
@@ -98,6 +78,29 @@ impl DockerSpawner {
             filesystem_restricted: !policy.filesystem_allowed,
             subprocess_blocked: !policy.subprocess_allowed,
         }
+    }
+
+    async fn read_container_stdout(&self, container_id: &str) -> Result<Vec<u8>, SandboxError> {
+        let options = LogsOptions::<String> {
+            follow: false,
+            stdout: true,
+            stderr: false,
+            ..Default::default()
+        };
+
+        let mut stream = self.client.logs(container_id, Some(options));
+        let mut stdout_buf = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(output) => stdout_buf.extend_from_slice(&output.into_bytes()),
+                Err(e) => {
+                    return Err(SandboxError::IpcError(format!(
+                        "failed to read container logs: {e}"
+                    )));
+                }
+            }
+        }
+        Ok(stdout_buf)
     }
 }
 
@@ -111,54 +114,45 @@ impl AgentSpawner for DockerSpawner {
         let handle = ExecutionHandle::new(&context.agent_did, &context.agent_name);
         let docker_flags = Self::build_docker_flags(&policy);
 
-        // For now, use a placeholder agent image.
-        // In production, this would be the actual pap-agent image.
         let image = "baursoftware/pap-agent:latest";
 
-        // Ensure image is available (pull if needed).
-        let _ = self
-            .client
-            .pull_image(
-                Some(PullImageOptions {
-                    tag: "latest",
-                    ..Default::default()
-                }),
-                None,
-            )
-            .await;
-
-        // Serialize execution context to pass as environment variable.
         let context_json =
             serde_json::to_string(&context).map_err(|e| SandboxError::IpcError(e.to_string()))?;
+        let policy_json =
+            serde_json::to_string(&policy).map_err(|e| SandboxError::IpcError(e.to_string()))?;
 
-        // Build container config.
         let config = Config {
             image: Some(image.to_string()),
+            cmd: Some(vec![
+                "--sandbox-worker".to_string(),
+                "--policy".to_string(),
+                policy_json,
+            ]),
             env: Some(vec![
-                format!("PAP_CONTEXT={}", context_json),
+                format!("PAP_CONTEXT={context_json}"),
                 format!("PAP_AGENT_DID={}", context.agent_did),
             ]),
+            attach_stdin: Some(true),
+            attach_stdout: Some(true),
+            open_stdin: Some(true),
             host_config: Some(HostConfig {
-                network_mode: Some(
-                    if policy.network_allowed {
-                        "bridge".to_string()
-                    } else {
-                        "none".to_string()
-                    },
-                ),
+                network_mode: Some(if policy.network_allowed {
+                    "bridge".to_string()
+                } else {
+                    "none".to_string()
+                }),
                 read_only: Some(!policy.filesystem_allowed),
                 cap_drop: if policy.subprocess_allowed {
                     None
                 } else {
                     Some(vec!["SYS_FORK".to_string(), "SYS_CLONE".to_string()])
                 },
-                memory: Some(256i64 * 1024 * 1024), // 256MB
+                memory: Some(256i64 * 1024 * 1024),
                 ..Default::default()
             }),
             ..Default::default()
         };
 
-        // Create container.
         let options = CreateContainerOptions {
             name: format!("pap-agent-{}", handle.id),
             platform: None,
@@ -168,21 +162,20 @@ impl AgentSpawner for DockerSpawner {
             .client
             .create_container(Some(options), config)
             .await
-            .map_err(|e| SandboxError::SpawnError(format!("Failed to create container: {}", e)))?;
+            .map_err(|e| SandboxError::SpawnError(format!("failed to create container: {e}")))?;
 
         let container_id = response.id;
 
-        // Start container.
         self.client
             .start_container::<String>(&container_id, None)
             .await
-            .map_err(|e| SandboxError::SpawnError(format!("Failed to start container: {}", e)))?;
+            .map_err(|e| SandboxError::SpawnError(format!("failed to start container: {e}")))?;
 
         let record = ContainerRecord {
-            container_id: container_id.clone(),
+            container_id,
             started: Instant::now(),
-            policy: policy.clone(),
-            docker_flags: docker_flags.clone(),
+            policy,
+            docker_flags,
         };
 
         let mut containers = self.containers.write().await;
@@ -192,49 +185,79 @@ impl AgentSpawner for DockerSpawner {
     }
 
     async fn poll_state(&self, handle: &ExecutionHandle) -> Result<ExecutionState, SandboxError> {
+        {
+            let results = self.results.read().await;
+            if let Some((ref result, _)) = results.get(&handle.id) {
+                return Ok(ExecutionState::Completed {
+                    exit_code: result.receipt.exit_code,
+                    elapsed_ms: result.receipt.execution_duration_ms,
+                });
+            }
+        }
+
         let containers = self.containers.read().await;
         let record = containers
             .get(&handle.id)
             .ok_or_else(|| SandboxError::ProcessNotFound(handle.id.clone()))?;
 
-        // Inspect container to get state.
         let info = self
             .client
             .inspect_container(&record.container_id, None)
             .await
-            .map_err(|e| {
-                SandboxError::SpawnError(format!("Failed to inspect container: {}", e))
-            })?;
+            .map_err(|e| SandboxError::SpawnError(format!("failed to inspect container: {e}")))?;
 
         if let Some(state) = info.state {
             let elapsed_ms = record.started.elapsed().as_millis() as u64;
 
-            // Check if running.
             if state.running.unwrap_or(false) {
-                // Map container PID to pid field (use container's main PID).
-                let pid = if let Some(pid) = state.pid {
-                    pid as u32
-                } else {
-                    0
-                };
-                return Ok(ExecutionState::Running {
-                    pid,
-                    elapsed_ms,
-                });
+                let pid = state.pid.map(|p| p as u32).unwrap_or(0);
+                return Ok(ExecutionState::Running { pid, elapsed_ms });
             }
 
-            // Check exit code.
             let exit_code = state.exit_code.unwrap_or(-1) as i32;
 
-            // Code 124 is commonly used for timeout (from GNU timeout utility).
             if exit_code == 124 {
                 return Ok(ExecutionState::TimedOut { elapsed_ms });
             }
 
-            return Ok(ExecutionState::Completed {
-                exit_code,
-                elapsed_ms,
-            });
+            // Container exited — read stdout and parse ExecutionResult.
+            let container_id = record.container_id.clone();
+            let policy = record.policy.clone();
+            let docker_flags = record.docker_flags.clone();
+            drop(containers);
+
+            let stdout_data = self.read_container_stdout(&container_id).await?;
+
+            if exit_code != 0 || stdout_data.is_empty() {
+                return Ok(ExecutionState::Failed {
+                    reason: format!(
+                        "container exited with code {exit_code}, stdout {} bytes",
+                        stdout_data.len()
+                    ),
+                    elapsed_ms,
+                });
+            }
+
+            match serde_json::from_slice::<ExecutionResult>(&stdout_data) {
+                Ok(exec_result) => {
+                    let receipt = exec_result.receipt.clone();
+                    let mut results = self.results.write().await;
+                    results.insert(handle.id.clone(), (exec_result, receipt));
+                    return Ok(ExecutionState::Completed {
+                        exit_code,
+                        elapsed_ms,
+                    });
+                }
+                Err(_) => {
+                    return Ok(ExecutionState::Failed {
+                        reason: format!(
+                            "container exited OK but stdout is not valid ExecutionResult JSON ({} bytes)",
+                            stdout_data.len()
+                        ),
+                        elapsed_ms,
+                    });
+                }
+            }
         }
 
         Ok(ExecutionState::Pending)
@@ -243,27 +266,43 @@ impl AgentSpawner for DockerSpawner {
     async fn terminate(
         &self,
         handle: &ExecutionHandle,
-        _reason: &str,
+        reason: &str,
     ) -> Result<(), SandboxError> {
         let containers = self.containers.read().await;
         let record = containers
             .get(&handle.id)
             .ok_or_else(|| SandboxError::ProcessNotFound(handle.id.clone()))?;
 
-        // Kill the container.
-        self.client
-            .kill_container::<String>(&record.container_id, None)
-            .await
-            .map_err(|e| SandboxError::SpawnError(format!("Failed to kill container: {}", e)))?;
+        let container_id = record.container_id.clone();
+        let policy = record.policy.clone();
+        let docker_flags = record.docker_flags.clone();
+        let elapsed_ms = record.started.elapsed().as_millis() as u64;
+        drop(containers);
 
-        // Remove the container.
-        self.client
-            .remove_container(&record.container_id, None)
-            .await
-            .map_err(|e| {
-                SandboxError::SpawnError(format!("Failed to remove container: {}", e))
-            })?;
+        let _ = self
+            .client
+            .kill_container::<String>(&container_id, None)
+            .await;
 
+        let _ = self.client.remove_container(&container_id, None).await;
+
+        let proof = Self::build_proof(&policy, &docker_flags);
+        let receipt = AttestationReceipt::killed(
+            handle.id.clone(),
+            handle.agent_did.clone(),
+            handle.agent_name.clone(),
+            "docker_execution".to_string(),
+            elapsed_ms,
+            reason.to_string(),
+            proof,
+        );
+        let result = ExecutionResult {
+            result_enc: vec![],
+            nonce: vec![],
+            receipt: receipt.clone(),
+        };
+        let mut results = self.results.write().await;
+        results.insert(handle.id.clone(), (result, receipt));
         Ok(())
     }
 
@@ -271,46 +310,10 @@ impl AgentSpawner for DockerSpawner {
         &self,
         handle: &ExecutionHandle,
     ) -> Result<(ExecutionResult, AttestationReceipt), SandboxError> {
-        // Check if result is already cached.
         let results = self.results.read().await;
-        if let Some((result, receipt)) = results.get(&handle.id) {
-            return Ok((result.clone(), receipt.clone()));
-        }
-        drop(results);
-
-        // Retrieve stored result or build a placeholder.
-        let containers = self.containers.read().await;
-        let record = containers
+        results
             .get(&handle.id)
-            .ok_or_else(|| SandboxError::ProcessNotFound(handle.id.clone()))?;
-
-        let elapsed_ms = record.started.elapsed().as_millis() as u64;
-
-        // In a full implementation, read logs from container and extract result.
-        // For now, return a placeholder result.
-        let result_hash = "0".repeat(64); // Placeholder SHA256 hash.
-
-        let receipt = AttestationReceipt {
-            session_id: handle.id.clone(),
-            agent_did: handle.agent_did.clone(),
-            agent_name: handle.agent_name.clone(),
-            action_type: "sandbox_execution".to_string(),
-            timestamp: chrono::Utc::now(),
-            execution_duration_ms: elapsed_ms,
-            capability_enforcement: Self::build_proof(&record.policy, record.docker_flags.clone()),
-            result_hash,
-            exit_code: 0,
-            aborted: false,
-            abort_reason: None,
-        };
-
-        // Placeholder result.
-        let result = ExecutionResult {
-            result_enc: vec![],
-            nonce: vec![],
-            receipt: receipt.clone(),
-        };
-
-        Ok((result, receipt))
+            .cloned()
+            .ok_or_else(|| SandboxError::ProcessNotFound(handle.id.clone()))
     }
 }
