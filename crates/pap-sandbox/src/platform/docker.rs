@@ -11,7 +11,9 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use bollard::models::{ContainerCreateBody, HostConfig};
-use bollard::query_parameters::{CreateContainerOptions, LogsOptions};
+use bollard::query_parameters::{
+    CreateContainerOptions, LogsOptions, RemoveContainerOptionsBuilder,
+};
 use bollard::Docker;
 use futures_util::StreamExt;
 use tokio::sync::RwLock;
@@ -51,9 +53,6 @@ impl DockerSpawner {
         let mut flags = vec!["--cap-drop=ALL".to_string()];
         if !policy.network_allowed {
             flags.push("--network=none".to_string());
-        }
-        if policy.network_allowed {
-            flags.push("--cap-add=NET_RAW".to_string());
         }
         if !policy.filesystem_allowed {
             flags.push("--read-only".to_string());
@@ -140,11 +139,7 @@ impl AgentSpawner for DockerSpawner {
                 }),
                 readonly_rootfs: Some(!policy.filesystem_allowed),
                 cap_drop: Some(vec!["ALL".to_string()]),
-                cap_add: if policy.network_allowed {
-                    Some(vec!["NET_RAW".to_string()])
-                } else {
-                    None
-                },
+                cap_add: None,
                 memory: Some(256i64 * 1024 * 1024),
                 ..Default::default()
             }),
@@ -164,20 +159,25 @@ impl AgentSpawner for DockerSpawner {
 
         let container_id = response.id;
 
-        self.client
-            .start_container(&container_id, None)
-            .await
-            .map_err(|e| SandboxError::SpawnError(format!("failed to start container: {e}")))?;
-
         let record = ContainerRecord {
-            container_id,
+            container_id: container_id.clone(),
             started: Instant::now(),
             policy,
             docker_flags,
         };
 
-        let mut containers = self.containers.write().await;
-        containers.insert(handle.id.clone(), record);
+        // Insert record before start so poll_state never sees ProcessNotFound for a live container.
+        {
+            let mut containers = self.containers.write().await;
+            containers.insert(handle.id.clone(), record);
+        }
+
+        if let Err(e) = self.client.start_container(&container_id, None).await {
+            self.containers.write().await.remove(&handle.id);
+            return Err(SandboxError::SpawnError(format!(
+                "failed to start container: {e}"
+            )));
+        }
 
         Ok(handle)
     }
@@ -253,8 +253,12 @@ impl AgentSpawner for DockerSpawner {
                 }
             };
 
-            // Clean up: remove container from Docker daemon and our tracking map.
-            let _ = self.client.remove_container(&container_id, None).await;
+            // Clean up: force-remove container (handles already-stopped or zombie state).
+            let remove_opts = RemoveContainerOptionsBuilder::new().force(true).build();
+            let _ = self
+                .client
+                .remove_container(&container_id, Some(remove_opts))
+                .await;
             let mut containers = self.containers.write().await;
             containers.remove(&handle.id);
 
@@ -278,7 +282,19 @@ impl AgentSpawner for DockerSpawner {
 
         let _ = self.client.kill_container(&container_id, None).await;
 
-        let _ = self.client.remove_container(&container_id, None).await;
+        let remove_opts = RemoveContainerOptionsBuilder::default().force(true).build();
+        let _ = self
+            .client
+            .remove_container(&container_id, Some(remove_opts))
+            .await;
+
+        // Remove from tracking map before writing the receipt so a concurrent
+        // poll_state caller sees ProcessNotFound rather than re-inspecting a
+        // dead container.
+        {
+            let mut containers = self.containers.write().await;
+            containers.remove(&handle.id);
+        }
 
         let proof = Self::build_proof(&policy, &docker_flags);
         let receipt = AttestationReceipt::killed(
@@ -304,10 +320,9 @@ impl AgentSpawner for DockerSpawner {
         &self,
         handle: &ExecutionHandle,
     ) -> Result<(ExecutionResult, AttestationReceipt), SandboxError> {
-        let results = self.results.read().await;
+        let mut results = self.results.write().await;
         results
-            .get(&handle.id)
-            .cloned()
+            .remove(&handle.id)
             .ok_or_else(|| SandboxError::ProcessNotFound(handle.id.clone()))
     }
 }
