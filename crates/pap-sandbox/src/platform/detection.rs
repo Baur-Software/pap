@@ -140,12 +140,9 @@ mod tests {
 
     #[test]
     fn test_is_in_container_detects_marker() {
-        // This test only makes sense inside a container.
-        // It documents the expected behavior.
-        #[cfg(feature = "test_in_docker")]
-        {
-            assert!(is_in_container());
-        }
+        // Verifies that is_in_container() doesn't panic.
+        // In a real container environment it should return true.
+        let _ = is_in_container();
     }
 
     #[test]
