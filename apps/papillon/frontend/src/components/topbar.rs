@@ -47,6 +47,23 @@ pub fn TopBar() -> impl IntoView {
             </div>
 
             <div class="topbar-end">
+                {
+                    let blocks = canvas_state.current_canvas_blocks();
+                    let has_blocks = Memo::new(move |_| !blocks.get().is_empty());
+                    let on_render = move |_: leptos::ev::MouseEvent| {
+                        canvas_state.render_workflow();
+                    };
+                    view! {
+                        <button
+                            class="canvas-render-btn"
+                            on:click=on_render
+                            disabled=move || !has_blocks.get()
+                            title="Auto-approve all pending blocks and render"
+                        >
+                            "\u{25b6} Render"
+                        </button>
+                    }
+                }
                 <button
                     class="canvas-flip-toggle"
                     on:click=toggle_side

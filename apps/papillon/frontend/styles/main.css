@@ -6752,6 +6752,26 @@ body {
   border-color: var(--purple, #6c5ce7);
 }
 
+/* ── Canvas render button ────────────────────────────────────────────────── */
+.canvas-render-btn {
+  background: var(--brand-purple, #6c5ce7);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.canvas-render-btn:hover {
+  opacity: 0.85;
+}
+.canvas-render-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Workflow pipeline ───────────────────────────────────────────────────── */
 .canvas-workflow-pipeline {
   padding: 16px;

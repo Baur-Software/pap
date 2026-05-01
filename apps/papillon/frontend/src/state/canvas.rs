@@ -899,6 +899,51 @@ impl CanvasState {
         });
     }
 
+    /// Power-user "just do it" trigger: auto-approves every pending block and
+    /// workflow edge, then flips to the rendered (front) face.
+    ///
+    /// This is a synchronous state update — it transitions Ghost/AwaitingApproval
+    /// blocks to `Resolving { phase: 2, .. }` and Proposed edges to `Confirmed`.
+    /// The existing Tauri event listeners and backend commands handle actual execution.
+    pub fn render_workflow(&self) {
+        let current_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+
+        // Step 1: Auto-approve all Ghost / AwaitingApproval blocks on the active canvas.
+        self.canvases.update(|cs| {
+            if let Some(canvas) = cs.iter_mut().find(|c| c.id == current_id) {
+                for block in canvas.blocks.iter_mut() {
+                    match &block.state {
+                        BlockState::Ghost { .. } | BlockState::AwaitingApproval { .. } => {
+                            block.state = BlockState::Resolving {
+                                phase: 2,
+                                phase_label: "Auto-approved...".into(),
+                            };
+                            block.updated_at = now_iso();
+                        }
+                        _ => {}
+                    }
+                }
+                canvas.updated_at = now_iso();
+            }
+        });
+
+        // Step 2: Auto-approve all Proposed workflow edges.
+        self.workflow_graph.update(|graph| {
+            for edge in graph.edges.iter_mut() {
+                if edge.state == papillon_shared::EdgeState::Proposed {
+                    edge.state = papillon_shared::EdgeState::Confirmed;
+                    edge.memex_remembered = true;
+                }
+            }
+        });
+
+        // Step 3: Flip to the rendered (front) face.
+        self.canvas_side.set(CanvasSide::Front);
+    }
+
     /// Approve an AwaitingApproval block — sends the decision to the backend
     /// and begins the handshake. Guards against double-submit via approval_in_flight.
     pub fn approve_block(&self, block_id: String, approval_request_id: String) {
