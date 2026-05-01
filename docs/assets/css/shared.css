@@ -43,7 +43,6 @@
     --muted:    #5c5b70;
     --faint:    #8888a0;
   }
-  nav { background: rgba(250,249,252,.9); }
 }
 
 /* ─── Forced color-scheme toggle via [data-theme] ───────────────────────── */
@@ -57,7 +56,6 @@
   --muted:    #5c5b70;
   --faint:    #8888a0;
 }
-[data-theme="light"] nav { background: rgba(250,249,252,.9); }
 [data-theme="dark"] {
   --bg:       #0c0b14;
   --surface:  #151420;
@@ -68,7 +66,6 @@
   --muted:    #9494a8;
   --faint:    #6a6a80;
 }
-[data-theme="dark"] nav { background: rgba(12,11,20,.85); }
 
 /* ─── Reset ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -105,9 +102,17 @@ img { max-width: 100%; }
 /* ─── Navigation ─────────────────────────────────────────────────────────── */
 nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(12,11,20,.85);
+  background: rgba(12,11,20,.85); /* dark mode default */
   backdrop-filter: blur(16px) saturate(1.5);
   border-bottom: 1px solid var(--border);
+}
+[data-theme="light"] nav {
+  background: rgba(250,249,252,.9);
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) nav {
+    background: rgba(250,249,252,.9);
+  }
 }
 .nav-inner {
   max-width: 1100px; margin: 0 auto; padding: 0 24px;
