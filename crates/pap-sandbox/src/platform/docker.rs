@@ -10,8 +10,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use bollard::container::{Config, CreateContainerOptions, LogsOptions};
-use bollard::models::HostConfig;
+use bollard::models::{ContainerCreateBody, HostConfig};
+use bollard::query_parameters::{CreateContainerOptions, LogsOptions};
 use bollard::Docker;
 use futures_util::StreamExt;
 use tokio::sync::RwLock;
@@ -80,7 +80,7 @@ impl DockerSpawner {
     }
 
     async fn read_container_stdout(&self, container_id: &str) -> Result<Vec<u8>, SandboxError> {
-        let options = LogsOptions::<String> {
+        let options = LogsOptions {
             follow: false,
             stdout: true,
             stderr: false,
@@ -120,7 +120,7 @@ impl AgentSpawner for DockerSpawner {
         let policy_json =
             serde_json::to_string(&policy).map_err(|e| SandboxError::IpcError(e.to_string()))?;
 
-        let config = Config {
+        let config = ContainerCreateBody {
             image: Some(image.to_string()),
             cmd: Some(vec![
                 "--sandbox-worker".to_string(),
@@ -152,8 +152,8 @@ impl AgentSpawner for DockerSpawner {
         };
 
         let options = CreateContainerOptions {
-            name: format!("pap-agent-{}", handle.id),
-            platform: None,
+            name: Some(format!("pap-agent-{}", handle.id)),
+            platform: String::new(),
         };
 
         let response = self
@@ -165,7 +165,7 @@ impl AgentSpawner for DockerSpawner {
         let container_id = response.id;
 
         self.client
-            .start_container::<String>(&container_id, None)
+            .start_container(&container_id, None)
             .await
             .map_err(|e| SandboxError::SpawnError(format!("failed to start container: {e}")))?;
 
@@ -276,10 +276,7 @@ impl AgentSpawner for DockerSpawner {
         let elapsed_ms = record.started.elapsed().as_millis() as u64;
         drop(containers);
 
-        let _ = self
-            .client
-            .kill_container::<String>(&container_id, None)
-            .await;
+        let _ = self.client.kill_container(&container_id, None).await;
 
         let _ = self.client.remove_container(&container_id, None).await;
 
