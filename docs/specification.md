@@ -2464,8 +2464,7 @@ MUST reject algorithms they do not support. The `did:key` multicodec
 prefix encodes the algorithm of the public key.
 
 Future versions of this specification MAY introduce additional algorithms
-(e.g., ML-DSA-65 for post-quantum resistance). See
-`docs/algorithm-agility.md` for the migration path.
+(e.g., ML-DSA-65 for post-quantum resistance).
 
 ### 16.2. Key Management
 
