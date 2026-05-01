@@ -59,13 +59,13 @@
   <div class="container">
     <img src="assets/images/papillon-icon.png" alt="Baur Software" class="hero-logo reveal" />
     <h1 class="reveal reveal-delay-1">
-      The Request Layer<br />
-      <span class="gradient-text">for Agentic Systems.</span>
+      Complete Trust Boundaries<br />
+      <span class="gradient-text">for Programmable Delegation.</span>
     </h1>
     <p class="reveal reveal-delay-2">
-      Before your agents execute, PAP has already set the scope — cryptographically, at the request.
-      Mandates bound what can be asked. Chrysalis controls who answers.
-      Humans stay sovereign. Agents stay accountable.
+      PAP seals the entire stack: request boundaries (what agents see) and execution boundaries (what agents can do).
+      Mandates set scope cryptographically. Sandboxing enforces constraints at the OS level.
+      Humans stay sovereign. Agents stay accountable. No AI required.
     </p>
     <div class="hero-cta reveal reveal-delay-3">
       <a href="pap/" class="btn btn-primary">Read the Protocol</a>
@@ -77,16 +77,17 @@
 </section>
 
 <!-- ─── TWO LAYERS ────────────────────────────────────────────────────── -->
-<section class="layers-section" aria-label="Two layers, one trust model">
+<section class="layers-section" aria-label="Two boundary layers, complete trust model">
   <div class="container">
-    <div class="section-eyebrow-center reveal">Two Layers. One Trust Model.</div>
+    <div class="section-eyebrow-center reveal">Two Boundaries. Complete Trust Model.</div>
     <div class="layers-grid reveal reveal-delay-1">
 
       <div class="layer-card layer-card-pap">
-        <div class="layer-label layer-label-pap">PAP — The Request Layer</div>
-        <h3>Governs what is asked.</h3>
+        <div class="layer-label layer-label-pap">PAP — The Request Boundary</div>
+        <h3>Minimize what agents see.</h3>
         <p>
           A principal signs a mandate specifying the action, the disclosure scope, and the TTL.
+          SD-JWT selective disclosure ensures agents receive only the properties their mandate permits.
           The 6-phase handshake enforces those bounds cryptographically at every delegation step.
           A child request cannot exceed its parent's scope — this is <code>Scope::contains()</code>
           in the protocol, not a policy setting.
@@ -94,13 +95,13 @@
       </div>
 
       <div class="layer-card layer-card-chr">
-        <div class="layer-label layer-label-chr">Chrysalis — The Execution Layer</div>
-        <h3>Governs who answers.</h3>
+        <div class="layer-label layer-label-chr">pap-sandbox — The Execution Boundary</div>
+        <h3>Minimize what agents can do.</h3>
         <p>
-          Agents register with verifiable DIDs, Ed25519-signed advertisements, and vouch-based
-          admission. A request that arrives without a valid mandate is rejected before execution.
-          An agent that requires more disclosure than the mandate permits is filtered before
-          the session opens.
+          Agents execute in OS-level sandboxes with enforced capability constraints (seccomp, pledge, entitlements).
+          Even if an agent is compromised, the OS prevents network access, filesystem escape, and subprocess spawning.
+          Every execution produces a cryptographic receipt proving what constraints were applied.
+          Audit trail: disclosure scope + execution constraints, co-signed by the principal.
         </p>
       </div>
 
@@ -137,8 +138,8 @@
         <span class="product-tag product-tag-protocol">Protocol Spec</span>
         <div class="product-name">Principal Agent Protocol</div>
         <p class="product-desc">
-          The request layer. A principal signs what may be asked, by whom, and for how long. Scope is
-          hash-linked and cryptographically contained at every delegation step.
+          Request boundary: mandate-based delegation with cryptographic scope enforcement.
+          A principal signs what may be asked, by whom, and for how long. Works with any agent runtime.
           No new crypto. No token economy. No central registry.
         </p>
         <span class="product-link">Read the spec &#8594;</span>
@@ -150,8 +151,8 @@
         <span class="product-tag product-tag-dev">In Development</span>
         <div class="product-name">Papillon</div>
         <p class="product-desc">
-          One canvas, many agents, your rules. Specialized agents work together on your tasks &#8212;
-          each seeing only what it needs. Preview plans before execution, verify results after.
+          One canvas, many agents, your rules. Agents work in sandboxed isolation with enforced capability constraints.
+          Each sees only what it needs. Preview plans before execution, verify results and constraints after.
         </p>
         <span class="product-link">See Papillon &#8594;</span>
       </a>
@@ -161,9 +162,9 @@
         <span class="product-tag product-tag-registry">Agent Registry</span>
         <div class="product-name">Chrysalis</div>
         <p class="product-desc">
-          The execution layer. Agents register with verifiable DIDs, Ed25519-signed capability
-          advertisements, and vouch-based admission. A request without a valid PAP mandate is rejected
-          before execution begins. Self-hostable, federated, no gatekeeper.
+          Federated agent registry. Agents register with verifiable DIDs and Ed25519-signed advertisements.
+          PAP mandates are verified before execution. Per-agent sandbox enforcement with cryptographic attestation.
+          Self-hostable, federated, no gatekeeper.
         </p>
         <span class="product-link">Learn more &#8594;</span>
       </a>
