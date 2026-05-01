@@ -395,6 +395,11 @@ Auditable: "Show me all executions of agent X under policy Y signed by principal
 | **macOS** | ✅ Production | Entitlements + SIP | Security settings depend on user configuration |
 | **Windows** | ✅ Production | Job Objects | Resource limits, process isolation |
 
+**Container environments**: pap-sandbox requires OS capabilities that are typically unavailable in containerized contexts:
+- **Docker/Podman**: Standard containers lack seccomp (or use relaxed defaults), pledge, and job object APIs. Sandbox will fall back to unsandboxed execution.
+- **Kubernetes**: Pod security policies and network policies don't replace OS-level capability enforcement; sandboxing will be unavailable.
+- **Workaround**: Run Papillon/Chrysalis on bare metal or with privileged container access (not recommended for security).
+
 Fallback: If sandbox fails to initialize, agent runs unsandboxed but receipt includes warning for audit visibility.
 
 ---

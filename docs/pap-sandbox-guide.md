@@ -197,9 +197,19 @@ enforcer = CapabilityEnforcer(policy)
 result = enforcer.execute(agent_fn, context)
 ```
 
+## Deployment: Container Compatibility
+
+**pap-sandbox does NOT work in standard containers** because OS-level capabilities (seccomp, pledge, entitlements, job objects) are unavailable:
+
+- **Docker/Podman containers**: Sandboxing will fail to initialize. Agents fall back to unsandboxed execution.
+- **Kubernetes pods**: Pod security policies don't provide OS capability enforcement; sandboxing unavailable.
+- **Solution**: Run Papillon/Chrysalis on bare metal, VMs, or with privileged container access (not recommended).
+
+When sandboxing fails to initialize, attestation receipts include a warning field for audit visibility. You'll see empty/null values in `capability_enforcement` proving no isolation happened.
+
 ## Verification Checklist
 
-After deploying pap-sandbox:
+After deploying pap-sandbox (bare metal/VM):
 
 - [ ] Seccomp rules load on Linux (check: `auditctl -l` shows PAP_* rules, or dmesg for SECCOMP_RET_KILL events)
 - [ ] Pledge enforces on BSD (test: sandboxed agent tries network → EPERM)
