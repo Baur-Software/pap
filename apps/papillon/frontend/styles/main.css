@@ -1394,8 +1394,11 @@ body {
     height: 100vh;
     overflow: hidden;
     background-color: var(--bg-0);
-    background-image: radial-gradient(circle, var(--dot-grid-color) 1px, transparent 1px);
-    background-size: var(--dot-grid-size) var(--dot-grid-size);
+    background-image:
+        linear-gradient(180deg, rgba(108, 92, 231, 0.07) 0%, transparent 320px),
+        radial-gradient(ellipse at 80% 0%, rgba(46, 196, 160, 0.07) 0%, transparent 400px),
+        radial-gradient(circle, var(--dot-grid-color) 1px, transparent 1px);
+    background-size: auto, auto, var(--dot-grid-size) var(--dot-grid-size);
 }
 
 .app-topbar {
@@ -2837,52 +2840,114 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   GHOST BLOCKS — plan preview, dashed outline
+   GHOST BLOCKS — pre-execution negotiation surface
    ═══════════════════════════════════════════════════════════ */
 
 .canvas-block.ghost {
-    border: 1px solid rgba(108, 92, 231, 0.35);
-    background: rgba(108, 92, 231, 0.04);
-    box-shadow: inset 0 0 0 1px rgba(108, 92, 231, 0.08);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(108, 92, 231, 0.3);
+    background:
+        linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+        rgba(20, 18, 36, 0.7);
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.32),
+        0 0 0 1px rgba(255, 255, 255, 0.07) inset,
+        0 1px 0 rgba(255, 255, 255, 0.14) inset;
+    backdrop-filter: blur(20px) saturate(130%);
+    -webkit-backdrop-filter: blur(20px) saturate(130%);
+    padding: 0;
+}
+
+/* Atmospheric radial glows inside ghost */
+.canvas-block.ghost::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at 12% 0%, rgba(108, 92, 231, 0.22) 0%, transparent 55%),
+        radial-gradient(ellipse at 88% 8%, rgba(46, 196, 160, 0.11) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Inner dashed frame */
+.canvas-block.ghost::after {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border: 1px dashed rgba(108, 92, 231, 0.2);
+    border-radius: calc(var(--r-lg) - 4px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.canvas-block.ghost > * {
+    position: relative;
+    z-index: 1;
 }
 
 .canvas-block.ghost:hover {
-    border-color: rgba(108, 92, 231, 0.6);
-    background: rgba(108, 92, 231, 0.07);
+    border-color: rgba(108, 92, 231, 0.5);
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.38),
+        0 0 0 1px rgba(255, 255, 255, 0.09) inset,
+        0 1px 0 rgba(255, 255, 255, 0.18) inset;
 }
 
+/* Ghost block inner padding wrapper */
 .ghost-header {
     display: flex;
-    align-items: baseline;
-    gap: var(--sp-xs);
-    margin-bottom: var(--sp-sm);
+    align-items: center;
+    gap: var(--sp-sm);
+    padding: var(--sp-sm) var(--sp-md) var(--sp-sm);
+    border-bottom: 1px solid rgba(108, 92, 231, 0.14);
+    margin-bottom: 0;
+    flex-wrap: wrap;
+    row-gap: 0;
+}
+
+/* "PREFLIGHT" teal label above agent+action row */
+.ghost-header::before {
+    content: 'PREFLIGHT';
+    display: block;
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: var(--sp-2xs);
+    order: -1;
 }
 
 .ghost-agent {
-    font: var(--text-ui);
     font-family: var(--font-display);
     font-weight: 700;
     color: var(--text-1);
     font-size: 14px;
+    flex: 1;
 }
 
 .ghost-action {
-    font: var(--text-label);
     font-family: var(--font-mono);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--purple);
     font-size: 10px;
     background: var(--purple-muted);
-    padding: 1px 6px;
+    padding: 2px 8px;
     border-radius: var(--r-sm);
-    border: 1px solid rgba(108, 92, 231, 0.2);
+    border: 1px solid rgba(108, 92, 231, 0.22);
+    flex-shrink: 0;
 }
 
 .ghost-scope {
     display: flex;
     flex-direction: column;
     gap: var(--sp-sm);
+    padding: var(--sp-md);
 }
 
 .ghost-disclosure,
@@ -2893,14 +2958,14 @@ body {
 }
 
 .ghost-scope-label {
-    font: var(--text-label);
     font-family: var(--font-mono);
-    letter-spacing: var(--ls-label);
+    letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--teal);
     font-size: 10px;
+    font-weight: 850;
     white-space: nowrap;
-    min-width: 80px;
+    min-width: 90px;
     padding-top: 3px;
 }
 
@@ -5384,7 +5449,7 @@ body {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    background: var(--bg-0);
+    background: transparent;
 }
 
 .canvas-prompt-bar {
@@ -5469,18 +5534,38 @@ body {
 
 /* ─── AwaitingApproval block ─── */
 .canvas-block.awaiting-approval {
-    border: 1px solid rgba(108, 92, 231, 0.45);
+    border: 1px solid rgba(240, 160, 48, 0.3);
     border-radius: var(--r-lg);
     padding: var(--sp-md);
-    background: rgba(108, 92, 231, 0.05);
-    box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.1), var(--shadow-sm);
+    padding-top: calc(var(--sp-md) + 20px);
+    background: rgba(240, 160, 48, 0.04);
+    box-shadow:
+        0 0 0 1px rgba(240, 160, 48, 0.08) inset,
+        var(--shadow-md);
+    position: relative;
+}
+
+.canvas-block.awaiting-approval::before {
+    content: 'AWAITING YOUR APPROVAL';
+    position: absolute;
+    top: var(--sp-sm);
+    left: var(--sp-md);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--gold);
+    opacity: 0.85;
 }
 
 .awaiting-approval-header {
     display: flex;
     align-items: baseline;
     gap: var(--sp-xs);
-    margin-bottom: var(--sp-md);
+    margin-bottom: var(--sp-sm);
+    padding-bottom: var(--sp-sm);
+    border-bottom: 1px solid rgba(240, 160, 48, 0.12);
 }
 
 .approval-agent-name {
@@ -5503,10 +5588,11 @@ body {
 
 .awaiting-approval-section-label {
     font-size: 10px;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--teal);
     font-family: var(--font-mono);
+    font-weight: 850;
     margin-bottom: var(--sp-xs);
 }
 
@@ -5523,11 +5609,16 @@ body {
     mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
 }
 
+/* Disclosure zone — amber consent treatment */
 .awaiting-approval-disclosure {
     display: flex;
     flex-wrap: wrap;
     gap: var(--sp-xs);
-    margin-bottom: var(--sp-md);
+    margin-bottom: var(--sp-sm);
+    padding: var(--sp-sm) var(--sp-md);
+    background: rgba(240, 160, 48, 0.05);
+    border: 1px solid rgba(240, 160, 48, 0.2);
+    border-radius: var(--r-md);
 }
 
 .awaiting-approval-mandate-note {
@@ -5543,7 +5634,7 @@ body {
     justify-content: space-between;
     gap: var(--sp-sm);
     padding-top: var(--sp-md);
-    border-top: 1px solid rgba(108, 92, 231, 0.15);
+    border-top: 1px solid rgba(240, 160, 48, 0.15);
 }
 
 .awaiting-approval-actions .hitl-reject-btn {
