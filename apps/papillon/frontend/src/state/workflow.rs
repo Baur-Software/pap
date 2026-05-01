@@ -197,11 +197,10 @@ impl WorkflowState {
     /// Persist templates to localStorage (fallback when Tauri is unavailable).
     /// When Tauri is available the save is issued via IPC in a spawn_local call.
     fn persist_templates(&self) {
-        let templates = self.saved_templates.get_untracked();
-        let json = serde_json::to_string(&templates).unwrap_or_default();
-
         #[cfg(target_arch = "wasm32")]
         {
+            let templates = self.saved_templates.get_untracked();
+            let json = serde_json::to_string(&templates).unwrap_or_default();
             use crate::bridge;
             if bridge::tauri_available() {
                 // Fire-and-forget Tauri IPC save
