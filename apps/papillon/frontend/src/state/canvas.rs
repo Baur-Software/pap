@@ -741,7 +741,7 @@ impl CanvasState {
         // Fire backend command with expanded text
         let cid = canvas_id.clone();
 
-        // Persist the new block and the user message to the DB (fire-and-forget).
+        // Persist the new block to the DB. Log errors but don't block the handshake.
         {
             let block_id_db = block_id.clone();
             let canvas_id_db = canvas_id.clone();
@@ -753,7 +753,7 @@ impl CanvasState {
                 .unwrap_or(0);
             spawn_local(async move {
                 if crate::bridge::tauri_available() {
-                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                    match crate::bridge::invoke::<_, serde_json::Value>(
                         "canvas_block_create",
                         &serde_json::json!({
                             "canvasId": canvas_id_db,
@@ -761,7 +761,17 @@ impl CanvasState {
                             "promptText": prompt_db,
                             "displayOrder": display_order,
                         }),
-                    ).await;
+                    ).await {
+                        Ok(_) => {
+                            leptos::logging::debug!("Block {} persisted to DB", block_id_db);
+                        }
+                        Err(e) => {
+                            leptos::logging::error!(
+                                "Failed to persist block {} to DB: {}. Block will remain in memory only.",
+                                block_id_db, e
+                            );
+                        }
+                    }
                 }
             });
         }
@@ -784,7 +794,7 @@ impl CanvasState {
             canvas_messages.update(|ms| ms.push(record));
             spawn_local(async move {
                 if crate::bridge::tauri_available() {
-                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                    if let Err(e) = crate::bridge::invoke::<_, serde_json::Value>(
                         "canvas_message_add",
                         &serde_json::json!({
                             "canvasId": canvas_id_msg,
@@ -792,7 +802,9 @@ impl CanvasState {
                             "content": display_text_msg,
                             "blockId": block_id_msg,
                         }),
-                    ).await;
+                    ).await {
+                        leptos::logging::warn!("Failed to persist message to DB: {}. Message will remain in memory only.", e);
+                    }
                 }
             });
         }
@@ -1016,6 +1028,10 @@ impl CanvasState {
     pub fn approve_block(&self, block_id: String, approval_request_id: String) {
         // Prevent double-submit
         if self.approval_in_flight.get_untracked().contains(&block_id) {
+            leptos::logging::warn!(
+                "Approval already in flight for block {}, ignoring duplicate request",
+                block_id
+            );
             return;
         }
         self.approval_in_flight.update(|s| {
@@ -1023,17 +1039,40 @@ impl CanvasState {
         });
 
         let in_flight = self.approval_in_flight;
+        let canvases = self.canvases;
         let block_id_clone = block_id.clone();
 
         spawn_local(async move {
-            let _ = crate::bridge::invoke::<_, serde_json::Value>(
+            match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": true,
                 }),
             )
-            .await;
+            .await
+            {
+                Ok(_) => {
+                    // Success - backend will send BlockUpdate event to transition state
+                }
+                Err(e) => {
+                    leptos::logging::error!("approve_block failed for {}: {}", block_id_clone, e);
+                    // Transition block to Failed state with the error message
+                    canvases.update(|cs| {
+                        for canvas in cs.iter_mut() {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
+                                b.state = BlockState::Failed {
+                                    phase: 2,
+                                    reason: format!("Approval failed: {}", e),
+                                };
+                                b.updated_at = now_iso();
+                                break;
+                            }
+                        }
+                    });
+                }
+            }
+            // Always remove from in-flight set to allow retry
             in_flight.update(|s| {
                 s.remove(&block_id_clone);
             });
@@ -1042,16 +1081,38 @@ impl CanvasState {
 
     /// Reject an AwaitingApproval block — sends the decision to the backend.
     pub fn reject_block(&self, block_id: String, approval_request_id: String) {
-        let _ = block_id; // state update arrives via block event from backend
+        let canvases = self.canvases;
+        let block_id_clone = block_id.clone();
         spawn_local(async move {
-            let _ = crate::bridge::invoke::<_, serde_json::Value>(
+            match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": false,
                 }),
             )
-            .await;
+            .await
+            {
+                Ok(_) => {
+                    // Success - backend will send BlockUpdate event to transition state
+                }
+                Err(e) => {
+                    leptos::logging::error!("reject_block failed for {}: {}", block_id_clone, e);
+                    // On rejection failure, transition to Failed state
+                    canvases.update(|cs| {
+                        for canvas in cs.iter_mut() {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
+                                b.state = BlockState::Failed {
+                                    phase: 2,
+                                    reason: format!("Rejection failed: {}", e),
+                                };
+                                b.updated_at = now_iso();
+                                break;
+                            }
+                        }
+                    });
+                }
+            }
         });
     }
 
