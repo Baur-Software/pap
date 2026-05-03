@@ -981,6 +981,9 @@ impl CanvasState {
 
         let bid = block_id.clone();
         let cid = canvas_id.clone();
+        let canvas_state_for_fallback = *self;
+        let original_text_for_fallback = original_text.clone();
+
         spawn_local(async move {
             #[derive(serde::Serialize)]
             #[serde(rename_all = "camelCase")]
@@ -992,21 +995,40 @@ impl CanvasState {
             let args = RetryArgs {
                 canvas_id: cid.clone(),
                 block_id: bid.clone(),
-                original_text, // now resolved
+                original_text: original_text, // now resolved
             };
             let result = bridge::invoke::<_, serde_json::Value>("canvas_retry", &args).await;
             if let Err(e) = result {
-                canvases.update(|cs| {
-                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid) {
-                        if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == bid) {
-                            b.state = BlockState::Failed {
-                                phase: 1,
-                                reason: e,
-                            };
-                            b.updated_at = now_iso();
+                let error_msg = e.to_string();
+                // If block not found in DB (due to failed persistence), delete the orphaned
+                // UI block and create a fresh prompt instead of failing.
+                if error_msg.contains("Block not found") || error_msg.contains("no definitions") {
+                    leptos::logging::warn!(
+                        "Retry failed because block {} not in DB (persistence failed). Creating fresh prompt instead.",
+                        bid
+                    );
+                    // Delete the orphaned block from UI
+                    canvases.update(|cs| {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid) {
+                            canvas.blocks.retain(|b| b.id != bid);
                         }
-                    }
-                });
+                    });
+                    // Create a fresh prompt with the same text
+                    canvas_state_for_fallback.submit_prompt(original_text_for_fallback);
+                } else {
+                    // Other error - show it in the block
+                    canvases.update(|cs| {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid) {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == bid) {
+                                b.state = BlockState::Failed {
+                                    phase: 1,
+                                    reason: error_msg,
+                                };
+                                b.updated_at = now_iso();
+                            }
+                        }
+                    });
+                }
             }
         });
     }
