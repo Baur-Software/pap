@@ -763,7 +763,7 @@ impl CanvasState {
                         }),
                     ).await {
                         Ok(_) => {
-                            leptos::logging::debug!("Block {} persisted to DB", block_id_db);
+                            // Block persisted successfully
                         }
                         Err(e) => {
                             leptos::logging::error!(
