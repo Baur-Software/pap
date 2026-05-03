@@ -825,6 +825,7 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    pointer-events: none; /* Don't block clicks outside wizard */
 }
 
 .setup-wizard {
@@ -836,6 +837,7 @@ body {
     width: 90%;
     background-image: radial-gradient(var(--dot-grid-color) 1px, transparent 1px);
     background-size: 20px 20px;
+    pointer-events: auto; /* Re-enable clicks on wizard itself */
 }
 
 .setup-options {
