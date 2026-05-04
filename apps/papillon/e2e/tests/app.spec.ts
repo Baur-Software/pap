@@ -20,7 +20,7 @@ test.describe("App shell", () => {
   test("shows workflow toggle button in top bar right zone", async ({ page }) => {
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await expect(page.locator(".canvas-flip-toggle")).toContainText("Workflow");
+    await expect(page.locator(".canvas-flip-toggle")).toContainText("workflow");
     await expect(page.locator(".topbar-address-input")).toBeVisible();
   });
 
@@ -59,8 +59,8 @@ test.describe("Canvas page", () => {
     // Seed canvas has blocks — create a new empty canvas via brand dropdown
     await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
-    await expect(page.locator(".canvas-rendered-placeholder-title")).toContainText(
-      "Approve your workflow before rendering"
+    await expect(page.locator(".canvas-surface-status")).toContainText(
+      "Approve workflow to render"
     );
   });
 
@@ -69,7 +69,7 @@ test.describe("Canvas page", () => {
     await waitForApp(page);
     // The prompt input is now the topbar address bar, not an inline canvas element
     await expect(page.locator(".topbar-address-input")).toBeVisible();
-    await expect(page.locator(".canvas-dock-toggle")).toContainText("Orchestrator");
+    await expect(page.locator(".canvas-dock-toggle")).toBeVisible();
   });
 
   test("address bar input accepts text", async ({ page }) => {

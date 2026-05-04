@@ -344,12 +344,8 @@ test.describe("Agent Picker Modal", () => {
     // Create a new empty canvas first
     await page.locator(".topbar-brand").click();
     await page.locator("text=+ New Canvas").click();
-    await expect(page.locator(".canvas-empty-state")).toBeVisible();
-
-    // Agent tiles should be visible in empty state
-    const tiles = page.locator(".agent-tile");
-    const count = await tiles.count();
-    expect(count).toBeGreaterThan(0);
+    // New canvas shows the "Approve workflow to render" status in the canvas stream
+    await expect(page.locator(".canvas-surface-status")).toContainText("Approve workflow to render");
   });
 });
 

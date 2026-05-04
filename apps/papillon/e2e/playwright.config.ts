@@ -1,9 +1,13 @@
 import { defineConfig } from "@playwright/test";
 
 const isCI = !!process.env.CI;
+const hasChrysalis = !!process.env.CHRYSALIS_URL;
 
 export default defineConfig({
   testDir: "./tests",
+  // Exclude live-server tests when CHRYSALIS_URL is not set — they require a
+  // running Chrysalis/Canary instance and will throw CI misconfiguration errors.
+  testIgnore: hasChrysalis ? [] : ["**/canary.spec.ts", "**/chrysalis-integration.spec.ts"],
   // WASM compile+mount takes ~15ms; 60s covers slow CI runners.
   timeout: 60_000,
   retries: 1,

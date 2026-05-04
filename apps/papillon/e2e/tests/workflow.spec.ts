@@ -11,8 +11,8 @@ async function createEmptyCanvas(page: Page) {
   await waitForApp(page);
   await page.locator(".topbar-brand").click();
   await page.getByText("+ New Canvas", { exact: true }).click();
-  await expect(page.locator(".canvas-rendered-placeholder-title")).toContainText(
-    "Approve your workflow before rendering"
+  await expect(page.locator(".canvas-surface-status")).toContainText(
+    "Approve workflow to render"
   );
   await expect(page.locator(".slide-panel.open")).toHaveCount(0);
 }

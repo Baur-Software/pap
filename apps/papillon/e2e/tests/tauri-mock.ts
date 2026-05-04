@@ -97,6 +97,8 @@ window.__TAURI__ = {
     _lastReshapeText: null,
     _approveCount: 0,
     _rejectCount: 0,
+    _canvases: [{ id: 'canvas-default', name: 'My Canvas', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }],
+    _canvasBlocks: {},
     _orchestratorConfig: ${JSON.stringify(ORCHESTRATOR_CONFIG)},
     _localAgents: [
       {
@@ -1185,6 +1187,64 @@ window.__TAURI__ = {
 
         case 'get_recovery_status':
           return { has_recovery: false, guardian_count: 0, threshold: 0 };
+
+        // ── Canvas persistence (new in canvas overhaul) ─────────────────
+        case 'canvas_list':
+          return window.__TAURI__.core._canvases;
+
+        case 'canvas_create': {
+          const name = (args && args.name) || 'My Canvas';
+          const id = 'canvas-' + Math.random().toString(36).substr(2, 9);
+          const now = new Date().toISOString();
+          const newCanvas = { id, name, created_at: now, updated_at: now };
+          window.__TAURI__.core._canvases.push(newCanvas);
+          window.__TAURI__.core._canvasBlocks[id] = [];
+          return newCanvas;
+        }
+
+        case 'canvas_blocks_load': {
+          const canvasId = (args && (args.canvasId || args.canvas_id)) || 'canvas-default';
+          return window.__TAURI__.core._canvasBlocks[canvasId] || [];
+        }
+
+        case 'canvas_block_create': {
+          const canvasId2 = (args && (args.canvasId || args.canvas_id)) || 'canvas-default';
+          const blockId = (args && (args.blockId || args.block_id)) || 'block-' + Math.random().toString(36).substr(2, 9);
+          const now2 = new Date().toISOString();
+          const newBlock = {
+            id: blockId, canvas_id: canvasId2, prompt_text: (args && args.prompt_text) || null,
+            schema_type: null, content_json: null, block_state: 'resolving', episode_id: null,
+            agent_did: null, mandate_expires_at: null, preference_guided: false,
+            display_order: 0, created_at: now2, updated_at: now2,
+          };
+          if (!window.__TAURI__.core._canvasBlocks[canvasId2]) {
+            window.__TAURI__.core._canvasBlocks[canvasId2] = [];
+          }
+          window.__TAURI__.core._canvasBlocks[canvasId2].push(newBlock);
+          return newBlock;
+        }
+
+        case 'canvas_rename': {
+          const renameId = (args && (args.canvasId || args.canvas_id)) || '';
+          const canvas = window.__TAURI__.core._canvases.find(c => c.id === renameId);
+          if (canvas && args && args.name) canvas.name = args.name;
+          return null;
+        }
+
+        case 'canvas_delete': {
+          const deleteId = (args && (args.canvasId || args.canvas_id)) || '';
+          window.__TAURI__.core._canvases = window.__TAURI__.core._canvases.filter(c => c.id !== deleteId);
+          delete window.__TAURI__.core._canvasBlocks[deleteId];
+          return null;
+        }
+
+        case 'canvas_message_add':
+        case 'canvas_list_messages':
+        case 'canvas_messages_load':
+          return [];
+
+        case 'canvas_create_note':
+          return null;
 
         default:
           console.warn('[tauri-mock] unhandled command:', cmd);

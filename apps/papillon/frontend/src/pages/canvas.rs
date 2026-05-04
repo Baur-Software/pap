@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use papillon_shared::{BlockState, CanvasBlock};
 
 use crate::components::block_renderer::BlockRenderer;
+use crate::components::canvas_aside::{AsideOpen, CanvasAside, CanvasAsideDockToggle};
 use crate::components::canvas_back_face::CanvasBackFace;
 use crate::components::canvas_surface_title::CanvasSurfaceTitle;
 use crate::components::hitl_gate::HitlGate;
@@ -19,7 +20,7 @@ pub fn CanvasPage() -> impl IntoView {
         blocks
             .get()
             .into_iter()
-            .filter(|block| matches!(block.state, BlockState::Resolved | BlockState::Outcome { .. }))
+            .filter(|block| !matches!(block.state, BlockState::Guide { .. }))
             .collect::<Vec<_>>()
     };
     let has_rendered_blocks = move || !rendered_blocks().is_empty();
@@ -54,6 +55,7 @@ pub fn CanvasPage() -> impl IntoView {
     };
 
     let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
+    let aside_open = use_context::<AsideOpen>().map(|AsideOpen(open)| open).unwrap_or_else(|| RwSignal::new(false));
 
     view! {
         <HitlGate />
@@ -66,6 +68,7 @@ pub fn CanvasPage() -> impl IntoView {
             >
                 // Front face: rendered blocks + collapsible aside.
                 <div class="canvas-face front">
+                    <CanvasAsideDockToggle open=aside_open />
                     <div class="canvas-stream">
                         <CanvasSurfaceTitle />
                         <Show when=move || !has_rendered_blocks()>
@@ -111,6 +114,7 @@ pub fn CanvasPage() -> impl IntoView {
                             </button>
                         </Show>
                     </div>
+                    <CanvasAside open=aside_open />
                 </div>
 
                 // Back face: workflow-side surfaces.

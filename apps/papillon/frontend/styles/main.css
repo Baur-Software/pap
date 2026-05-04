@@ -9295,3 +9295,8 @@ body {
         min-width: 720px;
     }
 }
+
+/* Schema type autocomplete dropdown item hover */
+.schema-suggestion:hover {
+    background: var(--bg-tertiary);
+}

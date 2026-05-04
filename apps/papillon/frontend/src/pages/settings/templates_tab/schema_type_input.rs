@@ -54,7 +54,6 @@ pub fn SchemaTypeInput(
                         key=|t| t.clone()
                         children=move |type_name| {
                             let name = type_name.clone();
-                            let hovered = RwSignal::new(false);
                             view! {
                                 <div
                                     on:mousedown=move |ev| {
@@ -62,12 +61,8 @@ pub fn SchemaTypeInput(
                                         value.set(name.clone());
                                         show_dropdown.set(false);
                                     }
-                                    on:mouseenter=move |_| hovered.set(true)
-                                    on:mouseleave=move |_| hovered.set(false)
-                                    style=move || format!(
-                                        "padding: 9px 12px; font-size: 13px; color: var(--text-1); cursor: pointer; font-family: var(--font-mono); background: {};",
-                                        if hovered.get() { "var(--bg-tertiary)" } else { "transparent" }
-                                    )
+                                    class="schema-suggestion"
+                                    style="padding: 9px 12px; font-size: 13px; color: var(--text-1); cursor: pointer; font-family: var(--font-mono);"
                                 >
                                     {type_name.clone()}
                                 </div>
