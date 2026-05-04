@@ -21,7 +21,10 @@ fn source_to_str(source: &DynamicAgentSource) -> &'static str {
 
 /// Derive agent lifecycle from the `published_to` sentinel values.
 fn lifecycle_from_published_to(published_to: &[String]) -> papillon_shared::AgentLifecycle {
-    if published_to.iter().any(|u| u == crate::state::LOCAL_REGISTRY_URL) {
+    if published_to
+        .iter()
+        .any(|u| u == crate::state::LOCAL_REGISTRY_URL)
+    {
         papillon_shared::AgentLifecycle::Published
     } else if published_to.iter().any(|u| u == LOCAL_UNPUBLISHED_SENTINEL) {
         papillon_shared::AgentLifecycle::Unpublished
@@ -588,8 +591,13 @@ pub async fn sign_and_publish_local(
         .ok_or_else(|| format!("Agent {agent_did} not found"))?;
 
     def.published_to.retain(|u| u != LOCAL_UNPUBLISHED_SENTINEL);
-    if !def.published_to.iter().any(|u| u == crate::state::LOCAL_REGISTRY_URL) {
-        def.published_to.push(crate::state::LOCAL_REGISTRY_URL.to_string());
+    if !def
+        .published_to
+        .iter()
+        .any(|u| u == crate::state::LOCAL_REGISTRY_URL)
+    {
+        def.published_to
+            .push(crate::state::LOCAL_REGISTRY_URL.to_string());
     }
     def.updated_at = chrono::Utc::now().to_rfc3339();
 
@@ -617,9 +625,15 @@ pub async fn unpublish_local(
         .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
         .ok_or_else(|| format!("Agent {agent_did} not found"))?;
 
-    def.published_to.retain(|u| u != crate::state::LOCAL_REGISTRY_URL);
-    if !def.published_to.iter().any(|u| u == LOCAL_UNPUBLISHED_SENTINEL) {
-        def.published_to.push(LOCAL_UNPUBLISHED_SENTINEL.to_string());
+    def.published_to
+        .retain(|u| u != crate::state::LOCAL_REGISTRY_URL);
+    if !def
+        .published_to
+        .iter()
+        .any(|u| u == LOCAL_UNPUBLISHED_SENTINEL)
+    {
+        def.published_to
+            .push(LOCAL_UNPUBLISHED_SENTINEL.to_string());
     }
     def.updated_at = chrono::Utc::now().to_rfc3339();
 
@@ -848,25 +862,37 @@ mod tests {
 
     #[test]
     fn lifecycle_empty_is_draft() {
-        assert_eq!(lifecycle_from_published_to(&[]), papillon_shared::AgentLifecycle::Draft);
+        assert_eq!(
+            lifecycle_from_published_to(&[]),
+            papillon_shared::AgentLifecycle::Draft
+        );
     }
 
     #[test]
     fn lifecycle_local_sentinel_is_published() {
         let v = vec![crate::state::LOCAL_REGISTRY_URL.to_string()];
-        assert_eq!(lifecycle_from_published_to(&v), papillon_shared::AgentLifecycle::Published);
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Published
+        );
     }
 
     #[test]
     fn lifecycle_unpublished_sentinel_is_unpublished() {
         let v = vec![LOCAL_UNPUBLISHED_SENTINEL.to_string()];
-        assert_eq!(lifecycle_from_published_to(&v), papillon_shared::AgentLifecycle::Unpublished);
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Unpublished
+        );
     }
 
     #[test]
     fn lifecycle_remote_url_only_is_draft() {
         let v = vec!["https://registry.example.com".to_string()];
-        assert_eq!(lifecycle_from_published_to(&v), papillon_shared::AgentLifecycle::Draft);
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Draft
+        );
     }
 
     #[test]
@@ -876,6 +902,9 @@ mod tests {
             crate::state::LOCAL_REGISTRY_URL.to_string(),
             LOCAL_UNPUBLISHED_SENTINEL.to_string(),
         ];
-        assert_eq!(lifecycle_from_published_to(&v), papillon_shared::AgentLifecycle::Published);
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Published
+        );
     }
 }

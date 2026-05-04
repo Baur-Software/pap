@@ -21,12 +21,18 @@ mod tests {
 
     #[test]
     fn converts_camelcase_return_type() {
-        assert_eq!(schema_phrase("schema:SoftwareApplication"), "Software Application");
+        assert_eq!(
+            schema_phrase("schema:SoftwareApplication"),
+            "Software Application"
+        );
     }
 
     #[test]
     fn handles_multi_word_action() {
-        assert_eq!(schema_phrase("schema:LodgingReservation"), "Lodging Reservation");
+        assert_eq!(
+            schema_phrase("schema:LodgingReservation"),
+            "Lodging Reservation"
+        );
     }
 
     #[test]

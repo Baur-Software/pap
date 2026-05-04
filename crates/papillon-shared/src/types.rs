@@ -158,9 +158,7 @@ impl ExecutionTarget {
             Some(url) if url.starts_with("https://") || url.starts_with("http://") => {
                 ExecutionTarget::Remote(url.to_string())
             }
-            Some(url) if url.starts_with("file://") => {
-                ExecutionTarget::Local(url.to_string())
-            }
+            Some(url) if url.starts_with("file://") => ExecutionTarget::Local(url.to_string()),
             Some(url) if url.starts_with("did:") || url.starts_with("pap://") => {
                 ExecutionTarget::SubAgent(url.to_string())
             }
