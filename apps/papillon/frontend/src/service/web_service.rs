@@ -27,8 +27,9 @@ use papillon_shared::types::LlmProvider;
 use super::web_identity::WebIdentityService;
 use super::{AgentProfileInfo, PapillonService};
 use papillon_shared::{
-    AgentInfo, IdentityInfo, OrchestratorConfig, OrchestratorStatus, ProfileMetadata, RegistryInfo,
-    ScenarioCard, ScenarioRunResult, SetupState, Template,
+    AgentInfo, AgentLifecycle, ExecutionTarget, IdentityInfo, OrchestratorConfig,
+    OrchestratorStatus, ProfileMetadata, RegistryInfo, ScenarioCard, ScenarioRunResult, SetupState,
+    Template,
 };
 use serde_json::Value;
 
@@ -233,6 +234,8 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
         // Catalog agents are seeded locally and are directly invocable.
         live: true,
         category: "general".to_owned(),
+        execution_target: ExecutionTarget::None,
+        lifecycle: AgentLifecycle::default(),
     }
 }
 
