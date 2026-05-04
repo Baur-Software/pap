@@ -69,7 +69,11 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
         live: true,
         category: def.category().to_string(),
         execution_target: papillon_shared::ExecutionTarget::None,
-        lifecycle: papillon_shared::AgentLifecycle::default(),
+        lifecycle: if def.published_to.iter().any(|u| u == "pap://local") {
+            papillon_shared::AgentLifecycle::Published
+        } else {
+            papillon_shared::AgentLifecycle::Draft
+        },
     }
 }
 
@@ -130,7 +134,13 @@ pub async fn list_local_agents(
                     .map(|d| d.category().to_string())
                     .unwrap_or_else(|| "general".to_owned()),
                 execution_target: papillon_shared::ExecutionTarget::None,
-                lifecycle: papillon_shared::AgentLifecycle::default(),
+                lifecycle: db_def.map(|d| {
+                    if d.published_to.iter().any(|u| u == "pap://local") {
+                        papillon_shared::AgentLifecycle::Published
+                    } else {
+                        papillon_shared::AgentLifecycle::Draft
+                    }
+                }).unwrap_or(papillon_shared::AgentLifecycle::Draft),
             }
         })
         .collect();
@@ -553,6 +563,62 @@ pub async fn unpublish_agent(
         .map_err(|e| format!("Failed to persist published_to for {agent_did}: {e}"))?;
 
     Ok(())
+}
+
+/// Sign an agent advertisement and mark it published to the local PAP registry.
+/// This transitions the agent from Draft → Published by adding "pap://local" to published_to.
+/// The advertisement is already signed when the agent was saved; this just marks it as
+/// actively advertised from this node.
+#[tauri::command]
+pub async fn sign_and_publish_local(
+    state: tauri::State<'_, AppState>,
+    agent_did: String,
+) -> Result<AgentInfo, String> {
+    let mut def = state
+        .db
+        .load_all_agents()
+        .map_err(|e| format!("Failed to load agents: {e}"))?
+        .into_iter()
+        .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
+        .ok_or_else(|| format!("Agent {agent_did} not found"))?;
+
+    if !def.published_to.contains(&"pap://local".to_string()) {
+        def.published_to.push("pap://local".to_string());
+    }
+    def.updated_at = chrono::Utc::now().to_rfc3339();
+
+    state
+        .db
+        .update_agent(&def)
+        .map_err(|e| format!("Failed to update agent: {e}"))?;
+
+    Ok(def_to_agent_info(&def))
+}
+
+/// Remove an agent advertisement from the local PAP registry.
+/// This transitions Published → Unpublished (tracked as Draft with no published_to).
+#[tauri::command]
+pub async fn unpublish_local(
+    state: tauri::State<'_, AppState>,
+    agent_did: String,
+) -> Result<AgentInfo, String> {
+    let mut def = state
+        .db
+        .load_all_agents()
+        .map_err(|e| format!("Failed to load agents: {e}"))?
+        .into_iter()
+        .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
+        .ok_or_else(|| format!("Agent {agent_did} not found"))?;
+
+    def.published_to.retain(|u| u != "pap://local");
+    def.updated_at = chrono::Utc::now().to_rfc3339();
+
+    state
+        .db
+        .update_agent(&def)
+        .map_err(|e| format!("Failed to update agent: {e}"))?;
+
+    Ok(def_to_agent_info(&def))
 }
 
 /// Approve a federation agent advertisement for local use.

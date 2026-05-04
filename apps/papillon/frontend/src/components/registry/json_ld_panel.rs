@@ -1,8 +1,14 @@
 use leptos::prelude::*;
 use papillon_shared::{AgentInfo, AgentLifecycle};
+use wasm_bindgen_futures::spawn_local;
+
+use crate::bridge;
+use crate::state::registry::RegistryState;
 
 #[component]
 pub fn JsonLdPanel(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
+    let registry = expect_context::<RegistryState>();
+
     let preview = move || {
         agent.get().map(|a| {
             let action = a.capabilities.first().cloned().unwrap_or_default();
@@ -39,12 +45,39 @@ pub fn JsonLdPanel(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
             "font-size: 11px; font-weight: 600; padding: 5px 14px; background: transparent; color: #f87171; border: 1px solid rgba(248,113,113,0.3); border-radius: 6px; cursor: pointer;",
     };
 
+    let on_action = move |_| {
+        let agent_did = match agent.get().and_then(|a| a.agent_did.clone()) {
+            Some(did) if !did.is_empty() => did,
+            _ => return,
+        };
+        let lc = lifecycle();
+
+        spawn_local(async move {
+            #[derive(serde::Serialize)]
+            struct AgentDidArg {
+                agent_did: String,
+            }
+            let cmd = match lc {
+                AgentLifecycle::Draft | AgentLifecycle::Unpublished => "sign_and_publish_local",
+                AgentLifecycle::Published => "unpublish_local",
+            };
+            if bridge::invoke::<AgentDidArg, AgentInfo>(cmd, &AgentDidArg { agent_did })
+                .await
+                .is_ok()
+            {
+                if let Ok(agents) = bridge::invoke_no_args::<Vec<AgentInfo>>("list_local_agents").await {
+                    registry.agents.set(agents);
+                }
+            }
+        });
+    };
+
     view! {
         <div style="height: 200px; border-top: 1px solid var(--border); background: #0a0a12; display: flex; flex-direction: column; flex-shrink: 0;">
             <div style="display: flex; align-items: center; gap: 10px; padding: 0 16px; height: 36px; border-bottom: 1px solid var(--border); flex-shrink: 0;">
                 <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary);">"JSON-LD Advertisement"</span>
                 <div style="margin-left: auto; display: flex; gap: 8px;">
-                    <button style=action_style>
+                    <button style=action_style on:click=on_action>
                         {action_label}
                     </button>
                 </div>
