@@ -71,6 +71,8 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
         execution_target: papillon_shared::ExecutionTarget::None,
         lifecycle: if def.published_to.iter().any(|u| u == "pap://local") {
             papillon_shared::AgentLifecycle::Published
+        } else if def.published_to.iter().any(|u| u == "pap://local:unpublished") {
+            papillon_shared::AgentLifecycle::Unpublished
         } else {
             papillon_shared::AgentLifecycle::Draft
         },
@@ -137,6 +139,8 @@ pub async fn list_local_agents(
                 lifecycle: db_def.map(|d| {
                     if d.published_to.iter().any(|u| u == "pap://local") {
                         papillon_shared::AgentLifecycle::Published
+                    } else if d.published_to.iter().any(|u| u == "pap://local:unpublished") {
+                        papillon_shared::AgentLifecycle::Unpublished
                     } else {
                         papillon_shared::AgentLifecycle::Draft
                     }
@@ -582,6 +586,7 @@ pub async fn sign_and_publish_local(
         .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
         .ok_or_else(|| format!("Agent {agent_did} not found"))?;
 
+    def.published_to.retain(|u| u != "pap://local:unpublished");
     if !def.published_to.contains(&"pap://local".to_string()) {
         def.published_to.push("pap://local".to_string());
     }
@@ -611,6 +616,9 @@ pub async fn unpublish_local(
         .ok_or_else(|| format!("Agent {agent_did} not found"))?;
 
     def.published_to.retain(|u| u != "pap://local");
+    if !def.published_to.contains(&"pap://local:unpublished".to_string()) {
+        def.published_to.push("pap://local:unpublished".to_string());
+    }
     def.updated_at = chrono::Utc::now().to_rfc3339();
 
     state
