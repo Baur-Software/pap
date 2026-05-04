@@ -28,6 +28,15 @@ pub fn CanvasEmptyState() -> impl IntoView {
 
     view! {
         <div class="canvas-empty-state">
+            <div class="canvas-empty-hero">
+                <div class="canvas-empty-kicker">"Intent browser"</div>
+                <h3 class="canvas-empty-title">
+                    "Start with a destination, a prompt, or a workflow idea."
+                </h3>
+                <p class="canvas-empty-copy">
+                    "Papillon can browse the old web, resolve a `pap://` target, or begin a ghost run that builds a workflow before anything is executed."
+                </p>
+            </div>
             <div class="agent-tiles">
                 {AGENT_TILES.iter().map(|&(label, example)| {
                     let canvas_state = canvas_state;

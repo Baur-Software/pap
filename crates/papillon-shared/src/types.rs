@@ -328,7 +328,7 @@ pub enum EdgeState {
 }
 
 /// A directed wire from an output port on one node to an input port on another.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowEdge {
     pub id: String,
     pub from_node_id: String,
@@ -342,7 +342,7 @@ pub struct WorkflowEdge {
 }
 
 /// A single step in a designed workflow — agent node or synthesizer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowNode {
     pub id: String,
     /// Node type: "agent" (default) or "synthesizer".
@@ -386,7 +386,7 @@ pub enum WorkflowMode {
 }
 
 /// Live workflow graph — derived from Map mode (block events) or authored in Design mode.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowGraph {
     pub nodes: Vec<WorkflowNode>,
     pub edges: Vec<WorkflowEdge>,

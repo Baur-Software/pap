@@ -296,3 +296,73 @@ test.describe("Ollama configuration — Settings UI", () => {
     await expect(page.locator(".topbar-address-input")).toHaveValue("What is the weather today?");
   });
 });
+
+// ── Error / edge cases ────────────────────────────────────────
+
+test.describe("Orchestrator configuration — error cases", () => {
+  test("configure_orchestrator with missing config fields uses defaults", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    // Partial config — only mandate_ttl_hours
+    await page.evaluate(() =>
+      (window as any).__TAURI__.core.invoke("configure_orchestrator", {
+        config: { mandate_ttl_hours: 12 },
+      })
+    );
+
+    const saved = await page.evaluate(() =>
+      (window as any).__TAURI__.core.invoke("get_orchestrator_config")
+    );
+    expect(saved.mandate_ttl_hours).toBe(12);
+  });
+
+  test("configure_orchestrator preserves auto_approve_zero_disclosure: false", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    await page.evaluate(() =>
+      (window as any).__TAURI__.core.invoke("configure_orchestrator", {
+        config: {
+          llm_provider: "None",
+          mandate_ttl_hours: 8,
+          auto_approve_zero_disclosure: false,
+        },
+      })
+    );
+
+    const saved = await page.evaluate(() =>
+      (window as any).__TAURI__.core.invoke("get_orchestrator_config")
+    );
+    expect(saved.auto_approve_zero_disclosure).toBe(false);
+  });
+
+  test("check_llm_connection returns a non-empty response without Ollama configured", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    // Default config has llm_provider: "None" — check_llm_connection still returns a string
+    const response = await page.evaluate(() =>
+      (window as any).__TAURI__.core.invoke("check_llm_connection")
+    );
+    expect(typeof response).toBe("string");
+    expect((response as string).length).toBeGreaterThan(0);
+  });
+
+  test("get_orchestrator_config returns default config on fresh page load", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const config = await page.evaluate(() =>
+      (window as any).__TAURI__.core.invoke("get_orchestrator_config")
+    );
+
+    expect(config).toHaveProperty("mandate_ttl_hours");
+    expect(config).toHaveProperty("auto_approve_zero_disclosure");
+    // Default provider is "None" (no LLM configured)
+    const provider = config.inference_substrate ?? config.llm_provider;
+    expect(provider).toBe("None");
+  });
+});

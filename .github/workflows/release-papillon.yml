@@ -704,15 +704,15 @@ jobs:
           npm install -D @playwright/test
           npx playwright install --with-deps chromium
 
-      - name: Run canary health checks
+      - name: Run smoke tests
         working-directory: apps/papillon/e2e
-        run: npx playwright test tests/canary.spec.ts --reporter=html
+        run: npx playwright test tests/smoke.spec.ts tests/web-standalone.spec.ts --reporter=html
         timeout-minutes: 15
 
-      - name: Upload canary report on failure
+      - name: Upload smoke report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: papillon-canary-report
+          name: papillon-smoke-report
           path: playwright-report/
           retention-days: 7

@@ -76,8 +76,22 @@ impl RegistryState {
                 registry.loading.set(false);
             });
         } else {
-            // Browser mode — fetch directly from the registry's HTTP API.
+            // Browser mode — use the embedded local catalog for pap://local,
+            // otherwise fetch directly from a remote registry's HTTP API.
             spawn_local(async move {
+                #[cfg(target_arch = "wasm32")]
+                if crate::service::web_service::is_local_registry_url(&url) {
+                    match crate::service::web_service::load_local_registry_snapshot().await {
+                        Ok((info, agents)) => {
+                            registry.info.set(Some(info));
+                            registry.agents.set(agents);
+                        }
+                        Err(e) => registry.error.set(Some(e)),
+                    }
+                    registry.loading.set(false);
+                    return;
+                }
+
                 match fetch_agents_from_registry(&url).await {
                     Ok(agents) => {
                         registry.info.set(Some(RegistryInfo {

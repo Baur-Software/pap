@@ -323,14 +323,17 @@ pub fn TemplatesTab() -> impl IntoView {
     // sync Effect in app.rs whenever templates change.
     let registered_types = Signal::derive(move || renderer_state.registered_keys.get());
 
-    // Auto-generate starter JSON when schema type changes
+    // Auto-generate starter JSON when schema type changes.
+    // Uses get_untracked for new_config to avoid an infinite reactive loop:
+    // new_config.set(generated) inside the Effect must not re-trigger the Effect,
+    // since only a schema_type change should drive auto-generation.
     let last_generated = RwSignal::new(String::new());
     Effect::new(move || {
         let schema_type = new_schema_type.get();
         if schema_type.trim().is_empty() {
             return;
         }
-        let current_config = new_config.get();
+        let current_config = new_config.get_untracked();
         let prev_generated = last_generated.get_untracked();
         // Only auto-populate if config is empty or still matches the last auto-generated value
         if current_config.is_empty() || current_config == prev_generated {

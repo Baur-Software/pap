@@ -9,12 +9,25 @@ use crate::components::canvas_aside::AsideOpen;
 use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::catalog::CatalogState;
 
+fn canvas_flip_label(side: CanvasSide) -> &'static str {
+    match side {
+        CanvasSide::Front => "↻ Show workflow",
+        CanvasSide::Back => "↻ Show rendered",
+    }
+}
+
+fn canvas_flip_title(side: CanvasSide) -> &'static str {
+    match side {
+        CanvasSide::Front => "Show the workflow side",
+        CanvasSide::Back => "Show the rendered side",
+    }
+}
+
 #[component]
 pub fn TopBar() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let menu_open = RwSignal::new(false);
 
-    let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
     let toggle_side = move |_: leptos::ev::MouseEvent| {
         canvas_state.canvas_side.update(|s| {
             *s = if *s == CanvasSide::Front {
@@ -50,21 +63,10 @@ pub fn TopBar() -> impl IntoView {
                 <button
                     class="canvas-flip-toggle"
                     on:click=toggle_side
+                    title=move || canvas_flip_title(canvas_state.canvas_side.get())
                 >
-                    {move || if is_back() { "\u{27f3} Rendered" } else { "\u{27f3} Workflow" }}
+                    {move || canvas_flip_label(canvas_state.canvas_side.get())}
                 </button>
-                {
-                    let aside = use_context::<AsideOpen>();
-                    aside.map(|AsideOpen(open)| view! {
-                        <button
-                            class="canvas-aside-toggle"
-                            on:click=move |_| open.update(|v| *v = !*v)
-                            title="Toggle conversation aside"
-                        >
-                            {move || if open.get() { "\u{2715} Chat" } else { "\u{1f4ac} Chat" }}
-                        </button>
-                    })
-                }
             </div>
         </header>
 
@@ -168,13 +170,11 @@ pub fn TopBar() -> impl IntoView {
 }
 
 /// Browser-style address bar — lives in the top chrome across all pages.
-/// Accepts natural-language prompts, pap:// URIs, and https:// URLs.
-/// Identical logic to the former canvas InlinePrompt, but styled as a
-/// compact pill input rather than a card.
 #[component]
 fn TopbarPrompt() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let catalog_state = use_context::<CatalogState>();
+    let aside_open = use_context::<AsideOpen>().map(|AsideOpen(open)| open);
     let input_ref = NodeRef::<html::Input>::new();
     let input_value = RwSignal::new(String::new());
     let selected_idx: RwSignal<Option<usize>> = RwSignal::new(None);
@@ -226,6 +226,9 @@ fn TopbarPrompt() -> impl IntoView {
             return;
         }
         canvas_state.submit_prompt(text.clone());
+        if let Some(open) = aside_open {
+            open.set(true);
+        }
         input_value.set(String::new());
         selected_idx.set(None);
     };
@@ -323,7 +326,6 @@ fn TopbarPrompt() -> impl IntoView {
                 }
                 on:keydown=on_keydown
                 on:dragover=|e: web_sys::DragEvent| {
-                    // Required to allow the subsequent drop event to fire.
                     e.prevent_default();
                 }
                 on:drop=move |e: web_sys::DragEvent| {
@@ -331,9 +333,6 @@ fn TopbarPrompt() -> impl IntoView {
                     if let Some(dt) = e.data_transfer() {
                         if let Ok(text) = dt.get_data("text/plain") {
                             if text.contains("{{block:") {
-                                // Parse block ID from "{{block:ID}}" and use
-                                // insert_block_ref so the prefill signal is updated
-                                // reactively (same path as agent-tile clicks).
                                 let id_start = text.find("{{block:").map(|i| i + 8);
                                 let id_end = text.find("}}");
                                 if let (Some(s), Some(e_idx)) = (id_start, id_end) {
@@ -343,11 +342,9 @@ fn TopbarPrompt() -> impl IntoView {
                                         return;
                                     }
                                 }
-                                // Fallback: append the raw reference text to the
-                                // current input value when ID parsing fails.
-                                let current = input_value.get();
-                                input_value.set(format!("{}{}", current, text));
                             }
+                            let current = input_value.get();
+                            input_value.set(format!("{}{}", current, text));
                         }
                     }
                 }
@@ -366,21 +363,24 @@ fn TopbarPrompt() -> impl IntoView {
                                 class:palette-suggestion-pap-discovery=is_discovery
                                 on:click=move |_| {
                                     if is_discovery {
-                                        // Strip the sentinel prefix to get the bare domain.
                                         let domain = name_for_click
                                             .strip_prefix("__pap_discover__:")
                                             .unwrap_or(&name_for_click)
                                             .to_string();
-                                        // Submit as a pap+discovery intent so the orchestrator
-                                        // knows to check /.well-known/pap/advertisements first.
                                         canvas_state.submit_prompt(
                                             format!("pap+discovery://{domain}")
                                         );
+                                        if let Some(open) = aside_open {
+                                            open.set(true);
+                                        }
                                         input_value.set(String::new());
                                     } else {
                                         let full = format!("pap://{}", name_for_click);
                                         if name_for_click.contains('.') {
                                             canvas_state.submit_prompt(full);
+                                            if let Some(open) = aside_open {
+                                                open.set(true);
+                                            }
                                             input_value.set(String::new());
                                         } else {
                                             input_value.set(full);
@@ -420,6 +420,21 @@ fn TopbarPrompt() -> impl IntoView {
                 </div>
             </Show>
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canvas_flip_label_is_action_oriented_on_front() {
+        assert_eq!(canvas_flip_label(CanvasSide::Front), "↻ Show workflow");
+    }
+
+    #[test]
+    fn canvas_flip_label_is_action_oriented_on_back() {
+        assert_eq!(canvas_flip_label(CanvasSide::Back), "↻ Show rendered");
     }
 }
 

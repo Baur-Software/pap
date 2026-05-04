@@ -19,25 +19,13 @@
  * and _lastReshapeText.
  */
 
-import { test, expect, Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
-import { waitForApp, submitPrompt } from "./helpers";
+import { waitForApp, submitAndWaitForBlock } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
-
-/**
- * Submit a prompt, wait for block visibility, then pause 400ms so the WASM
- * reactive system has time to attach Leptos on:click handlers before tests
- * start clicking. Without this pause the first click on a freshly-mounted
- * block can fire before the signal is wired up.
- */
-async function submitAndWaitForBlock(page: Page, prompt: string): Promise<void> {
-  await submitPrompt(page, prompt);
-  await expect(page.locator(".canvas-block").first()).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(400);
-}
 
 // ── Group 1: Inline reshape — UI appearance ──────────────────
 
