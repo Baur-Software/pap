@@ -2,17 +2,26 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
+use crate::orchestrator_runtime::{
+    builtin_models_for_runtime, default_builtin_model_id, fallback_status_for_config,
+    normalize_builtin_model_id,
+};
+use crate::service::use_papillon_service;
 use crate::state::orchestrator::OrchestratorState;
-use papillon_shared::{builtin_model_catalog, ModelAvailability, OrchestratorConfig, OrchestratorStatus, SetupState};
+use papillon_shared::{ModelAvailability, OrchestratorConfig};
 
 #[component]
 pub fn SetupWizard() -> impl IntoView {
+    let service = use_papillon_service();
+    let service_for_setup_check = StoredValue::new(service.clone());
+    let service_for_save = StoredValue::new(service.clone());
     let orchestrator = expect_context::<OrchestratorState>();
+    let is_tauri = bridge::tauri_available();
     let show_wizard = RwSignal::new(false);
     let wizard_error = RwSignal::new(None::<String>);
     let selected_provider = RwSignal::new("builtin".to_string());
-    let builtin_model = RwSignal::new("gemma-4-e2b".to_string());
-    let builtin_models = RwSignal::new(builtin_model_catalog());
+    let builtin_model = RwSignal::new(default_builtin_model_id(is_tauri));
+    let builtin_models = RwSignal::new(builtin_models_for_runtime(is_tauri));
     let ollama_endpoint = RwSignal::new("http://localhost:11434".to_string());
     let ollama_model = RwSignal::new("mistral:latest".to_string());
     let openai_endpoint = RwSignal::new(String::new());
@@ -26,9 +35,10 @@ pub fn SetupWizard() -> impl IntoView {
     // Check setup state on mount
     Effect::new(move || {
         let setup = orchestrator.setup_state;
-        if setup.get().is_none() && bridge::tauri_available() {
+        if setup.get().is_none() {
+            let svc = service_for_setup_check.get_value();
             spawn_local(async move {
-                match bridge::invoke_no_args::<SetupState>("get_setup_state").await {
+                match svc.get_setup_state().await {
                     Ok(state) => {
                         let should_show = !state.setup_complete || !state.llm_configured;
                         setup.set(Some(state));
@@ -54,66 +64,6 @@ pub fn SetupWizard() -> impl IntoView {
             }
         });
     });
-
-    let save_config = move |_| {
-        let provider = selected_provider.get();
-        let llm = match provider.as_str() {
-            "builtin" => papillon_shared::LlmProvider::BuiltIn {
-                model_id: builtin_model.get(),
-            },
-            "ollama" => papillon_shared::LlmProvider::Ollama {
-                endpoint: ollama_endpoint.get(),
-                model: ollama_model.get(),
-            },
-            "openai" => papillon_shared::LlmProvider::OpenAiCompatible {
-                endpoint: openai_endpoint.get(),
-                api_key: openai_key.get(),
-                model: openai_model.get(),
-            },
-            "huggingface" => papillon_shared::LlmProvider::HuggingFace {
-                api_token: hf_token.get(),
-                model: hf_model.get(),
-            },
-            _ => papillon_shared::LlmProvider::None,
-        };
-
-        let config = OrchestratorConfig {
-            inference_substrate: llm,
-            mandate_ttl_hours: 8,
-            auto_approve_zero_disclosure: true,
-            intent_confidence_threshold: 0.35,
-        };
-
-        spawn_local(async move {
-            wizard_error.set(None);
-            match bridge::invoke::<serde_json::Value, OrchestratorConfig>(
-                "configure_orchestrator",
-                &serde_json::json!({ "config": config }),
-            )
-            .await
-            {
-                Ok(saved) => {
-                    orchestrator.config.set(saved);
-                    // Refresh sidebar status (model is now loaded if BuiltIn)
-                    if let Ok(status) =
-                        bridge::invoke_no_args::<OrchestratorStatus>("get_orchestrator_status")
-                            .await
-                    {
-                        orchestrator.status.set(status);
-                    }
-                    show_wizard.set(false);
-                }
-                Err(e) => {
-                    let msg = if e.contains("model not found") || e.contains("Tokenizer not found") {
-                        "Model files not downloaded. Use the Download button above first.".to_string()
-                    } else {
-                        "Could not save \u{2014} backend unavailable.".to_string()
-                    };
-                    wizard_error.set(Some(msg));
-                }
-            }
-        });
-    };
 
     let skip = move |_| {
         show_wizard.set(false);
@@ -159,8 +109,20 @@ pub fn SetupWizard() -> impl IntoView {
                             class=move || if selected_provider.get() == "builtin" { "setup-option selected" } else { "setup-option" }
                             on:click=move |_| selected_provider.set("builtin".into())
                         >
-                            <div class="setup-option-title">"BUILTIN \u{2014} ON_DEVICE (RECOMMENDED)"</div>
-                            <div class="setup-option-desc">"On-device TinyLlama via Candle \u{2014} downloads once, runs fully offline"</div>
+                            <div class="setup-option-title">
+                                {if is_tauri {
+                                    "BUILTIN \u{2014} ON_DEVICE (RECOMMENDED)"
+                                } else {
+                                    "BUILTIN \u{2014} IN_BROWSER (RECOMMENDED)"
+                                }}
+                            </div>
+                            <div class="setup-option-desc">
+                                {if is_tauri {
+                                    "Local model runtime \u{2014} downloads once, then runs on this device"
+                                } else {
+                                    "Web-compatible local model \u{2014} runs in the browser client"
+                                }}
+                            </div>
                         </div>
                         <div
                             class=move || if selected_provider.get() == "ollama" { "setup-option selected" } else { "setup-option" }
@@ -220,10 +182,9 @@ pub fn SetupWizard() -> impl IntoView {
                                 if !bridge::tauri_available() {
                                     view! {
                                         <div class="setup-ext-info">
-                                            <p class="setup-ext-info-label">"EXTENSION_REQUIRED"</p>
+                                            <p class="setup-ext-info-label">"BROWSER_READY"</p>
                                             <p class="setup-ext-info-body">
-                                                "On-device inference requires the Papillon desktop app. "
-                                                "Install the browser extension to connect pap:// URLs to your local instance."
+                                                "This uses a web-compatible local model that runs in the browser client."
                                             </p>
                                         </div>
                                     }.into_any()
@@ -367,7 +328,59 @@ pub fn SetupWizard() -> impl IntoView {
                         <button class="btn-ghost" on:click=skip>
                             "[ SKIP ]"
                         </button>
-                        <button class="btn-sys" on:click=save_config>
+                        <button class="btn-sys" on:click=move |_| {
+                            let svc = service_for_save.get_value();
+                            let provider = selected_provider.get();
+                            let llm = match provider.as_str() {
+                                "builtin" => papillon_shared::LlmProvider::BuiltIn {
+                                    model_id: normalize_builtin_model_id(&builtin_model.get(), is_tauri),
+                                },
+                                "ollama" => papillon_shared::LlmProvider::Ollama {
+                                    endpoint: ollama_endpoint.get(),
+                                    model: ollama_model.get(),
+                                },
+                                "openai" => papillon_shared::LlmProvider::OpenAiCompatible {
+                                    endpoint: openai_endpoint.get(),
+                                    api_key: openai_key.get(),
+                                    model: openai_model.get(),
+                                },
+                                "huggingface" => papillon_shared::LlmProvider::HuggingFace {
+                                    api_token: hf_token.get(),
+                                    model: hf_model.get(),
+                                },
+                                _ => papillon_shared::LlmProvider::None,
+                            };
+
+                            let config = OrchestratorConfig {
+                                inference_substrate: llm,
+                                mandate_ttl_hours: 8,
+                                auto_approve_zero_disclosure: true,
+                                intent_confidence_threshold: 0.35,
+                            };
+
+                            spawn_local(async move {
+                                wizard_error.set(None);
+                                match svc.configure_orchestrator(&config).await {
+                                    Ok(saved) => {
+                                        orchestrator.config.set(saved.clone());
+                                        let status = svc
+                                            .get_orchestrator_status()
+                                            .await
+                                            .unwrap_or_else(|_| fallback_status_for_config(&saved));
+                                        orchestrator.status.set(status);
+                                        show_wizard.set(false);
+                                    }
+                                    Err(e) => {
+                                        let msg = if e.contains("model not found") || e.contains("Tokenizer not found") {
+                                            "Model files not downloaded. Use the Download button above first.".to_string()
+                                        } else {
+                                            format!("Save failed: {e}")
+                                        };
+                                        wizard_error.set(Some(msg));
+                                    }
+                                }
+                            });
+                        }>
                             "[ INITIALIZE ]"
                         </button>
                     </div>

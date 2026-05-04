@@ -54,6 +54,31 @@ fn agent_profile_infos_key(principal_did: &str) -> String {
 #[cfg(feature = "wasm")]
 const LOCAL_REGISTRY_URL: &str = "pap://local";
 
+#[cfg(feature = "wasm")]
+pub(crate) fn is_local_registry_url(url: &str) -> bool {
+    matches!(url.trim(), "" | "pap://local" | "local")
+}
+
+#[cfg(feature = "wasm")]
+pub(crate) async fn load_local_registry_snapshot() -> Result<(RegistryInfo, Vec<AgentInfo>), String> {
+    #[cfg(target_arch = "wasm32")]
+    let registry = WasmAgentRegistry::open("papillon-agents")
+        .await
+        .map_err(|e| format!("Failed to open local catalog: {e}"))?;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let registry = WasmAgentRegistry::new_empty("papillon-agents")
+        .map_err(|e| format!("Failed to create local catalog: {e}"))?;
+
+    let agents: Vec<AgentInfo> = registry.list_agents().iter().map(ad_to_info).collect();
+    let info = RegistryInfo {
+        url: LOCAL_REGISTRY_URL.to_owned(),
+        agent_count: agents.len(),
+        peer_count: 0,
+    };
+    Ok((info, agents))
+}
+
 /// Service implementation for pure WASM environments with IndexedDB.
 ///
 /// Holds a `WebIdentityService` for identity/profile management, a
@@ -317,8 +342,7 @@ impl PapillonService for WebService {
         {
             // WASM supports only the local registry; remote federation is not yet implemented.
             // Return an error for any non-local URL rather than silently serving local data.
-            const LOCAL_URLS: &[&str] = &["", "pap://local", "local"];
-            if !LOCAL_URLS.iter().any(|&u| u == url.trim()) {
+            if !is_local_registry_url(url) {
                 return Err(format!(
                     "WebService: remote registry navigation not supported in WASM \
                      (url: '{url}'); only the local agent catalog is available"
@@ -346,8 +370,7 @@ impl PapillonService for WebService {
             // as a Schema.org action type for capability filtering; otherwise it is treated as a
             // registry URL (only "pap://local" or empty is supported in WASM).
             if !registry_url.starts_with("schema:") {
-                const LOCAL_URLS: &[&str] = &["", "pap://local", "local"];
-                if !LOCAL_URLS.iter().any(|&u| u == registry_url.trim()) {
+                if !is_local_registry_url(registry_url) {
                     return Err(format!(
                         "WebService: remote registry URL '{registry_url}' not supported in WASM"
                     ));
@@ -398,8 +421,8 @@ impl PapillonService for WebService {
     }
 
     async fn get_orchestrator_status(&self) -> Result<OrchestratorStatus, String> {
-        // Orchestrator status requires runtime state from backend.
-        Err("WebService: get_orchestrator_status not yet implemented (requires backend)".into())
+        let config = self.get_orchestrator_config().await?;
+        Ok(crate::orchestrator_runtime::fallback_status_for_config(&config))
     }
 
     // ============================================================================

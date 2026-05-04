@@ -13,6 +13,7 @@
 
 pub mod fetch_client;
 pub mod intent;
+pub mod local_catalog;
 
 use chrono::{Duration, Utc};
 use serde_json::json;
@@ -25,6 +26,79 @@ use pap_did::{PrincipalKeypair, SessionKeypair};
 use pap_proto::ProtocolMessage;
 
 use fetch_client::{FetchClient, FetchError};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BrowserPromptPlan {
+    action_type: String,
+    preferred_agent: String,
+    query: String,
+}
+
+fn browser_agent_supports_execution(agent: &papillon_shared::AgentInfo) -> bool {
+    agent.endpoint.is_some() || agent.source == "catalog"
+}
+
+fn plan_browser_prompt(text: &str, agents: &[papillon_shared::AgentInfo]) -> BrowserPromptPlan {
+    let (action_type, preferred_agent, query) = intent::detect_intent(text);
+
+    if action_type != "schema:AnalyzeAction" {
+        return BrowserPromptPlan {
+            action_type: action_type.to_string(),
+            preferred_agent: preferred_agent.to_string(),
+            query,
+        };
+    }
+
+    let has_remote_classifier = agents.iter().any(|agent| {
+        agent
+            .capabilities
+            .iter()
+            .any(|capability| capability == "schema:AnalyzeAction")
+            && agent.endpoint.is_some()
+    });
+
+    if has_remote_classifier {
+        return BrowserPromptPlan {
+            action_type: action_type.to_string(),
+            preferred_agent: preferred_agent.to_string(),
+            query,
+        };
+    }
+
+    let search_agent = agents
+        .iter()
+        .find(|agent| {
+            browser_agent_supports_execution(agent)
+                && agent
+                    .capabilities
+                    .iter()
+                    .any(|capability| capability == "schema:SearchAction")
+                && agent.name == "DuckDuckGo Search"
+        })
+        .or_else(|| {
+            agents.iter().find(|agent| {
+                browser_agent_supports_execution(agent)
+                    && agent
+                        .capabilities
+                        .iter()
+                        .any(|capability| capability == "schema:SearchAction")
+            })
+        });
+
+    if let Some(agent) = search_agent {
+        return BrowserPromptPlan {
+            action_type: "schema:SearchAction".to_string(),
+            preferred_agent: agent.name.clone(),
+            query: text.to_string(),
+        };
+    }
+
+    BrowserPromptPlan {
+        action_type: action_type.to_string(),
+        preferred_agent: preferred_agent.to_string(),
+        query,
+    }
+}
 
 /// Result of a successful WASM handshake.
 pub struct HandshakeResult {
@@ -377,34 +451,42 @@ pub async fn run_prompt(
         .active_keypair()
         .map_err(|e| format!("No identity: {}", e))?;
 
-    // 2. Intent detection
-    let (action_type, preferred_agent, query) = intent::detect_intent(&text);
+    // 2. Ensure the browser has some agent visibility before planning.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
+    let mut agents = registry.agents.get();
+    if agents.is_empty() {
+        #[cfg(target_arch = "wasm32")]
+        if let Ok((info, local_agents)) = crate::service::web_service::load_local_registry_snapshot().await
+        {
+            registry.current_url.set(info.url.clone());
+            registry.info.set(Some(info));
+            registry.agents.set(local_agents.clone());
+            agents = local_agents;
+        }
+    }
 
-    // 3. Resolve agent from RegistryState (populated via Browse page)
-    let agents = registry.agents.get();
+    // 3. Prompt planning: prefer remote classifiers when they exist, otherwise
+    // fall back to a built-in search agent rather than failing on AnalyzeAction.
+    let plan = plan_browser_prompt(&text, &agents);
 
     let agent = agents
         .iter()
         .find(|a| {
-            a.capabilities.iter().any(|c| c == action_type) && a.name.contains(preferred_agent)
+            a.capabilities.iter().any(|c| c == &plan.action_type)
+                && a.name.contains(&plan.preferred_agent)
         })
         .or_else(|| {
             // Fallback: match by capability alone
             agents
                 .iter()
-                .find(|a| a.capabilities.iter().any(|c| c == action_type))
+                .find(|a| a.capabilities.iter().any(|c| c == &plan.action_type))
         })
         .ok_or_else(|| {
             format!(
                 "No agent available for '{}'. Navigate to a registry first.",
-                action_type
+                plan.action_type
             )
         })?;
-
-    let agent_endpoint = agent
-        .endpoint
-        .as_deref()
-        .ok_or_else(|| format!("Agent '{}' has no endpoint URL", agent.name))?;
 
     let agent_name = agent.name.clone();
     let agent_did = agent.provider_did.clone();
@@ -458,20 +540,43 @@ pub async fn run_prompt(
     };
 
     // 5. Execute the 6-phase handshake
-    let result = execute(WasmHandshakeParams {
-        agent_base_url: agent_endpoint,
-        agent_name: &agent_name,
-        agent_did: &agent_did,
-        action_type,
-        query: &query,
-        principal_kp: &principal_kp,
-        requires_disclosure: &requires_disclosure,
-        returns: &returns,
-        on_phase,
-        on_fail,
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let result = if let Some(agent_endpoint) = agent.endpoint.as_deref() {
+        execute(WasmHandshakeParams {
+            agent_base_url: agent_endpoint,
+            agent_name: &agent_name,
+            agent_did: &agent_did,
+            action_type: &plan.action_type,
+            query: &plan.query,
+            principal_kp: &principal_kp,
+            requires_disclosure: &requires_disclosure,
+            returns: &returns,
+            on_phase,
+            on_fail,
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    } else if agent.source == "catalog" {
+        canvases.update(|cs| {
+            if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id) {
+                    b.state = BlockState::Resolving {
+                        phase: 4,
+                        phase_label: format!("{agent_name} working..."),
+                    };
+                    b.updated_at = js_sys::Date::new_0()
+                        .to_iso_string()
+                        .as_string()
+                        .unwrap_or_default();
+                }
+            }
+        });
+        local_catalog::execute_local_catalog_agent(&agent_name, &plan.query).await?
+    } else {
+        return Err(format!(
+            "Agent '{}' is visible but not executable in browser mode",
+            agent_name
+        ));
+    };
 
     // 6. Update block to Resolved state with result
     canvases.update(|cs| {
@@ -489,4 +594,61 @@ pub async fn run_prompt(
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use papillon_shared::AgentInfo;
+
+    fn agent(name: &str, capability: &str, endpoint: Option<&str>, source: &str) -> AgentInfo {
+        AgentInfo {
+            name: name.to_string(),
+            provider_name: "Test Provider".to_string(),
+            provider_did: "did:key:test".to_string(),
+            capabilities: vec![capability.to_string()],
+            object_types: vec![],
+            requires_disclosure: vec![],
+            returns: vec![],
+            endpoint: endpoint.map(str::to_string),
+            content_hash: "hash".to_string(),
+            agent_did: Some("did:key:test-agent".to_string()),
+            source: source.to_string(),
+            published_to: vec![],
+            live: true,
+            category: "general".to_string(),
+        }
+    }
+
+    #[test]
+    fn browser_natural_language_falls_back_to_search_when_only_catalog_agents_exist() {
+        let agents = vec![agent(
+            "DuckDuckGo Search",
+            "schema:SearchAction",
+            None,
+            "catalog",
+        )];
+
+        let plan = plan_browser_prompt("what is going on in san diego", &agents);
+
+        assert_eq!(plan.action_type, "schema:SearchAction");
+        assert_eq!(plan.preferred_agent, "DuckDuckGo Search");
+        assert_eq!(plan.query, "what is going on in san diego");
+    }
+
+    #[test]
+    fn browser_keeps_analyze_action_when_remote_classifier_is_available() {
+        let agents = vec![agent(
+            "Remote Classifier",
+            "schema:AnalyzeAction",
+            Some("https://registry.example/agents/classifier"),
+            "federation",
+        )];
+
+        let plan = plan_browser_prompt("what is going on in san diego", &agents);
+
+        assert_eq!(plan.action_type, "schema:AnalyzeAction");
+        assert_eq!(plan.preferred_agent, "");
+        assert_eq!(plan.query, "what is going on in san diego");
+    }
 }

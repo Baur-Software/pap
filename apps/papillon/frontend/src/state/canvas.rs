@@ -8,6 +8,7 @@ use crate::bridge;
 use crate::service::PapillonService;
 use crate::state::catalog::CatalogState;
 use crate::state::registry::RegistryState;
+use crate::workflow_labels::workflow_port_label;
 
 pub use papillon_shared::{filter_messages_by_canvas, merge_canvases_from_records, merge_messages_dedup};
 
@@ -85,10 +86,8 @@ pub struct CanvasState {
     /// Components can subscribe to this instead of the full `canvases` vec
     /// to react to specific event types without unnecessary re-renders.
     pub last_event: RwSignal<Option<CanvasEvent>>,
-    /// Live workflow graph for the active canvas (MAP = auto-derived; DESIGN = authored).
+    /// Live workflow graph for the active canvas, derived from block state.
     pub workflow_graph: RwSignal<papillon_shared::WorkflowGraph>,
-    /// Whether the Workflow tab is in Map or Design sub-mode.
-    pub workflow_mode: RwSignal<papillon_shared::WorkflowMode>,
 }
 
 impl Default for CanvasState {
@@ -108,16 +107,15 @@ impl Default for CanvasState {
             block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
             last_event: RwSignal::new(None),
             workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
-            workflow_mode: RwSignal::new(papillon_shared::WorkflowMode::default()),
         }
     }
 }
 
 /// Derive a `WorkflowGraph` from a slice of canvas blocks.
 ///
-/// Nodes: one per block (label from prompt_text or schema_type, position left-to-right).
-/// Edges: scan each block's `prompt_text` for `{{block:<id>}}` references; also scan
-/// `linked_block_ids`. Each reference becomes a `WorkflowEdge` with `EdgeState::Unconnected`.
+/// Nodes follow real block lifecycle state so the workflow surface can translate
+/// PAP internals into human decisions without inventing fake authoring state.
+/// Edges come from explicit `{{block:<id>}}` references plus persisted block links.
 pub fn derive_map_graph(blocks: &[CanvasBlock]) -> papillon_shared::WorkflowGraph {
     use papillon_shared::{
         types::PipelineNodeType, EdgeState, PortRef, WorkflowEdge, WorkflowGraph, WorkflowNode,
@@ -126,31 +124,67 @@ pub fn derive_map_graph(blocks: &[CanvasBlock]) -> papillon_shared::WorkflowGrap
     let nodes: Vec<WorkflowNode> = blocks
         .iter()
         .enumerate()
+        .filter(|(_, block)| !matches!(block.state, papillon_shared::BlockState::Guide { .. }))
         .map(|(i, b)| {
             // Use agent_name extracted from Ghost/AwaitingApproval state, or fall back
             // to schema_type, or truncated prompt text.
-            let (agent_name, action_type) = match &b.state {
+            let (node_type, agent_name, action_type, input_ports, output_ports) = match &b.state {
                 papillon_shared::BlockState::Ghost {
                     agent_name,
                     action_type,
+                    disclosure_preview,
+                    returns_preview,
                     ..
-                } => (Some(agent_name.clone()), action_type.clone()),
+                } => (
+                    PipelineNodeType::Agent,
+                    Some(agent_name.clone()),
+                    action_type.clone(),
+                    build_workflow_ports(disclosure_preview, true),
+                    build_workflow_ports(returns_preview, false),
+                ),
                 papillon_shared::BlockState::AwaitingApproval { plan } => (
+                    PipelineNodeType::Agent,
                     Some(plan.selected_agent_name.clone()),
                     plan.action.clone(),
+                    build_workflow_ports(&plan.requires_disclosure, true),
+                    build_workflow_ports(&plan.returns, false),
                 ),
-                _ => (None, String::new()),
+                papillon_shared::BlockState::Outcome { .. } => (
+                    PipelineNodeType::Synthesizer,
+                    Some("Papillon".into()),
+                    "schema:SynthesizeAction".into(),
+                    Vec::new(),
+                    block_schema_ports(b),
+                ),
+                papillon_shared::BlockState::Note { .. } => (
+                    PipelineNodeType::Agent,
+                    Some("Note".into()),
+                    "note".into(),
+                    Vec::new(),
+                    vec![PortRef {
+                        path: "note".into(),
+                        label: "Note".into(),
+                        required: false,
+                    }],
+                ),
+                _ => (
+                    PipelineNodeType::Agent,
+                    None,
+                    String::new(),
+                    Vec::new(),
+                    block_schema_ports(b),
+                ),
             };
             WorkflowNode {
                 id: b.id.clone(),
-                node_type: PipelineNodeType::Agent,
+                node_type,
                 intent: b.prompt_text.clone().unwrap_or_default(),
                 agent_name,
                 agent_did: b.agent_did.clone(),
-                pap_uri: None,
+                pap_uri: b.agent_did.as_ref().map(|did| format!("pap://{did}")),
                 action_type,
-                input_ports: vec![],
-                output_ports: vec![],
+                input_ports,
+                output_ports,
                 template_override: None,
                 position_x: (i as f64) * 320.0,
                 position_y: 0.0,
@@ -160,6 +194,7 @@ pub fn derive_map_graph(blocks: &[CanvasBlock]) -> papillon_shared::WorkflowGrap
 
     let mut edges: Vec<WorkflowEdge> = Vec::new();
     let mut edge_counter: u32 = 0;
+    let mut seen_relationships = std::collections::BTreeSet::<(String, String)>::new();
 
     for block in blocks {
         // Extract {{block:ID}} refs from prompt text
@@ -169,23 +204,27 @@ pub fn derive_map_graph(blocks: &[CanvasBlock]) -> papillon_shared::WorkflowGrap
             remaining = &remaining[start + 8..];
             if let Some(end) = remaining.find("}}") {
                 let ref_id = &remaining[..end];
-                if !ref_id.is_empty() && blocks.iter().any(|b| b.id == ref_id) {
+                let edge_key = (ref_id.to_string(), block.id.clone());
+                if !ref_id.is_empty()
+                    && blocks.iter().any(|b| b.id == ref_id)
+                    && seen_relationships.insert(edge_key)
+                {
                     edge_counter += 1;
                     edges.push(WorkflowEdge {
                         id: format!("map-edge-{edge_counter}"),
                         from_node_id: ref_id.to_string(),
                         from_port: PortRef {
-                            path: String::new(),
-                            label: String::new(),
+                            path: "result".into(),
+                            label: "Result".into(),
                             required: false,
                         },
                         to_node_id: block.id.clone(),
                         to_port: PortRef {
-                            path: String::new(),
-                            label: String::new(),
+                            path: "context".into(),
+                            label: "Context".into(),
                             required: false,
                         },
-                        state: EdgeState::Unconnected,
+                        state: EdgeState::Confirmed,
                         memex_remembered: false,
                     });
                 }
@@ -196,23 +235,24 @@ pub fn derive_map_graph(blocks: &[CanvasBlock]) -> papillon_shared::WorkflowGrap
         }
         // Also capture linked_block_ids edges
         for linked_id in &block.linked_block_ids {
-            if blocks.iter().any(|b| &b.id == linked_id) {
+            let edge_key = (linked_id.clone(), block.id.clone());
+            if blocks.iter().any(|b| &b.id == linked_id) && seen_relationships.insert(edge_key) {
                 edge_counter += 1;
                 edges.push(WorkflowEdge {
                     id: format!("map-linked-{edge_counter}"),
                     from_node_id: linked_id.clone(),
                     from_port: PortRef {
-                        path: String::new(),
-                        label: String::new(),
+                        path: "linked_result".into(),
+                        label: "Linked result".into(),
                         required: false,
                     },
                     to_node_id: block.id.clone(),
                     to_port: PortRef {
-                        path: String::new(),
-                        label: String::new(),
+                        path: "linked_context".into(),
+                        label: "Linked context".into(),
                         required: false,
                     },
-                    state: EdgeState::Unconnected,
+                    state: EdgeState::Confirmed,
                     memex_remembered: false,
                 });
             }
@@ -224,6 +264,31 @@ pub fn derive_map_graph(blocks: &[CanvasBlock]) -> papillon_shared::WorkflowGrap
         edges,
         is_designed: false,
     }
+}
+
+fn build_workflow_ports(paths: &[String], required: bool) -> Vec<papillon_shared::PortRef> {
+    paths
+        .iter()
+        .map(|path| papillon_shared::PortRef {
+            path: path.clone(),
+            label: workflow_port_label(path),
+            required,
+        })
+        .collect()
+}
+
+fn block_schema_ports(block: &CanvasBlock) -> Vec<papillon_shared::PortRef> {
+    block
+        .schema_type
+        .as_ref()
+        .map(|schema_type| {
+            vec![papillon_shared::PortRef {
+                path: schema_type.clone(),
+                label: workflow_port_label(schema_type),
+                required: false,
+            }]
+        })
+        .unwrap_or_default()
 }
 
 /// Extract block IDs from `{{block:ID}}` patterns in prompt text.
@@ -333,6 +398,53 @@ impl CanvasState {
         self.current_canvas_id.set(Some(id.clone()));
         self.focus_prompt.update(|n| *n += 1);
         id
+    }
+
+    /// Rename the active canvas in-place and persist it when Tauri is available.
+    pub fn rename_current_canvas(&self, next_name: String) {
+        let canvas_id = match self.current_canvas_id.get_untracked() {
+            Some(id) => id,
+            None => return,
+        };
+        let Some(next_name) = normalize_canvas_name(&next_name) else {
+            return;
+        };
+
+        let mut renamed = false;
+        self.canvases.update(|cs| {
+            if let Some(canvas) = cs.iter_mut().find(|c| c.id == canvas_id) {
+                if canvas.name == next_name {
+                    return;
+                }
+                canvas.name = next_name.clone();
+                canvas.updated_at = now_iso();
+                renamed = true;
+            }
+        });
+
+        if !renamed || !crate::bridge::tauri_available() {
+            return;
+        }
+
+        spawn_local(async move {
+            #[derive(serde::Serialize)]
+            struct RenameArgs {
+                id: String,
+                name: String,
+            }
+
+            if let Err(e) = crate::bridge::invoke::<_, serde_json::Value>(
+                "canvas_rename",
+                &RenameArgs {
+                    id: canvas_id,
+                    name: next_name,
+                },
+            )
+            .await
+            {
+                leptos::logging::warn!("canvas_rename failed: {}", e);
+            }
+        });
     }
 
     /// Programmatically request that a specific block expand itself.
@@ -629,7 +741,7 @@ impl CanvasState {
         // Fire backend command with expanded text
         let cid = canvas_id.clone();
 
-        // Persist the new block and the user message to the DB (fire-and-forget).
+        // Persist the new block to the DB. Log errors but don't block the handshake.
         {
             let block_id_db = block_id.clone();
             let canvas_id_db = canvas_id.clone();
@@ -641,7 +753,7 @@ impl CanvasState {
                 .unwrap_or(0);
             spawn_local(async move {
                 if crate::bridge::tauri_available() {
-                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                    match crate::bridge::invoke::<_, serde_json::Value>(
                         "canvas_block_create",
                         &serde_json::json!({
                             "canvasId": canvas_id_db,
@@ -649,7 +761,17 @@ impl CanvasState {
                             "promptText": prompt_db,
                             "displayOrder": display_order,
                         }),
-                    ).await;
+                    ).await {
+                        Ok(_) => {
+                            // Block persisted successfully
+                        }
+                        Err(e) => {
+                            leptos::logging::error!(
+                                "Failed to persist block {} to DB: {}. Block will remain in memory only.",
+                                block_id_db, e
+                            );
+                        }
+                    }
                 }
             });
         }
@@ -672,7 +794,7 @@ impl CanvasState {
             canvas_messages.update(|ms| ms.push(record));
             spawn_local(async move {
                 if crate::bridge::tauri_available() {
-                    let _ = crate::bridge::invoke::<_, serde_json::Value>(
+                    if let Err(e) = crate::bridge::invoke::<_, serde_json::Value>(
                         "canvas_message_add",
                         &serde_json::json!({
                             "canvasId": canvas_id_msg,
@@ -680,7 +802,9 @@ impl CanvasState {
                             "content": display_text_msg,
                             "blockId": block_id_msg,
                         }),
-                    ).await;
+                    ).await {
+                        leptos::logging::warn!("Failed to persist message to DB: {}. Message will remain in memory only.", e);
+                    }
                 }
             });
         }
@@ -857,6 +981,9 @@ impl CanvasState {
 
         let bid = block_id.clone();
         let cid = canvas_id.clone();
+        let canvas_state_for_fallback = *self;
+        let original_text_for_fallback = original_text.clone();
+
         spawn_local(async move {
             #[derive(serde::Serialize)]
             #[serde(rename_all = "camelCase")]
@@ -868,21 +995,40 @@ impl CanvasState {
             let args = RetryArgs {
                 canvas_id: cid.clone(),
                 block_id: bid.clone(),
-                original_text, // now resolved
+                original_text: original_text, // now resolved
             };
             let result = bridge::invoke::<_, serde_json::Value>("canvas_retry", &args).await;
             if let Err(e) = result {
-                canvases.update(|cs| {
-                    if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid) {
-                        if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == bid) {
-                            b.state = BlockState::Failed {
-                                phase: 1,
-                                reason: e,
-                            };
-                            b.updated_at = now_iso();
+                let error_msg = e.to_string();
+                // If block not found in DB (due to failed persistence), delete the orphaned
+                // UI block and create a fresh prompt instead of failing.
+                if error_msg.contains("Block not found") || error_msg.contains("no definitions") {
+                    leptos::logging::warn!(
+                        "Retry failed because block {} not in DB (persistence failed). Creating fresh prompt instead.",
+                        bid
+                    );
+                    // Delete the orphaned block from UI
+                    canvases.update(|cs| {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid) {
+                            canvas.blocks.retain(|b| b.id != bid);
                         }
-                    }
-                });
+                    });
+                    // Create a fresh prompt with the same text
+                    canvas_state_for_fallback.submit_prompt(original_text_for_fallback);
+                } else {
+                    // Other error - show it in the block
+                    canvases.update(|cs| {
+                        if let Some(canvas) = cs.iter_mut().find(|c| c.id == cid) {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == bid) {
+                                b.state = BlockState::Failed {
+                                    phase: 1,
+                                    reason: error_msg,
+                                };
+                                b.updated_at = now_iso();
+                            }
+                        }
+                    });
+                }
             }
         });
     }
@@ -904,6 +1050,10 @@ impl CanvasState {
     pub fn approve_block(&self, block_id: String, approval_request_id: String) {
         // Prevent double-submit
         if self.approval_in_flight.get_untracked().contains(&block_id) {
+            leptos::logging::warn!(
+                "Approval already in flight for block {}, ignoring duplicate request",
+                block_id
+            );
             return;
         }
         self.approval_in_flight.update(|s| {
@@ -911,17 +1061,40 @@ impl CanvasState {
         });
 
         let in_flight = self.approval_in_flight;
+        let canvases = self.canvases;
         let block_id_clone = block_id.clone();
 
         spawn_local(async move {
-            let _ = crate::bridge::invoke::<_, serde_json::Value>(
+            match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": true,
                 }),
             )
-            .await;
+            .await
+            {
+                Ok(_) => {
+                    // Success - backend will send BlockUpdate event to transition state
+                }
+                Err(e) => {
+                    leptos::logging::error!("approve_block failed for {}: {}", block_id_clone, e);
+                    // Transition block to Failed state with the error message
+                    canvases.update(|cs| {
+                        for canvas in cs.iter_mut() {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
+                                b.state = BlockState::Failed {
+                                    phase: 2,
+                                    reason: format!("Approval failed: {}", e),
+                                };
+                                b.updated_at = now_iso();
+                                break;
+                            }
+                        }
+                    });
+                }
+            }
+            // Always remove from in-flight set to allow retry
             in_flight.update(|s| {
                 s.remove(&block_id_clone);
             });
@@ -930,16 +1103,38 @@ impl CanvasState {
 
     /// Reject an AwaitingApproval block — sends the decision to the backend.
     pub fn reject_block(&self, block_id: String, approval_request_id: String) {
-        let _ = block_id; // state update arrives via block event from backend
+        let canvases = self.canvases;
+        let block_id_clone = block_id.clone();
         spawn_local(async move {
-            let _ = crate::bridge::invoke::<_, serde_json::Value>(
+            match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": false,
                 }),
             )
-            .await;
+            .await
+            {
+                Ok(_) => {
+                    // Success - backend will send BlockUpdate event to transition state
+                }
+                Err(e) => {
+                    leptos::logging::error!("reject_block failed for {}: {}", block_id_clone, e);
+                    // On rejection failure, transition to Failed state
+                    canvases.update(|cs| {
+                        for canvas in cs.iter_mut() {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
+                                b.state = BlockState::Failed {
+                                    phase: 2,
+                                    reason: format!("Rejection failed: {}", e),
+                                };
+                                b.updated_at = now_iso();
+                                break;
+                            }
+                        }
+                    });
+                }
+            }
         });
     }
 
@@ -1399,6 +1594,15 @@ fn auto_name_from_prompt(prompt: &str) -> String {
     }
 }
 
+fn normalize_canvas_name(name: &str) -> Option<String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1585,6 +1789,18 @@ mod tests {
         assert!(result.starts_with(&body));
     }
 
+    #[test]
+    fn normalize_canvas_name_trims_whitespace() {
+        let result = normalize_canvas_name("  Summer travel plans  ");
+        assert_eq!(result.as_deref(), Some("Summer travel plans"));
+    }
+
+    #[test]
+    fn normalize_canvas_name_rejects_blank_input() {
+        let result = normalize_canvas_name("   ");
+        assert!(result.is_none());
+    }
+
     // ── insert_block_ref ─────────────────────────────────────────────────────
 
     #[test]
@@ -1605,7 +1821,7 @@ mod tests {
         assert_eq!(result, "search for {{block:xyz}}");
     }
 
-    // ── WorkflowGraph / WorkflowMode defaults ────────────────────────────────
+    // ── WorkflowGraph defaults ────────────────────────────────────────────────
 
     #[test]
     fn workflow_graph_default_is_empty() {
@@ -1614,13 +1830,6 @@ mod tests {
         assert!(g.edges.is_empty());
         assert!(!g.is_designed);
     }
-
-    #[test]
-    fn workflow_mode_default_is_map() {
-        let m = papillon_shared::WorkflowMode::default();
-        assert_eq!(m, papillon_shared::WorkflowMode::Map);
-    }
-
     // ── derive_map_graph ──────────────────────────────────────────────────────
 
     fn make_block(id: &str, prompt: &str) -> papillon_shared::CanvasBlock {
@@ -1671,6 +1880,17 @@ mod tests {
         block_b.linked_block_ids = vec!["aaa".to_string()];
         let blocks = vec![block_a, block_b];
         let graph = super::derive_map_graph(&blocks);
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.edges[0].from_node_id, "aaa");
+        assert_eq!(graph.edges[0].to_node_id, "bbb");
+    }
+
+    #[test]
+    fn derive_map_graph_dedupes_prompt_refs_and_linked_ids() {
+        let block_a = make_block("aaa", "search");
+        let mut block_b = make_block("bbb", "compare with {{block:aaa}}");
+        block_b.linked_block_ids = vec!["aaa".to_string()];
+        let graph = super::derive_map_graph(&[block_a, block_b]);
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.edges[0].from_node_id, "aaa");
         assert_eq!(graph.edges[0].to_node_id, "bbb");

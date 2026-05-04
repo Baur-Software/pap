@@ -1,3 +1,4 @@
+node_modules/
 /target
 apps/papillon/frontend/target
 apps/papillon/frontend/dist

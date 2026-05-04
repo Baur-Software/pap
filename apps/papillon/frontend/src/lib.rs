@@ -2,9 +2,11 @@ mod app;
 mod bridge;
 pub mod components;
 pub mod handshake;
+pub mod orchestrator_runtime;
 pub mod pages;
 pub mod service;
 pub mod state;
+pub mod workflow_labels;
 
 use wasm_bindgen::prelude::*;
 
