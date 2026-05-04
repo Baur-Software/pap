@@ -17,6 +17,7 @@ use crate::pages::canvas::CanvasPage;
 // home.rs removed — canvas at "/" IS the home screen
 use crate::pages::receipts::ReceiptsPage;
 use crate::pages::scenario::ScenarioPage;
+use crate::pages::registry::RegistryPage;
 use crate::pages::settings::SettingsPage;
 use crate::service::PapillonService;
 use crate::state::canvas::{CanvasState, derive_map_graph};
@@ -430,6 +431,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/activity") view=ActivityPage />
                         <Route path=path!("/receipts") view=ReceiptsPage />
                         <Route path=path!("/settings") view=SettingsPage />
+                        <Route path=path!("/registry") view=RegistryPage />
                     </Routes>
                 </main>
                 <footer class="status-bar app-statusbar">

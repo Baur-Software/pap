@@ -13,6 +13,10 @@ pub struct RegistryState {
     pub action_filter: RwSignal<String>,
     pub loading: RwSignal<bool>,
     pub error: RwSignal<Option<String>>,
+    /// ID (name) of the agent currently open in the editor. None = no agent selected.
+    pub active_agent_id: RwSignal<Option<String>>,
+    /// When true, shows the peer browser panel instead of the editor.
+    pub show_peer_browser: RwSignal<bool>,
 }
 
 impl Default for RegistryState {
@@ -25,6 +29,8 @@ impl Default for RegistryState {
             action_filter: RwSignal::new(String::new()),
             loading: RwSignal::new(false),
             error: RwSignal::new(None),
+            active_agent_id: RwSignal::new(None),
+            show_peer_browser: RwSignal::new(false),
         }
     }
 }
