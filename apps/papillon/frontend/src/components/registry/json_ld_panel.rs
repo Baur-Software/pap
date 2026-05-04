@@ -63,8 +63,9 @@ pub fn JsonLdPanel(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
             };
             match bridge::invoke::<AgentDidArg, AgentInfo>(cmd, &AgentDidArg { agent_did }).await {
                 Ok(_) => {
-                    if let Ok(agents) = bridge::invoke_no_args::<Vec<AgentInfo>>("list_local_agents").await {
-                        registry.agents.set(agents);
+                    match bridge::invoke_no_args::<Vec<AgentInfo>>("list_local_agents").await {
+                        Ok(agents) => registry.agents.set(agents),
+                        Err(e) => registry.error.set(Some(format!("Transition succeeded but refresh failed: {e}"))),
                     }
                 }
                 Err(e) => registry.error.set(Some(e)),
