@@ -1,21 +1,10 @@
 import { test, expect, Page } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
-import { submitPrompt, waitForApp } from "./helpers";
+import { submitPrompt, waitForApp, createEmptyCanvas } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
-
-async function createEmptyCanvas(page: Page) {
-  await page.goto("/", { waitUntil: "commit" });
-  await waitForApp(page);
-  await page.locator(".topbar-brand").click();
-  await page.getByText("+ New Canvas", { exact: true }).click();
-  await expect(page.locator(".canvas-surface-status")).toContainText(
-    "Approve workflow to render"
-  );
-  await expect(page.locator(".slide-panel.open")).toHaveCount(0);
-}
 
 async function openWorkflow(page: Page) {
   await page.locator(".canvas-flip-toggle").click();

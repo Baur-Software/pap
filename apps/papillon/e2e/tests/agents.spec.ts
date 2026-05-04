@@ -14,42 +14,38 @@
 
 import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
-import { waitForApp } from "./helpers";
+import { waitForApp, goToSettingsTab } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
-// ── Network tab in Settings (formerly at /fleet) ──────────────
-
-// Helper: navigate to Settings > Network tab
-async function openNetworkTab(page: import("@playwright/test").Page): Promise<void> {
-  await page.goto("/", { waitUntil: "commit" });
-  await waitForApp(page);
-  await page.locator(".topbar-brand").click();
-  await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
-  await expect(page.locator(".settings-overlay")).toBeVisible({ timeout: 5000 });
-  await page.locator(".settings-nav-link").filter({ hasText: "Network" }).click();
-}
-
 test.describe("Network settings tab", () => {
   test("settings Network tab renders the section title", async ({ page }) => {
-    await openNetworkTab(page);
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await goToSettingsTab(page, "Network");
     await expect(page.locator(".settings-section-title")).toContainText("Network");
   });
 
   test("This Node group is present", async ({ page }) => {
-    await openNetworkTab(page);
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await goToSettingsTab(page, "Network");
     await expect(page.locator(".settings-group-label").filter({ hasText: "This Node" })).toBeVisible();
   });
 
   test("Remote Nodes group is present", async ({ page }) => {
-    await openNetworkTab(page);
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await goToSettingsTab(page, "Network");
     await expect(page.locator(".settings-group-label").filter({ hasText: "Remote Nodes" })).toBeVisible();
   });
 
   test("Connect to Node group has a text input and Connect button", async ({ page }) => {
-    await openNetworkTab(page);
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await goToSettingsTab(page, "Network");
     await expect(page.locator(".settings-group-label").filter({ hasText: "Connect to Node" })).toBeVisible();
     await expect(page.locator(".settings-input").first()).toBeVisible();
     await expect(page.locator(".btn-primary")).toContainText("Connect");
@@ -383,5 +379,103 @@ test.describe("Agent Picker Modal (Browse page)", () => {
     await page.goto("/browse", { waitUntil: "commit" });
     await waitForApp(page);
     await expect(page.locator(".agent-picker-count")).toContainText("agents installed");
+  });
+});
+
+// ── Error / failure cases ─────────────────────────────────────
+
+test.describe("Agent command — error cases", () => {
+  test("update_agent with unknown DID returns null (no-op)", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("update_agent", {
+        def: {
+          agent_did: "did:key:z6MkNonexistent999",
+          name: "Ghost Agent",
+          action: "schema:Action",
+        },
+      })
+    );
+    expect(result).toBeNull();
+
+    // List should be unchanged — 5 seeded agents still present
+    const agents = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_local_agents")
+    );
+    expect(agents).toHaveLength(5);
+  });
+
+  test("delete_agent with unknown DID leaves fleet intact", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    await page.evaluate(() =>
+      window.__TAURI__.core.invoke("delete_agent", {
+        agent_did: "did:key:z6MkNonexistent888",
+      })
+    );
+
+    const agents = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_local_agents")
+    );
+    expect(agents).toHaveLength(5);
+  });
+
+  test("unpublish_agent with URL not in published_to is a no-op", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const before = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_local_agents")
+    );
+    const custom = before.find((a: any) => a.source === "user_created");
+    const originalCount = custom.published_to.length;
+
+    await page.evaluate((did: string) =>
+      window.__TAURI__.core.invoke("unpublish_agent", {
+        agent_did: did,
+        registry_url: "https://nonexistent.example.com",
+      }),
+    custom.agent_did);
+
+    const after = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("list_local_agents")
+    );
+    const updated = after.find((a: any) => a.agent_did === custom.agent_did);
+    expect(updated.published_to).toHaveLength(originalCount);
+  });
+
+  test("save_agent without a name defaults to 'Unnamed Agent'", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const saved = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("save_agent", {
+        def: {
+          action: "schema:SearchAction",
+          object_types: [],
+          requires_disclosure: [],
+          returns: [],
+          schema_version: 1,
+        },
+      })
+    );
+    expect(saved.name).toBe("Unnamed Agent");
+    expect(saved.agent_did).toBeTruthy();
+  });
+
+  test("generate_agent with empty prompt still returns valid preview", async ({ page }) => {
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+
+    const preview = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("generate_agent", { prompt: "" })
+    );
+
+    expect(preview).not.toBeNull();
+    expect(preview.agent_did).toBeNull();
+    expect(preview.source).toBe("generated");
   });
 });

@@ -24,19 +24,13 @@
  *   - Reshape disconnection: silently drops linked_block_ids (BUG-010)
  */
 
-import { test, expect, Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
-import { waitForApp, submitPrompt } from "./helpers";
+import { waitForApp, submitPrompt, submitAndWaitForBlock } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
-
-async function submitAndWaitForBlock(page: Page, prompt: string): Promise<void> {
-  await submitPrompt(page, prompt);
-  await expect(page.locator(".canvas-block").first()).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(400);
-}
 
 // ── Group 1: Ghost block preflight rendering ──────────────────
 

@@ -14,23 +14,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
-import { waitForApp } from "./helpers";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-async function goToTemplatesTab(page: import("@playwright/test").Page) {
-  const settingsNav = page.locator(".settings-nav");
-  const alreadyOnSettings = await settingsNav.isVisible().catch(() => false);
-  if (!alreadyOnSettings) {
-    // Navigate via topbar panel to avoid a second WASM reload.
-    await page.locator(".topbar-brand").click();
-    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
-    await page.locator(".settings-overlay").waitFor({ state: "visible" });
-    await expect(page.locator(".settings-nav")).toBeVisible({ timeout: 10_000 });
-  }
-  await page.locator(".settings-nav-link").filter({ hasText: "Templates" }).click();
-  await expect(page.locator(".settings-nav-link.active").filter({ hasText: "Templates" })).toBeVisible();
-}
+import { waitForApp, goToSettingsTab } from "./helpers";
 
 /** Scope selectors to the WYSIWYG builder modal (fixed overlay with "Template Builder" heading). */
 function builderModal(page: import("@playwright/test").Page) {
@@ -59,7 +43,7 @@ test.describe("WYSIWYG Template Builder", () => {
     await installTauriMock(page);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
   });
 
   test("opens via Builder button and shows Template Builder heading", async ({ page }) => {
@@ -196,7 +180,7 @@ test.describe("Schema Type Autocomplete", () => {
     await installTauriMock(page);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
   });
 
   test("shows dropdown with matching suggestions after typing", async ({ page }) => {
@@ -269,7 +253,7 @@ test.describe("Template Library", () => {
     await installTauriMock(page);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
   });
 
   test("opens via Library button and shows Template Library heading", async ({ page }) => {
@@ -409,7 +393,7 @@ test.describe("Template Export and Import", () => {
     await installTauriMock(page);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
   });
 
   test("export_templates command returns JSON string with current templates", async ({ page }) => {
@@ -520,7 +504,7 @@ test.describe("Live Registry Types in Autocomplete", () => {
     await installTauriMock(page);
     await page.goto("/", { waitUntil: "commit" });
     await waitForApp(page);
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
   });
 
   test("Movie appears in autocomplete (shipped renderer, absent from mock templates)", async ({
@@ -556,5 +540,96 @@ test.describe("Live Registry Types in Autocomplete", () => {
     await expect(dropdown.locator("div").filter({ hasText: /^Person$/ }).first()).toBeVisible({
       timeout: 5000,
     });
+  });
+});
+
+// ── 7. Error / failure cases ──────────────────────────────────────────────────
+
+test.describe("Template error cases", () => {
+  test.beforeEach(async ({ page }) => {
+    await installTauriMock(page);
+    await page.goto("/", { waitUntil: "commit" });
+    await waitForApp(page);
+    await goToSettingsTab(page, "Templates");
+  });
+
+  test("import_templates with invalid JSON is a no-op (no crash)", async ({ page }) => {
+    const before = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+    const beforeCount = before.length;
+
+    await page.evaluate(() =>
+      window.__TAURI__.core.invoke("import_templates", { json_str: "{not valid json[" })
+    );
+
+    const after = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+    expect(after).toHaveLength(beforeCount);
+  });
+
+  test("import_templates with empty array is a no-op", async ({ page }) => {
+    const before = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+
+    await page.evaluate(() =>
+      window.__TAURI__.core.invoke("import_templates", { json_str: "[]" })
+    );
+
+    const after = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+    expect(after).toHaveLength(before.length);
+  });
+
+  test("delete_template with unknown name is a no-op", async ({ page }) => {
+    const before = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+
+    await page.evaluate(() =>
+      window.__TAURI__.core.invoke("delete_template", { template_name: "nonexistent-template-xyz" })
+    );
+
+    const after = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+    expect(after).toHaveLength(before.length);
+  });
+
+  test("WYSIWYG builder: clicking Add Field without a path shows error", async ({ page }) => {
+    await page.locator('button:has-text("Builder")').first().click();
+    const modal = page.locator('div[style*="position: fixed"]').filter({ hasText: "Template Builder" });
+    await expect(modal).toBeVisible({ timeout: 5000 });
+
+    // Click Add Field with no path entered
+    await modal.locator('button:has-text("Add Field")').click();
+    await expect(modal.getByText(/Field path is required/i)).toBeVisible({ timeout: 3000 });
+  });
+
+  test("auto_generate_template does not duplicate when schema type already exists", async ({
+    page,
+  }) => {
+    const before = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+    const flightCount = before.filter((t: any) => t.schema_type === "FlightReservation").length;
+
+    // Attempt to generate a template for the already-seeded FlightReservation type
+    const result = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("auto_generate_template", {
+        schema_type: "FlightReservation",
+        content: { reservationNumber: "test" },
+      })
+    );
+    expect(result).toBeNull();
+
+    const after = await page.evaluate(() =>
+      window.__TAURI__.core.invoke("get_global_templates")
+    );
+    const flightCountAfter = after.filter((t: any) => t.schema_type === "FlightReservation").length;
+    expect(flightCountAfter).toBe(flightCount);
   });
 });

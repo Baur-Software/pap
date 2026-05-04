@@ -13,7 +13,7 @@
 
 import { test, expect } from "@playwright/test";
 import { installTauriMock } from "./tauri-mock";
-import { waitForApp } from "./helpers";
+import { waitForApp, goToSettingsTab } from "./helpers";
 
 /** A valid template config JSON string (validation requires at least one field). */
 const VALID_CONFIG = JSON.stringify({
@@ -49,32 +49,6 @@ async function createTemplateViaIpc(
   );
 }
 
-/** Navigate to Settings > Templates tab and wait for content.
- *
- * Uses direct page.goto when coming from a non-settings page to avoid
- * topbar slide-panel animation timing issues. Falls back to topbar nav
- * when in-memory mock state must be preserved (e.g., after creating a template
- * in the same test and navigating away to canvas then back).
- *
- * @param preserveMock - if true, navigate via topbar panel to keep window.__TAURI__ state
- */
-async function goToTemplatesTab(
-  page: import("@playwright/test").Page,
-  preserveMock: boolean = false
-) {
-  const settingsNav = page.locator(".settings-nav");
-  const alreadyOnSettings = await settingsNav.isVisible().catch(() => false);
-  if (!alreadyOnSettings) {
-    // Always navigate via topbar panel to avoid a full WASM reload.
-    // The preserveMock flag is kept for backwards compat but topbar nav always preserves state.
-    await page.locator(".topbar-brand").click();
-    await page.locator(".panel-nav-item").filter({ hasText: "All Settings" }).click();
-    await page.locator(".settings-overlay").waitFor({ state: "visible" });
-    await expect(page.locator(".settings-nav")).toBeVisible({ timeout: 10_000 });
-  }
-  await page.locator(".settings-nav-link").filter({ hasText: "Templates" }).click();
-  await expect(page.locator(".settings-nav-link.active").filter({ hasText: "Templates" })).toBeVisible();
-}
 
 /** Create a template through the UI form. */
 async function createTemplate(
@@ -117,7 +91,7 @@ test.describe("Templates", () => {
   test("template CRUD flow: create, read, update, delete", async ({
     page,
   }) => {
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
 
     // Create first template
     const templateName = `Recipe-${Date.now()}`;
@@ -159,7 +133,7 @@ test.describe("Templates", () => {
   });
 
   test("template row shows Edit and Delete buttons", async ({ page }) => {
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
 
     // Use an existing default template row (seeded by mock)
     const row = templateRow(page, "Default Flight Template");
@@ -174,7 +148,7 @@ test.describe("Templates", () => {
   });
 
   test("template list persists after page navigation", async ({ page }) => {
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
 
     // Create template
     const templateName = `Persist-${Date.now()}`;
@@ -190,7 +164,7 @@ test.describe("Templates", () => {
     await expect(page.locator(".settings-overlay")).not.toBeVisible({ timeout: 5000 });
     await page.locator(".topbar-brand").click();
     await page.locator(".panel-new-canvas-btn").click();
-    await goToTemplatesTab(page, true);
+    await goToSettingsTab(page, "Templates");
 
     // Verify template still present
     await expect(templateRow(page, templateName)).toBeVisible();
@@ -215,7 +189,7 @@ test.describe("Templates", () => {
   });
 
   test("JSON validation: reject malformed JSON", async ({ page }) => {
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
 
     // Try to create with malformed JSON
     const templateName = `BadJSON-${Date.now()}`;
@@ -236,7 +210,7 @@ test.describe("Templates", () => {
   });
 
   test("validation: reject empty required fields", async ({ page }) => {
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
 
     // Try to create with empty name — just fill schema and config
     const schemaInput = page.locator('input[placeholder*="FlightReservation"]').first();
@@ -259,7 +233,7 @@ test.describe("Templates", () => {
       }
     });
 
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
 
     // Verify the tab loaded without errors
     await expect(page.locator('input[placeholder*="Name"]')).toBeVisible();
@@ -269,7 +243,7 @@ test.describe("Templates", () => {
   });
 
   test("default templates available in settings", async ({ page }) => {
-    await goToTemplatesTab(page);
+    await goToSettingsTab(page, "Templates");
 
     // Verify default templates are listed (use .first() for strict mode safety)
     await expect(page.getByText("Default Flight Template").first()).toBeVisible();
