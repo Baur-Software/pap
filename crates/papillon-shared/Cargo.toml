@@ -13,6 +13,7 @@ zeroize = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 tracing = "0.1"
+heck = "0.5"
 
 # Database abstraction - feature gated
 rusqlite = { version = "0.32", features = ["bundled", "serde_json"], optional = true }
