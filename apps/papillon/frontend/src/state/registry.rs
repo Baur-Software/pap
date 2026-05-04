@@ -9,6 +9,8 @@ pub struct RegistryState {
     pub current_url: RwSignal<String>,
     pub info: RwSignal<Option<RegistryInfo>>,
     pub agents: RwSignal<Vec<AgentInfo>>,
+    /// Legacy browse-era selection signal. Now superseded by `active_agent_id` for the editor.
+    /// Kept for backward compatibility with reset logic in app.rs; can be removed when app.rs is updated.
     pub selected_agent: RwSignal<Option<AgentInfo>>,
     pub action_filter: RwSignal<String>,
     pub loading: RwSignal<bool>,
@@ -16,6 +18,7 @@ pub struct RegistryState {
     /// ID (name) of the agent currently open in the editor. None = no agent selected.
     pub active_agent_id: RwSignal<Option<String>>,
     /// When true, shows the peer browser panel instead of the editor.
+    /// TODO: wire to RegistryPage toggle when peer browser is re-integrated (out of scope for initial editor)
     pub show_peer_browser: RwSignal<bool>,
 }
 

@@ -42,7 +42,7 @@ pub fn JsonLdPanel(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     view! {
         <div style="height: 200px; border-top: 1px solid var(--border); background: #0a0a12; display: flex; flex-direction: column; flex-shrink: 0;">
             <div style="display: flex; align-items: center; gap: 10px; padding: 0 16px; height: 36px; border-bottom: 1px solid var(--border); flex-shrink: 0;">
-                <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #334155;">"JSON-LD Advertisement"</span>
+                <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary);">"JSON-LD Advertisement"</span>
                 <div style="margin-left: auto; display: flex; gap: 8px;">
                     <button style=action_style>
                         {action_label}

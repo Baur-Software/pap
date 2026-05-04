@@ -19,6 +19,10 @@ pub fn AgentEditor(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     let agent_name = move || agent.get().map(|a| a.name.clone()).unwrap_or_default();
     let lifecycle = move || agent.get().map(|a| a.lifecycle.clone()).unwrap_or(AgentLifecycle::Draft);
 
+    let input_count = move || agent.get().map(|a| a.capabilities.len()).unwrap_or(0);
+    let returns_count = move || agent.get().map(|a| a.returns.len()).unwrap_or(0);
+    let disclosure_count = move || agent.get().map(|a| a.requires_disclosure.len()).unwrap_or(0);
+
     let lifecycle_label = move || match lifecycle() {
         AgentLifecycle::Draft => "Draft",
         AgentLifecycle::Published => "Published",
@@ -26,7 +30,7 @@ pub fn AgentEditor(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     };
     let lifecycle_style = move || match lifecycle() {
         AgentLifecycle::Draft =>
-            "font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(100,116,139,0.12); color: #64748b; border: 1px solid #1e293b;",
+            "font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(100,116,139,0.12); color: #64748b; border: 1px solid rgba(100,116,139,0.3);",
         AgentLifecycle::Published =>
             "font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(108,92,231,0.15); color: #a78bfa; border: 1px solid rgba(108,92,231,0.3);",
         AgentLifecycle::Unpublished =>
@@ -48,9 +52,9 @@ pub fn AgentEditor(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
 
             // Tabs
             <div style="display: flex; border-bottom: 1px solid var(--border); background: var(--bg-secondary); padding: 0 20px; flex-shrink: 0;">
-                <TabButton tab=Tab::Input active_tab=active_tab label="Input" />
-                <TabButton tab=Tab::Returns active_tab=active_tab label="Returns" />
-                <TabButton tab=Tab::Disclosure active_tab=active_tab label="Disclosure" />
+                <TabButton tab=Tab::Input active_tab=active_tab label="Input" count=input_count() />
+                <TabButton tab=Tab::Returns active_tab=active_tab label="Returns" count=returns_count() />
+                <TabButton tab=Tab::Disclosure active_tab=active_tab label="Disclosure" count=disclosure_count() />
                 <TabButton tab=Tab::Endpoint active_tab=active_tab label="Endpoint" />
                 <TabButton tab=Tab::Settings active_tab=active_tab label="Settings" />
             </div>
@@ -72,18 +76,28 @@ pub fn AgentEditor(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
 }
 
 #[component]
-fn TabButton(tab: Tab, active_tab: RwSignal<Tab>, label: &'static str) -> impl IntoView {
+fn TabButton(
+    tab: Tab,
+    active_tab: RwSignal<Tab>,
+    label: &'static str,
+    #[prop(optional)] count: Option<usize>,
+) -> impl IntoView {
     let is_active = move || active_tab.get() == tab;
     view! {
         <div
             style=move || format!(
                 "font-size: 12px; padding: 10px 14px; cursor: pointer; color: {}; border-bottom: 2px solid {};",
-                if is_active() { "#a78bfa" } else { "#334155" },
+                if is_active() { "#a78bfa" } else { "var(--text-secondary)" },
                 if is_active() { "#6c5ce7" } else { "transparent" }
             )
             on:click=move |_| active_tab.set(tab)
         >
             {label}
+            {count.filter(|&c| c > 0).map(|c| view! {
+                <span style="display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 8px; background: rgba(108,92,231,0.15); color: #7c6cf7; margin-left: 4px;">
+                    {c}
+                </span>
+            })}
         </div>
     }
 }
@@ -117,7 +131,7 @@ fn InputTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     view! {
         <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #334155;">"Input Properties"</span>
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary);">"Input Properties"</span>
                 <button style="font-size: 10px; padding: 4px 10px; border-radius: 5px; background: rgba(255,255,255,0.04); color: #64748b; border: 1px solid var(--border); cursor: pointer;">
                     "+ Add Property"
                 </button>
@@ -138,7 +152,7 @@ fn InputTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
                             <option>"Date"</option>
                             <option>"URL"</option>
                         </select>
-                        <span style="color: #1e293b; cursor: pointer; padding: 4px 6px;">{"×"}</span>
+                        <span style="color: var(--text-tertiary); cursor: pointer; padding: 4px 6px;">{"×"}</span>
                     </div>
                 }
             }).collect::<Vec<_>>()}
@@ -151,7 +165,7 @@ fn ReturnsTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     let returns = move || agent.get().map(|a| a.returns.clone()).unwrap_or_default();
     view! {
         <div>
-            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #334155; margin-bottom: 14px;">"Return Types"</div>
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); margin-bottom: 14px;">"Return Types"</div>
             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 {move || returns().into_iter().map(|r| {
                     let phrase = papillon_shared::schema_phrase(&r);
@@ -161,7 +175,7 @@ fn ReturnsTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
                         </span>
                     }
                 }).collect::<Vec<_>>()}
-                <span style="font-size: 12px; padding: 4px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); color: #334155; border: 1px solid var(--border); cursor: pointer;">
+                <span style="font-size: 12px; padding: 4px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); color: var(--text-secondary); border: 1px solid var(--border); cursor: pointer;">
                     "+ Add type"
                 </span>
             </div>
@@ -174,7 +188,7 @@ fn DisclosureTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     let disclosure = move || agent.get().map(|a| a.requires_disclosure.clone()).unwrap_or_default();
     view! {
         <div>
-            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #334155; margin-bottom: 14px;">"Disclosure Requirements"</div>
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); margin-bottom: 14px;">"Disclosure Requirements"</div>
             {move || {
                 let items = disclosure();
                 if items.is_empty() {
@@ -210,7 +224,7 @@ fn EndpointTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     };
     view! {
         <div>
-            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #334155; margin-bottom: 14px;">"Execution Target"</div>
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); margin-bottom: 14px;">"Execution Target"</div>
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
                 <select style="background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); border-radius: 6px; padding: 7px 10px; font-size: 11px; font-weight: 700; color: #6ee7b7; cursor: pointer;">
                     <option>"GET"</option>
@@ -229,7 +243,7 @@ fn EndpointTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
                     </span>
                 })}
             </div>
-            <div style="font-size: 11px; color: #1e293b;">"Badge derived from URL scheme: https:// = Remote \u{00b7} file:// = Local \u{00b7} did: or pap:// = Sub-agent"</div>
+            <div style="font-size: 11px; color: var(--text-tertiary);">"Badge derived from URL scheme: https:// = Remote \u{00b7} file:// = Local \u{00b7} did: or pap:// = Sub-agent"</div>
         </div>
     }
 }
@@ -249,7 +263,7 @@ fn SettingsTab(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
             <div>
                 <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; margin-bottom: 6px;">
                     "Description"
-                    <span style="color: #334155; margin-left: 6px; font-size: 9px;">"(overrides derived verb phrase when present)"</span>
+                    <span style="color: var(--text-secondary); margin-left: 6px; font-size: 9px;">"(overrides derived verb phrase when present)"</span>
                 </div>
                 <textarea style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; font-size: 13px; color: #94a3b8; resize: vertical; min-height: 60px;" />
             </div>

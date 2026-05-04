@@ -64,7 +64,7 @@ fn AgentGroup(label: &'static str, agents: Signal<Vec<AgentInfo>>) -> impl IntoV
         }
         view! {
             <div>
-                <div style="padding: 8px 14px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #1e293b;">
+                <div style="padding: 8px 14px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary);">
                     {label}
                 </div>
                 {items.into_iter().map(|agent| {
@@ -79,7 +79,7 @@ fn AgentGroup(label: &'static str, agents: Signal<Vec<AgentInfo>>) -> impl IntoV
                     };
                     let dot_color = match agent.lifecycle {
                         AgentLifecycle::Published => "#6c5ce7",
-                        AgentLifecycle::Draft => "#334155",
+                        AgentLifecycle::Draft => "#64748b",
                         AgentLifecycle::Unpublished => "#ef4444",
                     };
                     view! {
@@ -96,7 +96,7 @@ fn AgentGroup(label: &'static str, agents: Signal<Vec<AgentInfo>>) -> impl IntoV
                             <div style=format!("width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: {dot_color};")></div>
                             <div style="flex: 1; min-width: 0;">
                                 <div style="font-size: 12px; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{name}</div>
-                                <div style="font-size: 10px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{verb}</div>
+                                <div style="font-size: 10px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{verb}</div>
                             </div>
                         </div>
                     }
