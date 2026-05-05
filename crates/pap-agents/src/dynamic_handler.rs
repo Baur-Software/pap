@@ -216,16 +216,27 @@ impl AgentHandler for DynamicAgentHandler {
                             }
                         }
                     } else {
-                        // Non-2xx: fall through to LLM rather than surfacing the
-                        // third-party API's error message directly to the user.
-                        // API errors (missing keys, wrong params, rate limits) are
-                        // implementation details — the LLM can still answer the query.
-                        let _ = status;
+                        // Non-2xx: the delegated action failed — surface the error.
+                        // Falling through to LLM would violate the mandate: the
+                        // agent was authorized to execute a specific action, not to
+                        // substitute a hallucination when that action fails.
+                        let body = resp.text().unwrap_or_default();
+                        let user_msg = serde_json::from_str::<serde_json::Value>(&body)
+                            .ok()
+                            .and_then(|v| {
+                                v.get("title")
+                                    .or_else(|| v.get("error"))
+                                    .and_then(|s| s.as_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .unwrap_or_else(|| format!("HTTP {} — no results found", status.as_u16()));
+                        return Err(TransportError::ServerError(user_msg));
                     }
                 }
                 Err(e) => {
-                    // Network-level failure (connection refused, timeout, etc.) — fall through to LLM
-                    let _ = e;
+                    return Err(TransportError::ServerError(format!(
+                        "network error: {e}"
+                    )));
                 }
             }
         }
