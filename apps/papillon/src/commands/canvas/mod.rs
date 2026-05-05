@@ -29,8 +29,6 @@ pub use outcome::*;
 // ── Internal re-exports used by sibling command modules ──────────────────
 pub(crate) use resolution::resolve_agent;
 #[allow(unused_imports)]
-pub(crate) use execution::process_prompt_with_extras;
-#[allow(unused_imports)]
 pub(crate) use resolution::resolve_top_agents;
 
 // ── Internal constants ────────────────────────────────────────────────────

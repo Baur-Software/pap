@@ -181,6 +181,12 @@ pub async fn canvas_plan_prompt(
     // Block until the principal approves or rejects (or the sender is dropped).
     let approved = receiver.await.unwrap_or(false);
 
+    // Always clean up approval_values regardless of approved/rejected outcome.
+    let (selected_names, filled_values) = {
+        let mut vals = state.approval_values.write().await;
+        vals.remove(&approval_request_id).unwrap_or_default()
+    };
+
     if approved {
         // Persist the approval so future identical requests skip the gate.
         PreferenceEngine::new(state.db.as_ref()).save_approved_scopes(
@@ -190,12 +196,6 @@ pub async fn canvas_plan_prompt(
             &primary_name,
             &plan.requires_disclosure,
         );
-
-        // Read the stored approval values (filled attributes + selected agents).
-        let (selected_names, filled_values) = {
-            let mut vals = state.approval_values.write().await;
-            vals.remove(&approval_request_id).unwrap_or_default()
-        };
 
         // Filter candidates to dispatch based on selected agent names.
         let dispatch_candidates: Vec<usize> = if selected_names.is_empty() {
@@ -209,7 +209,7 @@ pub async fn canvas_plan_prompt(
                 .collect()
         };
 
-        // Dispatch to each selected candidate and keep the last successful result.
+        // Dispatch to each selected candidate; use first successful result.
         let mut last_result: Option<(String, serde_json::Value, bool, String, Option<String>)> =
             None;
         for idx in &dispatch_candidates {
@@ -226,7 +226,10 @@ pub async fn canvas_plan_prompt(
             )
             .await
             {
-                Ok(r) => last_result = Some(r),
+                Ok(r) => {
+                    last_result = Some(r);
+                    break; // Use first successful result; each run emits its own block_resolved event
+                }
                 Err(e) => {
                     eprintln!("WARN: handshake failed for {}: {e}", candidate.name);
                 }

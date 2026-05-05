@@ -206,7 +206,9 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
     });
     if let Some(obj) = disclosure_obj.as_object_mut() {
         for (k, v) in &extra_disclosures {
-            obj.insert(k.clone(), serde_json::Value::String(v.clone()));
+            if k != "@type" && k != "query" {
+                obj.insert(k.clone(), serde_json::Value::String(v.clone()));
+            }
         }
     }
     let disclosures = vec![disclosure_obj];
@@ -453,5 +455,30 @@ mod tests {
 
         // Phase 6: Close
         handler.handle_close(&session_id).expect("close");
+    }
+
+    #[test]
+    fn extra_disclosures_merged_into_disclosure_obj() {
+        use std::collections::HashMap;
+        let mut base = serde_json::json!({
+            "@type": "schema:SearchAction",
+            "query": "test"
+        });
+        let mut extra: HashMap<String, String> = HashMap::new();
+        extra.insert("schema:givenName".to_string(), "Alice".to_string());
+        extra.insert("@type".to_string(), "INJECTED".to_string()); // should be skipped
+        extra.insert("query".to_string(), "INJECTED".to_string()); // should be skipped
+
+        if let Some(obj) = base.as_object_mut() {
+            for (k, v) in &extra {
+                if k != "@type" && k != "query" {
+                    obj.insert(k.clone(), serde_json::Value::String(v.clone()));
+                }
+            }
+        }
+
+        assert_eq!(base["schema:givenName"], "Alice");
+        assert_eq!(base["@type"], "schema:SearchAction"); // NOT overwritten
+        assert_eq!(base["query"], "test"); // NOT overwritten
     }
 }
