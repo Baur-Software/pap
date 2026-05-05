@@ -44,29 +44,21 @@ fn is_auth_param(name: &str) -> bool {
 /// Extract all `{name}` placeholder names from `url_template`, excluding
 /// `{query}`.  The returned list is deduplicated and preserves first-seen order.
 pub fn extract_template_params(url_template: &str) -> Vec<String> {
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut result: Vec<String> = Vec::new();
-
-    let bytes = url_template.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'{' {
-            // Find matching '}'
-            if let Some(end) = url_template[i..].find('}') {
-                let name = &url_template[i + 1..i + end];
-                if !name.is_empty() && name != "query" {
-                    let owned = name.to_string();
-                    if seen.insert(owned.clone()) {
-                        result.push(owned);
-                    }
-                }
-                i += end + 1;
-                continue;
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+    let mut chars = url_template.char_indices().peekable();
+    while let Some((_, c)) = chars.next() {
+        if c == '{' {
+            let name: String = chars
+                .by_ref()
+                .map(|(_, c)| c)
+                .take_while(|&c| c != '}')
+                .collect();
+            if !name.is_empty() && name != "query" && seen.insert(name.clone()) {
+                result.push(name);
             }
         }
-        i += 1;
     }
-
     result
 }
 
@@ -187,11 +179,20 @@ fn parse_owner_repo(query: &str) -> Option<(&str, &str)> {
             .nth(1)
             .unwrap_or(after_scheme)
     } else {
-        // May be "github.com/owner/repo" or "owner/repo"
-        let dots = query.matches('.').count();
-        if dots > 0 {
-            // Looks like a hostname prefix — skip it.
-            query.splitn(2, '/').nth(1).unwrap_or(query)
+        // May be "github.com/owner/repo" or plain "owner/repo".
+        // Only treat the first segment as a hostname when it *both* contains
+        // a dot *and* is followed by a slash — i.e. the pattern is
+        // "hostname/owner/repo" with at least 3 slash-delimited segments.
+        // This avoids incorrectly stripping "owner.name" as a hostname.
+        if query.contains('/') {
+            let first_slash = query.find('/')?;
+            let first_segment = &query[..first_slash];
+            if first_segment.contains('.') {
+                // First segment looks like a hostname — skip it.
+                &query[first_slash + 1..]
+            } else {
+                query
+            }
         } else {
             query
         }
@@ -214,8 +215,22 @@ fn split_artist_title(s: &str) -> Option<(&str, &str)> {
 
 /// Split `"Origin to Destination"` case-insensitively on ` to `.
 fn split_origin_destination(s: &str) -> Option<(&str, &str)> {
+    // Find " to " in the lowercased copy for case-insensitive matching.
+    // Guard with is_char_boundary before slicing the original `s` to avoid
+    // panics when multibyte characters appear before the separator.
     let lower = s.to_lowercase();
-    lower.find(" to ").map(|pos| (&s[..pos], &s[pos + 4..]))
+    let needle = " to ";
+    let pos = lower.find(needle)?;
+    let end = pos + needle.len();
+    if !s.is_char_boundary(pos) || !s.is_char_boundary(end) {
+        return None;
+    }
+    let origin = s[..pos].trim();
+    let dest = s[end..].trim();
+    if origin.is_empty() || dest.is_empty() {
+        return None;
+    }
+    Some((origin, dest))
 }
 
 /// Extract the first 4-digit year from a string.
