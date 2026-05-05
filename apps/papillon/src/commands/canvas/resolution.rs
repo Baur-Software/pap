@@ -174,8 +174,8 @@ fn build_handler(
     }
 }
 
-/// Resolve the top `n` agents by score. Returns an empty vec (not an error)
-/// if fewer than `n` candidates exist — callers must handle len < n gracefully.
+/// Resolve the top `n` agents by score. Returns fewer than `n` results without
+/// error if fewer candidates exist. Returns `Err` only when zero agents match.
 pub(crate) async fn resolve_top_agents(
     state: &State<'_, AppState>,
     action_type: &str,
@@ -281,6 +281,11 @@ pub(crate) async fn resolve_top_agents(
                     Some(url.clone()),
                     s,
                 ));
+            }
+
+            // Early-exit once we have enough candidates total
+            if all_scored.len() + remote_scored.len() >= n {
+                break;
             }
         }
         all_scored.extend(remote_scored);
