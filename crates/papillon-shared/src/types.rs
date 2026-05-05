@@ -1782,6 +1782,7 @@ mod tests {
             returns: vec!["schema:SearchResult".to_string()],
             approval_request_id: "test-uuid-1234".to_string(),
             ttl_hours: 8,
+            candidates: vec![],
         };
         let json = serde_json::to_string(&plan).unwrap();
         let round_trip: IntentPlan = serde_json::from_str(&json).unwrap();
@@ -1798,6 +1799,7 @@ mod tests {
             returns: vec!["schema:SearchResult".to_string()],
             approval_request_id: "uuid-5678".to_string(),
             ttl_hours: 8,
+            candidates: vec![],
         };
         let state = BlockState::AwaitingApproval { plan };
         let json = serde_json::to_string(&state).unwrap();

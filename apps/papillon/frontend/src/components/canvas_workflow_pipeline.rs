@@ -1937,6 +1937,7 @@ mod tests {
             returns: vec!["schema:FlightReservation".into()],
             approval_request_id: "req-abc-123".into(),
             ttl_hours: 1,
+            candidates: vec![],
         }
     }
 
