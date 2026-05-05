@@ -134,6 +134,180 @@ fn score_agent(
     base_score + substrate_delta
 }
 
+/// Build an agent handler — local shortcut or pinned-TLS remote proxy.
+fn build_handler(
+    state: &State<'_, AppState>,
+    agent_name: &str,
+    source_url: Option<&str>,
+) -> Result<Arc<dyn AgentHandler>, PapillonError> {
+    if let Some(h) = state.local_agents.get(agent_name) {
+        return Ok(h.clone());
+    }
+    let Some(pap_url) = source_url else {
+        return Err(PapillonError::from(format!("No handler for {}", agent_name)));
+    };
+    let parsed = PapUrl::parse(pap_url).map_err(|e| PapillonError::from(e.to_string()))?;
+    let endpoint = parsed.https_endpoint();
+    let fingerprint = {
+        let local = state
+            .local_registry
+            .lock()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        local
+            .peers()
+            .iter()
+            .find(|p| p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/'))
+            .and_then(|p| p.cert_fingerprint.clone())
+    };
+    let slug = agent_name.to_lowercase().replace(' ', "-");
+    let base_url = format!("{}/agents/{}", endpoint, slug);
+    match fingerprint {
+        Some(fp) => {
+            let http_client =
+                build_pinned_client(&[fp]).map_err(|e| PapillonError::from(e.to_string()))?;
+            Ok(Arc::new(RemoteAgentHandler::with_client(&base_url, http_client)))
+        }
+        None => Err(PapillonError::from(format!(
+            "No cert fingerprint for peer {} — navigate to it first",
+            endpoint
+        ))),
+    }
+}
+
+/// Resolve the top `n` agents by score. Returns an empty vec (not an error)
+/// if fewer than `n` candidates exist — callers must handle len < n gracefully.
+pub(crate) async fn resolve_top_agents(
+    state: &State<'_, AppState>,
+    action_type: &str,
+    preferred_name: &str,
+    exclude_agents: &[String],
+    n: usize,
+) -> Result<Vec<ResolvedAgent>, PapillonError> {
+    let agent_defs: std::collections::HashMap<String, pap_agents::DynamicAgentDef> = state
+        .db
+        .load_all_agents()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|d| d.agent_did.clone().map(|did| (did, d)))
+        .collect();
+
+    let inference_substrate = {
+        let cfg = state
+            .orchestrator_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        cfg.inference_substrate.clone()
+    };
+
+    // Collect all local candidates with scores
+    let mut all_scored: Vec<(String, String, Vec<String>, Vec<String>, Option<String>, f64)> = {
+        let local = state
+            .local_registry
+            .lock()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        let candidates = local.query_local(action_type);
+        let mut v: Vec<_> = candidates
+            .iter()
+            .filter(|a| !exclude_agents.contains(&a.name))
+            .map(|a| {
+                let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                let agent_def = agent_defs.get(&a.provider.did);
+                let s = score_agent(
+                    &state.db,
+                    &a.provider.did,
+                    preferred_name,
+                    &a.name,
+                    action_type,
+                    schema_hint,
+                    agent_def,
+                    &inference_substrate,
+                );
+                (
+                    a.name.clone(),
+                    a.provider.did.clone(),
+                    a.requires_disclosure.clone(),
+                    a.returns.clone(),
+                    None::<String>,
+                    s,
+                )
+            })
+            .collect();
+        v.sort_by(|a, b| b.5.partial_cmp(&a.5).unwrap_or(std::cmp::Ordering::Equal));
+        v
+    };
+
+    // If we need more candidates, check remote registries
+    if all_scored.len() < n {
+        let registries = state
+            .registries
+            .read()
+            .map_err(|e| PapillonError::from(e.to_string()))?;
+        let mut remote_scored: Vec<(String, String, Vec<String>, Vec<String>, Option<String>, f64)> =
+            Vec::new();
+        for (url, registry) in registries.iter() {
+            let remote_candidates = registry.query_local_satisfiable(action_type, &[]);
+            // Collect the eligible candidates into an owned vec first so we
+            // don't hold a borrow on `remote_scored` while mutating it.
+            let eligible: Vec<_> = remote_candidates
+                .iter()
+                .filter(|a| !exclude_agents.contains(&a.name))
+                .filter(|a| {
+                    !all_scored.iter().any(|(existing, _, _, _, _, _)| existing == &a.name)
+                })
+                .filter(|a| {
+                    !remote_scored
+                        .iter()
+                        .any(|(existing, _, _, _, _, _)| existing == &a.name)
+                })
+                .collect();
+            for a in eligible {
+                let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
+                let agent_def = agent_defs.get(&a.provider.did);
+                let s = score_agent(
+                    &state.db,
+                    &a.provider.did,
+                    preferred_name,
+                    &a.name,
+                    action_type,
+                    schema_hint,
+                    agent_def,
+                    &inference_substrate,
+                );
+                remote_scored.push((
+                    a.name.clone(),
+                    a.provider.did.clone(),
+                    a.requires_disclosure.clone(),
+                    a.returns.clone(),
+                    Some(url.clone()),
+                    s,
+                ));
+            }
+        }
+        all_scored.extend(remote_scored);
+        all_scored.sort_by(|a, b| b.5.partial_cmp(&a.5).unwrap_or(std::cmp::Ordering::Equal));
+    }
+
+    // Build handlers for the top-n candidates
+    let mut result = Vec::with_capacity(n.min(all_scored.len()));
+    for (name, did, requires_disclosure, returns, source_url, _score) in
+        all_scored.into_iter().take(n)
+    {
+        let handler = build_handler(state, &name, source_url.as_deref())?;
+        result.push(ResolvedAgent {
+            name,
+            did,
+            handler,
+            requires_disclosure,
+            returns,
+        });
+    }
+
+    if result.is_empty() {
+        return Err(PapillonError::from(format!("No agent for {}", action_type)));
+    }
+    Ok(result)
+}
+
 /// Resolve an agent by action type: discover from registries, build handler.
 /// Applies memory-informed scoring to rank candidates.
 /// `exclude_agents` filters out agents by name (used by reflection retries).
@@ -143,179 +317,7 @@ pub(crate) async fn resolve_agent(
     preferred_name: &str,
     exclude_agents: &[String],
 ) -> Result<ResolvedAgent, PapillonError> {
-    // Load all local agent defs once for model-substrate / source scoring.
-    // Keyed by agent DID so we can look up quickly per candidate.
-    let agent_defs: std::collections::HashMap<String, pap_agents::DynamicAgentDef> = state
-        .db
-        .load_all_agents()
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|d| d.agent_did.clone().map(|did| (did, d)))
-        .collect();
-
-    // Read inference substrate from the orchestrator config for substrate scoring.
-    let inference_substrate = {
-        let cfg = state
-            .orchestrator_config
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        cfg.inference_substrate.clone()
-    };
-
-    // Discover agent — try local registry first, then remote registries.
-    let (agent_name, agent_did, requires_disclosure, returns, source_url) = {
-        let local = state
-            .local_registry
-            .lock()
-            .map_err(|e| PapillonError::from(e.to_string()))?;
-        // Use query_local (not query_local_satisfiable) for local agents:
-        // local agents run on the user's device and are trusted. Disclosure
-        // filtering is meaningful for remote/federated agents, not local ones.
-        let candidates = local.query_local(action_type);
-
-        // Filter out excluded agents, then score the rest
-        let eligible: Vec<_> = candidates
-            .iter()
-            .filter(|a| !exclude_agents.contains(&a.name))
-            .collect();
-
-        let best = if eligible.is_empty() {
-            None
-        } else {
-            let mut scored: Vec<_> = eligible
-                .iter()
-                .map(|a| {
-                    // Use first returns type as schema hint for preference scoring
-                    let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
-                    let agent_def = agent_defs.get(&a.provider.did);
-                    let s = score_agent(
-                        &state.db,
-                        &a.provider.did,
-                        preferred_name,
-                        &a.name,
-                        action_type,
-                        schema_hint,
-                        agent_def,
-                        &inference_substrate,
-                    );
-                    (*a, s)
-                })
-                .collect();
-            scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            scored.first().map(|(a, _)| *a)
-        };
-
-        if let Some(agent) = best {
-            (
-                agent.name.clone(),
-                agent.provider.did.clone(),
-                agent.requires_disclosure.clone(),
-                agent.returns.clone(),
-                None, // local — no source URL
-            )
-        } else {
-            // Not found locally — search synced remote registries
-            drop(local);
-            let registries = state
-                .registries
-                .read()
-                .map_err(|e| PapillonError::from(e.to_string()))?;
-
-            let mut found = None;
-            for (url, registry) in registries.iter() {
-                let remote_candidates = registry.query_local_satisfiable(action_type, &[]);
-                let eligible: Vec<_> = remote_candidates
-                    .iter()
-                    .filter(|a| !exclude_agents.contains(&a.name))
-                    .collect();
-
-                let best = if eligible.is_empty() {
-                    None
-                } else {
-                    let mut scored: Vec<_> = eligible
-                        .iter()
-                        .map(|a| {
-                            let schema_hint = a.returns.first().map(|s| s.as_str()).unwrap_or("");
-                            // Remote/federated agents won't be in the local agent_defs map.
-                            let agent_def = agent_defs.get(&a.provider.did);
-                            let s = score_agent(
-                                &state.db,
-                                &a.provider.did,
-                                preferred_name,
-                                &a.name,
-                                action_type,
-                                schema_hint,
-                                agent_def,
-                                &inference_substrate,
-                            );
-                            (*a, s)
-                        })
-                        .collect();
-                    scored
-                        .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                    scored.first().map(|(a, _)| *a)
-                };
-
-                if let Some(agent) = best {
-                    found = Some((
-                        agent.name.clone(),
-                        agent.provider.did.clone(),
-                        agent.requires_disclosure.clone(),
-                        agent.returns.clone(),
-                        Some(url.clone()),
-                    ));
-                    break;
-                }
-            }
-
-            found.ok_or_else(|| PapillonError::from(format!("No agent for {}", action_type)))?
-        }
-    };
-
-    // Resolve handler — local handler or remote proxy over TLS.
-    let handler: Arc<dyn AgentHandler> = if let Some(h) = state.local_agents.get(&agent_name) {
-        h.clone()
-    } else if let Some(ref pap_url) = source_url {
-        let parsed = PapUrl::parse(pap_url).map_err(|e| PapillonError::from(e.to_string()))?;
-        let endpoint = parsed.https_endpoint();
-
-        let fingerprint = {
-            let local = state
-                .local_registry
-                .lock()
-                .map_err(|e| PapillonError::from(e.to_string()))?;
-            local
-                .peers()
-                .iter()
-                .find(|p| p.endpoint.trim_end_matches('/') == endpoint.trim_end_matches('/'))
-                .and_then(|p| p.cert_fingerprint.clone())
-        };
-
-        let slug = agent_name.to_lowercase().replace(' ', "-");
-        let base_url = format!("{}/agents/{}", endpoint, slug);
-
-        if let Some(fp) = fingerprint {
-            let http_client =
-                build_pinned_client(&[fp]).map_err(|e| PapillonError::from(e.to_string()))?;
-            Arc::new(RemoteAgentHandler::with_client(&base_url, http_client))
-        } else {
-            return Err(PapillonError::from(format!(
-                "No cert fingerprint for peer {} — navigate to it first",
-                endpoint
-            )));
-        }
-    } else {
-        return Err(PapillonError::from(format!(
-            "No handler for {}",
-            agent_name
-        )));
-    };
-
-    Ok(ResolvedAgent {
-        name: agent_name,
-        did: agent_did,
-        handler,
-        requires_disclosure,
-        returns,
-    })
+    resolve_top_agents(state, action_type, preferred_name, exclude_agents, 1)
+        .await
+        .map(|mut v| v.remove(0))
 }
