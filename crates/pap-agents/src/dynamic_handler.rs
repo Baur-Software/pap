@@ -24,6 +24,8 @@ use crate::session_store::SessionStore;
 
 struct DynamicSession {
     query: Option<String>,
+    /// All scalar properties disclosed in Phase 3 (e.g. api_key from SD-JWT vault, user-explicit params).
+    disclosed_props: HashMap<String, String>,
 }
 
 pub struct DynamicAgentHandler {
@@ -88,7 +90,7 @@ impl AgentHandler for DynamicAgentHandler {
         let session_id = uuid::Uuid::new_v4().to_string();
         let did = self
             .sessions
-            .insert(session_id.clone(), DynamicSession { query: None })?;
+            .insert(session_id.clone(), DynamicSession { query: None, disclosed_props: HashMap::new() })?;
         Ok((session_id, did))
     }
 
@@ -108,15 +110,35 @@ impl AgentHandler for DynamicAgentHandler {
         session_id: &str,
         disclosures: Vec<Value>,
     ) -> Result<(), TransportError> {
-        let query = disclosures
-            .iter()
-            .find_map(|d| d.get("query").and_then(|v| v.as_str()))
-            .map(String::from);
-        if let Some(q) = query {
-            self.sessions.with_mut(session_id, |data| {
-                data.query = Some(q);
-            })?;
+        let mut query: Option<String> = None;
+        let mut props: HashMap<String, String> = HashMap::new();
+
+        for disclosure in &disclosures {
+            if let Some(obj) = disclosure.as_object() {
+                for (key, val) in obj {
+                    if key == "@type" {
+                        continue;
+                    }
+                    let str_val = match val {
+                        Value::String(s) => s.clone(),
+                        Value::Number(n) => n.to_string(),
+                        Value::Bool(b) => b.to_string(),
+                        _ => continue,
+                    };
+                    if key == "query" {
+                        query = Some(str_val.clone());
+                    }
+                    props.insert(key.clone(), str_val);
+                }
+            }
         }
+
+        self.sessions.with_mut(session_id, |data| {
+            if let Some(q) = query {
+                data.query = Some(q);
+            }
+            data.disclosed_props.extend(props);
+        })?;
         Ok(())
     }
 
@@ -142,7 +164,38 @@ impl AgentHandler for DynamicAgentHandler {
                 .build()
                 .map_err(|e| TransportError::ServerError(format!("http client init: {e}")))?;
 
-            let url = endpoint.url_template.replace("{query}", &query);
+            // Substitute {query} first
+            let mut url = endpoint.url_template.replace("{query}", &query);
+
+            // Resolve any remaining {param} placeholders.
+            // Priority: (1) disclosed props from Phase 3 (SD-JWT vault claims, user-explicit),
+            //           (2) agent_props (loaded from agent_settings at registration),
+            //           (3) entity extractor (LLM → heuristic)
+            let extra_params = crate::entity_extractor::extract_template_params(&endpoint.url_template);
+            if !extra_params.is_empty() {
+                let disclosed = self
+                    .sessions
+                    .with(session_id, |data| data.disclosed_props.clone())?;
+
+                let extractor = crate::entity_extractor::EntityExtractor::new(self.make_llm_client());
+
+                // Build resolved map via extractor (covers LLM + heuristic paths)
+                let mut resolved = extractor.resolve(&endpoint.url_template, &query);
+
+                // Override with higher-priority sources: agent_props then disclosed
+                for param in &extra_params {
+                    if let Some(val) = self.agent_props.get(param) {
+                        resolved.insert(param.clone(), val.clone());
+                    }
+                    if let Some(val) = disclosed.get(param) {
+                        resolved.insert(param.clone(), val.clone());
+                    }
+                }
+
+                for (param, val) in &resolved {
+                    url = url.replace(&format!("{{{}}}", param), val);
+                }
+            }
 
             // Defense in depth: also validate after template expansion in case
             // {query} substitution changes the host (e.g. injection via fragment).
@@ -576,6 +629,33 @@ mod tests {
             .handle_disclosure(&sid, vec![json!({"query": "hello"})])
             .unwrap();
         assert!(handler.execute(&sid).is_err());
+    }
+
+    #[test]
+    fn disclosed_props_stored_from_phase3() {
+        let def = make_def_llm_only();
+        let handler = DynamicAgentHandler::new(def, Arc::new(RwLock::new(LlmProvider::None)));
+        let token = make_token("schema:SearchAction");
+        let (sid, _) = handler.handle_token(token).unwrap();
+        handler.handle_did_exchange(&sid, "did:key:peer").unwrap();
+
+        handler
+            .handle_disclosure(
+                &sid,
+                vec![json!({"@type": "schema:SearchAction", "query": "rust lang", "api_key": "sk-live-xyz"})],
+            )
+            .unwrap();
+
+        handler
+            .sessions
+            .with(&sid, |data| {
+                assert_eq!(data.query.as_deref(), Some("rust lang"));
+                assert_eq!(
+                    data.disclosed_props.get("api_key"),
+                    Some(&"sk-live-xyz".to_string())
+                );
+            })
+            .unwrap();
     }
 
     #[test]
