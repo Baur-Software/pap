@@ -286,10 +286,9 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
     // Phase 4 will return a clear "vault is sealed" / "credential not found" error.
     let cred_params = papillon_shared::credential_gate::credential_params_for(requires_disclosure);
     if !cred_params.is_empty() {
-        let agent_slug = agent_name.to_lowercase().replace(' ', "_");
         for param in &cred_params {
-            let credential_name = format!("{}_{}", agent_slug, param);
-            if let Ok(value) = crate::bridge::invoke::<_, String>(
+            let credential_name = format!("{}_{}", agent_did, param);
+            match crate::bridge::invoke::<_, String>(
                 "vault_disclose_for_agent",
                 &serde_json::json!({
                     "credentialName": credential_name,
@@ -298,7 +297,16 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
             )
             .await
             {
-                extra_disclosures.insert(param.clone(), value);
+                Ok(value) => {
+                    extra_disclosures.insert(param.clone(), value);
+                }
+                Err(e) => {
+                    on_fail(3, &format!("vault credential '{}' unavailable for agent {}: {} — unlock vault first", param, agent_did, e));
+                    return Err(FetchError(format!(
+                        "vault credential '{}' unavailable for agent {}: {} — unlock vault first",
+                        param, agent_did, e
+                    )));
+                }
             }
         }
     }
