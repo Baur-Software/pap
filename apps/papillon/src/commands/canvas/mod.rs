@@ -28,6 +28,8 @@ pub use outcome::*;
 
 // ── Internal re-exports used by sibling command modules ──────────────────
 pub(crate) use resolution::resolve_agent;
+#[allow(unused_imports)]
+pub(crate) use resolution::resolve_top_agents;
 
 // ── Internal constants ────────────────────────────────────────────────────
 /// BM25 confidence threshold for Level 2 intent routing.

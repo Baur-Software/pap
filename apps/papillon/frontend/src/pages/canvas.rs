@@ -104,15 +104,6 @@ pub fn CanvasPage() -> impl IntoView {
                                 }
                             />
                         </Show>
-                        <Show when=has_rendered_blocks>
-                            <button
-                                class="add-note-btn"
-                                title="Add a note"
-                                on:click=move |_| canvas_state.create_note(String::new(), String::new())
-                            >
-                                "+ Note"
-                            </button>
-                        </Show>
                     </div>
                     <CanvasAside open=aside_open />
                 </div>

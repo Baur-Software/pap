@@ -5,14 +5,21 @@ provider = "NASA NeoWs"
 description = "Get near-Earth asteroid data from NASA Near Earth Object Web Service."
 action = "schema:FindAction"
 object_types = ["schema:Event"]
-requires_disclosure = []
+requires_disclosure = ["api_key", "date"]
 returns = ["schema:Event"]
 source = "Catalog"
 llm_instructions = "You are a scientific information assistant for Near Earth Objects. Provide accurate, well-contextualized scientific information."
 subagents = []
 
 [endpoint]
-url_template = "https://api.nasa.gov/neo/rest/v1/feed?api_key=DEMO_KEY&start_date={date}"
+url_template = "https://api.nasa.gov/neo/rest/v1/feed?api_key={api_key}&start_date={date}"
 method = "Get"
 response_jsonpath = "$.near_earth_objects"
 response_schema_type = "schema:Event"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your NASA API key"
+defaultValue = ""

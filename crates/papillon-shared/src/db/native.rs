@@ -225,6 +225,12 @@ impl NativeDatabase {
                 updated_at    TEXT NOT NULL
             );
             CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_pipelines_name ON saved_pipelines(name);
+
+            CREATE TABLE IF NOT EXISTS principal_attributes (
+                prop_name  TEXT PRIMARY KEY,
+                value      TEXT NOT NULL,
+                last_used  TEXT NOT NULL
+            );
             ",
         )
         .map_err(|e| DbError(format!("db migrate: {e}")))?;
@@ -1963,6 +1969,46 @@ impl DatabaseOps for NativeDatabase {
             .map_err(|e| DbError(format!("db delete agent_def: {e}")))?;
         Ok(())
     }
+
+    fn set_principal_attribute(&self, prop: &str, value: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO principal_attributes (prop_name, value, last_used) VALUES (?1, ?2, ?3)
+             ON CONFLICT(prop_name) DO UPDATE SET value = excluded.value, last_used = excluded.last_used",
+            params![prop, value, now],
+        )
+        .map_err(|e| DbError(format!("db set_principal_attribute: {e}")))?;
+        Ok(())
+    }
+
+    fn get_principal_attribute(&self, prop: &str) -> Result<Option<String>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        conn.query_row(
+            "SELECT value FROM principal_attributes WHERE prop_name = ?1",
+            params![prop],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| DbError(format!("db get_principal_attribute: {e}")))
+    }
+
+    fn get_all_principal_attributes(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+        let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
+        let mut stmt = conn
+            .prepare("SELECT prop_name, value FROM principal_attributes ORDER BY last_used DESC")
+            .map_err(|e| DbError(format!("db get_all_principal_attributes: {e}")))?;
+        let map: Result<std::collections::HashMap<String, String>, _> = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| DbError(format!("db get_all_principal_attributes query: {e}")))?
+            .map(|r| r.map_err(|e| DbError(format!("db row: {e}"))))
+            .collect();
+        map
+    }
 }
 
 #[cfg(test)]
@@ -3216,5 +3262,47 @@ mod tests {
         let db = test_db();
         // Must not return an error when the name doesn't exist.
         db.delete_agent_def("nonexistent").unwrap();
+    }
+
+    // ── principal_attributes tests ────────────────────────────────────────────
+
+    #[test]
+    fn principal_attributes_round_trip() {
+        let db = NativeDatabase::open_memory().unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
+        let v = db.get_principal_attribute("schema:givenName").unwrap();
+        assert_eq!(v, Some("Alice".to_string()));
+    }
+
+    #[test]
+    fn principal_attributes_upsert() {
+        let db = NativeDatabase::open_memory().unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
+        db.set_principal_attribute("schema:givenName", "Bob")
+            .unwrap();
+        let v = db.get_principal_attribute("schema:givenName").unwrap();
+        assert_eq!(v, Some("Bob".to_string()));
+    }
+
+    #[test]
+    fn principal_attributes_missing_returns_none() {
+        let db = NativeDatabase::open_memory().unwrap();
+        let v = db.get_principal_attribute("schema:nonexistent").unwrap();
+        assert_eq!(v, None);
+    }
+
+    #[test]
+    fn get_all_principal_attributes_returns_all() {
+        let db = NativeDatabase::open_memory().unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
+        db.set_principal_attribute("schema:departureAirport", "LAX")
+            .unwrap();
+        let map = db.get_all_principal_attributes().unwrap();
+        assert_eq!(map.get("schema:givenName"), Some(&"Alice".to_string()));
+        assert_eq!(map.get("schema:departureAirport"), Some(&"LAX".to_string()));
+        assert_eq!(map.len(), 2);
     }
 }

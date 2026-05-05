@@ -50,6 +50,7 @@ pub enum VaultItemType {
     ContinuityToken = 1,
     VerifiableCredential = 2,
     NotaryDesignation = 3,
+    ApiCredential = 4,
 }
 
 /// Row stored in the vault_items table.
@@ -92,6 +93,10 @@ pub enum VaultItemData {
         threshold: usize,
         notary_count: usize,
     },
+    ApiCredential {
+        name: String,
+        value: String,
+    },
 }
 
 impl VaultItemData {
@@ -101,6 +106,7 @@ impl VaultItemData {
             Self::ContinuityToken { .. } => VaultItemType::ContinuityToken,
             Self::VerifiableCredential { .. } => VaultItemType::VerifiableCredential,
             Self::NotaryDesignation { .. } => VaultItemType::NotaryDesignation,
+            Self::ApiCredential { .. } => VaultItemType::ApiCredential,
         }
     }
 
@@ -109,7 +115,8 @@ impl VaultItemData {
             Self::PrincipalSeed { name, .. }
             | Self::ContinuityToken { name, .. }
             | Self::VerifiableCredential { name, .. }
-            | Self::NotaryDesignation { name, .. } => name,
+            | Self::NotaryDesignation { name, .. }
+            | Self::ApiCredential { name, .. } => name,
         }
     }
 }

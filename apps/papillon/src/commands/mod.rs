@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod attributes;
 pub mod canvas;
 pub mod chat;
 pub mod dataset_discovery;
@@ -13,4 +14,5 @@ pub mod recovery;
 pub mod registry;
 pub mod settings_vocab;
 pub mod templates;
+pub mod vault;
 pub mod webauthn;

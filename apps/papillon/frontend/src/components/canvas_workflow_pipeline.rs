@@ -828,6 +828,8 @@ fn WorkflowBlockActions() -> impl IntoView {
                                     workflow.canvas.approve_block(
                                         approve_block_id.clone(),
                                         approval_request_id.clone(),
+                                        std::collections::HashMap::new(),
+                                        Vec::new(),
                                     );
                                 }
                             >
@@ -1937,6 +1939,7 @@ mod tests {
             returns: vec!["schema:FlightReservation".into()],
             approval_request_id: "req-abc-123".into(),
             ttl_hours: 1,
+            candidates: vec![],
         }
     }
 

@@ -34,6 +34,7 @@ pub struct DynamicAgentDef {
     pub source: DynamicAgentSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operator_key_seed: Option<[u8; 32]>,
+    #[serde(default)]
     pub published_to: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_path: Option<String>,
@@ -41,7 +42,9 @@ pub struct DynamicAgentDef {
     /// Flows into AgentAdvertisement for federation — remote registries serve these.
     #[serde(default)]
     pub configurable_properties: Vec<serde_json::Value>,
+    #[serde(default)]
     pub created_at: String,
+    #[serde(default)]
     pub updated_at: String,
 }
 
@@ -671,5 +674,56 @@ mod tests {
     fn local_llm_rejects_no_scheme() {
         assert!(!is_local_llm_url("localhost:11434"));
         assert!(!is_local_llm_url("127.0.0.1:11434"));
+    }
+
+    #[test]
+    fn catalog_agents_declare_all_template_params_in_disclosure() {
+        use crate::entity_extractor::extract_template_params;
+        let catalog_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/catalog");
+        for entry in walkdir::WalkDir::new(catalog_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "toml"))
+        {
+            let content = std::fs::read_to_string(entry.path()).unwrap();
+            let def: DynamicAgentDef = toml::from_str(&content)
+                .unwrap_or_else(|e| panic!("Invalid TOML {}: {e}", entry.path().display()));
+            if let Some(endpoint) = &def.endpoint {
+                let params = extract_template_params(&endpoint.url_template);
+                for param in &params {
+                    assert!(
+                        def.requires_disclosure.iter().any(|r| r == param),
+                        "Agent {} has {{{}}} in url_template but not in requires_disclosure (current: [{}])",
+                        entry.path().display(),
+                        param,
+                        def.requires_disclosure.join(", ")
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn no_catalog_agent_has_hardcoded_demo_key() {
+        let catalog_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/catalog");
+        for entry in walkdir::WalkDir::new(catalog_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "toml"))
+        {
+            let content = std::fs::read_to_string(entry.path()).unwrap();
+            let def: DynamicAgentDef = toml::from_str(&content)
+                .unwrap_or_else(|e| panic!("Invalid TOML {}: {e}", entry.path().display()));
+            if let Some(endpoint) = &def.endpoint {
+                assert!(
+                    !endpoint.url_template.contains("=demo")
+                        && !endpoint.url_template.contains("=api2demo")
+                        && !endpoint.url_template.contains("=DEMO"),
+                    "Hardcoded demo key in {}: {}",
+                    entry.path().display(),
+                    endpoint.url_template
+                );
+            }
+        }
     }
 }

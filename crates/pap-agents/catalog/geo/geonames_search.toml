@@ -5,14 +5,14 @@ provider = "GeoNames"
 description = "Search the GeoNames geographic database for cities, mountains, rivers, and places."
 action = "schema:SearchAction"
 object_types = ["schema:Place"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:Place"]
 source = "Catalog"
 llm_instructions = "You are a geographic information assistant. Provide place name, country, population, elevation, timezone, and geographic coordinates."
 subagents = []
 
 [endpoint]
-url_template = "https://secure.geonames.org/searchJSON?q={query}&maxRows=5&username=demo"
+url_template = "https://secure.geonames.org/searchJSON?q={query}&maxRows=5&username={api_key}"
 method = "Get"
 response_jsonpath = "$.geonames[0].name"
 response_schema_type = "schema:Place"
@@ -26,3 +26,10 @@ description = "Maximum number of results to return per query"
 defaultValue = 5
 minValue = 1
 maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your GeoNames username"
+defaultValue = ""

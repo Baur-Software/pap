@@ -364,6 +364,23 @@ pub trait DatabaseOps: Send + Sync {
 
     /// Remove an agent definition by name.  No-op if the name is not found.
     fn delete_agent_def(&self, name: &str) -> Result<(), DbError>;
+
+    // ── Principal Attributes (memex) ─────────────────────────────────────────
+    // Stores per-principal attribute values keyed by exact schema.org vocab string.
+    // Any key that appears in an agent's `requires_disclosure` is a valid key here.
+    // Three agents asking for `schema:departureAirport` all share the same row.
+
+    /// Upsert a principal attribute (INSERT OR REPLACE by prop_name).
+    /// `prop` is the exact schema.org key, e.g. `"schema:givenName"`.
+    fn set_principal_attribute(&self, prop: &str, value: &str) -> Result<(), DbError>;
+
+    /// Retrieve a single principal attribute value. Returns `None` if not stored.
+    fn get_principal_attribute(&self, prop: &str) -> Result<Option<String>, DbError>;
+
+    /// Retrieve all stored principal attributes as a map of prop_name → value.
+    fn get_all_principal_attributes(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, DbError>;
 }
 
 /// A preference signal recording which agent was selected for a given

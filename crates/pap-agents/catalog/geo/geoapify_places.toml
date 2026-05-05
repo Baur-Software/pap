@@ -5,14 +5,14 @@ provider = "Geoapify"
 description = "Search places and amenities near a location using Geoapify."
 action = "schema:SearchAction"
 object_types = ["schema:Place"]
-requires_disclosure = []
+requires_disclosure = ["api_key", "lon", "lat"]
 returns = ["schema:LocalBusiness"]
 source = "Catalog"
 llm_instructions = "You are a geographic information assistant. Provide location data, coordinates, and geographic context for the requested place."
 subagents = []
 
 [endpoint]
-url_template = "https://api.geoapify.com/v2/places?categories=commercial.food_and_drink&filter=circle:{lon},{lat},1000&limit=5&apiKey=demo"
+url_template = "https://api.geoapify.com/v2/places?categories=commercial.food_and_drink&filter=circle:{lon},{lat},1000&limit=5&apiKey={api_key}"
 method = "Get"
 response_jsonpath = "$.features[0].properties.name"
 response_schema_type = "schema:LocalBusiness"
@@ -26,3 +26,10 @@ description = "Maximum number of results to return per query"
 defaultValue = 5
 minValue = 1
 maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Geoapify API key"
+defaultValue = ""

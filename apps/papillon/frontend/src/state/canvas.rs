@@ -1047,7 +1047,13 @@ impl CanvasState {
 
     /// Approve an AwaitingApproval block — sends the decision to the backend
     /// and begins the handshake. Guards against double-submit via approval_in_flight.
-    pub fn approve_block(&self, block_id: String, approval_request_id: String) {
+    pub fn approve_block(
+        &self,
+        block_id: String,
+        approval_request_id: String,
+        filled_values: std::collections::HashMap<String, String>,
+        selected_agent_names: Vec<String>,
+    ) {
         // Prevent double-submit
         if self.approval_in_flight.get_untracked().contains(&block_id) {
             leptos::logging::warn!(
@@ -1063,13 +1069,51 @@ impl CanvasState {
         let in_flight = self.approval_in_flight;
         let canvases = self.canvases;
         let block_id_clone = block_id.clone();
+        let filled_values_captured = filled_values;
+        let selected_names_captured = selected_agent_names;
 
         spawn_local(async move {
+            // Obtain a challenge signed by the principal's keypair before approving.
+            // The signing key lives in Rust, so we call sign_approval_challenge
+            // which issues and signs the nonce in a single backend round-trip.
+            let signed_challenge = match crate::bridge::invoke::<_, serde_json::Value>(
+                "sign_approval_challenge",
+                &serde_json::json!({}),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    leptos::logging::error!(
+                        "sign_approval_challenge failed for {}: {}",
+                        block_id_clone,
+                        e
+                    );
+                    canvases.update(|cs| {
+                        for canvas in cs.iter_mut() {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
+                                b.state = BlockState::Failed {
+                                    phase: 2,
+                                    reason: format!("Authorization failed: {}", e),
+                                };
+                                b.updated_at = now_iso();
+                                break;
+                            }
+                        }
+                    });
+                    in_flight.update(|s| { s.remove(&block_id_clone); });
+                    return;
+                }
+            };
+
             match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": true,
+                    "signedChallenge": signed_challenge,
+                    "filledValues": filled_values_captured,
+                    "selectedAgentNames": selected_names_captured,
                 }),
             )
             .await
@@ -1079,7 +1123,6 @@ impl CanvasState {
                 }
                 Err(e) => {
                     leptos::logging::error!("approve_block failed for {}: {}", block_id_clone, e);
-                    // Transition block to Failed state with the error message
                     canvases.update(|cs| {
                         for canvas in cs.iter_mut() {
                             if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
@@ -1106,11 +1149,27 @@ impl CanvasState {
         let canvases = self.canvases;
         let block_id_clone = block_id.clone();
         spawn_local(async move {
+            // Challenge required by backend even for rejections — prevents a
+            // compromised renderer from silently cancelling pending approvals.
+            let signed_challenge = match crate::bridge::invoke::<_, serde_json::Value>(
+                "sign_approval_challenge",
+                &serde_json::json!({}),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    leptos::logging::error!("reject_block challenge failed for {}: {}", block_id_clone, e);
+                    return;
+                }
+            };
+
             match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": false,
+                    "signedChallenge": signed_challenge,
                 }),
             )
             .await
@@ -1120,7 +1179,6 @@ impl CanvasState {
                 }
                 Err(e) => {
                     leptos::logging::error!("reject_block failed for {}: {}", block_id_clone, e);
-                    // On rejection failure, transition to Failed state
                     canvases.update(|cs| {
                         for canvas in cs.iter_mut() {
                             if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {

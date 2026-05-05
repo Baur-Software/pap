@@ -5,7 +5,7 @@ provider = "NASA"
 description = "Fetch NASA's Astronomy Picture of the Day with title, explanation, and image URL."
 action = "schema:ViewAction"
 object_types = ["schema:ImageObject"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:ImageObject"]
 source = "Catalog"
 llm_instructions = """
@@ -17,7 +17,14 @@ Reference well-known missions, discoveries, or celestial objects where applicabl
 subagents = []
 
 [endpoint]
-url_template = "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&concept_tags=True&q={query}"
+url_template = "https://api.nasa.gov/planetary/apod?api_key={api_key}&concept_tags=True&q={query}"
 method = "Get"
 response_jsonpath = "$.explanation"
 response_schema_type = "schema:ImageObject"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your NASA API key"
+defaultValue = ""

@@ -5,14 +5,14 @@ provider = "Visual Crossing"
 description = "Historical and forecast weather data via Visual Crossing Timeline API."
 action = "schema:FindAction"
 object_types = ["schema:Place"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:WeatherForecast"]
 source = "Catalog"
 llm_instructions = "You are a weather history and forecast assistant. Provide current conditions and upcoming forecast, noting any significant weather patterns or records."
 subagents = []
 
 [endpoint]
-url_template = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{query}?unitGroup=metric&key=DEMO&contentType=json"
+url_template = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{query}?unitGroup=metric&key={api_key}&contentType=json"
 method = "Get"
 response_jsonpath = "$.currentConditions.conditions"
 response_schema_type = "schema:WeatherForecast"
@@ -25,3 +25,10 @@ name = "Units"
 description = "Measurement system for temperature and wind"
 defaultValue = "metric"
 valuePattern = "metric|imperial"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Visual Crossing API key"
+defaultValue = ""

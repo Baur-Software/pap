@@ -4,13 +4,16 @@ use tauri::{AppHandle, Emitter, State};
 use crate::challenge_store::SignedChallenge;
 use crate::error::PapillonError;
 use crate::state::AppState;
-use papillon_shared::{BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine};
+use papillon_shared::{
+    AgentCandidate, BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine,
+};
 
 use super::super::orchestrator::hash_agent_did;
 use super::execution::process_prompt;
+use super::execution::process_prompt_with_extras;
 use super::helpers::maybe_auto_generate_template;
 use super::intent::classify_intent;
-use super::resolution::resolve_agent;
+use super::resolution::resolve_top_agents;
 
 /// Two-phase canvas prompt: plan first (emit `AwaitingApproval`), then wait for
 /// principal approval before running the full handshake.
@@ -38,8 +41,21 @@ pub async fn canvas_plan_prompt(
         .await;
     }
 
-    // Resolve agent to build the IntentPlan.
-    let resolved = resolve_agent(&state, &action_type, &preferred, &[]).await?;
+    // Resolve top-3 candidates.
+    let candidates_resolved = resolve_top_agents(&state, &action_type, &preferred, &[], 3).await?;
+
+    // Primary agent is the top-scored candidate.
+    let primary = &candidates_resolved[0];
+
+    // Union of requires_disclosure across all candidates (dedup, insertion order).
+    let mut union_disclosure: Vec<String> = Vec::new();
+    for c in &candidates_resolved {
+        for prop in &c.requires_disclosure {
+            if !union_disclosure.contains(prop) {
+                union_disclosure.push(prop.clone());
+            }
+        }
+    }
 
     let approval_request_id = uuid::Uuid::new_v4().to_string();
 
@@ -50,15 +66,32 @@ pub async fn canvas_plan_prompt(
             .map_err(|e| PapillonError::from(e.to_string()))?;
         cfg.mandate_ttl_hours
     };
+
+    let candidates: Vec<AgentCandidate> = candidates_resolved
+        .iter()
+        .map(|r| AgentCandidate {
+            name: r.name.clone(),
+            did: r.did.clone(),
+            requires_disclosure: r.requires_disclosure.clone(),
+            returns: r.returns.clone(),
+        })
+        .collect();
+
     let plan = IntentPlan {
         action: action_type.to_string(),
-        selected_agent_name: resolved.name.clone(),
-        selected_agent_did: Some(resolved.did.clone()),
-        requires_disclosure: resolved.requires_disclosure.clone(),
-        returns: resolved.returns.clone(),
+        selected_agent_name: primary.name.clone(),
+        selected_agent_did: Some(primary.did.clone()),
+        requires_disclosure: union_disclosure,
+        returns: primary.returns.clone(),
         approval_request_id: approval_request_id.clone(),
         ttl_hours: mandate_ttl_hours as u32,
+        candidates,
     };
+
+    // Extract owned primary identity strings before any await points to avoid
+    // holding a borrow across the oneshot receiver.await below.
+    let primary_did = primary.did.clone();
+    let primary_name = primary.name.clone();
 
     // Check auto-approve shortcut: if configured and no disclosure required, skip the gate.
     let auto_approve = {
@@ -150,28 +183,63 @@ pub async fn canvas_plan_prompt(
     // Block until the principal approves or rejects (or the sender is dropped).
     let approved = receiver.await.unwrap_or(false);
 
+    // Always clean up approval_values regardless of approved/rejected outcome.
+    let (selected_names, filled_values) = {
+        let mut vals = state.approval_values.write().await;
+        vals.remove(&approval_request_id).unwrap_or_default()
+    };
+
     if approved {
         // Persist the approval so future identical requests skip the gate.
         PreferenceEngine::new(state.db.as_ref()).save_approved_scopes(
             &action_type,
             schema_type_for_pref,
-            &hash_agent_did(&resolved.did),
-            &resolved.name,
+            &hash_agent_did(&primary_did),
+            &primary_name,
             &plan.requires_disclosure,
         );
 
-        // Run the full handshake.
-        let (schema_type, content, preference_guided, agent_did, retention_warning) =
-            process_prompt(
+        // Filter candidates to dispatch based on selected agent names.
+        let dispatch_candidates: Vec<usize> = if selected_names.is_empty() {
+            vec![0] // Default to primary only
+        } else {
+            candidates_resolved
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| selected_names.contains(&c.name))
+                .map(|(i, _)| i)
+                .collect()
+        };
+
+        // Dispatch to each selected candidate; use first successful result.
+        let mut last_result: Option<(String, serde_json::Value, bool, String, Option<String>)> =
+            None;
+        for idx in &dispatch_candidates {
+            let candidate = &candidates_resolved[*idx];
+            match process_prompt_with_extras(
                 &app,
                 &state,
                 &prompt_id,
                 &block_id,
                 &action_type,
-                &preferred,
+                &candidate.name,
                 &query,
+                filled_values.clone(),
             )
-            .await?;
+            .await
+            {
+                Ok(r) => {
+                    last_result = Some(r);
+                    break; // Use first successful result; the outer caller emits the single block_resolved.
+                }
+                Err(e) => {
+                    eprintln!("WARN: handshake failed for {}: {e}", candidate.name);
+                }
+            }
+        }
+
+        let (schema_type, content, preference_guided, agent_did, retention_warning) =
+            last_result.ok_or_else(|| PapillonError::from("All selected agents failed"))?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -241,8 +309,12 @@ pub async fn canvas_approve_block(
     approval_request_id: String,
     approved: bool,
     signed_challenge: SignedChallenge,
+    filled_values: Option<std::collections::HashMap<String, String>>,
+    selected_agent_names: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    let filled_values = filled_values.unwrap_or_default();
+    let selected_agent_names = selected_agent_names.unwrap_or_default();
     // Verify the principal signed this approval before acting on it.
     {
         let signer_lock = state.signer.read().map_err(|e| e.to_string())?;
@@ -255,6 +327,31 @@ pub async fn canvas_approve_block(
             .identity_challenges
             .take_and_verify(&signed_challenge, &signer.verifying_key())
             .map_err(|e| format!("authorization failed: {e}"))?;
+    }
+
+    // Store filled attribute values to principal memex and persist approval data.
+    if approved {
+        use crate::db::prelude::DatabaseOps;
+        for (prop, value) in &filled_values {
+            // Never persist credential/auth params (api_key, token, etc.) to the plaintext
+            // memex — those belong in the encrypted vault, not principal_attributes.
+            if !value.trim().is_empty()
+                && !papillon_shared::credential_gate::CREDENTIAL_PARAM_NAMES
+                    .contains(&prop.as_str())
+            {
+                if let Err(e) = state.db.set_principal_attribute(prop, value) {
+                    eprintln!("WARN: failed to store principal attribute {prop}: {e}");
+                }
+            }
+        }
+        // Store (selected_agent_names, filled_values) for canvas_plan_prompt to read after gate signals.
+        {
+            let mut vals = state.approval_values.write().await;
+            vals.insert(
+                approval_request_id.clone(),
+                (selected_agent_names, filled_values),
+            );
+        }
     }
 
     let sender = {

@@ -5,14 +5,14 @@ provider = "Pocket / Mozilla"
 description = "Find recommended long-form articles via Pocket's discovery API."
 action = "schema:SearchAction"
 object_types = ["schema:Article"]
-requires_disclosure = []
+requires_disclosure = ["api_key", "access_token"]
 returns = ["schema:Article"]
 source = "Catalog"
 llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from Pocket / Mozilla."
 subagents = []
 
 [endpoint]
-url_template = "https://getpocket.com/v3/get?consumer_key=demo&access_token=demo&tag={query}&count=5"
+url_template = "https://getpocket.com/v3/get?consumer_key={api_key}&access_token={access_token}&tag={query}&count=5"
 method = "Get"
 response_jsonpath = "$.list"
 response_schema_type = "schema:Article"
@@ -33,3 +33,17 @@ valueName = "include_adult_content"
 name = "Include Adult Content"
 description = "Show results that may contain mature content"
 defaultValue = false
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "Consumer Key"
+description = "Your Pocket consumer key"
+defaultValue = ""
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "access_token"
+name = "Access Token"
+description = "Your Pocket access token"
+defaultValue = ""

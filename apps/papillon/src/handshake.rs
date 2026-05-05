@@ -61,6 +61,9 @@ pub struct HandshakeParams<'a> {
     pub principal_kp: &'a PrincipalKeypair,
     pub requires_disclosure: &'a [String],
     pub returns: &'a [String],
+    /// Pre-filled attribute values from the principal's memex.
+    /// Merged into Phase 3 disclosures alongside the query.
+    pub extra_disclosures: std::collections::HashMap<String, String>,
     pub on_phase: PhaseCallback,
     pub on_fail: FailCallback,
 }
@@ -79,6 +82,7 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         principal_kp,
         requires_disclosure,
         returns,
+        extra_disclosures,
         on_phase,
         on_fail,
     } = params;
@@ -196,10 +200,18 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
     // ── Phase 3: Send disclosures (query goes here) ─────────
     on_phase(3, "Opening session...");
 
-    let disclosures = vec![json!({
+    let mut disclosure_obj = serde_json::json!({
         "@type": action_type,
         "query": query
-    })];
+    });
+    if let Some(obj) = disclosure_obj.as_object_mut() {
+        for (k, v) in &extra_disclosures {
+            if k != "@type" && k != "query" {
+                obj.insert(k.clone(), serde_json::Value::String(v.clone()));
+            }
+        }
+    }
+    let disclosures = vec![disclosure_obj];
 
     handler
         .handle_disclosure(&auth.agent_session_id, disclosures)
@@ -443,5 +455,30 @@ mod tests {
 
         // Phase 6: Close
         handler.handle_close(&session_id).expect("close");
+    }
+
+    #[test]
+    fn extra_disclosures_merged_into_disclosure_obj() {
+        use std::collections::HashMap;
+        let mut base = serde_json::json!({
+            "@type": "schema:SearchAction",
+            "query": "test"
+        });
+        let mut extra: HashMap<String, String> = HashMap::new();
+        extra.insert("schema:givenName".to_string(), "Alice".to_string());
+        extra.insert("@type".to_string(), "INJECTED".to_string()); // should be skipped
+        extra.insert("query".to_string(), "INJECTED".to_string()); // should be skipped
+
+        if let Some(obj) = base.as_object_mut() {
+            for (k, v) in &extra {
+                if k != "@type" && k != "query" {
+                    obj.insert(k.clone(), serde_json::Value::String(v.clone()));
+                }
+            }
+        }
+
+        assert_eq!(base["schema:givenName"], "Alice");
+        assert_eq!(base["@type"], "schema:SearchAction"); // NOT overwritten
+        assert_eq!(base["query"], "test"); // NOT overwritten
     }
 }

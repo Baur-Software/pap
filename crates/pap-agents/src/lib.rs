@@ -24,6 +24,7 @@ pub mod agents;
 pub mod catalog;
 pub mod dynamic;
 pub mod dynamic_handler;
+pub mod entity_extractor;
 pub mod executor;
 pub mod group_chat;
 pub mod intent_index;

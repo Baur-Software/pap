@@ -162,6 +162,17 @@ impl IndexedDbDatabase {
             }
         }
 
+        if let Some(attrs) = state
+            .get("principal_attributes")
+            .and_then(|v| v.as_object())
+        {
+            for (prop, val) in attrs {
+                if let Some(v) = val.as_str() {
+                    self.inner.set_principal_attribute(prop, v)?;
+                }
+            }
+        }
+
         // v2+: agent defs stored as {"name": <name>, "json": <raw-json>} objects
         if let Some(agents) = state.get("agents").and_then(|v| v.as_array()) {
             for (_i, val) in agents.iter().enumerate() {
@@ -212,6 +223,7 @@ impl IndexedDbDatabase {
             "settings": settings_map,
             "templates": self.inner.list_all_templates()?,
             "agents": agents_array,
+            "principal_attributes": self.inner.get_all_principal_attributes()?,
         });
 
         serde_json::to_string(&state).map_err(|e| DbError(format!("serialize: {e}")))
@@ -400,6 +412,22 @@ impl DatabaseOps for IndexedDbDatabase {
         self.inner.delete_agent_def(name)?;
         self.persist_to_storage()?;
         Ok(())
+    }
+
+    fn set_principal_attribute(&self, prop: &str, value: &str) -> Result<(), DbError> {
+        self.inner.set_principal_attribute(prop, value)?;
+        self.persist_to_storage()?;
+        Ok(())
+    }
+
+    fn get_principal_attribute(&self, prop: &str) -> Result<Option<String>, DbError> {
+        self.inner.get_principal_attribute(prop)
+    }
+
+    fn get_all_principal_attributes(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+        self.inner.get_all_principal_attributes()
     }
 }
 

@@ -5,14 +5,14 @@ provider = "Amazon / Goodreads"
 description = "Search book reviews, ratings, and reading lists via Goodreads."
 action = "schema:SearchAction"
 object_types = ["schema:Book"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:Book"]
 source = "Catalog"
 llm_instructions = "You are an entertainment information assistant. Provide relevant details about the requested goodreads_books including key facts and context."
 subagents = []
 
 [endpoint]
-url_template = "https://www.goodreads.com/search/index.xml?q={query}&key=demo"
+url_template = "https://www.goodreads.com/search/index.xml?q={query}&key={api_key}"
 method = "Get"
 response_jsonpath = "$.GoodreadsResponse.search.results.work[0].best_book.title"
 response_schema_type = "schema:Book"
@@ -24,3 +24,10 @@ valueName = "include_adult_content"
 name = "Include Adult Content"
 description = "Show results that may contain mature content"
 defaultValue = false
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Goodreads API key"
+defaultValue = ""

@@ -4748,6 +4748,7 @@ dependencies = [
  "toml 0.8.23",
  "url",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]
@@ -5325,6 +5326,7 @@ dependencies = [
  "pap-agents",
  "pap-core",
  "pap-credential",
+ "pap-credential-store",
  "pap-did",
  "pap-federation",
  "pap-marketplace",

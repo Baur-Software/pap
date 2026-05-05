@@ -82,6 +82,10 @@ dev:
 
 # ─── Services ─────────────────────────────────────────────────
 
+# Run Papillon in the browser via trunk serve (port 1420)
+web:
+    cd apps/papillon/frontend && trunk serve
+
 # Run Papillon desktop app (Tauri + Leptos frontend)
 papillon:
     cd apps/papillon && cargo tauri dev
