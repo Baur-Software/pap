@@ -18,6 +18,22 @@ pub mod local_catalog;
 use chrono::{Duration, Utc};
 use serde_json::json;
 
+/// Build the Phase-3 disclosure object, merging in any vault-resolved credentials.
+pub fn build_disclosures(
+    action_type: &str,
+    query: &str,
+    extra_disclosures: &std::collections::HashMap<String, String>,
+) -> Vec<serde_json::Value> {
+    let mut obj = serde_json::json!({
+        "@type": action_type,
+        "query": query,
+    });
+    for (key, val) in extra_disclosures {
+        obj[key] = serde_json::json!(val);
+    }
+    vec![obj]
+}
+
 use pap_core::mandate::Mandate;
 use pap_core::receipt::TransactionReceipt;
 use pap_core::scope::{DisclosureEntry, DisclosureSet, Scope, ScopeAction};
@@ -263,10 +279,31 @@ pub async fn execute(params: WasmHandshakeParams<'_>) -> Result<HandshakeResult,
     // ── Phase 3: Send disclosures (query goes here) ─────────
     on_phase(3, "Opening session...");
 
-    let disclosures = vec![json!({
-        "@type": action_type,
-        "query": query
-    })];
+    let mut extra_disclosures = std::collections::HashMap::new();
+
+    // Resolve vault credentials for any credential params in requires_disclosure.
+    // If the vault is sealed or a credential is not stored, proceed without it —
+    // Phase 4 will return a clear "vault is sealed" / "credential not found" error.
+    let cred_params = papillon_shared::credential_gate::credential_params_for(requires_disclosure);
+    if !cred_params.is_empty() {
+        let agent_slug = agent_name.to_lowercase().replace(' ', "_");
+        for param in &cred_params {
+            let credential_name = format!("{}_{}", agent_slug, param);
+            if let Ok(value) = crate::bridge::invoke::<_, String>(
+                "vault_disclose_for_agent",
+                &serde_json::json!({
+                    "credentialName": credential_name,
+                    "agentDid": agent_did,
+                }),
+            )
+            .await
+            {
+                extra_disclosures.insert(param.clone(), value);
+            }
+        }
+    }
+
+    let disclosures = build_disclosures(action_type, query, &extra_disclosures);
 
     let resp = client
         .send_disclosures(&auth.agent_session_id, disclosures)
@@ -599,7 +636,24 @@ pub async fn run_prompt(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use papillon_shared::AgentInfo;
+
+    #[test]
+    fn build_disclosures_merges_vault_claims() {
+        let mut extra = HashMap::new();
+        extra.insert("api_key".to_string(), "sk-live-123".to_string());
+        let result = build_disclosures("schema:SearchAction", "rust lang", &extra);
+        assert_eq!(result[0]["api_key"], "sk-live-123");
+        assert_eq!(result[0]["query"], "rust lang");
+    }
+
+    #[test]
+    fn build_disclosures_no_extra() {
+        let result = build_disclosures("schema:SearchAction", "rust lang", &HashMap::new());
+        assert!(result[0].get("api_key").is_none());
+        assert_eq!(result[0]["query"], "rust lang");
+    }
 
     fn agent(name: &str, capability: &str, endpoint: Option<&str>, source: &str) -> AgentInfo {
         AgentInfo {
