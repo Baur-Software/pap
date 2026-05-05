@@ -6,7 +6,6 @@ use anyhow::Context as _;
 
 use axum::extract::DefaultBodyLimit;
 use axum::middleware::{self, Next};
-use axum::routing::get;
 use axum::{extract::Request, Router};
 use leptos::config::get_configuration;
 use pap_registry::state::SETTING_CORS_ORIGINS;
@@ -311,27 +310,26 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // ── Leptos configuration ──────────────────────────────────────────────────
-    let leptos_options = get_configuration(None).unwrap().leptos_options;
+    let mut leptos_options = get_configuration(None).unwrap().leptos_options;
 
-    // Extract CSS path info before leptos_options is moved.
-    // Read site_root from LEPTOS_SITE_ROOT env var if set, otherwise use leptos_options.
-    // This handles Docker deployments where the site dir is mounted at a different path.
-    let css_path = {
-        let site_root = std::env::var("LEPTOS_SITE_ROOT")
-            .unwrap_or_else(|_| leptos_options.site_root.to_string());
-        let leptos_css = std::path::PathBuf::from(&site_root)
-            .join(leptos_options.site_pkg_dir.as_ref())
-            .join("pap-registry-ui.css");
-        tracing::debug!("Checking CSS at: {}", leptos_css.display());
-        tracing::debug!("CSS exists: {}", leptos_css.exists());
-        if leptos_css.exists() {
-            leptos_css
-        } else {
-            tracing::warn!("Built CSS not found, falling back to source");
-            std::path::PathBuf::from("apps/registry/styles/main.css")
-        }
-    };
-    info!("Serving CSS from {}", css_path.display());
+    // get_configuration bakes in the compile-time default ("target/site").
+    // Override with the runtime env var so file_and_error_handler and the
+    // /pkg ServeDir both resolve correctly in Docker (LEPTOS_SITE_ROOT=/app/site).
+    if let Ok(site_root) = std::env::var("LEPTOS_SITE_ROOT") {
+        leptos_options.site_root = site_root.into();
+    }
+    info!("Leptos site root: {}", leptos_options.site_root);
+
+    // Path to the compiled pkg directory (CSS, JS, WASM).
+    let pkg_dir = std::path::PathBuf::from(leptos_options.site_root.as_ref())
+        .join(leptos_options.site_pkg_dir.as_ref());
+    if !pkg_dir.exists() {
+        tracing::warn!(
+            "pkg dir not found at {} — frontend assets will 404. \
+             Run `cargo leptos build` to compile the frontend.",
+            pkg_dir.display()
+        );
+    }
 
     // ── Routers ───────────────────────────────────────────────────────────────
 
@@ -516,24 +514,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(federation_router)
         .merge(admin_router)
         .merge(agent_router)
-        .route(
-            "/pkg/pap-registry-ui.css",
-            get(move || {
-                let path = css_path.clone();
-                async move {
-                    match tokio::fs::read(&path).await {
-                        Ok(bytes) => axum::response::Response::builder()
-                            .header("content-type", "text/css")
-                            .body(axum::body::Body::from(bytes))
-                            .unwrap(),
-                        Err(_) => axum::response::Response::builder()
-                            .status(404)
-                            .body(axum::body::Body::empty())
-                            .unwrap(),
-                    }
-                }
-            }),
-        )
+        .nest_service("/pkg", ServeDir::new(&pkg_dir))
         .nest_service("/assets", ServeDir::new(&assets_dir))
         .merge(leptos_router)
         .layer(cors)
