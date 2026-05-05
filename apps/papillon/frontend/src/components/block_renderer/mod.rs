@@ -289,23 +289,15 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                         .strip_prefix("schema:")
                         .unwrap_or(&plan.action)
                         .to_string();
-                    let disclosure_items = plan.requires_disclosure.clone();
-                    let has_disclosure = !disclosure_items.is_empty();
                     let approval_id = plan.approval_request_id.clone();
                     let approval_id_reject = approval_id.clone();
                     let block_id_approve = block_ctx.id.get_value();
                     let block_id_reject = block_ctx.id.get_value();
                     let cs_approve = canvas_state;
                     let cs_reject = canvas_state;
-
-                    // Button labels vary by disclosure risk.
-                    let approve_label = if has_disclosure { "[ GRANT ACCESS ]" } else { "[ ALLOW ]" };
-                    let reject_label = if has_disclosure { "[ DENY ]" } else { "[ DECLINE ]" };
-
-                    // TTL from the plan (sourced from orchestrator config at plan-build time).
                     let ttl_hours = plan.ttl_hours;
 
-                    // Skeleton preview: minimal JSON-LD for the first returns type.
+                    // Skeleton preview
                     let first_returns_type = plan
                         .returns
                         .first()
@@ -316,12 +308,7 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                         "name": "\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}",
                         "description": "\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}\u{2593}"
                     });
-                    let skeleton_type = plan
-                        .returns
-                        .first()
-                        .cloned()
-                        .unwrap_or_else(|| "schema:Thing".to_string());
-                    // Schema type label shown above skeleton preview (strip "schema:" prefix, uppercase).
+                    let skeleton_type = first_returns_type.clone();
                     let skeleton_type_label = skeleton_type
                         .strip_prefix("schema:")
                         .unwrap_or(&skeleton_type)
@@ -329,6 +316,60 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                     let skeleton_entries =
                         generic::flatten_to_entries(&skeleton_type, &skeleton_json, &registry);
                     let skeleton_view = generic::render_stream(skeleton_entries, &registry);
+
+                    // Build candidates list — fall back to single candidate from scalar fields
+                    // if candidates vec is empty (old plan shape or single-agent case).
+                    let all_candidates: Vec<papillon_shared::AgentCandidate> = if plan.candidates.is_empty() {
+                        vec![papillon_shared::AgentCandidate {
+                            name: plan.selected_agent_name.clone(),
+                            did: plan.selected_agent_did.clone().unwrap_or_default(),
+                            requires_disclosure: plan.requires_disclosure.clone(),
+                            returns: plan.returns.clone(),
+                        }]
+                    } else {
+                        plan.candidates.clone()
+                    };
+
+                    // All candidates selected by default
+                    let default_selected: Vec<String> = all_candidates.iter().map(|c| c.name.clone()).collect();
+                    let selected_agents_signal: RwSignal<Vec<String>> = RwSignal::new(default_selected);
+
+                    // Disclosure form values — pre-filled from memex via get_principal_attributes
+                    let filled_values_signal: RwSignal<std::collections::HashMap<String, String>> =
+                        RwSignal::new(std::collections::HashMap::new());
+
+                    // Fetch stored attributes from backend on first render
+                    {
+                        let fv = filled_values_signal;
+                        spawn_local(async move {
+                            if let Ok(attrs) = crate::bridge::invoke::<_, std::collections::HashMap<String, String>>(
+                                "get_principal_attributes",
+                                &serde_json::json!({}),
+                            )
+                            .await
+                            {
+                                fv.set(attrs);
+                            }
+                        });
+                    }
+
+                    // Union of all requires_disclosure props across all candidates (dedup, insertion order)
+                    let all_disclosure_props: Vec<String> = {
+                        let mut seen: Vec<String> = Vec::new();
+                        for c in &all_candidates {
+                            for p in &c.requires_disclosure {
+                                if !seen.contains(p) {
+                                    seen.push(p.clone());
+                                }
+                            }
+                        }
+                        seen
+                    };
+                    let has_disclosure = !all_disclosure_props.is_empty();
+                    let show_agent_selector = all_candidates.len() > 1;
+
+                    let approve_label = if has_disclosure { "[ GRANT ACCESS ]" } else { "[ ALLOW ]" };
+                    let reject_label = if has_disclosure { "[ DENY ]" } else { "[ DECLINE ]" };
 
                     view! {
                         <div class="awaiting-approval-header">
@@ -344,15 +385,72 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                             {skeleton_view}
                         </div>
 
+                        <Show when=move || show_agent_selector>
+                            <div class="awaiting-approval-section-label">"SELECT AGENTS"</div>
+                            <div class="awaiting-approval-agent-selector">
+                                {all_candidates.iter().map(|c| {
+                                    let name = c.name.clone();
+                                    let name_check = name.clone();
+                                    let sa = selected_agents_signal;
+                                    view! {
+                                        <label class="agent-checkbox-label">
+                                            <input
+                                                type="checkbox"
+                                                prop:checked=move || sa.get().contains(&name_check)
+                                                on:change=move |ev| {
+                                                    use wasm_bindgen::JsCast;
+                                                    let checked = ev
+                                                        .target()
+                                                        .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+                                                        .map(|el| el.checked())
+                                                        .unwrap_or(false);
+                                                    let n = name.clone();
+                                                    sa.update(|list| {
+                                                        if checked {
+                                                            if !list.contains(&n) { list.push(n.clone()); }
+                                                        } else {
+                                                            list.retain(|x| x != &n);
+                                                        }
+                                                    });
+                                                }
+                                            />
+                                            <span class="agent-checkbox-name">{c.name.clone()}</span>
+                                        </label>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        </Show>
+
                         <Show when=move || has_disclosure>
                             <div class="awaiting-approval-section-label">"WILL NEED FROM YOU"</div>
-                            <div class="awaiting-approval-disclosure">
-                                {disclosure_items.iter().map(|item| {
-                                    let label = item
+                            <div class="awaiting-approval-disclosure-form">
+                                {all_disclosure_props.iter().map(|prop| {
+                                    let prop_key = prop.clone();
+                                    let prop_key2 = prop.clone();
+                                    let label = prop
                                         .trim_start_matches("schema:")
                                         .to_string();
+                                    let fv = filled_values_signal;
                                     view! {
-                                        <span class="scope-badge disclosure">{label}</span>
+                                        <div class="disclosure-field-row">
+                                            <label class="disclosure-field-label">{label.clone()}</label>
+                                            <input
+                                                class="disclosure-field-input"
+                                                type="text"
+                                                placeholder=label
+                                                prop:value=move || fv.get().get(&prop_key).cloned().unwrap_or_default()
+                                                on:input=move |ev| {
+                                                    use wasm_bindgen::JsCast;
+                                                    let val = ev
+                                                        .target()
+                                                        .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+                                                        .map(|el| el.value())
+                                                        .unwrap_or_default();
+                                                    let k = prop_key2.clone();
+                                                    fv.update(|m| { m.insert(k, val); });
+                                                }
+                                            />
+                                        </div>
                                     }
                                 }).collect::<Vec<_>>()}
                             </div>
@@ -385,6 +483,8 @@ pub fn BlockRenderer(block_id: String) -> impl IntoView {
                                     cs_approve.approve_block(
                                         block_id_approve.clone(),
                                         approval_id.clone(),
+                                        filled_values_signal.get(),
+                                        selected_agents_signal.get(),
                                     );
                                 }
                             >

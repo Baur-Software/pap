@@ -1047,7 +1047,13 @@ impl CanvasState {
 
     /// Approve an AwaitingApproval block — sends the decision to the backend
     /// and begins the handshake. Guards against double-submit via approval_in_flight.
-    pub fn approve_block(&self, block_id: String, approval_request_id: String) {
+    pub fn approve_block(
+        &self,
+        block_id: String,
+        approval_request_id: String,
+        filled_values: std::collections::HashMap<String, String>,
+        selected_agent_names: Vec<String>,
+    ) {
         // Prevent double-submit
         if self.approval_in_flight.get_untracked().contains(&block_id) {
             leptos::logging::warn!(
@@ -1063,6 +1069,8 @@ impl CanvasState {
         let in_flight = self.approval_in_flight;
         let canvases = self.canvases;
         let block_id_clone = block_id.clone();
+        let filled_values_captured = filled_values;
+        let selected_names_captured = selected_agent_names;
 
         spawn_local(async move {
             // Obtain a challenge signed by the principal's keypair before approving.
@@ -1104,6 +1112,8 @@ impl CanvasState {
                     "approvalRequestId": approval_request_id,
                     "approved": true,
                     "signedChallenge": signed_challenge,
+                    "filledValues": filled_values_captured,
+                    "selectedAgentNames": selected_names_captured,
                 }),
             )
             .await

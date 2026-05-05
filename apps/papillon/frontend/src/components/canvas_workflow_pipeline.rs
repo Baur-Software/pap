@@ -828,6 +828,8 @@ fn WorkflowBlockActions() -> impl IntoView {
                                     workflow.canvas.approve_block(
                                         approve_block_id.clone(),
                                         approval_request_id.clone(),
+                                        std::collections::HashMap::new(),
+                                        Vec::new(),
                                     );
                                 }
                             >
