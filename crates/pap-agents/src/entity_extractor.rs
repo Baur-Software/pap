@@ -308,6 +308,32 @@ impl EntityExtractor {
             .collect()
     }
 
+    /// Like `resolve` but takes param names directly instead of parsing a URL template.
+    /// Used when the caller already knows which params are needed and has already
+    /// pre-filled higher-priority sources — avoids redundant LLM calls for those.
+    pub fn resolve_params(&self, params: &[String], query: &str) -> HashMap<String, String> {
+        let structural_params: Vec<&str> = params
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|name| !is_auth_param(name))
+            .collect();
+
+        if structural_params.is_empty() {
+            return HashMap::new();
+        }
+
+        if let Ok(extracted) = self.extract_with_llm(&structural_params, query) {
+            if !extracted.is_empty() {
+                return extracted;
+            }
+        }
+
+        structural_params
+            .iter()
+            .filter_map(|&name| extract_heuristic(name, query).map(|v| (name.to_string(), v)))
+            .collect()
+    }
+
     /// Ask the LLM to extract structured values for the given param names.
     fn extract_with_llm(
         &self,

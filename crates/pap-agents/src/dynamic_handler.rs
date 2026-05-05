@@ -143,12 +143,14 @@ impl AgentHandler for DynamicAgentHandler {
     }
 
     fn execute(&self, session_id: &str) -> Result<Value, TransportError> {
-        let query = self
+        let (query, disclosed) = self
             .sessions
-            .with(session_id, |data| data.query.clone())?
-            .ok_or_else(|| {
-                TransportError::ServerError("No query provided in disclosures".into())
+            .with(session_id, |data| {
+                (data.query.clone(), data.disclosed_props.clone())
             })?;
+        let query = query.ok_or_else(|| {
+            TransportError::ServerError("No query provided in disclosures".into())
+        })?;
 
         if let Some(endpoint) = &self.def.endpoint {
             // SSRF validation at execution time (defense in depth)
@@ -173,23 +175,27 @@ impl AgentHandler for DynamicAgentHandler {
             //           (3) entity extractor (LLM → heuristic)
             let extra_params = crate::entity_extractor::extract_template_params(&endpoint.url_template);
             if !extra_params.is_empty() {
-                let disclosed = self
-                    .sessions
-                    .with(session_id, |data| data.disclosed_props.clone())?;
-
-                let extractor = crate::entity_extractor::EntityExtractor::new(self.make_llm_client());
-
-                // Build resolved map via extractor (covers LLM + heuristic paths)
-                let mut resolved = extractor.resolve(&endpoint.url_template, &query);
-
-                // Override with higher-priority sources: agent_props then disclosed
+                // Pre-fill from high-priority sources first (no LLM needed for these)
+                let mut resolved: HashMap<String, String> = HashMap::new();
                 for param in &extra_params {
-                    if let Some(val) = self.agent_props.get(param) {
-                        resolved.insert(param.clone(), val.clone());
-                    }
                     if let Some(val) = disclosed.get(param) {
                         resolved.insert(param.clone(), val.clone());
+                    } else if let Some(val) = self.agent_props.get(param) {
+                        resolved.insert(param.clone(), val.clone());
                     }
+                }
+
+                // Only invoke extractor (LLM → heuristic) for params not yet resolved
+                let unresolved: Vec<String> = extra_params
+                    .iter()
+                    .filter(|p| !resolved.contains_key(p.as_str()))
+                    .cloned()
+                    .collect();
+
+                if !unresolved.is_empty() {
+                    let extractor = crate::entity_extractor::EntityExtractor::new(self.make_llm_client());
+                    let extractor_results = extractor.resolve_params(&unresolved, &query);
+                    resolved.extend(extractor_results);
                 }
 
                 for (param, val) in &resolved {
