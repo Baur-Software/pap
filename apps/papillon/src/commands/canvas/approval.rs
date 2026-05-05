@@ -230,7 +230,7 @@ pub async fn canvas_plan_prompt(
             {
                 Ok(r) => {
                     last_result = Some(r);
-                    break; // Use first successful result; each run emits its own block_resolved event
+                    break; // Use first successful result; the outer caller emits the single block_resolved.
                 }
                 Err(e) => {
                     eprintln!("WARN: handshake failed for {}: {e}", candidate.name);
@@ -333,7 +333,12 @@ pub async fn canvas_approve_block(
     if approved {
         use crate::db::prelude::DatabaseOps;
         for (prop, value) in &filled_values {
-            if !value.trim().is_empty() {
+            // Never persist credential/auth params (api_key, token, etc.) to the plaintext
+            // memex — those belong in the encrypted vault, not principal_attributes.
+            if !value.trim().is_empty()
+                && !papillon_shared::credential_gate::CREDENTIAL_PARAM_NAMES
+                    .contains(&prop.as_str())
+            {
                 if let Err(e) = state.db.set_principal_attribute(prop, value) {
                     eprintln!("WARN: failed to store principal attribute {prop}: {e}");
                 }

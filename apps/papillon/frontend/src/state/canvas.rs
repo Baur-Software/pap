@@ -1149,11 +1149,27 @@ impl CanvasState {
         let canvases = self.canvases;
         let block_id_clone = block_id.clone();
         spawn_local(async move {
+            // Challenge required by backend even for rejections — prevents a
+            // compromised renderer from silently cancelling pending approvals.
+            let signed_challenge = match crate::bridge::invoke::<_, serde_json::Value>(
+                "sign_approval_challenge",
+                &serde_json::json!({}),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    leptos::logging::error!("reject_block challenge failed for {}: {}", block_id_clone, e);
+                    return;
+                }
+            };
+
             match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": false,
+                    "signedChallenge": signed_challenge,
                 }),
             )
             .await
@@ -1163,7 +1179,6 @@ impl CanvasState {
                 }
                 Err(e) => {
                     leptos::logging::error!("reject_block failed for {}: {}", block_id_clone, e);
-                    // On rejection failure, transition to Failed state
                     canvases.update(|cs| {
                         for canvas in cs.iter_mut() {
                             if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
