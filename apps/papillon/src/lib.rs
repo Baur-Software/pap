@@ -296,6 +296,7 @@ pub fn run() {
             commands::vault::vault_seal,
             commands::vault::vault_disclose_for_agent,
             commands::vault::vault_store_credential,
+            commands::attributes::get_principal_attributes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");

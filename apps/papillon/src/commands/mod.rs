@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod attributes;
 pub mod canvas;
 pub mod chat;
 pub mod dataset_discovery;
