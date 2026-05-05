@@ -126,6 +126,14 @@ pub struct AppState {
     /// Keyed by approval_request_id; resolved by `canvas_approve_block`.
     pub approval_gates:
         tokio::sync::RwLock<std::collections::HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
+    /// Stores (selected_agent_names, filled_values) keyed by approval_request_id.
+    /// Written by `canvas_approve_block` before signaling the gate, read by `canvas_plan_prompt`.
+    pub approval_values: tokio::sync::RwLock<
+        std::collections::HashMap<
+            String,
+            (Vec<String>, std::collections::HashMap<String, String>),
+        >,
+    >,
     /// Watch-channel sender for the orchestrator personal-context preamble.
     /// Push a fresh preamble string whenever episode history or traits change.
     /// All orchestrator LLM consumers hold a cloned `Receiver` and borrow at call time.
@@ -263,6 +271,8 @@ impl AppState {
             identity_challenges: IdentityChallengeStore::new(),
             // Background clones never handle approval gates; start fresh.
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+            // Background clones never handle approval values; start fresh.
+            approval_values: tokio::sync::RwLock::new(std::collections::HashMap::new()),
             // Share the same watch sender so background threads can push context updates.
             context_tx: self.context_tx.clone(),
             trait_beacon_profile: self.trait_beacon_profile.clone(),
@@ -561,6 +571,7 @@ impl AppState {
             webauthn_challenges: WebAuthnChallengeStore::new(),
             identity_challenges: IdentityChallengeStore::new(),
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+            approval_values: tokio::sync::RwLock::new(std::collections::HashMap::new()),
             context_tx,
             trait_beacon_profile,
         }

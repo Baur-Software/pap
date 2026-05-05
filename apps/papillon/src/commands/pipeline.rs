@@ -108,6 +108,7 @@ async fn run_pipeline_node(
         principal_kp: &principal_kp,
         requires_disclosure: &resolved.requires_disclosure,
         returns: &resolved.returns,
+        extra_disclosures: std::collections::HashMap::new(),
         on_phase,
         on_fail,
     })

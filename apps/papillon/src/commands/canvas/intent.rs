@@ -140,6 +140,7 @@ pub(crate) async fn classify_intent(
         principal_kp: &principal_kp,
         requires_disclosure: &resolved.requires_disclosure,
         returns: &resolved.returns,
+        extra_disclosures: std::collections::HashMap::new(),
         on_phase: Box::new(|_, _| {}),
         on_fail: Box::new(|_, _| {}),
     })

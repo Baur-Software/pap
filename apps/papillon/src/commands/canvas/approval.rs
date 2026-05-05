@@ -8,6 +8,7 @@ use papillon_shared::{AgentCandidate, BlockEvent, BlockState, BlockUpdate, Inten
 
 use super::super::orchestrator::hash_agent_did;
 use super::execution::process_prompt;
+use super::execution::process_prompt_with_extras;
 use super::helpers::maybe_auto_generate_template;
 use super::intent::classify_intent;
 use super::resolution::resolve_top_agents;
@@ -190,18 +191,50 @@ pub async fn canvas_plan_prompt(
             &plan.requires_disclosure,
         );
 
-        // Run the full handshake.
-        let (schema_type, content, preference_guided, agent_did, retention_warning) =
-            process_prompt(
+        // Read the stored approval values (filled attributes + selected agents).
+        let (selected_names, filled_values) = {
+            let mut vals = state.approval_values.write().await;
+            vals.remove(&approval_request_id).unwrap_or_default()
+        };
+
+        // Filter candidates to dispatch based on selected agent names.
+        let dispatch_candidates: Vec<usize> = if selected_names.is_empty() {
+            vec![0] // Default to primary only
+        } else {
+            candidates_resolved
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| selected_names.contains(&c.name))
+                .map(|(i, _)| i)
+                .collect()
+        };
+
+        // Dispatch to each selected candidate and keep the last successful result.
+        let mut last_result: Option<(String, serde_json::Value, bool, String, Option<String>)> =
+            None;
+        for idx in &dispatch_candidates {
+            let candidate = &candidates_resolved[*idx];
+            match process_prompt_with_extras(
                 &app,
                 &state,
                 &prompt_id,
                 &block_id,
                 &action_type,
-                &preferred,
+                &candidate.name,
                 &query,
+                filled_values.clone(),
             )
-            .await?;
+            .await
+            {
+                Ok(r) => last_result = Some(r),
+                Err(e) => {
+                    eprintln!("WARN: handshake failed for {}: {e}", candidate.name);
+                }
+            }
+        }
+
+        let (schema_type, content, preference_guided, agent_did, retention_warning) =
+            last_result.ok_or_else(|| PapillonError::from("All selected agents failed"))?;
         maybe_auto_generate_template(&state, &schema_type, &content);
         let now = Utc::now().to_rfc3339();
         let mandate_expires_at =
@@ -271,8 +304,12 @@ pub async fn canvas_approve_block(
     approval_request_id: String,
     approved: bool,
     signed_challenge: SignedChallenge,
+    filled_values: Option<std::collections::HashMap<String, String>>,
+    selected_agent_names: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    let filled_values = filled_values.unwrap_or_default();
+    let selected_agent_names = selected_agent_names.unwrap_or_default();
     // Verify the principal signed this approval before acting on it.
     {
         let signer_lock = state.signer.read().map_err(|e| e.to_string())?;
@@ -285,6 +322,26 @@ pub async fn canvas_approve_block(
             .identity_challenges
             .take_and_verify(&signed_challenge, &signer.verifying_key())
             .map_err(|e| format!("authorization failed: {e}"))?;
+    }
+
+    // Store filled attribute values to principal memex and persist approval data.
+    if approved {
+        use crate::db::prelude::DatabaseOps;
+        for (prop, value) in &filled_values {
+            if !value.trim().is_empty() {
+                if let Err(e) = state.db.set_principal_attribute(prop, value) {
+                    eprintln!("WARN: failed to store principal attribute {prop}: {e}");
+                }
+            }
+        }
+        // Store (selected_agent_names, filled_values) for canvas_plan_prompt to read after gate signals.
+        {
+            let mut vals = state.approval_values.write().await;
+            vals.insert(
+                approval_request_id.clone(),
+                (selected_agent_names, filled_values),
+            );
+        }
     }
 
     let sender = {

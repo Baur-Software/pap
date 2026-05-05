@@ -60,6 +60,36 @@ pub(crate) async fn process_prompt(
         query,
         &[],
         0,
+        std::collections::HashMap::new(),
+    )
+    .await
+}
+
+/// Like `process_prompt` but also passes pre-filled attribute values into Phase 3 disclosures.
+///
+/// Called by the post-approval dispatch path in `canvas_plan_prompt` when the user
+/// has filled in principal attribute fields during the approval step.
+pub(crate) async fn process_prompt_with_extras(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    prompt_id: &str,
+    block_id: &str,
+    action_type: &str,
+    preferred: &str,
+    query: &str,
+    extra_disclosures: std::collections::HashMap<String, String>,
+) -> Result<(String, serde_json::Value, bool, String, Option<String>), PapillonError> {
+    process_prompt_inner(
+        app,
+        state,
+        prompt_id,
+        block_id,
+        action_type,
+        preferred,
+        query,
+        &[],
+        0,
+        extra_disclosures,
     )
     .await
 }
@@ -82,6 +112,7 @@ pub(crate) fn process_prompt_inner<'a>(
     query: &'a str,
     exclude_agents: &'a [String],
     retry_count: u8,
+    extra_disclosures: std::collections::HashMap<String, String>,
 ) -> std::pin::Pin<
     Box<
         dyn std::future::Future<
@@ -183,6 +214,7 @@ pub(crate) fn process_prompt_inner<'a>(
             principal_kp: &principal_kp,
             requires_disclosure: &resolved.requires_disclosure,
             returns: &resolved.returns,
+            extra_disclosures,
             on_phase,
             on_fail,
         })
@@ -238,6 +270,7 @@ pub(crate) fn process_prompt_inner<'a>(
                     query,
                     &new_exclude,
                     retry_count + 1,
+                    std::collections::HashMap::new(), // reflection doesn't carry filled values
                 )
                 .await;
             }
