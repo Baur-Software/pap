@@ -1,10 +1,16 @@
+use heck::ToTitleCase;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use papillon_shared::schema_phrase;
 
 use crate::ui::api::{self, AgentEntry};
 
 const PER_PAGE: u32 = 20;
+
+fn schema_phrase(s: &str) -> String {
+    let s = s.trim_start_matches("schema:");
+    let s = s.strip_suffix("Action").unwrap_or(s);
+    s.to_title_case()
+}
 
 #[component]
 pub fn AgentsPage() -> impl IntoView {
