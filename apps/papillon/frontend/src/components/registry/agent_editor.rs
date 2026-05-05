@@ -52,9 +52,9 @@ pub fn AgentEditor(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
 
             // Tabs
             <div style="display: flex; border-bottom: 1px solid var(--border); background: var(--bg-secondary); padding: 0 20px; flex-shrink: 0;">
-                <TabButton tab=Tab::Input active_tab=active_tab label="Input" count=input_count() />
-                <TabButton tab=Tab::Returns active_tab=active_tab label="Returns" count=returns_count() />
-                <TabButton tab=Tab::Disclosure active_tab=active_tab label="Disclosure" count=disclosure_count() />
+                <TabButton tab=Tab::Input active_tab=active_tab label="Input" count=Signal::derive(input_count) />
+                <TabButton tab=Tab::Returns active_tab=active_tab label="Returns" count=Signal::derive(returns_count) />
+                <TabButton tab=Tab::Disclosure active_tab=active_tab label="Disclosure" count=Signal::derive(disclosure_count) />
                 <TabButton tab=Tab::Endpoint active_tab=active_tab label="Endpoint" />
                 <TabButton tab=Tab::Settings active_tab=active_tab label="Settings" />
             </div>
@@ -80,7 +80,7 @@ fn TabButton(
     tab: Tab,
     active_tab: RwSignal<Tab>,
     label: &'static str,
-    #[prop(optional)] count: Option<usize>,
+    #[prop(optional)] count: Option<Signal<usize>>,
 ) -> impl IntoView {
     let is_active = move || active_tab.get() == tab;
     view! {
@@ -93,9 +93,9 @@ fn TabButton(
             on:click=move |_| active_tab.set(tab)
         >
             {label}
-            {count.filter(|&c| c > 0).map(|c| view! {
+            {move || count.filter(|s| s.get() > 0).map(|s| view! {
                 <span style="display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 8px; background: rgba(108,92,231,0.15); color: #7c6cf7; margin-left: 4px;">
-                    {c}
+                    {s.get()}
                 </span>
             })}
         </div>
