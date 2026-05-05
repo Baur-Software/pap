@@ -1118,6 +1118,42 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ── principal attribute tests ─────────────────────────────────────────────
+
+    #[test]
+    fn wasm_principal_attributes_round_trip() {
+        let db = WasmDatabase::new().unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
+        let v = db.get_principal_attribute("schema:givenName").unwrap();
+        assert_eq!(v, Some("Alice".to_string()));
+    }
+
+    #[test]
+    fn wasm_principal_attributes_upsert() {
+        let db = WasmDatabase::new().unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
+        db.set_principal_attribute("schema:givenName", "Bob").unwrap();
+        let v = db.get_principal_attribute("schema:givenName").unwrap();
+        assert_eq!(v, Some("Bob".to_string()));
+    }
+
+    #[test]
+    fn wasm_principal_attributes_missing_returns_none() {
+        let db = WasmDatabase::new().unwrap();
+        let v = db.get_principal_attribute("schema:nonexistent").unwrap();
+        assert_eq!(v, None);
+    }
+
+    #[test]
+    fn wasm_get_all_principal_attributes_returns_all() {
+        let db = WasmDatabase::new().unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
+        db.set_principal_attribute("schema:departureAirport", "LAX").unwrap();
+        let map = db.get_all_principal_attributes().unwrap();
+        assert_eq!(map.get("schema:givenName"), Some(&"Alice".to_string()));
+        assert_eq!(map.get("schema:departureAirport"), Some(&"LAX".to_string()));
+    }
+
     // ── agent def tests ───────────────────────────────────────────────────────
 
     #[test]
