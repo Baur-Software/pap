@@ -234,7 +234,7 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
         // Catalog agents are seeded locally and are directly invocable.
         live: true,
         category: "general".to_owned(),
-        execution_target: ExecutionTarget::None,
+        execution_target: ExecutionTarget::derive(None),
         lifecycle: AgentLifecycle::default(),
     }
 }

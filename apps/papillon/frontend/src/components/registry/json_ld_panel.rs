@@ -48,7 +48,12 @@ pub fn JsonLdPanel(agent: Signal<Option<AgentInfo>>) -> impl IntoView {
     let on_action = move |_| {
         let agent_did = match agent.get().and_then(|a| a.agent_did.clone()) {
             Some(did) if !did.is_empty() => did,
-            _ => return,
+            _ => {
+                registry
+                    .error
+                    .set(Some("Agent has no DID — save the agent first to generate one.".into()));
+                return;
+            }
         };
         let lc = lifecycle();
 

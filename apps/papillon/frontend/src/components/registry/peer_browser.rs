@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
 use crate::state::registry::RegistryState;
-use papillon_shared::{AgentInfo, RegistryInfo};
+use papillon_shared::{schema_phrase, AgentInfo, RegistryInfo};
 
 #[component]
 pub fn PeerBrowser() -> impl IntoView {
@@ -161,7 +161,7 @@ pub fn PeerBrowser() -> impl IntoView {
                         let caps: Vec<String> = agent
                             .capabilities
                             .iter()
-                            .map(|c| c.trim_start_matches("schema:").to_string())
+                            .map(|c| schema_phrase(c))
                             .collect();
                         let cap_count = caps.len();
                         let disclosure = if agent.requires_disclosure.is_empty() {

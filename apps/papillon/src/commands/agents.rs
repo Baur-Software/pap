@@ -84,7 +84,9 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
         // Callers that need live=false (DB-only agents) override this after construction.
         live: true,
         category: def.category().to_string(),
-        execution_target: papillon_shared::ExecutionTarget::None,
+        execution_target: papillon_shared::ExecutionTarget::derive(
+            def.endpoint.as_ref().map(|e| e.url_template.as_str()),
+        ),
         lifecycle: lifecycle_from_published_to(&def.published_to),
     }
 }
@@ -145,7 +147,11 @@ pub async fn list_local_agents(
                 category: db_def
                     .map(|d| d.category().to_string())
                     .unwrap_or_else(|| "general".to_owned()),
-                execution_target: papillon_shared::ExecutionTarget::None,
+                execution_target: papillon_shared::ExecutionTarget::derive(
+                    db_def
+                        .and_then(|d| d.endpoint.as_ref())
+                        .map(|e| e.url_template.as_str()),
+                ),
                 lifecycle: db_def
                     .map(|d| lifecycle_from_published_to(&d.published_to))
                     .unwrap_or(papillon_shared::AgentLifecycle::Draft),

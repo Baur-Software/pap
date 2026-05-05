@@ -31,7 +31,7 @@ fn ad_to_info(ad: &pap_marketplace::AgentAdvertisement) -> AgentInfo {
         // Remote registry agents are advertised and reachable — treat as live.
         live: true,
         category: "general".to_owned(),
-        execution_target: papillon_shared::ExecutionTarget::None,
+        execution_target: papillon_shared::ExecutionTarget::derive(None),
         lifecycle: papillon_shared::AgentLifecycle::default(),
     }
 }
