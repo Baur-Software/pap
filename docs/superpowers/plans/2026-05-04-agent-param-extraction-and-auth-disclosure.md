@@ -2,30 +2,46 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make 58 broken catalog agents work honestly — extracting structured URL parameters from natural-language queries, and routing user-configured API keys through the disclosure mechanism rather than hardcoding `demo`.
+**Goal:** Make 58 broken catalog agents work honestly — extracting structured URL parameters from natural-language queries via a new `EntityExtractor` agent that uses the LLM when available and regex for structured patterns, and routing user API keys through the SD-JWT credential store rather than hardcoded `demo` values or flat `agent_settings`.
 
-**Architecture:** Three coordinated changes: (1) `dynamic_handler.rs` extracts all params from the URL template, resolves each from the query text using lightweight heuristics, and substitutes them before making the HTTP call; (2) `registry.rs` loads saved `agent_settings` into `agent_props` at registration time so API keys configured by the user are available at execution; (3) catalog TOMLs for auth-gated agents are updated to use `{api_key}` in their URL templates and declare `requires_disclosure = ["api_key"]` instead of `apikey=demo`.
+**Architecture:** Four coordinated subsystems:
+1. **Entity extraction** — a new `EntityExtractor` agent wraps the LLM (or falls back to regex) to pull `{owner}`, `{repo}`, `{lat}`, `{lon}`, `{artist}`, `{title}`, etc. from natural-language queries. BM25 already handles *which* agent to use; this handles *what values* to pass to it.
+2. **Handler param substitution** — `dynamic_handler.rs` invokes the entity extractor for any `{param}` beyond `{query}`, using the LLM path if available and regex fallback otherwise.
+3. **SD-JWT credential disclosure** — API keys travel via the principal's vault as SD-JWT selective disclosures through the existing 6-phase handshake (`requires_disclosure = ["api_key"]`), never as flat config values. The orchestrator gates on vault availability and surfaces the disclosure scope to the user.
+4. **Catalog TOML fixes** — auth-gated agents declare `requires_disclosure = ["api_key"]` and use `{api_key}` in their URL templates; structural-param agents declare their params in `requires_disclosure`.
 
-**Tech Stack:** Rust, `reqwest` (blocking), `serde_json`, `regex` crate (already in workspace or added as a dependency), existing `agent_settings` SQLite table, `DynamicAgentHandler`, `DynamicSession`.
+**Tech Stack:** Rust, `pap-credential` (SD-JWT types — already exists), `pap-credential-store` (encrypted vault — already exists, not yet wired to Tauri), `reqwest` blocking, existing `DynamicAgentHandler`, `SessionStore`, `AgentSet::register_dynamic`.
 
 ---
 
 ## Background / Key Facts
 
-Before implementing, read these files so you understand what already exists:
+Read these files before implementing:
 
 - `crates/pap-agents/src/dynamic_handler.rs` — `DynamicSession`, `handle_disclosure()`, `execute()`, `agent_props` header substitution
-- `crates/pap-agents/src/dynamic.rs` — `DynamicAgentDef`, `HttpEndpointConfig`
-- `crates/pap-agents/src/registry.rs` — `register_dynamic()` at line 168 (currently creates handler with empty `agent_props`)
-- `apps/papillon/src/state.rs` at line 344 — where `register_dynamic` is called
-- `crates/papillon-shared/src/db/mod.rs` — `DatabaseOps::get_agent_settings()` returns `HashMap<String, AgentSettingRow>`
-- `apps/papillon/src/commands/settings_vocab.rs` — how `agent_settings` table stores key/value pairs per agent DID hash
+- `crates/pap-agents/src/intent_index.rs` — BM25 classifier. Classifies *intent* (which agent), not entities (what values). `IntentMatch.cleaned_query` is the raw user prompt verbatim — entity extraction is a downstream step.
+- `crates/pap-agents/src/dynamic.rs` — `DynamicAgentDef`, `HttpEndpointConfig`, `requires_disclosure`
+- `crates/pap-agents/src/registry.rs` — `register_dynamic()` at line 168
+- `crates/pap-credential/src/sd_jwt.rs` — `SelectiveDisclosureJwt`, `Disclosure` types. `disclose(&["api_key"])` produces `Vec<Disclosure>` with salt+key+value.
+- `crates/pap-credential-store/src/` — `Vault`, `SqliteVaultStore`. Fully implemented, not yet exposed via Tauri commands.
+- `apps/papillon/frontend/src/handshake/mod.rs` line 263 — Phase 3 currently builds `{"@type": action_type, "query": query}`. This is where disclosed SD-JWT claims get merged in.
+- `crates/papillon-shared/src/db/mod.rs` — `DatabaseOps::get_agent_settings()` returns `HashMap<String, AgentSettingRow>` — this is the flat settings store, separate from the vault.
 
-**The three bugs today:**
+**What BM25 does and does NOT do:**
+- Does: routes "latest rust release" → `github_releases` agent (intent classification)
+- Does NOT: extract `owner=rust-lang` and `repo=rust` from that query (entity extraction)
 
-1. `dynamic_handler.rs:145` only substitutes `{query}`. URLs like `https://api.foo.com/{lat}/{lon}` ship with literal `{lat}` in the request.
-2. `registry.rs:199` calls `DynamicAgentHandler::new(def, llm)` — always empty `agent_props`. The `new_with_props()` constructor exists but is never called. API keys the user saves to `agent_settings` are never wired into the handler.
-3. ~24 catalog TOMLs have `apikey=demo` hardcoded. Even if agent_props were wired, the URL template doesn't use `{api_key}` — it has the literal string `demo`.
+**What the SD-JWT vault does:**
+- Stores API keys as `VaultItemData::VerifiableCredential` or a new `ApiCredential` variant (see Task 4)
+- `SelectiveDisclosureJwt::disclose(&["api_key"])` produces a disclosure containing only that claim, with its salt — the rest of the vault stays hidden
+- The orchestrator presents this to the user as "Agent X needs your API key for Alpha Vantage — approve?"
+- After approval, the disclosed claim arrives at `handle_disclosure()` as `{"api_key": "sk-live-..."}`
+
+**Three bugs to fix:**
+
+1. `dynamic_handler.rs:145` only substitutes `{query}`. URLs like `https://api.github.com/repos/{owner}/{repo}` ship literal `{owner}` to GitHub.
+2. ~24 catalog TOMLs have `apikey=demo` hardcoded. API keys should come through the SD-JWT disclosure path.
+3. The vault exists but has no Tauri command layer — the orchestrator can't yet ask the vault to disclose a specific credential for a specific agent.
 
 ---
 
@@ -33,65 +49,67 @@ Before implementing, read these files so you understand what already exists:
 
 | File | Change |
 |------|--------|
-| `crates/pap-agents/src/dynamic_handler.rs` | Add `extract_url_params()` + `resolve_param()`, update `handle_disclosure()` to store all disclosed fields, update `execute()` to substitute all params |
-| `crates/pap-agents/src/param_extractor.rs` | **New file.** All param extraction logic: parse template params, classify each, resolve from query string |
-| `crates/pap-agents/src/lib.rs` | Export `param_extractor` module |
-| `crates/pap-agents/src/registry.rs` | `register_dynamic()` now loads `agent_settings` and calls `new_with_props()` |
-| `apps/papillon/src/state.rs` | Pass `db` reference to `register_dynamic()` |
-| Catalog TOMLs (24 files) | Replace `apikey=demo` with `{api_key}`, add `requires_disclosure = ["api_key"]`, add `configurable_properties` entry |
+| `crates/pap-agents/src/entity_extractor.rs` | **New file.** `EntityExtractor` — LLM-first, regex-fallback entity extraction for URL template params |
+| `crates/pap-agents/src/lib.rs` | Export `entity_extractor` module |
+| `crates/pap-agents/src/dynamic_handler.rs` | Expand `DynamicSession.disclosed_props`, update `handle_disclosure()` to store all fields, update `execute()` to resolve all `{param}` via extractor |
+| `crates/papillon-shared/src/credential_gate.rs` | **New file.** `CredentialGate` — determines whether an agent's `requires_disclosure` list needs vault credentials, builds disclosure request for orchestrator |
+| `crates/papillon-shared/src/lib.rs` | Export `credential_gate` module |
+| `apps/papillon/src/commands/vault.rs` | **New file.** Tauri commands: `vault_open`, `vault_seal`, `vault_disclose_for_agent` |
+| `apps/papillon/src/commands/mod.rs` | Register new vault commands |
+| `apps/papillon/src/main.rs` | Register vault Tauri command handlers |
+| `apps/papillon/frontend/src/handshake/mod.rs` | Phase 3: merge vault disclosures into disclosure object |
+| Catalog TOMLs (43 files) | Fix `requires_disclosure`, replace `demo` keys with `{api_key}`, add `configurable_properties` |
 
 ---
 
-## Task 1: Add `param_extractor.rs` — template param parsing and resolution
+## Task 1: Add `entity_extractor.rs` — LLM-first, regex-fallback entity extraction
 
 **Files:**
-- Create: `crates/pap-agents/src/param_extractor.rs`
-- Modify: `crates/pap-agents/src/lib.rs` (add `pub mod param_extractor;`)
+- Create: `crates/pap-agents/src/entity_extractor.rs`
+- Modify: `crates/pap-agents/src/lib.rs`
 
-This module does two things:
-1. `extract_template_params(url_template: &str) -> Vec<String>` — find all `{name}` placeholders in a URL template that are NOT `{query}`
-2. `resolve_param(name: &str, query: &str) -> Option<String>` — attempt to extract the named param's value from the query string using pattern matching
+The entity extractor takes a URL template and a query string and returns a `HashMap<String, String>` of resolved param values. It has two execution paths:
 
-- [ ] **Step 1.1: Write failing tests for `extract_template_params`**
+**LLM path (when LLM is configured):** Builds a structured prompt listing the param names needed and asks the LLM to extract them from the query as JSON. Deterministic output via a strict JSON schema prompt.
 
-In `crates/pap-agents/src/param_extractor.rs`, create the file with tests only:
+**Regex/heuristic path (fallback):** Pattern matching for well-structured inputs — coordinate pairs, `owner/repo`, `Artist - Title`, `X to Y`, 4-digit years, `r/subreddit`. Returns the verbatim query for params without a reliable heuristic. Returns `None` for auth params (they never come from query text).
+
+**Auth params are excluded from extraction** — `api_key`, `access_key`, `key`, `token`, `consumer_key`, `user_key`, `wskey` always return `None` from this extractor. They come from the vault via SD-JWT disclosure.
+
+- [ ] **Step 1.1: Write failing tests for auth param exclusion**
+
+Create `crates/pap-agents/src/entity_extractor.rs`:
 
 ```rust
-//! Lightweight parameter extraction from URL templates and natural-language queries.
+//! Entity extraction for URL template parameters.
+//!
+//! Resolves `{param}` placeholders in URL templates from natural-language query text.
+//! Auth params (api_key, access_key, etc.) always return None — they come from the
+//! SD-JWT credential vault, never from query text.
+
+use std::collections::HashMap;
+
+use crate::llm::{LlmClient, LlmProvider};
+
+/// Names that identify authentication credentials — never extracted from query text.
+const AUTH_PARAMS: &[&str] = &[
+    "api_key", "apikey", "access_key", "key", "token", "api_token",
+    "consumer_key", "user_key", "wskey", "access_token",
+];
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn extract_params_single_query() {
-        // {query} alone — no structural params
-        let params = extract_template_params("https://api.foo.com/search?q={query}");
-        assert!(params.is_empty());
-    }
-
-    #[test]
-    fn extract_params_lat_lon() {
-        let params = extract_template_params("https://api.foo.com?lat={lat}&lon={lon}");
-        assert_eq!(params, vec!["lat".to_string(), "lon".to_string()]);
-    }
-
-    #[test]
-    fn extract_params_owner_repo() {
-        let params = extract_template_params("https://api.github.com/repos/{owner}/{repo}/releases/latest");
-        assert_eq!(params, vec!["owner".to_string(), "repo".to_string()]);
-    }
-
-    #[test]
-    fn extract_params_mixed_with_query() {
-        let params = extract_template_params("https://api.foo.com/{country}?q={query}");
-        assert_eq!(params, vec!["country".to_string()]);
-    }
-
-    #[test]
-    fn extract_params_no_placeholders() {
-        let params = extract_template_params("https://api.foo.com/static");
-        assert!(params.is_empty());
+    fn auth_params_return_none() {
+        for name in AUTH_PARAMS {
+            assert_eq!(
+                extract_heuristic(name, "any query text"),
+                None,
+                "auth param '{name}' must never be extracted from query text"
+            );
+        }
     }
 }
 ```
@@ -99,20 +117,160 @@ mod tests {
 - [ ] **Step 1.2: Run test to verify it fails**
 
 ```bash
-cd crates/pap-agents && cargo test extract_template_params 2>&1 | head -20
+cd crates/pap-agents && cargo test auth_params_return_none 2>&1 | head -20
 ```
 Expected: compile error (function not defined)
 
-- [ ] **Step 1.3: Implement `extract_template_params`**
+- [ ] **Step 1.3: Implement `extract_heuristic`**
 
 Add above the `#[cfg(test)]` block:
 
 ```rust
-use std::collections::HashSet;
+/// Extract a single URL template param value from query text using heuristics.
+/// Returns `None` for auth params (must come from vault) and for params with
+/// no reliable extraction pattern.
+pub fn extract_heuristic(name: &str, query: &str) -> Option<String> {
+    let q = query.trim();
 
-/// Return all `{name}` placeholder names in `url_template`, excluding `{query}`.
+    // Auth params never come from query text
+    if AUTH_PARAMS.contains(&name) {
+        return None;
+    }
+
+    match name {
+        // Coordinates: "37.7749,-122.4194" or "37.7749, -122.4194"
+        "lat" | "latitude" => {
+            let (lat_str, _) = q.split_once(',')?;
+            let lat: f64 = lat_str.trim().parse().ok()?;
+            (-90.0..=90.0).contains(&lat).then(|| lat_str.trim().to_string())
+        }
+        "lon" | "lng" | "longitude" => {
+            let (_, lon_str) = q.split_once(',')?;
+            let lon: f64 = lon_str.trim().parse().ok()?;
+            (-180.0..=180.0).contains(&lon).then(|| lon_str.trim().to_string())
+        }
+
+        // GitHub: "torvalds/linux" or "github.com/torvalds/linux"
+        "owner" => {
+            let q = q.strip_prefix("github.com/").unwrap_or(q);
+            let (owner, _) = q.split_once('/')?;
+            Some(owner.trim().to_string())
+        }
+        "repo" => {
+            let q = q.strip_prefix("github.com/").unwrap_or(q);
+            let (_, rest) = q.split_once('/')?;
+            Some(rest.split('/').next()?.trim().to_string())
+        }
+
+        // Reddit: "r/rust" or bare word
+        "subreddit" => {
+            let sub = q.strip_prefix("r/").unwrap_or(q);
+            Some(sub.split_whitespace().next().unwrap_or(sub).to_string())
+        }
+
+        // Music: "Artist - Title"
+        "artist" => q.split_once(" - ").map(|(a, _)| a.trim().to_string()),
+        "title" => q.split_once(" - ").map(|(_, t)| t.trim().to_string()),
+
+        // Travel: "London to Paris"
+        "origin" | "oName" => {
+            split_to(q).map(|(o, _)| o)
+        }
+        "destination" | "dName" => {
+            split_to(q).map(|(_, d)| d)
+        }
+
+        // Year: first 4-digit number
+        "year" => q
+            .split_whitespace()
+            .find(|w| w.len() == 4 && w.chars().all(|c| c.is_ascii_digit()))
+            .map(str::to_string),
+
+        // Verbatim fallback: BM25 already routed to the right agent;
+        // the query IS the country/language/sport/league/etc.
+        _ => Some(q.to_string()),
+    }
+}
+
+fn split_to(q: &str) -> Option<(String, String)> {
+    let lower = q.to_lowercase();
+    let idx = lower.find(" to ")?;
+    let origin = q[..idx].trim().to_string();
+    let dest = q[idx + 4..].trim().to_string();
+    Some((origin, dest))
+}
+```
+
+- [ ] **Step 1.4: Add tests for heuristic extraction**
+
+Add to the `tests` module:
+
+```rust
+    #[test]
+    fn lat_from_coord_pair() {
+        assert_eq!(extract_heuristic("lat", "37.7749,-122.4194"), Some("37.7749".to_string()));
+    }
+
+    #[test]
+    fn lon_from_coord_pair() {
+        assert_eq!(extract_heuristic("lon", "37.7749,-122.4194"), Some("-122.4194".to_string()));
+    }
+
+    #[test]
+    fn owner_repo_from_slash() {
+        assert_eq!(extract_heuristic("owner", "torvalds/linux"), Some("torvalds".to_string()));
+        assert_eq!(extract_heuristic("repo", "torvalds/linux"), Some("linux".to_string()));
+    }
+
+    #[test]
+    fn owner_repo_with_github_prefix() {
+        assert_eq!(extract_heuristic("owner", "github.com/rust-lang/rust"), Some("rust-lang".to_string()));
+        assert_eq!(extract_heuristic("repo", "github.com/rust-lang/rust"), Some("rust".to_string()));
+    }
+
+    #[test]
+    fn subreddit_with_r_prefix() {
+        assert_eq!(extract_heuristic("subreddit", "r/rust"), Some("rust".to_string()));
+    }
+
+    #[test]
+    fn artist_title_from_dash() {
+        assert_eq!(extract_heuristic("artist", "Pink Floyd - Comfortably Numb"), Some("Pink Floyd".to_string()));
+        assert_eq!(extract_heuristic("title", "Pink Floyd - Comfortably Numb"), Some("Comfortably Numb".to_string()));
+    }
+
+    #[test]
+    fn origin_destination_from_to() {
+        assert_eq!(extract_heuristic("origin", "London to Paris"), Some("London".to_string()));
+        assert_eq!(extract_heuristic("destination", "London to Paris"), Some("Paris".to_string()));
+    }
+
+    #[test]
+    fn year_from_natural_language() {
+        assert_eq!(extract_heuristic("year", "treasury rates 2023"), Some("2023".to_string()));
+    }
+
+    #[test]
+    fn unknown_param_returns_verbatim() {
+        assert_eq!(extract_heuristic("country", "Germany"), Some("Germany".to_string()));
+    }
+```
+
+- [ ] **Step 1.5: Run tests to verify they pass**
+
+```bash
+cd crates/pap-agents && cargo test entity_extractor 2>&1
+```
+Expected: all tests pass
+
+- [ ] **Step 1.6: Add `extract_template_params` to the same file**
+
+This is the helper that finds all `{param}` names in a URL template (excluding `{query}`):
+
+```rust
+/// Return all `{name}` placeholder names in `url_template` that are not `{query}`.
 pub fn extract_template_params(url_template: &str) -> Vec<String> {
-    let mut seen = HashSet::new();
+    let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
     let mut chars = url_template.chars().peekable();
     while let Some(c) = chars.next() {
@@ -127,311 +285,165 @@ pub fn extract_template_params(url_template: &str) -> Vec<String> {
 }
 ```
 
-- [ ] **Step 1.4: Run tests to verify they pass**
-
-```bash
-cd crates/pap-agents && cargo test extract_template_params 2>&1
-```
-Expected: all 5 tests pass
-
-- [ ] **Step 1.5: Write failing tests for `resolve_param`**
-
-Add these tests to the `tests` module:
+Add tests:
 
 ```rust
     #[test]
-    fn resolve_lat_from_coordinates() {
-        // "37.7749,-122.4194" format
-        let lat = resolve_param("lat", "37.7749,-122.4194");
-        assert_eq!(lat, Some("37.7749".to_string()));
+    fn extract_params_excludes_query() {
+        let params = extract_template_params("https://api.foo.com/search?q={query}");
+        assert!(params.is_empty());
     }
 
     #[test]
-    fn resolve_lon_from_coordinates() {
-        let lon = resolve_param("lon", "37.7749,-122.4194");
-        assert_eq!(lon, Some("-122.4194".to_string()));
+    fn extract_params_lat_lon() {
+        let params = extract_template_params("https://api.foo.com?lat={lat}&lon={lon}");
+        assert_eq!(params, vec!["lat", "lon"]);
     }
 
     #[test]
-    fn resolve_lat_lng_aliases() {
-        // Some templates use {lng} instead of {lon}
-        let lng = resolve_param("lng", "37.7749,-122.4194");
-        assert_eq!(lng, Some("-122.4194".to_string()));
+    fn extract_params_owner_repo() {
+        let params = extract_template_params("https://api.github.com/repos/{owner}/{repo}/releases");
+        assert_eq!(params, vec!["owner", "repo"]);
     }
 
     #[test]
-    fn resolve_owner_repo_from_path() {
-        // "torvalds/linux" or "owner: torvalds, repo: linux"
-        let owner = resolve_param("owner", "torvalds/linux");
-        assert_eq!(owner, Some("torvalds".to_string()));
-        let repo = resolve_param("repo", "torvalds/linux");
-        assert_eq!(repo, Some("linux".to_string()));
-    }
-
-    #[test]
-    fn resolve_owner_repo_with_github_prefix() {
-        let owner = resolve_param("owner", "github.com/rust-lang/rust");
-        assert_eq!(owner, Some("rust-lang".to_string()));
-        let repo = resolve_param("repo", "github.com/rust-lang/rust");
-        assert_eq!(repo, Some("rust".to_string()));
-    }
-
-    #[test]
-    fn resolve_subreddit_from_r_prefix() {
-        let sub = resolve_param("subreddit", "r/rust");
-        assert_eq!(sub, Some("rust".to_string()));
-    }
-
-    #[test]
-    fn resolve_subreddit_bare_word() {
-        let sub = resolve_param("subreddit", "rust");
-        assert_eq!(sub, Some("rust".to_string()));
-    }
-
-    #[test]
-    fn resolve_artist_title_from_dash() {
-        // "Pink Floyd - Comfortably Numb"
-        let artist = resolve_param("artist", "Pink Floyd - Comfortably Numb");
-        assert_eq!(artist, Some("Pink Floyd".to_string()));
-        let title = resolve_param("title", "Pink Floyd - Comfortably Numb");
-        assert_eq!(title, Some("Comfortably Numb".to_string()));
-    }
-
-    #[test]
-    fn resolve_origin_destination_from_to() {
-        // "London to Paris"
-        let origin = resolve_param("origin", "London to Paris");
-        assert_eq!(origin, Some("London".to_string()));
-        let dest = resolve_param("destination", "London to Paris");
-        assert_eq!(dest, Some("Paris".to_string()));
-    }
-
-    #[test]
-    fn resolve_country_single_word() {
-        let country = resolve_param("country", "Germany");
-        assert_eq!(country, Some("Germany".to_string()));
-    }
-
-    #[test]
-    fn resolve_year_four_digits() {
-        let year = resolve_param("year", "treasury rates 2023");
-        assert_eq!(year, Some("2023".to_string()));
-    }
-
-    #[test]
-    fn resolve_lang_from_query() {
-        let lang = resolve_param("lang", "rust");
-        assert_eq!(lang, Some("rust".to_string()));
-    }
-
-    #[test]
-    fn resolve_unknown_param_returns_query_verbatim() {
-        // For unknown params, return the whole query (safe fallback)
-        let val = resolve_param("something_unknown", "some query text");
-        assert_eq!(val, Some("some query text".to_string()));
-    }
-
-    #[test]
-    fn resolve_api_key_returns_none() {
-        // api_key comes from agent_settings/disclosures, not query extraction
-        let val = resolve_param("api_key", "anything");
-        assert_eq!(val, None);
+    fn extract_params_deduplicates() {
+        let params = extract_template_params("https://api.foo.com/{id}?related={id}");
+        assert_eq!(params, vec!["id"]);
     }
 ```
 
-- [ ] **Step 1.6: Run tests to verify they fail**
+- [ ] **Step 1.7: Add LLM-backed extraction**
 
-```bash
-cd crates/pap-agents && cargo test resolve_param 2>&1 | head -20
-```
-Expected: compile error (function not defined)
-
-- [ ] **Step 1.7: Implement `resolve_param`**
-
-Add after `extract_template_params`:
+Add the public `EntityExtractor` struct and `extract_with_llm`:
 
 ```rust
-/// Attempt to extract the value of a named URL parameter from a natural-language query string.
+/// Extracts URL template parameter values from natural-language query text.
 ///
-/// Returns `None` for params that must come from agent_settings (api_key, access_key, etc.)
-/// rather than the query text. Returns `Some(query.to_string())` as a safe verbatim fallback
-/// for unrecognised param names.
-pub fn resolve_param(name: &str, query: &str) -> Option<String> {
-    let q = query.trim();
+/// Tries two paths in order:
+/// 1. LLM extraction — asks the configured LLM to extract params as JSON
+/// 2. Heuristic fallback — regex/pattern matching for structured inputs
+pub struct EntityExtractor {
+    llm: Box<dyn LlmClient>,
+}
 
-    match name {
-        // Auth params — must come from agent_settings/disclosure, never from query text
-        "api_key" | "apikey" | "access_key" | "key" | "token" | "api_token"
-        | "consumer_key" | "user_key" | "wskey" => return None,
+impl EntityExtractor {
+    pub fn new(llm: Box<dyn LlmClient>) -> Self {
+        Self { llm }
+    }
 
-        // Coordinates: expect "lat,lon" or "lat, lon" format
-        "lat" | "latitude" => {
-            if let Some(lat) = parse_lat(q) {
-                return Some(lat);
-            }
-        }
-        "lon" | "lng" | "longitude" => {
-            if let Some(lon) = parse_lon(q) {
-                return Some(lon);
-            }
-        }
-
-        // GitHub-style: "owner/repo" or "github.com/owner/repo"
-        "owner" => {
-            if let Some(owner) = parse_github_owner(q) {
-                return Some(owner);
-            }
-        }
-        "repo" => {
-            if let Some(repo) = parse_github_repo(q) {
-                return Some(repo);
-            }
+    /// Resolve all `{param}` values for the given URL template from the query.
+    /// Auth params are excluded (they come from vault disclosure).
+    /// Returns a map of param_name → resolved_value for params that could be resolved.
+    pub fn resolve(
+        &self,
+        url_template: &str,
+        query: &str,
+    ) -> HashMap<String, String> {
+        let params = extract_template_params(url_template);
+        if params.is_empty() {
+            return HashMap::new();
         }
 
-        // Reddit: "r/subreddit" or bare word
-        "subreddit" => {
-            let sub = q.strip_prefix("r/").unwrap_or(q);
-            let word: String = sub.split_whitespace().next().unwrap_or(sub).to_string();
-            return Some(word);
+        // Exclude auth params — they must come from vault
+        let structural_params: Vec<&str> = params
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|name| !AUTH_PARAMS.contains(name))
+            .collect();
+
+        if structural_params.is_empty() {
+            return HashMap::new();
         }
 
-        // Music: "Artist - Title"
-        "artist" => {
-            if let Some((artist, _)) = q.split_once(" - ") {
-                return Some(artist.trim().to_string());
-            }
-        }
-        "title" => {
-            if let Some((_, title)) = q.split_once(" - ") {
-                return Some(title.trim().to_string());
+        // Try LLM extraction first
+        if let Ok(extracted) = self.extract_with_llm(&structural_params, query) {
+            if !extracted.is_empty() {
+                return extracted;
             }
         }
 
-        // Travel: "origin to destination"
-        "origin" | "oName" => {
-            if let Some((origin, _)) = split_to(q) {
-                return Some(origin);
-            }
-        }
-        "destination" | "dName" => {
-            if let Some((_, dest)) = split_to(q) {
-                return Some(dest);
-            }
-        }
+        // Heuristic fallback
+        structural_params
+            .iter()
+            .filter_map(|&name| {
+                extract_heuristic(name, query).map(|v| (name.to_string(), v))
+            })
+            .collect()
+    }
 
-        // Year: first 4-digit number in query
-        "year" => {
-            for word in q.split_whitespace() {
-                if word.len() == 4 && word.chars().all(|c| c.is_ascii_digit()) {
-                    return Some(word.to_string());
+    fn extract_with_llm(
+        &self,
+        params: &[&str],
+        query: &str,
+    ) -> Result<HashMap<String, String>, String> {
+        let param_list = params.join(", ");
+        let instructions = format!(
+            "Extract the following named values from the user query. \
+             Output ONLY a JSON object with these exact keys: [{param_list}]. \
+             If a value cannot be determined, omit that key. \
+             Do not add any other keys or explanation.\n\
+             Example for params [owner, repo] and query \"torvalds/linux\": \
+             {{\"owner\":\"torvalds\",\"repo\":\"linux\"}}"
+        );
+
+        let response = self.llm.complete(&instructions, query)
+            .map_err(|e| e.to_string())?;
+
+        // Strip markdown fences if present
+        let cleaned = response
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+
+        let parsed: serde_json::Value = serde_json::from_str(cleaned)
+            .map_err(|e| e.to_string())?;
+
+        let obj = parsed.as_object().ok_or("not an object")?;
+        let mut result = HashMap::new();
+        for &param in params {
+            if let Some(val) = obj.get(param).and_then(|v| v.as_str()) {
+                if !val.is_empty() {
+                    result.insert(param.to_string(), val.to_string());
                 }
             }
         }
-
-        // Country / language / sport / league / office / gridX / gridY — use whole query as-is
-        // (BM25 already routed to the right agent; the query IS the country/language/etc.)
-        _ => {}
+        Ok(result)
     }
-
-    // Safe fallback: return the query verbatim for unrecognised structural params
-    Some(q.to_string())
-}
-
-// ── Coordinate helpers ────────────────────────────────────────────────────────
-
-fn parse_lat(q: &str) -> Option<String> {
-    // "37.7749,-122.4194" or "37.7749, -122.4194"
-    let (lat_str, _) = q.split_once(',')?;
-    let lat: f64 = lat_str.trim().parse().ok()?;
-    if (-90.0..=90.0).contains(&lat) {
-        Some(lat_str.trim().to_string())
-    } else {
-        None
-    }
-}
-
-fn parse_lon(q: &str) -> Option<String> {
-    let (_, lon_str) = q.split_once(',')?;
-    let lon: f64 = lon_str.trim().parse().ok()?;
-    if (-180.0..=180.0).contains(&lon) {
-        Some(lon_str.trim().to_string())
-    } else {
-        None
-    }
-}
-
-// ── GitHub helpers ─────────────────────────────────────────────────────────────
-
-fn parse_github_owner(q: &str) -> Option<String> {
-    // Strip optional "github.com/" prefix
-    let q = q.strip_prefix("github.com/").unwrap_or(q);
-    let (owner, _) = q.split_once('/')?;
-    Some(owner.trim().to_string())
-}
-
-fn parse_github_repo(q: &str) -> Option<String> {
-    let q = q.strip_prefix("github.com/").unwrap_or(q);
-    let (_, rest) = q.split_once('/')?;
-    // Take only the repo part (before any further '/')
-    let repo = rest.split('/').next()?.trim().to_string();
-    Some(repo)
-}
-
-// ── Travel helpers ────────────────────────────────────────────────────────────
-
-fn split_to(q: &str) -> Option<(String, String)> {
-    // "London to Paris" — case-insensitive " to "
-    let lower = q.to_lowercase();
-    let idx = lower.find(" to ")?;
-    let origin = q[..idx].trim().to_string();
-    let dest = q[idx + 4..].trim().to_string();
-    Some((origin, dest))
 }
 ```
 
-- [ ] **Step 1.8: Run all param_extractor tests**
+- [ ] **Step 1.8: Export from `lib.rs`**
+
+In `crates/pap-agents/src/lib.rs`:
+```rust
+pub mod entity_extractor;
+```
+
+- [ ] **Step 1.9: Full test run**
 
 ```bash
-cd crates/pap-agents && cargo test param_extractor 2>&1
+cd crates/pap-agents && cargo test 2>&1 | tail -20
 ```
 Expected: all tests pass
 
-- [ ] **Step 1.9: Export the module from `lib.rs`**
-
-In `crates/pap-agents/src/lib.rs`, add the line:
-```rust
-pub mod param_extractor;
-```
-
-- [ ] **Step 1.10: Confirm it compiles**
+- [ ] **Step 1.10: Commit**
 
 ```bash
-cd crates/pap-agents && cargo check 2>&1 | grep -E "^error" | head -10
-```
-Expected: no errors
-
-- [ ] **Step 1.11: Commit**
-
-```bash
-git add crates/pap-agents/src/param_extractor.rs crates/pap-agents/src/lib.rs
-git commit -m "feat(agents): add param_extractor for URL template parameter resolution"
+git add crates/pap-agents/src/entity_extractor.rs crates/pap-agents/src/lib.rs
+git commit -m "feat(agents): add EntityExtractor — LLM-first, regex-fallback URL param resolution"
 ```
 
 ---
 
-## Task 2: Wire param extraction into `dynamic_handler.rs`
+## Task 2: Wire entity extraction into `dynamic_handler.rs`
 
 **Files:**
 - Modify: `crates/pap-agents/src/dynamic_handler.rs`
 
-The handler currently substitutes only `{query}`. After this task it substitutes all `{name}` params:
-1. From `session.disclosed_props` (values disclosed during Phase 3 — api keys, user-provided params)
-2. From `param_extractor::resolve_param(name, &query)` for structural params extracted from the query text
-
-**Files:**
-- Modify: `crates/pap-agents/src/dynamic_handler.rs`
-
-- [ ] **Step 2.1: Expand `DynamicSession` to store all disclosed properties**
+- [ ] **Step 2.1: Expand `DynamicSession` to hold all disclosed properties**
 
 Change:
 ```rust
@@ -443,62 +455,47 @@ To:
 ```rust
 struct DynamicSession {
     query: Option<String>,
-    /// All properties disclosed in Phase 3 (e.g. api_key, lat, lon, etc.)
-    disclosed_props: std::collections::HashMap<String, String>,
+    /// All scalar properties disclosed in Phase 3 (e.g. api_key from SD-JWT, user-provided params).
+    disclosed_props: HashMap<String, String>,
 }
 ```
 
-Update `DynamicSession` construction in `handle_token()`:
+Update the `DynamicSession` initializer in `handle_token()`:
 ```rust
-let did = self
-    .sessions
-    .insert(session_id.clone(), DynamicSession {
-        query: None,
-        disclosed_props: std::collections::HashMap::new(),
-    })?;
+self.sessions.insert(session_id.clone(), DynamicSession {
+    query: None,
+    disclosed_props: HashMap::new(),
+})?;
 ```
 
-- [ ] **Step 2.2: Write failing test for multi-param substitution**
+- [ ] **Step 2.2: Write failing test**
 
-Add this test to `dynamic_handler.rs`'s `#[cfg(test)]` block:
+Add to `dynamic_handler.rs` tests:
 
 ```rust
 #[test]
-fn disclosed_api_key_substituted_in_url() {
-    // Build a def whose url_template uses {api_key} and {query}
-    let def = DynamicAgentDef {
-        endpoint: Some(HttpEndpointConfig {
-            url_template: "https://api.example.com/search?q={query}&apikey={api_key}".into(),
-            method: HttpMethod::Get,
-            headers: HashMap::new(),
-            body_template: None,
-            response_jsonpath: "$.result".into(),
-            response_schema_type: "schema:Thing".into(),
-            response_mapping: HashMap::new(),
-            timeout_secs: 5,
-        }),
-        ..make_def_llm_only()
-    };
+fn disclosed_props_stored_from_phase3() {
+    let def = make_def_llm_only();
     let handler = DynamicAgentHandler::new(def, Arc::new(RwLock::new(LlmProvider::None)));
     let token = make_token("schema:SearchAction");
     let (sid, _) = handler.handle_token(token).unwrap();
     handler.handle_did_exchange(&sid, "did:key:peer").unwrap();
-    // Disclose both query and api_key
+
     handler
         .handle_disclosure(
             &sid,
-            vec![json!({"query": "rust language", "api_key": "sk-live-abc123"})],
+            vec![json!({"@type": "schema:SearchAction", "query": "rust lang", "api_key": "sk-live-xyz"})],
         )
         .unwrap();
 
-    // We can't call execute() without a real HTTP server, but we can verify
-    // that the session stores both values by checking handle_disclosure stored api_key.
-    // The integration test (Task 3) will verify actual URL construction.
     handler
         .sessions
         .with(&sid, |data| {
-            assert_eq!(data.disclosed_props.get("api_key"), Some(&"sk-live-abc123".to_string()));
-            assert_eq!(data.query, Some("rust language".to_string()));
+            assert_eq!(data.query.as_deref(), Some("rust lang"));
+            assert_eq!(
+                data.disclosed_props.get("api_key"),
+                Some(&"sk-live-xyz".to_string())
+            );
         })
         .unwrap();
 }
@@ -507,13 +504,13 @@ fn disclosed_api_key_substituted_in_url() {
 - [ ] **Step 2.3: Run test to verify it fails**
 
 ```bash
-cd crates/pap-agents && cargo test disclosed_api_key_substituted_in_url 2>&1 | head -20
+cd crates/pap-agents && cargo test disclosed_props_stored 2>&1 | head -20
 ```
-Expected: compile error (field `disclosed_props` doesn't exist or `sessions.with` can't access it)
+Expected: compile error (field `disclosed_props` doesn't exist)
 
-- [ ] **Step 2.4: Update `handle_disclosure()` to extract all properties**
+- [ ] **Step 2.4: Update `handle_disclosure()` to extract all scalar properties**
 
-Replace the existing `handle_disclosure` implementation:
+Replace the existing `handle_disclosure` impl:
 
 ```rust
 fn handle_disclosure(
@@ -522,7 +519,7 @@ fn handle_disclosure(
     disclosures: Vec<Value>,
 ) -> Result<(), TransportError> {
     let mut query: Option<String> = None;
-    let mut disclosed_props: HashMap<String, String> = HashMap::new();
+    let mut props: HashMap<String, String> = HashMap::new();
 
     for disclosure in &disclosures {
         if let Some(obj) = disclosure.as_object() {
@@ -539,7 +536,7 @@ fn handle_disclosure(
                 if key == "query" {
                     query = Some(str_val.clone());
                 }
-                disclosed_props.insert(key.clone(), str_val);
+                props.insert(key.clone(), str_val);
             }
         }
     }
@@ -548,514 +545,409 @@ fn handle_disclosure(
         if let Some(q) = query {
             data.query = Some(q);
         }
-        data.disclosed_props.extend(disclosed_props);
+        data.disclosed_props.extend(props);
     })?;
     Ok(())
 }
 ```
 
-- [ ] **Step 2.5: Update `execute()` to substitute all params**
+- [ ] **Step 2.5: Run test to verify it passes**
 
-In `execute()`, replace the current `{query}`-only substitution block. Find:
+```bash
+cd crates/pap-agents && cargo test disclosed_props_stored 2>&1
+```
+Expected: PASS
+
+- [ ] **Step 2.6: Update `execute()` to resolve all template params**
+
+In `execute()`, replace the `{query}`-only URL substitution:
+
 ```rust
 let url = endpoint.url_template.replace("{query}", &query);
 ```
-Replace with:
+
+With:
+
 ```rust
-// Substitute {query} first.
+// Substitute {query} first
 let mut url = endpoint.url_template.replace("{query}", &query);
 
-// Substitute any remaining {param} placeholders.
-// Priority: (1) disclosed_props from Phase 3, (2) agent_props (user-configured settings),
-// (3) param_extractor heuristics applied to the query text.
-let extra_params = crate::param_extractor::extract_template_params(&endpoint.url_template);
-let disclosed = self
-    .sessions
-    .with(session_id, |data| data.disclosed_props.clone())?;
+// Resolve any remaining {param} placeholders.
+// Priority: (1) disclosed props from Phase 3 (SD-JWT vault claims, user-explicit),
+//           (2) agent_props (loaded from agent_settings at registration),
+//           (3) entity extractor (LLM → heuristic)
+let extra_params = crate::entity_extractor::extract_template_params(&endpoint.url_template);
+if !extra_params.is_empty() {
+    let disclosed = self
+        .sessions
+        .with(session_id, |data| data.disclosed_props.clone())?;
 
-for param in &extra_params {
-    let value = disclosed
-        .get(param)
-        .cloned()
-        .or_else(|| self.agent_props.get(param).cloned())
-        .or_else(|| crate::param_extractor::resolve_param(param, &query));
+    let extractor = crate::entity_extractor::EntityExtractor::new(self.make_llm_client());
 
-    if let Some(val) = value {
-        url = url.replace(&format!("{{{}}}", param), &val);
+    // Build resolved map via extractor (covers LLM + heuristic paths)
+    let mut resolved = extractor.resolve(&endpoint.url_template, &query);
+
+    // Override with higher-priority sources: agent_props then disclosed
+    for param in &extra_params {
+        if let Some(val) = self.agent_props.get(param) {
+            resolved.insert(param.clone(), val.clone());
+        }
+        if let Some(val) = disclosed.get(param) {
+            resolved.insert(param.clone(), val.clone());
+        }
+    }
+
+    for (param, val) in &resolved {
+        url = url.replace(&format!("{{{}}}", param), val);
     }
 }
 ```
-
-- [ ] **Step 2.6: Run the new test**
-
-```bash
-cd crates/pap-agents && cargo test disclosed_api_key_substituted_in_url 2>&1
-```
-Expected: PASS
 
 - [ ] **Step 2.7: Run full test suite**
 
 ```bash
 cd crates/pap-agents && cargo test 2>&1 | tail -20
 ```
-Expected: all tests pass (no regressions)
+Expected: all tests pass
 
 - [ ] **Step 2.8: Commit**
 
 ```bash
 git add crates/pap-agents/src/dynamic_handler.rs
-git commit -m "feat(agents): substitute all URL template params from disclosures, agent_props, and query extraction"
+git commit -m "feat(agents): resolve all URL template params via disclosed props and entity extractor"
 ```
 
 ---
 
-## Task 3: Wire `agent_settings` into handler at registration time
+## Task 3: Add `credential_gate.rs` — orchestrator-side vault disclosure logic
 
 **Files:**
-- Modify: `crates/pap-agents/src/registry.rs`
-- Modify: `apps/papillon/src/state.rs`
+- Create: `crates/papillon-shared/src/credential_gate.rs`
+- Modify: `crates/papillon-shared/src/lib.rs`
 
-Right now `register_dynamic()` always creates handlers with empty `agent_props`. The user's saved API keys in `agent_settings` are never loaded. This task connects them.
+This module determines, given an agent's `requires_disclosure` list, whether the agent needs credential vault access (i.e. it requires an auth param), and builds the disclosure request that the orchestrator presents to the user.
 
-`register_dynamic()` needs a `HashMap<String, String>` of agent settings at registration time. The caller (`state.rs`) already has the DB handle and can load the settings there.
+- [ ] **Step 3.1: Write failing tests**
 
-- [ ] **Step 3.1: Write failing test for register_dynamic with props**
-
-Add this test to `crates/pap-agents/src/registry.rs` in the `#[cfg(test)]` block:
+Create `crates/papillon-shared/src/credential_gate.rs`:
 
 ```rust
-#[test]
-fn register_dynamic_with_props_available_at_execute_time() {
-    // Verify that agent_props passed at registration reach the handler.
-    // We test via the header substitution path (existing test logic).
-    let mut props = HashMap::new();
-    props.insert("api_token".to_string(), "sk-live-xyz".to_string());
+//! Credential gate — determines whether an agent's `requires_disclosure` list
+//! needs vault credentials, and produces the user-facing disclosure request.
 
-    let def = make_dynamic_def();
-    let mut set = AgentSet::default();
-    set.register_dynamic_with_props(
-        &def,
-        Arc::new(RwLock::new(LlmProvider::None)),
-        props.clone(),
-    )
-    .unwrap();
+/// Returns true if any item in `requires_disclosure` is a known auth param name.
+pub fn needs_vault_credential(requires_disclosure: &[String]) -> bool {
+    requires_disclosure
+        .iter()
+        .any(|s| CREDENTIAL_PARAM_NAMES.contains(&s.as_str()))
+}
 
-    // Handler is registered
-    assert!(set.handlers.contains_key(&def.name));
-    // The handler should have the props — we can't directly inspect them
-    // but we know new_with_props was called because register_dynamic_with_props exists
+/// The canonical set of param names that represent API credentials.
+/// These must come from the vault, never from query text or agent settings.
+pub const CREDENTIAL_PARAM_NAMES: &[&str] = &[
+    "api_key", "apikey", "access_key", "access_token", "key", "token",
+    "api_token", "consumer_key", "user_key", "wskey",
+];
+
+/// Identifies which credential param names an agent requires.
+pub fn credential_params_for(requires_disclosure: &[String]) -> Vec<String> {
+    requires_disclosure
+        .iter()
+        .filter(|s| CREDENTIAL_PARAM_NAMES.contains(&s.as_str()))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alpha_vantage_needs_vault() {
+        let reqs = vec!["query".to_string(), "api_key".to_string()];
+        assert!(needs_vault_credential(&reqs));
+    }
+
+    #[test]
+    fn geo_agent_no_vault_needed() {
+        let reqs = vec!["lat".to_string(), "lon".to_string()];
+        assert!(!needs_vault_credential(&reqs));
+    }
+
+    #[test]
+    fn empty_disclosure_no_vault() {
+        assert!(!needs_vault_credential(&[]));
+    }
+
+    #[test]
+    fn credential_params_extracted() {
+        let reqs = vec!["query".to_string(), "api_key".to_string(), "lat".to_string()];
+        let creds = credential_params_for(&reqs);
+        assert_eq!(creds, vec!["api_key".to_string()]);
+    }
 }
 ```
 
-(The test for `make_dynamic_def` already exists in the test module — verify or add a helper that builds a `DynamicAgentDef` with a valid `operator_key_seed`.)
-
-- [ ] **Step 3.2: Add `register_dynamic_with_props()` to `AgentSet`**
-
-In `crates/pap-agents/src/registry.rs`, add a new method after `register_dynamic`:
-
-```rust
-/// Like `register_dynamic` but pre-loads agent property values (e.g. user-configured API keys)
-/// into the handler so they are available for URL/header substitution at execution time.
-pub fn register_dynamic_with_props(
-    &mut self,
-    def: &DynamicAgentDef,
-    llm_provider: Arc<RwLock<LlmProvider>>,
-    props: HashMap<String, String>,
-) -> Result<String, RegistrationError> {
-    let seed = def
-        .operator_key_seed
-        .ok_or(RegistrationError::MissingKeySeed)?;
-    let kp = PrincipalKeypair::from_bytes(&seed)
-        .map_err(|e| RegistrationError::InvalidKeySeed(e.to_string()))?;
-    let did = kp.did();
-
-    let ad = AgentAdvertisement::new(
-        &def.name,
-        &def.provider,
-        &did,
-        vec![def.action.clone()],
-        def.object_types.clone(),
-        def.requires_disclosure.clone(),
-        def.returns.clone(),
-    )
-    .with_version(&def.version)
-    .with_configurable_properties(def.configurable_properties.clone());
-    let mut ad = ad;
-    ad.sign(kp.signing_key())
-        .map_err(|_| RegistrationError::SignatureInvalid)?;
-
-    self.registry
-        .register_local(ad)
-        .map_err(|_| RegistrationError::AlreadyRegistered(def.name.clone()))?;
-
-    let handler = Arc::new(DynamicAgentHandler::new_with_props(def.clone(), llm_provider, props));
-    self.handlers.insert(def.name.clone(), handler);
-    self.keypairs.insert(def.name.clone(), kp);
-
-    Ok(did)
-}
-```
-
-- [ ] **Step 3.3: Run the new test**
+- [ ] **Step 3.2: Run tests to verify they pass**
 
 ```bash
-cd crates/pap-agents && cargo test register_dynamic_with_props 2>&1
+cargo test -p papillon-shared credential_gate 2>&1
 ```
-Expected: PASS
+Expected: PASS (the logic is simple enough it should pass immediately)
 
-- [ ] **Step 3.4: Update `state.rs` to load and pass `agent_settings`**
+- [ ] **Step 3.3: Export from `lib.rs`**
 
-In `apps/papillon/src/state.rs`, find the loop that registers DB agents (around line 344–350):
+In `crates/papillon-shared/src/lib.rs`:
+```rust
+pub mod credential_gate;
+```
+
+- [ ] **Step 3.4: Commit**
+
+```bash
+git add crates/papillon-shared/src/credential_gate.rs crates/papillon-shared/src/lib.rs
+git commit -m "feat(orchestrator): add credential_gate — detect vault-requiring agents"
+```
+
+---
+
+## Task 4: Add Tauri vault commands — expose the credential store to the frontend
+
+**Files:**
+- Create: `apps/papillon/src/commands/vault.rs`
+- Modify: `apps/papillon/src/commands/mod.rs`
+- Modify: `apps/papillon/src/main.rs`
+
+The vault (`pap-credential-store`) is production-ready but has no Tauri command layer. This task adds the minimum commands needed to:
+1. Open (unlock) the vault with the user's password
+2. Seal (lock) the vault
+3. Disclose a specific credential claim for a specific agent (returns the raw claim value after user-visible gate)
+
+**Important:** The vault password is never persisted and never leaves Rust. The Tauri frontend only calls `vault_disclose_for_agent` — it receives the disclosed claim value ephemerally and passes it into the handshake; it never stores the raw key.
+
+- [ ] **Step 4.1: Write failing tests**
+
+Create `apps/papillon/src/commands/vault.rs`:
 
 ```rust
-// ── Register all DB agents (catalog + user_created + generated) ───────────
-let db_agents = db.load_all_agents().unwrap_or_default();
-for def in &db_agents {
-    if let Err(e) = agent_set.register_dynamic(def, shared_llm_provider.clone()) {
-        eprintln!("Failed to register agent '{}': {e}", def.name);
-    }
+//! Tauri commands for the credential vault (pap-credential-store).
+//!
+//! The vault stores API keys as AES-256-GCM encrypted items.
+//! Commands here unlock, seal, and produce ephemeral SD-JWT disclosures
+//! for specific agents — raw keys never leave Rust into persistent storage.
+
+use pap_credential_store::{SqliteVaultStore, Vault, VaultItemData};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use tauri::State;
+
+use crate::error::PapillonError;
+use crate::state::AppState;
+
+/// Open (unlock) the vault. Subsequent `vault_disclose_for_agent` calls succeed
+/// until `vault_seal` is called or the process exits.
+#[tauri::command]
+pub fn vault_open(
+    state: State<'_, AppState>,
+    password: String,
+) -> Result<(), PapillonError> {
+    // Implementation in Step 4.3
+    todo!()
+}
+
+/// Seal the vault — zeroes the in-memory vault key.
+#[tauri::command]
+pub fn vault_seal(state: State<'_, AppState>) -> Result<(), PapillonError> {
+    todo!()
+}
+
+/// Returns the stored credential value for the given `credential_name` (e.g. "alpha_vantage_api_key"),
+/// intended for disclosure to `agent_did`. The frontend passes this ephemerally into the handshake.
+///
+/// Returns an error if the vault is sealed or the credential doesn't exist.
+#[tauri::command]
+pub fn vault_disclose_for_agent(
+    state: State<'_, AppState>,
+    credential_name: String,
+    agent_did: String,
+) -> Result<String, PapillonError> {
+    todo!()
+}
+
+/// Store a credential in the vault. Used by the settings UI when the user provides their API key.
+#[tauri::command]
+pub fn vault_store_credential(
+    state: State<'_, AppState>,
+    credential_name: String,
+    credential_value: String,
+) -> Result<(), PapillonError> {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    // Integration tests that require a real vault file go here.
+    // Unit tests for the gate logic live in papillon-shared::credential_gate.
 }
 ```
 
-Replace with:
+- [ ] **Step 4.2: Add `vault_handle` to `AppState`**
+
+In `apps/papillon/src/state.rs`, add to `AppState`:
 
 ```rust
-// ── Register all DB agents (catalog + user_created + generated) ───────────
-let db_agents = db.load_all_agents().unwrap_or_default();
-for def in &db_agents {
-    // Load saved agent settings (API keys, user overrides) into the handler.
-    let agent_did = {
-        use ed25519_dalek::SigningKey;
-        def.operator_key_seed
-            .as_ref()
-            .and_then(|seed| {
-                pap_did::PrincipalKeypair::from_bytes(seed)
-                    .ok()
-                    .map(|kp| kp.did())
-            })
-            .unwrap_or_default()
-    };
-    let agent_did_hash = crate::commands::orchestrator::hash_agent_did(&agent_did);
-    let props: HashMap<String, String> = db
-        .get_agent_settings(&agent_did_hash)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(k, row)| {
-            // Values are stored as JSON strings; unwrap quoted strings
-            let v = serde_json::from_str::<String>(&row.value)
-                .unwrap_or(row.value);
-            (k, v)
-        })
-        .collect();
+/// Credential vault — unlocked on demand by the user, sealed at exit.
+/// `None` means the vault is sealed (not yet unlocked or auto-locked).
+pub vault: Arc<Mutex<Option<Vault<SqliteVaultStore>>>>,
+```
 
-    if let Err(e) = agent_set.register_dynamic_with_props(def, shared_llm_provider.clone(), props) {
-        eprintln!("Failed to register agent '{}': {e}", def.name);
-    }
+Also add a `vault_path: PathBuf` field so `vault_open` knows where to find the file.
+
+- [ ] **Step 4.3: Implement the vault commands**
+
+Fill in the four `todo!()` stubs:
+
+```rust
+pub fn vault_open(state: State<'_, AppState>, password: String) -> Result<(), PapillonError> {
+    let store = SqliteVaultStore::open(&state.vault_path)
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    let vault = Vault::open(store, &password)
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    let mut guard = state.vault.lock().map_err(|e| PapillonError::from(e.to_string()))?;
+    *guard = Some(vault);
+    Ok(())
+}
+
+pub fn vault_seal(state: State<'_, AppState>) -> Result<(), PapillonError> {
+    let mut guard = state.vault.lock().map_err(|e| PapillonError::from(e.to_string()))?;
+    *guard = None;
+    Ok(())
+}
+
+pub fn vault_disclose_for_agent(
+    state: State<'_, AppState>,
+    credential_name: String,
+    _agent_did: String,  // logged for audit; not yet used for scoped access
+) -> Result<String, PapillonError> {
+    let guard = state.vault.lock().map_err(|e| PapillonError::from(e.to_string()))?;
+    let vault = guard.as_ref().ok_or_else(|| PapillonError::from("vault is sealed".to_string()))?;
+    let value = vault
+        .get_credential(&credential_name)
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    Ok(value)
+}
+
+pub fn vault_store_credential(
+    state: State<'_, AppState>,
+    credential_name: String,
+    credential_value: String,
+) -> Result<(), PapillonError> {
+    let guard = state.vault.lock().map_err(|e| PapillonError::from(e.to_string()))?;
+    let vault = guard.as_ref().ok_or_else(|| PapillonError::from("vault is sealed".to_string()))?;
+    vault
+        .store_credential(&credential_name, &credential_value)
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    Ok(())
 }
 ```
 
-You need to add `use std::collections::HashMap;` at the top of `state.rs` if not already present.
+**Note:** `Vault::get_credential` and `Vault::store_credential` are new methods needed on the `Vault` type in `pap-credential-store`. Add them in the same task (see Step 4.4).
 
-- [ ] **Step 3.5: Check it compiles**
+- [ ] **Step 4.4: Add `get_credential` / `store_credential` to `Vault`**
+
+In `crates/pap-credential-store/src/vault.rs` (or wherever `Vault` is defined), add:
+
+```rust
+/// Store a named API credential (plaintext value encrypted at rest).
+pub fn store_credential(&self, name: &str, value: &str) -> Result<(), VaultError> {
+    self.add_item(VaultItemData::ApiCredential {
+        name: name.to_string(),
+        value: value.to_string(),
+    })?;
+    Ok(())
+}
+
+/// Retrieve a named API credential value (decrypted from vault).
+pub fn get_credential(&self, name: &str) -> Result<String, VaultError> {
+    for item in self.list_items()? {
+        if let VaultItemData::ApiCredential { name: item_name, value } = self.get_item(&item.id)? {
+            if item_name == name {
+                return Ok(value);
+            }
+        }
+    }
+    Err(VaultError::NotFound(name.to_string()))
+}
+```
+
+Add `ApiCredential` to `VaultItemData` in `crates/pap-credential-store/src/types.rs`:
+
+```rust
+ApiCredential {
+    name: String,
+    value: String,
+},
+```
+
+Add `ApiCredential = 4` to `VaultItemType` enum and handle the new variant in the SQLite serialization layer.
+
+- [ ] **Step 4.5: Register commands in `main.rs`**
+
+In `apps/papillon/src/main.rs`, add to the `.invoke_handler(tauri::generate_handler![...])` call:
+
+```rust
+commands::vault::vault_open,
+commands::vault::vault_seal,
+commands::vault::vault_disclose_for_agent,
+commands::vault::vault_store_credential,
+```
+
+- [ ] **Step 4.6: Compile check**
 
 ```bash
 cd apps/papillon && cargo check 2>&1 | grep "^error" | head -20
 ```
 Expected: no errors
 
-- [ ] **Step 3.6: Run all tests**
+- [ ] **Step 4.7: Commit**
 
 ```bash
-cargo test -p pap-agents 2>&1 | tail -20
-```
-Expected: all tests pass
-
-- [ ] **Step 3.7: Commit**
-
-```bash
-git add crates/pap-agents/src/registry.rs apps/papillon/src/state.rs
-git commit -m "feat(agents): load agent_settings into handler props at registration time"
+git add crates/pap-credential-store/src/ apps/papillon/src/commands/vault.rs apps/papillon/src/commands/mod.rs apps/papillon/src/state.rs apps/papillon/src/main.rs
+git commit -m "feat(vault): expose credential store via Tauri commands for SD-JWT API key disclosure"
 ```
 
 ---
 
-## Task 4: Fix auth-gated catalog TOMLs — replace `demo` keys with `{api_key}`
-
-**Files:**
-- Modify: 24 catalog TOML files (list below)
-
-Auth-gated agents currently have `apikey=demo` (or similar) hardcoded in the URL template. They need:
-1. `{api_key}` in the URL template where `demo` is
-2. `requires_disclosure = ["api_key"]` so the orchestrator knows to ask the user
-3. A `[[configurable_properties]]` entry so the settings UI renders a field for it
-
-The 24 files to update:
-
-| File | Current param name | URL position |
-|------|--------------------|-------------|
-| `catalog/arts/europeana_art.toml` | `wskey=api2demo` | query param |
-| `catalog/commerce/builtwith_tech.toml` | `KEY=demo` | query param |
-| `catalog/commerce/crunchbase_org.toml` | `user_key=demo` | query param |
-| `catalog/commerce/similar_web.toml` | `api_key=demo` | query param |
-| `catalog/education/europeana_search.toml` | `wskey=api2demo` | query param |
-| `catalog/entertainment/goodreads_books.toml` | `key=demo` | query param |
-| `catalog/finance/alpha_vantage.toml` | `apikey=demo` | query param |
-| `catalog/finance/currency_layer.toml` | `access_key=demo` | query param |
-| `catalog/finance/fixer_io.toml` | `access_key=demo` | query param |
-| `catalog/finance/stock_analysis.toml` | `apikey=demo` | query param |
-| `catalog/geo/geoapify_places.toml` | `apiKey=demo` | query param (also has `{lat}/{lon}`) |
-| `catalog/geo/mapquest_geocode.toml` | `key=demo` | query param |
-| `catalog/geo/what3words.toml` | `key=demo` | query param |
-| `catalog/government/congress_votes.toml` | `api_key=demo` | query param |
-| `catalog/media/bbc_world_news.toml` | `apiKey=demo` | query param |
-| `catalog/media/mediastack_news.toml` | `access_key=demo` | query param |
-| `catalog/media/npr_stories.toml` | `apiKey=demo` | query param |
-| `catalog/media/pocket_recommendations.toml` | `consumer_key=demo&access_token=demo` | query params |
-| `catalog/sports/tennis_rankings.toml` | `key=demo` | query param |
-| `catalog/travel/google_maps_place.toml` | `key=demo` | query param |
-| `catalog/travel/numbeo_cost.toml` | `api_key=demo` | query param |
-| `catalog/travel/rome2rio.toml` | `key=demo` (also `{origin}/{destination}`) | query param |
-| `catalog/utilities/domain_whois.toml` | `apiKey=demo` | query param |
-| `catalog/utilities/email_validate.toml` | `api_key=demo` | query param |
-
-The transform for each file is mechanical. Here is the pattern using `alpha_vantage.toml` as the canonical example:
-
-**Before:**
-```toml
-requires_disclosure = []
-...
-url_template = "https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey=demo"
-```
-
-**After:**
-```toml
-requires_disclosure = ["api_key"]
-...
-url_template = "https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey={api_key}"
-
-[[configurable_properties]]
-"@type" = "PropertyValueSpecification"
-valueName = "api_key"
-name = "API Key"
-description = "Your Alpha Vantage API key (free at alphavantage.co/support/#api-key)"
-defaultValue = ""
-valuePattern = "^[A-Z0-9]+$"
-```
-
-Note: for `pocket_recommendations.toml`, there are two auth params — use `{api_key}` for `consumer_key` and add a second `{access_token}` param with its own `configurable_properties` entry.
-
-- [ ] **Step 4.1: Write a test that validates the TOML schema has `requires_disclosure` = `["api_key"]` for an auth-gated file**
-
-Add a test to `crates/pap-agents/src/dynamic.rs` or a new test module. This verifies that loading the fixed TOMLs produces the right struct shape:
-
-```rust
-#[test]
-fn alpha_vantage_requires_api_key_disclosure() {
-    let content = include_str!("../catalog/finance/alpha_vantage.toml");
-    let def: DynamicAgentDef = toml::from_str(content).expect("valid toml");
-    assert!(
-        def.requires_disclosure.contains(&"api_key".to_string()),
-        "alpha_vantage must declare api_key in requires_disclosure"
-    );
-    assert!(
-        def.endpoint
-            .as_ref()
-            .map(|e| e.url_template.contains("{api_key}"))
-            .unwrap_or(false),
-        "url_template must use {{api_key}} placeholder, not hardcoded demo"
-    );
-}
-```
-
-- [ ] **Step 4.2: Run the test to verify it fails**
-
-```bash
-cd crates/pap-agents && cargo test alpha_vantage_requires_api_key 2>&1
-```
-Expected: FAIL (url_template still has `apikey=demo`)
-
-- [ ] **Step 4.3: Update all 24 TOML files**
-
-Apply the transform (replace `demo` key with `{api_key}`, add disclosure, add configurable property) to each file in the table above. Use the alpha_vantage pattern as template. For files with non-standard param names (wskey, KEY, access_key, user_key), replace that param's value with `{api_key}` regardless — the `{api_key}` name is the canonical disclosed property name.
-
-Special cases:
-- `geoapify_places.toml` — also has `{lat}` and `{lon}`; keep those, only fix the `apiKey=demo`
-- `rome2rio.toml` — also has `{origin}` and `{destination}`; keep those, only fix `key=demo`
-- `pocket_recommendations.toml` — two auth params; use `{api_key}` for `consumer_key` and `{access_token}` for `access_token`; add both to `requires_disclosure` and add two `configurable_properties` entries
-
-- [ ] **Step 4.4: Run the test to verify it passes**
-
-```bash
-cd crates/pap-agents && cargo test alpha_vantage_requires_api_key 2>&1
-```
-Expected: PASS
-
-- [ ] **Step 4.5: Run full test suite to check no regressions**
-
-```bash
-cargo test -p pap-agents 2>&1 | tail -20
-```
-Expected: all tests pass
-
-- [ ] **Step 4.6: Commit**
-
-```bash
-git add crates/pap-agents/catalog/
-git commit -m "fix(catalog): replace hardcoded demo API keys with {api_key} disclosure params (24 agents)"
-```
-
----
-
-## Task 5: Fix structurally-broken catalog TOMLs — declare missing params and update `requires_disclosure`
-
-**Files:**
-- Modify: 19 catalog TOML files
-
-These agents have `{lat}`, `{lon}`, `{owner}`, `{repo}`, etc. in their URL templates but declare `requires_disclosure = []`. The param_extractor (Task 1) handles extraction from query text, but the agents should honestly declare what they need.
-
-The right disclosure model for structural params: they can be resolved from the query automatically (param_extractor handles it), but agents should declare them in `requires_disclosure` so the orchestrator can optionally expose them in the mandate preview.
-
-For each file, add the template params to `requires_disclosure` if they cannot be derived automatically from `{query}` (e.g. `{lat}`,`{lon}` come from query text when query is a coordinate pair, but for natural-language queries like "sunrise in Tokyo" there's no coordinate — the extractor will fall back to the query verbatim which is wrong).
-
-**Conservative rule applied here:** If a param has no reliable extraction heuristic (i.e., it requires geocoding or structured input the user never provides as a coord pair), mark it in `requires_disclosure` so the orchestrator can surface it. Params with reliable heuristics (`{owner}/{repo}` from `user/repo` format, `{artist} - {title}`, `{origin} to {destination}`, `{subreddit}` from `r/name`) are fine with just the extractor.
-
-Files needing `requires_disclosure` updates:
-
-| File | Template params | Heuristic quality |
-|------|----------------|-------------------|
-| `catalog/geo/elevation_api.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/geo/bigdatacloud_reverse.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/geo/overpass_pois.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/geo/sunrisesunset.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/weather/open_meteo_hourly.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/weather/uv_index.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/weather/storm_glass.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/weather/weather_gov.toml` | `{office}`, `{gridX}`, `{gridY}` | No heuristic — verbatim fallback |
-| `catalog/travel/open_meteo_forecast.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-| `catalog/developer/github_releases.toml` | `{owner}`, `{repo}` | Reliable from `user/repo` format |
-| `catalog/developer/github_trending.toml` | `{lang}` | Verbatim fallback |
-| `catalog/entertainment/lyrics_ovh.toml` | `{artist}`, `{title}` | Reliable from `Artist - Title` |
-| `catalog/finance/treasury_rates.toml` | `{year}` | Reliable from 4-digit year |
-| `catalog/finance/world_bank_indicator.toml` | `{country}` | Verbatim fallback |
-| `catalog/media/reddit_subreddit.toml` | `{subreddit}` | Reliable from `r/name` |
-| `catalog/sports/cycling_strava.toml` | `{bounds}` | No heuristic |
-| `catalog/sports/espn_scores.toml` | `{sport}`, `{league}` | No heuristic |
-| `catalog/travel/rome2rio.toml` | `{origin}`, `{destination}` | Reliable from `X to Y` |
-| `catalog/geo/geoapify_places.toml` | `{lat}`, `{lon}` | Reliable if query is coords |
-
-For all of these, add the template params to `requires_disclosure`. This does NOT break anything — `requires_disclosure` is advertised to the orchestrator but the handler will still use the extractor as a fallback if the user doesn't explicitly disclose them.
-
-- [ ] **Step 5.1: Write a test validating one of the files**
-
-```rust
-#[test]
-fn github_releases_declares_owner_repo_disclosure() {
-    let content = include_str!("../catalog/developer/github_releases.toml");
-    let def: DynamicAgentDef = toml::from_str(content).expect("valid toml");
-    assert!(def.requires_disclosure.contains(&"owner".to_string()));
-    assert!(def.requires_disclosure.contains(&"repo".to_string()));
-}
-```
-
-- [ ] **Step 5.2: Run test to verify it fails**
-
-```bash
-cd crates/pap-agents && cargo test github_releases_declares_owner_repo 2>&1
-```
-Expected: FAIL
-
-- [ ] **Step 5.3: Update all 19 TOML files**
-
-For each file, update `requires_disclosure` to include the template params. Example for `github_releases.toml`:
-
-```toml
-# Before:
-requires_disclosure = []
-
-# After:
-requires_disclosure = ["owner", "repo"]
-```
-
-For geo/weather files that use `{lat}`, `{lon}`:
-```toml
-requires_disclosure = ["lat", "lon"]
-```
-
-- [ ] **Step 5.4: Run the test to verify it passes**
-
-```bash
-cd crates/pap-agents && cargo test github_releases_declares_owner_repo 2>&1
-```
-Expected: PASS
-
-- [ ] **Step 5.5: Run full test suite**
-
-```bash
-cargo test -p pap-agents 2>&1 | tail -20
-```
-Expected: all tests pass
-
-- [ ] **Step 5.6: Commit**
-
-```bash
-git add crates/pap-agents/catalog/
-git commit -m "fix(catalog): declare structural URL params in requires_disclosure (19 agents)"
-```
-
----
-
-## Task 6: Update handshake to pass disclosed structural params
+## Task 5: Wire vault disclosures into the Phase 3 handshake (WASM)
 
 **Files:**
 - Modify: `apps/papillon/frontend/src/handshake/mod.rs`
-- Modify: `crates/papillon-shared/src/handshake/mod.rs` (if it exists and the WASM path uses it)
 
-Currently Phase 3 sends only `{"@type": action_type, "query": query}`. After this task, if an agent's `requires_disclosure` contains params beyond `query`, those params are included in the disclosure object when the user has configured them.
+Phase 3 currently sends `{"@type": action_type, "query": query}`. When the agent's `requires_disclosure` contains credential params, the frontend must:
+1. Check if those params are in the vault (call `vault_disclose_for_agent`)
+2. If not yet unlocked, gate on the vault-unlock UI (out of scope for this task — just error cleanly)
+3. Merge the returned claim values into the disclosure object
 
-**Scope:** For this task, only handle params that come from `agent_settings` (i.e. `api_key`). Structural params like `lat`/`lon` that come from the query text are resolved server-side in `param_extractor` — the handshake doesn't need to know about them.
+This is the SD-JWT path: the vault acts as the principal's credential store, the orchestrator mediates access, and the agent receives the key as a disclosed claim in Phase 3 — exactly the same disclosure channel as the query.
 
-- [ ] **Step 6.1: Find where Phase 3 disclosures are built in the WASM handshake**
+- [ ] **Step 5.1: Extract a testable `build_disclosures` function**
 
-Read `apps/papillon/frontend/src/handshake/mod.rs`. Find the `disclosures` construction (around line 263):
-
-```rust
-let disclosures = vec![json!({
-    "@type": action_type,
-    "query": query
-})];
-```
-
-- [ ] **Step 6.2: Write a test for the disclosure builder**
-
-In `crates/papillon-shared/src/handshake/mod.rs` or `intent.rs`, if a unit-testable `build_disclosures` function exists or can be extracted, write a test. If the disclosure building is inline in Leptos component code, this test goes in a helper function.
-
-Extract into a testable function first:
+In `apps/papillon/frontend/src/handshake/mod.rs` (or a sibling `handshake_helpers.rs`), extract:
 
 ```rust
-/// Build the Phase-3 disclosure object for an agent.
-/// `agent_requires` is the agent's `requires_disclosure` list.
-/// `query` is the user's prompt.  
-/// `settings` is the agent's saved settings (api_key, etc.).
+/// Build the Phase-3 disclosure object.
+/// `extra_disclosures` is a map of param_name → value for any vault-resolved credentials.
 pub fn build_disclosures(
     action_type: &str,
     query: &str,
-    agent_requires: &[String],
-    settings: &HashMap<String, String>,
+    extra_disclosures: &std::collections::HashMap<String, String>,
 ) -> Vec<serde_json::Value> {
     let mut obj = serde_json::json!({
         "@type": action_type,
         "query": query,
     });
-    // Include any required properties that are available in settings
-    for key in agent_requires {
-        if key == "query" {
-            continue;
-        }
-        if let Some(val) = settings.get(key) {
-            if !val.is_empty() {
-                obj[key] = serde_json::json!(val);
-            }
-        }
+    for (key, val) in extra_disclosures {
+        obj[key] = serde_json::json!(val);
     }
     vec![obj]
 }
@@ -1065,120 +957,318 @@ Test:
 
 ```rust
 #[test]
-fn build_disclosures_includes_api_key_from_settings() {
-    let settings = [("api_key".to_string(), "sk-live-123".to_string())]
-        .into_iter()
-        .collect();
-    let result = build_disclosures(
-        "schema:SearchAction",
-        "rust programming",
-        &["query".to_string(), "api_key".to_string()],
-        &settings,
-    );
-    assert_eq!(result.len(), 1);
+fn build_disclosures_merges_vault_claims() {
+    let mut extra = std::collections::HashMap::new();
+    extra.insert("api_key".to_string(), "sk-live-123".to_string());
+    let result = build_disclosures("schema:SearchAction", "rust lang", &extra);
     assert_eq!(result[0]["api_key"], "sk-live-123");
-    assert_eq!(result[0]["query"], "rust programming");
+    assert_eq!(result[0]["query"], "rust lang");
 }
 
 #[test]
-fn build_disclosures_omits_empty_api_key() {
-    let settings = [("api_key".to_string(), "".to_string())]
-        .into_iter()
-        .collect();
-    let result = build_disclosures(
-        "schema:SearchAction",
-        "rust programming",
-        &["query".to_string(), "api_key".to_string()],
-        &settings,
-    );
+fn build_disclosures_no_extra() {
+    let result = build_disclosures("schema:SearchAction", "rust lang", &Default::default());
     assert!(result[0].get("api_key").is_none());
-}
-
-#[test]
-fn build_disclosures_query_only_when_no_extra_required() {
-    let settings = HashMap::new();
-    let result = build_disclosures("schema:SearchAction", "rust", &[], &settings);
-    assert_eq!(result[0]["query"], "rust");
-    assert!(result[0].get("api_key").is_none());
+    assert_eq!(result[0]["query"], "rust lang");
 }
 ```
 
-- [ ] **Step 6.3: Run tests to verify they fail**
-
-```bash
-cargo test build_disclosures 2>&1 | head -20
-```
-Expected: compile error
-
-- [ ] **Step 6.4: Implement `build_disclosures` in the right place**
-
-If `papillon-shared/src/handshake/mod.rs` exists and is shared between WASM/native paths, add `build_disclosures` there. Otherwise add it in a new `handshake_helpers.rs` in `papillon-shared/src/`.
-
-- [ ] **Step 6.5: Run tests to verify they pass**
+- [ ] **Step 5.2: Run tests**
 
 ```bash
 cargo test build_disclosures 2>&1
 ```
 Expected: PASS
 
-- [ ] **Step 6.6: Wire `build_disclosures` into the WASM handshake**
+- [ ] **Step 5.3: Update Phase 3 to call vault for credential params**
 
-In `apps/papillon/frontend/src/handshake/mod.rs`, replace the inline `disclosures` construction with a call to `build_disclosures`. The WASM handshake will need access to the agent's `requires_disclosure` list (already available from the `AgentAdvertisement`) and the agent's saved settings (load from `agent_settings` via the local catalog).
+In `handshake/mod.rs`, before building disclosures, check the agent advertisement's `requires_disclosure` list for credential params. For each found, call `vault_disclose_for_agent`. Replace the inline disclosure construction with `build_disclosures`.
 
-**Note:** The WASM path runs in-browser. Agent settings are loaded from `IndexedDB` (via `DatabaseOps::get_agent_settings`). The agent DID hash is available at the point of handshake. Look at how `local_catalog.rs` resolves agents and what data is available — you may need to pass `requires_disclosure` and settings into the handshake executor.
+```rust
+// Phase 3: build disclosures
+use papillon_shared::credential_gate::{credential_params_for, CREDENTIAL_PARAM_NAMES};
 
-- [ ] **Step 6.7: Run full app compile check**
+let mut extra_disclosures = std::collections::HashMap::new();
+
+// Collect vault-backed credential params
+let cred_params = credential_params_for(&agent_ad.requires_disclosure);
+for param in &cred_params {
+    // Invoke the Tauri vault command
+    if let Ok(value) = invoke::<String>(
+        "vault_disclose_for_agent",
+        &serde_json::json!({
+            "credentialName": format!("{}_{}", agent_name_slug, param),
+            "agentDid": agent_did,
+        }),
+    ).await {
+        extra_disclosures.insert(param.clone(), value);
+    }
+    // If vault is sealed or key not stored, proceed without — handler will fail phase 4
+    // with a clear error ("vault is sealed" or "credential not found")
+}
+
+let disclosures = build_disclosures(&action_type, &query, &extra_disclosures);
+```
+
+- [ ] **Step 5.4: Compile check (WASM target)**
 
 ```bash
-cd apps/papillon && cargo check 2>&1 | grep "^error" | head -20
+cd apps/papillon/frontend && trunk build 2>&1 | grep "^error" | head -20
 ```
 Expected: no errors
 
-- [ ] **Step 6.8: Commit**
+- [ ] **Step 5.5: Commit**
 
 ```bash
-git add apps/papillon/frontend/src/ crates/papillon-shared/src/
-git commit -m "feat(handshake): include agent-required properties (api_key etc.) in Phase 3 disclosures"
+git add apps/papillon/frontend/src/handshake/
+git commit -m "feat(handshake): include vault credential disclosures in Phase 3 SD-JWT path"
 ```
 
 ---
 
-## Task 7: End-to-end test and PR
+## Task 6: Fix auth-gated catalog TOMLs (24 files)
 
 **Files:**
-- Modify: `apps/papillon/e2e/tests/agents.spec.ts` (add a test that submits a query that exercises a structural-param agent)
+- Modify: 24 catalog TOML files
 
-- [ ] **Step 7.1: Run the full test suite**
+Replace `apikey=demo` (and variants) with `{api_key}` in the URL template, add `requires_disclosure = ["api_key"]`, add a `configurable_properties` entry so the settings UI renders a field for the vault.
+
+The 24 files to update:
+
+| File | Current key param | Provider docs URL hint |
+|------|------------------|----------------------|
+| `catalog/arts/europeana_art.toml` | `wskey=api2demo` | europeana.eu/develop |
+| `catalog/commerce/builtwith_tech.toml` | `KEY=demo` | api.builtwith.com |
+| `catalog/commerce/crunchbase_org.toml` | `user_key=demo` | crunchbase.com/api |
+| `catalog/commerce/similar_web.toml` | `api_key=demo` | similarweb.com/api |
+| `catalog/education/europeana_search.toml` | `wskey=api2demo` | europeana.eu/develop |
+| `catalog/entertainment/goodreads_books.toml` | `key=demo` | goodreads.com/api |
+| `catalog/finance/alpha_vantage.toml` | `apikey=demo` | alphavantage.co |
+| `catalog/finance/currency_layer.toml` | `access_key=demo` | currencylayer.com |
+| `catalog/finance/fixer_io.toml` | `access_key=demo` | fixer.io |
+| `catalog/finance/stock_analysis.toml` | `apikey=demo` | financialmodelingprep.com |
+| `catalog/geo/geoapify_places.toml` | `apiKey=demo` | geoapify.com (also has `{lat}/{lon}`) |
+| `catalog/geo/mapquest_geocode.toml` | `key=demo` | developer.mapquest.com |
+| `catalog/geo/what3words.toml` | `key=demo` | developer.what3words.com |
+| `catalog/government/congress_votes.toml` | `api_key=demo` | api.congress.gov |
+| `catalog/media/bbc_world_news.toml` | `apiKey=demo` | newsapi.org |
+| `catalog/media/mediastack_news.toml` | `access_key=demo` | mediastack.com |
+| `catalog/media/npr_stories.toml` | `apiKey=demo` | npr.org/api |
+| `catalog/media/pocket_recommendations.toml` | `consumer_key=demo&access_token=demo` | getpocket.com/developer |
+| `catalog/sports/tennis_rankings.toml` | `key=demo` | sportsdata.io |
+| `catalog/travel/google_maps_place.toml` | `key=demo` | developers.google.com/maps |
+| `catalog/travel/numbeo_cost.toml` | `api_key=demo` | numbeo.com/api |
+| `catalog/travel/rome2rio.toml` | `key=demo` | (also has `{origin}/{destination}`) |
+| `catalog/utilities/domain_whois.toml` | `apiKey=demo` | whoisxmlapi.com |
+| `catalog/utilities/email_validate.toml` | `api_key=demo` | hunter.io |
+
+**Canonical transform (alpha_vantage.toml as example):**
+
+```toml
+# BEFORE:
+requires_disclosure = []
+url_template = "https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey=demo"
+
+# AFTER:
+requires_disclosure = ["api_key"]
+url_template = "https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey={api_key}"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Alpha Vantage API key — free tier available at alphavantage.co/support/#api-key"
+defaultValue = ""
+```
+
+Special cases:
+- `pocket_recommendations.toml` — two auth params: use `{api_key}` for `consumer_key`, add `{access_token}` for `access_token`, add both to `requires_disclosure = ["api_key", "access_token"]`, add two `configurable_properties` entries
+- `geoapify_places.toml` — also has `{lat}` and `{lon}`; keep those, only fix `apiKey=demo` → `{api_key}` and add `api_key` to requires_disclosure alongside lat/lon
+
+- [ ] **Step 6.1: Write a validation test**
+
+```rust
+// In crates/pap-agents/src/dynamic.rs tests or a dedicated catalog_validation_test.rs
+#[test]
+fn no_catalog_agent_has_hardcoded_demo_key() {
+    let catalog_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/catalog");
+    for entry in walkdir::WalkDir::new(catalog_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "toml"))
+    {
+        let content = std::fs::read_to_string(entry.path()).unwrap();
+        let def: DynamicAgentDef = toml::from_str(&content)
+            .unwrap_or_else(|e| panic!("Invalid TOML {}: {e}", entry.path().display()));
+        if let Some(endpoint) = &def.endpoint {
+            assert!(
+                !endpoint.url_template.contains("=demo") && !endpoint.url_template.contains("=api2demo"),
+                "Hardcoded demo key in {}: {}",
+                entry.path().display(),
+                endpoint.url_template
+            );
+        }
+    }
+}
+```
+
+Add `walkdir` to `pap-agents/Cargo.toml` dev-dependencies:
+```toml
+[dev-dependencies]
+walkdir = "2"
+```
+
+- [ ] **Step 6.2: Run test to verify it fails**
+
+```bash
+cd crates/pap-agents && cargo test no_catalog_agent_has_hardcoded_demo_key 2>&1 | head -20
+```
+Expected: FAIL (lists the 24 offending files)
+
+- [ ] **Step 6.3: Update all 24 TOML files**
+
+Apply the transform to each file.
+
+- [ ] **Step 6.4: Run the validation test to verify it passes**
+
+```bash
+cd crates/pap-agents && cargo test no_catalog_agent_has_hardcoded_demo_key 2>&1
+```
+Expected: PASS
+
+- [ ] **Step 6.5: Commit**
+
+```bash
+git add crates/pap-agents/catalog/ crates/pap-agents/Cargo.toml
+git commit -m "fix(catalog): replace 24 hardcoded demo API keys with {api_key} disclosure params"
+```
+
+---
+
+## Task 7: Declare structural params in `requires_disclosure` for 19 agents
+
+**Files:**
+- Modify: 19 catalog TOML files (the structural-param agents)
+
+Agents with `{lat}`, `{lon}`, `{owner}`, `{repo}`, etc. in their URL templates should declare those params in `requires_disclosure`. This lets the orchestrator surface them in the mandate preview and allows explicit user disclosure when the heuristic can't extract them.
+
+| File | Add to `requires_disclosure` |
+|------|------------------------------|
+| `catalog/geo/elevation_api.toml` | `["lat", "lon"]` |
+| `catalog/geo/bigdatacloud_reverse.toml` | `["lat", "lon"]` |
+| `catalog/geo/overpass_pois.toml` | `["lat", "lon"]` |
+| `catalog/geo/sunrisesunset.toml` | `["lat", "lon"]` |
+| `catalog/weather/open_meteo_hourly.toml` | `["lat", "lon"]` |
+| `catalog/weather/uv_index.toml` | `["lat", "lon"]` |
+| `catalog/weather/storm_glass.toml` | `["lat", "lon"]` |
+| `catalog/weather/weather_gov.toml` | `["office", "gridX", "gridY"]` |
+| `catalog/travel/open_meteo_forecast.toml` | `["lat", "lon"]` |
+| `catalog/developer/github_releases.toml` | `["owner", "repo"]` |
+| `catalog/developer/github_trending.toml` | `["lang"]` |
+| `catalog/entertainment/lyrics_ovh.toml` | `["artist", "title"]` |
+| `catalog/finance/treasury_rates.toml` | `["year"]` |
+| `catalog/finance/world_bank_indicator.toml` | `["country"]` |
+| `catalog/media/reddit_subreddit.toml` | `["subreddit"]` |
+| `catalog/sports/cycling_strava.toml` | `["bounds"]` |
+| `catalog/sports/espn_scores.toml` | `["sport", "league"]` |
+| `catalog/travel/rome2rio.toml` | add `"origin", "destination"` (already gets `"api_key"` from Task 6) |
+| `catalog/geo/geoapify_places.toml` | add `"lat", "lon"` (already gets `"api_key"` from Task 6) |
+
+- [ ] **Step 7.1: Write a validation test**
+
+```rust
+#[test]
+fn catalog_agents_declare_all_template_params_in_disclosure() {
+    use crate::entity_extractor::{extract_template_params, AUTH_PARAMS};
+    let catalog_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/catalog");
+    for entry in walkdir::WalkDir::new(catalog_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "toml"))
+    {
+        let content = std::fs::read_to_string(entry.path()).unwrap();
+        let def: DynamicAgentDef = toml::from_str(&content)
+            .unwrap_or_else(|e| panic!("Invalid TOML {}: {e}", entry.path().display()));
+        if let Some(endpoint) = &def.endpoint {
+            let params = extract_template_params(&endpoint.url_template);
+            for param in &params {
+                assert!(
+                    def.requires_disclosure.contains(param),
+                    "Agent {} has {{{}}} in url_template but not in requires_disclosure ({})",
+                    entry.path().display(),
+                    param,
+                    def.requires_disclosure.join(", ")
+                );
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 7.2: Run test to verify it fails**
+
+```bash
+cd crates/pap-agents && cargo test catalog_agents_declare_all_template_params 2>&1 | head -30
+```
+Expected: FAIL (lists offending files)
+
+- [ ] **Step 7.3: Update all 19 TOML files**
+
+Add the params from the table above to each file's `requires_disclosure`.
+
+- [ ] **Step 7.4: Run the validation test to verify it passes**
+
+```bash
+cd crates/pap-agents && cargo test catalog_agents_declare_all_template_params 2>&1
+```
+Expected: PASS
+
+- [ ] **Step 7.5: Commit**
+
+```bash
+git add crates/pap-agents/catalog/
+git commit -m "fix(catalog): declare structural URL params in requires_disclosure (19 agents)"
+```
+
+---
+
+## Task 8: End-to-end test and PR
+
+- [ ] **Step 8.1: Full workspace test**
 
 ```bash
 cargo test --workspace 2>&1 | tail -30
 ```
 Expected: all tests pass
 
-- [ ] **Step 7.2: Add an e2e test for param extraction**
+- [ ] **Step 8.2: Add e2e test verifying no unsubstituted placeholders reach the user**
 
-In `apps/papillon/e2e/tests/agents.spec.ts`, add:
+In `apps/papillon/e2e/tests/agents.spec.ts`:
 
 ```typescript
-test("github releases agent resolves owner/repo from query", async ({ page }) => {
-  // This test verifies that submitting "torvalds/linux" routes to the GitHub Releases
-  // agent and the block resolves (not fails at phase 4 with literal {owner}/{repo}).
-  // Since we're not mocking HTTP in e2e, we accept either Resolved or a network error —
-  // what we must NOT see is "phase 4: no results" with unsubstituted placeholders.
+test("github releases agent resolves owner/repo from query — no literal placeholders", async ({ page }) => {
   await createEmptyCanvas(page);
   await submitAndWaitForBlock(page, "torvalds/linux releases");
   const block = page.locator(".canvas-block").first();
+  // The block may fail (network, no LLM) but it must never contain literal placeholders
   await expect(block).not.toContainText("{owner}");
   await expect(block).not.toContainText("{repo}");
 });
 ```
 
-- [ ] **Step 7.3: Push and open PR**
+- [ ] **Step 8.3: Push and open PR**
 
 ```bash
 git push origin feat/1ed9-continue-branch
-gh pr create --title "feat(agents): parameter extraction and auth disclosure for 58 catalog agents" \
-  --body "..."
+gh pr create \
+  --title "feat(agents): entity extraction + SD-JWT credential disclosure for 58 catalog agents" \
+  --body "Fixes 58 broken catalog agents via two complementary mechanisms:
+  - EntityExtractor (LLM-first, regex-fallback) resolves structural URL params from query text
+  - SD-JWT vault path routes API keys through the principal's credential store, not hardcoded demo values
+  - 24 auth-gated TOMLs: apikey=demo → {api_key} + requires_disclosure
+  - 19 structural-param TOMLs: declare params in requires_disclosure
+  - New Tauri vault commands: vault_open, vault_seal, vault_disclose_for_agent, vault_store_credential
+  - credential_gate.rs: orchestrator-side logic for detecting vault-requiring agents"
 ```
 
 ---
@@ -1187,12 +1277,14 @@ gh pr create --title "feat(agents): parameter extraction and auth disclosure for
 
 **Spec coverage check:**
 
-- ✅ Category A (structural params like lat/lon, owner/repo): Task 1 (extractor) + Task 2 (substitution) + Task 5 (disclosure declaration)
-- ✅ Category B (auth-gated with demo keys): Task 3 (agent_settings wired into handler) + Task 4 (TOML demo→{api_key}) + Task 6 (disclosures include api_key from settings)
-- ✅ Protocol correctness: auth params come from disclosures/settings, NOT from query text (resolve_param returns None for auth param names)
-- ✅ Fallback behavior: unknown structural params fall back to verbatim query (safe — BM25 already routed correctly)
-- ✅ No LLM hallucination path: endpoint failures still hard-fail; LLM path only for agents without endpoints
+- ✅ BM25 as intent router (not entity extractor) — EntityExtractor is a separate layer, invoked after BM25 routes to the right agent
+- ✅ API keys via SD-JWT — vault path: vault_disclose_for_agent → disclosed prop → handle_disclosure() → substituted in URL template. Never from query text (AUTH_PARAMS guard in EntityExtractor).
+- ✅ Principal doesn't manage keys manually — orchestrator calls vault on their behalf when agent requires credential params; user only unlocks the vault once
+- ✅ Category A (structural params) — Task 1 EntityExtractor + Task 2 handler wiring + Task 7 TOML disclosure declarations
+- ✅ Category B (auth-gated) — Task 3 credential_gate + Task 4 vault Tauri commands + Task 5 handshake wiring + Task 6 TOML fixes
+- ✅ Protocol correctness — endpoint hard-fails preserved; no LLM hallucination fallback; entity extractor is pre-execution param resolution, not a fallback execution path
+- ✅ Validation tests in Tasks 6 and 7 catch regressions automatically
 
-**Placeholder scan:** No TBDs found. All code blocks are complete.
+**Placeholder scan:** No TBDs. All code blocks are complete except vault.rs Step 4.3 which is filled in the same step.
 
-**Type consistency:** `DynamicSession.disclosed_props` is `HashMap<String, String>` throughout. `extract_template_params` returns `Vec<String>`. `resolve_param` returns `Option<String>`. All consistent.
+**Type consistency:** `EntityExtractor::resolve()` returns `HashMap<String, String>`. `DynamicSession::disclosed_props` is `HashMap<String, String>`. `build_disclosures()` takes `&HashMap<String, String>`. All consistent.
