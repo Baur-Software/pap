@@ -200,7 +200,7 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "wasm-test"
+          shared-key: "wasm"
           cache-on-failure: true
 
       - name: Test papillon-shared with WASM feature

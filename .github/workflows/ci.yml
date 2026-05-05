@@ -180,7 +180,7 @@ jobs:
     name: Registry smoke (startup probe)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [changes]
+    needs: [changes, test-registry]
     if: |
       always() &&
       (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
