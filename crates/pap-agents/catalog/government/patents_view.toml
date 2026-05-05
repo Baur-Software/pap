@@ -12,7 +12,7 @@ llm_instructions = "You are a patent research assistant. Provide patent title, n
 subagents = []
 
 [endpoint]
-url_template = "https://search.patentsview.org/api/v1/patent/?q={\"_text_phrase\":{\"patent_title\":\"{query}\"}}&f=[\"patent_title\",\"patent_number\",\"patent_date\"]&o={\"per_page\":5}"
+url_template = "https://search.patentsview.org/api/v1/patent/?q=%7B%22_text_phrase%22%3A%7B%22patent_title%22%3A%22{query}%22%7D%7D&f=%5B%22patent_title%22%2C%22patent_number%22%2C%22patent_date%22%5D&o=%7B%22per_page%22%3A5%7D"
 method = "Get"
 response_jsonpath = "$.patents[0].patent_title"
 response_schema_type = "schema:CreativeWork"
