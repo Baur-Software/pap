@@ -12,6 +12,16 @@ use papillon_shared::PreferenceEngine;
 
 use super::super::orchestrator::hash_agent_did;
 
+/// (name, did, requires_disclosure, returns, source_url, score)
+type ScoredCandidate = (
+    String,
+    String,
+    Vec<String>,
+    Vec<String>,
+    Option<String>,
+    f64,
+);
+
 /// Result of agent resolution from registries.
 pub(crate) struct ResolvedAgent {
     pub name: String,
@@ -206,14 +216,7 @@ pub(crate) async fn resolve_top_agents(
     };
 
     // Collect all local candidates with scores
-    let mut all_scored: Vec<(
-        String,
-        String,
-        Vec<String>,
-        Vec<String>,
-        Option<String>,
-        f64,
-    )> = {
+    let mut all_scored: Vec<ScoredCandidate> = {
         let local = state
             .local_registry
             .lock()
@@ -255,14 +258,7 @@ pub(crate) async fn resolve_top_agents(
             .registries
             .read()
             .map_err(|e| PapillonError::from(e.to_string()))?;
-        let mut remote_scored: Vec<(
-            String,
-            String,
-            Vec<String>,
-            Vec<String>,
-            Option<String>,
-            f64,
-        )> = Vec::new();
+        let mut remote_scored: Vec<ScoredCandidate> = Vec::new();
         for (url, registry) in registries.iter() {
             let remote_candidates = registry.query_local_satisfiable(action_type, &[]);
             // Collect the eligible candidates into an owned vec first so we

@@ -69,6 +69,7 @@ pub(crate) async fn process_prompt(
 ///
 /// Called by the post-approval dispatch path in `canvas_plan_prompt` when the user
 /// has filled in principal attribute fields during the approval step.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn process_prompt_with_extras(
     app: &AppHandle,
     state: &State<'_, AppState>,

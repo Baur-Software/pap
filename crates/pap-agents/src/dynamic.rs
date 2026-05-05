@@ -683,7 +683,7 @@ mod tests {
         for entry in walkdir::WalkDir::new(catalog_dir)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "toml"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "toml"))
         {
             let content = std::fs::read_to_string(entry.path()).unwrap();
             let def: DynamicAgentDef = toml::from_str(&content)
@@ -709,7 +709,7 @@ mod tests {
         for entry in walkdir::WalkDir::new(catalog_dir)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "toml"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "toml"))
         {
             let content = std::fs::read_to_string(entry.path()).unwrap();
             let def: DynamicAgentDef = toml::from_str(&content)

@@ -14,6 +14,9 @@
 // Remaining migration to tokio::sync::RwLock requires auditing all read sites.
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+/// (selected_agent_names, filled_values) payload stored between gate signal and dispatch.
+type ApprovalPayload = (Vec<String>, HashMap<String, String>);
 use std::sync::atomic::AtomicU16;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -128,9 +131,7 @@ pub struct AppState {
         tokio::sync::RwLock<std::collections::HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
     /// Stores (selected_agent_names, filled_values) keyed by approval_request_id.
     /// Written by `canvas_approve_block` before signaling the gate, read by `canvas_plan_prompt`.
-    pub approval_values: tokio::sync::RwLock<
-        std::collections::HashMap<String, (Vec<String>, std::collections::HashMap<String, String>)>,
-    >,
+    pub approval_values: tokio::sync::RwLock<HashMap<String, ApprovalPayload>>,
     /// Watch-channel sender for the orchestrator personal-context preamble.
     /// Push a fresh preamble string whenever episode history or traits change.
     /// All orchestrator LLM consumers hold a cloned `Receiver` and borrow at call time.
