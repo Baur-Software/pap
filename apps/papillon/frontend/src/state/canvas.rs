@@ -1065,11 +1065,45 @@ impl CanvasState {
         let block_id_clone = block_id.clone();
 
         spawn_local(async move {
+            // Obtain a challenge signed by the principal's keypair before approving.
+            // The signing key lives in Rust, so we call sign_approval_challenge
+            // which issues and signs the nonce in a single backend round-trip.
+            let signed_challenge = match crate::bridge::invoke::<_, serde_json::Value>(
+                "sign_approval_challenge",
+                &serde_json::json!({}),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    leptos::logging::error!(
+                        "sign_approval_challenge failed for {}: {}",
+                        block_id_clone,
+                        e
+                    );
+                    canvases.update(|cs| {
+                        for canvas in cs.iter_mut() {
+                            if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {
+                                b.state = BlockState::Failed {
+                                    phase: 2,
+                                    reason: format!("Authorization failed: {}", e),
+                                };
+                                b.updated_at = now_iso();
+                                break;
+                            }
+                        }
+                    });
+                    in_flight.update(|s| { s.remove(&block_id_clone); });
+                    return;
+                }
+            };
+
             match crate::bridge::invoke::<_, serde_json::Value>(
                 "canvas_approve_block",
                 &serde_json::json!({
                     "approvalRequestId": approval_request_id,
                     "approved": true,
+                    "signedChallenge": signed_challenge,
                 }),
             )
             .await
@@ -1079,7 +1113,6 @@ impl CanvasState {
                 }
                 Err(e) => {
                     leptos::logging::error!("approve_block failed for {}: {}", block_id_clone, e);
-                    // Transition block to Failed state with the error message
                     canvases.update(|cs| {
                         for canvas in cs.iter_mut() {
                             if let Some(b) = canvas.blocks.iter_mut().find(|b| b.id == block_id_clone) {

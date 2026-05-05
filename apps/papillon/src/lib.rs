@@ -176,6 +176,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::health::get_health_status,
             commands::identity::get_identity_challenge,
+            commands::identity::sign_approval_challenge,
             commands::identity::create_identity,
             commands::identity::get_identity,
             commands::identity::get_principal_did,

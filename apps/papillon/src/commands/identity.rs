@@ -28,6 +28,38 @@ pub fn get_identity_challenge(state: State<'_, AppState>) -> Result<ChallengeTok
     Ok(state.identity_challenges.issue())
 }
 
+/// Issue a challenge and immediately sign it with the principal's keypair.
+///
+/// The frontend cannot hold the signing key (it lives in Rust), so approval
+/// flows that require a `SignedChallenge` call this instead of the
+/// issue-then-sign round-trip. Returns an error if no identity exists yet.
+#[tauri::command]
+pub fn sign_approval_challenge(
+    state: State<'_, AppState>,
+) -> Result<SignedChallenge, PapillonError> {
+    let signer_lock = state
+        .signer
+        .read()
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    let signer = signer_lock
+        .as_ref()
+        .ok_or_else(|| PapillonError::from("no principal identity — create one first".to_string()))?;
+
+    let token = state.identity_challenges.issue();
+    let nonce = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(&token.nonce_b64)
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    let sig_bytes = signer
+        .sign(&nonce)
+        .map_err(|e| PapillonError::from(e.to_string()))?;
+    let signature_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&sig_bytes);
+
+    Ok(SignedChallenge {
+        challenge_id: token.challenge_id,
+        signature_b64,
+    })
+}
+
 /// Create a new principal identity (generates a new keypair).
 /// Returns error if the new identity cannot be persisted to the database,
 /// preventing the frontend from believing the identity was created when it wasn't.
