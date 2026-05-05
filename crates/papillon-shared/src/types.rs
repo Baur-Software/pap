@@ -134,6 +134,52 @@ pub struct RegistryInfo {
     pub peer_count: usize,
 }
 
+/// How this agent executes — derived from `endpoint` URL scheme at deserialization.
+/// Never stored in TOML; always computed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(tag = "type", content = "value")]
+pub enum ExecutionTarget {
+    /// HTTPS or HTTP endpoint — remote API call.
+    Remote(String),
+    /// file:// path — local binary or CLI.
+    Local(String),
+    /// did: or pap:// — delegation to another agent by DID.
+    SubAgent(String),
+    /// No endpoint configured (embedded compiled agent or not yet set).
+    #[default]
+    None,
+}
+
+impl ExecutionTarget {
+    /// Derive execution target from an optional endpoint URL.
+    pub fn derive(endpoint: Option<&str>) -> Self {
+        match endpoint {
+            None => ExecutionTarget::None,
+            Some(url) if url.starts_with("https://") || url.starts_with("http://") => {
+                ExecutionTarget::Remote(url.to_string())
+            }
+            Some(url) if url.starts_with("file://") => ExecutionTarget::Local(url.to_string()),
+            Some(url) if url.starts_with("did:") || url.starts_with("pap://") => {
+                ExecutionTarget::SubAgent(url.to_string())
+            }
+            Some(url) => ExecutionTarget::Remote(url.to_string()),
+        }
+    }
+}
+
+/// Agent lifecycle state — tracks the signing and publication status of an agent definition.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentLifecycle {
+    /// Unsigned, not visible to federation peers.
+    #[default]
+    Draft,
+    /// Signed with node keypair, advertised to federation.
+    Published,
+    /// Signed but withdrawn from federation advertisement.
+    Unpublished,
+}
+
 /// Agent information for display in the registry browser and agent management UI.
 /// This is the safe frontend-facing type — never contains operator_key_seed,
 /// HttpEndpointConfig, llm_instructions, or endpoint internals.
@@ -178,6 +224,12 @@ pub struct AgentInfo {
     /// with no catalog path.
     #[serde(default)]
     pub category: String,
+    /// Execution target derived from `endpoint` at deserialization.
+    #[serde(default)]
+    pub execution_target: ExecutionTarget,
+    /// Lifecycle state of this agent definition.
+    #[serde(default)]
+    pub lifecycle: AgentLifecycle,
 }
 
 /// Federation peer information.

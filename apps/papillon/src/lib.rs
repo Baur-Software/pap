@@ -272,6 +272,8 @@ pub fn run() {
             commands::agents::generate_agent,
             commands::agents::publish_agent,
             commands::agents::unpublish_agent,
+            commands::agents::sign_and_publish_local,
+            commands::agents::unpublish_local,
             commands::agents::save_trait_beacon_profile,
             commands::agents::approve_federation_agent,
             commands::webauthn::begin_registration,

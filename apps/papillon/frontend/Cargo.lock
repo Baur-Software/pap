@@ -1361,6 +1361,7 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "getrandom 0.2.17",
+ "heck",
  "js-sys",
  "pap-did",
  "pap-federation",

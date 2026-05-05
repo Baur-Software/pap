@@ -1,9 +1,16 @@
+use heck::ToTitleCase;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::ui::api::{self, AgentEntry};
 
 const PER_PAGE: u32 = 20;
+
+fn schema_phrase(s: &str) -> String {
+    let s = s.trim_start_matches("schema:");
+    let s = s.strip_suffix("Action").unwrap_or(s);
+    s.to_title_case()
+}
 
 #[component]
 pub fn AgentsPage() -> impl IntoView {
@@ -228,13 +235,13 @@ fn AgentCard(entry: AgentEntry, #[prop(into)] on_remove: Callback<()>) -> impl I
 
             <div class="agent-meta">
                 {capabilities.iter().map(|c| view! {
-                    <span class="tag tag-action">{c.clone()}</span>
+                    <span class="tag tag-action">{schema_phrase(c)}</span>
                 }).collect::<Vec<_>>()}
                 {returns.iter().map(|r| view! {
-                    <span class="tag tag-returns">{r.clone()}</span>
+                    <span class="tag tag-returns">{schema_phrase(r)}</span>
                 }).collect::<Vec<_>>()}
                 {disclosure.iter().map(|d| view! {
-                    <span class="tag tag-disclosure">{d.clone()}</span>
+                    <span class="tag tag-disclosure">{schema_phrase(d)}</span>
                 }).collect::<Vec<_>>()}
             </div>
 

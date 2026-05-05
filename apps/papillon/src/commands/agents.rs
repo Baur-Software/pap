@@ -6,7 +6,9 @@ use papillon_shared::types::AgentInfo;
 use crate::db::prelude::DatabaseOps;
 use crate::state::AppState;
 
-// ── Helper ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const LOCAL_UNPUBLISHED_SENTINEL: &str = "pap://local:unpublished";
 
 fn source_to_str(source: &DynamicAgentSource) -> &'static str {
     match source {
@@ -14,6 +16,20 @@ fn source_to_str(source: &DynamicAgentSource) -> &'static str {
         DynamicAgentSource::UserCreated => "user_created",
         DynamicAgentSource::Generated => "generated",
         DynamicAgentSource::Federation => "federation",
+    }
+}
+
+/// Derive agent lifecycle from the `published_to` sentinel values.
+fn lifecycle_from_published_to(published_to: &[String]) -> papillon_shared::AgentLifecycle {
+    if published_to
+        .iter()
+        .any(|u| u == crate::state::LOCAL_REGISTRY_URL)
+    {
+        papillon_shared::AgentLifecycle::Published
+    } else if published_to.iter().any(|u| u == LOCAL_UNPUBLISHED_SENTINEL) {
+        papillon_shared::AgentLifecycle::Unpublished
+    } else {
+        papillon_shared::AgentLifecycle::Draft
     }
 }
 
@@ -68,6 +84,10 @@ fn def_to_agent_info(def: &DynamicAgentDef) -> AgentInfo {
         // Callers that need live=false (DB-only agents) override this after construction.
         live: true,
         category: def.category().to_string(),
+        execution_target: papillon_shared::ExecutionTarget::derive(
+            def.endpoint.as_ref().map(|e| e.url_template.as_str()),
+        ),
+        lifecycle: lifecycle_from_published_to(&def.published_to),
     }
 }
 
@@ -127,6 +147,14 @@ pub async fn list_local_agents(
                 category: db_def
                     .map(|d| d.category().to_string())
                     .unwrap_or_else(|| "general".to_owned()),
+                execution_target: papillon_shared::ExecutionTarget::derive(
+                    db_def
+                        .and_then(|d| d.endpoint.as_ref())
+                        .map(|e| e.url_template.as_str()),
+                ),
+                lifecycle: db_def
+                    .map(|d| lifecycle_from_published_to(&d.published_to))
+                    .unwrap_or(papillon_shared::AgentLifecycle::Draft),
             }
         })
         .collect();
@@ -551,6 +579,78 @@ pub async fn unpublish_agent(
     Ok(())
 }
 
+/// Sign an agent advertisement and mark it published to the local PAP registry.
+/// Transitions Draft → Published (or Unpublished → Published on re-publish) by
+/// adding `LOCAL_REGISTRY_URL` to `published_to` and removing any unpublished sentinel.
+/// The advertisement is already signed when the agent was saved via `save_agent`.
+#[tauri::command]
+pub async fn sign_and_publish_local(
+    state: tauri::State<'_, AppState>,
+    agent_did: String,
+) -> Result<AgentInfo, String> {
+    let mut def = state
+        .db
+        .load_all_agents()
+        .map_err(|e| format!("Failed to load agents: {e}"))?
+        .into_iter()
+        .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
+        .ok_or_else(|| format!("Agent {agent_did} not found"))?;
+
+    def.published_to.retain(|u| u != LOCAL_UNPUBLISHED_SENTINEL);
+    if !def
+        .published_to
+        .iter()
+        .any(|u| u == crate::state::LOCAL_REGISTRY_URL)
+    {
+        def.published_to
+            .push(crate::state::LOCAL_REGISTRY_URL.to_string());
+    }
+    def.updated_at = chrono::Utc::now().to_rfc3339();
+
+    state
+        .db
+        .update_agent(&def)
+        .map_err(|e| format!("Failed to update agent: {e}"))?;
+
+    Ok(def_to_agent_info(&def))
+}
+
+/// Remove an agent advertisement from the local PAP registry.
+/// Transitions Published → Unpublished by replacing the `LOCAL_REGISTRY_URL` sentinel
+/// with `LOCAL_UNPUBLISHED_SENTINEL` in `published_to`.
+#[tauri::command]
+pub async fn unpublish_local(
+    state: tauri::State<'_, AppState>,
+    agent_did: String,
+) -> Result<AgentInfo, String> {
+    let mut def = state
+        .db
+        .load_all_agents()
+        .map_err(|e| format!("Failed to load agents: {e}"))?
+        .into_iter()
+        .find(|d| d.agent_did.as_deref() == Some(agent_did.as_str()))
+        .ok_or_else(|| format!("Agent {agent_did} not found"))?;
+
+    def.published_to
+        .retain(|u| u != crate::state::LOCAL_REGISTRY_URL);
+    if !def
+        .published_to
+        .iter()
+        .any(|u| u == LOCAL_UNPUBLISHED_SENTINEL)
+    {
+        def.published_to
+            .push(LOCAL_UNPUBLISHED_SENTINEL.to_string());
+    }
+    def.updated_at = chrono::Utc::now().to_rfc3339();
+
+    state
+        .db
+        .update_agent(&def)
+        .map_err(|e| format!("Failed to update agent: {e}"))?;
+
+    Ok(def_to_agent_info(&def))
+}
+
 /// Approve a federation agent advertisement for local use.
 ///
 /// Validates the advertisement signature, converts it into a `DynamicAgentDef`
@@ -764,5 +864,53 @@ mod tests {
             .expect("federation agent must appear in BM25 index");
         assert_eq!(m.agent_name.as_deref(), Some("FedWeather"));
         assert_eq!(m.action, "schema:CheckAction");
+    }
+
+    #[test]
+    fn lifecycle_empty_is_draft() {
+        assert_eq!(
+            lifecycle_from_published_to(&[]),
+            papillon_shared::AgentLifecycle::Draft
+        );
+    }
+
+    #[test]
+    fn lifecycle_local_sentinel_is_published() {
+        let v = vec![crate::state::LOCAL_REGISTRY_URL.to_string()];
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Published
+        );
+    }
+
+    #[test]
+    fn lifecycle_unpublished_sentinel_is_unpublished() {
+        let v = vec![LOCAL_UNPUBLISHED_SENTINEL.to_string()];
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Unpublished
+        );
+    }
+
+    #[test]
+    fn lifecycle_remote_url_only_is_draft() {
+        let v = vec!["https://registry.example.com".to_string()];
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Draft
+        );
+    }
+
+    #[test]
+    fn lifecycle_published_takes_precedence() {
+        // If somehow both sentinels are present, Published wins.
+        let v = vec![
+            crate::state::LOCAL_REGISTRY_URL.to_string(),
+            LOCAL_UNPUBLISHED_SENTINEL.to_string(),
+        ];
+        assert_eq!(
+            lifecycle_from_published_to(&v),
+            papillon_shared::AgentLifecycle::Published
+        );
     }
 }

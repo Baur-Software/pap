@@ -3,6 +3,7 @@ pub mod browse;
 pub mod canvas;
 pub mod pipelines;
 pub mod receipts;
+pub mod registry;
 pub mod scenario;
 pub mod sessions;
 pub mod settings;

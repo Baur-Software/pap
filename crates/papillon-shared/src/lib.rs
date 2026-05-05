@@ -11,7 +11,9 @@ pub mod intent;
 pub mod json_ld_query;
 pub mod pap_uri;
 pub use pap_uri::{resolve_pap_uri, LinkOrigin, PapUriError, ResolvedUri};
+pub mod schema_phrase;
 pub mod template_gen;
+pub use schema_phrase::schema_phrase;
 pub mod types;
 
 #[cfg(any(feature = "native", feature = "wasm"))]

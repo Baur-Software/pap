@@ -2,12 +2,11 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bridge;
-use crate::components::registry::agent_card::AgentCard;
 use crate::state::registry::RegistryState;
-use papillon_shared::{AgentInfo, RegistryInfo};
+use papillon_shared::{schema_phrase, AgentInfo, RegistryInfo};
 
 #[component]
-pub fn RegistryBrowser() -> impl IntoView {
+pub fn PeerBrowser() -> impl IntoView {
     let registry = expect_context::<RegistryState>();
 
     let is_connected = move || registry.info.get().is_some();
@@ -156,8 +155,41 @@ pub fn RegistryBrowser() -> impl IntoView {
                 }}
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
-                    {move || agents().into_iter().map(|agent| view! {
-                        <AgentCard agent=agent />
+                    {move || agents().into_iter().map(|agent| {
+                        let name = agent.name.clone();
+                        let provider = agent.provider_name.clone();
+                        let caps: Vec<String> = agent
+                            .capabilities
+                            .iter()
+                            .map(|c| schema_phrase(c))
+                            .collect();
+                        let cap_count = caps.len();
+                        let disclosure = if agent.requires_disclosure.is_empty() {
+                            None
+                        } else {
+                            Some(agent.requires_disclosure.join(", "))
+                        };
+                        view! {
+                            <div class="card agent-card" style="cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                    <h4 style="font-size: 14px; font-weight: 600;">{name}</h4>
+                                    <span class="badge badge-accent">{cap_count}" cap"</span>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                                    {provider}
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                    {caps.into_iter().map(|cap| view! {
+                                        <span class="badge badge-success">{cap}</span>
+                                    }).collect::<Vec<_>>()}
+                                </div>
+                                {disclosure.map(|d| view! {
+                                    <div style="margin-top: 8px; font-size: 11px; color: var(--warning);">
+                                        "Requires: "{d}
+                                    </div>
+                                })}
+                            </div>
+                        }
                     }).collect::<Vec<_>>()}
                 </div>
 

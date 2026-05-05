@@ -63,6 +63,7 @@ hydrate = [
 [dependencies]
 leptos        = { version = "0.8", features = [] }
 leptos_router = { version = "0.8", features = [] }
+heck = "0.5"
 leptos_axum   = { version = "0.8", optional = true }
 leptos_meta   = { version = "0.8", optional = true }
 serde         = { workspace = true }
