@@ -291,6 +291,10 @@ pub fn run() {
             sandbox_commands::sandbox_force_terminate,
             sandbox_commands::sandbox_get_receipt,
             sandbox_commands::sandbox_default_policy,
+            commands::vault::vault_open,
+            commands::vault::vault_seal,
+            commands::vault::vault_disclose_for_agent,
+            commands::vault::vault_store_credential,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Papillon");

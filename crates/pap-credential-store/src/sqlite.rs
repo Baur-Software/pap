@@ -318,6 +318,7 @@ fn row_to_vault_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<VaultItem> {
         1 => VaultItemType::ContinuityToken,
         2 => VaultItemType::VerifiableCredential,
         3 => VaultItemType::NotaryDesignation,
+        4 => VaultItemType::ApiCredential,
         other => {
             return Err(rusqlite::Error::FromSqlConversionFailure(
                 1,

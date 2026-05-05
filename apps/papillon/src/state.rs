@@ -17,6 +17,8 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicU16;
 use std::sync::{Arc, Mutex, RwLock};
 
+use pap_credential_store::{SqliteVaultStore, Vault};
+
 use crate::challenge_store::IdentityChallengeStore;
 use crate::commands::webauthn::WebAuthnChallengeStore;
 
@@ -110,6 +112,10 @@ pub struct AppState {
     /// LAN-reachable `pap://` URLs for this node, computed at startup.
     /// Excludes loopback; populated by `start_federation_server_async`.
     pub local_pap_urls: RwLock<Vec<String>>,
+    /// Encrypted credential vault (None when sealed).
+    pub vault: Arc<Mutex<Option<Vault<SqliteVaultStore>>>>,
+    /// Path to the vault database file on disk.
+    pub vault_path: PathBuf,
     /// Pending WebAuthn challenges awaiting completion.
     /// Keyed by a UUID challenge_id; entries expire after `CHALLENGE_TTL_SECS`.
     pub webauthn_challenges: WebAuthnChallengeStore,
@@ -148,11 +154,17 @@ impl AppState {
         let episode_db =
             EpisodeDb::open(db_path).expect("failed to open episode_db for approval records");
 
+        let vault_path = db_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("vault.db");
+
         Self::with_db(
             Arc::new(db),
             Arc::new(profiles_db),
             Arc::new(episode_db),
             catalog_dir,
+            vault_path,
         )
     }
 
@@ -241,6 +253,9 @@ impl AppState {
                     .unwrap_or_else(|e| e.into_inner())
                     .clone(),
             ),
+            // Background clones share the same vault Arc so seal/unseal is visible.
+            vault: self.vault.clone(),
+            vault_path: self.vault_path.clone(),
             // Each clone gets its own isolated challenge store — background
             // threads never need to complete WebAuthn ceremonies.
             webauthn_challenges: WebAuthnChallengeStore::new(),
@@ -259,6 +274,7 @@ impl AppState {
         profiles_db: Arc<ProfilesDatabase>,
         episode_db: Arc<EpisodeDb>,
         catalog_dir: PathBuf,
+        vault_path: PathBuf,
     ) -> Self {
         let model_manager = Arc::new(tokio::sync::Mutex::new(ModelManager::new()));
 
@@ -540,6 +556,8 @@ impl AppState {
             node_endpoint: RwLock::new(String::new()),
             node_cert_fingerprint: RwLock::new(String::new()),
             local_pap_urls: RwLock::new(Vec::new()),
+            vault: Arc::new(Mutex::new(None)),
+            vault_path,
             webauthn_challenges: WebAuthnChallengeStore::new(),
             identity_challenges: IdentityChallengeStore::new(),
             approval_gates: tokio::sync::RwLock::new(std::collections::HashMap::new()),
@@ -605,6 +623,7 @@ impl Default for AppState {
             Arc::new(db),
             Arc::new(profiles_db),
             Arc::new(episode_db),
+            PathBuf::new(),
             PathBuf::new(),
         )
     }
@@ -740,7 +759,7 @@ mod tests {
             crate::profiles_db::ProfilesDatabase::open_memory().expect("in-memory profiles db"),
         );
         let episode_db = Arc::new(EpisodeDb::open_in_memory().expect("in-memory episode_db"));
-        AppState::with_db(db, profiles_db, episode_db, PathBuf::new())
+        AppState::with_db(db, profiles_db, episode_db, PathBuf::new(), PathBuf::new())
     }
 
     #[test]

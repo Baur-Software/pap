@@ -305,6 +305,31 @@ impl<S: VaultStore> Vault<S> {
         items_to_summaries(vault_key.as_bytes(), &items)
     }
 
+    /// Store a named API credential (plaintext value encrypted at rest).
+    pub fn store_credential(&self, name: &str, value: &str) -> Result<(), VaultError> {
+        self.add_item(VaultItemData::ApiCredential {
+            name: name.to_string(),
+            value: value.to_string(),
+        })?;
+        Ok(())
+    }
+
+    /// Retrieve a named API credential value (decrypted from vault).
+    pub fn get_credential(&self, name: &str) -> Result<String, VaultError> {
+        for summary in self.list_items()? {
+            if let VaultItemData::ApiCredential {
+                name: item_name,
+                value,
+            } = self.get_item(&summary.id)?
+            {
+                if item_name == name {
+                    return Ok(value);
+                }
+            }
+        }
+        Err(VaultError::ItemNotFound(name.to_string()))
+    }
+
     /// Extract a principal seed from a PrincipalSeed item, returned as Zeroizing bytes.
     pub fn get_principal_seed(&self, id: &str) -> Result<Zeroizing<[u8; 32]>, VaultError> {
         let data = self.get_item(id)?;

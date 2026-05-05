@@ -13,4 +13,5 @@ pub mod recovery;
 pub mod registry;
 pub mod settings_vocab;
 pub mod templates;
+pub mod vault;
 pub mod webauthn;
