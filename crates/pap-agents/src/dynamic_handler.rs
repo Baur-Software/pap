@@ -216,23 +216,11 @@ impl AgentHandler for DynamicAgentHandler {
                             }
                         }
                     } else {
-                        // Non-2xx: surface a clean error message.
-                        // Try to parse JSON and extract a "title" or "message" field so raw
-                        // third-party error strings (e.g. "Sorry pal, ...") never reach the UI.
-                        let body = resp.text().unwrap_or_default();
-                        let user_msg = serde_json::from_str::<serde_json::Value>(&body)
-                            .ok()
-                            .and_then(|v| {
-                                // Prefer "title", fall back to "message", then "error"
-                                v.get("title")
-                                    .or_else(|| v.get("error"))
-                                    .and_then(|s| s.as_str())
-                                    .map(|s| s.to_string())
-                            })
-                            .unwrap_or_else(|| {
-                                format!("HTTP {} — no results found", status.as_u16())
-                            });
-                        return Err(TransportError::ServerError(user_msg));
+                        // Non-2xx: fall through to LLM rather than surfacing the
+                        // third-party API's error message directly to the user.
+                        // API errors (missing keys, wrong params, rate limits) are
+                        // implementation details — the LLM can still answer the query.
+                        let _ = status;
                     }
                 }
                 Err(e) => {
