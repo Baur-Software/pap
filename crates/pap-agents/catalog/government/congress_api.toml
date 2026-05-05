@@ -5,7 +5,7 @@ provider = "Library of Congress"
 description = "Search U.S. Congressional bills and legislation via the Congress.gov API."
 action = "schema:SearchAction"
 object_types = ["schema:GovernmentPermit"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:GovernmentPermit"]
 source = "Catalog"
 llm_instructions = """
@@ -17,7 +17,7 @@ Keep your response factual and nonpartisan.
 subagents = []
 
 [endpoint]
-url_template = "https://api.congress.gov/v3/bill?query={query}&format=json&limit=5&api_key=DEMO_KEY"
+url_template = "https://api.congress.gov/v3/bill?query={query}&format=json&limit=5&api_key={api_key}"
 method = "Get"
 response_jsonpath = "$.bills[0].title"
 response_schema_type = "schema:GovernmentPermit"
@@ -31,3 +31,10 @@ description = "Maximum number of results to return per query"
 defaultValue = 5
 minValue = 1
 maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Congress.gov API key"
+defaultValue = ""

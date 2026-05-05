@@ -5,14 +5,21 @@ provider = "Fixer.io"
 description = "Get real-time and historical forex exchange rates from Fixer.io."
 action = "schema:FindAction"
 object_types = ["schema:MonetaryAmount"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:MonetaryAmount"]
 source = "Catalog"
 llm_instructions = "You are a financial information assistant. Provide factual financial data about Fixer.io Exchange Rates. This is for educational purposes only, not financial advice."
 subagents = []
 
 [endpoint]
-url_template = "https://data.fixer.io/api/latest?access_key=demo&base={query}"
+url_template = "https://data.fixer.io/api/latest?access_key={api_key}&base={query}"
 method = "Get"
 response_jsonpath = "$.rates"
 response_schema_type = "schema:MonetaryAmount"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Fixer.io API key"
+defaultValue = ""

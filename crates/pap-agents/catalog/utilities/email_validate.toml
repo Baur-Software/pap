@@ -5,14 +5,21 @@ provider = "Hunter.io"
 description = "Validate email address format and domain existence."
 action = "schema:FindAction"
 object_types = ["schema:WebSite"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:WebSite"]
 source = "Catalog"
 llm_instructions = "You are a utility assistant for Email Validation. Provide clear, helpful responses for the requested operation."
 subagents = []
 
 [endpoint]
-url_template = "https://api.hunter.io/v2/email-verifier?email={query}&api_key=demo"
+url_template = "https://api.hunter.io/v2/email-verifier?email={query}&api_key={api_key}"
 method = "Get"
 response_jsonpath = "$.data.status"
 response_schema_type = "schema:WebSite"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Hunter.io API key"
+defaultValue = ""

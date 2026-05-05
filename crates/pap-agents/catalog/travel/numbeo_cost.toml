@@ -5,14 +5,14 @@ provider = "Numbeo"
 description = "Compare cost of living data between cities worldwide."
 action = "schema:FindAction"
 object_types = ["schema:MonetaryAmount"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:MonetaryAmount"]
 source = "Catalog"
 llm_instructions = "You are a travel assistant. Provide helpful travel information about Numbeo Cost of Living: relevant details, tips, and context for travelers."
 subagents = []
 
 [endpoint]
-url_template = "https://www.numbeo.com/api/indices?api_key=demo&query={query}"
+url_template = "https://www.numbeo.com/api/indices?api_key={api_key}&query={query}"
 method = "Get"
 response_jsonpath = "$.city"
 response_schema_type = "schema:MonetaryAmount"
@@ -24,3 +24,10 @@ valueName = "open_now"
 name = "Open Now"
 description = "Only show currently open venues"
 defaultValue = false
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Numbeo API key"
+defaultValue = ""

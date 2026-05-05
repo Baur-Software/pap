@@ -5,14 +5,21 @@ provider = "Tennis.com API"
 description = "Get current ATP and WTA tennis player world rankings."
 action = "schema:FindAction"
 object_types = ["schema:SportsTeam"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:SportsTeam"]
 source = "Catalog"
 llm_instructions = "You are a sports and athletics information assistant. Provide statistics, records, and context for the queried sport."
 subagents = []
 
 [endpoint]
-url_template = "https://api.sportsdata.io/v3/tennis/scores/json/Players?key=demo"
+url_template = "https://api.sportsdata.io/v3/tennis/scores/json/Players?key={api_key}"
 method = "Get"
 response_jsonpath = "0.FullName"
 response_schema_type = "schema:SportsTeam"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your SportsData.io API key"
+defaultValue = ""

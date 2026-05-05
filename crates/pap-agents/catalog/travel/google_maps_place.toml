@@ -5,14 +5,14 @@ provider = "Google"
 description = "Search places and businesses via Google Places API."
 action = "schema:SearchAction"
 object_types = ["schema:LocalBusiness"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:LocalBusiness"]
 source = "Catalog"
 llm_instructions = "You are a travel assistant. Provide helpful travel information about Google Places Search: relevant details, tips, and context for travelers."
 subagents = []
 
 [endpoint]
-url_template = "https://maps.googleapis.com/maps/api/place/textsearch/json?query={query}&key=demo"
+url_template = "https://maps.googleapis.com/maps/api/place/textsearch/json?query={query}&key={api_key}"
 method = "Get"
 response_jsonpath = "$.results[0].name"
 response_schema_type = "schema:LocalBusiness"
@@ -24,3 +24,10 @@ valueName = "open_now"
 name = "Open Now"
 description = "Only show currently open venues"
 defaultValue = false
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Google Maps Platform API key"
+defaultValue = ""

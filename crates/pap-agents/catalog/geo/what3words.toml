@@ -5,14 +5,21 @@ provider = "what3words"
 description = "Convert what3words 3-word addresses to GPS coordinates."
 action = "schema:FindAction"
 object_types = ["schema:GeoCoordinates"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:GeoCoordinates"]
 source = "Catalog"
 llm_instructions = "You are a geographic information assistant. Provide location data, coordinates, and geographic context for the requested place."
 subagents = []
 
 [endpoint]
-url_template = "https://api.what3words.com/v3/convert-to-coordinates?words={query}&key=demo"
+url_template = "https://api.what3words.com/v3/convert-to-coordinates?words={query}&key={api_key}"
 method = "Get"
 response_jsonpath = "$.coordinates.lat"
 response_schema_type = "schema:GeoCoordinates"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your what3words API key"
+defaultValue = ""

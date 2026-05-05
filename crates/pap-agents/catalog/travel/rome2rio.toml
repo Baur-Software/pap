@@ -5,14 +5,14 @@ provider = "Rome2rio"
 description = "Find travel routes by plane, train, bus, ferry from A to B."
 action = "schema:FindAction"
 object_types = ["schema:Trip"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:Trip"]
 source = "Catalog"
 llm_instructions = "You are a travel assistant. Provide helpful travel information about Rome2rio Route Planner: relevant details, tips, and context for travelers."
 subagents = []
 
 [endpoint]
-url_template = "https://free.rome2rio.com/api/1.4/json/Search?key=demo&oName={origin}&dName={destination}"
+url_template = "https://free.rome2rio.com/api/1.4/json/Search?key={api_key}&oName={origin}&dName={destination}"
 method = "Get"
 response_jsonpath = "$.routes[0].name"
 response_schema_type = "schema:Trip"
@@ -24,3 +24,10 @@ valueName = "open_now"
 name = "Open Now"
 description = "Only show currently open venues"
 defaultValue = false
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Rome2rio API key"
+defaultValue = ""

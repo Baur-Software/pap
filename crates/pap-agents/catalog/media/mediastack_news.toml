@@ -5,14 +5,14 @@ provider = "Mediastack"
 description = "Get live news from 7,500+ global news sources via Mediastack."
 action = "schema:SearchAction"
 object_types = ["schema:NewsArticle"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:NewsArticle"]
 source = "Catalog"
 llm_instructions = "You are a media and journalism assistant. Provide relevant news, articles, and content summaries from Mediastack."
 subagents = []
 
 [endpoint]
-url_template = "https://api.mediastack.com/v1/news?access_key=demo&keywords={query}&limit=5"
+url_template = "https://api.mediastack.com/v1/news?access_key={api_key}&keywords={query}&limit=5"
 method = "Get"
 response_jsonpath = "$.data[0].title"
 response_schema_type = "schema:NewsArticle"
@@ -33,3 +33,10 @@ valueName = "include_adult_content"
 name = "Include Adult Content"
 description = "Show results that may contain mature content"
 defaultValue = false
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Mediastack API key"
+defaultValue = ""

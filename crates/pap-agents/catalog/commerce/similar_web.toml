@@ -5,14 +5,21 @@ provider = "SimilarWeb"
 description = "Get website traffic estimates and audience demographics."
 action = "schema:FindAction"
 object_types = ["schema:WebSite"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:WebSite"]
 source = "Catalog"
 llm_instructions = "You are a business and commerce research assistant. Provide relevant product, market, and company information."
 subagents = []
 
 [endpoint]
-url_template = "https://api.similarweb.com/v1/website/{query}/traffic-and-engagement/visits?api_key=demo&country=world"
+url_template = "https://api.similarweb.com/v1/website/{query}/traffic-and-engagement/visits?api_key={api_key}&country=world"
 method = "Get"
 response_jsonpath = "$.visits[0].visits"
 response_schema_type = "schema:WebSite"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your SimilarWeb API key"
+defaultValue = ""

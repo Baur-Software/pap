@@ -5,14 +5,14 @@ provider = "Congress.gov"
 description = "Search congressional votes and roll call records via Congress.gov API."
 action = "schema:SearchAction"
 object_types = ["schema:LegislationObject"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:LegislationObject"]
 source = "Catalog"
 llm_instructions = "You are a government and public records assistant. Provide factual information about legislation, policy, and government data."
 subagents = []
 
 [endpoint]
-url_template = "https://api.congress.gov/v3/vote?q={query}&limit=5&api_key=demo"
+url_template = "https://api.congress.gov/v3/vote?q={query}&limit=5&api_key={api_key}"
 method = "Get"
 response_jsonpath = "$.votes.vote[0].description"
 response_schema_type = "schema:LegislationObject"
@@ -26,3 +26,10 @@ description = "Maximum number of results to return per query"
 defaultValue = 5
 minValue = 1
 maxValue = 50
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Congress.gov API key"
+defaultValue = ""

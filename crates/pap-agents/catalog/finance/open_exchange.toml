@@ -5,14 +5,21 @@ provider = "Open Exchange Rates"
 description = "Access hourly updated exchange rates for 170 world currencies."
 action = "schema:TradeAction"
 object_types = ["schema:MonetaryAmount"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:MonetaryAmount"]
 source = "Catalog"
 llm_instructions = "You are a financial information assistant. Provide factual financial data about Open Exchange Rates. This is for educational purposes only, not financial advice."
 subagents = []
 
 [endpoint]
-url_template = "https://openexchangerates.org/api/latest.json?app_id=demo&base={query}"
+url_template = "https://openexchangerates.org/api/latest.json?app_id={api_key}&base={query}"
 method = "Get"
 response_jsonpath = "$.rates"
 response_schema_type = "schema:MonetaryAmount"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Open Exchange Rates app ID"
+defaultValue = ""

@@ -5,14 +5,21 @@ provider = "Alpha Vantage"
 description = "Search stock symbols and get real-time equity quotes via Alpha Vantage API."
 action = "schema:SearchAction"
 object_types = ["schema:InvestmentFund"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:InvestmentFund"]
 source = "Catalog"
 llm_instructions = "You are a financial data assistant. Provide stock symbol, company name, current price, change, and volume. Do not give investment advice."
 subagents = []
 
 [endpoint]
-url_template = "https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey=demo"
+url_template = "https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey={api_key}"
 method = "Get"
 response_jsonpath = "$.bestMatches[0].2. name"
 response_schema_type = "schema:InvestmentFund"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Alpha Vantage API key"
+defaultValue = ""

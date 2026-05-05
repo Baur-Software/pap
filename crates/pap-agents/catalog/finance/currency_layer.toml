@@ -5,14 +5,21 @@ provider = "currencylayer"
 description = "Access 168 currency exchange rates updated every hour."
 action = "schema:FindAction"
 object_types = ["schema:MonetaryAmount"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:MonetaryAmount"]
 source = "Catalog"
 llm_instructions = "You are a financial information assistant. Provide factual financial data about Currency Layer Rates. This is for educational purposes only, not financial advice."
 subagents = []
 
 [endpoint]
-url_template = "https://api.currencylayer.com/live?access_key=demo&source={query}"
+url_template = "https://api.currencylayer.com/live?access_key={api_key}&source={query}"
 method = "Get"
 response_jsonpath = "$.quotes"
 response_schema_type = "schema:MonetaryAmount"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your currencylayer API key"
+defaultValue = ""

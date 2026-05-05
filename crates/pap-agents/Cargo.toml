@@ -44,6 +44,7 @@ serde_json = { workspace = true }
 pap-credential-store = { workspace = true, features = ["testing"] }
 rand = { workspace = true }
 tempfile = "3"
+walkdir = "2"
 
 [lints]
 workspace = true

@@ -5,14 +5,21 @@ provider = "NASA InSight"
 description = "Get weather conditions on Mars from NASA InSight lander data."
 action = "schema:FindAction"
 object_types = ["schema:WeatherForecast"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:WeatherForecast"]
 source = "Catalog"
 llm_instructions = "You are a scientific information assistant for Mars Weather. Provide accurate, well-contextualized scientific information."
 subagents = []
 
 [endpoint]
-url_template = "https://api.nasa.gov/insight_weather/?api_key=DEMO_KEY&feedtype=json&ver=1.0"
+url_template = "https://api.nasa.gov/insight_weather/?api_key={api_key}&feedtype=json&ver=1.0"
 method = "Get"
 response_jsonpath = "$.sol_keys[0]"
 response_schema_type = "schema:WeatherForecast"
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your NASA API key"
+defaultValue = ""

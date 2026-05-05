@@ -5,14 +5,14 @@ provider = "Europeana Foundation"
 description = "Search European cultural heritage: art, books, music, and historical documents."
 action = "schema:SearchAction"
 object_types = ["schema:CreativeWork"]
-requires_disclosure = []
+requires_disclosure = ["api_key"]
 returns = ["schema:CreativeWork"]
 source = "Catalog"
 llm_instructions = "You are a cultural heritage assistant. Describe the item, its origin, time period, medium, and holding institution."
 subagents = []
 
 [endpoint]
-url_template = "https://api.europeana.eu/record/v2/search.json?query={query}&rows=5&wskey=api2demo"
+url_template = "https://api.europeana.eu/record/v2/search.json?query={query}&rows=5&wskey={api_key}"
 method = "Get"
 response_jsonpath = "$.items[0].title[0]"
 response_schema_type = "schema:CreativeWork"
@@ -33,3 +33,10 @@ valueName = "open_access_only"
 name = "Open Access Only"
 description = "Only return freely accessible publications"
 defaultValue = false
+
+[[configurable_properties]]
+"@type" = "PropertyValueSpecification"
+valueName = "api_key"
+name = "API Key"
+description = "Your Europeana Foundation API key"
+defaultValue = ""
