@@ -3,6 +3,7 @@ pub use canvas_ops::{
     filter_messages_by_canvas, merge_canvases_from_records, merge_messages_dedup,
     parse_inline_citations, segment_with_citations, InlineCitation, TextSegment,
 };
+pub mod credential_gate;
 pub mod dataset_types;
 pub use dataset_types::{DatasetDiscoveryState, DatasetResult};
 pub mod events;
