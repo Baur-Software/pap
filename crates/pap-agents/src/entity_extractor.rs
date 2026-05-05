@@ -175,8 +175,8 @@ fn parse_owner_repo(query: &str) -> Option<(&str, &str)> {
         // Absolute URL like "https://github.com/owner/repo"
         let after_scheme = &query[slash_pos + 2..];
         after_scheme
-            .splitn(2, '/')
-            .nth(1)
+            .split_once('/')
+            .map(|x| x.1)
             .unwrap_or(after_scheme)
     } else {
         // May be "github.com/owner/repo" or plain "owner/repo".

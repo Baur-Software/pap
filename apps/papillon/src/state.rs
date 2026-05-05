@@ -129,10 +129,7 @@ pub struct AppState {
     /// Stores (selected_agent_names, filled_values) keyed by approval_request_id.
     /// Written by `canvas_approve_block` before signaling the gate, read by `canvas_plan_prompt`.
     pub approval_values: tokio::sync::RwLock<
-        std::collections::HashMap<
-            String,
-            (Vec<String>, std::collections::HashMap<String, String>),
-        >,
+        std::collections::HashMap<String, (Vec<String>, std::collections::HashMap<String, String>)>,
     >,
     /// Watch-channel sender for the orchestrator personal-context preamble.
     /// Push a fresh preamble string whenever episode history or traits change.

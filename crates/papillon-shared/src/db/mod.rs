@@ -378,7 +378,9 @@ pub trait DatabaseOps: Send + Sync {
     fn get_principal_attribute(&self, prop: &str) -> Result<Option<String>, DbError>;
 
     /// Retrieve all stored principal attributes as a map of prop_name → value.
-    fn get_all_principal_attributes(&self) -> Result<std::collections::HashMap<String, String>, DbError>;
+    fn get_all_principal_attributes(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, DbError>;
 }
 
 /// A preference signal recording which agent was selected for a given

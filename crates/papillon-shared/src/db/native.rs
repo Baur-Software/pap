@@ -1993,13 +1993,17 @@ impl DatabaseOps for NativeDatabase {
         .map_err(|e| DbError(format!("db get_principal_attribute: {e}")))
     }
 
-    fn get_all_principal_attributes(&self) -> Result<std::collections::HashMap<String, String>, DbError> {
+    fn get_all_principal_attributes(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, DbError> {
         let conn = self.conn.lock().map_err(|e| DbError(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT prop_name, value FROM principal_attributes ORDER BY last_used DESC")
             .map_err(|e| DbError(format!("db get_all_principal_attributes: {e}")))?;
         let map: Result<std::collections::HashMap<String, String>, _> = stmt
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
             .map_err(|e| DbError(format!("db get_all_principal_attributes query: {e}")))?
             .map(|r| r.map_err(|e| DbError(format!("db row: {e}"))))
             .collect();
@@ -3265,7 +3269,8 @@ mod tests {
     #[test]
     fn principal_attributes_round_trip() {
         let db = NativeDatabase::open_memory().unwrap();
-        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
         let v = db.get_principal_attribute("schema:givenName").unwrap();
         assert_eq!(v, Some("Alice".to_string()));
     }
@@ -3273,8 +3278,10 @@ mod tests {
     #[test]
     fn principal_attributes_upsert() {
         let db = NativeDatabase::open_memory().unwrap();
-        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
-        db.set_principal_attribute("schema:givenName", "Bob").unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
+        db.set_principal_attribute("schema:givenName", "Bob")
+            .unwrap();
         let v = db.get_principal_attribute("schema:givenName").unwrap();
         assert_eq!(v, Some("Bob".to_string()));
     }
@@ -3289,8 +3296,10 @@ mod tests {
     #[test]
     fn get_all_principal_attributes_returns_all() {
         let db = NativeDatabase::open_memory().unwrap();
-        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
-        db.set_principal_attribute("schema:departureAirport", "LAX").unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
+        db.set_principal_attribute("schema:departureAirport", "LAX")
+            .unwrap();
         let map = db.get_all_principal_attributes().unwrap();
         assert_eq!(map.get("schema:givenName"), Some(&"Alice".to_string()));
         assert_eq!(map.get("schema:departureAirport"), Some(&"LAX".to_string()));

@@ -144,7 +144,10 @@ fn build_handler(
         return Ok(h.clone());
     }
     let Some(pap_url) = source_url else {
-        return Err(PapillonError::from(format!("No handler for {}", agent_name)));
+        return Err(PapillonError::from(format!(
+            "No handler for {}",
+            agent_name
+        )));
     };
     let parsed = PapUrl::parse(pap_url).map_err(|e| PapillonError::from(e.to_string()))?;
     let endpoint = parsed.https_endpoint();
@@ -165,7 +168,10 @@ fn build_handler(
         Some(fp) => {
             let http_client =
                 build_pinned_client(&[fp]).map_err(|e| PapillonError::from(e.to_string()))?;
-            Ok(Arc::new(RemoteAgentHandler::with_client(&base_url, http_client)))
+            Ok(Arc::new(RemoteAgentHandler::with_client(
+                &base_url,
+                http_client,
+            )))
         }
         None => Err(PapillonError::from(format!(
             "No cert fingerprint for peer {} — navigate to it first",
@@ -200,7 +206,14 @@ pub(crate) async fn resolve_top_agents(
     };
 
     // Collect all local candidates with scores
-    let mut all_scored: Vec<(String, String, Vec<String>, Vec<String>, Option<String>, f64)> = {
+    let mut all_scored: Vec<(
+        String,
+        String,
+        Vec<String>,
+        Vec<String>,
+        Option<String>,
+        f64,
+    )> = {
         let local = state
             .local_registry
             .lock()
@@ -242,8 +255,14 @@ pub(crate) async fn resolve_top_agents(
             .registries
             .read()
             .map_err(|e| PapillonError::from(e.to_string()))?;
-        let mut remote_scored: Vec<(String, String, Vec<String>, Vec<String>, Option<String>, f64)> =
-            Vec::new();
+        let mut remote_scored: Vec<(
+            String,
+            String,
+            Vec<String>,
+            Vec<String>,
+            Option<String>,
+            f64,
+        )> = Vec::new();
         for (url, registry) in registries.iter() {
             let remote_candidates = registry.query_local_satisfiable(action_type, &[]);
             // Collect the eligible candidates into an owned vec first so we
@@ -252,7 +271,9 @@ pub(crate) async fn resolve_top_agents(
                 .iter()
                 .filter(|a| !exclude_agents.contains(&a.name))
                 .filter(|a| {
-                    !all_scored.iter().any(|(existing, _, _, _, _, _)| existing == &a.name)
+                    !all_scored
+                        .iter()
+                        .any(|(existing, _, _, _, _, _)| existing == &a.name)
                 })
                 .filter(|a| {
                     !remote_scored

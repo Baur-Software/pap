@@ -504,18 +504,29 @@ impl DatabaseOps for WasmDatabase {
     }
 
     fn set_principal_attribute(&self, prop: &str, value: &str) -> Result<(), DbError> {
-        let mut map = self.principal_attributes.lock().map_err(|e| DbError(format!("db lock: {e}")))?;
+        let mut map = self
+            .principal_attributes
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
         map.insert(prop.to_string(), value.to_string());
         Ok(())
     }
 
     fn get_principal_attribute(&self, prop: &str) -> Result<Option<String>, DbError> {
-        let map = self.principal_attributes.lock().map_err(|e| DbError(format!("db lock: {e}")))?;
+        let map = self
+            .principal_attributes
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
         Ok(map.get(prop).cloned())
     }
 
-    fn get_all_principal_attributes(&self) -> Result<std::collections::HashMap<String, String>, DbError> {
-        let map = self.principal_attributes.lock().map_err(|e| DbError(format!("db lock: {e}")))?;
+    fn get_all_principal_attributes(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, DbError> {
+        let map = self
+            .principal_attributes
+            .lock()
+            .map_err(|e| DbError(format!("db lock: {e}")))?;
         Ok(map.clone())
     }
 }
@@ -1123,7 +1134,8 @@ mod tests {
     #[test]
     fn wasm_principal_attributes_round_trip() {
         let db = WasmDatabase::new().unwrap();
-        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
         let v = db.get_principal_attribute("schema:givenName").unwrap();
         assert_eq!(v, Some("Alice".to_string()));
     }
@@ -1131,8 +1143,10 @@ mod tests {
     #[test]
     fn wasm_principal_attributes_upsert() {
         let db = WasmDatabase::new().unwrap();
-        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
-        db.set_principal_attribute("schema:givenName", "Bob").unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
+        db.set_principal_attribute("schema:givenName", "Bob")
+            .unwrap();
         let v = db.get_principal_attribute("schema:givenName").unwrap();
         assert_eq!(v, Some("Bob".to_string()));
     }
@@ -1147,8 +1161,10 @@ mod tests {
     #[test]
     fn wasm_get_all_principal_attributes_returns_all() {
         let db = WasmDatabase::new().unwrap();
-        db.set_principal_attribute("schema:givenName", "Alice").unwrap();
-        db.set_principal_attribute("schema:departureAirport", "LAX").unwrap();
+        db.set_principal_attribute("schema:givenName", "Alice")
+            .unwrap();
+        db.set_principal_attribute("schema:departureAirport", "LAX")
+            .unwrap();
         let map = db.get_all_principal_attributes().unwrap();
         assert_eq!(map.get("schema:givenName"), Some(&"Alice".to_string()));
         assert_eq!(map.get("schema:departureAirport"), Some(&"LAX".to_string()));

@@ -4,7 +4,9 @@ use tauri::{AppHandle, Emitter, State};
 use crate::challenge_store::SignedChallenge;
 use crate::error::PapillonError;
 use crate::state::AppState;
-use papillon_shared::{AgentCandidate, BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine};
+use papillon_shared::{
+    AgentCandidate, BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine,
+};
 
 use super::super::orchestrator::hash_agent_did;
 use super::execution::process_prompt;

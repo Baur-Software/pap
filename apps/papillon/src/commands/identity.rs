@@ -41,9 +41,9 @@ pub fn sign_approval_challenge(
         .signer
         .read()
         .map_err(|e| PapillonError::from(e.to_string()))?;
-    let signer = signer_lock
-        .as_ref()
-        .ok_or_else(|| PapillonError::from("no principal identity — create one first".to_string()))?;
+    let signer = signer_lock.as_ref().ok_or_else(|| {
+        PapillonError::from("no principal identity — create one first".to_string())
+    })?;
 
     let token = state.identity_challenges.issue();
     let nonce = base64::engine::general_purpose::URL_SAFE_NO_PAD

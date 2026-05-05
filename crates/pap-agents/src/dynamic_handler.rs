@@ -88,9 +88,13 @@ impl AgentHandler for DynamicAgentHandler {
             )));
         }
         let session_id = uuid::Uuid::new_v4().to_string();
-        let did = self
-            .sessions
-            .insert(session_id.clone(), DynamicSession { query: None, disclosed_props: HashMap::new() })?;
+        let did = self.sessions.insert(
+            session_id.clone(),
+            DynamicSession {
+                query: None,
+                disclosed_props: HashMap::new(),
+            },
+        )?;
         Ok((session_id, did))
     }
 
@@ -143,11 +147,9 @@ impl AgentHandler for DynamicAgentHandler {
     }
 
     fn execute(&self, session_id: &str) -> Result<Value, TransportError> {
-        let (query, disclosed) = self
-            .sessions
-            .with(session_id, |data| {
-                (data.query.clone(), data.disclosed_props.clone())
-            })?;
+        let (query, disclosed) = self.sessions.with(session_id, |data| {
+            (data.query.clone(), data.disclosed_props.clone())
+        })?;
         let query = query.ok_or_else(|| {
             TransportError::ServerError("No query provided in disclosures".into())
         })?;
@@ -173,7 +175,8 @@ impl AgentHandler for DynamicAgentHandler {
             // Priority: (1) disclosed props from Phase 3 (SD-JWT vault claims, user-explicit),
             //           (2) agent_props (loaded from agent_settings at registration),
             //           (3) entity extractor (LLM → heuristic)
-            let extra_params = crate::entity_extractor::extract_template_params(&endpoint.url_template);
+            let extra_params =
+                crate::entity_extractor::extract_template_params(&endpoint.url_template);
             if !extra_params.is_empty() {
                 // Pre-fill from high-priority sources first (no LLM needed for these)
                 let mut resolved: HashMap<String, String> = HashMap::new();
@@ -193,7 +196,8 @@ impl AgentHandler for DynamicAgentHandler {
                     .collect();
 
                 if !unresolved.is_empty() {
-                    let extractor = crate::entity_extractor::EntityExtractor::new(self.make_llm_client());
+                    let extractor =
+                        crate::entity_extractor::EntityExtractor::new(self.make_llm_client());
                     let extractor_results = extractor.resolve_params(&unresolved, &query);
                     resolved.extend(extractor_results);
                 }
@@ -288,14 +292,14 @@ impl AgentHandler for DynamicAgentHandler {
                                     .and_then(|s| s.as_str())
                                     .map(|s| s.to_string())
                             })
-                            .unwrap_or_else(|| format!("HTTP {} — no results found", status.as_u16()));
+                            .unwrap_or_else(|| {
+                                format!("HTTP {} — no results found", status.as_u16())
+                            });
                         return Err(TransportError::ServerError(user_msg));
                     }
                 }
                 Err(e) => {
-                    return Err(TransportError::ServerError(format!(
-                        "network error: {e}"
-                    )));
+                    return Err(TransportError::ServerError(format!("network error: {e}")));
                 }
             }
         }

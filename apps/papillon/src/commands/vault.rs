@@ -5,10 +5,7 @@ use crate::error::PapillonError;
 use crate::state::AppState;
 
 #[tauri::command]
-pub fn vault_open(
-    state: State<'_, AppState>,
-    password: String,
-) -> Result<(), PapillonError> {
+pub fn vault_open(state: State<'_, AppState>, password: String) -> Result<(), PapillonError> {
     let store = SqliteVaultStore::open(&state.vault_path)
         .map_err(|e| PapillonError::from(e.to_string()))?;
 
@@ -24,8 +21,7 @@ pub fn vault_open(
         Err(pap_credential_store::VaultError::VaultNotInitialized) => {
             let store2 = SqliteVaultStore::open(&state.vault_path)
                 .map_err(|e| PapillonError::from(e.to_string()))?;
-            Vault::create(store2, &password)
-                .map_err(|e| PapillonError::from(e.to_string()))?
+            Vault::create(store2, &password).map_err(|e| PapillonError::from(e.to_string()))?
         }
         Err(e) => return Err(PapillonError::from(e.to_string())),
     };

@@ -4,8 +4,16 @@
 /// The canonical set of param names that represent API credentials.
 /// These must come from the vault, never from query text or agent settings.
 pub const CREDENTIAL_PARAM_NAMES: &[&str] = &[
-    "api_key", "apikey", "access_key", "access_token", "key", "token",
-    "api_token", "consumer_key", "user_key", "wskey",
+    "api_key",
+    "apikey",
+    "access_key",
+    "access_token",
+    "key",
+    "token",
+    "api_token",
+    "consumer_key",
+    "user_key",
+    "wskey",
 ];
 
 /// Returns true if any item in `requires_disclosure` is a known credential param name.
@@ -47,7 +55,11 @@ mod tests {
 
     #[test]
     fn credential_params_extracted() {
-        let reqs = vec!["query".to_string(), "api_key".to_string(), "lat".to_string()];
+        let reqs = vec![
+            "query".to_string(),
+            "api_key".to_string(),
+            "lat".to_string(),
+        ];
         let creds = credential_params_for(&reqs);
         assert_eq!(creds, vec!["api_key".to_string()]);
     }
