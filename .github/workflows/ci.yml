@@ -179,6 +179,7 @@ jobs:
   registry-probe:
     name: Registry smoke (startup probe)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [changes]
     if: |
       always() &&
