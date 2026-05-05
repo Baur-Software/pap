@@ -10,7 +10,7 @@ use super::super::orchestrator::hash_agent_did;
 use super::execution::process_prompt;
 use super::helpers::maybe_auto_generate_template;
 use super::intent::classify_intent;
-use super::resolution::resolve_agent;
+use super::resolution::resolve_top_agents;
 
 /// Two-phase canvas prompt: plan first (emit `AwaitingApproval`), then wait for
 /// principal approval before running the full handshake.
@@ -38,8 +38,21 @@ pub async fn canvas_plan_prompt(
         .await;
     }
 
-    // Resolve agent to build the IntentPlan.
-    let resolved = resolve_agent(&state, &action_type, &preferred, &[]).await?;
+    // Resolve top-3 candidates.
+    let candidates_resolved = resolve_top_agents(&state, &action_type, &preferred, &[], 3).await?;
+
+    // Primary agent is the top-scored candidate.
+    let primary = &candidates_resolved[0];
+
+    // Union of requires_disclosure across all candidates (dedup, insertion order).
+    let mut union_disclosure: Vec<String> = Vec::new();
+    for c in &candidates_resolved {
+        for prop in &c.requires_disclosure {
+            if !union_disclosure.contains(prop) {
+                union_disclosure.push(prop.clone());
+            }
+        }
+    }
 
     let approval_request_id = uuid::Uuid::new_v4().to_string();
 
@@ -50,21 +63,32 @@ pub async fn canvas_plan_prompt(
             .map_err(|e| PapillonError::from(e.to_string()))?;
         cfg.mandate_ttl_hours
     };
+
+    let candidates: Vec<AgentCandidate> = candidates_resolved
+        .iter()
+        .map(|r| AgentCandidate {
+            name: r.name.clone(),
+            did: r.did.clone(),
+            requires_disclosure: r.requires_disclosure.clone(),
+            returns: r.returns.clone(),
+        })
+        .collect();
+
     let plan = IntentPlan {
         action: action_type.to_string(),
-        selected_agent_name: resolved.name.clone(),
-        selected_agent_did: Some(resolved.did.clone()),
-        requires_disclosure: resolved.requires_disclosure.clone(),
-        returns: resolved.returns.clone(),
+        selected_agent_name: primary.name.clone(),
+        selected_agent_did: Some(primary.did.clone()),
+        requires_disclosure: union_disclosure,
+        returns: primary.returns.clone(),
         approval_request_id: approval_request_id.clone(),
         ttl_hours: mandate_ttl_hours as u32,
-        candidates: vec![AgentCandidate {
-            name: resolved.name.clone(),
-            did: resolved.did.clone(),
-            requires_disclosure: resolved.requires_disclosure.clone(),
-            returns: resolved.returns.clone(),
-        }],
+        candidates,
     };
+
+    // Extract owned primary identity strings before any await points to avoid
+    // holding a borrow across the oneshot receiver.await below.
+    let primary_did = primary.did.clone();
+    let primary_name = primary.name.clone();
 
     // Check auto-approve shortcut: if configured and no disclosure required, skip the gate.
     let auto_approve = {
@@ -161,8 +185,8 @@ pub async fn canvas_plan_prompt(
         PreferenceEngine::new(state.db.as_ref()).save_approved_scopes(
             &action_type,
             schema_type_for_pref,
-            &hash_agent_did(&resolved.did),
-            &resolved.name,
+            &hash_agent_did(&primary_did),
+            &primary_name,
             &plan.requires_disclosure,
         );
 
