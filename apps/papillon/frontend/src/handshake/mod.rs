@@ -650,9 +650,9 @@ mod tests {
     #[test]
     fn build_disclosures_merges_vault_claims() {
         let mut extra = HashMap::new();
-        extra.insert("api_key".to_string(), "sk-live-123".to_string());
+        extra.insert("api_key".to_string(), "test-credential-value".to_string());
         let result = build_disclosures("schema:SearchAction", "rust lang", &extra);
-        assert_eq!(result[0]["api_key"], "sk-live-123");
+        assert_eq!(result[0]["api_key"], "test-credential-value");
         assert_eq!(result[0]["query"], "rust lang");
     }
 
