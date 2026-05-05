@@ -38,6 +38,8 @@ pub struct WasmDatabase {
     templates: Arc<Mutex<Vec<Template>>>,
     /// In-memory dynamic agent definition store (name → raw JSON string)
     agent_defs: Arc<Mutex<HashMap<String, String>>>,
+    /// In-memory principal attribute store (prop_name → value)
+    principal_attributes: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl WasmDatabase {
@@ -49,6 +51,7 @@ impl WasmDatabase {
             settings: Arc::new(Mutex::new(Vec::new())),
             templates: Arc::new(Mutex::new(Vec::new())),
             agent_defs: Arc::new(Mutex::new(HashMap::new())),
+            principal_attributes: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -102,6 +105,7 @@ impl Default for WasmDatabase {
             settings: Arc::new(Mutex::new(Vec::new())),
             templates: Arc::new(Mutex::new(Vec::new())),
             agent_defs: Arc::new(Mutex::new(HashMap::new())),
+            principal_attributes: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 }
@@ -497,6 +501,22 @@ impl DatabaseOps for WasmDatabase {
             .map_err(|e| DbError(format!("db lock: {e}")))?;
         defs.remove(name);
         Ok(())
+    }
+
+    fn set_principal_attribute(&self, prop: &str, value: &str) -> Result<(), DbError> {
+        let mut map = self.principal_attributes.lock().map_err(|e| DbError(format!("db lock: {e}")))?;
+        map.insert(prop.to_string(), value.to_string());
+        Ok(())
+    }
+
+    fn get_principal_attribute(&self, prop: &str) -> Result<Option<String>, DbError> {
+        let map = self.principal_attributes.lock().map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(map.get(prop).cloned())
+    }
+
+    fn get_all_principal_attributes(&self) -> Result<std::collections::HashMap<String, String>, DbError> {
+        let map = self.principal_attributes.lock().map_err(|e| DbError(format!("db lock: {e}")))?;
+        Ok(map.clone())
     }
 }
 

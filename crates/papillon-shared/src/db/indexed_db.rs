@@ -401,6 +401,20 @@ impl DatabaseOps for IndexedDbDatabase {
         self.persist_to_storage()?;
         Ok(())
     }
+
+    fn set_principal_attribute(&self, prop: &str, value: &str) -> Result<(), DbError> {
+        self.inner.set_principal_attribute(prop, value)?;
+        self.persist_to_storage()?;
+        Ok(())
+    }
+
+    fn get_principal_attribute(&self, prop: &str) -> Result<Option<String>, DbError> {
+        self.inner.get_principal_attribute(prop)
+    }
+
+    fn get_all_principal_attributes(&self) -> Result<std::collections::HashMap<String, String>, DbError> {
+        self.inner.get_all_principal_attributes()
+    }
 }
 
 #[cfg(test)]
