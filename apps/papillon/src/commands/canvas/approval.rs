@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::challenge_store::SignedChallenge;
 use crate::error::PapillonError;
 use crate::state::AppState;
-use papillon_shared::{BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine};
+use papillon_shared::{AgentCandidate, BlockEvent, BlockState, BlockUpdate, IntentPlan, PreferenceEngine};
 
 use super::super::orchestrator::hash_agent_did;
 use super::execution::process_prompt;
@@ -58,6 +58,12 @@ pub async fn canvas_plan_prompt(
         returns: resolved.returns.clone(),
         approval_request_id: approval_request_id.clone(),
         ttl_hours: mandate_ttl_hours as u32,
+        candidates: vec![AgentCandidate {
+            name: resolved.name.clone(),
+            did: resolved.did.clone(),
+            requires_disclosure: resolved.requires_disclosure.clone(),
+            returns: resolved.returns.clone(),
+        }],
     };
 
     // Check auto-approve shortcut: if configured and no disclosure required, skip the gate.

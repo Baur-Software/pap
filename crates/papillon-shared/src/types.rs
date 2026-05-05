@@ -432,17 +432,26 @@ impl Default for AppSettings {
     }
 }
 
+/// A single agent candidate in a multi-agent approval plan.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AgentCandidate {
+    pub name: String,
+    pub did: String,
+    pub requires_disclosure: Vec<String>,
+    pub returns: Vec<String>,
+}
+
 /// The orchestrator's execution plan for a prompt --- built from agent metadata
 /// before the mandate is created. Shown to the user in AwaitingApproval state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IntentPlan {
     /// Schema.org action type, e.g. "schema:SearchAction"
     pub action: String,
-    /// Human-readable agent name
+    /// Primary agent (first candidate). Kept for auto-approve path and backward compat.
     pub selected_agent_name: String,
     /// Agent DID (available after agent resolution)
     pub selected_agent_did: Option<String>,
-    /// Properties the agent will need from the user (from AgentMeta.requires_disclosure)
+    /// Union of requires_disclosure across all candidates (for display).
     pub requires_disclosure: Vec<String>,
     /// Schema.org types/properties the agent will return (from AgentMeta.returns)
     pub returns: Vec<String>,
@@ -452,6 +461,9 @@ pub struct IntentPlan {
     /// Used by the AwaitingApproval UI to show the correct authorization window.
     #[serde(default = "default_ttl_hours")]
     pub ttl_hours: u32,
+    /// All agent candidates (up to 3). Frontend shows agent selector + union disclosure form.
+    #[serde(default)]
+    pub candidates: Vec<AgentCandidate>,
 }
 
 fn default_ttl_hours() -> u32 {
