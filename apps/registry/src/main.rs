@@ -323,6 +323,13 @@ async fn main() -> anyhow::Result<()> {
     // Path to the compiled pkg directory (CSS, JS, WASM).
     let pkg_dir = std::path::PathBuf::from(leptos_options.site_root.as_ref())
         .join(leptos_options.site_pkg_dir.as_ref());
+    if !pkg_dir.exists() {
+        tracing::warn!(
+            "pkg dir not found at {} — frontend assets will 404. \
+             Run `cargo leptos build` to compile the frontend.",
+            pkg_dir.display()
+        );
+    }
 
     // ── Routers ───────────────────────────────────────────────────────────────
 
