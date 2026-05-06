@@ -1,0 +1,97 @@
+[
+  {
+    "id": 0,
+    "label": "E2E Testing",
+    "size": 20,
+    "members": [
+      "Ollama Configuration E2E Tests",
+      "Workflow E2E Tests",
+      "Templates E2E Tests"
+    ]
+  },
+  {
+    "id": 1,
+    "label": "Canvas UI",
+    "size": 12,
+    "members": [
+      "Canvas Back Face Component",
+      "Canvas Chat Thread Component",
+      "Workflow Labels"
+    ]
+  },
+  {
+    "id": 2,
+    "label": "Canvas UI",
+    "size": 14,
+    "members": [
+      "Setup Wizard Component",
+      "Orchestrator Runtime",
+      "Canvas"
+    ]
+  },
+  {
+    "id": 3,
+    "label": "Singleton",
+    "size": 1
+  },
+  {
+    "id": 4,
+    "label": "Orchestrator & Handshake",
+    "size": 13,
+    "members": [
+      "Profile Avatar Component",
+      "TopbarPrompt Component",
+      "Intent Detection Delegate"
+    ]
+  },
+  {
+    "id": 5,
+    "label": "Block Renderer",
+    "size": 14,
+    "members": [
+      "Iterative DFS Tree Flattening",
+      "Handshake Envelope Sentinel Detection",
+      "Two-Tier Renderer Dispatch"
+    ]
+  },
+  {
+    "id": 6,
+    "label": "Core Protocol",
+    "size": 18,
+    "members": [
+      "ShardManifest",
+      "Scope",
+      "RecoveryShard"
+    ]
+  },
+  {
+    "id": 7,
+    "label": "Core Protocol",
+    "size": 16,
+    "members": [
+      "Error Propagation Pattern",
+      "Session FFI",
+      "AgentClient Transport FFI"
+    ]
+  },
+  {
+    "id": 8,
+    "label": "Core Protocol",
+    "size": 12,
+    "members": [
+      "6-Phase Session Handshake",
+      "Human Principal",
+      "Transaction Receipt"
+    ]
+  },
+  {
+    "id": 9,
+    "label": "Federation & Registry",
+    "size": 21,
+    "members": [
+      "Federated Registry",
+      "Six-Phase Handshake Protocol",
+      "Operator Metrics"
+    ]
+  }
+]
