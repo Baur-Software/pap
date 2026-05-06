@@ -25,11 +25,9 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run cargo audit
-        working-directory: pap
         run: cargo audit
 
       - name: Deny on any warning
-        working-directory: pap
         # --deny warnings catches vulnerabilities, unsoundness, AND unmaintained.
         # Every ignored advisory is explicitly documented in .cargo/audit.toml
         # with justification. Any new undocumented advisory will fail this step,
