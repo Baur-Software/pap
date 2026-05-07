@@ -32,12 +32,14 @@ Successfully extracted and unified a comprehensive knowledge graph from the 691-
 
 1. **Core Protocol Layer** (20 nodes)
    - Mandate, Session, Receipt, DecayState
+   - Six-phase handshake (PAP protocol itself)
    - Shamir secret sharing (M-of-N recovery)
    - SelectiveDisclosureJwt (SD-JWT)
 
 2. **Transport & Federation Layer** (17 nodes)
-   - WebSocket, OHTTP, TLS mutual auth
-   - Peer discovery, registry sync, vouch-based trust
+   - Transport-agnostic: WebSocket, OHTTP carry PAP sessions
+   - TLS mutual auth, peer discovery, registry sync
+   - Vouch-based trust model
 
 3. **Frontend Layer** (14 nodes)
    - Canvas UI system, Block renderer
@@ -54,7 +56,9 @@ Successfully extracted and unified a comprehensive knowledge graph from the 691-
 ### Critical Bridges Discovered
 
 **Cross-Layer Bridges** (connect architectural layers):
-- `Session → WebSocketTransport` (core protocol uses transport)
+- `WebSocketTransport → Session` (transport carries PAP protocol)
+- `OHTTPRelay → Session` (alternative transport, protocol-agnostic)
+- `Session → SixPhaseHandshake` (protocol implements handshake)
 - `Mandate → renderer_registry` (authorization controls rendering)
 - `mandate_ffi → Mandate` (FFI exposes core types)
 - `orchestrator_doc → orchestrator_runtime_OrchestratorRuntime` (spec to implementation)
@@ -118,6 +122,7 @@ Complete peer-to-peer infrastructure with vouch-based trust, registry sync, and 
 
 ## Surprising Connections
 
+- **PAP is transport-agnostic**: The six-phase handshake IS the core protocol - WebSocket and OHTTP are just transport layers that carry PAP sessions. Protocol and transport are cleanly separated.
 - **Mandate → renderer_registry**: Protocol authorization layer directly controls what can be rendered (security boundary enforcement)
 - **Two-Boundary Security → SelectiveDisclosureJwt + Sandbox**: Architectural pattern that pairs request minimization with execution constraints
 - **E2E tests → Orchestrator**: Test suite directly exercises the deny-by-default gatekeeper (validates security posture)

@@ -2444,16 +2444,6 @@
       "weight": 1.0
     },
     {
-      "source": "WebSocketTransport",
-      "target": "SixPhaseHandshake",
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/pap-transport/src/websocket.rs",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
       "source": "WsAgentClient",
       "target": "WebSocketTransport",
       "relation": "uses",
@@ -3452,6 +3442,66 @@
       "source_file": "apps/chrysalis/README.md",
       "source_location": null,
       "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "SixPhaseHandshake",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "six_phase_handshake_doc",
+      "target": "SixPhaseHandshake",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WebSocketTransport",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/websocket.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "OHTTPRelay",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/ohttp.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WebSocketTransport",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/websocket.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "OHTTPRelay",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/ohttp.rs",
+      "source_location": null,
+      "weight": 1.0
     }
   ],
   "hyperedges": [
@@ -3690,12 +3740,11 @@
     },
     {
       "id": "TransportAbstraction",
-      "label": "Transport Abstraction",
+      "label": "Transport Layer Abstraction",
       "nodes": [
         "WebSocketTransport",
         "OHTTPRelay",
-        "TLSMutualAuth",
-        "SixPhaseHandshake"
+        "TLSMutualAuth"
       ],
       "relation": "form",
       "confidence": "EXTRACTED",
