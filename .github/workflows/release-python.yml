@@ -24,7 +24,7 @@ env:
   PACKAGE_NAME: pap-protocol
 
 jobs:
-  # ── 1. Detect new version and create tag ──────────────────────────────────
+  # ── 1. Detect new version and check for existing release ──────────────────
   check-version:
     name: Check version
     runs-on: ubuntu-latest
@@ -36,47 +36,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read VERSION and check for existing tag
+      - name: Read VERSION and check for existing release
         id: check
         run: |
           VERSION=$(cat VERSION)
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           TAG="python-v${VERSION}"
-          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "Tag ${TAG} already exists — skipping release"
+
+          # Check if release already exists (not just tag)
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists — skipping"
             echo "should_release=false" >> "$GITHUB_OUTPUT"
           else
-            echo "New version ${VERSION} detected — will tag and release"
+            echo "New version ${VERSION} detected — will build and release"
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Create tag via GitHub API
-        if: steps.check.outputs.should_release == 'true'
-        uses: actions/github-script@v9
         env:
-          VERSION: ${{ steps.check.outputs.version }}
-        with:
-          script: |
-            const tagName = `python-v${process.env.VERSION}`;
-            const sha = context.sha;
-
-            // Create tag object
-            const tagObject = await github.rest.git.createTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: tagName,
-              message: `Python SDK v${process.env.VERSION}`,
-              object: sha,
-              type: 'commit'
-            });
-
-            // Create tag reference
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${tagName}`,
-              sha: tagObject.data.sha
-            });
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── 2. Build wheels ────────────────────────────────────────────────────────
   build-wheels:
@@ -182,7 +158,7 @@ jobs:
           NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" crates/pap-python/CHANGELOG.md)
           echo "${NOTES}" > /tmp/release-notes.md
 
-      - name: Create draft release
+      - name: Create draft release (with tag)
         uses: actions/github-script@v9
         env:
           VERSION: ${{ needs.check-version.outputs.version }}
@@ -190,6 +166,8 @@ jobs:
           script: |
             const fs = require('fs');
             const notes = fs.readFileSync('/tmp/release-notes.md', 'utf8').trim();
+
+            // Create release - this also creates the tag if it doesn't exist
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -197,7 +175,8 @@ jobs:
               name: `Python SDK v${process.env.VERSION}`,
               body: notes || `See [CHANGELOG](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/crates/pap-python/CHANGELOG.md) for details.`,
               draft: true,
-              prerelease: false
+              prerelease: false,
+              target_commitish: context.sha
             });
 
       - name: Upload release assets
