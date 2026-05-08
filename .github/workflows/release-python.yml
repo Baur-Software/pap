@@ -50,11 +50,33 @@ jobs:
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and push tag
+      - name: Create tag via GitHub API
         if: steps.check.outputs.should_release == 'true'
-        run: |
-          git tag "python-v${{ steps.check.outputs.version }}"
-          git push origin "python-v${{ steps.check.outputs.version }}"
+        uses: actions/github-script@v9
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        with:
+          script: |
+            const tagName = `python-v${process.env.VERSION}`;
+            const sha = context.sha;
+
+            // Create tag object
+            const tagObject = await github.rest.git.createTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: tagName,
+              message: `Python SDK v${process.env.VERSION}`,
+              object: sha,
+              type: 'commit'
+            });
+
+            // Create tag reference
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${tagName}`,
+              sha: tagObject.data.sha
+            });
 
   # ── 2. Build wheels ────────────────────────────────────────────────────────
   build-wheels:
@@ -160,7 +182,7 @@ jobs:
           NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" crates/pap-python/CHANGELOG.md)
           echo "${NOTES}" > /tmp/release-notes.md
 
-      - name: Create release
+      - name: Create draft release
         uses: actions/github-script@v9
         env:
           VERSION: ${{ needs.check-version.outputs.version }}
@@ -174,7 +196,7 @@ jobs:
               tag_name: `python-v${process.env.VERSION}`,
               name: `Python SDK v${process.env.VERSION}`,
               body: notes || `See [CHANGELOG](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/crates/pap-python/CHANGELOG.md) for details.`,
-              draft: false,
+              draft: true,
               prerelease: false
             });
 
@@ -183,6 +205,11 @@ jobs:
           for file in dist/*; do
             gh release upload "python-v${{ needs.check-version.outputs.version }}" "$file" --clobber
           done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release
+        run: gh release edit "python-v${{ needs.check-version.outputs.version }}" --draft=false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
