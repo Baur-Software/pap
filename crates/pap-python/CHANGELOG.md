@@ -4,6 +4,11 @@ All notable changes to the Python SDK will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-05-08
+
+### Fixed
+- CI/CD workflow improvements for wheel building and release publishing
+
 ## [0.8.2] - 2026-04-18
 
 ### Added
