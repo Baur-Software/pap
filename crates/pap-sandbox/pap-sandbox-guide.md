@@ -199,13 +199,88 @@ result = enforcer.execute(agent_fn, context)
 
 ## Deployment: Container Compatibility
 
-**pap-sandbox does NOT work in standard containers** because OS-level capabilities (seccomp, pledge, entitlements, job objects) are unavailable:
+**pap-sandbox supports Docker via sibling container spawning** when running inside a container with the Docker socket mounted.
 
-- **Docker/Podman containers**: Sandboxing will fail to initialize. Agents fall back to unsandboxed execution.
-- **Kubernetes pods**: Pod security policies don't provide OS capability enforcement; sandboxing unavailable.
-- **Solution**: Run Papillon/Chrysalis on bare metal, VMs, or with privileged container access (not recommended).
+### Three Execution Modes
 
-When sandboxing fails to initialize, attestation receipts include a warning field for audit visibility. You'll see empty/null values in `capability_enforcement` proving no isolation happened.
+The sandbox automatically detects its runtime environment and selects the appropriate isolation mechanism:
+
+1. **Bare Metal / VM (preferred)**
+   - Uses native OS capabilities: seccomp (Linux), pledge (BSD), entitlements (macOS), job objects (Windows)
+   - Lowest overhead (~1-8% depending on platform)
+   - Best security posture with full OS-level enforcement
+
+2. **Docker Sibling Containers (containerized deployment)**
+   - When running inside Docker with `/var/run/docker.sock` mounted
+   - Spawns agents as **sibling containers** (not nested) with capability constraints mapped to docker flags:
+     - `network_allowed: false` → `--network=none`
+     - `filesystem_allowed: false` → `--read-only`
+     - `subprocess_allowed: false` → `--cap-drop=ALL`
+   - Uses `baursoftware/pap-agent:latest` image containing the worker binary
+   - Receipt includes `network_blocked`, `filesystem_restricted`, `subprocess_blocked` proof fields
+
+3. **Fallback (unsandboxed)**
+   - When neither OS capabilities nor Docker socket are available
+   - Agent runs without isolation but receipt includes warning for audit visibility
+   - You'll see empty/null values in `capability_enforcement`
+
+### Docker Socket Detection
+
+The runtime checks standard locations:
+
+- `/var/run/docker.sock` (Docker default)
+- `/run/docker.sock` (alternate location)
+- `/run/podman/podman.sock` (Podman compatibility)
+- `$DOCKER_HOST` environment variable
+
+If running inside a container (detected via `/.dockerenv` or `/proc/self/cgroup`), the Docker spawner takes priority over bare capabilities.
+
+### Example: Running Papillon in Docker
+
+```dockerfile
+FROM rust:1.76
+WORKDIR /app
+COPY . .
+RUN cargo build --release --bin papillon
+
+# Volume mount required for Docker spawning
+VOLUME /var/run/docker.sock
+
+CMD ["./target/release/papillon"]
+```
+
+```bash
+docker run -v /var/run/docker.sock:/var/run/docker.sock \
+  -e DOCKER_HOST=unix:///var/run/docker.sock \
+  baursoftware/papillon:latest
+```
+
+When an agent executes, Papillon spawns `baursoftware/pap-agent:latest` as a sibling container with constraints applied. The sibling container reads `ExecutionContext` from the `PAP_CONTEXT` env var, runs the agent handler, and writes `ExecutionResult` JSON to stdout. Papillon collects the output, verifies it, and includes Docker-based capability proof in the receipt.
+
+### Kubernetes Deployment
+
+For Kubernetes, mount the Docker socket via a hostPath volume:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: papillon
+spec:
+  containers:
+  - name: papillon
+    image: baursoftware/papillon:latest
+    volumeMounts:
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket
+```
+
+**Security note**: Mounting the Docker socket grants cluster-level privileges. Only use this for trusted deployments or where Papillon runs in an isolated node pool.
 
 ## Verification Checklist
 
