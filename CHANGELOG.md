@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Documentation
+
+- **pap-sandbox**: Clarified that pap-sandbox **supports Docker** via sibling container spawning when running inside a container with `/var/run/docker.sock` mounted. Previous documentation incorrectly stated containers don't work. The Docker spawner (introduced in v0.8.3) uses `bollard` to spawn agents as sibling containers with capability constraints mapped to Docker flags (`--network=none`, `--read-only`, `--cap-drop=ALL`). Updated `pap-sandbox-guide.md`, `crates/pap-sandbox/README.md`, and confirmed `docker-compose.yml` examples accurately reflect this capability.
+
 ## [0.8.3] - 2026-04-30
 
 ### Added

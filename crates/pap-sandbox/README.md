@@ -394,13 +394,32 @@ Auditable: "Show me all executions of agent X under policy Y signed by principal
 | **BSD** | ✅ Production | pledge(2) | Simpler capability model, covers most use cases |
 | **macOS** | ✅ Production | Entitlements + SIP | Security settings depend on user configuration |
 | **Windows** | ✅ Production | Job Objects | Resource limits, process isolation |
+| **Docker** | ✅ Production | Sibling containers | When running in container with Docker socket mounted |
 
-**Container environments**: pap-sandbox requires OS capabilities that are typically unavailable in containerized contexts:
-- **Docker/Podman**: Standard containers lack seccomp (or use relaxed defaults), pledge, and job object APIs. Sandbox will fall back to unsandboxed execution.
-- **Kubernetes**: Pod security policies and network policies don't replace OS-level capability enforcement; sandboxing will be unavailable.
-- **Workaround**: Run Papillon/Chrysalis on bare metal or with privileged container access (not recommended for security).
+### Container Deployment
 
-Fallback: If sandbox fails to initialize, agent runs unsandboxed but receipt includes warning for audit visibility.
+pap-sandbox supports **three execution modes** based on runtime environment detection:
+
+1. **Bare Metal / VM (preferred)**
+   - Uses native OS capabilities listed above
+   - Lowest overhead, strongest isolation guarantees
+
+2. **Docker Sibling Containers**
+   - When running inside Docker with `/var/run/docker.sock` mounted
+   - Spawns agents as **sibling containers** (not nested) using `baursoftware/pap-agent:latest`
+   - Capability constraints map to Docker flags:
+     - `network_allowed: false` → `--network=none`
+     - `filesystem_allowed: false` → `--read-only`
+     - `subprocess_allowed: false` → `--cap-drop=ALL`
+   - Socket detection: `/var/run/docker.sock`, `/run/docker.sock`, `/run/podman/podman.sock`, or `$DOCKER_HOST`
+
+3. **Fallback (unsandboxed)**
+   - When neither OS capabilities nor Docker socket available
+   - Agent runs without isolation; receipt includes warning for audit visibility
+
+**Kubernetes**: Mount Docker socket via hostPath volume (requires cluster-level privileges; use isolated node pools for production)
+
+See [pap-sandbox-guide.md](pap-sandbox-guide.md) for complete deployment examples.
 
 ---
 
