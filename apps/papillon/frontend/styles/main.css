@@ -9742,6 +9742,17 @@ body {
     color: var(--text-primary);
 }
 
+/* No plan state */
+.workflow-no-plan {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-2xl);
+    font: var(--text-ui);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
 /* ═══════════════════════════════════════════════════════════
    WORKFLOW CHAT THREAD
    ═══════════════════════════════════════════════════════════ */

@@ -2,15 +2,20 @@ use leptos::prelude::*;
 use papillon_shared::{AgentCandidate, IntentPlan};
 
 #[component]
-pub fn AgentCurationList(plan: IntentPlan) -> impl IntoView {
-    // Selected agents (DID list)
-    let (selected_agents, set_selected_agents) = create_signal(
-        plan.candidates
-            .iter()
-            .filter(|c| Some(&c.did) == plan.selected_agent_did.as_ref())
-            .map(|c| c.did.clone())
-            .collect::<Vec<_>>(),
-    );
+pub fn AgentCurationList(
+    plan: IntentPlan,
+    selected_agents: RwSignal<Vec<String>>,
+) -> impl IntoView {
+    // Initialize selected agents from plan if not already set
+    let initial_selected = plan.candidates
+        .iter()
+        .filter(|c| Some(&c.did) == plan.selected_agent_did.as_ref())
+        .map(|c| c.did.clone())
+        .collect::<Vec<_>>();
+
+    if selected_agents.get_untracked().is_empty() && !initial_selected.is_empty() {
+        selected_agents.set(initial_selected);
+    }
 
     view! {
         <div class="agent-curation-list">
@@ -21,8 +26,8 @@ pub fn AgentCurationList(plan: IntentPlan) -> impl IntoView {
                     view! {
                         <AgentCurationCard
                             agent=candidate
-                            selected=selected_agents
-                            on_toggle=set_selected_agents
+                            selected=selected_agents.read_only()
+                            on_toggle=selected_agents
                         />
                     }
                 }
@@ -35,7 +40,7 @@ pub fn AgentCurationList(plan: IntentPlan) -> impl IntoView {
 fn AgentCurationCard(
     agent: AgentCandidate,
     selected: ReadSignal<Vec<String>>,
-    on_toggle: WriteSignal<Vec<String>>,
+    on_toggle: RwSignal<Vec<String>>,
 ) -> impl IntoView {
     let agent_did = agent.did.clone();
     let agent_did_for_toggle = agent.did.clone();

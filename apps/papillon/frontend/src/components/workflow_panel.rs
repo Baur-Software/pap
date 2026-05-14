@@ -1,6 +1,9 @@
 use leptos::prelude::*;
 use crate::state::canvas::CanvasState;
 use crate::components::workflow_chat_thread::WorkflowChatThread;
+use crate::components::agent_curation_list::AgentCurationList;
+use crate::components::disclosure_form::DisclosureForm;
+use papillon_shared::IntentPlan;
 
 /// Slide-in workflow panel from the right side.
 /// Shows chat, curation, and disclosure sections for the active workflow.
@@ -8,6 +11,9 @@ use crate::components::workflow_chat_thread::WorkflowChatThread;
 pub fn WorkflowPanel() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let is_open = canvas_state.workflow_panel_open;
+
+    // Placeholder signal for active plan (Task 17 will wire real state)
+    let active_plan: RwSignal<Option<IntentPlan>> = RwSignal::new(None);
 
     // Close handler
     let close = move |_| {
@@ -37,27 +43,41 @@ pub fn WorkflowPanel() -> impl IntoView {
             </div>
 
             <div class="workflow-panel-body">
-                {/* Chat section */}
-                <div class="workflow-section workflow-chat-section">
-                    <h3>"Chat"</h3>
-                    <WorkflowChatThread />
-                </div>
+                <Show
+                    when=move || active_plan.get().is_some()
+                    fallback=|| view! {
+                        <div class="workflow-no-plan">
+                            "No active plan"
+                        </div>
+                    }
+                >
+                    {move || {
+                        active_plan.get().map(|plan| {
+                            // Create selected agents signal for this plan
+                            let selected_agents = RwSignal::new(Vec::<String>::new());
 
-                {/* Curation section */}
-                <div class="workflow-section workflow-curation-section">
-                    <h3>"Curation"</h3>
-                    <div class="workflow-curation-placeholder">
-                        "Agent selection and curation controls coming soon"
-                    </div>
-                </div>
+                            view! {
+                                {/* Chat section */}
+                                <div class="workflow-section workflow-chat-section">
+                                    <h3>"Chat"</h3>
+                                    <WorkflowChatThread />
+                                </div>
 
-                {/* Disclosure section */}
-                <div class="workflow-section workflow-disclosure-section">
-                    <h3>"Disclosure"</h3>
-                    <div class="workflow-disclosure-placeholder">
-                        "Disclosure review coming soon"
-                    </div>
-                </div>
+                                {/* Curation section */}
+                                <div class="workflow-section workflow-curation-section">
+                                    <h3>"Curation"</h3>
+                                    <AgentCurationList plan=plan.clone() selected_agents=selected_agents />
+                                </div>
+
+                                {/* Disclosure section */}
+                                <div class="workflow-section workflow-disclosure-section">
+                                    <h3>"Disclosure"</h3>
+                                    <DisclosureForm plan=plan selected_agents=selected_agents.read_only() />
+                                </div>
+                            }
+                        })
+                    }}
+                </Show>
             </div>
 
             <div class="workflow-panel-footer">
