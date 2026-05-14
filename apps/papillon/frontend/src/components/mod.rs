@@ -7,6 +7,7 @@ pub mod canvas_chat_thread;
 pub mod canvas_empty_state;
 pub mod canvas_ghost_run_panel;
 pub mod canvas_surface_title;
+pub mod canvas_tab_bar;
 pub mod canvas_workflow_pipeline;
 pub mod hitl_gate;
 pub mod outcome_summary;
