@@ -9805,3 +9805,88 @@ body {
     color: var(--text-primary);
     line-height: 1.5;
 }
+/* ═══════════════════════════════════════════════════════════
+   AGENT CURATION LIST
+   ═══════════════════════════════════════════════════════════ */
+
+.agent-curation-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-sm);
+}
+
+.agent-card {
+    padding: var(--sp-md);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    transition: all 150ms ease;
+}
+
+.agent-card:hover {
+    background: var(--surface-card-hover);
+    border-color: var(--surface-card-border-hover);
+}
+
+.agent-card.selected {
+    background: var(--purple-muted);
+    border-color: var(--purple);
+}
+
+.agent-card-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-md);
+    cursor: pointer;
+}
+
+.agent-card-checkbox {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.agent-card-info {
+    flex: 1;
+}
+
+.agent-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    margin-bottom: var(--sp-xs);
+}
+
+.agent-card-name {
+    font: var(--text-ui);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.trust-badge {
+    padding: 2px 8px;
+    border-radius: var(--r-sm);
+    font: var(--text-label);
+    font-size: 10px;
+}
+
+.trust-badge.on-device {
+    background: var(--teal);
+    color: white;
+}
+
+.agent-card-did {
+    display: block;
+    margin-bottom: var(--sp-sm);
+    font: var(--text-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.agent-card-disclosure {
+    font: var(--text-small);
+    color: var(--text-secondary);
+}
+
+.disclosure-count {
+    font-weight: 500;
+}
