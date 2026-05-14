@@ -1,5 +1,6 @@
 mod app;
 mod bridge;
+pub mod commands;
 pub mod components;
 pub mod handshake;
 pub mod orchestrator_runtime;
