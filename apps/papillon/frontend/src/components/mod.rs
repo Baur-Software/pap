@@ -1,6 +1,7 @@
 pub mod address_bar;
 pub mod agent_curation_list;
 pub mod agent_picker_modal;
+pub mod approval_toast;
 pub mod canvas_aside;
 pub mod block_renderer;
 pub mod canvas_back_face;

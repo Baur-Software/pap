@@ -9981,3 +9981,158 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ========================================================================
+   APPROVAL TOAST
+   ======================================================================== */
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.approval-toast {
+    position: fixed;
+    bottom: var(--sp-lg);
+    right: var(--sp-lg);
+    width: 360px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+    animation: slideInUp 250ms ease-out;
+    overflow: hidden;
+}
+
+.approval-toast-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-md) var(--sp-lg);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.approval-toast-agent {
+    font: var(--text-ui);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.approval-toast-dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 20px;
+    transition: all 150ms ease;
+}
+
+.approval-toast-dismiss:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.approval-toast-body {
+    padding: var(--sp-lg);
+}
+
+.approval-toast-action {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    font: var(--text-ui);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--sp-sm);
+}
+
+.approval-toast-risk {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font: var(--text-label);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.approval-toast-risk.high {
+    background: rgba(240, 160, 48, 0.15);
+    color: var(--gold);
+}
+
+.approval-toast-risk.critical {
+    background: rgba(232, 72, 72, 0.15);
+    color: var(--coral);
+}
+
+.approval-toast-description {
+    font: var(--text-ui);
+    color: var(--text-secondary);
+    margin-bottom: var(--sp-md);
+    line-height: 1.5;
+}
+
+.approval-toast-disclosure {
+    font: var(--text-small);
+    color: var(--text-secondary);
+    padding: var(--sp-sm) var(--sp-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--r-sm);
+    border-left: 2px solid var(--purple-muted);
+}
+
+.approval-toast-footer {
+    padding: var(--sp-md) var(--sp-lg);
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.approval-toast-button {
+    width: 100%;
+    padding: var(--sp-md) var(--sp-lg);
+    border: none;
+    border-radius: var(--r-md);
+    font: var(--text-ui);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.approval-toast-button.approve {
+    background: var(--purple);
+    color: white;
+}
+
+.approval-toast-button.approve:hover {
+    background: var(--purple-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+}
+
+.approval-toast-button.details {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.approval-toast-button.details:hover {
+    background: var(--purple-muted);
+    border-color: var(--purple);
+    color: var(--purple);
+}
