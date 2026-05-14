@@ -6,6 +6,7 @@ use crate::components::canvas_aside::{AsideOpen, CanvasAside, CanvasAsideDockTog
 use crate::components::canvas_back_face::CanvasBackFace;
 use crate::components::canvas_surface_title::CanvasSurfaceTitle;
 use crate::components::hitl_gate::HitlGate;
+use crate::components::workflow_panel::WorkflowPanel;
 use crate::state::canvas::{CanvasSide, CanvasState};
 
 #[component]
@@ -113,6 +114,8 @@ pub fn CanvasPage() -> impl IntoView {
                     <CanvasBackFace />
                 </div>
             </div>
+
+            <WorkflowPanel />
         </div>
     }
 }
