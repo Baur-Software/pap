@@ -10,6 +10,7 @@ pub mod canvas_ghost_run_panel;
 pub mod canvas_surface_title;
 pub mod canvas_tab_bar;
 pub mod canvas_workflow_pipeline;
+pub mod disclosure_form;
 pub mod hitl_gate;
 pub mod outcome_summary;
 pub mod profile_avatar;
