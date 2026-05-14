@@ -9741,3 +9741,67 @@ body {
     border-color: var(--text-secondary);
     color: var(--text-primary);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   WORKFLOW CHAT THREAD
+   ═══════════════════════════════════════════════════════════ */
+
+.workflow-chat {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: var(--sp-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--r-md);
+}
+
+.workflow-chat-empty {
+    padding: var(--sp-lg);
+    font: var(--text-ui);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.chat-message {
+    padding: var(--sp-md);
+    margin-bottom: var(--sp-md);
+    background: var(--bg-secondary);
+    border-radius: var(--r-md);
+    border-left: 3px solid var(--border);
+}
+
+.chat-message:last-child {
+    margin-bottom: 0;
+}
+
+.chat-message.user {
+    border-left-color: var(--purple);
+}
+
+.chat-message.assistant {
+    border-left-color: var(--teal);
+}
+
+.chat-message-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-xs);
+}
+
+.chat-message-role {
+    font: var(--text-label);
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.chat-message-time {
+    font: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+.chat-message-content {
+    font: var(--text-ui);
+    color: var(--text-primary);
+    line-height: 1.5;
+}

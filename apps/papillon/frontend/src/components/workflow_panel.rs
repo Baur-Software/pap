@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use crate::state::canvas::CanvasState;
+use crate::components::workflow_chat_thread::WorkflowChatThread;
 
 /// Slide-in workflow panel from the right side.
 /// Shows chat, curation, and disclosure sections for the active workflow.
@@ -39,9 +40,7 @@ pub fn WorkflowPanel() -> impl IntoView {
                 {/* Chat section */}
                 <div class="workflow-section workflow-chat-section">
                     <h3>"Chat"</h3>
-                    <div class="workflow-chat-placeholder">
-                        "Chat interface coming soon"
-                    </div>
+                    <WorkflowChatThread />
                 </div>
 
                 {/* Curation section */}
