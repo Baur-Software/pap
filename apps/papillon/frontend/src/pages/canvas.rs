@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos::ev;
 use papillon_shared::{BlockState, CanvasBlock};
 
 use crate::components::approval_toast::ApprovalToastStack;
@@ -59,10 +60,39 @@ pub fn CanvasPage() -> impl IntoView {
     let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
     let aside_open = use_context::<AsideOpen>().map(|AsideOpen(open)| open).unwrap_or_else(|| RwSignal::new(false));
 
+    // Keyboard shortcut handler
+    let handle_keydown = move |e: ev::KeyboardEvent| {
+        if !e.ctrl_key() {
+            return;
+        }
+
+        match e.key().as_str() {
+            "t" | "T" => {
+                e.prevent_default();
+                canvas_state.new_canvas();
+            }
+            "w" | "W" => {
+                e.prevent_default();
+                if let Some(current_id) = canvas_state.current_canvas_id.get() {
+                    canvas_state.delete_canvas(&current_id);
+                }
+            }
+            "\\" => {
+                e.prevent_default();
+                canvas_state.workflow_panel_open.update(|open| *open = !*open);
+            }
+            "Tab" => {
+                e.prevent_default();
+                cycle_canvas_forward(&canvas_state);
+            }
+            _ => {}
+        }
+    };
+
     view! {
         <HitlGate />
 
-        <div class="canvas-page">
+        <div class="canvas-page" on:keydown=handle_keydown tabindex="0">
             // Flip container.
             <div
                 class="canvas-flip-container"
@@ -126,4 +156,27 @@ pub fn CanvasPage() -> impl IntoView {
 enum BlockGroup {
     Single(CanvasBlock),
     Linked(Vec<CanvasBlock>),
+}
+
+/// Cycle to the next canvas in the sorted list (wrapping around).
+fn cycle_canvas_forward(canvas_state: &CanvasState) {
+    let current_id = match canvas_state.current_canvas_id.get() {
+        Some(id) => id,
+        None => return,
+    };
+
+    let mut canvases = canvas_state.canvases.get();
+    // Sort by updated_at descending (most recent first) to match sidebar order
+    canvases.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+
+    let current_index = canvases.iter().position(|c| c.id == current_id);
+
+    let next_index = match current_index {
+        Some(idx) => (idx + 1) % canvases.len(),
+        None => 0,
+    };
+
+    if let Some(next_canvas) = canvases.get(next_index) {
+        canvas_state.current_canvas_id.set(Some(next_canvas.id.clone()));
+    }
 }
