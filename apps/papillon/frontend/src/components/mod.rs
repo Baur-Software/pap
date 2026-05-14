@@ -16,3 +16,4 @@ pub mod recovery_setup;
 pub mod registry;
 pub mod setup_wizard;
 pub mod topbar;
+pub mod workflow_panel;
