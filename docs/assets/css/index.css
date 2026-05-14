@@ -50,10 +50,13 @@
 .products { padding: 0 0 120px; }
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   max-width: 1200px;
   margin: 0 auto;
+}
+.product-card-consulting {
+  grid-column: 1 / -1;
 }
 .product-card {
   background: var(--surface); border: 1px solid var(--border);
