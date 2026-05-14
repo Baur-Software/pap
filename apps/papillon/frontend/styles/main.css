@@ -10136,3 +10136,65 @@ body {
     border-color: var(--purple);
     color: var(--purple);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   GHOST BLOCK
+   ═══════════════════════════════════════════════════════════ */
+
+.ghost-block {
+    padding: var(--sp-lg);
+    background: var(--bg-secondary);
+    border: 2px dashed var(--purple);
+    border-radius: var(--r-lg);
+    opacity: 0.7;
+}
+
+.ghost-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-md);
+    margin-bottom: var(--sp-lg);
+    padding-bottom: var(--sp-md);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.ghost-schema-icon {
+    font-size: 24px;
+}
+
+.ghost-schema-type {
+    flex: 1;
+    font: var(--text-ui);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.ghost-agent-count {
+    font: var(--text-small);
+    color: var(--text-secondary);
+}
+
+.ghost-skeleton {
+    font-family: var(--font-mono);
+}
+
+.skeleton-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-md);
+}
+
+.skeleton-field {
+    display: flex;
+    gap: var(--sp-sm);
+}
+
+.skeleton-label {
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.skeleton-value {
+    color: var(--text-tertiary);
+    opacity: 0.5;
+}
