@@ -44,7 +44,7 @@ pub fn CanvasTabBar() -> impl IntoView {
                 }}
             </div>
             <button
-                class="canvas-tab-new"
+                class="new-tab-btn"
                 on:click=on_new_canvas
                 title="New canvas"
             >
@@ -110,9 +110,9 @@ fn OverflowDropdown(canvases: Vec<papillon_shared::Canvas>) -> impl IntoView {
     };
 
     view! {
-        <div class="canvas-tab-overflow">
+        <div class="overflow-dropdown-container">
             <button
-                class="canvas-tab-overflow-btn"
+                class="overflow-dropdown-toggle"
                 on:click=toggle
                 title="More canvases"
             >
@@ -122,7 +122,7 @@ fn OverflowDropdown(canvases: Vec<papillon_shared::Canvas>) -> impl IntoView {
                 if open.get() {
                     let canvas_list = canvases.clone();
                     Some(view! {
-                        <div class="canvas-tab-overflow-menu">
+                        <div class="overflow-dropdown-menu">
                             <For
                                 each=move || canvas_list.clone()
                                 key=|c| c.id.clone()
@@ -135,7 +135,7 @@ fn OverflowDropdown(canvases: Vec<papillon_shared::Canvas>) -> impl IntoView {
                                     };
                                     view! {
                                         <button
-                                            class="canvas-tab-overflow-item"
+                                            class="overflow-dropdown-item"
                                             on:click=on_item_click
                                         >
                                             <span class="overflow-item-name">{canvas.name}</span>

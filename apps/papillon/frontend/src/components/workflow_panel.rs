@@ -78,15 +78,6 @@ pub fn WorkflowPanel() -> impl IntoView {
                     }}
                 </Show>
             </div>
-
-            <div class="workflow-panel-footer">
-                <button
-                    class="workflow-execute-button"
-                    disabled=true
-                >
-                    "Disclose & Execute"
-                </button>
-            </div>
         </div>
     }
 }
