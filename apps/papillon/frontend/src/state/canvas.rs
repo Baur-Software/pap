@@ -88,6 +88,8 @@ pub struct CanvasState {
     pub last_event: RwSignal<Option<CanvasEvent>>,
     /// Live workflow graph for the active canvas, derived from block state.
     pub workflow_graph: RwSignal<papillon_shared::WorkflowGraph>,
+    /// Whether the workflow panel is open (toggled by toast clicks and Ctrl+\).
+    pub workflow_panel_open: RwSignal<bool>,
 }
 
 impl Default for CanvasState {
@@ -107,6 +109,7 @@ impl Default for CanvasState {
             block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
             last_event: RwSignal::new(None),
             workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
+            workflow_panel_open: RwSignal::new(false),
         }
     }
 }
