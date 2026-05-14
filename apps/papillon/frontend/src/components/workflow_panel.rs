@@ -3,7 +3,6 @@ use crate::state::canvas::CanvasState;
 use crate::components::workflow_chat_thread::WorkflowChatThread;
 use crate::components::agent_curation_list::AgentCurationList;
 use crate::components::disclosure_form::DisclosureForm;
-use papillon_shared::IntentPlan;
 
 /// Slide-in workflow panel from the right side.
 /// Shows chat, curation, and disclosure sections for the active workflow.
@@ -12,8 +11,8 @@ pub fn WorkflowPanel() -> impl IntoView {
     let canvas_state = expect_context::<CanvasState>();
     let is_open = canvas_state.workflow_panel_open;
 
-    // Placeholder signal for active plan (Task 17 will wire real state)
-    let active_plan: RwSignal<Option<IntentPlan>> = RwSignal::new(None);
+    // Active plan from CanvasState (populated by canvas_plan_prompt command)
+    let active_plan = canvas_state.active_intent_plan;
 
     // Close handler
     let close = move |_| {

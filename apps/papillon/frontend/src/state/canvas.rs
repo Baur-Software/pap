@@ -90,6 +90,8 @@ pub struct CanvasState {
     pub workflow_graph: RwSignal<papillon_shared::WorkflowGraph>,
     /// Whether the workflow panel is open (toggled by toast clicks and Ctrl+\).
     pub workflow_panel_open: RwSignal<bool>,
+    /// Active IntentPlan for the workflow panel, populated by canvas_plan_prompt.
+    pub active_intent_plan: RwSignal<Option<papillon_shared::IntentPlan>>,
 }
 
 impl Default for CanvasState {
@@ -110,6 +112,7 @@ impl Default for CanvasState {
             last_event: RwSignal::new(None),
             workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
             workflow_panel_open: RwSignal::new(false),
+            active_intent_plan: RwSignal::new(None),
         }
     }
 }
