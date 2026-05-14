@@ -6,6 +6,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
 use crate::components::canvas_aside::AsideOpen;
+use crate::components::canvas_tab_bar::CanvasTabBar;
 use crate::state::canvas::{CanvasSide, CanvasState};
 use crate::state::catalog::CatalogState;
 
@@ -69,6 +70,8 @@ pub fn TopBar() -> impl IntoView {
                 </button>
             </div>
         </header>
+
+        <CanvasTabBar />
 
         // Backdrop — click to close
         <div
