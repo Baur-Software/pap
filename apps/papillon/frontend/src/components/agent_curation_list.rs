@@ -45,7 +45,7 @@ fn AgentCurationCard(
     let agent_did = agent.did.clone();
     let agent_did_for_toggle = agent.did.clone();
 
-    let is_selected = create_memo(move |_| selected.get().contains(&agent_did));
+    let is_selected = Memo::new(move |_| selected.get().contains(&agent_did));
 
     // On-device detection (simplified: check if did:key)
     let is_on_device = agent.did.starts_with("did:key:");

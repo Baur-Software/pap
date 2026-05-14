@@ -12,10 +12,10 @@ pub fn DisclosureForm(
     selected_agents: ReadSignal<Vec<String>>,
 ) -> impl IntoView {
     // Form field values stored in local signal
-    let (field_values, set_field_values) = create_signal(HashMap::<String, String>::new());
+    let (field_values, set_field_values) = signal(HashMap::<String, String>::new());
 
     // Compute union of requires_disclosure from selected agents
-    let disclosure_props = create_memo(move |_| {
+    let disclosure_props = Memo::new(move |_| {
         let selected = selected_agents.get();
         if selected.is_empty() {
             return Vec::new();
@@ -35,7 +35,7 @@ pub fn DisclosureForm(
         props
     });
 
-    let agent_count = create_memo(move |_| selected_agents.get().len());
+    let agent_count = Memo::new(move |_| selected_agents.get().len());
 
     view! {
         <div class="disclosure-form">
@@ -130,7 +130,7 @@ fn DisclosureField(
     // Humanize property name
     let label = humanize_property(&property);
 
-    let current_value = create_memo(move |_| {
+    let current_value = Memo::new(move |_| {
         field_values
             .get()
             .get(&prop_clone)
