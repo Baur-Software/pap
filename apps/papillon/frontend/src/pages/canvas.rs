@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use papillon_shared::{BlockState, CanvasBlock};
 
+use crate::components::approval_toast::ApprovalToastStack;
 use crate::components::block_renderer::BlockRenderer;
 use crate::components::canvas_aside::{AsideOpen, CanvasAside, CanvasAsideDockToggle};
 use crate::components::canvas_back_face::CanvasBackFace;
@@ -116,6 +117,7 @@ pub fn CanvasPage() -> impl IntoView {
             </div>
 
             <WorkflowPanel />
+            <ApprovalToastStack />
         </div>
     }
 }
