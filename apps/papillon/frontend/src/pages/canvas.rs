@@ -7,7 +7,9 @@ use crate::components::block_renderer::BlockRenderer;
 use crate::components::canvas_aside::{AsideOpen, CanvasAside, CanvasAsideDockToggle};
 use crate::components::canvas_back_face::CanvasBackFace;
 use crate::components::canvas_surface_title::CanvasSurfaceTitle;
+use crate::components::canvas_tab_bar::CanvasTabBar;
 use crate::components::hitl_gate::HitlGate;
+use crate::components::inline_prompt::InlinePrompt;
 use crate::components::workflow_panel::WorkflowPanel;
 use crate::state::canvas::{CanvasSide, CanvasState};
 
@@ -60,6 +62,16 @@ pub fn CanvasPage() -> impl IntoView {
     let is_back = move || canvas_state.canvas_side.get() == CanvasSide::Back;
     let aside_open = use_context::<AsideOpen>().map(|AsideOpen(open)| open).unwrap_or_else(|| RwSignal::new(false));
 
+    let toggle_side = move |_: leptos::ev::MouseEvent| {
+        canvas_state.canvas_side.update(|s| {
+            *s = if *s == CanvasSide::Front {
+                CanvasSide::Back
+            } else {
+                CanvasSide::Front
+            };
+        });
+    };
+
     // Keyboard shortcut handler
     let handle_keydown = move |e: ev::KeyboardEvent| {
         if !e.ctrl_key() {
@@ -92,7 +104,24 @@ pub fn CanvasPage() -> impl IntoView {
     view! {
         <HitlGate />
 
+        // Tab bar at the top with logo/settings
+        <CanvasTabBar />
+
         <div class="canvas-page" on:keydown=handle_keydown tabindex="0">
+            // Canvas header with inline prompt and workflow toggle
+            <div class="canvas-header">
+                <div class="canvas-header-prompt">
+                    <InlinePrompt />
+                </div>
+                <button
+                    class="canvas-flip-toggle"
+                    on:click=toggle_side
+                    title=move || if is_back() { "Show rendered side" } else { "Show workflow side" }
+                >
+                    {move || if is_back() { "↻ Show rendered" } else { "↻ Show workflow" }}
+                </button>
+            </div>
+
             // Flip container.
             <div
                 class="canvas-flip-container"
@@ -120,7 +149,14 @@ pub fn CanvasPage() -> impl IntoView {
                                 children=move |group| {
                                     match group {
                                         BlockGroup::Single(block) => {
-                                            view! { <BlockRenderer block_id=block.id /> }.into_any()
+                                            // Check if this block has a container_id
+                                            if block.container_id.is_some() {
+                                                // TODO: Fetch BlockContainer from backend and render BlockContainerView
+                                                // For now, fall back to legacy renderer
+                                                view! { <BlockRenderer block_id=block.id /> }.into_any()
+                                            } else {
+                                                view! { <BlockRenderer block_id=block.id /> }.into_any()
+                                            }
                                         }
                                         BlockGroup::Linked(blocks) => {
                                             view! {
