@@ -94,4 +94,48 @@ mod tests {
         assert_eq!(sig.input_types, vec!["schema:Place"]);
         assert_eq!(sig.output_types, vec!["schema:WeatherForecast"]);
     }
+
+    #[test]
+    fn test_matches_identical_signatures() {
+        let sig1 = SchemaSignature {
+            input_types: vec!["schema:Place".into()],
+            output_types: vec!["schema:WeatherForecast".into()],
+        };
+        let sig2 = SchemaSignature {
+            input_types: vec!["schema:Place".into()],
+            output_types: vec!["schema:WeatherForecast".into()],
+        };
+        assert!(sig1.matches(&sig2));
+    }
+
+    #[test]
+    fn test_matches_different_signatures() {
+        let sig1 = SchemaSignature {
+            input_types: vec!["schema:Place".into()],
+            output_types: vec!["schema:WeatherForecast".into()],
+        };
+        let sig2 = SchemaSignature {
+            input_types: vec!["schema:Place".into()],
+            output_types: vec!["schema:Event".into()],
+        };
+        let sig3 = SchemaSignature {
+            input_types: vec!["schema:DateTime".into()],
+            output_types: vec!["schema:WeatherForecast".into()],
+        };
+        assert!(!sig1.matches(&sig2));
+        assert!(!sig1.matches(&sig3));
+    }
+
+    #[test]
+    fn test_cannot_wire_partial_overlap() {
+        let source = SchemaSignature {
+            input_types: vec![],
+            output_types: vec!["schema:Place".into()],
+        };
+        let target = SchemaSignature {
+            input_types: vec!["schema:Place".into(), "schema:DateTime".into()],
+            output_types: vec!["schema:Event".into()],
+        };
+        assert!(!source.can_wire_to(&target));
+    }
 }
