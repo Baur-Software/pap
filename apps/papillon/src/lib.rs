@@ -245,6 +245,7 @@ pub fn run() {
             commands::canvas::canvas_create_note,
             commands::canvas::canvas_update_note,
             commands::canvas::canvas_delete_note,
+            commands::canvas::create_block_container,
             commands::dataset_discovery::canvas_discover_datasets,
             commands::dataset_discovery::list_dataset_agents,
             commands::pipeline::run_pipeline,

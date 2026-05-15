@@ -2,6 +2,7 @@
 
 mod approval;
 mod blocks;
+mod container;
 mod crud;
 mod execution;
 mod guide;
@@ -19,6 +20,7 @@ mod types;
 // are also visible at the `commands::canvas::*` path used by generate_handler![].
 pub use approval::*;
 pub use blocks::*;
+pub use container::*;
 pub use crud::*;
 pub use guide::*;
 pub use messages::*;
