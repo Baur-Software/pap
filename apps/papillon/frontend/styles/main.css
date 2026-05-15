@@ -5236,12 +5236,88 @@ body {
       var(--bg-0);
 }
 
+.canvas-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-md);
+    padding: var(--sp-md) var(--sp-lg);
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: 10;
+}
+
+.canvas-header-prompt {
+    flex: 1;
+    max-width: 800px;
+}
+
+.canvas-flip-toggle {
+    padding: var(--sp-sm) var(--sp-md);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    font: var(--text-ui);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 150ms ease;
+    white-space: nowrap;
+}
+
+.canvas-flip-toggle:hover {
+    background: var(--purple-muted);
+    border-color: var(--purple);
+    color: var(--purple);
+}
+
 .canvas-prompt-bar {
     flex-shrink: 0;
     padding: var(--sp-md);
     border-bottom: 1px solid var(--border);
     background: var(--bg-1);
     z-index: 10;
+}
+
+/* Inline prompt component (replaces topbar prompt within canvas) */
+.inline-prompt {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.inline-prompt-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 14px;
+    padding: 11px 16px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--text-1);
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.inline-prompt-input::placeholder {
+    color: var(--text-3);
+}
+
+.inline-prompt-input:focus {
+    border-color: var(--purple);
+    background: rgba(108, 92, 231, 0.08);
+}
+
+.inline-prompt-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    z-index: 50;
+    overflow: hidden;
 }
 
 .canvas-stream {
@@ -9313,6 +9389,32 @@ body {
     padding: 0 var(--sp-md);
     background: var(--bg-primary);
     border-bottom: 1px solid var(--border-subtle);
+    position: relative;
+}
+
+.canvas-tab-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    width: 36px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: background 150ms ease;
+    margin-right: var(--sp-sm);
+}
+
+.canvas-tab-brand:hover {
+    background: var(--purple-muted);
+}
+
+.canvas-tab-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
 }
 
 .canvas-tabs {
@@ -10204,4 +10306,69 @@ body {
 .skeleton-value {
     color: var(--text-tertiary);
     opacity: 0.5;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Block Ports (Node Graph Wiring)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.block-port {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: var(--sp-xs);
+}
+
+.block-port-input {
+  justify-content: flex-start;
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.block-port-output {
+  justify-content: flex-end;
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.port-circle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-3);
+  border: 2px solid var(--bg-secondary);
+  transition: all 0.2s ease;
+}
+
+.block-port.connected .port-circle {
+  background: var(--teal);
+  box-shadow: 0 0 8px var(--teal);
+}
+
+.block-port:hover .port-circle {
+  background: var(--purple);
+  transform: scale(1.2);
+  cursor: pointer;
+}
+
+.port-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.block-port-input .port-label {
+  margin-left: 4px;
+}
+
+.block-port-output .port-label {
+  margin-right: 4px;
 }
