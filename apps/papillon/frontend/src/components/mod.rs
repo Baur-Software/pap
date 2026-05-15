@@ -1,6 +1,7 @@
 pub mod address_bar;
 pub mod agent_curation_list;
 pub mod agent_picker_modal;
+pub mod agent_selector;
 pub mod approval_toast;
 pub mod canvas_aside;
 pub mod block_renderer;
@@ -25,4 +26,5 @@ pub mod topbar;
 pub mod workflow_chat_thread;
 pub mod workflow_panel;
 
+pub use agent_selector::AgentSelector;
 pub use block_ports::{BlockInputPort, BlockOutputPort};

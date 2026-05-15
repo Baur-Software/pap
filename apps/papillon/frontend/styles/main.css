@@ -10372,3 +10372,96 @@ body {
 .block-port-output .port-label {
   margin-right: 4px;
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Agent Selector (Multi-Agent Block)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.agent-selector {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: var(--sp-sm);
+  max-width: 300px;
+}
+
+.agent-selector-header {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-xs);
+  padding-bottom: var(--sp-xs);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.agent-selector-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.agent-selector-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: var(--sp-xs);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.agent-selector-item:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--brand-purple);
+}
+
+.agent-selector-item.selected {
+  background: rgba(108, 92, 231, 0.1);
+  border-color: var(--brand-purple);
+}
+
+.agent-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-primary);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--brand-purple);
+  flex-shrink: 0;
+}
+
+.agent-selector-item.selected .agent-checkbox {
+  background: var(--brand-purple);
+  color: white;
+  border-color: var(--brand-purple);
+}
+
+.agent-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-provider {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
