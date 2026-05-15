@@ -6,6 +6,8 @@ pub use canvas_ops::{
 pub mod credential_gate;
 pub mod dataset_types;
 pub use dataset_types::{DatasetDiscoveryState, DatasetResult};
+pub mod schema_signature;
+pub use schema_signature::SchemaSignature;
 pub mod events;
 pub mod intent;
 pub mod json_ld_query;
