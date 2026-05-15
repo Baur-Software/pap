@@ -335,6 +335,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            container_id: None,
             mandate_expires_at: None,
             preference_guided: false,
             auto_expand: false,
