@@ -10465,3 +10465,79 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Block Container (Node Graph)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.block-container {
+  position: absolute;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  min-width: 200px;
+  max-width: 300px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.block-container:hover {
+  border-color: var(--brand-purple);
+  box-shadow: 0 4px 16px rgba(108, 92, 231, 0.2);
+}
+
+.block-container-body {
+  padding: var(--sp-sm);
+}
+
+.block-container-header {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.block-container-types {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  margin-bottom: var(--sp-xs);
+  flex-wrap: wrap;
+}
+
+.type-badge {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+  white-space: nowrap;
+}
+
+.type-badge.type-input {
+  border-color: var(--wing-teal);
+  color: var(--wing-teal);
+}
+
+.type-badge.type-output {
+  border-color: var(--wing-gold);
+  color: var(--wing-gold);
+}
+
+.type-arrow {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0 4px;
+}
+
+.block-agent-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: var(--sp-xs);
+  padding-top: var(--sp-xs);
+  border-top: 1px solid var(--border-primary);
+}

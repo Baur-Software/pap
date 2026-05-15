@@ -4,6 +4,7 @@ pub mod agent_picker_modal;
 pub mod agent_selector;
 pub mod approval_toast;
 pub mod canvas_aside;
+pub mod block_container_view;
 pub mod block_renderer;
 pub mod block_ports;
 pub mod canvas_back_face;
@@ -27,4 +28,5 @@ pub mod workflow_chat_thread;
 pub mod workflow_panel;
 
 pub use agent_selector::AgentSelector;
+pub use block_container_view::BlockContainerView;
 pub use block_ports::{BlockInputPort, BlockOutputPort};
