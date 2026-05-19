@@ -1,6 +1,6 @@
-use tauri::State;
-use papillon_shared::BlockConnection;
 use crate::AppState;
+use papillon_shared::BlockConnection;
+use tauri::State;
 
 /// Connect two block containers.
 /// Validates that from_block outputs match to_block inputs.
@@ -8,7 +8,7 @@ use crate::AppState;
 pub async fn connect_blocks(
     from_block_id: String,
     to_block_id: String,
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
 ) -> Result<BlockConnection, String> {
     // 1. Fetch both containers from DB (TODO: implement fetch)
     // For now, validate signatures conceptually
@@ -38,9 +38,9 @@ pub async fn connect_blocks(
 /// Disconnect two block containers.
 #[tauri::command]
 pub async fn disconnect_blocks(
-    from_block_id: String,
-    to_block_id: String,
-    state: State<'_, AppState>,
+    _from_block_id: String,
+    _to_block_id: String,
+    _state: State<'_, AppState>,
 ) -> Result<(), String> {
     // 1. Fetch connection from DB
     // 2. Delete connection record
@@ -50,7 +50,6 @@ pub async fn disconnect_blocks(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use papillon_shared::SchemaSignature;
 
     #[test]

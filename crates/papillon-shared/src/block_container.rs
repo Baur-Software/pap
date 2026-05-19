@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::SchemaSignature;
+use serde::{Deserialize, Serialize};
 
 /// A block container holds N agents with the same schema signature.
 /// Positioned on a 2D canvas with input/output ports for visual wiring.

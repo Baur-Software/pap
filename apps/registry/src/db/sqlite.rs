@@ -338,16 +338,28 @@ impl SqliteStore {
     ) -> Result<CredentialsPage> {
         let offset = page.saturating_sub(1) * per_page;
 
-        let (total, rows): (u64, Vec<(i64, String, String, String, Option<String>, Option<String>, String, String, Option<String>)>) = if let Some(query) = q.filter(|s| !s.is_empty()) {
+        let (total, rows): (
+            u64,
+            Vec<(
+                i64,
+                String,
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                String,
+                String,
+                Option<String>,
+            )>,
+        ) = if let Some(query) = q.filter(|s| !s.is_empty()) {
             let pattern = format!("%{query}%");
-            let total: i64 = sqlx::query_as::<_, (i64,)>(
-                "SELECT COUNT(*) FROM credentials WHERE name LIKE ?",
-            )
-            .bind(&pattern)
-            .fetch_one(&self.pool)
-            .await
-            .map(|(n,)| n)
-            .unwrap_or(0);
+            let total: i64 =
+                sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM credentials WHERE name LIKE ?")
+                    .bind(&pattern)
+                    .fetch_one(&self.pool)
+                    .await
+                    .map(|(n,)| n)
+                    .unwrap_or(0);
 
             let rows = sqlx::query_as::<_, (i64, String, String, String, Option<String>, Option<String>, String, String, Option<String>)>(
                 "SELECT id, name, kind, payload, schema_type, issuer_did, created_at, updated_at, expires_at
@@ -383,8 +395,8 @@ impl SqliteStore {
 
         let items = rows
             .into_iter()
-            .map(|(id, name, kind, payload, schema_type, issuer_did, created_at, updated_at, expires_at)| {
-                CredentialEntry {
+            .map(
+                |(
                     id,
                     name,
                     kind,
@@ -394,8 +406,20 @@ impl SqliteStore {
                     created_at,
                     updated_at,
                     expires_at,
-                }
-            })
+                )| {
+                    CredentialEntry {
+                        id,
+                        name,
+                        kind,
+                        payload,
+                        schema_type,
+                        issuer_did,
+                        created_at,
+                        updated_at,
+                        expires_at,
+                    }
+                },
+            )
             .collect();
 
         Ok(CredentialsPage {

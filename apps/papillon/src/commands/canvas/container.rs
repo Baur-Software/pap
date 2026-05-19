@@ -1,22 +1,19 @@
-use tauri::State;
-use papillon_shared::{BlockContainer, BlockPosition, SchemaSignature, AgentInfo};
 use crate::AppState;
+use papillon_shared::{AgentInfo, BlockContainer, BlockPosition, SchemaSignature};
 use rand::Rng;
+use tauri::State;
 
 /// Create a new block container from an intent.
 /// Uses BM25 to classify intent → schema action → agent signature.
 #[tauri::command]
 pub async fn create_block_container(
     canvas_id: String,
-    prompt: String,
+    _prompt: String,
     position: Option<BlockPosition>,
     state: State<'_, AppState>,
 ) -> Result<BlockContainer, String> {
     // 1. Get agents from local registry
-    let local_registry = state
-        .local_registry
-        .lock()
-        .map_err(|e| e.to_string())?;
+    let local_registry = state.local_registry.lock().map_err(|e| e.to_string())?;
 
     let ads = local_registry.all_advertisements();
     let agents: Vec<AgentInfo> = ads

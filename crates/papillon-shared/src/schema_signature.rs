@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::AgentInfo;
+use serde::{Deserialize, Serialize};
 
 /// Schema.org I/O signature for an agent or block container.
 /// Defines what types go in and what types come out.
@@ -30,7 +30,10 @@ impl SchemaSignature {
             return false;
         }
         // Check that every required input type is present in our outputs
-        other.input_types.iter().all(|req| self.output_types.contains(req))
+        other
+            .input_types
+            .iter()
+            .all(|req| self.output_types.contains(req))
     }
 
     /// Check if an agent's signature matches this container's signature.

@@ -9,7 +9,7 @@ pub use dataset_types::{DatasetDiscoveryState, DatasetResult};
 pub mod schema_signature;
 pub use schema_signature::SchemaSignature;
 pub mod block_container;
-pub use block_container::{BlockContainer, BlockConnection, BlockPosition, WiringError};
+pub use block_container::{BlockConnection, BlockContainer, BlockPosition, WiringError};
 pub mod events;
 pub mod intent;
 pub mod json_ld_query;
