@@ -99,8 +99,8 @@ pub fn AgentsPage() -> impl IntoView {
                                     <div class="pagination">
                                         <button
                                             class="btn btn-secondary btn-sm"
-                                            disabled=move || page.get() <= 1
-                                            on:click=move |_| page.update(|p| *p -= 1)
+                                            disabled={move || page.get() <= 1}
+                                            on:click={move |_| page.update(|p| *p -= 1)}
                                         >
                                             "← Prev"
                                         </button>
@@ -110,8 +110,8 @@ pub fn AgentsPage() -> impl IntoView {
                                         </span>
                                         <button
                                             class="btn btn-secondary btn-sm"
-                                            disabled=move || page.get() >= total_pages
-                                            on:click=move |_| page.update(|p| *p += 1)
+                                            disabled={move || page.get() >= total_pages}
+                                            on:click={move |_| page.update(|p| *p += 1)}
                                         >
                                             "Next →"
                                         </button>

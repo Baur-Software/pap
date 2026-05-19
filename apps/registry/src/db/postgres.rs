@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use pap_federation::peer::RegistryPeer;
 use pap_marketplace::AgentAdvertisement;
 
-use super::{AgentEntry, AgentsPage, NodeIdentity};
+use super::{AgentEntry, AgentsPage, CredentialEntry, CredentialsPage, NodeIdentity};
 
 pub struct PostgresStore {
     pub pool: PgPool,

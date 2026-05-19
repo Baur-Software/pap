@@ -1249,7 +1249,7 @@ checksum = "8c04f5d74368e4d0dfe06c45c8627c81bd7c317d52762d118fb9b3076f6420fd"
 
 [[package]]
 name = "pap-core"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "base64",
  "chrono",
@@ -1267,7 +1267,7 @@ dependencies = [
 
 [[package]]
 name = "pap-credential"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "base64",
  "chrono",
@@ -1285,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "pap-did"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "bs58",
  "ed25519-dalek",
@@ -1298,7 +1298,7 @@ dependencies = [
 
 [[package]]
 name = "pap-federation"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "base64",
  "chrono",
@@ -1317,7 +1317,7 @@ dependencies = [
 
 [[package]]
 name = "pap-marketplace"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "base64",
  "chrono",
@@ -1334,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "pap-proto"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aes-gcm",
  "base64",
@@ -1356,7 +1356,7 @@ dependencies = [
 
 [[package]]
 name = "papillon-shared"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "chrono",
  "ed25519-dalek",
