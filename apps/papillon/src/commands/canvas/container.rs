@@ -1,6 +1,7 @@
 use tauri::State;
 use papillon_shared::{BlockContainer, BlockPosition, SchemaSignature, AgentInfo};
 use crate::AppState;
+use rand::Rng;
 
 /// Create a new block container from an intent.
 /// Uses BM25 to classify intent → schema action → agent signature.
@@ -8,6 +9,7 @@ use crate::AppState;
 pub async fn create_block_container(
     canvas_id: String,
     prompt: String,
+    position: Option<BlockPosition>,
     state: State<'_, AppState>,
 ) -> Result<BlockContainer, String> {
     // 1. Get agents from local registry
@@ -66,13 +68,20 @@ pub async fn create_block_container(
         return Err(format!("No agents found for signature: {:?}", signature));
     }
 
-    // 4. Create container with default position
+    // 4. Create container with caller-supplied or auto-offset position
+    let position = position.unwrap_or_else(|| {
+        let mut rng = rand::rngs::OsRng;
+        BlockPosition {
+            x: 100.0 + rng.gen_range(0.0..=40.0),
+            y: 100.0 + rng.gen_range(0.0..=40.0),
+        }
+    });
     let container = BlockContainer {
         id: uuid::Uuid::new_v4().to_string(),
         canvas_id,
         signature,
         agent_names: compatible_agents,
-        position: BlockPosition { x: 100.0, y: 100.0 },
+        position,
         input_connections: vec![],
         output_connections: vec![],
         created_at: chrono::Utc::now().to_rfc3339(),

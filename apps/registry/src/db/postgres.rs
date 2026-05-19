@@ -339,4 +339,125 @@ impl PostgresStore {
         .await?;
         Ok(())
     }
+
+    // ── Credentials ────────────────────────────────────────────────────────────
+
+    pub async fn list_credentials(
+        &self,
+        q: Option<&str>,
+        page: u32,
+        per_page: u32,
+    ) -> Result<CredentialsPage> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let (total, rows): (u64, Vec<(i64, String, String, String, Option<String>, Option<String>, String, String, Option<String>)>) = if let Some(query) = q.filter(|s| !s.is_empty()) {
+            let pattern = format!("%{query}%");
+            let total: i64 = sqlx::query_as::<_, (i64,)>(
+                "SELECT COUNT(*) FROM credentials WHERE name LIKE $1",
+            )
+            .bind(&pattern)
+            .fetch_one(&self.pool)
+            .await
+            .map(|(n,)| n)
+            .unwrap_or(0);
+
+            let rows = sqlx::query_as::<_, (i64, String, String, String, Option<String>, Option<String>, String, String, Option<String>)>(
+                "SELECT id, name, kind, payload, schema_type, issuer_did, created_at, updated_at, expires_at
+                 FROM credentials WHERE name LIKE $1
+                 ORDER BY updated_at DESC LIMIT $2 OFFSET $3",
+            )
+            .bind(&pattern)
+            .bind(per_page as i64)
+            .bind(offset as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+            (total as u64, rows)
+        } else {
+            let total: i64 = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM credentials")
+                .fetch_one(&self.pool)
+                .await
+                .map(|(n,)| n)
+                .unwrap_or(0);
+
+            let rows = sqlx::query_as::<_, (i64, String, String, String, Option<String>, Option<String>, String, String, Option<String>)>(
+                "SELECT id, name, kind, payload, schema_type, issuer_did, created_at, updated_at, expires_at
+                 FROM credentials
+                 ORDER BY updated_at DESC LIMIT $1 OFFSET $2",
+            )
+            .bind(per_page as i64)
+            .bind(offset as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+            (total as u64, rows)
+        };
+
+        let items = rows
+            .into_iter()
+            .map(|(id, name, kind, payload, schema_type, issuer_did, created_at, updated_at, expires_at)| {
+                CredentialEntry {
+                    id,
+                    name,
+                    kind,
+                    payload,
+                    schema_type,
+                    issuer_did,
+                    created_at,
+                    updated_at,
+                    expires_at,
+                }
+            })
+            .collect();
+
+        Ok(CredentialsPage {
+            items,
+            total,
+            page,
+            per_page,
+        })
+    }
+
+    pub async fn insert_credential(&self, entry: &CredentialEntry) -> Result<i64> {
+        let id: i64 = sqlx::query_scalar(
+            "INSERT INTO credentials (name, kind, payload, schema_type, issuer_did, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id",
+        )
+        .bind(&entry.name)
+        .bind(&entry.kind)
+        .bind(&entry.payload)
+        .bind(&entry.schema_type)
+        .bind(&entry.issuer_did)
+        .bind(&entry.expires_at)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(id)
+    }
+
+    pub async fn update_credential(&self, entry: &CredentialEntry) -> Result<bool> {
+        let result = sqlx::query(
+            "UPDATE credentials SET
+                 name = $1, kind = $2, payload = $3, schema_type = $4, issuer_did = $5, expires_at = $6
+             WHERE id = $7",
+        )
+        .bind(&entry.name)
+        .bind(&entry.kind)
+        .bind(&entry.payload)
+        .bind(&entry.schema_type)
+        .bind(&entry.issuer_did)
+        .bind(&entry.expires_at)
+        .bind(entry.id)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn delete_credential(&self, id: i64) -> Result<bool> {
+        let result = sqlx::query("DELETE FROM credentials WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
 }
