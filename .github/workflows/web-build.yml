@@ -84,7 +84,7 @@ jobs:
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json', 'e2e/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json') }}
           restore-keys: playwright-${{ runner.os }}-
 
       - name: Install npm dependencies
