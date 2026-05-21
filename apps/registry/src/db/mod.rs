@@ -8,7 +8,7 @@ use sqlite::SqliteStore;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use pap_federation::peer::RegistryPeer;
 use pap_marketplace::AgentAdvertisement;
@@ -28,6 +28,26 @@ pub struct AgentEntry {
 
 pub struct AgentsPage {
     pub items: Vec<AgentEntry>,
+    pub total: u64,
+    pub page: u32,
+    pub per_page: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CredentialEntry {
+    pub id: i64,
+    pub name: String,
+    pub kind: String,
+    pub payload: String,
+    pub schema_type: Option<String>,
+    pub issuer_did: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub expires_at: Option<String>,
+}
+
+pub struct CredentialsPage {
+    pub items: Vec<CredentialEntry>,
     pub total: u64,
     pub page: u32,
     pub per_page: u32,
@@ -163,6 +183,41 @@ impl RegistryStore {
         match self {
             RegistryStore::Sqlite(s) => s.save_setting(key, value).await,
             RegistryStore::Postgres(p) => p.save_setting(key, value).await,
+        }
+    }
+
+    // ── Credentials ──────────────────────────────────────────────────────────
+
+    pub async fn list_credentials(
+        &self,
+        q: Option<&str>,
+        page: u32,
+        per_page: u32,
+    ) -> Result<CredentialsPage> {
+        match self {
+            RegistryStore::Sqlite(s) => s.list_credentials(q, page, per_page).await,
+            RegistryStore::Postgres(p) => p.list_credentials(q, page, per_page).await,
+        }
+    }
+
+    pub async fn insert_credential(&self, entry: &CredentialEntry) -> Result<i64> {
+        match self {
+            RegistryStore::Sqlite(s) => s.insert_credential(entry).await,
+            RegistryStore::Postgres(p) => p.insert_credential(entry).await,
+        }
+    }
+
+    pub async fn update_credential(&self, entry: &CredentialEntry) -> Result<bool> {
+        match self {
+            RegistryStore::Sqlite(s) => s.update_credential(entry).await,
+            RegistryStore::Postgres(p) => p.update_credential(entry).await,
+        }
+    }
+
+    pub async fn delete_credential(&self, id: i64) -> Result<bool> {
+        match self {
+            RegistryStore::Sqlite(s) => s.delete_credential(id).await,
+            RegistryStore::Postgres(p) => p.delete_credential(id).await,
         }
     }
 }

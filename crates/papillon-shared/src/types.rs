@@ -734,6 +734,10 @@ pub struct CanvasBlock {
     /// agent-scoped templates over global schema-type renderers.
     #[serde(default)]
     pub agent_did: Option<String>,
+    /// Optional block container ID when this block is part of a multi-agent container.
+    /// When present, this block's schema output can wire to other blocks' inputs.
+    #[serde(default)]
+    pub container_id: Option<String>,
     /// When this block was created.
     pub created_at: String,
     /// When this block was last updated.
@@ -1331,6 +1335,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            container_id: None,
             mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1363,6 +1368,7 @@ mod tests {
             content: Some(content.clone()),
             linked_block_ids: vec!["blk-3".into()],
             agent_did: None,
+            container_id: None,
             mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:01Z".into(),
@@ -1391,6 +1397,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            container_id: None,
             mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1425,6 +1432,7 @@ mod tests {
                 content: Some(serde_json::json!({"@type": "FlightReservation"})),
                 linked_block_ids: Vec::new(),
                 agent_did: None,
+                container_id: None,
                 mandate_expires_at: None,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1778,6 +1786,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            container_id: None,
             mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
@@ -1920,6 +1929,7 @@ mod tests {
             content: None,
             linked_block_ids: Vec::new(),
             agent_did: None,
+            container_id: None,
             mandate_expires_at: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),

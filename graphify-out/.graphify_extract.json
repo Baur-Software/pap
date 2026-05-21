@@ -1,0 +1,3828 @@
+{
+  "nodes": [
+    {
+      "id": "test_papillon_root",
+      "label": "Papillon Test Entry Point",
+      "file_type": "code",
+      "source_file": "test-papillon.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "papillon_build_script",
+      "label": "Papillon Build Configuration",
+      "file_type": "code",
+      "source_file": "apps/papillon/build.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_playwright_config",
+      "label": "Playwright E2E Configuration",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/playwright.config.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_playwright_local_config",
+      "label": "Playwright Local E2E Configuration",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/playwright.local.config.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_advertiser_phase_spec",
+      "label": "Advertiser Phase E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/advertiser-phase.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_agent_prompts_spec",
+      "label": "Agent Prompts E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/agent-prompts.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_agents_spec",
+      "label": "Agents E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/agents.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_app_spec",
+      "label": "App Core E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/app.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_edge_cases_spec",
+      "label": "Edge Cases E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/edge-cases.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_helpers",
+      "label": "E2E Test Helpers",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/helpers.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_ollama_config_spec",
+      "label": "Ollama Configuration E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/ollama-config.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_prompt_coverage_spec",
+      "label": "Prompt Coverage E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/prompt-coverage.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_reshape_spec",
+      "label": "Reshape E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/reshape.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_smoke_spec",
+      "label": "Smoke Tests E2E",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/smoke.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_tauri_mock",
+      "label": "Tauri IPC Mock",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/tauri-mock.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_templates_spec",
+      "label": "Templates E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/templates.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_tier2_functional_spec",
+      "label": "Tier 2 Functional E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/tier2-functional.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_web_standalone_spec",
+      "label": "Web Standalone E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/web-standalone.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_workflow_spec",
+      "label": "Workflow E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/workflow.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "e2e_wysiwyg_registry_spec",
+      "label": "WYSIWYG Registry E2E Tests",
+      "file_type": "code",
+      "source_file": "apps/papillon/e2e/tests/wysiwyg-registry.spec.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "app_App",
+      "label": "App Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/app.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bridge_Bridge",
+      "label": "Bridge Module",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/bridge.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_Frontend",
+      "label": "Frontend Library Entry",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "orchestrator_runtime_OrchestratorRuntime",
+      "label": "Orchestrator Runtime",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/orchestrator_runtime.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workflow_labels_WorkflowLabels",
+      "label": "Workflow Labels",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/workflow_labels.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "address_bar_AddressBar",
+      "label": "Address Bar Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/address_bar.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "agent_picker_modal_AgentPickerModal",
+      "label": "Agent Picker Modal",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/agent_picker_modal.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_aside_CanvasAside",
+      "label": "Canvas Aside Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/canvas_aside.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_back_face_CanvasBackFace",
+      "label": "Canvas Back Face Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/canvas_back_face.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_chat_thread_CanvasChatThread",
+      "label": "Canvas Chat Thread Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/canvas_chat_thread.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_empty_state_CanvasEmptyState",
+      "label": "Canvas Empty State Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/canvas_empty_state.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_ghost_run_panel_CanvasGhostRunPanel",
+      "label": "Canvas Ghost Run Panel",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/canvas_ghost_run_panel.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_surface_title_CanvasSurfaceTitle",
+      "label": "Canvas Surface Title Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/canvas_surface_title.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_workflow_pipeline_CanvasWorkflowPipeline",
+      "label": "Canvas Workflow Pipeline Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/canvas_workflow_pipeline.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "hitl_gate_HitlGate",
+      "label": "Human-in-the-Loop Gate Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/hitl_gate.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "components_mod_ComponentsModule",
+      "label": "Components Module",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/mod.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "outcome_summary_OutcomeSummary",
+      "label": "Outcome Summary Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/outcome_summary.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "profile_avatar_ProfileAvatar",
+      "label": "Profile Avatar Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/profile_avatar.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "recovery_setup_RecoverySetup",
+      "label": "Recovery Setup Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/recovery_setup.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "setup_wizard_SetupWizard",
+      "label": "Setup Wizard Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/setup_wizard.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "address_bar_multifunction_pattern",
+      "label": "Address Bar Multifunction Pattern",
+      "file_type": "rationale",
+      "source_file": "apps/papillon/frontend/src/components/address_bar.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ghost_run_dry_run_pattern",
+      "label": "Ghost Run Dry-Run Pattern",
+      "file_type": "rationale",
+      "source_file": "apps/papillon/frontend/src/components/canvas_ghost_run_panel.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "hitl_approval_pattern",
+      "label": "Human-in-the-Loop Approval Pattern",
+      "file_type": "rationale",
+      "source_file": "apps/papillon/frontend/src/components/hitl_gate.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "source_panel_component",
+      "label": "SourcePanel Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/source_panel.rs",
+      "source_location": "17",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "topbar_component",
+      "label": "TopBar Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/topbar.rs",
+      "source_location": "27",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "topbar_prompt_component",
+      "label": "TopbarPrompt Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/topbar.rs",
+      "source_location": "174",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "block_renderer_mod",
+      "label": "BlockRenderer Module",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/mod.rs",
+      "source_location": "1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "renderer_registry",
+      "label": "RendererRegistry",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/registry.rs",
+      "source_location": "19",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "block_renderer_trait",
+      "label": "BlockRenderer Trait",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/renderer.rs",
+      "source_location": "9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "declarative_renderer",
+      "label": "DeclarativeRenderer",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/declarative.rs",
+      "source_location": "16",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "field_classify_module",
+      "label": "Field Classification Module",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/field_classify.rs",
+      "source_location": "56",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "generic_stream_renderer",
+      "label": "Generic Stream Renderer",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/generic.rs",
+      "source_location": "100",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_property_catalog",
+      "label": "Schema Property Catalog",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/schema_property.rs",
+      "source_location": "16",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dataset_search_template",
+      "label": "DatasetSearchTemplate",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/dataset_template.rs",
+      "source_location": "13",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "shipped_templates",
+      "label": "Shipped Schema.org Templates",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/templates.rs",
+      "source_location": "1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "receipt_wrapper",
+      "label": "Receipt Wrapper",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/receipt.rs",
+      "source_location": "7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "agent_card_component",
+      "label": "AgentCard Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/registry/agent_card.rs",
+      "source_location": "7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "agent_detail_component",
+      "label": "AgentDetail Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/registry/agent_detail.rs",
+      "source_location": "6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "registry_browser_component",
+      "label": "RegistryBrowser Component",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/components/registry/browser.rs",
+      "source_location": "10",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fetch_client",
+      "label": "FetchClient",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/handshake/fetch_client.rs",
+      "source_location": "34",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wasm_handshake_executor",
+      "label": "WASM Handshake Executor",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/handshake/mod.rs",
+      "source_location": "141",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "local_catalog_executor",
+      "label": "Local Catalog Executor",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/handshake/local_catalog.rs",
+      "source_location": "52",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "intent_detection_delegate",
+      "label": "Intent Detection Delegate",
+      "file_type": "code",
+      "source_file": "apps/papillon/frontend/src/handshake/intent.rs",
+      "source_location": "6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "two_tier_dispatch_pattern",
+      "label": "Two-Tier Renderer Dispatch",
+      "file_type": "rationale",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/registry.rs",
+      "source_location": "6-18",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vocabulary_driven_classification",
+      "label": "Vocabulary-Driven Field Classification",
+      "file_type": "rationale",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/schema_property.rs",
+      "source_location": "1-15",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "iterative_dfs_flattening",
+      "label": "Iterative DFS Tree Flattening",
+      "file_type": "rationale",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/generic.rs",
+      "source_location": "100-109",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "envelope_detection_sentinel",
+      "label": "Handshake Envelope Sentinel Detection",
+      "file_type": "rationale",
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/mod.rs",
+      "source_location": "1127-1145",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Mandate",
+      "label": "Mandate",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "64-99",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "DecayState",
+      "label": "DecayState",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "14-23",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Scope",
+      "label": "Scope",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/scope.rs",
+      "source_location": "6-8",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "DisclosureSet",
+      "label": "DisclosureSet",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/scope.rs",
+      "source_location": "28-31",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Session",
+      "label": "Session",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "208-222",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "SessionState",
+      "label": "SessionState",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "28-38",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "CapabilityToken",
+      "label": "CapabilityToken",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "72-93",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "TransactionReceipt",
+      "label": "TransactionReceipt",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "265-301",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "SessionAttestation",
+      "label": "SessionAttestation",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "48-65",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "PrincipalKeypair",
+      "label": "PrincipalKeypair",
+      "file_type": "code",
+      "source_file": "crates/pap-did/src/principal.rs",
+      "source_location": "10-12",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "SessionKeypair",
+      "label": "SessionKeypair",
+      "file_type": "code",
+      "source_file": "crates/pap-did/src/session.rs",
+      "source_location": "9-11",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "SelectiveDisclosureJwt",
+      "label": "SelectiveDisclosureJwt",
+      "file_type": "code",
+      "source_file": "crates/pap-credential/src/sd_jwt.rs",
+      "source_location": "15-28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Disclosure",
+      "label": "Disclosure",
+      "file_type": "code",
+      "source_file": "crates/pap-credential/src/sd_jwt.rs",
+      "source_location": "31-36",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "RecoveryShard",
+      "label": "RecoveryShard",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/shamir.rs",
+      "source_location": "168-186",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ShardManifest",
+      "label": "ShardManifest",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/shamir.rs",
+      "source_location": "285-298",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ReputationProfile",
+      "label": "ReputationProfile",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "200-204",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "MandateChain",
+      "label": "MandateChain",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "402-405",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ScopeAction",
+      "label": "ScopeAction",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/scope.rs",
+      "source_location": "14-25",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "DisclosureEntry",
+      "label": "DisclosureEntry",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/scope.rs",
+      "source_location": "36-54",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "PaymentProof",
+      "label": "PaymentProof",
+      "file_type": "code",
+      "source_file": "crates/pap-core/src/payment.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WebSocketTransport",
+      "label": "WebSocket Transport",
+      "file_type": "code",
+      "source_file": "crates/pap-transport/src/websocket.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "OHTTPRelay",
+      "label": "OHTTP Relay",
+      "file_type": "code",
+      "source_file": "crates/pap-transport/src/ohttp.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "TLSMutualAuth",
+      "label": "TLS Mutual Authentication",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/tls.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "FederatedRegistry",
+      "label": "Federated Registry",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/registry.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "PeerDiscovery",
+      "label": "Peer Discovery",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/discovery.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "AgentAdvertisement",
+      "label": "Agent Advertisement",
+      "file_type": "code",
+      "source_file": "crates/pap-marketplace/src/advertisement.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WsAgentClient",
+      "label": "WebSocket Agent Client",
+      "file_type": "code",
+      "source_file": "crates/pap-transport/src/ws_client.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WsAgentServer",
+      "label": "WebSocket Agent Server",
+      "file_type": "code",
+      "source_file": "crates/pap-transport/src/ws_server.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "FederationClient",
+      "label": "Federation Client",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/client.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "FederationServer",
+      "label": "Federation Server",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/server.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "RegistryPeer",
+      "label": "Registry Peer",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/peer.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "PeerVouch",
+      "label": "Peer Vouch",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/vouch.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "MarketplaceRegistry",
+      "label": "Marketplace Registry",
+      "file_type": "code",
+      "source_file": "crates/pap-marketplace/src/registry.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "OperatorMetrics",
+      "label": "Operator Metrics",
+      "file_type": "code",
+      "source_file": "crates/pap-marketplace/src/metrics.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "SixPhaseHandshake",
+      "label": "Six-Phase Handshake Protocol",
+      "file_type": "rationale",
+      "source_file": "crates/pap-transport/src/websocket.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "PeerRegistrationPolicy",
+      "label": "Peer Registration Policy",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/policy.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "NodeTlsIdentity",
+      "label": "Node TLS Identity",
+      "file_type": "code",
+      "source_file": "crates/pap-federation/src/tls.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pap_c_ffi_layer",
+      "label": "pap-c FFI Layer",
+      "file_type": "code",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pyo3_bindings",
+      "label": "PyO3 Python Bindings",
+      "file_type": "code",
+      "source_file": "crates/pap-python/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cpp_raii_wrapper",
+      "label": "C++ RAII Wrapper",
+      "file_type": "code",
+      "source_file": "bindings/cpp/pap.hpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "csharp_safehandle",
+      "label": "C# SafeHandle Bindings",
+      "file_type": "code",
+      "source_file": "bindings/csharp/",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "java_jna_bindings",
+      "label": "Java JNA Bindings",
+      "file_type": "code",
+      "source_file": "bindings/java/src/main/java/io/pap/",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "typescript_native",
+      "label": "TypeScript Pure Implementation",
+      "file_type": "code",
+      "source_file": "packages/pap-ts/src/",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "opaque_handle_pattern",
+      "label": "Opaque Handle Pattern",
+      "file_type": "rationale",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "principal_keypair_ffi",
+      "label": "PrincipalKeypair FFI",
+      "file_type": "code",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mandate_ffi",
+      "label": "Mandate FFI",
+      "file_type": "code",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "session_ffi",
+      "label": "Session FFI",
+      "file_type": "code",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scope_disclosure_ffi",
+      "label": "Scope/Disclosure FFI",
+      "file_type": "code",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "string_ownership_pattern",
+      "label": "String Ownership Pattern",
+      "file_type": "rationale",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "error_propagation_pattern",
+      "label": "Error Propagation Pattern",
+      "file_type": "rationale",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "async_runtime_boundary",
+      "label": "Async Runtime Boundary",
+      "file_type": "rationale",
+      "source_file": "crates/pap-python/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "decay_state_encoding",
+      "label": "Decay State ABI Encoding",
+      "file_type": "rationale",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sandbox_ffi",
+      "label": "Sandbox FFI",
+      "file_type": "code",
+      "source_file": "crates/pap-python/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "agent_client_transport",
+      "label": "AgentClient Transport FFI",
+      "file_type": "code",
+      "source_file": "crates/pap-python/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "marketplace_ffi",
+      "label": "Marketplace Registry FFI",
+      "file_type": "code",
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pap_protocol",
+      "label": "Principal Agent Protocol (PAP)",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "trust_root",
+      "label": "Human Principal",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mandate_doc",
+      "label": "Mandate",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scope_doc",
+      "label": "Scope",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "session_did_doc",
+      "label": "Ephemeral Session DID",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sd_jwt_doc",
+      "label": "SD-JWT Selective Disclosure",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "six_phase_handshake_doc",
+      "label": "6-Phase Session Handshake",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "transaction_receipt_doc",
+      "label": "Transaction Receipt",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "decay_state_doc",
+      "label": "Progressive Decay States",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "orchestrator_doc",
+      "label": "Orchestrator Agent",
+      "file_type": "document",
+      "source_file": "docs/CANVAS_SPEC.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "papillon",
+      "label": "Papillon",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "canvas_doc",
+      "label": "Canvas",
+      "file_type": "document",
+      "source_file": "docs/CANVAS_SPEC.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "chrysalis",
+      "label": "Chrysalis",
+      "file_type": "document",
+      "source_file": "apps/chrysalis/README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "threat_model",
+      "label": "PAP Threat Model",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "capture_test",
+      "label": "Platform Capture Test",
+      "file_type": "rationale",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "protocol_stack",
+      "label": "Standards-Based Protocol Stack",
+      "file_type": "rationale",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "two_boundary_security",
+      "label": "Two-Boundary Security Model",
+      "file_type": "rationale",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sandbox_execution_doc",
+      "label": "OS-Level Sandbox Execution",
+      "file_type": "document",
+      "source_file": "docs/specification.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_org_rendering_doc",
+      "label": "Schema.org Rendering",
+      "file_type": "rationale",
+      "source_file": "docs/DESIGN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "e2e_playwright_local_config",
+      "target": "e2e_playwright_config",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/playwright.local.config.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_advertiser_phase_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/advertiser-phase.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_agent_prompts_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/agent-prompts.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_agents_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/agents.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_app_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/app.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_edge_cases_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/edge-cases.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_ollama_config_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/ollama-config.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_prompt_coverage_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/prompt-coverage.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_reshape_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/reshape.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_smoke_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/smoke.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_templates_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/templates.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_tier2_functional_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/tier2-functional.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_web_standalone_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/web-standalone.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_workflow_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/workflow.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_wysiwyg_registry_spec",
+      "target": "e2e_helpers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/wysiwyg-registry.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_web_standalone_spec",
+      "target": "e2e_tauri_mock",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/web-standalone.spec.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "test_papillon_root",
+      "target": "e2e_playwright_config",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "test-papillon.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "papillon_build_script",
+      "target": "e2e_playwright_config",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "apps/papillon/build.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "app_App",
+      "target": "address_bar_AddressBar",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/app.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "app_App",
+      "target": "canvas_chat_thread_CanvasChatThread",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/app.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "app_App",
+      "target": "bridge_Bridge",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/app.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_Frontend",
+      "target": "app_App",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "address_bar_AddressBar",
+      "target": "orchestrator_runtime_OrchestratorRuntime",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/address_bar.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "address_bar_AddressBar",
+      "target": "bridge_Bridge",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/address_bar.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "agent_picker_modal_AgentPickerModal",
+      "target": "address_bar_AddressBar",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/agent_picker_modal.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_ghost_run_panel_CanvasGhostRunPanel",
+      "target": "hitl_gate_HitlGate",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/canvas_ghost_run_panel.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_workflow_pipeline_CanvasWorkflowPipeline",
+      "target": "workflow_labels_WorkflowLabels",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/canvas_workflow_pipeline.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_chat_thread_CanvasChatThread",
+      "target": "canvas_ghost_run_panel_CanvasGhostRunPanel",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/canvas_chat_thread.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_chat_thread_CanvasChatThread",
+      "target": "hitl_gate_HitlGate",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/canvas_chat_thread.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_chat_thread_CanvasChatThread",
+      "target": "outcome_summary_OutcomeSummary",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/canvas_chat_thread.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_aside_CanvasAside",
+      "target": "canvas_back_face_CanvasBackFace",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/canvas_aside.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "setup_wizard_SetupWizard",
+      "target": "recovery_setup_RecoverySetup",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/setup_wizard.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "setup_wizard_SetupWizard",
+      "target": "bridge_Bridge",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/setup_wizard.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "recovery_setup_RecoverySetup",
+      "target": "bridge_Bridge",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/recovery_setup.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "address_bar_multifunction_pattern",
+      "target": "address_bar_AddressBar",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/address_bar.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "ghost_run_dry_run_pattern",
+      "target": "canvas_ghost_run_panel_CanvasGhostRunPanel",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/canvas_ghost_run_panel.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "hitl_approval_pattern",
+      "target": "hitl_gate_HitlGate",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/hitl_gate.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_empty_state_CanvasEmptyState",
+      "target": "canvas_chat_thread_CanvasChatThread",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "apps/papillon/frontend/src/components/canvas_empty_state.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_runtime_OrchestratorRuntime",
+      "target": "bridge_Bridge",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/orchestrator_runtime.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "source_panel_component",
+      "target": "topbar_prompt_component",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/source_panel.rs",
+      "source_location": "94-103",
+      "weight": 1.0
+    },
+    {
+      "source": "topbar_prompt_component",
+      "target": "intent_detection_delegate",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/topbar.rs",
+      "source_location": "223-234",
+      "weight": 1.0
+    },
+    {
+      "source": "block_renderer_mod",
+      "target": "renderer_registry",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/mod.rs",
+      "source_location": "119-122",
+      "weight": 1.0
+    },
+    {
+      "source": "renderer_registry",
+      "target": "block_renderer_trait",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/registry.rs",
+      "source_location": "23",
+      "weight": 1.0
+    },
+    {
+      "source": "declarative_renderer",
+      "target": "block_renderer_trait",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/declarative.rs",
+      "source_location": "140",
+      "weight": 1.0
+    },
+    {
+      "source": "renderer_registry",
+      "target": "two_tier_dispatch_pattern",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/registry.rs",
+      "source_location": "6-18",
+      "weight": 1.0
+    },
+    {
+      "source": "field_classify_module",
+      "target": "schema_property_catalog",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/field_classify.rs",
+      "source_location": "68,105",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_property_catalog",
+      "target": "vocabulary_driven_classification",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/schema_property.rs",
+      "source_location": "1-15",
+      "weight": 1.0
+    },
+    {
+      "source": "generic_stream_renderer",
+      "target": "field_classify_module",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/generic.rs",
+      "source_location": "233",
+      "weight": 1.0
+    },
+    {
+      "source": "generic_stream_renderer",
+      "target": "iterative_dfs_flattening",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/generic.rs",
+      "source_location": "100-109",
+      "weight": 1.0
+    },
+    {
+      "source": "generic_stream_renderer",
+      "target": "renderer_registry",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/generic.rs",
+      "source_location": "129,238,401",
+      "weight": 1.0
+    },
+    {
+      "source": "dataset_search_template",
+      "target": "block_renderer_trait",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/dataset_template.rs",
+      "source_location": "15",
+      "weight": 1.0
+    },
+    {
+      "source": "shipped_templates",
+      "target": "block_renderer_trait",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/templates.rs",
+      "source_location": "17,43,102",
+      "weight": 1.0
+    },
+    {
+      "source": "block_renderer_mod",
+      "target": "receipt_wrapper",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/mod.rs",
+      "source_location": "1159",
+      "weight": 1.0
+    },
+    {
+      "source": "block_renderer_mod",
+      "target": "envelope_detection_sentinel",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/mod.rs",
+      "source_location": "1127-1145",
+      "weight": 1.0
+    },
+    {
+      "source": "registry_browser_component",
+      "target": "agent_card_component",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/registry/browser.rs",
+      "source_location": "160",
+      "weight": 1.0
+    },
+    {
+      "source": "wasm_handshake_executor",
+      "target": "fetch_client",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/handshake/mod.rs",
+      "source_location": "159,176,230,272,296,370,402",
+      "weight": 1.0
+    },
+    {
+      "source": "wasm_handshake_executor",
+      "target": "local_catalog_executor",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/handshake/mod.rs",
+      "source_location": "573",
+      "weight": 1.0
+    },
+    {
+      "source": "wasm_handshake_executor",
+      "target": "intent_detection_delegate",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/handshake/mod.rs",
+      "source_location": "42",
+      "weight": 1.0
+    },
+    {
+      "source": "declarative_renderer",
+      "target": "shipped_templates",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/declarative.rs",
+      "source_location": "6-9",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "DecayState",
+      "relation": "has_field",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "83",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "Scope",
+      "relation": "has_field",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "76",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "DisclosureSet",
+      "relation": "has_field",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "78",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "PaymentProof",
+      "relation": "has_field",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "92",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "Mandate",
+      "relation": "delegates_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "182-211",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "PrincipalKeypair",
+      "relation": "signed_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "222-235",
+      "weight": 1.0
+    },
+    {
+      "source": "DecayState",
+      "target": "DecayState",
+      "relation": "transitions_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "27-37",
+      "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "SessionState",
+      "relation": "has_field",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "210",
+      "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "Scope",
+      "relation": "has_field",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "214",
+      "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "CapabilityToken",
+      "relation": "initiated_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "226-247",
+      "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "SessionKeypair",
+      "relation": "uses_ephemeral_did",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "211-212",
+      "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "DisclosureSet",
+      "relation": "validates_disclosure",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "262-285",
+      "weight": 1.0
+    },
+    {
+      "source": "SessionState",
+      "target": "SessionState",
+      "relation": "transitions_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "41-50",
+      "weight": 1.0
+    },
+    {
+      "source": "CapabilityToken",
+      "target": "PrincipalKeypair",
+      "relation": "signed_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": "117-130",
+      "weight": 1.0
+    },
+    {
+      "source": "TransactionReceipt",
+      "target": "Session",
+      "relation": "generated_from",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "305-336",
+      "weight": 1.0
+    },
+    {
+      "source": "TransactionReceipt",
+      "target": "SessionAttestation",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "300",
+      "weight": 1.0
+    },
+    {
+      "source": "TransactionReceipt",
+      "target": "SessionKeypair",
+      "relation": "co_signed_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "436-442",
+      "weight": 1.0
+    },
+    {
+      "source": "TransactionReceipt",
+      "target": "PaymentProof",
+      "relation": "commits_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "340-346",
+      "weight": 1.0
+    },
+    {
+      "source": "SessionAttestation",
+      "target": "SessionKeypair",
+      "relation": "signed_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "87-100",
+      "weight": 1.0
+    },
+    {
+      "source": "PrincipalKeypair",
+      "target": "RecoveryShard",
+      "relation": "recoverable_via",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-core/src/shamir.rs",
+      "source_location": "324-418",
+      "weight": 1.0
+    },
+    {
+      "source": "RecoveryShard",
+      "target": "ShardManifest",
+      "relation": "described_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/shamir.rs",
+      "source_location": "403-410",
+      "weight": 1.0
+    },
+    {
+      "source": "SelectiveDisclosureJwt",
+      "target": "Disclosure",
+      "relation": "produces",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-credential/src/sd_jwt.rs",
+      "source_location": "103-127",
+      "weight": 1.0
+    },
+    {
+      "source": "SelectiveDisclosureJwt",
+      "target": "PrincipalKeypair",
+      "relation": "signed_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-credential/src/sd_jwt.rs",
+      "source_location": "65-78",
+      "weight": 1.0
+    },
+    {
+      "source": "Disclosure",
+      "target": "DisclosureSet",
+      "relation": "selective_reveal_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "crates/pap-credential/src/sd_jwt.rs",
+      "source_location": "103-127",
+      "weight": 1.0
+    },
+    {
+      "source": "ReputationProfile",
+      "target": "TransactionReceipt",
+      "relation": "aggregates",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/receipt.rs",
+      "source_location": "218-244",
+      "weight": 1.0
+    },
+    {
+      "source": "MandateChain",
+      "target": "Mandate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "404",
+      "weight": 1.0
+    },
+    {
+      "source": "Scope",
+      "target": "ScopeAction",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/scope.rs",
+      "source_location": "7",
+      "weight": 1.0
+    },
+    {
+      "source": "DisclosureSet",
+      "target": "DisclosureEntry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/scope.rs",
+      "source_location": "30",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "Mandate",
+      "relation": "parent_of",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "74",
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "Scope",
+      "relation": "enforces_subset_rule",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs",
+      "source_location": "189-191",
+      "weight": 1.0
+    },
+    {
+      "source": "WsAgentClient",
+      "target": "WebSocketTransport",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/ws_client.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WsAgentServer",
+      "target": "WebSocketTransport",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/ws_server.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WebSocketTransport",
+      "target": "TLSMutualAuth",
+      "relation": "optionally_secured_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/websocket.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "OHTTPRelay",
+      "target": "WebSocketTransport",
+      "relation": "alternative_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-transport/src/ohttp.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "OHTTPRelay",
+      "target": "TLSMutualAuth",
+      "relation": "complementary_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "crates/pap-transport/src/ohttp.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederatedRegistry",
+      "target": "RegistryPeer",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/registry.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederatedRegistry",
+      "target": "AgentAdvertisement",
+      "relation": "stores",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/registry.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederatedRegistry",
+      "target": "PeerRegistrationPolicy",
+      "relation": "enforces",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/registry.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "RegistryPeer",
+      "target": "PeerVouch",
+      "relation": "vouched_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/peer.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "RegistryPeer",
+      "target": "TLSMutualAuth",
+      "relation": "authenticated_via",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/peer.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederationClient",
+      "target": "TLSMutualAuth",
+      "relation": "requires",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/client.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederationClient",
+      "target": "FederatedRegistry",
+      "relation": "syncs_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/client.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederationServer",
+      "target": "FederatedRegistry",
+      "relation": "serves",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/server.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederationServer",
+      "target": "NodeTlsIdentity",
+      "relation": "identified_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/server.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "PeerDiscovery",
+      "target": "RegistryPeer",
+      "relation": "discovers",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/discovery.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "PeerDiscovery",
+      "target": "PeerVouch",
+      "relation": "validated_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/discovery.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "AgentAdvertisement",
+      "target": "OperatorMetrics",
+      "relation": "optionally_includes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-marketplace/src/advertisement.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "MarketplaceRegistry",
+      "target": "AgentAdvertisement",
+      "relation": "indexes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-marketplace/src/registry.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "FederatedRegistry",
+      "target": "MarketplaceRegistry",
+      "relation": "extends",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-federation/src/registry.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "TLSMutualAuth",
+      "target": "NodeTlsIdentity",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/tls.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "PeerRegistrationPolicy",
+      "target": "PeerVouch",
+      "relation": "validates",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/policy.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_c_ffi_layer",
+      "target": "cpp_raii_wrapper",
+      "relation": "exposes_abi_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_c_ffi_layer",
+      "target": "csharp_safehandle",
+      "relation": "exposes_abi_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_c_ffi_layer",
+      "target": "java_jna_bindings",
+      "relation": "exposes_abi_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pyo3_bindings",
+      "target": "pap_c_ffi_layer",
+      "relation": "parallel_implementation_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-python/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "typescript_native",
+      "target": "pap_c_ffi_layer",
+      "relation": "independent_implementation_of",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "packages/pap-ts/src/",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "cpp_raii_wrapper",
+      "target": "opaque_handle_pattern",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "bindings/cpp/pap.hpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "csharp_safehandle",
+      "target": "opaque_handle_pattern",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "bindings/csharp/",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "java_jna_bindings",
+      "target": "opaque_handle_pattern",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "bindings/java/",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pyo3_bindings",
+      "target": "opaque_handle_pattern",
+      "relation": "wraps_rust_types_directly",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-python/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "opaque_handle_pattern",
+      "target": "principal_keypair_ffi",
+      "relation": "applied_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "opaque_handle_pattern",
+      "target": "mandate_ffi",
+      "relation": "applied_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "opaque_handle_pattern",
+      "target": "session_ffi",
+      "relation": "applied_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "opaque_handle_pattern",
+      "target": "scope_disclosure_ffi",
+      "relation": "applied_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_c_ffi_layer",
+      "target": "string_ownership_pattern",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "cpp_raii_wrapper",
+      "target": "string_ownership_pattern",
+      "relation": "consumes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "bindings/cpp/pap.hpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "csharp_safehandle",
+      "target": "string_ownership_pattern",
+      "relation": "consumes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "bindings/csharp/",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "java_jna_bindings",
+      "target": "string_ownership_pattern",
+      "relation": "consumes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "bindings/java/",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_protocol",
+      "target": "trust_root",
+      "relation": "rooted_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "trust_root",
+      "target": "orchestrator_doc",
+      "relation": "delegates_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_doc",
+      "target": "mandate_doc",
+      "relation": "holds_root",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mandate_doc",
+      "target": "scope_doc",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mandate_doc",
+      "target": "decay_state_doc",
+      "relation": "transitions_through",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_protocol",
+      "target": "six_phase_handshake_doc",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "six_phase_handshake_doc",
+      "target": "session_did_doc",
+      "relation": "exchanges",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "six_phase_handshake_doc",
+      "target": "sd_jwt_doc",
+      "relation": "uses_for_disclosure",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "six_phase_handshake_doc",
+      "target": "transaction_receipt_doc",
+      "relation": "produces",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_protocol",
+      "target": "two_boundary_security",
+      "relation": "enforces",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "two_boundary_security",
+      "target": "sd_jwt_doc",
+      "relation": "request_boundary",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "two_boundary_security",
+      "target": "sandbox_execution_doc",
+      "relation": "execution_boundary",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "papillon",
+      "target": "canvas_doc",
+      "relation": "provides",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "papillon",
+      "target": "schema_org_rendering_doc",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_protocol",
+      "target": "capture_test",
+      "relation": "evaluated_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_protocol",
+      "target": "protocol_stack",
+      "relation": "built_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_protocol",
+      "target": "threat_model",
+      "relation": "defends_against",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "threat_model",
+      "target": "session_did_doc",
+      "relation": "mitigates_T1_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "threat_model",
+      "target": "sd_jwt_doc",
+      "relation": "mitigates_T2_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "threat_model",
+      "target": "scope_doc",
+      "relation": "mitigates_T3_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mandate_doc",
+      "target": "Mandate",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "scope_doc",
+      "target": "Scope",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "session_did_doc",
+      "target": "SessionKeypair",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "transaction_receipt_doc",
+      "target": "TransactionReceipt",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "decay_state_doc",
+      "target": "DecayState",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_doc",
+      "target": "orchestrator_runtime_OrchestratorRuntime",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "schema_org_rendering_doc",
+      "target": "renderer_registry",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "two_boundary_security",
+      "target": "SelectiveDisclosureJwt",
+      "relation": "enforced_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "topbar_component",
+      "target": "profile_avatar_ProfileAvatar",
+      "relation": "contains_component",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "topbar_component",
+      "target": "topbar_component",
+      "relation": "contains_component",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "registry_browser_component",
+      "target": "agent_detail_component",
+      "relation": "contains_component",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pyo3_bindings",
+      "target": "async_runtime_boundary",
+      "relation": "implements_pattern",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pyo3_bindings",
+      "target": "sandbox_ffi",
+      "relation": "implements_pattern",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pyo3_bindings",
+      "target": "agent_client_transport",
+      "relation": "implements_pattern",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "WebSocketTransport",
+      "relation": "transmitted_via",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mandate_ffi",
+      "target": "Mandate",
+      "relation": "exposes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "session_ffi",
+      "target": "Session",
+      "relation": "exposes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Mandate",
+      "target": "renderer_registry",
+      "relation": "authorizes_rendering_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WsAgentClient",
+      "target": "bridge_Bridge",
+      "relation": "used_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_agents_spec",
+      "target": "orchestrator_runtime_OrchestratorRuntime",
+      "relation": "tests",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wasm_handshake_executor",
+      "target": "Session",
+      "relation": "executes",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "agent_card_component",
+      "target": "AgentAdvertisement",
+      "relation": "renders",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "papillon",
+      "target": "orchestrator_runtime_OrchestratorRuntime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "source_panel_component",
+      "target": "orchestrator_runtime_OrchestratorRuntime",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "registry_browser_component",
+      "target": "AgentAdvertisement",
+      "relation": "displays",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "e2e_playwright_local_config",
+      "target": "e2e_agents_spec",
+      "relation": "configures",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_workflow_pipeline_CanvasWorkflowPipeline",
+      "target": "canvas_empty_state_CanvasEmptyState",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workflow_labels_WorkflowLabels",
+      "target": "canvas_empty_state_CanvasEmptyState",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_aside_CanvasAside",
+      "target": "canvas_empty_state_CanvasEmptyState",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_back_face_CanvasBackFace",
+      "target": "canvas_empty_state_CanvasEmptyState",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "canvas_surface_title_CanvasSurfaceTitle",
+      "target": "canvas_empty_state_CanvasEmptyState",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "topbar_component",
+      "target": "topbar_prompt_component",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "profile_avatar_ProfileAvatar",
+      "target": "topbar_prompt_component",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "ReputationProfile",
+      "target": "topbar_prompt_component",
+      "relation": "part_of",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_c_ffi_layer",
+      "target": "marketplace_ffi",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "marketplace_ffi",
+      "target": "MarketplaceRegistry",
+      "relation": "exposes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "marketplace_ffi",
+      "target": "AgentAdvertisement",
+      "relation": "handles",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_c_ffi_layer",
+      "target": "error_propagation_pattern",
+      "relation": "implements_pattern",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "pap_c_ffi_layer",
+      "target": "decay_state_encoding",
+      "relation": "implements_pattern",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "decay_state_encoding",
+      "target": "DecayState",
+      "relation": "encodes",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-c/src/lib.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "chrysalis",
+      "target": "FederatedRegistry",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/chrysalis/README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "chrysalis",
+      "target": "MarketplaceRegistry",
+      "relation": "hosts",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/chrysalis/README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Session",
+      "target": "SixPhaseHandshake",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/session.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "six_phase_handshake_doc",
+      "target": "SixPhaseHandshake",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WebSocketTransport",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/websocket.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "OHTTPRelay",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/ohttp.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WebSocketTransport",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/websocket.rs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "OHTTPRelay",
+      "target": "Session",
+      "relation": "transports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/ohttp.rs",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "e2e_test_suite",
+      "label": "Papillon E2E Test Suite",
+      "nodes": [
+        "e2e_advertiser_phase_spec",
+        "e2e_agent_prompts_spec",
+        "e2e_agents_spec",
+        "e2e_app_spec",
+        "e2e_edge_cases_spec",
+        "e2e_ollama_config_spec",
+        "e2e_prompt_coverage_spec",
+        "e2e_reshape_spec",
+        "e2e_smoke_spec",
+        "e2e_templates_spec",
+        "e2e_tier2_functional_spec",
+        "e2e_web_standalone_spec",
+        "e2e_workflow_spec",
+        "e2e_wysiwyg_registry_spec"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/tests/"
+    },
+    {
+      "id": "e2e_test_infrastructure",
+      "label": "E2E Test Infrastructure",
+      "nodes": [
+        "e2e_playwright_config",
+        "e2e_playwright_local_config",
+        "e2e_helpers",
+        "e2e_tauri_mock"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/e2e/"
+    },
+    {
+      "id": "canvas_ui_components",
+      "label": "Canvas UI Component Family",
+      "nodes": [
+        "canvas_aside_CanvasAside",
+        "canvas_back_face_CanvasBackFace",
+        "canvas_chat_thread_CanvasChatThread",
+        "canvas_empty_state_CanvasEmptyState",
+        "canvas_ghost_run_panel_CanvasGhostRunPanel",
+        "canvas_surface_title_CanvasSurfaceTitle",
+        "canvas_workflow_pipeline_CanvasWorkflowPipeline"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/mod.rs"
+    },
+    {
+      "id": "approval_flow_components",
+      "label": "Approval Flow UI Pattern",
+      "nodes": [
+        "canvas_ghost_run_panel_CanvasGhostRunPanel",
+        "hitl_gate_HitlGate",
+        "ghost_run_dry_run_pattern",
+        "hitl_approval_pattern"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/hitl_gate.rs"
+    },
+    {
+      "id": "initial_setup_flow",
+      "label": "Initial Setup and Recovery Flow",
+      "nodes": [
+        "setup_wizard_SetupWizard",
+        "recovery_setup_RecoverySetup",
+        "bridge_Bridge"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "apps/papillon/frontend/src/components/setup_wizard.rs"
+    },
+    {
+      "id": "block_rendering_pipeline",
+      "label": "Block Rendering Pipeline",
+      "nodes": [
+        "block_renderer_mod",
+        "renderer_registry",
+        "generic_stream_renderer",
+        "field_classify_module"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/block_renderer/mod.rs"
+    },
+    {
+      "id": "wasm_handshake_flow",
+      "label": "WASM 6-Phase Handshake Flow",
+      "nodes": [
+        "wasm_handshake_executor",
+        "fetch_client",
+        "local_catalog_executor",
+        "intent_detection_delegate"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/handshake/mod.rs"
+    },
+    {
+      "id": "registry_ui_flow",
+      "label": "Registry Browser UI Flow",
+      "nodes": [
+        "registry_browser_component",
+        "agent_card_component",
+        "agent_detail_component"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "apps/papillon/frontend/src/components/registry/browser.rs"
+    },
+    {
+      "id": "six_phase_handshake",
+      "label": "Six-Phase PAP Handshake",
+      "nodes": [
+        "CapabilityToken",
+        "Mandate",
+        "DisclosureSet",
+        "Session",
+        "TransactionReceipt",
+        "SessionAttestation"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-core/src/session.rs"
+    },
+    {
+      "id": "mandate_lifecycle",
+      "label": "Mandate Lifecycle",
+      "nodes": [
+        "Mandate",
+        "DecayState",
+        "Scope",
+        "DisclosureSet"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/mandate.rs"
+    },
+    {
+      "id": "shamir_secret_sharing",
+      "label": "M-of-N Social Recovery",
+      "nodes": [
+        "PrincipalKeypair",
+        "RecoveryShard",
+        "ShardManifest"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/shamir.rs"
+    },
+    {
+      "id": "selective_disclosure",
+      "label": "SD-JWT Selective Disclosure",
+      "nodes": [
+        "SelectiveDisclosureJwt",
+        "Disclosure",
+        "DisclosureSet",
+        "DisclosureEntry"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-credential/src/sd_jwt.rs"
+    },
+    {
+      "id": "bilateral_attestation",
+      "label": "Bilateral Session Attestation",
+      "nodes": [
+        "TransactionReceipt",
+        "SessionAttestation",
+        "SessionKeypair"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-core/src/receipt.rs"
+    },
+    {
+      "id": "did_generation",
+      "label": "DID Generation (Principal vs Session)",
+      "nodes": [
+        "PrincipalKeypair",
+        "SessionKeypair"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-did/src/principal.rs"
+    },
+    {
+      "id": "FederationSyncProtocol",
+      "label": "Federation Sync Protocol",
+      "nodes": [
+        "FederationClient",
+        "FederationServer",
+        "FederatedRegistry",
+        "AgentAdvertisement"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-federation/src/client.rs"
+    },
+    {
+      "id": "MultiSignalTrustModel",
+      "label": "Multi-Signal Trust Model",
+      "nodes": [
+        "PeerVouch",
+        "OperatorMetrics",
+        "NodeTlsIdentity",
+        "RegistryPeer"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "crates/pap-federation/src/peer.rs"
+    },
+    {
+      "id": "TransportAbstraction",
+      "label": "Transport Layer Abstraction",
+      "nodes": [
+        "WebSocketTransport",
+        "OHTTPRelay",
+        "TLSMutualAuth"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-transport/src/websocket.rs"
+    },
+    {
+      "id": "AntiPlatformCaptureDesign",
+      "label": "Anti-Platform Capture Design",
+      "nodes": [
+        "MarketplaceRegistry",
+        "FederatedRegistry",
+        "AgentAdvertisement",
+        "OperatorMetrics"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-marketplace/src/registry.rs"
+    },
+    {
+      "id": "ffi_consumption_chain",
+      "label": "FFI Consumption Chain",
+      "nodes": [
+        "pap_c_ffi_layer",
+        "cpp_raii_wrapper",
+        "csharp_safehandle",
+        "java_jna_bindings"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs"
+    },
+    {
+      "id": "ffi_safety_triad",
+      "label": "FFI Safety Triad",
+      "nodes": [
+        "opaque_handle_pattern",
+        "string_ownership_pattern",
+        "error_propagation_pattern"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/pap-c/src/lib.rs"
+    },
+    {
+      "id": "he_protocol_invariants",
+      "label": "PAP Protocol Invariants",
+      "nodes": [
+        "trust_root",
+        "mandate_doc",
+        "scope_doc",
+        "session_did_doc",
+        "transaction_receipt_doc",
+        "decay_state_doc"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null
+    },
+    {
+      "id": "he_6phase_handshake_doc",
+      "label": "6-Phase Protocol Handshake",
+      "nodes": [
+        "session_did_doc",
+        "sd_jwt_doc",
+        "sandbox_execution_doc",
+        "transaction_receipt_doc"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": null
+    }
+  ],
+  "input_tokens": 558894,
+  "output_tokens": 68938
+}

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::bridge;
 
 use crate::components::setup_wizard::SetupWizard;
-use crate::components::topbar::TopBar;
+// TopBar removed - tab bar is now the primary navigation
 use crate::orchestrator_runtime::fallback_status_for_config;
 use crate::pages::activity::ActivityPage;
 use crate::pages::browse::BrowsePage;
@@ -422,7 +422,7 @@ pub fn App() -> impl IntoView {
     view! {
         <Router>
             <div class="app-shell-canvas">
-                <TopBar />
+                // TopBar removed - tab bar is now the primary navigation
                 <main class="app-main">
                     <Routes fallback=|| "Page not found.">
                         <Route path=path!("/") view=CanvasPage />

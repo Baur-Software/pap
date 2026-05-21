@@ -88,6 +88,10 @@ pub struct CanvasState {
     pub last_event: RwSignal<Option<CanvasEvent>>,
     /// Live workflow graph for the active canvas, derived from block state.
     pub workflow_graph: RwSignal<papillon_shared::WorkflowGraph>,
+    /// Whether the workflow panel is open (toggled by toast clicks and Ctrl+\).
+    pub workflow_panel_open: RwSignal<bool>,
+    /// Active IntentPlan for the workflow panel, populated by canvas_plan_prompt.
+    pub active_intent_plan: RwSignal<Option<papillon_shared::IntentPlan>>,
 }
 
 impl Default for CanvasState {
@@ -107,6 +111,8 @@ impl Default for CanvasState {
             block_template_overrides: RwSignal::new(std::collections::HashMap::new()),
             last_event: RwSignal::new(None),
             workflow_graph: RwSignal::new(papillon_shared::WorkflowGraph::default()),
+            workflow_panel_open: RwSignal::new(false),
+            active_intent_plan: RwSignal::new(None),
         }
     }
 }
@@ -717,6 +723,7 @@ impl CanvasState {
             content: None,
             linked_block_ids,
             agent_did: None,
+            container_id: None,
             mandate_expires_at: None,
             preference_guided: false,
             auto_expand,
@@ -1422,6 +1429,7 @@ impl CanvasState {
                                     content: None,
                                     linked_block_ids: Vec::new(),
                                     agent_did: None,
+                                    container_id: None,
                                     mandate_expires_at: None,
                                     preference_guided: false,
                                     auto_expand: false,
@@ -1551,6 +1559,7 @@ impl CanvasState {
                                     content,
                                     linked_block_ids: Vec::new(),
                                     agent_did: rec.agent_did,
+                                    container_id: None,
                                     mandate_expires_at: rec.mandate_expires_at,
                                     preference_guided: rec.preference_guided,
                                     auto_expand: false,

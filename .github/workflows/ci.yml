@@ -480,7 +480,7 @@ jobs:
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json', 'e2e/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json') }}
           restore-keys: playwright-${{ runner.os }}-
       - name: Install npm dependencies
         working-directory: apps/papillon/e2e
@@ -567,7 +567,7 @@ jobs:
         id: playwright-cache-tier2
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json', 'e2e/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/papillon/e2e/package-lock.json') }}
           restore-keys: playwright-${{ runner.os }}-
 
       - name: Install npm dependencies
@@ -632,13 +632,29 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: apps/registry/e2e/package.json
+          cache-dependency-path: apps/registry/e2e/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v5
+        id: playwright-cache-fed
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-fed-${{ runner.os }}-${{ hashFiles('apps/registry/e2e/package-lock.json') }}
+          restore-keys: playwright-fed-${{ runner.os }}-
 
       - name: Install Playwright dependencies
         working-directory: apps/registry/e2e
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: apps/registry/e2e
+        if: steps.playwright-cache-fed.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps only
+        working-directory: apps/registry/e2e
+        if: steps.playwright-cache-fed.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Run federation sync tests
         working-directory: apps/registry/e2e
