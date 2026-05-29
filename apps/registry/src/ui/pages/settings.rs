@@ -60,6 +60,48 @@ pub fn SettingsPage() -> impl IntoView {
 
             <div class="card" style="margin-bottom: var(--sp-xl)">
                 <div class="card-header">
+                    <span class="card-title">"Authentication Status"</span>
+                </div>
+                <div class="card-body">
+                    <p style="font-size: 13px; color: var(--text-2); margin-bottom: var(--sp-md)">
+                        "Authentication and API key configuration status."
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-lg)">
+                        <div style="padding: var(--sp-md); background: var(--bg-2); border-radius: var(--r-md); border: 1px solid var(--border-subtle)">
+                            <div style="font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: var(--sp-sm)">"Bearer Token"</div>
+                            <div style="font-size: 14px; color: var(--text-1)">
+                                "Set via "
+                                <code style="font-family: var(--font-mono); color: var(--gold); background: rgba(240,160,48,0.1); padding: 2px 4px; border-radius: 3px">
+                                    "PAP_REGISTRY_ADMIN_TOKEN"
+                                </code>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-3); margin-top: var(--sp-sm)">"Required for admin API routes"</div>
+                        </div>
+                        <div style="padding: var(--sp-md); background: var(--bg-2); border-radius: var(--r-md); border: 1px solid var(--border-subtle)">
+                            <div style="font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: var(--sp-sm)">"OIDC Integration"</div>
+                            <div style="font-size: 14px; color: var(--text-1)">"Not configured"</div>
+                            <div style="font-size: 12px; color: var(--text-3); margin-top: var(--sp-sm)">"Configure via environment variables"</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: var(--sp-xl)">
+                <div class="card-header">
+                    <span class="card-title">"API Keys"</span>
+                </div>
+                <div class="card-body">
+                    <p style="font-size: 13px; color: var(--text-2); margin-bottom: var(--sp-md)">
+                        "API key management is coming soon. Currently, authentication is handled via Bearer tokens."
+                    </p>
+                    <div style="padding: var(--sp-md); background: var(--bg-2); border-radius: var(--r-md); border: 1px solid var(--border-subtle); border-left: 3px solid var(--gold)">
+                        <div style="font-size: 13px; color: var(--text-2); font-style: italic">"Self-service API key generation and revocation will be available in a future release."</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: var(--sp-xl)">
+                <div class="card-header">
                     <span class="card-title">"Environment Configuration"</span>
                 </div>
                 <div class="card-body">
