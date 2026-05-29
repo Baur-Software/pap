@@ -1,0 +1,5259 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- name="GENERATOR" content="github.com/mmarkdown/mmark Mmark Markdown Processor - mmark.miek.nl" --><rfc xmlns:xi="http://www.w3.org/2001/XInclude" version="3" ipr="trust200902" docName="draft-baur-pap-00" submissionType="IETF" category="info" xml:lang="en" indexInclude="true">
+
+<front>
+<title abbrev="PAP">Principal Agent Protocol (PAP)</title><seriesInfo value="draft-baur-pap-00" stream="IETF" status="informational" name="Internet-Draft"/>
+<author initials="T." surname="Baur" fullname="Todd Baur"><organization>Baur Software</organization><address><postal><street/>
+</postal><email>todd@baursoftware.com</email>
+</address></author><date year="2026" month="May" day="20"/>
+<area>Internet</area>
+<workgroup/>
+
+<abstract><t>This document specifies the Principal Agent Protocol (PAP), a
+cryptographic protocol for human-controlled agent-to-agent
+transactions. PAP establishes a trust model rooted in human
+principals, defines hierarchical delegation through signed mandates,
+enforces context minimization through selective disclosure at the
+protocol level, and provides session ephemerality as a structural
+guarantee. The protocol uses no novel cryptographic primitives and
+requires no central registry, token economy, or trusted third party.</t>
+</abstract></front>
+
+<middle><section anchor="s-1-introduction"><name>Introduction</name>
+
+<section anchor="s-1-1-problem-statement"><name>Problem Statement</name>
+<t>Existing agent-to-agent protocols authenticate agents as platform
+entities, not as delegates of human principals. None enforce context
+minimization at the protocol level. Disclosure is
+implementation-dependent. Session ephemerality is undefined. Execution
+isolation is absent--agents run in the same address space as the
+orchestrator or other services, creating blast radius problems even
+when disclosure is minimized. Economic models underneath these
+protocols are compatible with platform capture through cloud compute
+metering.</t>
+</section>
+
+<section anchor="s-1-2-design-goals"><name>Design Goals</name>
+<t>PAP is designed to satisfy the following goals:</t>
+
+<ol spacing="compact">
+<li>The human principal is the root of trust for every transaction.</li>
+<li>Context disclosure is enforced by the protocol at the request boundary (via SD-JWT).</li>
+<li>Execution is isolated at the process boundary via OS-level capabilities.</li>
+<li>Sessions are ephemeral by design; no persistent correlation.</li>
+<li>Delegation is hierarchical with cryptographically enforced bounds.</li>
+<li>Co-signed receipts prove both disclosure scope and execution constraints.</li>
+<li>No novel cryptography, no token economy, no central registry.</li>
+<li>Any compliant implementation MUST be buildable from this document
+alone, without reference to a specific programming language.</li>
+</ol>
+</section>
+
+<section anchor="s-1-3-protocol-overview"><name>Protocol Overview</name>
+<t>A PAP transaction involves:</t>
+
+<ul spacing="compact">
+<li>A <strong>human principal</strong> who holds a device-bound keypair.</li>
+<li>An <strong>orchestrator agent</strong> operating under a root mandate.</li>
+<li>One or more <strong>downstream agents</strong> operating under delegated mandates, each executing in sandboxed isolation.</li>
+<li>A <strong>marketplace</strong> for agent discovery and disclosure filtering.</li>
+<li>A <strong>6-phase session handshake</strong> between pairs of agents.</li>
+<li><strong>Request boundary security</strong> via SD-JWT selective disclosure (minimize what the agent sees).</li>
+<li><strong>Execution boundary security</strong> via OS sandboxing (minimize what the agent can do).</li>
+<li><strong>Co-signed receipts</strong> recording property references and enforcement proof, never values.</li>
+</ul>
+</section>
+</section>
+
+<section anchor="s-2-conventions-and-terminology"><name>Conventions and Terminology</name>
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY",
+and "OPTIONAL" in this document are to be interpreted as described
+in BCP 14 [RFC 2119] [RFC 8174] when, and only when, they appear
+in all capitals, as shown here.</t>
+
+<section anchor="s-2-1-definitions"><name>Definitions</name>
+<t><strong>Principal:</strong> A human user who holds the root keypair and is the
+ultimate authority over all agent actions taken on their behalf.</t>
+<t><strong>Orchestrator:</strong> An agent that holds the root mandate from the
+principal. The orchestrator is the only agent that MAY hold the
+principal's full context. It delegates scoped mandates to downstream
+agents.</t>
+<t><strong>Mandate:</strong> A signed authorization object that specifies what an
+agent is permitted to do, what context it may disclose, and when
+the authorization expires.</t>
+<t><strong>Mandate Chain:</strong> An ordered sequence of mandates from root to
+leaf, each cryptographically linked to its parent.</t>
+<t><strong>Scope:</strong> The set of actions a mandate permits. Deny-by-default:
+an empty scope permits nothing.</t>
+<t><strong>Disclosure Set:</strong> The set of context classes an agent holds and
+the conditions under which they may be shared.</t>
+<t><strong>Capability Token:</strong> A single-use, signed authorization to open a
+session with a specific agent for a specific action.</t>
+<t><strong>Session DID:</strong> An ephemeral <tt>did:key</tt> identifier generated for a
+single session and discarded at session close.</t>
+<t><strong>Receipt:</strong> A co-signed record of a transaction that contains
+property type references but never property values.</t>
+<t><strong>Decay State:</strong> The lifecycle state of a mandate as it approaches
+or passes its TTL without renewal.</t>
+</section>
+</section>
+
+<section anchor="s-3-trust-model-and-threat-model"><name>Trust Model and Threat Model</name>
+
+<section anchor="s-3-1-trust-hierarchy"><name>Trust Hierarchy</name>
+<t>The PAP trust hierarchy is:</t>
+
+<artwork>Human Principal (device-bound keypair, root of trust)
+  +-- Orchestrator Agent (root mandate, full principal context)
+       +-- Downstream Agent (task mandate, scoped context)
+            +-- Marketplace Agent (own principal chain)
+</artwork>
+<t>The principal's device-bound keypair is the sole root of trust.
+Every agent in a transaction MUST carry a cryptographically
+verifiable mandate chain traceable to this root.</t>
+</section>
+
+<section anchor="s-3-2-trust-assumptions"><name>Trust Assumptions</name>
+<table>
+<thead>
+<tr>
+<th>Assumption</th>
+<th>Verification Method</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>Principal keypair not compromised</td>
+<td>WebAuthn device binding (Section 4.3)</td>
+</tr>
+
+<tr>
+<td>Orchestrator delegates correctly</td>
+<td>Mandate chain verification (Section 5.6)</td>
+</tr>
+
+<tr>
+<td>Session keys not leaked</td>
+<td>Single-use per session, discarded at close</td>
+</tr>
+
+<tr>
+<td>Clocks approximately synchronized</td>
+<td>RFC 3339 timestamps; receivers SHOULD reject tokens with skew exceeding implementation-defined thresholds</td>
+</tr>
+
+<tr>
+<td>Ed25519 not broken</td>
+<td>Cryptographic library security; algorithm agility reserved for future versions</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-3-3-threat-model"><name>Threat Model</name>
+<t>PAP is designed to defend against the following threats:</t>
+<t><strong>T1. Context profiling.</strong> An adversary correlates a principal's
+transactions across sessions to build a behavioral profile.
+<em>Mitigation:</em> Ephemeral session DIDs (Section 6.3) ensure each
+session is cryptographically unlinkable.</t>
+<t><strong>T2. Over-disclosure.</strong> An agent discloses more principal context
+than the principal authorized. <em>Mitigation:</em> SD-JWT selective
+disclosure (Section 7) structurally prevents disclosure of claims
+not included in the disclosure set. Marketplace filtering
+(Section 9.3) excludes agents whose requirements exceed the
+mandate before any session is established.</t>
+<t><strong>T3. Delegation bypass.</strong> A downstream agent acts outside its
+delegated scope. <em>Mitigation:</em> Scope containment (Section 5.4) and
+TTL bounds (Section 5.5) are verified cryptographically at each
+level of the mandate chain.</t>
+<t><strong>T4. Replay attacks.</strong> An adversary replays a captured capability
+token to open an unauthorized session. <em>Mitigation:</em> Nonce
+consumption (Section 6.2) ensures each token is single-use.</t>
+<t><strong>T5. Mandate tampering.</strong> An adversary modifies a mandate in the
+chain. <em>Mitigation:</em> Parent hash binding (Section 5.3) and Ed25519
+signatures (Section 5.2) detect any modification.</t>
+<t><strong>T6. Platform capture.</strong> A platform operator accumulates control
+over agent transactions through infrastructure dependency.
+<em>Mitigation:</em> Federated discovery (Section 10), no central
+registry, no token economy, principal-held keys. Marketplace
+registries MUST NOT rank query results by operator metrics
+(Section 9.6) -- ranking power is platform capture power. Trust
+evaluation is the principal's responsibility.</t>
+<t><strong>T7. Payment linkability.</strong> A payment is correlated with the
+principal's identity. <em>Mitigation:</em> Chaumian ecash blind-signed
+tokens (Section 13.1) provide unlinkable proof of value transfer.</t>
+</section>
+
+<section anchor="s-3-4-explicit-non-goals"><name>Explicit Non-Goals</name>
+<t>The following are explicitly out of scope for PAP:</t>
+
+<ol spacing="compact">
+<li>Compatibility with token economy monetization.</li>
+<li>Enclave-as-equivalent-to-local trust models.</li>
+<li>Identity recovery through platform operators.</li>
+<li>Central registries for agent discovery.</li>
+<li>Runtime scope expansion of mandates.</li>
+<li>Arbitrary code execution in the orchestrator context.</li>
+<li>Any extension that trades trust guarantees for adoption ease.</li>
+</ol>
+</section>
+</section>
+
+<section anchor="s-4-identity-layer"><name>Identity Layer</name>
+
+<section anchor="s-4-1-did-method"><name>DID Method</name>
+<t>PAP uses the <tt>did:key</tt> method as defined in [DID-KEY]. All
+identifiers MUST use Ed25519 public keys with the following
+derivation:</t>
+
+<artwork>did:key:z&lt;base58btc(0xed01 || public_key_bytes)&gt;
+</artwork>
+<t>Where:
+- <tt>0xed01</tt> is the multicodec prefix for Ed25519 public keys.
+- <tt>public_key_bytes</tt> is the 32-byte Ed25519 public key.
+- <tt>base58btc</tt> is Bitcoin's base58 encoding.
+- The <tt>z</tt> prefix indicates base58btc multibase encoding.</t>
+<t>Implementations MUST support <tt>did:key</tt> resolution by extracting
+the public key bytes from the DID string:</t>
+
+<ol spacing="compact">
+<li>Strip the <tt>did:key:z</tt> prefix.</li>
+<li>Base58-decode the remainder.</li>
+<li>Verify the first two bytes are <tt>0xed</tt> and <tt>0x01</tt>.</li>
+<li>The remaining 32 bytes are the Ed25519 public key.</li>
+</ol>
+</section>
+
+<section anchor="s-4-2-did-document"><name>DID Document</name>
+<t>A DID document for a PAP identity MUST conform to [DID-CORE] and
+contain:</t>
+
+<sourcecode type="json">{
+  "@context": "https://www.w3.org/ns/did/v1",
+  "id": "did:key:z...",
+  "verificationMethod": [{
+    "id": "did:key:z...#key-1",
+    "type": "Ed25519VerificationKey2020",
+    "controller": "did:key:z...",
+    "publicKeyMultibase": "z&lt;base58btc(0xed01 ++ public_key_bytes)&gt;"
+  }],
+  "authentication": ["did:key:z...#key-1"]
+}
+</sourcecode>
+<t>A DID document MUST NOT contain any personal information. It
+contains only the public key and verification method reference.</t>
+</section>
+
+<section anchor="s-4-3-principal-keypair"><name>Principal Keypair</name>
+<t>The principal keypair is the root of trust. It MUST be an Ed25519
+keypair. In production deployments, the private key SHOULD be
+bound to a hardware authenticator via WebAuthn [WEBAUTHN].</t>
+<t>Implementations MUST support the <tt>PrincipalSigner</tt> interface:</t>
+
+<ul spacing="compact">
+<li><tt>did() -&gt; String</tt> -- The <tt>did:key</tt> identifier.</li>
+<li><tt>sign(message: bytes) -&gt; bytes</tt> -- Ed25519 signature (64 bytes).</li>
+<li><tt>verifying_key() -&gt; Ed25519PublicKey</tt> -- The public key.</li>
+</ul>
+<t>Implementations MAY use software keys for development and testing.
+Production deployments SHOULD use WebAuthn-backed keys.</t>
+</section>
+
+<section anchor="s-4-4-session-keypair"><name>Session Keypair</name>
+<t>A session keypair is an ephemeral Ed25519 keypair generated fresh
+for each protocol session. Session keypairs:</t>
+
+<ul spacing="compact">
+<li>MUST be generated using a cryptographically secure random number
+generator.</li>
+<li>MUST NOT be derived from or linked to the principal keypair.</li>
+<li>MUST be discarded when the session closes.</li>
+<li>MUST NOT be persisted to stable storage.</li>
+</ul>
+<t>The session DID is derived using the same <tt>did:key</tt> method as the
+principal DID. An observer MUST NOT be able to determine whether a
+<tt>did:key</tt> identifier represents a principal or a session key.</t>
+</section>
+</section>
+
+<section anchor="s-5-mandate-structure-and-delegation-rules"><name>Mandate Structure and Delegation Rules</name>
+
+<section anchor="s-5-1-mandate-object"><name>Mandate Object</name>
+<t>A mandate is the core delegation primitive. It authorizes an agent
+to perform specific actions with specific context. A mandate MUST
+contain the following fields:</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>principal_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the human principal (root of trust)</td>
+</tr>
+
+<tr>
+<td><tt>agent_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the agent receiving this mandate</td>
+</tr>
+
+<tr>
+<td><tt>issuer_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the entity signing this mandate</td>
+</tr>
+
+<tr>
+<td><tt>parent_mandate_hash</tt></td>
+<td>String or null</td>
+<td>REQUIRED</td>
+<td>SHA-256 hash of the parent mandate, or null for root mandates</td>
+</tr>
+
+<tr>
+<td><tt>scope</tt></td>
+<td>Scope</td>
+<td>REQUIRED</td>
+<td>Permitted actions (Section 5.4)</td>
+</tr>
+
+<tr>
+<td><tt>disclosure_set</tt></td>
+<td>DisclosureSet</td>
+<td>REQUIRED</td>
+<td>Context classes and sharing conditions (Section 5.4.3)</td>
+</tr>
+
+<tr>
+<td><tt>ttl</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Expiry timestamp (RFC 3339)</td>
+</tr>
+
+<tr>
+<td><tt>decay_state</tt></td>
+<td>DecayState</td>
+<td>REQUIRED</td>
+<td>Current lifecycle state (Section 5.7)</td>
+</tr>
+
+<tr>
+<td><tt>issued_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Issuance timestamp (RFC 3339)</td>
+</tr>
+
+<tr>
+<td><tt>payment_proof</tt></td>
+<td>PaymentProof or null</td>
+<td>OPTIONAL</td>
+<td>ZK payment commitment (Section 13.1)</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String or null</td>
+<td>OPTIONAL</td>
+<td>Ed25519 signature (base64url-no-pad)</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-5-2-mandate-signing"><name>Mandate Signing</name>
+<t>A mandate MUST be signed by the issuer's Ed25519 signing key.</t>
+<t>The canonical form for signing MUST be computed as follows:</t>
+
+<ol spacing="compact">
+<li>Construct a JSON object containing all mandate fields EXCEPT
+<tt>signature</tt>.</li>
+<li>DateTime fields MUST be serialized as RFC 3339 strings.</li>
+<li>Null fields MUST be included as JSON <tt>null</tt>.</li>
+<li>Serialize the JSON object to bytes.</li>
+<li>Compute the Ed25519 signature over these bytes.</li>
+<li>Encode the 64-byte signature using base64url without padding
+(RFC 4648 Section 5, no <tt>=</tt> padding).</li>
+</ol>
+<t>The canonical JSON object MUST contain exactly these keys:</t>
+
+<sourcecode type="json">{
+  "principal_did": "...",
+  "agent_did": "...",
+  "issuer_did": "...",
+  "parent_mandate_hash": null,
+  "scope": { ... },
+  "disclosure_set": { ... },
+  "ttl": "2026-03-15T20:00:00+00:00",
+  "issued_at": "2026-03-15T16:00:00+00:00",
+  "payment_proof": null
+}
+</sourcecode>
+</section>
+
+<section anchor="s-5-3-mandate-hashing"><name>Mandate Hashing</name>
+<t>The mandate hash is used for parent-child linking in delegation
+chains. It MUST be computed as:</t>
+
+<ol spacing="compact">
+<li>Compute the canonical form (Section 5.2, step 1-4).</li>
+<li>Apply SHA-256 to the canonical bytes.</li>
+<li>Encode the 32-byte digest using base64url without padding.</li>
+</ol>
+<t>The hash MUST be deterministic: the same mandate MUST always
+produce the same hash.</t>
+</section>
+
+<section anchor="s-5-4-scope"><name>Scope</name>
+
+<section anchor="s-5-4-1-scope-object"><name>5.4.1. Scope Object</name>
+<t>A scope defines the set of permitted actions. It is deny-by-default:
+an agent with an empty scope MUST NOT perform any action.</t>
+
+<sourcecode type="json">{
+  "actions": [
+    {
+      "action": "schema:SearchAction",
+      "object": "schema:WebPage",
+      "conditions": {}
+    }
+  ]
+}
+</sourcecode>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>actions</tt></td>
+<td>Array of ScopeAction</td>
+<td>REQUIRED</td>
+<td>The permitted actions</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-5-4-2-scopeaction-object"><name>5.4.2. ScopeAction Object</name>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>action</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Schema.org action type (e.g., <tt>schema:SearchAction</tt>)</td>
+</tr>
+
+<tr>
+<td><tt>object</tt></td>
+<td>String or null</td>
+<td>OPTIONAL</td>
+<td>Schema.org object type constraint (e.g., <tt>schema:Flight</tt>)</td>
+</tr>
+
+<tr>
+<td><tt>conditions</tt></td>
+<td>Object</td>
+<td>OPTIONAL</td>
+<td>Protocol-level conditions (key-value pairs). Default: empty object.</td>
+</tr>
+</tbody>
+</table><t>Action and object type references MUST use the <tt>schema:</tt> prefix
+for Schema.org vocabulary. Implementations MAY define additional
+namespaced prefixes for domain-specific vocabularies.</t>
+</section>
+
+<section anchor="s-5-4-3-disclosureset-object"><name>5.4.3. DisclosureSet Object</name>
+<t>The disclosure set defines what context an agent holds and the
+conditions for sharing it.</t>
+
+<sourcecode type="json">{
+  "entries": [
+    {
+      "type": "schema:Person",
+      "permitted_properties": ["schema:name", "schema:nationality"],
+      "prohibited_properties": ["schema:email", "schema:telephone"],
+      "session_only": true,
+      "no_retention": true
+    }
+  ]
+}
+</sourcecode>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>entries</tt></td>
+<td>Array of DisclosureEntry</td>
+<td>REQUIRED</td>
+<td>The disclosure entries</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-5-4-4-disclosureentry-object"><name>5.4.4. DisclosureEntry Object</name>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>type</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Schema.org type (e.g., <tt>schema:Person</tt>)</td>
+</tr>
+
+<tr>
+<td><tt>permitted_properties</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Properties the agent MAY disclose</td>
+</tr>
+
+<tr>
+<td><tt>prohibited_properties</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Properties the agent MUST NOT disclose</td>
+</tr>
+
+<tr>
+<td><tt>session_only</tt></td>
+<td>Boolean</td>
+<td>OPTIONAL</td>
+<td>If true, disclosed data is valid only for the session duration. Default: false.</td>
+</tr>
+
+<tr>
+<td><tt>no_retention</tt></td>
+<td>Boolean</td>
+<td>OPTIONAL</td>
+<td>If true, the receiving party MUST NOT retain disclosed data beyond the session. Default: false.</td>
+</tr>
+</tbody>
+</table><t>Property references MUST use Schema.org property names with the
+<tt>schema:</tt> prefix.</t>
+<t><strong>Property Reference Format:</strong> When used in receipts or marketplace
+advertisements, a fully qualified property reference is formed as
+<tt>{type}.{property}</tt>, e.g., <tt>schema:Person.schema:name</tt>.</t>
+</section>
+
+<section anchor="s-5-4-4-1-tee-requirement-for-no-retention-disclosures"><name>5.4.4.1. TEE Requirement for No-Retention Disclosures</name>
+<t>When a disclosure entry has <tt>no_retention</tt> set to true, the receiving
+agent MUST provide TEE attestation (Section 13.6) during session
+establishment. If the receiving agent cannot provide valid TEE
+attestation, the initiating agent MUST NOT disclose properties from
+that entry.</t>
+<t>Without TEE attestation, <tt>no_retention</tt> is a contractual constraint
+only -- the protocol cannot enforce data deletion on an untrusted host.
+Implementations SHOULD clearly communicate this limitation to
+principals when TEE attestation is unavailable.</t>
+<t>An implementation's disclosure validation MUST return one of three
+states to the caller:</t>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>NotRequired</tt></td>
+<td>No <tt>no_retention</tt> entries in the disclosure set</td>
+</tr>
+
+<tr>
+<td><tt>TeeEnforced</tt></td>
+<td>TEE attestation present; retention constraint is cryptographic</td>
+</tr>
+
+<tr>
+<td><tt>ContractualOnly</tt></td>
+<td>No TEE available; <tt>no_retention</tt> is a contractual term only</td>
+</tr>
+</tbody>
+</table><t>Implementations that support the TEE extension (Section 13.6) MUST
+treat <tt>ContractualOnly</tt> as an error. Implementations without TEE
+support MAY proceed with <tt>ContractualOnly</tt> but MUST expose this
+state to the caller so the principal can make an informed decision.</t>
+</section>
+
+<section anchor="s-5-4-5-scope-containment"><name>5.4.5. Scope Containment</name>
+<t>A child scope S_c is <strong>contained by</strong> a parent scope S_p (written
+S_c &lt;= S_p) if and only if for every action A_c in S_c, there
+exists an action A_p in S_p such that:</t>
+
+<ol spacing="compact">
+<li><tt>A_c.action == A_p.action</tt></li>
+<li>If <tt>A_p.object</tt> is non-null, then <tt>A_c.object</tt> MUST equal
+<tt>A_p.object</tt>.</li>
+<li>If <tt>A_p.object</tt> is null, then <tt>A_c.object</tt> MAY be any value
+(including null).</li>
+<li>If <tt>A_p.object</tt> is non-null and <tt>A_c.object</tt> is null, the
+containment check MUST fail. A child MUST NOT broaden an object
+constraint.</li>
+</ol>
+</section>
+</section>
+
+<section anchor="s-5-5-delegation-rules"><name>Delegation Rules</name>
+<t>When an agent delegates a mandate to a child agent, the following
+rules MUST be enforced:</t>
+<t><strong>R1. Scope Containment:</strong> The child mandate's scope MUST be
+contained by the parent mandate's scope (Section 5.4.5). If
+scope containment fails, the delegation MUST be rejected.</t>
+<t><strong>R2. TTL Bound:</strong> The child mandate's <tt>ttl</tt> MUST NOT exceed the
+parent mandate's <tt>ttl</tt>. If the child TTL exceeds the parent TTL,
+the delegation MUST be rejected.</t>
+<t><strong>R3. Parent Hash Binding:</strong> The child mandate's
+<tt>parent_mandate_hash</tt> MUST equal the hash (Section 5.3) of the
+parent mandate's canonical form.</t>
+<t><strong>R4. Issuer Chain:</strong> The child mandate's <tt>issuer_did</tt> MUST equal
+the parent mandate's <tt>agent_did</tt>. The child mandate MUST be signed
+by the parent mandate's <tt>agent_did</tt> key.</t>
+<t><strong>R5. Principal Propagation:</strong> The child mandate's <tt>principal_did</tt>
+MUST equal the parent mandate's <tt>principal_did</tt>.</t>
+<t><strong>R6. Root Mandate:</strong> A root mandate MUST have
+<tt>parent_mandate_hash</tt> set to null. A root mandate's <tt>issuer_did</tt>
+MUST equal its <tt>principal_did</tt>.</t>
+</section>
+
+<section anchor="s-5-6-mandate-chain-verification"><name>Mandate Chain Verification</name>
+<t>A mandate chain is an ordered array of mandates <tt>[M_0, M_1, ..., M_n]</tt>
+where <tt>M_0</tt> is the root mandate. Verification MUST proceed as follows:</t>
+
+<ol spacing="compact">
+<li><tt>M_0.parent_mandate_hash</tt> MUST be null.</li>
+<li><tt>M_0.signature</tt> MUST verify against the principal's public key.</li>
+<li>For each <tt>i</tt> from 1 to n:
+a. <tt>M_i.parent_mandate_hash</tt> MUST equal <tt>hash(M_{i-1})</tt>.
+b. <tt>M_i.scope</tt> MUST satisfy scope containment against
+  <tt>M_{i-1}.scope</tt> (Section 5.4.5).
+c. <tt>M_i.ttl</tt> MUST NOT exceed <tt>M_{i-1}.ttl</tt>.
+d. <tt>M_i.signature</tt> MUST verify against the public key of
+  <tt>M_{i-1}.agent_did</tt>.</li>
+</ol>
+<t>If any check fails, the entire chain MUST be rejected.</t>
+</section>
+
+<section anchor="s-5-7-decay-state-machine"><name>Decay State Machine</name>
+<t>A mandate's decay state tracks its lifecycle as the TTL progresses.
+The decay state MUST be one of:</t>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>Active</tt></td>
+<td>Full scope, within TTL</td>
+</tr>
+
+<tr>
+<td><tt>Degraded</tt></td>
+<td>Reduced scope, TTL within decay window, renewal pending</td>
+</tr>
+
+<tr>
+<td><tt>ReadOnly</tt></td>
+<td>No execution permitted, observation only, TTL expired</td>
+</tr>
+
+<tr>
+<td><tt>Suspended</tt></td>
+<td>No activity, awaiting principal review</td>
+</tr>
+</tbody>
+</table>
+<section anchor="s-5-7-1-state-transitions"><name>5.7.1. State Transitions</name>
+<t>The following transitions are valid:</t>
+
+<artwork>Active --&gt; Degraded --&gt; ReadOnly --&gt; Suspended
+  ^            |            |
+  |            |            |
+  +-- renewal -+-- renewal -+
+</artwork>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To</th>
+<th>Condition</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>Active</td>
+<td>Degraded</td>
+<td>Remaining TTL &lt;= implementation-defined decay window</td>
+</tr>
+
+<tr>
+<td>Degraded</td>
+<td>ReadOnly</td>
+<td>TTL expired without renewal</td>
+</tr>
+
+<tr>
+<td>ReadOnly</td>
+<td>Suspended</td>
+<td>Implementation-defined timeout without principal action</td>
+</tr>
+
+<tr>
+<td>Degraded</td>
+<td>Active</td>
+<td>Mandate renewed by issuer</td>
+</tr>
+
+<tr>
+<td>ReadOnly</td>
+<td>Active</td>
+<td>Mandate renewed by issuer</td>
+</tr>
+
+<tr>
+<td>Suspended</td>
+<td>(none)</td>
+<td>Suspended mandates MUST NOT be renewed. Principal MUST issue a new mandate.</td>
+</tr>
+</tbody>
+</table><t>Any transition not listed above MUST be rejected.</t>
+</section>
+
+<section anchor="s-5-7-2-decay-computation"><name>5.7.2. Decay Computation</name>
+<t>An implementation SHOULD compute the current decay state as:</t>
+
+<artwork>function compute_decay_state(mandate, decay_window_seconds):
+  now = current_utc_time()
+  if now &gt; mandate.ttl:
+    if mandate.decay_state == Suspended:
+      return Suspended
+    else:
+      return ReadOnly
+  else:
+    remaining = mandate.ttl - now (in seconds)
+    if remaining &lt;= decay_window_seconds:
+      return Degraded
+    else:
+      return Active
+</artwork>
+<t>The <tt>decay_window_seconds</tt> parameter is implementation-defined.
+Implementations SHOULD document their chosen value.</t>
+</section>
+</section>
+</section>
+
+<section anchor="s-6-session-lifecycle"><name>Session Lifecycle</name>
+
+<section anchor="s-6-1-session-state-machine"><name>Session State Machine</name>
+<t>A session tracks the state of a transaction between two agents.
+The session state MUST be one of:</t>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>Initiated</tt></td>
+<td>Capability token presented, awaiting verification</td>
+</tr>
+
+<tr>
+<td><tt>Open</tt></td>
+<td>Handshake complete, session DIDs exchanged</td>
+</tr>
+
+<tr>
+<td><tt>Executed</tt></td>
+<td>Transaction executed within session</td>
+</tr>
+
+<tr>
+<td><tt>Closed</tt></td>
+<td>Session closed, ephemeral keys discarded</td>
+</tr>
+</tbody>
+</table><t>Valid transitions:</t>
+
+<artwork>Initiated --&gt; Open --&gt; Executed --&gt; Closed
+    |                                 ^
+    +----------&gt; Closed (early) ------+
+                     ^
+    Open -------&gt; Closed (early) -----+
+</artwork>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To</th>
+<th>Trigger</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>Initiated</td>
+<td>Open</td>
+<td>Session DID exchange completed</td>
+</tr>
+
+<tr>
+<td>Initiated</td>
+<td>Closed</td>
+<td>Early termination (rejection or error)</td>
+</tr>
+
+<tr>
+<td>Open</td>
+<td>Executed</td>
+<td>Action executed</td>
+</tr>
+
+<tr>
+<td>Open</td>
+<td>Closed</td>
+<td>Early termination</td>
+</tr>
+
+<tr>
+<td>Executed</td>
+<td>Closed</td>
+<td>Session close message sent</td>
+</tr>
+</tbody>
+</table><t>Any transition not listed above MUST be rejected.</t>
+</section>
+
+<section anchor="s-6-2-capability-token"><name>Capability Token</name>
+<t>A capability token is a single-use authorization to open a session.
+It MUST contain the following fields:</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>id</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Unique token identifier (UUID v4)</td>
+</tr>
+
+<tr>
+<td><tt>target_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the agent this token authorizes a session with</td>
+</tr>
+
+<tr>
+<td><tt>action</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Schema.org action type this token authorizes</td>
+</tr>
+
+<tr>
+<td><tt>nonce</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Single-use nonce (UUID v4), consumed on session initiation</td>
+</tr>
+
+<tr>
+<td><tt>issuer_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the issuing agent (typically the orchestrator)</td>
+</tr>
+
+<tr>
+<td><tt>issued_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Issuance timestamp (RFC 3339)</td>
+</tr>
+
+<tr>
+<td><tt>expires_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Expiry timestamp (RFC 3339)</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String or null</td>
+<td>OPTIONAL</td>
+<td>Ed25519 signature (base64url-no-pad)</td>
+</tr>
+</tbody>
+</table>
+<section anchor="s-6-2-1-token-signing"><name>6.2.1. Token Signing</name>
+<t>The token canonical form MUST be:</t>
+
+<sourcecode type="json">{
+  "id": "...",
+  "target_did": "...",
+  "action": "...",
+  "nonce": "...",
+  "issuer_did": "...",
+  "issued_at": "...",
+  "expires_at": "..."
+}
+</sourcecode>
+<t>Signing follows the same procedure as mandate signing (Section 5.2).</t>
+</section>
+
+<section anchor="s-6-2-2-token-verification"><name>6.2.2. Token Verification</name>
+<t>A receiving agent MUST verify a capability token as follows:</t>
+
+<ol spacing="compact">
+<li><tt>token.target_did</tt> MUST match the receiver's DID.</li>
+<li><tt>token.nonce</tt> MUST NOT appear in the receiver's consumed nonce
+set.</li>
+<li>The current time MUST NOT exceed <tt>token.expires_at</tt>.</li>
+<li><tt>token.signature</tt> MUST verify against the public key of
+<tt>token.issuer_did</tt>.</li>
+</ol>
+<t>If all checks pass, the receiver MUST immediately add <tt>token.nonce</tt>
+to its consumed nonce set. A nonce, once consumed, MUST never be
+accepted again.</t>
+</section>
+</section>
+
+<section anchor="s-6-3-six-phase-handshake"><name>Six-Phase Handshake</name>
+<t>The session handshake consists of six phases. Each phase involves
+a message exchange between the initiating agent (I) and the
+receiving agent (R).</t>
+
+<artwork>Phase  Direction  Message              Data
+-----  ---------  -------------------  --------------------------------
+1a     I -&gt; R     TokenPresentation    CapabilityToken
+1b     R -&gt; I     TokenAccepted        session_id, receiver_session_did
+       R -&gt; I     TokenRejected        reason (terminates handshake)
+
+2a     I -&gt; R     SessionDidExchange   initiator_session_did
+2b     R -&gt; I     SessionDidAck        (empty)
+
+3a     I -&gt; R     DisclosureOffer      disclosures (may be empty array)
+3b     R -&gt; I     DisclosureAccepted   (empty)
+
+4      R -&gt; I     ExecutionResult      result (Schema.org JSON-LD)
+
+5a     I -&gt; R     ReceiptForCoSign     half-signed TransactionReceipt
+5b     R -&gt; I     ReceiptCoSigned      fully co-signed TransactionReceipt
+
+6a     I -&gt; R     SessionClose         session_id
+6b     R -&gt; I     SessionClosed        (empty)
+</artwork>
+
+<section anchor="s-6-3-1-phase-1-token-presentation"><name>6.3.1. Phase 1: Token Presentation</name>
+<t>The initiating agent presents a signed capability token. The
+receiving agent verifies the token (Section 6.2.2).</t>
+<t>On acceptance, the receiver MUST:
+1. Generate a fresh session keypair (Section 4.4).
+2. Create a session in the <tt>Initiated</tt> state.
+3. Return a <tt>TokenAccepted</tt> message containing the session ID and
+   the receiver's ephemeral session DID.</t>
+<t>On rejection, the receiver MUST return a <tt>TokenRejected</tt> message
+with a reason string. The handshake terminates.</t>
+</section>
+
+<section anchor="s-6-3-2-phase-2-ephemeral-did-exchange"><name>6.3.2. Phase 2: Ephemeral DID Exchange</name>
+<t>The initiating agent generates its own fresh session keypair and
+sends a <tt>SessionDidExchange</tt> message containing its session DID.</t>
+<t>On receipt, the receiver MUST:
+1. Transition the session state from <tt>Initiated</tt> to <tt>Open</tt>.
+2. Store the initiator's session DID.
+3. Return a <tt>SessionDidAck</tt> message.</t>
+<t>After Phase 2, both parties have exchanged ephemeral session DIDs.
+All subsequent envelope signatures (Section 8.2) MUST use session
+keys.</t>
+</section>
+
+<section anchor="s-6-3-3-phase-3-disclosure"><name>6.3.3. Phase 3: Disclosure</name>
+<t>The initiating agent sends a <tt>DisclosureOffer</tt> containing an array
+of SD-JWT disclosures (Section 7). The array MAY be empty for
+zero-disclosure sessions.</t>
+<t>The receiver MUST:
+1. Verify each disclosure against the SD-JWT commitment
+   (Section 7.3).
+2. Return a <tt>DisclosureAccepted</tt> message.</t>
+<t>If disclosure verification fails, the receiver SHOULD return an
+<tt>Error</tt> message and close the session.</t>
+</section>
+
+<section anchor="s-6-3-4-phase-4-execution"><name>6.3.4. Phase 4: Execution</name>
+<t>The receiver executes the requested action and returns an
+<tt>ExecutionResult</tt> message containing a Schema.org JSON-LD result
+object.</t>
+<t>The session state MUST transition from <tt>Open</tt> to <tt>Executed</tt>.</t>
+</section>
+
+<section anchor="s-6-3-5-phase-5-receipt-co-signing"><name>6.3.5. Phase 5: Receipt Co-Signing</name>
+<t>The initiating agent constructs a <tt>TransactionReceipt</tt>
+(Section 11), signs it with its session key, and sends it as
+<tt>ReceiptForCoSign</tt>.</t>
+<t>The receiving agent MUST:
+1. Verify the initiator's signature on the receipt.
+2. Add its own co-signature using its session key.
+3. Return the fully co-signed receipt as <tt>ReceiptCoSigned</tt>.</t>
+</section>
+
+<section anchor="s-6-3-6-phase-6-session-close"><name>6.3.6. Phase 6: Session Close</name>
+<t>Either party MAY initiate session close by sending a
+<tt>SessionClose</tt> message containing the session ID.</t>
+<t>On receipt of <tt>SessionClose</tt>, the other party MUST:
+1. Return a <tt>SessionClosed</tt> message.
+2. Transition the session state to <tt>Closed</tt>.
+3. Discard all ephemeral session keys.</t>
+<t>After Phase 6, both parties MUST discard their session keypairs.
+Session DIDs MUST NOT be reused.</t>
+</section>
+</section>
+</section>
+
+<section anchor="s-7-sd-jwt-disclosure-protocol"><name>SD-JWT Disclosure Protocol</name>
+
+<section anchor="s-7-1-overview"><name>Overview</name>
+<t>PAP uses Selective Disclosure JWT (SD-JWT) as defined in
+[SD-JWT-08] for context disclosure during the session handshake.
+SD-JWT allows the principal to hold multiple claims but disclose
+only those permitted by the mandate.</t>
+</section>
+
+<section anchor="s-7-2-sd-jwt-object"><name>SD-JWT Object</name>
+<t>An SD-JWT MUST contain:</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>issuer</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the claim issuer (typically the principal)</td>
+</tr>
+
+<tr>
+<td><tt>claims</tt></td>
+<td>Object</td>
+<td>REQUIRED (private)</td>
+<td>All claims as key-value pairs</td>
+</tr>
+
+<tr>
+<td><tt>salts</tt></td>
+<td>Object</td>
+<td>REQUIRED (private)</td>
+<td>Per-claim random salts (UUID v4)</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String or null</td>
+<td>OPTIONAL</td>
+<td>Ed25519 signature over commitment bytes (base64url-no-pad)</td>
+</tr>
+</tbody>
+</table><t>The <tt>claims</tt> and <tt>salts</tt> fields are private to the holder and
+MUST NOT be transmitted in their entirety. Only selected
+disclosures (Section 7.3) are transmitted.</t>
+</section>
+
+<section anchor="s-7-3-disclosure-object"><name>Disclosure Object</name>
+<t>A disclosure reveals a single claim. It MUST contain:</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>salt</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>The claim-specific random salt</td>
+</tr>
+
+<tr>
+<td><tt>key</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>The claim key</td>
+</tr>
+
+<tr>
+<td><tt>value</tt></td>
+<td>Any JSON value</td>
+<td>REQUIRED</td>
+<td>The claim value</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-7-4-commitment-computation"><name>Commitment Computation</name>
+<t>The SD-JWT commitment is signed to bind all possible disclosures.</t>
+
+<ol>
+<li><t>For each claim <tt>(key, value)</tt> with salt <tt>s</tt>:</t>
+
+<ul spacing="compact">
+<li>Construct: <tt>{"salt": s, "key": key, "value": value}</tt></li>
+<li>Hash: <tt>SHA-256(JSON_bytes(disclosure))</tt></li>
+<li>Encode: base64url-no-pad</li>
+</ul></li>
+<li><t>Collect all hashes and sort lexicographically.</t>
+</li>
+<li><t>Construct commitment bytes:</t>
+
+<sourcecode type="json">{
+ "issuer": "&lt;issuer_did&gt;",
+ "disclosure_hashes": ["&lt;sorted_hash_1&gt;", "&lt;sorted_hash_2&gt;", ...]
+}
+</sourcecode>
+</li>
+<li><t>Sign: <tt>Ed25519_sign(JSON_bytes(commitment))</tt></t>
+</li>
+</ol>
+</section>
+
+<section anchor="s-7-5-disclosure-verification"><name>Disclosure Verification</name>
+<t>A verifier MUST:</t>
+
+<ol spacing="compact">
+<li>Verify the SD-JWT signature over the commitment bytes using the
+issuer's public key.</li>
+<li>For each received disclosure:
+a. Compute <tt>hash = base64url(SHA-256(JSON_bytes(disclosure)))</tt>.
+b. Verify that <tt>hash</tt> is present in the signed
+  <tt>disclosure_hashes</tt> array.</li>
+</ol>
+<t>If any disclosure hash is not found in the commitment, the
+verification MUST fail.</t>
+</section>
+
+<section anchor="s-7-6-zero-disclosure-sessions"><name>Zero-Disclosure Sessions</name>
+<t>A session MAY proceed with zero disclosures. In this case:</t>
+
+<ul spacing="compact">
+<li>The <tt>DisclosureOffer</tt> message carries an empty disclosures array.</li>
+<li>The SD-JWT signature MUST still verify (the commitment contains
+hashes for all claims, but none are revealed).</li>
+<li>The receiver MUST accept an empty disclosure set without error.</li>
+</ul>
+</section>
+</section>
+
+<section anchor="s-8-protocol-messages-and-envelope"><name>Protocol Messages and Envelope</name>
+
+<section anchor="s-8-1-protocol-message-types"><name>Protocol Message Types</name>
+<t>All protocol messages are serialized as JSON objects with a <tt>type</tt>
+discriminator field. The following message types are defined:</t>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Phase</th>
+<th>Direction</th>
+<th>Fields</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>TokenPresentation</tt></td>
+<td>1</td>
+<td>I-&gt;R</td>
+<td><tt>token</tt>: CapabilityToken</td>
+</tr>
+
+<tr>
+<td><tt>TokenAccepted</tt></td>
+<td>1</td>
+<td>R-&gt;I</td>
+<td><tt>session_id</tt>: String, <tt>receiver_session_did</tt>: String</td>
+</tr>
+
+<tr>
+<td><tt>TokenRejected</tt></td>
+<td>1</td>
+<td>R-&gt;I</td>
+<td><tt>reason</tt>: String</td>
+</tr>
+
+<tr>
+<td><tt>SessionDidExchange</tt></td>
+<td>2</td>
+<td>I-&gt;R</td>
+<td><tt>initiator_session_did</tt>: String</td>
+</tr>
+
+<tr>
+<td><tt>SessionDidAck</tt></td>
+<td>2</td>
+<td>R-&gt;I</td>
+<td>(no fields)</td>
+</tr>
+
+<tr>
+<td><tt>DisclosureOffer</tt></td>
+<td>3</td>
+<td>I-&gt;R</td>
+<td><tt>disclosures</tt>: Array of JSON values</td>
+</tr>
+
+<tr>
+<td><tt>DisclosureAccepted</tt></td>
+<td>3</td>
+<td>R-&gt;I</td>
+<td>(no fields)</td>
+</tr>
+
+<tr>
+<td><tt>ExecutionResult</tt></td>
+<td>4</td>
+<td>R-&gt;I</td>
+<td><tt>result</tt>: JSON value (Schema.org JSON-LD)</td>
+</tr>
+
+<tr>
+<td><tt>ReceiptForCoSign</tt></td>
+<td>5</td>
+<td>I-&gt;R</td>
+<td><tt>receipt</tt>: TransactionReceipt</td>
+</tr>
+
+<tr>
+<td><tt>ReceiptCoSigned</tt></td>
+<td>5</td>
+<td>R-&gt;I</td>
+<td><tt>receipt</tt>: TransactionReceipt</td>
+</tr>
+
+<tr>
+<td><tt>SessionClose</tt></td>
+<td>6</td>
+<td>Either</td>
+<td><tt>session_id</tt>: String</td>
+</tr>
+
+<tr>
+<td><tt>SessionClosed</tt></td>
+<td>6</td>
+<td>Either</td>
+<td>(no fields)</td>
+</tr>
+
+<tr>
+<td><tt>Error</tt></td>
+<td>Any</td>
+<td>Either</td>
+<td><tt>code</tt>: String, <tt>message</tt>: String</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-8-2-envelope"><name>Envelope</name>
+<t>Protocol messages are transmitted inside an envelope that provides
+routing, sequencing, and integrity.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>id</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Unique envelope identifier (UUID v4)</td>
+</tr>
+
+<tr>
+<td><tt>session_id</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Session this envelope belongs to</td>
+</tr>
+
+<tr>
+<td><tt>sender</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the sender</td>
+</tr>
+
+<tr>
+<td><tt>recipient</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the intended recipient</td>
+</tr>
+
+<tr>
+<td><tt>sequence</tt></td>
+<td>Integer</td>
+<td>REQUIRED</td>
+<td>Monotonically increasing sequence number within the session</td>
+</tr>
+
+<tr>
+<td><tt>payload</tt></td>
+<td>ProtocolMessage</td>
+<td>REQUIRED</td>
+<td>The protocol message</td>
+</tr>
+
+<tr>
+<td><tt>timestamp</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>ISO 8601 timestamp</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>Bytes or null</td>
+<td>OPTIONAL</td>
+<td>Ed25519 signature over signable bytes</td>
+</tr>
+</tbody>
+</table>
+<section anchor="s-8-2-1-envelope-signing"><name>8.2.1. Envelope Signing</name>
+<t>The signable bytes for an envelope MUST be computed as:</t>
+
+<artwork>SHA-256(session_id_bytes || sequence_big_endian_8_bytes || payload_json_bytes)
+</artwork>
+<t>Where <tt>||</tt> denotes concatenation and <tt>sequence_big_endian_8_bytes</tt>
+is the sequence number as an 8-byte big-endian integer.</t>
+<t>Before Phase 2 (DID exchange), the <tt>signature</tt> field MAY be null
+because the capability token carries its own signature from the
+issuer.</t>
+<t>After Phase 2, all envelopes MUST be signed by the sender's
+ephemeral session key.</t>
+</section>
+
+<section anchor="s-8-2-2-envelope-verification"><name>8.2.2. Envelope Verification</name>
+<t>The recipient MUST:</t>
+
+<ol spacing="compact">
+<li>Verify <tt>recipient</tt> matches its own DID.</li>
+<li>Verify <tt>sequence</tt> is strictly greater than the last received
+sequence number for this session.</li>
+<li>If <tt>signature</tt> is present, verify it against the sender's
+session public key.</li>
+</ol>
+</section>
+</section>
+</section>
+
+<section anchor="s-9-marketplace-advertisement-schema"><name>Marketplace Advertisement Schema</name>
+
+<section anchor="s-9-1-agent-advertisement"><name>Agent Advertisement</name>
+<t>An agent advertisement declares an agent's capabilities, disclosure
+requirements, and return types. Advertisements use Schema.org
+vocabulary and JSON-LD structure.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>@context</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>MUST be <tt>"https://schema.org"</tt></td>
+</tr>
+
+<tr>
+<td><tt>@type</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>MUST be <tt>"schema:Service"</tt></td>
+</tr>
+
+<tr>
+<td><tt>name</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Human-readable agent name</td>
+</tr>
+
+<tr>
+<td><tt>provider</tt></td>
+<td>Provider</td>
+<td>REQUIRED</td>
+<td>Provider organization (Section 9.2)</td>
+</tr>
+
+<tr>
+<td><tt>capability</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Schema.org action types the agent can perform</td>
+</tr>
+
+<tr>
+<td><tt>object_types</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Schema.org object types the agent operates on</td>
+</tr>
+
+<tr>
+<td><tt>requires_disclosure</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Fully qualified property references the agent requires (e.g., <tt>schema:Person.name</tt>)</td>
+</tr>
+
+<tr>
+<td><tt>returns</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Schema.org types the agent returns</td>
+</tr>
+
+<tr>
+<td><tt>ttl_min</tt></td>
+<td>Integer</td>
+<td>OPTIONAL</td>
+<td>Minimum session TTL in seconds. Default: 300.</td>
+</tr>
+
+<tr>
+<td><tt>signed_by</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID that signed this advertisement</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String or null</td>
+<td>OPTIONAL</td>
+<td>Ed25519 signature (base64url-no-pad)</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-9-2-provider-object"><name>Provider Object</name>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>@type</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>MUST be <tt>"schema:Organization"</tt></td>
+</tr>
+
+<tr>
+<td><tt>name</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Organization name</td>
+</tr>
+
+<tr>
+<td><tt>did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Operator DID</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-9-3-disclosure-filtering"><name>Disclosure Filtering</name>
+<t>A marketplace registry MUST support two query modes:</t>
+<t><strong>Query by action:</strong> Return all advertisements whose <tt>capability</tt>
+array contains the requested action type.</t>
+<t><strong>Query by action with disclosure satisfiability:</strong> Return only
+advertisements where:
+1. The <tt>capability</tt> array contains the requested action type, AND
+2. Every entry in <tt>requires_disclosure</tt> is present in the caller's
+   available properties list.</t>
+<t>This filtering MUST occur before any mandate is issued or session
+is established. Agents whose disclosure requirements exceed the
+principal's authorization MUST be excluded. The principal MUST
+NOT be asked to over-disclose.</t>
+</section>
+
+<section anchor="s-9-4-advertisement-signing"><name>Advertisement Signing</name>
+<t>The canonical form for advertisement signing MUST include all
+fields except <tt>signature</tt>:</t>
+
+<sourcecode type="json">{
+  "@context": "https://schema.org",
+  "@type": "schema:Service",
+  "name": "...",
+  "provider": { ... },
+  "capability": [...],
+  "object_types": [...],
+  "requires_disclosure": [...],
+  "returns": [...],
+  "ttl_min": 300,
+  "signed_by": "did:key:z..."
+}
+</sourcecode>
+<t>Signing follows the same Ed25519/base64url-no-pad procedure as
+mandate signing (Section 5.2).</t>
+<t>A marketplace registry MUST reject unsigned advertisements.</t>
+</section>
+
+<section anchor="s-9-5-advertisement-hashing"><name>Advertisement Hashing</name>
+<t>The content hash of an advertisement MUST be computed as:</t>
+
+<artwork>base64url(SHA-256(canonical_bytes))
+</artwork>
+<t>This hash is used for deduplication in federated registries
+(Section 10).</t>
+</section>
+
+<section anchor="s-9-6-operator-metrics"><name>Operator Metrics</name>
+<t>An agent advertisement MAY include an <tt>operator_metrics</tt> field
+containing self-reported operational statistics. Metrics are
+informational metadata for principal evaluation and MUST NOT be
+used by marketplace registries for ranking, sorting, or filtering
+query results.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>total_receipts</tt></td>
+<td>Integer</td>
+<td>OPTIONAL</td>
+<td>Total co-signed transaction receipts</td>
+</tr>
+
+<tr>
+<td><tt>bilateral_attestations</tt></td>
+<td>Integer</td>
+<td>OPTIONAL</td>
+<td>Receipts with bilateral session attestation</td>
+</tr>
+
+<tr>
+<td><tt>unique_counterparties</tt></td>
+<td>Integer</td>
+<td>OPTIONAL</td>
+<td>Distinct counterparty session DIDs</td>
+</tr>
+
+<tr>
+<td><tt>action_types</tt></td>
+<td>Array of String</td>
+<td>OPTIONAL</td>
+<td>Distinct Schema.org action types performed</td>
+</tr>
+
+<tr>
+<td><tt>tee_sessions_pct</tt></td>
+<td>Number</td>
+<td>OPTIONAL</td>
+<td>Fraction of sessions with TEE attestation (0.0 to 1.0)</td>
+</tr>
+
+<tr>
+<td><tt>first_seen</tt></td>
+<td>DateTime</td>
+<td>OPTIONAL</td>
+<td>RFC 3339 timestamp of first registration</td>
+</tr>
+
+<tr>
+<td><tt>uptime_days</tt></td>
+<td>Integer</td>
+<td>OPTIONAL</td>
+<td>Days the operator has been active</td>
+</tr>
+</tbody>
+</table><t>The <tt>operator_metrics</tt> field MUST be excluded from the advertisement
+content hash (Section 9.5) and signature computation (Section 9.4).
+Metrics change over time while the advertisement identity remains
+stable.</t>
+<t><strong>Anti-ranking requirement:</strong> Marketplace registries MUST return
+query results in insertion order. Registries MUST NOT rank, sort,
+or filter results based on operator metrics. The principal's
+orchestrator is responsible for evaluating metrics and making
+selection decisions. This requirement prevents marketplace
+registries from accumulating ranking power, which would constitute
+platform capture.</t>
+</section>
+</section>
+
+<section anchor="s-10-federation-protocol"><name>Federation Protocol</name>
+
+<section anchor="s-10-1-overview"><name>Overview</name>
+<t>Federation enables independent marketplace registries to discover
+and share agent advertisements. Federation is peer-to-peer with
+no central coordinator.</t>
+</section>
+
+<section anchor="s-10-2-registry-peer"><name>Registry Peer</name>
+<t>A federation peer is identified by:</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the peer registry operator</td>
+</tr>
+
+<tr>
+<td><tt>endpoint</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>HTTP(S) endpoint for federation API calls</td>
+</tr>
+
+<tr>
+<td><tt>last_sync</tt></td>
+<td>DateTime or null</td>
+<td>OPTIONAL</td>
+<td>Timestamp of last successful sync</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-10-3-federation-messages"><name>Federation Messages</name>
+<t>Federation uses the following message types, discriminated by a
+<tt>type</tt> field:</t>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Direction</th>
+<th>Fields</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>QueryByAction</tt></td>
+<td>Request</td>
+<td><tt>action</tt>: String</td>
+<td>Query for agents supporting an action</td>
+</tr>
+
+<tr>
+<td><tt>QueryResponse</tt></td>
+<td>Response</td>
+<td><tt>advertisements</tt>: Array of AgentAdvertisement</td>
+<td>Matching advertisements</td>
+</tr>
+
+<tr>
+<td><tt>Announce</tt></td>
+<td>Request</td>
+<td><tt>advertisement</tt>: AgentAdvertisement</td>
+<td>Announce a new local advertisement</td>
+</tr>
+
+<tr>
+<td><tt>AnnounceAck</tt></td>
+<td>Response</td>
+<td><tt>hash</tt>: String, <tt>accepted</tt>: Boolean</td>
+<td>Acknowledge announcement</td>
+</tr>
+
+<tr>
+<td><tt>PeerList</tt></td>
+<td>Request</td>
+<td>(none)</td>
+<td>Request known peer list</td>
+</tr>
+
+<tr>
+<td><tt>PeerListResponse</tt></td>
+<td>Response</td>
+<td><tt>peers</tt>: Array of RegistryPeer</td>
+<td>Known peers</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-10-4-federation-endpoints"><name>Federation Endpoints</name>
+<t>A federation server MUST expose the following HTTP endpoints:</t>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Request Body</th>
+<th>Response Body</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>GET</td>
+<td><tt>/federation/query?action={action}</tt></td>
+<td>(none)</td>
+<td><tt>QueryResponse</tt></td>
+</tr>
+
+<tr>
+<td>POST</td>
+<td><tt>/federation/announce</tt></td>
+<td><tt>Announce</tt></td>
+<td><tt>AnnounceAck</tt></td>
+</tr>
+
+<tr>
+<td>GET</td>
+<td><tt>/federation/peers</tt></td>
+<td>(none)</td>
+<td><tt>PeerListResponse</tt></td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-10-5-content-hash-deduplication"><name>Content-Hash Deduplication</name>
+<t>When merging remote advertisements, a federated registry MUST:</t>
+
+<ol spacing="compact">
+<li>Compute the content hash of each advertisement (Section 9.5).</li>
+<li>If the hash already exists in the local seen-hashes set, skip
+the advertisement.</li>
+<li>If the advertisement has no signature, skip it.</li>
+<li>Otherwise, register the advertisement and add its hash to the
+seen-hashes set.</li>
+</ol>
+<t>This ensures idempotent synchronization and prevents duplicate
+entries.</t>
+</section>
+
+<section anchor="s-10-6-peer-discovery"><name>Peer Discovery</name>
+<t>A registry MAY discover new peers transitively:</t>
+
+<ol spacing="compact">
+<li>Query a known peer's <tt>/federation/peers</tt> endpoint.</li>
+<li>For each peer in the response not already known, add it to the
+local peer list.</li>
+</ol>
+<t>Implementations SHOULD implement rate limiting and SHOULD validate
+that newly discovered peers are reachable before adding them.</t>
+</section>
+
+<section anchor="s-10-7-peer-trust-signals"><name>Peer Trust Signals</name>
+<t>A federation peer MAY present trust signals to establish
+credibility with other registries. Trust signals are additive --
+more signals increase confidence but no single signal is
+sufficient alone.</t>
+
+<section anchor="s-10-7-1-signal-categories"><name>10.7.1. Signal Categories</name>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Weight</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>Social vouching</td>
+<td>Primary</td>
+<td>Signed vouches from existing peers</td>
+</tr>
+
+<tr>
+<td>TEE attestation</td>
+<td>Supplementary</td>
+<td>Hardware attestation of registry software</td>
+</tr>
+
+<tr>
+<td>Operational history</td>
+<td>Supplementary</td>
+<td>Observable uptime and sync metrics</td>
+</tr>
+
+<tr>
+<td>Domain verification</td>
+<td>Supplementary</td>
+<td>DNS or TLS proof of domain ownership</td>
+</tr>
+</tbody>
+</table><t>A registry SHOULD require at least two signal categories before
+granting a peer full synchronization privileges.</t>
+</section>
+
+<section anchor="s-10-7-2-peer-vouch"><name>10.7.2. Peer Vouch</name>
+<t>A peer vouch is a signed statement by an existing peer that they
+have evaluated the new peer and believe it operates a conformant
+registry.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>voucher_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the vouching peer</td>
+</tr>
+
+<tr>
+<td><tt>vouchee_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the peer being vouched</td>
+</tr>
+
+<tr>
+<td><tt>timestamp</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>RFC 3339 timestamp</td>
+</tr>
+
+<tr>
+<td><tt>justification</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Structured reason for vouching</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ed25519 signature by voucher</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-10-7-3-vouch-budget"><name>10.7.3. Vouch Budget</name>
+<t>To prevent vouch ring attacks (where colluding peers mutually
+vouch to create Sybil identities), implementations SHOULD enforce:</t>
+
+<ul spacing="compact">
+<li><strong>Vouch budget:</strong> Each peer MAY issue at most 3 vouches per year.</li>
+<li><strong>Minimum age:</strong> A peer MUST be registered for at least 90 days
+before it is eligible to vouch for others.</li>
+<li><strong>Probationary period:</strong> Newly registered peers operate in
+probationary status for 60 days. During probation, a peer MAY
+receive advertisements but MUST NOT vouch for other peers.</li>
+<li><strong>Diverse trust paths:</strong> The vouchers for a new peer SHOULD NOT
+all trace their own vouching chains through the same set of
+peers.</li>
+</ul>
+</section>
+</section>
+</section>
+
+<section anchor="s-11-receipt-format"><name>Receipt Format</name>
+
+<section anchor="s-11-1-transaction-receipt"><name>Transaction Receipt</name>
+<t>A transaction receipt is a co-signed record of a completed session.
+Receipts contain property type references only -- never values.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>session_id</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ephemeral session ID (not linked to principal)</td>
+</tr>
+
+<tr>
+<td><tt>action</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Schema.org action type executed</td>
+</tr>
+
+<tr>
+<td><tt>initiating_agent_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ephemeral session DID of the initiator</td>
+</tr>
+
+<tr>
+<td><tt>receiving_agent_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ephemeral session DID of the receiver</td>
+</tr>
+
+<tr>
+<td><tt>disclosed_by_initiator</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Property references disclosed by the initiator</td>
+</tr>
+
+<tr>
+<td><tt>disclosed_by_receiver</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Property references or operator statements from the receiver</td>
+</tr>
+
+<tr>
+<td><tt>executed</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Human-readable description of the action executed</td>
+</tr>
+
+<tr>
+<td><tt>returned</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Human-readable description of the result returned</td>
+</tr>
+
+<tr>
+<td><tt>timestamp</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>RFC 3339 timestamp</td>
+</tr>
+
+<tr>
+<td><tt>signatures</tt></td>
+<td>Array of String</td>
+<td>REQUIRED</td>
+<td>Co-signatures (base64url-no-pad)</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-11-2-receipt-signing"><name>Receipt Signing</name>
+<t>The canonical form for receipt signing MUST include all fields
+except <tt>signatures</tt>:</t>
+
+<sourcecode type="json">{
+  "session_id": "...",
+  "action": "...",
+  "initiating_agent_did": "...",
+  "receiving_agent_did": "...",
+  "disclosed_by_initiator": [...],
+  "disclosed_by_receiver": [...],
+  "executed": "...",
+  "returned": "...",
+  "timestamp": "..."
+}
+</sourcecode>
+</section>
+
+<section anchor="s-11-3-co-signing-protocol"><name>Co-Signing Protocol</name>
+
+<ol spacing="compact">
+<li>The initiator constructs a receipt from the completed session.</li>
+<li>The initiator computes <tt>Ed25519_sign(canonical_bytes)</tt> using its
+session key and appends the base64url-no-pad encoded signature
+to <tt>signatures</tt>.</li>
+<li>The initiator sends the half-signed receipt to the receiver.</li>
+<li>The receiver verifies the initiator's signature against the
+initiator's session public key.</li>
+<li>The receiver computes <tt>Ed25519_sign(canonical_bytes)</tt> using its
+session key and appends its signature to <tt>signatures</tt>.</li>
+<li>The receiver returns the fully co-signed receipt.</li>
+</ol>
+</section>
+
+<section anchor="s-11-4-receipt-verification"><name>Receipt Verification</name>
+<t>To verify a co-signed receipt:</t>
+
+<ol spacing="compact">
+<li>The <tt>signatures</tt> array MUST contain exactly 2 entries.</li>
+<li><tt>signatures[0]</tt> MUST verify against the initiator's session
+public key.</li>
+<li><tt>signatures[1]</tt> MUST verify against the receiver's session
+public key.</li>
+</ol>
+</section>
+
+<section anchor="s-11-5-privacy-properties"><name>Privacy Properties</name>
+<t>Receipts MUST NOT contain:
+- Personal data values (names, emails, etc.)
+- SD-JWT claim values
+- Raw execution inputs or outputs</t>
+<t>Receipts MUST contain only:
+- Schema.org property type references (e.g.,
+  <tt>schema:Person.schema:name</tt>)
+- Operator-defined category references (e.g.,
+  <tt>operator:search_executed</tt>)
+- Human-readable action/result descriptions</t>
+<t>This ensures receipts are auditable by both principals without
+revealing the data exchanged in the transaction.</t>
+</section>
+
+<section anchor="s-11-6-session-attestation"><name>Session Attestation</name>
+<t>A session attestation is a signed statement by a session
+participant recording their assessment of the session outcome.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>session_id</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Session identifier</td>
+</tr>
+
+<tr>
+<td><tt>attester_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ephemeral session DID of attester</td>
+</tr>
+
+<tr>
+<td><tt>outcome</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>One of: <tt>fulfilled</tt>, <tt>partial</tt>, <tt>failed</tt>, <tt>disputed</tt></td>
+</tr>
+
+<tr>
+<td><tt>action_type</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Schema.org action type executed</td>
+</tr>
+
+<tr>
+<td><tt>timestamp</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>RFC 3339 timestamp</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ed25519 signature by attester</td>
+</tr>
+</tbody>
+</table><t>A receipt with attestations from both the initiating and receiving
+agents is <strong>bilaterally attested</strong>. Bilaterally attested receipts
+carry higher evidentiary weight for operator metric computation.</t>
+<t>Attestations are per-action-type. An operator's reputation in one
+action domain (e.g., <tt>schema:SearchAction</tt>) MUST NOT be conflated
+with reputation in another domain (e.g., <tt>schema:ReserveAction</tt>).</t>
+</section>
+</section>
+
+<section anchor="s-12-verifiable-credential-envelope"><name>Verifiable Credential Envelope</name>
+
+<section anchor="s-12-1-overview"><name>Overview</name>
+<t>PAP mandates MAY be wrapped in a W3C Verifiable Credential (VC)
+envelope for interoperability with existing credential ecosystems.
+The VC envelope is OPTIONAL; implementations MUST support bare
+mandates and MAY additionally support VC-wrapped mandates.</t>
+</section>
+
+<section anchor="s-12-2-vc-structure"><name>VC Structure</name>
+<t>A PAP Verifiable Credential MUST conform to [VC-DATA-MODEL-2.0]:</t>
+
+<sourcecode type="json">{
+  "@context": [
+    "https://www.w3.org/ns/credentials/v2",
+    "https://www.w3.org/ns/credentials/examples/v2"
+  ],
+  "id": "urn:uuid:&lt;uuid-v4&gt;",
+  "type": ["VerifiableCredential", "PAPMandateCredential"],
+  "issuer": "&lt;issuer_did&gt;",
+  "issuanceDate": "&lt;rfc3339&gt;",
+  "expirationDate": "&lt;rfc3339&gt;",
+  "credentialSubject": { &lt;mandate_payload&gt; },
+  "proof": {
+    "type": "Ed25519Signature2020",
+    "created": "&lt;rfc3339&gt;",
+    "verificationMethod": "&lt;did&gt;#key-1",
+    "proofPurpose": "assertionMethod",
+    "proofValue": "&lt;base64url-no-pad&gt;"
+  }
+}
+</sourcecode>
+<t>The <tt>type</tt> array MUST include both <tt>"VerifiableCredential"</tt> and
+<tt>"PAPMandateCredential"</tt> for discoverability.</t>
+</section>
+
+<section anchor="s-12-3-credential-signing"><name>Credential Signing</name>
+<t>The canonical form for VC signing MUST include all fields except
+<tt>proof</tt>:</t>
+
+<sourcecode type="json">{
+  "@context": [...],
+  "id": "...",
+  "type": [...],
+  "issuer": "...",
+  "issuanceDate": "...",
+  "expirationDate": "..." or null,
+  "credentialSubject": { ... }
+}
+</sourcecode>
+<t>The <tt>proofValue</tt> is <tt>base64url(Ed25519_sign(JSON_bytes(canonical)))</tt>.</t>
+</section>
+</section>
+
+<section anchor="s-13-extension-points"><name>Extension Points</name>
+<t>The following extensions are defined for PAP v1.0. Core extensions
+(Sections 13.1--13.4) were introduced in v0.4. Recovery mandates
+(Section 13.5), TEE attestation (Section 13.6), and payment proof
+validation (Section 13.7) were added in v0.7. All extensions are
+OPTIONAL; a conformant implementation MAY support none, some, or
+all of them.</t>
+
+<section anchor="s-13-1-payment-proof"><name>Payment Proof</name>
+<t>A mandate MAY carry a <tt>payment_proof</tt> field containing a
+zero-knowledge payment commitment. PAP does not define the payment
+protocol; it defines the integration point. Only cryptographic
+commitments are stored -- <strong>never</strong> amounts, destinations, mints, or
+other identifying payment data.</t>
+<t>The <tt>PaymentProof</tt> type is a tagged enum with two variants:</t>
+<table>
+<thead>
+<tr>
+<th>Variant</th>
+<th>Inner Type</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>Lightning</tt></td>
+<td><tt>Bolt11Hash</tt></td>
+<td>SHA-256 of a BOLT-11 invoice payment hash</td>
+</tr>
+
+<tr>
+<td><tt>Ecash</tt></td>
+<td><tt>CashuTokenHash</tt></td>
+<td>SHA-256 of a Cashu blind-signed token</td>
+</tr>
+</tbody>
+</table>
+<section anchor="s-13-1-1-bolt11hash"><name>13.1.1. Bolt11Hash</name>
+<t>A commitment to a Lightning Network payment. The <tt>hash</tt> field
+contains the base64url-no-pad encoded SHA-256 of the BOLT-11
+invoice payment hash. The preimage is never stored.</t>
+
+<sourcecode type="json">{
+  "type": "Lightning",
+  "hash": "&lt;base64url-no-pad SHA-256&gt;"
+}
+</sourcecode>
+</section>
+
+<section anchor="s-13-1-2-cashutokenhash"><name>13.1.2. CashuTokenHash</name>
+<t>A commitment to a Cashu ecash token. The <tt>hash</tt> field contains the
+base64url-no-pad encoded SHA-256 of the blind-signed token. The
+token itself is never stored.</t>
+
+<sourcecode type="json">{
+  "type": "Ecash",
+  "hash": "&lt;base64url-no-pad SHA-256&gt;"
+}
+</sourcecode>
+</section>
+
+<section anchor="s-13-1-3-payment-proof-properties"><name>13.1.3. Payment Proof Properties</name>
+
+<ul spacing="compact">
+<li>The proof contains <strong>only</strong> a cryptographic commitment hash.</li>
+<li>No amounts, destinations, mints, or routing data are stored.</li>
+<li>The vendor MUST NOT be able to identify the payer from the proof.</li>
+<li>The proof MUST be unlinkable to the principal's identity.</li>
+<li>The payment proof is included in the mandate's canonical form for
+signing.</li>
+<li>If a mandate's scope includes <tt>schema:PayAction</tt>, a payment proof
+SHOULD be attached. Implementations MAY reject mandates that
+permit payment actions without a proof.</li>
+</ul>
+</section>
+
+<section anchor="s-13-1-4-ecash-blind-signature-protocol"><name>13.1.4. Ecash Blind Signature Protocol</name>
+<t>PAP includes a reference implementation of the Chaumian blind signature
+scheme in the <tt>pap-ecash</tt> crate. The scheme uses RFC 9474
+RSABSSA-SHA384-PSS (non-augmented variant, <tt>randomize = false</tt>).</t>
+<t><strong>Protocol parameters:</strong></t>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>Scheme</td>
+<td>RSABSSA-SHA384-PSS (RFC 9474 Section 4.2, non-augmented)</td>
+</tr>
+
+<tr>
+<td>Key size</td>
+<td>>= 2048 bits (production); 1024 bits (tests only)</td>
+</tr>
+
+<tr>
+<td>Commitment</td>
+<td>SHA-256(<tt>serial</tt> || <tt>signature</tt>), base64url-no-pad</td>
+</tr>
+
+<tr>
+<td>Serial size</td>
+<td>32 bytes, randomly chosen by the client</td>
+</tr>
+</tbody>
+</table><t><strong>Protocol steps:</strong></t>
+
+<ol spacing="compact">
+<li><strong>Request</strong> -- client calls <tt>ecash_request(serial, mint_pk)</tt>.
+Returns a <tt>BlindToken</tt> containing a randomly-blinded serial. Only the
+<tt>blinded_message()</tt> bytes are transmitted to the mint.</li>
+<li><strong>Mint</strong> -- mint calls <tt>ecash_mint_sign(blinded_msg, keypair)</tt>.
+Returns raw blind-signature bytes to the client.</li>
+<li><strong>Unblind</strong> -- client calls <tt>ecash_unblind(blind_token, blind_sig, mint_pk)</tt>.
+Returns the spendable <tt>EcashToken { serial, signature }</tt>.</li>
+<li><strong>Attach</strong> -- client calls <tt>token.to_payment_proof()</tt> and includes the
+result in the mandate's <tt>payment_proof</tt> field.</li>
+<li><strong>Verify</strong> -- payee calls <tt>ecash_verify(token, mint_pk)</tt>. Valid tokens
+have a correct RSA-PSS signature over <tt>serial</tt>.</li>
+<li><strong>Redeem</strong> -- payee calls <tt>ecash_redeem(token, mint_pk, registry)</tt>.
+Atomically verifies and records <tt>serial</tt> in the spent registry,
+preventing double-spend.</li>
+</ol>
+<t><strong>Unlinkability invariant:</strong> The random blinding factor applied in step 1
+means that the <tt>blinded_message</tt> bytes transmitted to the mint are
+statistically independent of the final <tt>(serial, signature)</tt> pair. The
+mint cannot link a signing operation to a subsequent redemption.</t>
+<t><strong>Double-spend invariant:</strong> <tt>ecash_redeem</tt> MUST return <tt>EcashError::DoubleSpend</tt>
+on any second call with the same serial, regardless of signature validity.</t>
+<t><strong>Test vectors:</strong> The conformance test suite is in <tt>crates/pap-ecash/</tt>.
+Run the following to generate and verify all test vectors:</t>
+
+<sourcecode type="bash">cargo test -p pap-ecash -- --nocapture
+</sourcecode>
+<t>The <tt>ecash_test_vector</tt> test uses a freshly-generated 1024-bit test key
+(test-only size) and serial <tt>0x000...001</tt> (32 bytes). Because
+<tt>blind-rsa-signatures</tt> v0.14 uses <tt>OsRng</tt> internally (no injectable RNG),
+the blinding factor and PSS salt are non-deterministic. The test therefore
+validates structural invariants (correct verification, 43-char base64url
+commitment) rather than pinning an exact byte value.</t>
+<t><strong>C FFI:</strong> <tt>pap_ecash_mint_keypair_generate</tt>, <tt>pap_ecash_blind</tt>,
+<tt>pap_ecash_blind_message_bytes</tt>, <tt>pap_ecash_mint_sign</tt>, <tt>pap_ecash_unblind</tt>,
+<tt>pap_ecash_verify</tt>, <tt>pap_ecash_spent_registry_new</tt>, <tt>pap_ecash_redeem</tt>,
+<tt>pap_ecash_token_payment_proof_commitment</tt>.</t>
+<t><strong>WASM:</strong> <tt>EcashMintKeypair</tt>, <tt>EcashBlindToken</tt>, <tt>EcashToken</tt>,
+<tt>ecashMintSign</tt>, <tt>ecashVerify</tt>.</t>
+</section>
+</section>
+
+<section anchor="s-13-2-payment-proof-verification"><name>Payment Proof Verification</name>
+<t>A receiving agent that requires payment MUST:
+1. Extract the <tt>payment_proof</tt> from the mandate.
+2. Validate the proof's structural integrity (valid base64url,
+   32-byte SHA-256 commitment).
+3. Verify the proof against the payment network (out of band):
+   - <strong>Lightning</strong>: verify the BOLT-11 payment hash preimage
+   - <strong>Ecash</strong>: verify the Cashu token with the issuing mint
+4. Accept or reject the session based on verification.</t>
+
+<section anchor="s-13-2-1-receipt-payment-proof-commitment"><name>13.2.1. Receipt Payment Proof Commitment</name>
+<t>When a transaction receipt is created for a <tt>schema:PayAction</tt>,
+the receipt MUST include a <tt>payment_proof_commitment</tt> field
+containing the commitment hash from the mandate's payment proof.
+This enables auditing without revealing payment details.</t>
+<t>A receipt validator MUST check:
+1. The <tt>payment_proof_commitment</tt> is present for payment actions.
+2. The commitment matches the mandate's payment proof commitment.
+3. The commitment is included in the receipt's canonical form for
+   co-signing.</t>
+<t>The verification protocol between the receiving agent and the
+payment network is out of scope for this specification.</t>
+</section>
+</section>
+
+<section anchor="s-13-3-continuity-tokens"><name>Continuity Tokens</name>
+<t>A continuity token enables stateful relationships across sessions
+without requiring the vendor to retain state.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>schema_type</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Schema.org type describing the encrypted payload shape</td>
+</tr>
+
+<tr>
+<td><tt>vendor_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the vendor that issued this token</td>
+</tr>
+
+<tr>
+<td><tt>encrypted_payload</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Vendor-encrypted state (opaque to orchestrator)</td>
+</tr>
+
+<tr>
+<td><tt>ttl</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Expiry timestamp, set by the principal</td>
+</tr>
+
+<tr>
+<td><tt>issued_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Issuance timestamp</td>
+</tr>
+</tbody>
+</table>
+<section anchor="s-13-3-1-continuity-token-lifecycle"><name>13.3.1. Continuity Token Lifecycle</name>
+
+<ol spacing="compact">
+<li>At session close, the vendor encrypts its internal state and
+returns it as a continuity token to the orchestrator.</li>
+<li>The orchestrator stores the token locally. The vendor retains
+nothing.</li>
+<li>When the principal returns, the orchestrator presents the token
+to the vendor.</li>
+<li>The vendor decrypts the payload and resumes the relationship.</li>
+<li>The principal controls the TTL. The vendor MUST NOT set or
+extend the TTL.</li>
+<li>To sever the relationship, the principal deletes the token. No
+revocation notice is required.</li>
+</ol>
+</section>
+
+<section anchor="s-13-3-2-continuity-token-properties"><name>13.3.2. Continuity Token Properties</name>
+
+<ul spacing="compact">
+<li>The <tt>schema_type</tt> MUST be inspectable by the orchestrator without
+decrypting the payload.</li>
+<li>The vendor MUST NOT be able to write to the continuity token
+without the principal presenting it.</li>
+<li>The encrypted payload format is vendor-defined and opaque to the
+protocol.</li>
+</ul>
+</section>
+</section>
+
+<section anchor="s-13-4-auto-approval-policies"><name>Auto-Approval Policies</name>
+<t>An auto-approval policy allows the principal to pre-authorize
+certain categories of actions without per-transaction approval.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>name</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Human-readable policy name</td>
+</tr>
+
+<tr>
+<td><tt>scope</tt></td>
+<td>Scope</td>
+<td>REQUIRED</td>
+<td>Subset of the mandate scope this policy applies to</td>
+</tr>
+
+<tr>
+<td><tt>max_value</tt></td>
+<td>Number or null</td>
+<td>OPTIONAL</td>
+<td>Maximum transaction value for auto-approval (currency-agnostic)</td>
+</tr>
+
+<tr>
+<td><tt>zero_additional_disclosure</tt></td>
+<td>Boolean</td>
+<td>REQUIRED</td>
+<td>If true, auto-approve only when zero additional disclosure is required beyond the mandate</td>
+</tr>
+
+<tr>
+<td><tt>authored_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Timestamp when the principal authored this policy</td>
+</tr>
+</tbody>
+</table>
+<section anchor="s-13-4-1-auto-approval-constraints"><name>13.4.1. Auto-Approval Constraints</name>
+
+<ul spacing="compact">
+<li>The policy scope MUST be contained by the mandate scope
+(Section 5.4.5). A policy MUST NOT be more permissive than the
+mandate.</li>
+<li>Policies are principal-authored and orchestrator-enforced. An
+agent MUST NOT trigger a policy change by requesting it.</li>
+<li><tt>zero_additional_disclosure</tt> defaults to true. When true, the
+orchestrator MUST auto-approve only when the agent's disclosure
+requirements are fully covered by the existing mandate.</li>
+<li>If <tt>max_value</tt> is set and the transaction value exceeds it, the
+orchestrator MUST request explicit principal approval.</li>
+</ul>
+</section>
+</section>
+
+<section anchor="s-13-5-m-of-n-social-recovery"><name>M-of-N Social Recovery</name>
+<t>Principal identity recovery via a designated notary quorum. No central
+recovery authority. The principal designates N notary DIDs at setup
+time; any M co-signers from that set can authorize key rotation.</t>
+
+<section anchor="s-13-5-1-recovery-mandate"><name>13.5.1. Recovery Mandate</name>
+<t>A principal creates a <tt>RecoveryMandate</tt> while they still control their
+key, designating the notary set and threshold.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>principal_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the principal creating the mandate</td>
+</tr>
+
+<tr>
+<td><tt>threshold</tt></td>
+<td>Integer</td>
+<td>REQUIRED</td>
+<td>M: minimum co-signatures required (1 &lt;= M &lt;= N)</td>
+</tr>
+
+<tr>
+<td><tt>notary_dids</tt></td>
+<td>Array&lt;String&gt;</td>
+<td>REQUIRED</td>
+<td>N designated notary DIDs (no duplicates)</td>
+</tr>
+
+<tr>
+<td><tt>created_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Mandate creation timestamp</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ed25519 signature by the principal</td>
+</tr>
+</tbody>
+</table><t>Constraints:
+- <tt>threshold</tt> MUST be >= 1 and &lt;= <tt>notary_dids.length</tt>.
+- <tt>notary_dids</tt> MUST NOT contain duplicate entries.
+- The mandate MUST be signed by the principal's current key.
+- Only one recovery mandate per principal DID. A new mandate
+  replaces any previous one.</t>
+</section>
+
+<section anchor="s-13-5-2-recovery-request"><name>13.5.2. Recovery Request</name>
+<t>When recovery is needed, a <tt>RecoveryRequest</tt> is created identifying
+the old principal, the new principal keypair, and the authorizing
+recovery mandate.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>old_principal_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the principal being recovered</td>
+</tr>
+
+<tr>
+<td><tt>new_principal_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the new principal keypair</td>
+</tr>
+
+<tr>
+<td><tt>recovery_mandate_hash</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>SHA-256 hash of the authorizing RecoveryMandate</td>
+</tr>
+
+<tr>
+<td><tt>requested_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Request timestamp</td>
+</tr>
+</tbody>
+</table><t>The canonical bytes of the recovery request are the message that each
+notary signs independently.</t>
+</section>
+
+<section anchor="s-13-5-3-partial-recovery-signature-blind"><name>13.5.3. Partial Recovery Signature (Blind)</name>
+<t>Each notary signs the recovery request independently. Notaries MUST
+NOT communicate with each other during recovery -- they learn nothing
+about which other notaries have been contacted (threshold blind
+signature scheme).</t>
+<t>Before signing, a notary MUST verify:
+1. The recovery mandate was signed by the old principal.
+2. The notary's own DID is in the designated notary set.
+3. The request references the correct recovery mandate hash.
+4. The request's <tt>old_principal_did</tt> matches the mandate.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>notary_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>DID of the signing notary</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ed25519 signature over the RecoveryRequest canonical bytes</td>
+</tr>
+
+<tr>
+<td><tt>signed_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Timestamp of the notary's signature</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-13-5-4-recovery-proof-assembly"><name>13.5.4. Recovery Proof Assembly</name>
+<t>A recovery coordinator collects M partial signatures and assembles a
+<tt>RecoveryProof</tt>. Verification of the proof MUST check:</t>
+
+<ol spacing="compact">
+<li>The recovery mandate was signed by the old principal.</li>
+<li>At least M partial signatures are present.</li>
+<li>All signers are in the designated notary set.</li>
+<li>No duplicate signers.</li>
+<li>All partial signatures are cryptographically valid.</li>
+</ol>
+</section>
+
+<section anchor="s-13-5-5-revocation-proof-and-broadcast"><name>13.5.5. Revocation Proof and Broadcast</name>
+<t>After successful recovery, a <tt>RevocationProof</tt> is created and
+broadcast to federation peers.</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>old_principal_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>The revoked DID</td>
+</tr>
+
+<tr>
+<td><tt>new_principal_did</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>The replacement DID</td>
+</tr>
+
+<tr>
+<td><tt>recovery_proof_hash</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>SHA-256 hash of the RecoveryProof</td>
+</tr>
+
+<tr>
+<td><tt>revoked_at</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Revocation timestamp</td>
+</tr>
+
+<tr>
+<td><tt>signature</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Ed25519 signature by the new principal key</td>
+</tr>
+</tbody>
+</table><t>The revocation proof MUST be signed by the new principal key (proving
+possession). Federation peers that receive a valid revocation MUST:
+- Mark the old principal DID as revoked.
+- Reject any future operations using the old DID.
+- Remove the old recovery mandate from their NotarySet.</t>
+</section>
+
+<section anchor="s-13-5-6-notaryset-registry"><name>13.5.6. NotarySet Registry</name>
+<t>Each federation node maintains a <tt>NotarySet</tt> -- a registry of recovery
+mandates queryable by principal DID. The NotarySet:
+- Stores signed recovery mandates.
+- Tracks revoked principal DIDs.
+- Rejects mandate registration for already-revoked DIDs.
+- Processes revocation broadcasts from federation peers.</t>
+</section>
+
+<section anchor="s-13-5-7-security-properties"><name>13.5.7. Security Properties</name>
+
+<ul spacing="compact">
+<li><strong>No central authority.</strong> Recovery requires M independent notaries.</li>
+<li><strong>Blind co-signing.</strong> Notaries do not learn which other notaries
+participate in a recovery event.</li>
+<li><strong>Old key revocation.</strong> The old principal DID is cryptographically
+revoked and broadcast to all federation peers.</li>
+<li><strong>Notary set immutability.</strong> The notary set is fixed at mandate
+creation time by the principal. It cannot be modified without
+creating a new mandate signed by the principal.</li>
+<li><strong>Threshold enforcement.</strong> Fewer than M signatures MUST be rejected.
+Duplicate signers MUST be rejected.</li>
+</ul>
+</section>
+</section>
+
+<section anchor="s-13-6-tee-attestation"><name>TEE Attestation</name>
+<t>A mandate or session MAY carry a Trusted Execution Environment
+(TEE) attestation to provide evidence that an agent is executing
+within an isolated enclave. TEE attestation is OPTIONAL and does
+NOT elevate a TEE to equivalence with local trust (Section 3.4).</t>
+
+<section anchor="s-13-6-1-attestation-object"><name>13.6.1. Attestation Object</name>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>enclave_type</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>TEE platform identifier (e.g., <tt>"sgx"</tt>, <tt>"sev-snp"</tt>, <tt>"trustzone"</tt>)</td>
+</tr>
+
+<tr>
+<td><tt>measurement</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Enclave measurement hash (base64url-no-pad)</td>
+</tr>
+
+<tr>
+<td><tt>attestation_report</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Platform-specific attestation report (base64url-no-pad)</td>
+</tr>
+
+<tr>
+<td><tt>timestamp</tt></td>
+<td>DateTime</td>
+<td>REQUIRED</td>
+<td>Attestation generation timestamp (RFC 3339)</td>
+</tr>
+
+<tr>
+<td><tt>nonce</tt></td>
+<td>String</td>
+<td>REQUIRED</td>
+<td>Challenge nonce binding this attestation to the current session (UUID v4)</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-13-6-2-attestation-verification"><name>13.6.2. Attestation Verification</name>
+<t>A verifier MUST:</t>
+
+<ol spacing="compact">
+<li>Verify the <tt>attestation_report</tt> against the TEE platform's
+root of trust (platform-specific, out of scope).</li>
+<li>Verify that <tt>measurement</tt> matches an expected enclave binary
+hash (implementation-defined allowlist).</li>
+<li>Verify that <tt>nonce</tt> matches the session's challenge nonce.</li>
+<li>Verify that <tt>timestamp</tt> is within an acceptable window
+(implementations SHOULD reject attestations older than 60
+seconds).</li>
+</ol>
+</section>
+
+<section anchor="s-13-6-3-trust-boundaries"><name>13.6.3. Trust Boundaries</name>
+<t>TEE attestation provides evidence of code integrity, not
+behavioral correctness. Specifically:</t>
+
+<ul spacing="compact">
+<li>A TEE attestation MUST NOT be treated as equivalent to a
+mandate. An agent in a TEE still requires a valid mandate chain.</li>
+<li>A TEE attestation MUST NOT be used to expand scope beyond what
+the mandate permits.</li>
+<li>The principal MAY use TEE attestation as an input to
+auto-approval policies (Section 13.4) but MUST NOT be required
+to accept TEE attestation as a substitute for consent.</li>
+</ul>
+</section>
+
+<section anchor="s-13-6-4-implementation-notes"><name>13.6.4. Implementation Notes</name>
+<t>The reference implementation provides TEE attestation support via
+the <tt>pap-tee</tt> crate, which is compiled only when opted into as a
+dependency. Integration with <tt>pap-core</tt> is gated behind the <tt>tee</tt>
+Cargo feature flag.</t>
+
+<ul spacing="compact">
+<li><strong><tt>pap-tee</tt> crate</strong>: Defines <tt>AttestationEvidence</tt>,
+<tt>EnclaveType</tt>, the <tt>AttestationVerifier</tt> trait, and a
+<tt>SoftwareSimulator</tt> for integration testing without hardware.</li>
+<li><strong><tt>pap-core</tt> <tt>tee</tt> feature</strong>: Adds an optional <tt>attestation</tt>
+field to <tt>Session</tt> and provides <tt>open_with_attestation()</tt>.</li>
+<li><strong><tt>ProtocolMessage::TokenAccepted</tt></strong>: Carries an optional
+<tt>attestation</tt> field as opaque JSON (<tt>serde_json::Value</tt>).
+Receivers parse it via <tt>AttestationEvidence::from_value()</tt>.</li>
+</ul>
+<t>The <tt>SoftwareSimulator</tt> uses <tt>EnclaveType::Software</tt> and signs
+attestation reports with an Ed25519 key. It is intended for
+conformance testing (Appendix D, tests E-13 through E-15) and
+MUST NOT be deployed in production.</t>
+</section>
+</section>
+
+<section anchor="s-13-7-payment-proof-validation"><name>Payment Proof Validation</name>
+<t>Section 13.1 defines the payment proof integration point. This
+section specifies the validation requirements that a conformant
+implementation MUST satisfy when payment proofs are present.</t>
+
+<section anchor="s-13-7-1-proof-format-registry"><name>13.7.1. Proof Format Registry</name>
+<t>PAP defines the following payment proof format prefixes:</t>
+<table>
+<thead>
+<tr>
+<th>Prefix</th>
+<th>Protocol</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>ecash:blind:v1:</tt></td>
+<td>Chaumian ecash</td>
+<td>Blind-signed mint tokens (Section 13.1)</td>
+</tr>
+
+<tr>
+<td><tt>ln:preimage:v1:</tt></td>
+<td>Lightning Network</td>
+<td>Hash preimage proof of payment</td>
+</tr>
+
+<tr>
+<td><tt>zk:receipt:v1:</tt></td>
+<td>Zero-knowledge proof</td>
+<td>ZK proof of value transfer</td>
+</tr>
+</tbody>
+</table><t>Implementations MAY support additional formats using the
+<tt>pap:payment:</tt> namespace prefix.</t>
+</section>
+
+<section anchor="s-13-7-2-validation-requirements"><name>13.7.2. Validation Requirements</name>
+<t>A receiving agent that requires payment MUST:</t>
+
+<ol spacing="compact">
+<li>Parse the <tt>payment_proof</tt> field and identify the format prefix.</li>
+<li>If the format is not supported, reject the mandate with a
+<tt>PaymentFormatUnsupported</tt> error.</li>
+<li>Verify the proof against the appropriate payment backend
+(mint, Lightning node, or ZK verifier). The verification
+protocol is out of scope for this specification.</li>
+<li>Verify that the proof amount meets the agent's minimum
+requirement for the requested action.</li>
+<li>Verify that the proof has not been previously consumed
+(double-spend protection).</li>
+</ol>
+</section>
+
+<section anchor="s-13-7-3-privacy-requirements"><name>13.7.3. Privacy Requirements</name>
+
+<ul spacing="compact">
+<li>Payment proof verification MUST NOT reveal the payer's
+identity to the payment backend.</li>
+<li>The receiving agent MUST NOT store payment proofs beyond the
+session duration unless required by applicable law.</li>
+<li>Payment proofs MUST NOT appear in transaction receipts
+(Section 11.5).</li>
+</ul>
+</section>
+</section>
+
+<section anchor="s-13-8-chat-and-real-time-communication"><name>Chat and Real-Time Communication</name>
+
+<section anchor="s-13-8-1-overview"><name>13.8.1. Overview</name>
+<t>PAP provides a natural foundation for zero-trust, privacy-preserving
+real-time communication between principals. A personal agent MAY
+advertise <tt>schema:CommunicateAction</tt> in the federation registry -- exactly
+as a service agent advertises <tt>schema:SearchAction</tt>. This makes a
+principal discoverable for chat without requiring a phone number,
+email address, or centrally-administered identity. Discoverability is
+opt-in, scoped, and revocable through the standard mandate system.</t>
+<t>Chat is not a new protocol. It is the <strong>Phase 4 streaming extension</strong> of
+the standard 6-phase handshake, applied to a <tt>schema:CommunicateAction</tt>
+session.</t>
+</section>
+
+<section anchor="s-13-8-2-capability-grant"><name>13.8.2. Capability Grant</name>
+<t>A <tt>CapabilityToken</tt> scoped to <tt>schema:CommunicateAction</tt> MUST be issued
+by the initiating principal (or a delegated orchestrator) and signed with
+a principal key. The token:</t>
+
+<ul spacing="compact">
+<li>MUST set <tt>action = "schema:CommunicateAction"</tt>.</li>
+<li>MUST set <tt>target_did</tt> to the receiving principal's agent DID.</li>
+<li>MAY set a <tt>ttl</tt> appropriate for the conversation duration.</li>
+<li>MAY carry a <tt>scope</tt> restricting the permitted communication modes
+(e.g., <tt>text-only</tt>, <tt>text+audio</tt>, <tt>text+audio+video</tt>).</li>
+</ul>
+</section>
+
+<section anchor="s-13-8-3-phase-4-streaming-mode"><name>13.8.3. Phase 4 Streaming Mode</name>
+<t>After Phase 3 (disclosure), instead of a single task execution,
+the session transitions to <strong>streaming mode</strong>:</t>
+
+<ol>
+<li><t><strong>Phase 4 execute</strong> (client -> server, no payload): the receiving
+agent returns <tt>ExecutionResult</tt> containing a <tt>schema:Conversation</tt>
+JSON-LD object. This signals that the session SHOULD remain open.</t>
+</li>
+<li><t><strong>StreamingMessage frames</strong> (bidirectional, Phase 4): either party
+MAY send <tt>StreamingMessage</tt> frames carrying DIDComm <tt>basicmessage</tt>
+protocol payloads (see Section 13.8.5). Each frame MUST include:</t>
+
+<ul spacing="compact">
+<li><tt>id</tt>: a UUID for ack correlation.</li>
+<li><tt>content</tt>: a JSON object conforming to the DIDComm <tt>basicmessage</tt>
+body schema.</li>
+</ul></li>
+<li><t><strong>StreamingAck</strong> (responding side): upon receiving a <tt>StreamingMessage</tt>,
+the server MUST reply with either a <tt>StreamingAck</tt> (delivery confirmed)
+or a <tt>StreamingMessage</tt> (reply).</t>
+</li>
+<li><t>The session MUST remain open until either party sends <tt>SessionClose</tt>
+(Phase 6). Implementations SHOULD NOT proceed to Phase 5 (receipt
+co-signing) until the conversation is concluded.</t>
+</li>
+</ol>
+</section>
+
+<section anchor="s-13-8-4-message-format-didcomm-basicmessage"><name>13.8.4. Message Format (DIDComm basicmessage)</name>
+<t>The <tt>content</tt> field of each <tt>StreamingMessage</tt> MUST conform to the
+DIDComm <tt>basicmessage</tt> 2.0 protocol body:</t>
+
+<sourcecode type="json">{
+  "type": "https://didcomm.org/basicmessage/2.0/message",
+  "id": "&lt;UUID&gt;",
+  "body": {
+    "content": "&lt;text of message&gt;"
+  }
+}
+</sourcecode>
+<t>The DIDComm wrapping (plaintext, signed, or encrypted) is applied at the
+<tt>Envelope</tt> layer via <tt>PapToDIDComm</tt> (Section 5.6). For chat sessions,
+implementations SHOULD use at minimum <tt>DIDCommSigned</tt> to bind each
+message to the sender's session DID.</t>
+</section>
+
+<section anchor="s-13-8-5-receipt"><name>13.8.5. Receipt</name>
+<t>Upon <tt>SessionClose</tt>, the receipt (Phase 5) MUST record:</t>
+
+<ul spacing="compact">
+<li><tt>action = "schema:CommunicateAction"</tt></li>
+<li><tt>executed</tt>: a summary string, e.g., <tt>"schema:Conversation"</tt>.</li>
+<li><tt>disclosed_by_initiator</tt> / <tt>disclosed_by_receiver</tt>: property
+references only (e.g., <tt>["schema:name"]</tt>). Message <strong>content</strong>
+MUST NOT appear in receipts.</li>
+<li>Both parties' session DIDs as <tt>initiating_agent_did</tt> /
+<tt>receiving_agent_did</tt> (ephemeral, unlinked from principal DIDs).</li>
+</ul>
+</section>
+
+<section anchor="s-13-8-6-group-chat-rooms"><name>13.8.6. Group Chat Rooms</name>
+<t>A group chat room is an agent with its own DID that implements
+<tt>AgentHandler</tt> and maintains one session per member:</t>
+
+<ul spacing="compact">
+<li>The room DID is registered in the federation with
+<tt>capability: ["schema:CommunicateAction"]</tt>.</li>
+<li>The room owner issues a separate <tt>CapabilityToken</tt> to each
+member, all targeting the room DID.</li>
+<li>Each member runs the standard 6-phase handshake against the
+room DID. After Phase 4 (streaming mode open), the room agent
+fans out each <tt>StreamingMessage</tt> to all other connected members.</li>
+<li>Group membership is enforced by the token system: only principals
+holding a valid token may connect. Revocation follows the standard
+mandate revocation flow (Section 8).</li>
+<li>Rooms MAY be hosted locally (Papillon instance) or on any
+federation peer. A room hosted on a federation peer is
+discoverable via its DID advertisement.</li>
+</ul>
+</section>
+
+<section anchor="s-13-8-7-audio-and-video"><name>13.8.7. Audio and Video</name>
+<t>Audio and video calls follow the same pattern as text chat, using
+WebRTC as the media transport:</t>
+
+<ol spacing="compact">
+<li>PAP Phases 1-4 establish identity, authorization, and streaming
+mode. The <tt>CapabilityToken</tt> scope SHOULD include the permitted
+media types (e.g., <tt>text+audio+video</tt>).</li>
+<li><strong>SDP negotiation</strong> is carried via <tt>StreamingMessage</tt> frames:
+the offerer sends a <tt>StreamingMessage</tt> whose <tt>content.body</tt>
+contains the SDP offer; the answerer replies with SDP answer.
+ICE candidates are exchanged as subsequent frames.</li>
+<li>WebRTC DTLS-SRTP establishes the media channel out-of-band.
+PAP does not inspect or relay media.</li>
+<li>Implementations MAY route ICE/TURN through an OHTTP relay to
+conceal participant IP addresses.</li>
+<li>The PAP receipt records call metadata (duration, participant
+session DIDs, permitted media scope) but MUST NOT include
+audio or video content.</li>
+</ol>
+</section>
+
+<section anchor="s-13-8-8-privacy-properties"><name>13.8.8. Privacy Properties</name>
+<t>Chat sessions inherit all PAP privacy guarantees:</t>
+
+<ul spacing="compact">
+<li><strong>Ephemeral session DIDs</strong> -- neither party's principal DID
+appears in message frames or SDP.</li>
+<li><strong>OHTTP relay</strong> -- IP addresses hidden from the relay operator.</li>
+<li><strong>Receipts</strong> -- property references only; no message content.</li>
+<li><strong>Discoverability</strong> -- controlled by the principal's federation
+advertisement; opt-in.</li>
+<li><strong>Forward secrecy</strong> -- DIDComm anoncrypt (<tt>ECDH-ES + A256GCM</tt>)
+MAY be applied to <tt>StreamingMessage</tt> content for per-message
+forward secrecy.</li>
+</ul>
+</section>
+</section>
+</section>
+
+<section anchor="s-14-transport-binding"><name>Transport Binding</name>
+
+<section anchor="s-14-1-http-json-transport"><name>HTTP/JSON Transport</name>
+<t>PAP defines an HTTP/JSON transport binding for the 6-phase
+handshake. This binding is the default transport for PAP v1.0.
+Implementations MAY define additional transport bindings.</t>
+</section>
+
+<section anchor="s-14-2-agent-server-endpoints"><name>Agent Server Endpoints</name>
+<t>A receiving agent MUST expose the following HTTP endpoints:</t>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Phase</th>
+<th>Request</th>
+<th>Response</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>POST</td>
+<td><tt>/session</tt></td>
+<td>1</td>
+<td><tt>TokenPresentation</tt></td>
+<td><tt>TokenAccepted</tt> or <tt>TokenRejected</tt></td>
+</tr>
+
+<tr>
+<td>POST</td>
+<td><tt>/session/{id}/did</tt></td>
+<td>2</td>
+<td><tt>SessionDidExchange</tt></td>
+<td><tt>SessionDidAck</tt></td>
+</tr>
+
+<tr>
+<td>POST</td>
+<td><tt>/session/{id}/disclosure</tt></td>
+<td>3</td>
+<td><tt>DisclosureOffer</tt></td>
+<td><tt>DisclosureAccepted</tt></td>
+</tr>
+
+<tr>
+<td>POST</td>
+<td><tt>/session/{id}/execute</tt></td>
+<td>4</td>
+<td>(empty body)</td>
+<td><tt>ExecutionResult</tt></td>
+</tr>
+
+<tr>
+<td>POST</td>
+<td><tt>/session/{id}/receipt</tt></td>
+<td>5</td>
+<td><tt>ReceiptForCoSign</tt></td>
+<td><tt>ReceiptCoSigned</tt></td>
+</tr>
+
+<tr>
+<td>POST</td>
+<td><tt>/session/{id}/close</tt></td>
+<td>6</td>
+<td><tt>SessionClose</tt></td>
+<td><tt>SessionClosed</tt></td>
+</tr>
+</tbody>
+</table><t>The <tt>{id}</tt> path parameter is the session ID returned in Phase 1.</t>
+</section>
+
+<section anchor="s-14-3-agent-handler-interface"><name>Agent Handler Interface</name>
+<t>Implementations MUST implement a handler interface with the
+following operations:</t>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Phase</th>
+<th>Input</th>
+<th>Output</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>handle_token</tt></td>
+<td>1</td>
+<td>CapabilityToken</td>
+<td>(session_id, receiver_session_did)</td>
+</tr>
+
+<tr>
+<td><tt>handle_did_exchange</tt></td>
+<td>2</td>
+<td>session_id, initiator_session_did</td>
+<td>()</td>
+</tr>
+
+<tr>
+<td><tt>handle_disclosure</tt></td>
+<td>3</td>
+<td>session_id, disclosures</td>
+<td>()</td>
+</tr>
+
+<tr>
+<td><tt>execute</tt></td>
+<td>4</td>
+<td>session_id</td>
+<td>JSON result</td>
+</tr>
+
+<tr>
+<td><tt>co_sign_receipt</tt></td>
+<td>5</td>
+<td>TransactionReceipt</td>
+<td>TransactionReceipt (co-signed)</td>
+</tr>
+
+<tr>
+<td><tt>handle_close</tt></td>
+<td>6</td>
+<td>session_id</td>
+<td>()</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-14-4-endpoint-resolution"><name>Endpoint Resolution</name>
+<t>Endpoint resolution maps a DID to a transport endpoint URL. In
+production, this SHOULD be backed by DID Document <tt>service</tt>
+endpoints. Implementations MAY use in-memory registries for
+development and testing.</t>
+</section>
+
+<section anchor="s-14-5-content-type"><name>Content Type</name>
+<t>All HTTP request and response bodies MUST use <tt>Content-Type:
+application/json</tt>. Implementations SHOULD set <tt>Accept:
+application/json</tt> on requests.</t>
+</section>
+
+<section anchor="s-14-6-error-handling"><name>Error Handling</name>
+<t>If a phase handler returns an error, the server MUST respond with
+HTTP status 500 and a <tt>ProtocolMessage::Error</tt> payload containing
+a <tt>code</tt> and <tt>message</tt>.</t>
+<t>If the request body does not match the expected message type for
+the endpoint, the server MUST respond with HTTP status 400.</t>
+</section>
+
+<section anchor="s-14-7-websocket-transport"><name>WebSocket Transport</name>
+<t>Implementations MAY support a WebSocket transport binding as an
+alternative to the HTTP/JSON binding. The WebSocket binding is
+OPTIONAL and provides full-duplex communication for sessions that
+benefit from lower-latency message exchange.</t>
+
+<section anchor="s-14-7-1-connection-lifecycle"><name>14.7.1. Connection Lifecycle</name>
+
+<ol spacing="compact">
+<li>The initiating agent opens a WebSocket connection to the
+receiving agent's WebSocket endpoint.</li>
+<li>All 6 phases of the session handshake (Section 6.3) are
+conducted as JSON messages over the WebSocket connection.</li>
+<li>Each message MUST be a JSON-serialized <tt>Envelope</tt> (Section 8.2).</li>
+<li>The connection MUST be closed after Phase 6 (session close).</li>
+</ol>
+</section>
+
+<section anchor="s-14-7-2-endpoint-format"><name>14.7.2. Endpoint Format</name>
+<t>A WebSocket endpoint MUST use the <tt>wss://</tt> scheme. Implementations
+MUST NOT use unencrypted <tt>ws://</tt> connections in production.</t>
+<t>The endpoint URL MUST be published in the agent's DID Document
+<tt>service</tt> array with <tt>type</tt> set to <tt>"PAPWebSocket"</tt>:</t>
+
+<sourcecode type="json">{
+  "id": "did:key:z...#pap-ws",
+  "type": "PAPWebSocket",
+  "serviceEndpoint": "wss://agent.example.com/pap/ws"
+}
+</sourcecode>
+</section>
+
+<section anchor="s-14-7-3-message-framing"><name>14.7.3. Message Framing</name>
+<t>Each WebSocket text frame MUST contain exactly one JSON-serialized
+<tt>Envelope</tt>. Binary frames MUST NOT be used. Implementations MUST
+reject connections that send binary frames.</t>
+</section>
+
+<section anchor="s-14-7-4-sequence-enforcement"><name>14.7.4. Sequence Enforcement</name>
+<t>Envelope sequence number rules (Section 8.2.2) apply identically
+over WebSocket. Out-of-order messages MUST be rejected.</t>
+</section>
+</section>
+
+<section anchor="s-14-8-oblivious-http-ohttp-transport"><name>Oblivious HTTP (OHTTP) Transport</name>
+<t>Implementations MAY support Oblivious HTTP [RFC 9458] as a
+transport binding. OHTTP provides request unlinkability at the
+network layer, preventing the receiving agent's operator from
+correlating requests by IP address.</t>
+
+<section anchor="s-14-8-1-architecture"><name>14.8.1. Architecture</name>
+<t>An OHTTP deployment interposes a relay between the initiating
+agent and the receiving agent:</t>
+
+<artwork>Initiator -&gt; OHTTP Relay -&gt; Receiving Agent (Gateway)
+</artwork>
+<t>The relay sees the initiator's IP but not the request content.
+The receiving agent sees the request content but not the
+initiator's IP.</t>
+</section>
+
+<section anchor="s-14-8-2-encapsulation"><name>14.8.2. Encapsulation</name>
+<t>Each PAP protocol message MUST be encapsulated as an OHTTP
+Binary HTTP request targeting the corresponding HTTP/JSON
+endpoint (Section 14.2). The <tt>Content-Type</tt> MUST remain
+<tt>application/json</tt>.</t>
+</section>
+
+<section anchor="s-14-8-3-key-configuration"><name>14.8.3. Key Configuration</name>
+<t>The receiving agent MUST publish its OHTTP key configuration
+in its DID Document <tt>service</tt> array with <tt>type</tt> set to
+<tt>"PAPObliviousHTTP"</tt>:</t>
+
+<sourcecode type="json">{
+  "id": "did:key:z...#pap-ohttp",
+  "type": "PAPObliviousHTTP",
+  "serviceEndpoint": "https://agent.example.com/pap/ohttp",
+  "ohttpKeyConfig": "&lt;base64url-encoded-key-config&gt;"
+}
+</sourcecode>
+</section>
+
+<section anchor="s-14-8-4-relay-selection"><name>14.8.4. Relay Selection</name>
+<t>The initiating agent selects the OHTTP relay. The relay MUST
+NOT be operated by the same entity as the receiving agent. The
+protocol does not define relay discovery; implementations
+SHOULD allow the principal to configure trusted relays.</t>
+</section>
+</section>
+
+<section anchor="s-14-9-didcomm-transport"><name>DIDComm Transport</name>
+<t>Implementations MAY support DIDComm Messaging v2 [DIDCOMM-V2]
+as a transport binding. DIDComm provides authenticated encryption
+at the message layer, enabling transport-independent secure
+messaging between agents identified by DIDs.</t>
+
+<section anchor="s-14-9-1-message-mapping"><name>14.9.1. Message Mapping</name>
+<t>Each PAP protocol message (Section 8.1) MUST be wrapped in a
+DIDComm plaintext message with the following mapping:</t>
+<table>
+<thead>
+<tr>
+<th>DIDComm Field</th>
+<th>Value</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>type</tt></td>
+<td><tt>https://pap.dev/protocol/1.0/{message_type}</tt></td>
+</tr>
+
+<tr>
+<td><tt>from</tt></td>
+<td>Sender's DID (session DID after Phase 2)</td>
+</tr>
+
+<tr>
+<td><tt>to</tt></td>
+<td>Array containing recipient's DID</td>
+</tr>
+
+<tr>
+<td><tt>body</tt></td>
+<td>The PAP protocol message payload</td>
+</tr>
+
+<tr>
+<td><tt>created_time</tt></td>
+<td>Envelope timestamp (Unix epoch seconds)</td>
+</tr>
+</tbody>
+</table><t>Where <tt>{message_type}</tt> is the lowercase, hyphenated form of the
+PAP message type (e.g., <tt>token-presentation</tt>, <tt>session-did-exchange</tt>).</t>
+</section>
+
+<section anchor="s-14-9-2-encryption"><name>14.9.2. Encryption</name>
+<t>DIDComm messages MUST use authenticated encryption (authcrypt)
+after Phase 2 when both session DIDs are known. Phase 1 messages
+MAY use anonymous encryption (anoncrypt) since the initiator's
+session DID is not yet established.</t>
+</section>
+
+<section anchor="s-14-9-3-service-endpoint"><name>14.9.3. Service Endpoint</name>
+<t>A DIDComm-capable agent MUST publish a DIDComm service endpoint
+in its DID Document:</t>
+
+<sourcecode type="json">{
+  "id": "did:key:z...#pap-didcomm",
+  "type": "DIDCommMessaging",
+  "serviceEndpoint": {
+    "uri": "https://agent.example.com/pap/didcomm",
+    "accept": ["didcomm/v2"]
+  }
+}
+</sourcecode>
+</section>
+</section>
+
+<section anchor="s-14-10-transport-negotiation"><name>Transport Negotiation</name>
+<t>When an agent supports multiple transport bindings, the initiating
+agent MUST select a transport by inspecting the receiving agent's
+DID Document <tt>service</tt> array. The preference order SHOULD be:</t>
+
+<ol spacing="compact">
+<li>OHTTP (strongest privacy properties)</li>
+<li>DIDComm (authenticated encryption at message layer)</li>
+<li>WebSocket (lower latency for interactive sessions)</li>
+<li>HTTP/JSON (default, widest compatibility)</li>
+</ol>
+<t>If the receiving agent's DID Document contains no <tt>service</tt>
+entries, the initiating agent MUST fall back to HTTP/JSON with
+endpoint resolution (Section 14.4).</t>
+</section>
+
+<section anchor="s-14-11-didcomm-v2-envelope-compatibility"><name>DIDComm v2 Envelope Compatibility</name>
+<t>PAP defines an optional DIDComm v2 envelope compatibility layer
+that wraps PAP protocol envelopes inside DIDComm v2 message
+formats. This allows PAP agents to interoperate with
+DIDComm-native agents without changing the PAP protocol itself.
+This section specifies the detailed wire formats used by the
+DIDComm transport binding (Section 14.9).</t>
+
+<section anchor="s-14-11-1-design-principles"><name>14.11.1. Design Principles</name>
+
+<ul spacing="compact">
+<li>PAP mandate, session, and receipt semantics are fully preserved.</li>
+<li>Only the outer transport envelope changes; the inner PAP
+<tt>Envelope</tt> (including its Ed25519 signature) travels intact
+inside the DIDComm message body.</li>
+<li>The DIDComm layer provides additional transport-level integrity
+(JWS) or confidentiality (JWE) on top of PAP's own signatures.</li>
+<li>This is a shim -- existing <tt>pap-transport</tt> behavior is unaffected.</li>
+</ul>
+</section>
+
+<section anchor="s-14-11-2-plaintext-messages"><name>14.11.2. Plaintext Messages</name>
+<t>A PAP envelope is wrapped in a DIDComm v2 plaintext message:</t>
+
+<sourcecode type="json">{
+  "id": "&lt;uuid&gt;",
+  "typ": "application/didcomm-plain+json",
+  "type": "https://pap.baur.dev/proto/1.0/&lt;message-slug&gt;",
+  "from": "&lt;sender-did&gt;",
+  "to": ["&lt;recipient-did&gt;"],
+  "created_time": &lt;unix-timestamp&gt;,
+  "body": { &lt;full PAP Envelope as JSON&gt; }
+}
+</sourcecode>
+<t>The <tt>type</tt> field uses PAP message type URIs under the namespace
+<tt>https://pap.baur.dev/proto/1.0/</tt>, with kebab-case slugs derived
+from the <tt>ProtocolMessage</tt> variant name (e.g., <tt>session-did-ack</tt>,
+<tt>execution-result</tt>, <tt>token-presentation</tt>).</t>
+<t>The <tt>body</tt> field contains the complete PAP <tt>Envelope</tt> including
+its <tt>signature</tt> field, so the receiving agent can verify the
+PAP-level signature independently of the DIDComm layer.</t>
+</section>
+
+<section anchor="s-14-11-3-signed-messages-ed25519-jws"><name>14.11.3. Signed Messages (Ed25519 JWS)</name>
+<t>A signed DIDComm v2 message uses JWS General JSON Serialization
+(RFC 7515) with the <tt>EdDSA</tt> algorithm (RFC 8037):</t>
+
+<sourcecode type="json">{
+  "payload": "&lt;base64url(plaintext-json)&gt;",
+  "signatures": [{
+    "protected": "&lt;base64url({\"typ\":\"application/didcomm-signed+json\",\"alg\":\"EdDSA\"})&gt;",
+    "signature": "&lt;base64url(Ed25519-signature)&gt;"
+  }]
+}
+</sourcecode>
+<t>The signing input is <tt>ASCII(protected) || '.' || ASCII(payload)</tt>
+where both values are base64url-encoded without padding (RFC 4648
+Section 5). The signature is computed with Ed25519 (RFC 8032).</t>
+<t>Verifiers MUST reject messages where:
+- The <tt>alg</tt> header value is not <tt>"EdDSA"</tt>.
+- The signature does not verify against the expected key.
+- The decoded payload is not valid DIDComm v2 plaintext JSON.</t>
+</section>
+
+<section anchor="s-14-11-4-encrypted-messages-ecdh-es-a256gcm-jwe"><name>14.11.4. Encrypted Messages (ECDH-ES + A256GCM JWE)</name>
+<t>An encrypted DIDComm v2 message uses JWE JSON Serialization with
+anonymous encryption (anoncrypt):</t>
+
+<ul spacing="compact">
+<li><strong>Key Agreement</strong>: <tt>ECDH-ES</tt> (direct, no key wrapping) via
+X25519 Diffie-Hellman. The sender generates an ephemeral X25519
+keypair. The recipient's Ed25519 public key is converted to
+X25519 using the Edwards-to-Montgomery birational map.</li>
+<li><strong>Key Derivation</strong>: Concat KDF (NIST SP 800-56A Section 5.8.1)
+with <tt>algId = "A256GCM"</tt>, empty <tt>apu</tt>, and
+<tt>apv = SHA-256(recipient-did)</tt>.</li>
+<li><strong>Content Encryption</strong>: AES-256-GCM with a random 96-bit IV.
+The base64url-encoded protected header serves as Additional
+Authenticated Data (AAD).</li>
+</ul>
+
+<sourcecode type="json">{
+  "protected": "&lt;base64url(header-json)&gt;",
+  "recipients": [{
+    "header": { "kid": "&lt;recipient-did&gt;" },
+    "encrypted_key": ""
+  }],
+  "iv": "&lt;base64url(96-bit-nonce)&gt;",
+  "ciphertext": "&lt;base64url(aes-gcm-ciphertext)&gt;",
+  "tag": "&lt;base64url(128-bit-auth-tag)&gt;"
+}
+</sourcecode>
+<t>The protected header contains:</t>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>typ</tt></td>
+<td><tt>"application/didcomm-encrypted+json"</tt></td>
+</tr>
+
+<tr>
+<td><tt>alg</tt></td>
+<td><tt>"ECDH-ES"</tt></td>
+</tr>
+
+<tr>
+<td><tt>enc</tt></td>
+<td><tt>"A256GCM"</tt></td>
+</tr>
+
+<tr>
+<td><tt>epk</tt></td>
+<td><tt>{"kty":"OKP","crv":"X25519","x":"&lt;base64url-pubkey&gt;"}</tt></td>
+</tr>
+
+<tr>
+<td><tt>apv</tt></td>
+<td><tt>"&lt;base64url(SHA-256(recipient-did))&gt;"</tt></td>
+</tr>
+</tbody>
+</table><t>The <tt>encrypted_key</tt> field is empty for ECDH-ES direct key
+agreement (the content encryption key is derived directly from
+the shared secret).</t>
+</section>
+
+<section anchor="s-14-11-5-ed25519-to-x25519-key-conversion"><name>14.11.5. Ed25519 to X25519 Key Conversion</name>
+<t>DIDComm v2 encryption requires X25519 keys for key agreement.
+PAP agents use Ed25519 keys (via <tt>did:key</tt>). The conversion is:</t>
+
+<ul spacing="compact">
+<li><strong>Public key</strong>: Decompress the Ed25519 compressed Edwards Y
+coordinate, then apply the Edwards-to-Montgomery birational map
+to obtain the X25519 public key (32 bytes).</li>
+<li><strong>Private key</strong>: Compute <tt>SHA-512(Ed25519-seed)[0..32]</tt>. The
+X25519 library applies standard clamping (clear bits 0-2,
+clear bit 255, set bit 254).</li>
+</ul>
+<t>This conversion is consistent: the X25519 public key derived from
+the converted private key matches the X25519 public key derived
+from the original Ed25519 public key.</t>
+</section>
+
+<section anchor="s-14-11-6-translation-rules"><name>14.11.6. Translation Rules</name>
+<table>
+<thead>
+<tr>
+<th>Direction</th>
+<th>Operation</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>PAP -> DIDComm Plaintext</td>
+<td>Serialize PAP <tt>Envelope</tt> into DIDComm <tt>body</tt></td>
+</tr>
+
+<tr>
+<td>PAP -> DIDComm Signed</td>
+<td>Build plaintext, then apply Ed25519 JWS</td>
+</tr>
+
+<tr>
+<td>PAP -> DIDComm Encrypted</td>
+<td>Build plaintext, then apply ECDH-ES + A256GCM JWE</td>
+</tr>
+
+<tr>
+<td>DIDComm Plaintext -> PAP</td>
+<td>Deserialize <tt>body</tt> field as PAP <tt>Envelope</tt></td>
+</tr>
+
+<tr>
+<td>DIDComm Signed -> PAP</td>
+<td>Verify JWS, then extract PAP <tt>Envelope</tt> from body</td>
+</tr>
+
+<tr>
+<td>DIDComm Encrypted -> PAP</td>
+<td>Decrypt JWE, then extract PAP <tt>Envelope</tt> from body</td>
+</tr>
+</tbody>
+</table><t>In all cases, the PAP <tt>Envelope.signature</tt> field (if present)
+remains intact and can be verified independently using the
+session's ephemeral key.</t>
+</section>
+</section>
+</section>
+
+<section anchor="s-15-pap-uri-scheme"><name>PAP URI Scheme</name>
+
+<section anchor="s-15-1-overview"><name>Overview</name>
+<t>The <tt>pap</tt> URI scheme identifies agents, capabilities, and resources within
+the Principal Agent Protocol. A <tt>pap://</tt> URI is always an expression of
+<strong>intent</strong> -- resolving one initiates a PAP mandate-scoped interaction, not
+a raw network request.</t>
+<t>The scheme family consists of three variants:</t>
+<table>
+<thead>
+<tr>
+<th>Scheme</th>
+<th>Meaning</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>pap://</tt></td>
+<td>PAP-native transport; client negotiates protocol</td>
+</tr>
+
+<tr>
+<td><tt>pap+https://</tt></td>
+<td>PAP mandate scope applied over HTTPS transport</td>
+</tr>
+
+<tr>
+<td><tt>pap+wss://</tt></td>
+<td>PAP mandate scope applied over WebSocket transport</td>
+</tr>
+</tbody>
+</table><t><tt>pap+https://</tt> and <tt>pap+wss://</tt> are <strong>recapture schemes</strong>. They apply PAP
+semantics -- mandate enforcement, selective disclosure, co-signed receipts --
+to existing transports. The remote endpoint does not need to implement PAP.
+The client enforces the protocol locally. A <tt>pap+https://</tt> URI is still an
+HTTPS request under the hood; the principal's mandate scope wraps it
+regardless of whether the server is PAP-aware.</t>
+</section>
+
+<section anchor="s-15-2-syntax"><name>Syntax</name>
+
+<sourcecode type="abnf">pap-uri         = pap-scheme "://" pap-authority pap-path [ "?" pap-query ]
+
+pap-scheme      = "pap" / "pap+https" / "pap+wss"
+
+pap-authority   = registry-host / did-authority / catalog-name
+
+registry-host   = host [ ":" port ]
+                  ; authority is the hostname only; agent slug appears in path
+
+did-authority   = "did:key:" base58-multicodec-key
+                  ; PAP parsers MUST treat "did:key:" as an atomic authority
+                  ; token. Standard RFC 3986 host parsing (which disallows
+                  ; colons) MUST NOT be applied to did-authority. A PAP URI
+                  ; parser identifies did-authority by the "did:key:" prefix
+                  ; before applying any other rule.
+
+catalog-name    = 1*( ALPHA / DIGIT / "-" / "_" )
+                  ; MUST NOT be a reserved word (receipt, canvas, settings)
+                  ; resolved against local catalog before dispatch
+
+pap-path        = registry-path / simple-path
+
+registry-path   = "/agents/" agent-slug "/" schema-action-type
+simple-path     = "/" schema-action-type
+                  ; Schema.org action type, e.g. "SearchAction"
+
+pap-query       = pap-param *( "&amp;" pap-param )
+pap-param       = schema-property "=" pap-value
+                  ; values MUST be percent-encoded per RFC 3986 Section 2.1
+                  ; "+" MUST NOT be used as a space encoding in pap-query
+</sourcecode>
+<t>Examples:</t>
+
+<artwork>; Networked agent via Chrysalis registry
+pap://chrysalis.example.com/agents/arxiv/SearchAction?query=quantum%20computing
+
+; Direct peer-to-peer via DID (no registry)
+pap://did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK/SearchAction
+
+; Local catalog shorthand -- resolved before dispatch
+pap://arxiv/SearchAction?query=quantum%20computing
+pap://wikipedia/ReadAction?name=Rust%20programming
+
+; Receipt deep-link
+pap://receipt/RCP_abc123
+
+; Recapture schemes -- PAP scope over existing transports
+pap+https://api.example.com/agents/bookings/BuyAction?offer=flight-abc
+pap+wss://stream.example.com/agents/feed/ListenAction
+</artwork>
+</section>
+
+<section anchor="s-15-3-resolution"><name>Resolution</name>
+<t>A conforming client MUST resolve a <tt>pap://</tt> URI using the following
+priority chain, in order:</t>
+
+<ol>
+<li><t><strong>Special authority</strong> -- if the authority is one of the reserved words
+(<tt>receipt</tt>, <tt>canvas</tt>, <tt>settings</tt>), resolve locally without any network
+lookup. See Section 15.7. Do not proceed to subsequent steps.</t>
+</li>
+<li><t><strong><tt>did:key:</tt> authority</strong> -- if the authority begins with <tt>did:key:</tt>,
+resolve directly via DID Document endpoint discovery (Section 14.4).
+No registry lookup. Initiates a PAP handshake with the identified agent.</t>
+</li>
+<li><t><strong>Catalog name</strong> -- if the authority contains no <tt>.</tt> character and does
+not begin with <tt>did:</tt>, the client MUST check its local agent catalog for
+an entry whose <tt>name</tt> field matches the authority (case-insensitive). If
+found, rewrite the URI to the agent's registered DID and resolve via
+step 1.</t>
+</li>
+<li><t><strong>Registry hostname</strong> -- if the authority contains a <tt>.</tt> character, or
+matches <tt>localhost</tt>, or is a valid IPv4 address or IPv6 literal, treat it
+as a Chrysalis registry host. Resolve by querying the registry's
+<tt>/agents/{slug}/</tt> routes (Section 14.1) using the path-embedded agent
+slug, and initiate a PAP handshake with the returned agent endpoint.
+The <tt>.</tt> heuristic MUST NOT be applied to <tt>localhost</tt> or IP literals;
+they are always treated as registry hosts.</t>
+</li>
+</ol>
+<t>If resolution fails at all steps, the client MUST render an inline error in
+place of the activated link, showing the unresolved URI and a human-readable
+explanation. The client MUST NOT navigate away from the current canvas or
+dismiss existing content. The client MUST NOT silently fall back to a raw
+HTTP request.</t>
+</section>
+
+<section anchor="s-15-4-action-type-and-query-parameters"><name>Action Type and Query Parameters</name>
+<t>The action type path segment MUST be a Schema.org action type
+(e.g. <tt>SearchAction</tt>, <tt>BuyAction</tt>, <tt>ReadAction</tt>). For registry URIs the
+full path is <tt>/agents/{slug}/{ActionType}</tt>; for catalog and DID URIs the
+path is <tt>/{ActionType}</tt>. Clients SHOULD use the action type to pre-filter
+agents during resolution -- if a catalog agent does not advertise the
+requested action type in its <tt>capability</tt> array, it MUST NOT be selected.</t>
+<t>Query parameters MUST use Schema.org property names as keys. Values MUST
+be percent-encoded per RFC 3986 Section 2.1; <tt>+</tt> MUST NOT be used as a space
+encoding. Clients MAY pass query parameters directly to the agent as the
+intent payload. Agents MAY ignore unknown parameters.</t>
+</section>
+
+<section anchor="s-15-5-recapture-semantics-pap-https-pap-wss"><name>Recapture Semantics (<tt>pap+https://</tt>, <tt>pap+wss://</tt>)</name>
+<t>When a <tt>pap+https://</tt> or <tt>pap+wss://</tt> URI is resolved:</t>
+
+<ol>
+<li><t>The active mandate scope MUST be checked before the request is made. If
+no mandate is in scope, the client MUST NOT proceed.</t>
+</li>
+<li><t>The request is made over the underlying transport (HTTPS or WSS) with
+the standard PAP session headers included where the server accepts them.</t>
+</li>
+<li><t>The client MUST record what was disclosed and generate a receipt entry
+regardless of whether the server participates in the PAP handshake.</t>
+</li>
+<li><t>The remote endpoint's response is treated as agent output and rendered
+via the standard block renderer pipeline.</t>
+</li>
+</ol>
+<t>For <tt>pap+wss://</tt> URIs, the connection lifecycle (establishment, keepalive,
+and termination) follows the mandate-scoped session lifecycle defined in
+Section 5. Streaming-specific semantics (chunked responses, event framing) are
+deferred to v1.1.</t>
+<t>This allows principals to bring existing web services under PAP governance
+without requiring those services to be modified.</t>
+<t><strong>v1.0 scope note:</strong> In v1.0, <tt>pap+https://</tt> and <tt>pap+wss://</tt> URIs are
+parsed and classified by conforming clients. Full mandate enforcement
+(steps 1-4 above) requires the mandate enforcement layer, which is deferred
+to a post-v1.0 milestone. v1.0 clients MUST NOT silently downgrade a
+<tt>pap+https://</tt> URI to an unscoped HTTPS request. They MUST either enforce
+the mandate or reject the request with a clear principal-visible error
+explaining that recapture enforcement is not yet available.</t>
+</section>
+
+<section anchor="s-15-6-link-rendering"><name>Link Rendering</name>
+<t>Any string value in a JSON-LD agent response that begins with <tt>pap://</tt>,
+<tt>pap+https://</tt>, or <tt>pap+wss://</tt> MUST be rendered as a navigable link by
+conforming clients. Activating such a link MUST dispatch the URI as intent
+through the same pipeline as a principal-typed query -- it is not a browser
+navigation event.</t>
+<t>This enables agent-rendered content to form a navigable graph of
+intent-links without requiring any special page routing. Every link is a
+new PAP interaction.</t>
+<t><strong>Agent-rendered link security:</strong> Clients MUST visually distinguish links
+originating from agent-rendered content from links typed directly by the
+principal. Before dispatching an agent-rendered <tt>pap://</tt> link, clients
+SHOULD display the full URI and the identity of the agent that produced it,
+and require explicit principal confirmation. This prevents injection attacks
+where a malicious or compromised agent response induces the client to
+execute unintended actions.</t>
+<t>Agent-rendered links MUST NOT activate the <tt>settings</tt>, <tt>canvas</tt>, or
+<tt>receipt</tt> special authorities (Section 15.7). Clients MUST silently reject
+such links and MAY log the attempt for principal review.</t>
+</section>
+
+<section anchor="s-15-7-special-authorities"><name>Special Authorities</name>
+<t>The following authority values are reserved and MUST be handled by the
+client without registry or catalog lookup:</t>
+<table>
+<thead>
+<tr>
+<th>Authority</th>
+<th>Meaning</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>receipt</tt></td>
+<td>Deep-link to a receipt by session ID. <tt>pap://receipt/{session-id}</tt> opens the receipt detail view.</td>
+</tr>
+
+<tr>
+<td><tt>canvas</tt></td>
+<td>Deep-link to a canvas block. <tt>pap://canvas/{canvas-id}/{block-id}</tt> navigates to the referenced block.</td>
+</tr>
+
+<tr>
+<td><tt>settings</tt></td>
+<td>Opens the settings panel. <tt>pap://settings/{tab}</tt> opens a specific tab.</td>
+</tr>
+</tbody>
+</table></section>
+</section>
+
+<section anchor="s-16-security-considerations"><name>Security Considerations</name>
+
+<section anchor="s-16-1-cryptographic-algorithms"><name>Cryptographic Algorithms</name>
+<t>PAP v1.0 uses exclusively:</t>
+
+<ul spacing="compact">
+<li><strong>Ed25519</strong> (RFC 8032) for all signatures.</li>
+<li><strong>SHA-256</strong> (FIPS 180-4) for all hashes.</li>
+<li><strong>Base64url without padding</strong> (RFC 4648 Section 5) for all
+binary-to-text encoding.</li>
+<li><strong>Base58btc</strong> for DID key encoding.</li>
+</ul>
+<t>Implementations MUST use these algorithms for PAP v1.0. All signable
+structures carry a <tt>SignatureAlgorithm</tt> field (serialized as the JWS
+<tt>alg</tt> string, e.g. <tt>"EdDSA"</tt>) to enable forward-compatible algorithm
+negotiation. The field defaults to Ed25519 when absent. Implementations
+MUST reject algorithms they do not support. The <tt>did:key</tt> multicodec
+prefix encodes the algorithm of the public key.</t>
+<t>Future versions of this specification MAY introduce additional algorithms
+(e.g., ML-DSA-65 for post-quantum resistance).</t>
+</section>
+
+<section anchor="s-16-2-key-management"><name>Key Management</name>
+
+<ul spacing="compact">
+<li>Principal private keys SHOULD be stored in hardware security
+modules or platform authenticators (WebAuthn). They MUST NOT be
+stored in plaintext in configuration files or environment
+variables in production.</li>
+<li>Session private keys MUST be held only in memory for the
+duration of the session. They MUST NOT be persisted to disk.</li>
+<li>Signing keys for agent operators (used to sign advertisements)
+SHOULD be protected with access controls appropriate to the
+deployment environment.</li>
+</ul>
+</section>
+
+<section anchor="s-16-3-nonce-management"><name>Nonce Management</name>
+
+<ul spacing="compact">
+<li>Capability token nonces MUST be stored in a consumed-nonce set
+for at least the duration of the token's validity period.</li>
+<li>Implementations SHOULD periodically purge expired nonces to
+prevent unbounded growth of the consumed-nonce set.</li>
+<li>If a receiver restarts and loses its consumed-nonce set, it
+SHOULD reject all tokens issued before the restart by comparing
+<tt>issued_at</tt> against its restart timestamp.</li>
+</ul>
+</section>
+
+<section anchor="s-16-4-replay-protection"><name>Replay Protection</name>
+<t>Multiple layers provide replay protection:</t>
+
+<ol spacing="compact">
+<li><strong>Token nonces:</strong> Each capability token has a UUID v4 nonce
+consumed on first use.</li>
+<li><strong>Envelope sequencing:</strong> Sequence numbers are monotonically
+increasing within a session. Out-of-order envelopes MUST be
+rejected.</li>
+<li><strong>Token expiry:</strong> Tokens carry an <tt>expires_at</tt> timestamp.
+Expired tokens MUST be rejected.</li>
+<li><strong>Session ephemerality:</strong> Session keys are discarded at close.
+A replayed session message cannot be verified against the
+original session keys.</li>
+</ol>
+</section>
+
+<section anchor="s-16-5-denial-of-service"><name>Denial of Service</name>
+
+<ul spacing="compact">
+<li>Implementations SHOULD rate-limit token presentation requests
+to prevent resource exhaustion from session initiation floods.</li>
+<li>Federation sync operations SHOULD be rate-limited per peer.</li>
+<li>Marketplace registries SHOULD limit the number of advertisements
+per operator DID.</li>
+</ul>
+</section>
+
+<section anchor="s-16-6-man-in-the-middle"><name>Man-in-the-Middle</name>
+
+<ul spacing="compact">
+<li>After Phase 2 (DID exchange), all envelopes MUST be signed by
+the sender's session key. An attacker who intercepts envelopes
+cannot forge valid signatures without the session private key.</li>
+<li>The initial token presentation (Phase 1) is protected by the
+orchestrator's signature on the capability token. An attacker
+cannot forge a valid token without the orchestrator's private
+key.</li>
+<li>Implementations SHOULD use TLS for all HTTP transport to protect
+against passive eavesdropping.</li>
+</ul>
+</section>
+
+<section anchor="s-16-7-context-leakage"><name>Context Leakage</name>
+
+<ul spacing="compact">
+<li>The <tt>DisclosureOffer</tt> (Phase 3) MUST contain only SD-JWT
+disclosures permitted by the mandate's disclosure set.</li>
+<li>The orchestrator MUST verify that the agent's
+<tt>requires_disclosure</tt> is satisfiable by the mandate before
+issuing a capability token. An agent MUST NOT receive a token
+if its disclosure requirements exceed the principal's
+authorization.</li>
+<li>Receipts MUST NOT contain personal data values (Section 11.5).</li>
+</ul>
+</section>
+
+<section anchor="s-16-8-mandate-chain-depth"><name>Mandate Chain Depth</name>
+<t>Implementations SHOULD enforce a maximum mandate chain depth to
+prevent resource exhaustion during chain verification. A maximum
+depth of 10 is RECOMMENDED.</t>
+</section>
+
+<section anchor="s-16-9-clock-skew"><name>Clock Skew</name>
+
+<ul spacing="compact">
+<li>Implementations MUST use UTC for all timestamps.</li>
+<li>Implementations SHOULD tolerate clock skew of up to 30 seconds
+for token expiry and mandate TTL checks.</li>
+<li>Implementations MAY use NTP or similar time synchronization
+protocols to minimize skew.</li>
+</ul>
+</section>
+
+<section anchor="s-16-10-canonical-json-determinism"><name>Canonical JSON Determinism</name>
+<t>The security of mandate hashing and signature verification depends
+on deterministic JSON serialization. Implementations MUST ensure
+that the canonical JSON form produces identical bytes for the same
+logical content.</t>
+<t>Implementations SHOULD:
+- Use a JSON serializer that produces consistent key ordering.
+- Represent numbers without unnecessary precision.
+- Use RFC 3339 with explicit UTC offset for all timestamps.</t>
+<t>If an implementation cannot guarantee deterministic JSON output,
+it MUST use an alternative canonical form (e.g., JCS [RFC 8785])
+and document the choice.</t>
+</section>
+
+<section anchor="s-16-11-attack-surface-summary"><name>Attack Surface Summary</name>
+<table>
+<thead>
+<tr>
+<th>Attack Vector</th>
+<th>Mitigation</th>
+<th>Spec Section</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>Context profiling</td>
+<td>Ephemeral session DIDs</td>
+<td>4.4, 6.3.2</td>
+</tr>
+
+<tr>
+<td>Over-disclosure</td>
+<td>SD-JWT structural binding + marketplace filtering</td>
+<td>7, 9.3</td>
+</tr>
+
+<tr>
+<td>Replay attacks</td>
+<td>Nonce consumption + envelope sequencing</td>
+<td>6.2.2, 8.2.2</td>
+</tr>
+
+<tr>
+<td>Delegation bypass</td>
+<td>Scope containment + TTL bounds</td>
+<td>5.4.5, 5.5</td>
+</tr>
+
+<tr>
+<td>Mandate tampering</td>
+<td>Parent hash + signature chain</td>
+<td>5.3, 5.6</td>
+</tr>
+
+<tr>
+<td>Platform lock-in</td>
+<td>Federated discovery, no central registry</td>
+<td>10</td>
+</tr>
+
+<tr>
+<td>Payment linkability</td>
+<td>ZK commitments (Lightning BOLT-11, Cashu ecash)</td>
+<td>13.1</td>
+</tr>
+
+<tr>
+<td>Session correlation</td>
+<td>Session keys discarded at close</td>
+<td>4.4, 6.3.6</td>
+</tr>
+
+<tr>
+<td>Stale authorization</td>
+<td>Decay state machine + non-renewal revocation</td>
+<td>5.7</td>
+</tr>
+
+<tr>
+<td>Advertisement spoofing</td>
+<td>Signed advertisements, registry rejects unsigned</td>
+<td>9.4</td>
+</tr>
+
+<tr>
+<td>Retention violation</td>
+<td>TEE attestation for no_retention sessions</td>
+<td>5.4.4.1, 13.6</td>
+</tr>
+
+<tr>
+<td>Vouch ring / Sybil peers</td>
+<td>Vouch budget + age requirement + diverse paths</td>
+<td>10.7.3</td>
+</tr>
+
+<tr>
+<td>Metric-based ranking capture</td>
+<td>Anti-ranking requirement on marketplace queries</td>
+<td>9.6</td>
+</tr>
+</tbody>
+</table></section>
+</section>
+
+</middle><back><section anchor="appendix-a-example-zero-disclosure-search"><name>Example: Zero-Disclosure Search</name>
+<t>This appendix illustrates a complete PAP transaction with zero
+personal disclosure.</t>
+
+<section anchor="a-1-setup"><name>Setup</name>
+
+<artwork>Principal generates keypair -&gt; did:key:zPrincipal
+Orchestrator keypair -&gt; did:key:zOrch
+Search agent operator keypair -&gt; did:key:zSearch
+</artwork>
+</section>
+
+<section anchor="a-2-root-mandate"><name>Root Mandate</name>
+
+<sourcecode type="json">{
+  "principal_did": "did:key:zPrincipal",
+  "agent_did": "did:key:zOrch",
+  "issuer_did": "did:key:zPrincipal",
+  "parent_mandate_hash": null,
+  "scope": {
+    "actions": [{"action": "schema:SearchAction"}]
+  },
+  "disclosure_set": {"entries": []},
+  "ttl": "2026-03-15T20:00:00+00:00",
+  "decay_state": "Active",
+  "issued_at": "2026-03-15T16:00:00+00:00",
+  "payment_proof": null,
+  "signature": "&lt;base64url&gt;"
+}
+</sourcecode>
+</section>
+
+<section anchor="a-3-marketplace-query"><name>Marketplace Query</name>
+
+<artwork>query_satisfiable("schema:SearchAction", available=[])
+  -&gt; [SearchAgent] (requires_disclosure: [])
+  -&gt; Filtered out: agents requiring personal disclosure
+</artwork>
+</section>
+
+<section anchor="a-4-session-handshake"><name>Session Handshake</name>
+
+<artwork>Phase 1: Orchestrator -&gt; SearchAgent: TokenPresentation
+         SearchAgent -&gt; Orchestrator: TokenAccepted(session_id, recv_did)
+
+Phase 2: Orchestrator -&gt; SearchAgent: SessionDidExchange(init_did)
+         SearchAgent -&gt; Orchestrator: SessionDidAck
+
+Phase 3: Orchestrator -&gt; SearchAgent: DisclosureOffer([])
+         SearchAgent -&gt; Orchestrator: DisclosureAccepted
+
+Phase 4: SearchAgent -&gt; Orchestrator: ExecutionResult({...})
+
+Phase 5: Orchestrator -&gt; SearchAgent: ReceiptForCoSign(receipt)
+         SearchAgent -&gt; Orchestrator: ReceiptCoSigned(receipt)
+
+Phase 6: Orchestrator -&gt; SearchAgent: SessionClose
+         SearchAgent -&gt; Orchestrator: SessionClosed
+</artwork>
+</section>
+
+<section anchor="a-5-receipt"><name>Receipt</name>
+
+<sourcecode type="json">{
+  "session_id": "&lt;uuid&gt;",
+  "action": "schema:SearchAction",
+  "initiating_agent_did": "did:key:zInitSess",
+  "receiving_agent_did": "did:key:zRecvSess",
+  "disclosed_by_initiator": [],
+  "disclosed_by_receiver": ["operator:search_executed"],
+  "executed": "schema:SearchAction executed",
+  "returned": "schema:SearchResult returned",
+  "timestamp": "2026-03-15T16:05:00+00:00",
+  "signatures": ["&lt;initiator_sig&gt;", "&lt;receiver_sig&gt;"]
+}
+</sourcecode>
+<t>Zero personal properties disclosed. Both session DIDs are
+ephemeral and discarded. The receipt is auditable but contains
+no personal data.</t>
+</section>
+</section>
+
+<section anchor="appendix-b-example-selective-disclosure-flight-booking"><name>Example: Selective Disclosure Flight Booking</name>
+
+<section anchor="b-1-disclosure-set"><name>Disclosure Set</name>
+
+<sourcecode type="json">{
+  "entries": [{
+    "type": "schema:Person",
+    "permitted_properties": ["schema:name", "schema:nationality"],
+    "prohibited_properties": ["schema:email", "schema:telephone"],
+    "session_only": true,
+    "no_retention": true
+  }]
+}
+</sourcecode>
+</section>
+
+<section anchor="b-2-sd-jwt-claims"><name>SD-JWT Claims</name>
+
+<artwork>Claims: {name: "Alice", email: "alice@example.com",
+         nationality: "US", telephone: "+1-555-0100"}
+Disclosed: [name, nationality]
+Withheld: [email, telephone]  (cryptographically uncommitted)
+</artwork>
+</section>
+
+<section anchor="b-3-marketplace-filtering"><name>Marketplace Filtering</name>
+
+<artwork>SkyBook Flight Agent:  requires [name, nationality]    -&gt; satisfiable
+LuxAir Premium Agent:  requires [name, nationality, email] -&gt; FILTERED OUT
+StayWell Hotel Agent:  wrong object type               -&gt; not matched
+</artwork>
+</section>
+
+<section anchor="b-4-receipt"><name>Receipt</name>
+
+<sourcecode type="json">{
+  "disclosed_by_initiator": [
+    "schema:Person.schema:name",
+    "schema:Person.schema:nationality"
+  ],
+  "disclosed_by_receiver": ["operator:booking_confirmed"]
+}
+</sourcecode>
+<t>Values "Alice" and "US" never appear in the receipt.</t>
+</section>
+</section>
+
+<section anchor="appendix-c-example-4-level-delegation-chain"><name>Example: 4-Level Delegation Chain</name>
+
+<artwork>Level 0: Principal (root of trust)
+Level 1: Orchestrator
+  scope: [Search, Reserve(Flight), Reserve(Lodging), Pay]
+  ttl: 4h
+
+Level 2: Trip Planner (delegated from Orchestrator)
+  scope: [Search, Reserve(Flight)]  (subset of Level 1)
+  ttl: 3h  (&lt; 4h)
+  parent_mandate_hash: hash(Level 1 mandate)
+
+Level 3: Booking Agent (delegated from Trip Planner)
+  scope: [Reserve(Flight)]  (subset of Level 2)
+  ttl: 2h  (&lt; 3h)
+  parent_mandate_hash: hash(Level 2 mandate)
+</artwork>
+<t>Attempted violations:
+- Booking Agent delegates PayAction -&gt; DelegationExceedsScope
+- Booking Agent delegates with TTL &gt; 2h -&gt; DelegationExceedsTtl</t>
+<t>Chain verification: verify_chain([principal_key, orch_key, planner_key])</t>
+</section>
+
+<section anchor="appendix-d-conformance-test-matrix"><name>Conformance Test Matrix</name>
+<t>A conformant PAP v1.0 implementation MUST pass all tests in the
+<strong>Core</strong> category. Tests in the <strong>Extension</strong> category apply only
+when the implementation supports the corresponding extension.</t>
+
+<section anchor="d-1-core-protocol-tests"><name>Core Protocol Tests</name>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Test</th>
+<th>Spec Section</th>
+<th>Requirement</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>C-01</td>
+<td>Root mandate sign and verify</td>
+<td>5.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-02</td>
+<td>Mandate hash determinism (same input produces same hash)</td>
+<td>5.3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-03</td>
+<td>Scope containment: child subset of parent accepted</td>
+<td>5.4.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-04</td>
+<td>Scope containment: child exceeding parent rejected</td>
+<td>5.4.5, 5.5 R1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-05</td>
+<td>Scope containment: child broadening object constraint rejected</td>
+<td>5.4.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-06</td>
+<td>Delegation TTL: child TTL &lt;= parent TTL accepted</td>
+<td>5.5 R2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-07</td>
+<td>Delegation TTL: child TTL &gt; parent TTL rejected</td>
+<td>5.5 R2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-08</td>
+<td>Parent hash binding: correct hash accepted</td>
+<td>5.5 R3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-09</td>
+<td>Parent hash binding: incorrect hash rejected</td>
+<td>5.5 R3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-10</td>
+<td>Issuer chain: child issuer_did == parent agent_did</td>
+<td>5.5 R4</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-11</td>
+<td>Principal propagation: child principal_did == parent principal_did</td>
+<td>5.5 R5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-12</td>
+<td>Root mandate: parent_mandate_hash is null</td>
+<td>5.5 R6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-13</td>
+<td>Mandate chain verification: 2-level chain</td>
+<td>5.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-14</td>
+<td>Mandate chain verification: 3-level chain</td>
+<td>5.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-15</td>
+<td>Mandate chain verification: invalid signature in chain rejected</td>
+<td>5.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-16</td>
+<td>Decay state: Active within TTL</td>
+<td>5.7</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-17</td>
+<td>Decay state: Degraded within decay window</td>
+<td>5.7</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-18</td>
+<td>Decay state: ReadOnly after TTL expiry</td>
+<td>5.7</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-19</td>
+<td>Decay state: Suspended is terminal (no renewal)</td>
+<td>5.7.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-20</td>
+<td>Decay state: invalid transition rejected</td>
+<td>5.7.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-21</td>
+<td>Capability token sign and verify</td>
+<td>6.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-22</td>
+<td>Capability token: wrong target_did rejected</td>
+<td>6.2.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-23</td>
+<td>Capability token: nonce replay rejected</td>
+<td>6.2.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-24</td>
+<td>Capability token: expired token rejected</td>
+<td>6.2.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-25</td>
+<td>Session state machine: Initiated -&gt; Open -&gt; Executed -&gt; Closed</td>
+<td>6.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-26</td>
+<td>Session state machine: invalid transition rejected</td>
+<td>6.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-27</td>
+<td>Session state machine: early termination from Initiated</td>
+<td>6.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-28</td>
+<td>SD-JWT commitment and disclosure verification</td>
+<td>7.4, 7.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-29</td>
+<td>SD-JWT: disclosure hash not in commitment rejected</td>
+<td>7.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-30</td>
+<td>SD-JWT: unsigned commitment rejected</td>
+<td>7.4</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-31</td>
+<td>SD-JWT: zero-disclosure session accepted</td>
+<td>7.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-32</td>
+<td>SD-JWT: partial disclosure (subset of claims)</td>
+<td>7.3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-33</td>
+<td>Envelope sign and verify with session keys</td>
+<td>8.2.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-34</td>
+<td>Envelope: wrong key verification fails</td>
+<td>8.2.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-35</td>
+<td>Envelope: out-of-sequence rejected</td>
+<td>8.2.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-36</td>
+<td>Envelope: tampered payload detected</td>
+<td>8.2.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-37</td>
+<td>Receipt: co-signed by both parties</td>
+<td>11.3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-38</td>
+<td>Receipt: contains property references, not values</td>
+<td>11.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-39</td>
+<td>Receipt: zero-disclosure receipt valid</td>
+<td>11.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-40</td>
+<td>Receipt: wrong key co-sign verification fails</td>
+<td>11.4</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-41</td>
+<td>Advertisement: unsigned advertisement rejected by registry</td>
+<td>9.4</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-42</td>
+<td>Advertisement: content hash deduplication</td>
+<td>9.5, 10.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-43</td>
+<td>Marketplace: query by action returns matching agents</td>
+<td>9.3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-44</td>
+<td>Marketplace: disclosure satisfiability filtering</td>
+<td>9.3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-45</td>
+<td>VC envelope: wrap and unwrap mandate</td>
+<td>12.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-46</td>
+<td>VC envelope: unsigned VC rejected</td>
+<td>12.3</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-47</td>
+<td>Session: no_retention disclosure rejected without TEE attestation</td>
+<td>5.4.4.1</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-48</td>
+<td>Session attestation: sign and verify bilateral attestation</td>
+<td>11.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>C-49</td>
+<td>Session attestation: per-action-type segmentation enforced</td>
+<td>11.6</td>
+<td>MUST</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="d-2-transport-tests"><name>Transport Tests</name>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Test</th>
+<th>Spec Section</th>
+<th>Requirement</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>T-01</td>
+<td>HTTP/JSON: full 6-phase handshake over HTTP</td>
+<td>14.2</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>T-02</td>
+<td>HTTP/JSON: error response with code and message</td>
+<td>14.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>T-03</td>
+<td>HTTP/JSON: wrong message type returns 400</td>
+<td>14.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>T-04</td>
+<td>WebSocket: full 6-phase handshake over WebSocket</td>
+<td>14.7</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>T-05</td>
+<td>WebSocket: binary frame rejected</td>
+<td>14.7.3</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>T-06</td>
+<td>OHTTP: encapsulated request reaches gateway</td>
+<td>14.8</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>T-07</td>
+<td>DIDComm: message mapping roundtrip</td>
+<td>14.9.1</td>
+<td>OPTIONAL</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="d-3-extension-tests"><name>Extension Tests</name>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Test</th>
+<th>Spec Section</th>
+<th>Requirement</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>E-01</td>
+<td>Payment proof: mandate with valid proof accepted</td>
+<td>13.1, 13.7</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-02</td>
+<td>Payment proof: unsupported format rejected</td>
+<td>13.7.2</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-03</td>
+<td>Payment proof: double-spend rejected</td>
+<td>13.7.2</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-04</td>
+<td>Continuity token: creation and expiry check</td>
+<td>13.3</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-05</td>
+<td>Continuity token: expired token rejected</td>
+<td>13.3.1</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-06</td>
+<td>Continuity token: principal-controlled TTL</td>
+<td>13.3.2</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-07</td>
+<td>Auto-approval: policy within mandate scope accepted</td>
+<td>13.4</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-08</td>
+<td>Auto-approval: policy exceeding mandate rejected</td>
+<td>13.4.1</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-09</td>
+<td>Auto-approval: transaction exceeding max_value requires approval</td>
+<td>13.4.1</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-10</td>
+<td>Recovery mandate: pap:RecoverAction in scope</td>
+<td>13.5.1</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-11</td>
+<td>Recovery mandate: delegation attempt rejected</td>
+<td>13.5.3</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-12</td>
+<td>Recovery mandate: short TTL enforced</td>
+<td>13.5.3</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-13</td>
+<td>TEE attestation: valid attestation with matching nonce</td>
+<td>13.6.2</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-14</td>
+<td>TEE attestation: stale attestation rejected</td>
+<td>13.6.2</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-15</td>
+<td>TEE attestation: does not expand mandate scope</td>
+<td>13.6.3</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>E-16</td>
+<td>Marketplace: query results not ranked by operator metrics</td>
+<td>9.6</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>E-17</td>
+<td>Marketplace: operator metrics excluded from content hash</td>
+<td>9.6</td>
+<td>MUST</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="d-4-federation-tests"><name>Federation Tests</name>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Test</th>
+<th>Spec Section</th>
+<th>Requirement</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>F-01</td>
+<td>Federation: QueryByAction returns matching advertisements</td>
+<td>10.3, 10.4</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>F-02</td>
+<td>Federation: Announce and AnnounceAck roundtrip</td>
+<td>10.3, 10.4</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>F-03</td>
+<td>Federation: content-hash deduplication on merge</td>
+<td>10.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>F-04</td>
+<td>Federation: unsigned advertisement skipped on merge</td>
+<td>10.5</td>
+<td>MUST</td>
+</tr>
+
+<tr>
+<td>F-05</td>
+<td>Federation: transitive peer discovery</td>
+<td>10.6</td>
+<td>OPTIONAL</td>
+</tr>
+
+<tr>
+<td>F-06</td>
+<td>Federation: peer registration requires minimum vouches</td>
+<td>10.7.2</td>
+<td>SHOULD</td>
+</tr>
+
+<tr>
+<td>F-07</td>
+<td>Federation: vouch budget enforced (max 3/year)</td>
+<td>10.7.3</td>
+<td>SHOULD</td>
+</tr>
+
+<tr>
+<td>F-08</td>
+<td>Federation: probationary peer cannot vouch</td>
+<td>10.7.3</td>
+<td>SHOULD</td>
+</tr>
+
+<tr>
+<td>F-09</td>
+<td>Federation: vouch signature verification</td>
+<td>10.7.2</td>
+<td>MUST</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="d-5-trust-invariant-summary"><name>Trust Invariant Summary</name>
+<t>A conformant implementation MUST demonstrate all eight trust
+invariants hold:</t>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Invariant</th>
+<th>Key Tests</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>TI-1</td>
+<td>Mandate scope is cryptographically bounded</td>
+<td>C-03, C-04, C-05</td>
+</tr>
+
+<tr>
+<td>TI-2</td>
+<td>Session DIDs are ephemeral and unlinkable to principal</td>
+<td>C-25, C-27</td>
+</tr>
+
+<tr>
+<td>TI-3</td>
+<td>Receipts contain property references, never values</td>
+<td>C-37, C-38, C-39</td>
+</tr>
+
+<tr>
+<td>TI-4</td>
+<td>Delegation chains enforce depth and TTL bounds</td>
+<td>C-06, C-07, C-13, C-14</td>
+</tr>
+
+<tr>
+<td>TI-5</td>
+<td>Decay states follow the defined state machine</td>
+<td>C-16, C-17, C-18, C-19, C-20</td>
+</tr>
+
+<tr>
+<td>TI-6</td>
+<td>no_retention requires TEE attestation</td>
+<td>C-47</td>
+</tr>
+
+<tr>
+<td>TI-7</td>
+<td>Marketplace queries are ranking-free</td>
+<td>E-16, E-17</td>
+</tr>
+
+<tr>
+<td>TI-8</td>
+<td>Peer vouching enforces budget and age constraints</td>
+<td>F-06, F-07, F-08</td>
+</tr>
+</tbody>
+</table><t><em>End of specification.</em></t>
+</section>
+</section>
+<section anchor="s-18-references"><name>References</name>
+
+<section anchor="s-18-1-normative-references"><name>Normative References</name>
+<t>[RFC 2119] Bradner, S., "Key words for use in RFCs to Indicate
+Requirement Levels", BCP 14, RFC 2119, March 1997.</t>
+<t>[RFC 8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in
+RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.</t>
+<t>[RFC 3339] Klyne, G. and C. Newman, "Date and Time on the
+Internet: Timestamps", RFC 3339, July 2002.</t>
+<t>[RFC 4648] Josefsson, S., "The Base16, Base32, and Base64 Data
+Encodings", RFC 4648, October 2006.</t>
+<t>[RFC 8032] Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
+Signature Algorithm (EdDSA)", RFC 8032, January 2017.</t>
+<t>[DID-CORE] Sporny, M., Guy, A., Sabadello, M., and D. Reed,
+"Decentralized Identifiers (DIDs) v1.0", W3C Recommendation,
+July 2022.</t>
+<t>[DID-KEY] Longley, D. and M. Sporny, "The did:key Method v0.7",
+W3C Community Group Report.</t>
+<t>[SD-JWT-08] Fett, D., Yasuda, K., and B. Campbell,
+"Selective Disclosure for JWTs (SD-JWT)", Internet-Draft
+draft-ietf-oauth-selective-disclosure-jwt-08.</t>
+<t>[VC-DATA-MODEL-2.0] Sporny, M., et al., "Verifiable Credentials
+Data Model v2.0", W3C Recommendation.</t>
+<t>[WEBAUTHN] Balfanz, D., et al., "Web Authentication: An API for
+accessing Public Key Credentials Level 2", W3C Recommendation.</t>
+</section>
+
+<section anchor="s-18-2-informative-references"><name>Informative References</name>
+<t>[RFC 8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON
+Canonicalization Scheme (JCS)", RFC 8785, June 2020.</t>
+<t>[RFC 9458] Thomson, M. and C. A. Wood, "Oblivious HTTP",
+RFC 9458, January 2024.</t>
+<t>[DIDCOMM-V2] Curren, S., Looker, T., and O. Terbu, "DIDComm
+Messaging v2.0", Decentralized Identity Foundation, 2022.</t>
+<t>[RFC 6455] Fette, I. and A. Melnikov, "The WebSocket Protocol",
+RFC 6455, December 2011.</t>
+</section>
+</section>
+
+<section anchor="s-17-iana-and-vocabulary-references"><name>IANA and Vocabulary References</name>
+
+<section anchor="s-17-1-schema-org-vocabulary"><name>Schema.org Vocabulary</name>
+<t>PAP uses Schema.org (<eref target="https://schema.org">https://schema.org</eref>) as the vocabulary for
+action types, object types, and property references. The following
+Schema.org types are referenced in this specification:</t>
+<t><strong>Action Types:</strong>
+- <tt>schema:SearchAction</tt> -- Search for information
+- <tt>schema:ReserveAction</tt> -- Reserve a resource (flight, hotel, etc.)
+- <tt>schema:PayAction</tt> -- Make a payment
+- <tt>schema:CheckAction</tt> -- Check a condition or status
+- <tt>schema:ReadAction</tt> -- Read a resource</t>
+<t><strong>Object Types:</strong>
+- <tt>schema:Flight</tt> -- A flight
+- <tt>schema:Lodging</tt> -- Lodging accommodation
+- <tt>schema:WebPage</tt> -- A web page</t>
+<t><strong>Entity Types:</strong>
+- <tt>schema:Person</tt> -- A person
+- <tt>schema:Organization</tt> -- An organization
+- <tt>schema:Service</tt> -- A service
+- <tt>schema:Order</tt> -- An order
+- <tt>schema:Subscription</tt> -- A subscription</t>
+<t><strong>Property References:</strong>
+- <tt>schema:name</tt> -- Name of a person or entity
+- <tt>schema:email</tt> -- Email address
+- <tt>schema:telephone</tt> -- Phone number
+- <tt>schema:nationality</tt> -- Nationality</t>
+<t>Implementations MAY use additional Schema.org types and properties.
+Implementations MAY define additional namespaced vocabularies using
+a prefix notation (e.g., <tt>custom:MyAction</tt>). Custom vocabularies
+SHOULD be documented.</t>
+</section>
+
+<section anchor="s-17-2-w3c-standards"><name>W3C Standards</name>
+<table>
+<thead>
+<tr>
+<th>Standard</th>
+<th>URI</th>
+<th>Usage</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>DID Core 1.0</td>
+<td><eref target="https://www.w3.org/TR/did-core/">https://www.w3.org/TR/did-core/</eref></td>
+<td>DID document structure</td>
+</tr>
+
+<tr>
+<td>DID Key Method</td>
+<td><eref target="https://w3c-ccg.github.io/did-method-key/">https://w3c-ccg.github.io/did-method-key/</eref></td>
+<td><tt>did:key</tt> derivation</td>
+</tr>
+
+<tr>
+<td>VC Data Model 2.0</td>
+<td><eref target="https://www.w3.org/TR/vc-data-model-2.0/">https://www.w3.org/TR/vc-data-model-2.0/</eref></td>
+<td>Credential envelope</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-17-3-ietf-standards"><name>IETF Standards</name>
+<table>
+<thead>
+<tr>
+<th>Standard</th>
+<th>RFC/Draft</th>
+<th>Usage</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>RFC 2119</td>
+<td>Key words</td>
+<td>Requirement levels</td>
+</tr>
+
+<tr>
+<td>RFC 8174</td>
+<td>Key words update</td>
+<td>Requirement levels clarification</td>
+</tr>
+
+<tr>
+<td>RFC 3339</td>
+<td>Date and Time on the Internet</td>
+<td>Timestamp format</td>
+</tr>
+
+<tr>
+<td>RFC 4648</td>
+<td>Base Encodings</td>
+<td>Base64url encoding</td>
+</tr>
+
+<tr>
+<td>RFC 8032</td>
+<td>Edwards-Curve Digital Signature Algorithm</td>
+<td>Ed25519 signatures</td>
+</tr>
+
+<tr>
+<td>RFC 8785</td>
+<td>JSON Canonicalization Scheme</td>
+<td>Canonical JSON (RECOMMENDED)</td>
+</tr>
+
+<tr>
+<td>RFC 9458</td>
+<td>Oblivious HTTP</td>
+<td>OHTTP transport binding (Section 14.8)</td>
+</tr>
+
+<tr>
+<td>draft-ietf-oauth-selective-disclosure-jwt-08</td>
+<td>SD-JWT</td>
+<td>Selective disclosure</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-17-4-webauthn"><name>WebAuthn</name>
+<table>
+<thead>
+<tr>
+<th>Standard</th>
+<th>URI</th>
+<th>Usage</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>Web Authentication Level 2</td>
+<td><eref target="https://www.w3.org/TR/webauthn-2/">https://www.w3.org/TR/webauthn-2/</eref></td>
+<td>Device-bound key generation</td>
+</tr>
+</tbody>
+</table></section>
+
+<section anchor="s-17-5-multicodec"><name>Multicodec</name>
+<t>The Ed25519 public key multicodec prefix is <tt>0xed01</tt> as registered
+in the Multicodec table (<eref target="https://github.com/multiformats/multicodec">https://github.com/multiformats/multicodec</eref>).</t>
+</section>
+
+<section anchor="s-17-6-reserved-namespace-prefixes"><name>Reserved Namespace Prefixes</name>
+<table>
+<thead>
+<tr>
+<th>Prefix</th>
+<th>Namespace</th>
+<th>Authority</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><tt>schema:</tt></td>
+<td><eref target="https://schema.org">https://schema.org</eref></td>
+<td>Schema.org Community</td>
+</tr>
+
+<tr>
+<td><tt>operator:</tt></td>
+<td>Implementation-defined</td>
+<td>Agent operator</td>
+</tr>
+
+<tr>
+<td><tt>pap:</tt></td>
+<td>Reserved for PAP extensions</td>
+<td>PAP specification</td>
+</tr>
+</tbody>
+</table></section>
+</section>
+
+<section anchor="s-19-changelog"><name>Changelog</name>
+
+<section anchor="v1-0-2026-03-24"><name>v1.0 (2026-03-24)</name>
+
+<ul spacing="compact">
+<li>Promoted specification from Draft to Approved status.</li>
+<li><strong>Section 13.5:</strong> Added recovery mandate extension with recovery
+proof binding and short-TTL constraints.</li>
+<li><strong>Section 13.6:</strong> Added TEE attestation extension with enclave
+measurement verification and trust boundary rules.</li>
+<li><strong>Section 13.7:</strong> Added payment proof validation requirements
+including format registry, double-spend protection, and privacy
+constraints.</li>
+<li><strong>Section 14.7:</strong> Added WebSocket transport binding with
+connection lifecycle, message framing, and sequence enforcement.</li>
+<li><strong>Section 14.8:</strong> Added Oblivious HTTP (OHTTP) transport binding
+with relay architecture and key configuration.</li>
+<li><strong>Section 14.9:</strong> Added DIDComm v2 transport binding with message
+mapping and authenticated encryption.</li>
+<li><strong>Section 14.10:</strong> Added transport negotiation rules with
+privacy-preference ordering.</li>
+<li><strong>Appendix D:</strong> Added conformance test matrix.</li>
+<li>Updated all version references from v0.1 to v1.0.</li>
+<li>Added DIDComm and WebSocket to normative/informative references.</li>
+</ul>
+</section>
+
+<section anchor="v0-7-2026-03-10"><name>v0.7 (2026-03-10)</name>
+
+<ul spacing="compact">
+<li>Added recovery mandate extension (Section 13.5).</li>
+<li>Added TEE attestation extension (Section 13.6).</li>
+<li>Added payment proof format registry and validation (Section 13.7).</li>
+</ul>
+</section>
+
+<section anchor="v0-6-2026-02-28"><name>v0.6 (2026-02-28)</name>
+
+<ul spacing="compact">
+<li>Added WebSocket transport binding (Section 14.7).</li>
+<li>Added OHTTP transport binding (Section 14.8).</li>
+<li>Added DIDComm transport binding (Section 14.9).</li>
+<li>Added transport negotiation (Section 14.10).</li>
+</ul>
+</section>
+
+<section anchor="v0-4-2026-02-01"><name>v0.4 (2026-02-01)</name>
+
+<ul spacing="compact">
+<li><t>Initial public draft with core protocol:</t>
+
+<ul spacing="compact">
+<li>Trust model and threat model (Section 3).</li>
+<li>Identity layer with did:key (Section 4).</li>
+<li>Mandate structure and delegation rules (Section 5).</li>
+<li>Session lifecycle with 6-phase handshake (Section 6).</li>
+<li>SD-JWT disclosure protocol (Section 7).</li>
+<li>Protocol messages and envelope (Section 8).</li>
+<li>Marketplace advertisement schema (Section 9).</li>
+<li>Federation protocol (Section 10).</li>
+<li>Receipt format (Section 11).</li>
+<li>Verifiable Credential envelope (Section 12).</li>
+<li>Payment proof integration point (Section 13.1).</li>
+<li>Continuity tokens (Section 13.3).</li>
+<li>Auto-approval policies (Section 13.4).</li>
+<li>HTTP/JSON transport binding (Section 14.1--14.6).</li>
+</ul></li>
+</ul>
+</section>
+</section>
+
+</back></rfc>

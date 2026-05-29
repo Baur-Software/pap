@@ -1,0 +1,20 @@
+To: support@ietf.org
+Subject: Manual posting request — draft-baur-pap-00 (submission 163346 timed out)
+
+Hi IETF support team,
+
+I attempted to submit Internet-Draft draft-baur-pap-00 via the datatracker (submission ID 163346), but the submission was cancelled because validation checks took too long. I am unable to modify or resubmit through that entry.
+
+Could you please manually post the attached draft? The document is attached in both XML v3 and plain text formats.
+
+Draft details:
+- Name: draft-baur-pap-00
+- Title: Principal Agent Protocol (PAP)
+- Author: Todd Baur (Baur Software) <todd@baursoftware.com>
+- Date: 20 May 2026
+- Intended status: Informational
+
+If you need anything else, just let me know.
+
+Thanks,
+Todd Baur

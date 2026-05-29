@@ -172,11 +172,333 @@
 (function() {
   'use strict';
 
-  // === CONFIG ===
+  const CONTACT_EMAIL = 'contact@baursoftware.com';
+  const STORAGE_KEY = 'pap_assessment_state';
+  const MAX_MAILTO_CHARS = 1800;
 
-  // === STATE MANAGEMENT ===
+  const TIERS = [
+    { max: 39,  label: 'Nascent',           desc: 'Significant gaps in trust infrastructure. PAP would be a foundational layer.', scope: 'Foundational Trust Layer Build' },
+    { max: 59,  label: 'Developing',        desc: 'Some trust mechanisms exist but are not unified or agent-aware.', scope: 'Phased Integration with Trust Retrofit' },
+    { max: 79,  label: 'Maturing',          desc: 'Good foundation; PAP adds selective disclosure and mandate scoping.', scope: 'Selective Disclosure & Federation Enablement' },
+    { max: 100, label: 'Production-Ready',  desc: 'Strong posture; PAP enhances verifiability and federation.', scope: 'PAP Hardening & Multi-Principal Expansion' }
+  ];
 
-  // === QUESTION DEFINITIONS ===
+  let state = {
+    role: null,
+    currentSection: 0,
+    answers: {},
+    contact: { name: '', email: '', notes: '' }
+  };
+
+  function loadState() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        state = { ...state, ...saved };
+        return true;
+      }
+    } catch (e) {
+      console.warn('Failed to load assessment state:', e);
+    }
+    return false;
+  }
+
+  function saveState() {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.warn('Failed to save assessment state:', e);
+      showToast('Progress will not survive page refresh (storage unavailable)');
+    }
+  }
+
+  function clearState() {
+    try { sessionStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    state = { role: null, currentSection: 0, answers: {}, contact: { name: '', email: '', notes: '' } };
+  }
+
+  function setAnswer(qid, value) {
+    state.answers[qid] = value;
+    saveState();
+  }
+
+  function getAnswer(qid) {
+    return state.answers[qid] ?? null;
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  const SECTIONS = [
+    {
+      id: 'org',
+      title: 'Organization Context',
+      subtitle: 'Basic context about your organization and goals.',
+      questions: [
+        { id: 'q1_org', type: 'text', text: 'Organization name', required: true },
+        { id: 'q1_size', type: 'radio', text: 'Approximate team size', required: true,
+          options: [
+            { value: '1-10', label: '1–10' },
+            { value: '11-50', label: '11–50' },
+            { value: '51-200', label: '51–200' },
+            { value: '201-1000', label: '201–1000' },
+            { value: '1000+', label: '1000+' }
+          ] },
+        { id: 'q1_industry', type: 'radio', text: 'Industry', required: true,
+          options: [
+            { value: 'technology', label: 'Technology' },
+            { value: 'finance', label: 'Finance' },
+            { value: 'healthcare', label: 'Healthcare' },
+            { value: 'government', label: 'Government' },
+            { value: 'energy', label: 'Energy' },
+            { value: 'other', label: 'Other' }
+          ] },
+        { id: 'q1_agents', type: 'radio', text: 'Are you currently using AI agents in production?', required: true,
+          options: [
+            { value: 'extensive', label: 'Yes — extensively in production' },
+            { value: 'pilot', label: 'Yes — pilot or limited production' },
+            { value: 'evaluating', label: 'Evaluating — not yet deployed' },
+            { value: 'no', label: 'No — not using AI agents today' }
+          ] },
+        { id: 'q1_timeline', type: 'radio', text: 'Desired timeline to evaluate or deploy PAP?', required: true,
+          options: [
+            { value: 'asap', label: 'ASAP' },
+            { value: '3mo', label: 'Within 3 months' },
+            { value: '6mo', label: 'Within 6 months' },
+            { value: '12mo', label: 'Within 12 months' },
+            { value: 'exploring', label: 'Just exploring — no fixed timeline' }
+          ] }
+      ]
+    },
+    {
+      id: 'identity',
+      title: 'Identity & Trust',
+      subtitle: 'How your organization handles identity, keys, and trust boundaries.',
+      questions: [
+        { id: 'q2_idp', type: 'radio', text: 'Do you have a central identity provider (IdP) in production?', required: true,
+          options: [
+            { value: 'production', label: 'Yes — production IdP' },
+            { value: 'evaluating', label: 'Yes — evaluating or partial deployment' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q2_keys', type: 'radio', text: 'How do you manage cryptographic keys for services?', required: true,
+          options: [
+            { value: 'hsm', label: 'Hardware Security Module (HSM) or Cloud KMS' },
+            { value: 'software', label: 'Software key management with access controls' },
+            { value: 'manual', label: 'Manual / secrets manager (no rotation)' },
+            { value: 'no', label: 'No key management in place' }
+          ] },
+        { id: 'q2_audit', type: 'radio', text: 'Do you have audit logging for all API and agent actions?', required: true,
+          options: [
+            { value: 'full', label: 'Yes — comprehensive audit logging' },
+            { value: 'partial', label: 'Partial — some systems covered' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q2_did', type: 'radio', text: 'Have you implemented or evaluated decentralized identifiers (DIDs)?', required: true,
+          options: [
+            { value: 'production', label: 'Yes — in production' },
+            { value: 'evaluated', label: 'Yes — evaluated, not deployed' },
+            { value: 'aware', label: 'Aware but not evaluated' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q2_mfa', type: 'radio', text: 'Is multi-factor authentication enforced for all administrative access?', required: true,
+          options: [
+            { value: 'enforced', label: 'Yes — enforced for all admin access' },
+            { value: 'partial', label: 'Partial — some systems only' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q2_trust', type: 'radio', text: 'Is there a formal trust-boundary model for your agent systems?', required: true,
+          options: [
+            { value: 'documented', label: 'Yes — documented and maintained' },
+            { value: 'informal', label: 'Informal — understood by team but not documented' },
+            { value: 'no', label: 'No' }
+          ] }
+      ]
+    },
+    {
+      id: 'agents',
+      title: 'Agent Infrastructure',
+      subtitle: 'Your current agent frameworks, orchestration, and observability.',
+      questions: [
+        { id: 'q3_frameworks', type: 'multi', text: 'What agent frameworks do you use? (Select all that apply)', required: false,
+          options: [
+            { value: 'langchain', label: 'LangChain' },
+            { value: 'crewai', label: 'CrewAI' },
+            { value: 'autogen', label: 'AutoGen' },
+            { value: 'custom', label: 'Custom / in-house' },
+            { value: 'none', label: 'None yet' }
+          ] },
+        { id: 'q3_orchestration', type: 'radio', text: 'How are your agents orchestrated?', required: true,
+          options: [
+            { value: 'central', label: 'Central orchestrator' },
+            { value: 'distributed', label: 'Distributed / event-driven' },
+            { value: 'adhoc', label: 'Ad-hoc / manual triggering' },
+            { value: 'none', label: 'No orchestration' }
+          ] },
+        { id: 'q3_prod_data', type: 'radio', text: 'Do your agents access production data?', required: true,
+          options: [
+            { value: 'full', label: 'Yes — full production data access' },
+            { value: 'restricted', label: 'Yes — with restrictions' },
+            { value: 'sandbox', label: 'Sandbox / synthetic data only' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q3_observability', type: 'radio', text: 'Is there observability (logging, metrics, tracing) across all agent executions?', required: true,
+          options: [
+            { value: 'full', label: 'Yes — full observability' },
+            { value: 'partial', label: 'Partial — some systems covered' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q3_registry', type: 'radio', text: 'Do you have a registry or catalog of agents and their capabilities?', required: true,
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'partial', label: 'Partial — informal list' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q3_workflows', type: 'radio', text: 'How many distinct agent workflows exist?', required: true,
+          options: [
+            { value: '1-5', label: '1–5' },
+            { value: '6-20', label: '6–20' },
+            { value: '21-100', label: '21–100' },
+            { value: '100+', label: '100+' }
+          ] }
+      ]
+    },
+    {
+      id: 'data',
+      title: 'Data & Disclosure',
+      subtitle: 'How you classify, steward, and disclose data in agent workflows.',
+      questions: [
+        { id: 'q4_classification', type: 'radio', text: 'Do you have a data classification policy (Public / Internal / Confidential / Restricted)?', required: true,
+          options: [
+            { value: 'enforced', label: 'Yes — enforced across all systems' },
+            { value: 'documented', label: 'Yes — documented, partially enforced' },
+            { value: 'informal', label: 'Informal — understood but not enforced' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q4_pii', type: 'radio', text: 'How is PII handled in agent workflows?', required: true,
+          options: [
+            { value: 'tokenized', label: 'Tokenized or anonymized before agent access' },
+            { value: 'masked', label: 'Masked or redacted' },
+            { value: 'raw_controls', label: 'Raw data with access controls only' },
+            { value: 'no', label: 'No specific PII handling' }
+          ] },
+        { id: 'q4_regulations', type: 'multi', text: 'What regulations apply to your data? (Select all that apply)', required: false,
+          options: [
+            { value: 'gdpr', label: 'GDPR' },
+            { value: 'hipaa', label: 'HIPAA' },
+            { value: 'sox', label: 'SOX' },
+            { value: 'ccpa', label: 'CCPA / CPRA' },
+            { value: 'soc2', label: 'SOC 2' },
+            { value: 'none', label: 'None of the above' }
+          ] },
+        { id: 'q4_residency', type: 'radio', text: 'Is there a data residency requirement?', required: true,
+          options: [
+            { value: 'single', label: 'Yes — single region / jurisdiction' },
+            { value: 'multi', label: 'Yes — multi-region with constraints' },
+            { value: 'none', label: 'No specific requirement' }
+          ] },
+        { id: 'q4_disclosure', type: 'radio', text: 'Do you implement selective disclosure today (only sharing minimum required data)?', required: true,
+          options: [
+            { value: 'systematic', label: 'Yes — systematic across workflows' },
+            { value: 'partial', label: 'Partial — some workflows only' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q4_retention', type: 'radio', text: 'How long do you retain agent interaction logs?', required: true,
+          options: [
+            { value: '30d', label: 'Less than 30 days' },
+            { value: '90d', label: '30–90 days' },
+            { value: '1y', label: '90 days to 1 year' },
+            { value: '1y+', label: 'More than 1 year' },
+            { value: 'indefinite', label: 'Indefinite / no policy' }
+          ] }
+      ]
+    },
+    {
+      id: 'integration',
+      title: 'Integration Surface',
+      subtitle: 'Your API surface, authentication patterns, and target SDKs.',
+      questions: [
+        { id: 'q5_protocols', type: 'multi', text: 'What API protocols do your agents use? (Select all that apply)', required: false,
+          options: [
+            { value: 'rest', label: 'REST' },
+            { value: 'graphql', label: 'GraphQL' },
+            { value: 'grpc', label: 'gRPC' },
+            { value: 'websocket', label: 'WebSocket' },
+            { value: 'other', label: 'Other' }
+          ] },
+        { id: 'q5_auth', type: 'multi', text: 'How are your APIs authenticated? (Select all that apply)', required: true,
+          options: [
+            { value: 'oauth', label: 'OAuth 2.0' },
+            { value: 'mtls', label: 'mTLS' },
+            { value: 'apikeys', label: 'API keys' },
+            { value: 'jwt', label: 'JWT / custom tokens' },
+            { value: 'none', label: 'No authentication' }
+          ] },
+        { id: 'q5_gateway', type: 'radio', text: 'Do you use an API gateway or service mesh?', required: true,
+          options: [
+            { value: 'production', label: 'Yes — in production' },
+            { value: 'evaluating', label: 'Yes — evaluating' },
+            { value: 'no', label: 'No' }
+          ] },
+        { id: 'q5_sdks', type: 'multi', text: 'Which SDK languages are most important for PAP integration? (Select all that apply)', required: false,
+          options: [
+            { value: 'rust', label: 'Rust' },
+            { value: 'ts', label: 'TypeScript / JavaScript' },
+            { value: 'python', label: 'Python' },
+            { value: 'java', label: 'Java' },
+            { value: 'cpp', label: 'C / C++' },
+            { value: 'csharp', label: 'C#' },
+            { value: 'go', label: 'Go' },
+            { value: 'other', label: 'Other' }
+          ] },
+        { id: 'q5_ratelimit', type: 'radio', text: 'Do your APIs support rate limiting and throttling?', required: true,
+          options: [
+            { value: 'yes', label: 'Yes — all APIs' },
+            { value: 'partial', label: 'Partial — some APIs only' },
+            { value: 'no', label: 'No' }
+          ] }
+      ]
+    },
+    {
+      id: 'goals',
+      title: 'Goals & Contact',
+      subtitle: 'What you want to achieve and how to reach you.',
+      questions: [
+        { id: 'q6_goals', type: 'multi', text: 'Primary goal for PAP (Select all that apply)', required: false,
+          options: [
+            { value: 'trust', label: 'Agent trust / attestation' },
+            { value: 'disclosure', label: 'Selective disclosure' },
+            { value: 'mandates', label: 'Mandate scoping' },
+            { value: 'federation', label: 'Cross-organization federation' },
+            { value: 'compliance', label: 'Audit / compliance' },
+            { value: 'other', label: 'Other' }
+          ] },
+        { id: 'q6_concerns', type: 'textarea', text: 'What is your biggest concern about deploying PAP?', required: false },
+        { id: 'q6_name', type: 'text', text: 'Your name', required: true },
+        { id: 'q6_email', type: 'text', text: 'Your email address', required: true },
+        { id: 'q6_notes', type: 'textarea', text: 'Additional notes', required: false }
+      ]
+    }
+  ];
+
+  const ROLE_GATE = {
+    id: 'role',
+    title: 'Welcome',
+    subtitle: 'What best describes your role? This helps us tailor the assessment.',
+    questions: [
+      { id: 'role', type: 'radio', text: 'Select your role', required: true,
+        options: [
+          { value: 'technical', label: 'Technical / Architect' },
+          { value: 'security', label: 'Security / Compliance' },
+          { value: 'product', label: 'Product / Engineering Lead' }
+        ] }
+    ]
+  };
 
   // === WIZARD RENDERING ===
 
