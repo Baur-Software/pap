@@ -62,6 +62,25 @@ pub struct Config {
     /// be issued in excess of the sustained rate before throttling begins).
     /// Default: 60. Override via `PAP_REGISTRY_RATE_LIMIT_BURST`.
     pub rate_limit_burst: u32,
+
+    /// Optional OIDC issuer URL for token validation.
+    /// Used for validating bearer tokens from an OpenID Connect provider.
+    /// Set via `PAP_REGISTRY_OIDC_ISSUER`.
+    pub oidc_issuer: Option<String>,
+
+    /// Optional OIDC audience identifier for token validation.
+    /// Must match the "aud" claim in OIDC tokens.
+    /// Set via `PAP_REGISTRY_OIDC_AUDIENCE`.
+    pub oidc_audience: Option<String>,
+
+    /// AWS region for accessing secrets and other AWS services.
+    /// Default: "us-east-1". Override via `PAP_REGISTRY_AWS_REGION`.
+    pub aws_region: String,
+
+    /// Enable API key authentication for programmatic access.
+    /// When true, clients can authenticate using API keys stored in AWS Secrets Manager.
+    /// Set via `PAP_REGISTRY_ENABLE_API_KEYS=true/false`. Default: false.
+    pub enable_api_keys: bool,
 }
 
 impl Config {
@@ -115,6 +134,17 @@ impl Config {
             .and_then(|v| v.parse().ok())
             .unwrap_or(60u32);
 
+        let oidc_issuer = env::var("PAP_REGISTRY_OIDC_ISSUER").ok();
+
+        let oidc_audience = env::var("PAP_REGISTRY_OIDC_AUDIENCE").ok();
+
+        let aws_region = env::var("PAP_REGISTRY_AWS_REGION")
+            .unwrap_or_else(|_| "us-east-1".into());
+
+        let enable_api_keys = env::var("PAP_REGISTRY_ENABLE_API_KEYS")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
         Self {
             port,
             host,
@@ -128,6 +158,10 @@ impl Config {
             max_body_bytes,
             rate_limit_rps,
             rate_limit_burst,
+            oidc_issuer,
+            oidc_audience,
+            aws_region,
+            enable_api_keys,
         }
     }
 
@@ -178,6 +212,10 @@ mod tests {
         env::remove_var("PAP_REGISTRY_MAX_BODY_BYTES");
         env::remove_var("PAP_REGISTRY_RATE_LIMIT_RPS");
         env::remove_var("PAP_REGISTRY_RATE_LIMIT_BURST");
+        env::remove_var("PAP_REGISTRY_OIDC_ISSUER");
+        env::remove_var("PAP_REGISTRY_OIDC_AUDIENCE");
+        env::remove_var("PAP_REGISTRY_AWS_REGION");
+        env::remove_var("PAP_REGISTRY_ENABLE_API_KEYS");
     }
 
     #[test]
