@@ -25,6 +25,18 @@ services:
       # Uncomment ONCE to recover from "migration was previously applied but
       # has been modified" errors (deletes all data and regenerates identity):
       # PAP_REGISTRY_RESET_DB: "true"
+
+      # Authentication
+      PAP_REGISTRY_ADMIN_TOKEN: ${PAP_REGISTRY_ADMIN_TOKEN:-change-me}
+      PAP_REGISTRY_REQUIRE_AUTH: ${PAP_REGISTRY_REQUIRE_AUTH:-false}
+
+      # OIDC (optional)
+      PAP_REGISTRY_OIDC_ISSUER: ${PAP_REGISTRY_OIDC_ISSUER:-}
+      PAP_REGISTRY_OIDC_AUDIENCE: ${PAP_REGISTRY_OIDC_AUDIENCE:-}
+
+      # AWS (optional)
+      PAP_REGISTRY_AWS_REGION: ${PAP_REGISTRY_AWS_REGION:-us-east-1}
+      PAP_REGISTRY_ENABLE_API_KEYS: ${PAP_REGISTRY_ENABLE_API_KEYS:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fk", "https://localhost:7890/federation/identity"]
