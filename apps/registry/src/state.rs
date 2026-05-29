@@ -122,6 +122,8 @@ pub struct AppState {
     pub endpoint_counters: Arc<EndpointCounters>,
     /// Platform-appropriate sandbox spawner — shared across all agent execution paths.
     pub sandbox_spawner: Arc<dyn AgentSpawner>,
+    /// Bearer token validator for middleware-based authentication.
+    pub bearer_validator: Arc<crate::auth::BearerTokenValidator>,
 }
 
 impl AppState {
@@ -146,6 +148,9 @@ impl AppState {
             cors_allowed_origins,
             endpoint_counters: Arc::new(EndpointCounters::default()),
             sandbox_spawner,
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(
+                config.admin_token.clone(),
+            )),
         }
     }
 
@@ -185,6 +190,9 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(
+                token.map(str::to_owned),
+            )),
         }
     }
 

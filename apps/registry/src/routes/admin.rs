@@ -666,6 +666,9 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(
+                token.map(str::to_owned),
+            )),
         };
         router()
             .with_state(state)
@@ -859,6 +862,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -916,6 +920,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -964,6 +969,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -1030,6 +1036,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -1103,6 +1110,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -1150,6 +1158,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -1240,6 +1249,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -1319,6 +1329,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -1465,6 +1476,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -1626,6 +1638,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router().with_state(state);
 
@@ -2066,6 +2079,7 @@ mod tests {
             cors_allowed_origins: Arc::new(RwLock::new(vec![])),
             endpoint_counters: Arc::new(crate::state::EndpointCounters::default()),
             sandbox_spawner: Arc::new(pap_sandbox::spawner::NoopSpawner),
+            bearer_validator: Arc::new(crate::auth::BearerTokenValidator::new(None)),
         };
         let app = router()
             .with_state(state)

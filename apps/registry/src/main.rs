@@ -6,6 +6,8 @@ use anyhow::Context as _;
 
 use axum::extract::DefaultBodyLimit;
 use axum::middleware::{self, Next};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::{extract::Request, Router};
 use leptos::config::get_configuration;
 use pap_registry::state::SETTING_CORS_ORIGINS;
@@ -49,6 +51,7 @@ fn check_auth_config(config: &Config) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -364,7 +367,33 @@ async fn main() -> anyhow::Result<()> {
     }));
 
     // Admin API routes.
-    let admin_router = routes::admin::router().with_state(app_state.clone());
+    let admin_router = if config.admin_token.is_some() {
+        let validator = app_state.bearer_validator.clone();
+        routes::admin::router()
+            .with_state(app_state.clone())
+            .layer(middleware::from_fn(move |req: Request, next: Next| {
+                let validator = validator.clone();
+                async move {
+                    // Extract Authorization header
+                    if let Some(auth_header) = req.headers().get("Authorization") {
+                        if let Ok(auth_str) = auth_header.to_str() {
+                            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                                if validator.validate(Some(token)) {
+                                    return next.run(req).await;
+                                }
+                            }
+                        }
+                    }
+                    (
+                        StatusCode::UNAUTHORIZED,
+                        "Missing or invalid Authorization header",
+                    )
+                        .into_response()
+                }
+            }))
+    } else {
+        routes::admin::router().with_state(app_state.clone())
+    };
 
     // Leptos SSR + hydration routes (replaces ServeDir fallback).
     let leptos_router = routes::leptos_handler::leptos_router(leptos_options.clone(), app_state)
