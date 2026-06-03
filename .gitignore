@@ -2,6 +2,7 @@ node_modules/
 /target
 apps/papillon/frontend/target
 apps/papillon/frontend/dist
+bindings/java/.gradle/
 registry.db
 apps/papillon/papillon.db
 .DS_STORE

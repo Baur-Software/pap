@@ -61,7 +61,8 @@ pub fn create_default_registry() -> Arc<RendererRegistry> {
     // Reservations
     registry.register(Arc::new(templates::FlightTemplate));
     registry.register(Arc::new(templates::HotelTemplate));
-    // Q&A — SearchResultsPage/SearchAction handled by generic composite renderer
+    // Search / Q&A
+    registry.register(Arc::new(templates::SearchResultsTemplate));
     registry.register(Arc::new(templates::AnswerTemplate));
     // Entertainment
     registry.register(Arc::new(templates::MovieTemplate));
