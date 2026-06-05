@@ -93,9 +93,7 @@ impl BlockRenderer for SearchResultsTemplate {
         let result_views = results
             .into_iter()
             .map(|item| {
-                let has_url = !item.url.is_empty();
                 let pap_url = to_pap_url(&item.url);
-                let pap_for_click = pap_url.clone();
                 let source_for_click = source_block_id.clone();
                 let canvas_for_click = canvas_state;
                 let title = if item.name.is_empty() {
@@ -104,7 +102,8 @@ impl BlockRenderer for SearchResultsTemplate {
                     item.name
                 };
 
-                let title_view = if has_url {
+                let title_view = if let Some(pap_url) = pap_url {
+                    let pap_for_click = pap_url.clone();
                     view! {
                         <a
                             class="typed-search-title"
@@ -139,13 +138,13 @@ impl BlockRenderer for SearchResultsTemplate {
                 let action_views = item
                     .actions
                     .into_iter()
-                    .map(|action| {
+                    .filter_map(|action| {
                         let target_title = action.target;
-                        let target_for_click = to_pap_url(&target_title);
+                        let target_for_click = to_pap_url(&target_title)?;
                         let source_for_action = source_block_id.clone();
                         let canvas_for_action = canvas_state;
 
-                        view! {
+                        Some(view! {
                             <button
                                 class="typed-search-action"
                                 title=target_title
@@ -158,7 +157,7 @@ impl BlockRenderer for SearchResultsTemplate {
                             >
                                 {action.label}
                             </button>
-                        }
+                        })
                     })
                     .collect::<Vec<_>>();
 
@@ -212,14 +211,14 @@ impl BlockRenderer for SearchResultsTemplate {
     }
 
     fn schema_types(&self) -> Vec<&'static str> {
-        vec!["SearchResultsPage", "SearchResult"]
+        vec!["SearchResultsPage"]
     }
 }
 
 fn extract_search_results(content: &Value) -> Vec<SearchResultItem> {
     let mut raw_items: Vec<Value> = Vec::new();
 
-    if has_type(content, "SearchResult") {
+    if has_type(content, "SearchResult") && !has_result_collection(content) {
         raw_items.push(content.clone());
     }
 
@@ -252,6 +251,24 @@ fn extract_search_results(content: &Value) -> Vec<SearchResultItem> {
         .filter_map(search_item_from_value)
         .take(20)
         .collect()
+}
+
+fn has_result_collection(content: &Value) -> bool {
+    content
+        .get("mainEntity")
+        .and_then(|v| v.get("itemListElement"))
+        .and_then(|v| v.as_array())
+        .is_some()
+        || content
+            .get("itemListElement")
+            .and_then(|v| v.as_array())
+            .is_some()
+        || content.get("result").and_then(|v| v.as_array()).is_some()
+        || content
+            .get("result")
+            .and_then(|v| v.get("itemListElement"))
+            .and_then(|v| v.as_array())
+            .is_some()
 }
 
 fn search_item_from_value(value: &Value) -> Option<SearchResultItem> {
@@ -318,7 +335,7 @@ fn action_from_value(value: &Value) -> Option<SearchResultAction> {
         .or_else(|| textish(value, "url"))
         .unwrap_or_default();
 
-    if target.is_empty() {
+    if target.is_empty() || to_pap_url(&target).is_none() {
         None
     } else {
         Some(SearchResultAction { label, target })
@@ -353,13 +370,188 @@ fn textish(value: &Value, key: &str) -> Option<String> {
     }
 }
 
-fn to_pap_url(raw: &str) -> String {
-    if let Some(rest) = raw.strip_prefix("https://") {
-        format!("pap://{rest}")
-    } else if let Some(rest) = raw.strip_prefix("http://") {
-        format!("pap://{rest}")
+fn to_pap_url(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty()
+        || trimmed.contains('{')
+        || trimmed.contains('}')
+        || trimmed.chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("https://") {
+        if rest.is_empty() {
+            None
+        } else {
+            Some(format!("pap://{rest}"))
+        }
+    } else if let Some(rest) = trimmed.strip_prefix("http://") {
+        if rest.is_empty() {
+            None
+        } else {
+            Some(format!("pap://{rest}"))
+        }
+    } else if trimmed.starts_with("pap://") && trimmed.len() > "pap://".len() {
+        Some(trimmed.to_string())
     } else {
-        raw.to_string()
+        None
+    }
+}
+
+#[cfg(test)]
+mod search_results_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn extracts_search_results_from_item_list_shapes() {
+        let content = json!({
+            "@type": "SearchResultsPage",
+            "mainEntity": {
+                "@type": "ItemList",
+                "itemListElement": [
+                    {
+                        "@type": "ListItem",
+                        "item": {
+                            "@type": "SearchResult",
+                            "name": "Papillon overview",
+                            "url": "https://example.com/papillon",
+                            "description": "A schema-driven browser result.",
+                            "potentialAction": {
+                                "@type": "ReadAction",
+                                "target": "https://example.com/papillon/open"
+                            }
+                        }
+                    },
+                    {
+                        "@type": "SearchResult",
+                        "headline": "Agent registry",
+                        "sameAs": "https://registry.example/agents"
+                    }
+                ]
+            }
+        });
+
+        let results = extract_search_results(&content);
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].name, "Papillon overview");
+        assert_eq!(results[0].url, "https://example.com/papillon");
+        assert_eq!(results[0].description, "A schema-driven browser result.");
+        assert_eq!(results[0].actions.len(), 1);
+        assert_eq!(results[1].name, "Agent registry");
+        assert_eq!(results[1].url, "https://registry.example/agents");
+    }
+
+    #[test]
+    fn does_not_duplicate_top_level_search_result_with_collection() {
+        let content = json!({
+            "@type": "SearchResult",
+            "name": "Wrapper result",
+            "itemListElement": [
+                {
+                    "@type": "SearchResult",
+                    "name": "Only child",
+                    "url": "https://example.com/child"
+                }
+            ]
+        });
+
+        let results = extract_search_results(&content);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "Only child");
+    }
+
+    #[test]
+    fn search_item_from_value_reads_list_item_payload() {
+        let value = json!({
+            "@type": "ListItem",
+            "name": "Position label",
+            "item": {
+                "@type": "SearchResult",
+                "name": "Payload title",
+                "url": "https://example.com/payload",
+                "description": "Payload description"
+            }
+        });
+
+        let item = search_item_from_value(&value).expect("item should parse");
+
+        assert_eq!(item.name, "Payload title");
+        assert_eq!(item.url, "https://example.com/payload");
+        assert_eq!(item.description, "Payload description");
+    }
+
+    #[test]
+    fn has_type_matches_schema_prefix_and_array_values() {
+        assert!(has_type(
+            &json!({"@type": "schema:SearchResultsPage"}),
+            "SearchResultsPage"
+        ));
+        assert!(has_type(
+            &json!({"@type": ["schema:Thing", "SearchResult"]}),
+            "SearchResult"
+        ));
+        assert!(!has_type(&json!({"@type": "Article"}), "SearchResult"));
+    }
+
+    #[test]
+    fn textish_reads_scalar_object_and_array_values() {
+        assert_eq!(
+            textish(&json!({"provider": {"name": "DuckDuckGo"}}), "provider").as_deref(),
+            Some("DuckDuckGo")
+        );
+        assert_eq!(textish(&json!({"rank": 3}), "rank").as_deref(), Some("3"));
+        assert_eq!(
+            textish(
+                &json!({"sameAs": ["", {"url": "https://example.com/alt"}]}),
+                "sameAs"
+            )
+            .as_deref(),
+            Some("https://example.com/alt")
+        );
+    }
+
+    #[test]
+    fn to_pap_url_rewrites_only_resolved_http_urls() {
+        assert_eq!(
+            to_pap_url("https://example.com/path?q=1").as_deref(),
+            Some("pap://example.com/path?q=1")
+        );
+        assert_eq!(
+            to_pap_url("http://example.com").as_deref(),
+            Some("pap://example.com")
+        );
+        assert_eq!(
+            to_pap_url("pap://registry.example/agent").as_deref(),
+            Some("pap://registry.example/agent")
+        );
+        assert_eq!(to_pap_url("{+url}"), None);
+        assert_eq!(to_pap_url("https://example.com/{id}"), None);
+        assert_eq!(to_pap_url("javascript:alert(1)"), None);
+    }
+
+    #[test]
+    fn action_from_value_skips_uri_templates() {
+        let action = json!({
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": "https://example.com/search?q={query}"
+            }
+        });
+
+        assert!(action_from_value(&action).is_none());
+    }
+
+    #[test]
+    fn search_results_template_only_registers_page_type() {
+        assert_eq!(
+            SearchResultsTemplate.schema_types(),
+            vec!["SearchResultsPage"]
+        );
     }
 }
 

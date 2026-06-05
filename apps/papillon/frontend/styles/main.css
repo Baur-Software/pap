@@ -5375,10 +5375,13 @@ body {
 
 .canvas-empty-hero {
     width: 100%;
-    padding: 24px;
+    padding: 30px 30px 26px;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 8px;
-    background: rgba(255,255,255,0.025);
+    border-radius: 24px;
+    background:
+        radial-gradient(circle at top right, rgba(108,92,231,0.18), transparent 34%),
+        radial-gradient(circle at left center, rgba(46,196,160,0.09), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
 }
 
 .canvas-empty-kicker {
@@ -5390,7 +5393,7 @@ body {
 }
 
 .canvas-empty-title {
-    font: 700 28px/1.16 var(--font-display);
+    font: 700 40px/1.08 var(--font-display);
     letter-spacing: 0;
     color: var(--text-1);
     max-width: 720px;
@@ -7801,6 +7804,21 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px;
+}
+
+.ghost-disclosure-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ghost-disclosure-loading {
+  color: var(--text-3);
+  font: var(--text-small);
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.025);
 }
 
 .ghost-disclosure-field {

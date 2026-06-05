@@ -222,10 +222,13 @@ fn GroupedApprovalCard(group: ApprovalGroup) -> impl IntoView {
             .map(|candidate| candidate.name.clone())
             .collect::<Vec<_>>(),
     );
+    let has_disclosures = !group.disclosure_props.is_empty();
     let filled_values: RwSignal<HashMap<String, String>> = RwSignal::new(HashMap::new());
+    let attributes_loading = RwSignal::new(has_disclosures && crate::bridge::tauri_available());
 
-    if !group.disclosure_props.is_empty() && crate::bridge::tauri_available() {
+    if has_disclosures && crate::bridge::tauri_available() {
         let values = filled_values;
+        let loading = attributes_loading;
         spawn_local(async move {
             if let Ok(attrs) = crate::bridge::invoke::<_, HashMap<String, String>>(
                 "get_principal_attributes",
@@ -235,6 +238,7 @@ fn GroupedApprovalCard(group: ApprovalGroup) -> impl IntoView {
             {
                 values.set(attrs);
             }
+            loading.set(false);
         });
     }
 
@@ -243,7 +247,6 @@ fn GroupedApprovalCard(group: ApprovalGroup) -> impl IntoView {
     let candidate_count = group.candidates.len();
     let item_count = group.items.len();
     let ttl_hours = group.ttl_hours;
-    let has_disclosures = !group.disclosure_props.is_empty();
     let group_for_render = group.clone();
     let group_for_deny = group.clone();
     let canvas_for_render = canvas_state;
@@ -311,6 +314,7 @@ fn GroupedApprovalCard(group: ApprovalGroup) -> impl IntoView {
                         <input
                             type="text"
                             placeholder=label
+                            prop:disabled=move || attributes_loading.get()
                             prop:value=move || {
                                 filled_values
                                     .get()
@@ -336,7 +340,12 @@ fn GroupedApprovalCard(group: ApprovalGroup) -> impl IntoView {
             })
             .collect::<Vec<_>>();
         view! {
-            <div class="ghost-disclosure-grid">{disclosure_field_views}</div>
+            <div class="ghost-disclosure-stack">
+                <Show when=move || attributes_loading.get()>
+                    <div class="ghost-disclosure-loading">"Loading saved fields"</div>
+                </Show>
+                <div class="ghost-disclosure-grid">{disclosure_field_views}</div>
+            </div>
         }
         .into_any()
     } else {
@@ -422,10 +431,15 @@ fn GroupedApprovalCard(group: ApprovalGroup) -> impl IntoView {
                 <button
                     class="ghost-approval-btn ghost-approval-render"
                     type="button"
-                    prop:disabled=move || selected_agents.get().is_empty()
+                    prop:disabled=move || {
+                        selected_agents.get().is_empty() || attributes_loading.get()
+                    }
                     on:click=move |_| {
                         let selected = selected_agents.get();
-                        let values = filled_values.get();
+                        let values = filtered_disclosure_values(
+                            &filled_values.get(),
+                            &group_for_render.disclosure_props,
+                        );
                         for item in &group_for_render.items {
                             let item_selected = selected
                                 .iter()
@@ -445,7 +459,13 @@ fn GroupedApprovalCard(group: ApprovalGroup) -> impl IntoView {
                         canvas_for_render.canvas_side.set(CanvasSide::Front);
                     }
                 >
-                    "Render selected"
+                    {move || {
+                        if attributes_loading.get() {
+                            "Loading disclosures"
+                        } else {
+                            "Render selected"
+                        }
+                    }}
                 </button>
             </div>
         </article>
@@ -537,6 +557,16 @@ fn merge_unique(target: &mut Vec<String>, values: Vec<String>) {
     }
 }
 
+fn filtered_disclosure_values(
+    values: &HashMap<String, String>,
+    allowed_props: &[String],
+) -> HashMap<String, String> {
+    allowed_props
+        .iter()
+        .filter_map(|prop| values.get(prop).map(|value| (prop.clone(), value.clone())))
+        .collect()
+}
+
 fn readable_returns(types: &[String]) -> String {
     if types.is_empty() {
         return "Structured result".into();
@@ -577,5 +607,205 @@ fn pluralize(count: usize, singular: &str) -> String {
         format!("1 {singular}")
     } else {
         format!("{count} {singular}s")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| value.to_string()).collect()
+    }
+
+    fn candidate(name: &str, did: &str, disclosures: &[&str], returns: &[&str]) -> AgentCandidate {
+        AgentCandidate {
+            name: name.to_string(),
+            did: did.to_string(),
+            requires_disclosure: strings(disclosures),
+            returns: strings(returns),
+        }
+    }
+
+    fn plan(
+        action: &str,
+        disclosures: &[&str],
+        returns: &[&str],
+        candidates: Vec<AgentCandidate>,
+        ttl_hours: u32,
+        approval_request_id: &str,
+    ) -> IntentPlan {
+        let selected_agent_name = candidates
+            .first()
+            .map(|candidate| candidate.name.clone())
+            .unwrap_or_else(|| "Legacy agent".to_string());
+        let selected_agent_did = candidates.first().map(|candidate| candidate.did.clone());
+
+        IntentPlan {
+            action: action.to_string(),
+            selected_agent_name,
+            selected_agent_did,
+            requires_disclosure: strings(disclosures),
+            returns: strings(returns),
+            approval_request_id: approval_request_id.to_string(),
+            ttl_hours,
+            candidates,
+        }
+    }
+
+    fn block(id: &str, prompt: &str, plan: IntentPlan) -> CanvasBlock {
+        CanvasBlock {
+            id: id.to_string(),
+            prompt_id: format!("prompt-{id}"),
+            prompt_text: Some(prompt.to_string()),
+            state: BlockState::AwaitingApproval { plan },
+            schema_type: None,
+            content: None,
+            linked_block_ids: Vec::new(),
+            agent_did: None,
+            created_at: "2026-06-05T00:00:00Z".to_string(),
+            updated_at: "2026-06-05T00:00:00Z".to_string(),
+            mandate_expires_at: None,
+            preference_guided: false,
+            auto_expand: false,
+            retention_warning: None,
+        }
+    }
+
+    #[test]
+    fn grouped_approvals_merges_same_action_and_disclosures() {
+        let ddg = candidate(
+            "DuckDuckGo",
+            "did:pap:ddg",
+            &["schema:query"],
+            &["SearchResultsPage"],
+        );
+        let google = candidate(
+            "Google",
+            "did:pap:google",
+            &["schema:query"],
+            &["SearchResultsPage"],
+        );
+
+        let groups = grouped_approvals(vec![
+            block(
+                "block-1",
+                "Search the web",
+                plan(
+                    "schema:SearchAction",
+                    &["schema:query"],
+                    &["SearchResultsPage"],
+                    vec![ddg],
+                    8,
+                    "approval-1",
+                ),
+            ),
+            block(
+                "block-2",
+                "Search again",
+                plan(
+                    "schema:SearchAction",
+                    &["schema:query"],
+                    &["SearchResultsPage"],
+                    vec![google],
+                    4,
+                    "approval-2",
+                ),
+            ),
+        ]);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].action, "schema:SearchAction");
+        assert_eq!(groups[0].ttl_hours, 4);
+        assert_eq!(groups[0].items.len(), 2);
+        assert_eq!(groups[0].candidates.len(), 2);
+        assert_eq!(groups[0].disclosure_props, strings(&["schema:query"]));
+    }
+
+    #[test]
+    fn grouped_approvals_separates_different_disclosures() {
+        let groups = grouped_approvals(vec![
+            block(
+                "block-1",
+                "Search without disclosure",
+                plan(
+                    "schema:SearchAction",
+                    &[],
+                    &["SearchResultsPage"],
+                    vec![candidate(
+                        "Zero",
+                        "did:pap:zero",
+                        &[],
+                        &["SearchResultsPage"],
+                    )],
+                    8,
+                    "approval-1",
+                ),
+            ),
+            block(
+                "block-2",
+                "Search with query",
+                plan(
+                    "schema:SearchAction",
+                    &["schema:query"],
+                    &["SearchResultsPage"],
+                    vec![candidate(
+                        "Query",
+                        "did:pap:query",
+                        &["schema:query"],
+                        &["SearchResultsPage"],
+                    )],
+                    8,
+                    "approval-2",
+                ),
+            ),
+        ]);
+
+        assert_eq!(groups.len(), 2);
+        assert!(groups.iter().any(|group| group.disclosure_props.is_empty()));
+        assert!(groups
+            .iter()
+            .any(|group| group.disclosure_props == strings(&["schema:query"])));
+    }
+
+    #[test]
+    fn plan_candidates_falls_back_to_selected_agent_fields() {
+        let plan = IntentPlan {
+            action: "schema:SearchAction".to_string(),
+            selected_agent_name: "Legacy search".to_string(),
+            selected_agent_did: Some("did:pap:legacy".to_string()),
+            requires_disclosure: strings(&["schema:query"]),
+            returns: strings(&["SearchResultsPage"]),
+            approval_request_id: "approval-legacy".to_string(),
+            ttl_hours: 8,
+            candidates: Vec::new(),
+        };
+
+        let candidates = plan_candidates(&plan);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].name, "Legacy search");
+        assert_eq!(candidates[0].did, "did:pap:legacy");
+        assert_eq!(
+            candidates[0].requires_disclosure,
+            strings(&["schema:query"])
+        );
+    }
+
+    #[test]
+    fn filtered_disclosure_values_keeps_only_declared_fields() {
+        let values = HashMap::from([
+            ("schema:query".to_string(), "papillon".to_string()),
+            ("schema:email".to_string(), "hidden@example.com".to_string()),
+        ]);
+
+        let filtered = filtered_disclosure_values(&values, &strings(&["schema:query"]));
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(
+            filtered.get("schema:query").map(String::as_str),
+            Some("papillon")
+        );
+        assert!(!filtered.contains_key("schema:email"));
     }
 }
