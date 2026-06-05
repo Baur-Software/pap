@@ -4,6 +4,7 @@ use papillon_shared::{BlockState, CanvasBlock};
 use crate::components::block_renderer::BlockRenderer;
 use crate::components::canvas_aside::{AsideOpen, CanvasAside, CanvasAsideDockToggle};
 use crate::components::canvas_back_face::CanvasBackFace;
+use crate::components::canvas_empty_state::CanvasEmptyState;
 use crate::components::canvas_surface_title::CanvasSurfaceTitle;
 use crate::components::hitl_gate::HitlGate;
 use crate::state::canvas::{CanvasSide, CanvasState};
@@ -23,6 +24,7 @@ pub fn CanvasPage() -> impl IntoView {
             .filter(|block| !matches!(block.state, BlockState::Guide { .. }))
             .collect::<Vec<_>>()
     };
+    let has_any_blocks = move || !blocks.get().is_empty();
     let has_rendered_blocks = move || !rendered_blocks().is_empty();
     // Group blocks by semantic links for rendering
     let grouped_blocks = move || {
@@ -72,7 +74,14 @@ pub fn CanvasPage() -> impl IntoView {
                     <div class="canvas-stream">
                         <CanvasSurfaceTitle />
                         <Show when=move || !has_rendered_blocks()>
-                            <div class="canvas-surface-status">"Approve workflow to render"</div>
+                            <Show
+                                when=move || !has_any_blocks()
+                                fallback=|| view! {
+                                    <div class="canvas-surface-status">"Approve workflow to render"</div>
+                                }
+                            >
+                                <CanvasEmptyState />
+                            </Show>
                         </Show>
                         <Show when=has_rendered_blocks>
                             <For
