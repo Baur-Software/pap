@@ -61,6 +61,14 @@ pub struct HandshakeParams<'a> {
     pub principal_kp: &'a PrincipalKeypair,
     pub requires_disclosure: &'a [String],
     pub returns: &'a [String],
+    /// Schema.org type that scopes the SD-JWT `DisclosureEntry` in Phase 2.
+    ///
+    /// Derived from the intent classification result — the nearest ontology type
+    /// or the agent's `object_types[0]`. Replaces the previous hardcoded
+    /// `"schema:Person"` fallback so the disclosure envelope is correctly typed
+    /// for the actual data being requested (e.g. `"schema:ExchangeRateSpecification"`
+    /// for a currency query, not `"schema:Person"`).
+    pub disclosure_context_type: &'a str,
     /// Pre-filled attribute values from the principal's memex.
     /// Merged into Phase 3 disclosures alongside the query.
     pub extra_disclosures: std::collections::HashMap<String, String>,
@@ -82,6 +90,7 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         principal_kp,
         requires_disclosure,
         returns,
+        disclosure_context_type,
         extra_disclosures,
         on_phase,
         on_fail,
@@ -117,8 +126,11 @@ pub async fn execute(params: HandshakeParams<'_>) -> Result<HandshakeResult, Pap
         let disclosure_set = if requires_disclosure.is_empty() {
             DisclosureSet::empty()
         } else {
+            // Use the intent-derived context type so the SD-JWT envelope is typed
+            // correctly for the actual data domain (e.g. "schema:ExchangeRateSpecification"
+            // for currency queries, not the generic "schema:Person" fallback).
             DisclosureSet::new(vec![DisclosureEntry::new(
-                "schema:Person",
+                disclosure_context_type,
                 requires_disclosure.to_vec(),
                 vec![],
             )])

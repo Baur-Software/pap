@@ -12,7 +12,7 @@ path = "src/main.rs"
 pap-did         = { workspace = true }
 pap-core        = { workspace = true }
 pap-marketplace = { workspace = true }
-pap-agents      = { workspace = true }
+pap-agents      = { workspace = true, features = ["semantic"] }
 papillon-shared = { workspace = true }
 chrono          = { workspace = true }
 serde_json      = { workspace = true }

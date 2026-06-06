@@ -59,8 +59,12 @@ pub struct ModelDownloadProgress {
     pub progress_pct: u8,
 }
 
+/// The embedding model ID used by `SemanticIndex` for agent descriptor embeddings.
+pub const EMBEDDING_MODEL_ID: &str = "all-minilm-l6-v2";
+
 /// Catalog of models available for on-device inference.
-/// The first entry is the default.
+/// LLM entries come first (the first entry is the default inference model).
+/// Embedding-only models follow.
 pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
     vec![
         BuiltInModelInfo {
@@ -82,6 +86,17 @@ pub fn builtin_model_catalog() -> Vec<BuiltInModelInfo> {
             download_url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf".into(),
             tokenizer_url: "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json".into(),
             web_compatible: false,
+        },
+        // ── Embedding models (not for generation) ──────────────────────────────
+        BuiltInModelInfo {
+            id: "all-minilm-l6-v2".into(),
+            display_name: "all-MiniLM-L6-v2 (sentence embeddings)".into(),
+            repo: "sentence-transformers/all-MiniLM-L6-v2".into(),
+            filename: "all-minilm-l6-v2.safetensors".into(),
+            size_hint: "~22 MB".into(),
+            download_url: "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/model.safetensors".into(),
+            tokenizer_url: "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json".into(),
+            web_compatible: true,
         },
     ]
 }

@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["semantic-index"]
+semantic-index = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -16,7 +20,7 @@ pap-marketplace = { workspace = true }
 pap-webauthn = { workspace = true }
 pap-proto = { workspace = true }
 pap-transport = { workspace = true }
-pap-agents = { workspace = true }
+pap-agents = { workspace = true, features = ["semantic"] }
 pap-credential-store = { path = "../../crates/pap-credential-store" }
 pap-federation = { workspace = true, features = ["native"] }
 pap-sandbox = { workspace = true, features = ["tauri"] }
@@ -25,6 +29,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-store = "2"
 
 candle-core = { workspace = true }
+candle-nn = { version = "0.10" }
 candle-transformers = { workspace = true }
 tokenizers = { workspace = true }
 

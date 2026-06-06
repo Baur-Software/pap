@@ -208,6 +208,7 @@ pub async fn save_agent(
         .db
         .insert_agent(&def)
         .map_err(|e| format!("Failed to persist agent: {e}"))?;
+    state.rebuild_intent_index();
 
     // Retain the keypair for handshake co-signing
     {
@@ -268,6 +269,7 @@ pub async fn delete_agent(
         .db
         .delete_agent(&agent_did)
         .map_err(|e| format!("Failed to delete agent from DB: {e}"))?;
+    state.rebuild_intent_index();
 
     // Remove from live registry by hash — find the matching ad first
     {
@@ -336,6 +338,7 @@ pub async fn update_agent(
         .db
         .update_agent(&def)
         .map_err(|e| format!("Failed to update agent in DB: {e}"))?;
+    state.rebuild_intent_index();
 
     Ok(def_to_agent_info(&def))
 }
@@ -688,6 +691,7 @@ pub async fn approve_federation_agent(
         .db
         .insert_agent(&def)
         .map_err(|e| format!("Failed to persist federation agent: {e}"))?;
+    state.rebuild_intent_index();
 
     // 5. Register in the live local registry for immediate invocability.
     {
