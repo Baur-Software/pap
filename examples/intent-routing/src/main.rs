@@ -337,6 +337,17 @@ fn build_catalog() -> Vec<DynamicAgentDef> {
              Users ask to book, reserve, find hotel, lodging in a city.",
         ),
         agent(
+            "Frankfurter Exchange Rates",
+            "Frankfurter",
+            "Convert and look up current and historical foreign exchange rates from the European Central Bank.",
+            "schema:TradeAction",
+            &["schema:MonetaryAmount"],
+            &["schema:ExchangeRateSpecification"],
+            "You are a foreign exchange information assistant. The user has asked to convert currency \
+             or look up exchange rates. Help users convert amounts between currencies (e.g. USD to MXN, \
+             EUR to GBP). Users may ask: convert 100 USD to MXN, exchange rate, how much is X in Y currency.",
+        ),
+        agent(
             "On-Device AI",
             "Papillon",
             "Local language model for open-ended questions and synthesis.",
@@ -523,5 +534,41 @@ mod tests {
                 "prompt '{prompt}' should route to {expected_action}, got {action}"
             );
         }
+    }
+
+    /// Smoke-test the semantic (ordvec + MiniLM) path against the seeded
+    /// schema.org ontology index. Skipped when the model files are absent
+    /// (e.g. CI without model cache) — the test is advisory, not blocking.
+    #[test]
+    fn semantic_index_ontology_routes_currency_query() {
+        let model_dir = pap_agents::default_model_dir();
+        let catalog = build_catalog();
+
+        let idx = pap_agents::SemanticIndex::from_ontology(&catalog, Some(model_dir.clone()))
+            .or_else(|| pap_agents::SemanticIndex::build(&catalog, Some(model_dir)));
+
+        let Some(idx) = idx else {
+            eprintln!("SKIP: semantic index model files not present — run seed-ontology first");
+            return;
+        };
+
+        // "convert 100 usd to mx" should NOT route to the geocoder.
+        // With the ontology index, ExchangeRateSpecification is closer than
+        // GeoCoordinates in embedding space.
+        let hits = idx.search("convert 100 usd to mx", 3);
+        assert!(
+            !hits.is_empty(),
+            "semantic index returned no hits for currency query"
+        );
+        let top = &hits[0];
+        assert_ne!(
+            top.agent_name, "Nominatim Geocoding",
+            "currency query must not route to geocoder (got '{}')",
+            top.agent_name
+        );
+        eprintln!(
+            "semantic routing: 'convert 100 usd to mx' → {} ({})",
+            top.agent_name, top.action
+        );
     }
 }

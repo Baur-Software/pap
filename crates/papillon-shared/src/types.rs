@@ -516,6 +516,22 @@ pub struct IntentPlan {
     /// All agent candidates (up to 3). Frontend shows agent selector + union disclosure form.
     #[serde(default)]
     pub candidates: Vec<AgentCandidate>,
+    /// The schema.org type that scopes the SD-JWT disclosure set for this intent.
+    ///
+    /// Derived from the intent classification result — the `object_types[0]` of the
+    /// winning agent (BM25/NLU) or the nearest ontology type (semantic index). Used
+    /// in Phase 2 of the PAP handshake to build a typed `DisclosureEntry` instead of
+    /// the generic `schema:Person` fallback.
+    ///
+    /// Examples: `"schema:ExchangeRateSpecification"`, `"schema:GeoCoordinates"`,
+    /// `"schema:WeatherForecast"`. Falls back to `"schema:Thing"` when no better
+    /// type is available.
+    #[serde(default = "default_disclosure_context_type")]
+    pub disclosure_context_type: String,
+}
+
+fn default_disclosure_context_type() -> String {
+    "schema:Thing".to_owned()
 }
 
 fn default_ttl_hours() -> u32 {
@@ -1119,7 +1135,11 @@ mod tests {
             assert!(!m.id.is_empty(), "id must be set");
             assert!(!m.display_name.is_empty(), "display_name must be set");
             assert!(!m.repo.is_empty(), "repo must be set");
-            assert!(m.filename.ends_with(".gguf"), "filename must be .gguf");
+            assert!(
+                m.filename.ends_with(".gguf") || m.filename.ends_with(".safetensors"),
+                "filename must be .gguf (LLM) or .safetensors (embedding): {}",
+                m.filename
+            );
             assert!(!m.size_hint.is_empty(), "size_hint must be set");
         }
     }
@@ -1835,6 +1855,7 @@ mod tests {
             approval_request_id: "test-uuid-1234".to_string(),
             ttl_hours: 8,
             candidates: vec![],
+            disclosure_context_type: "schema:Thing".to_string(),
         };
         let json = serde_json::to_string(&plan).unwrap();
         let round_trip: IntentPlan = serde_json::from_str(&json).unwrap();
@@ -1852,6 +1873,7 @@ mod tests {
             approval_request_id: "uuid-5678".to_string(),
             ttl_hours: 8,
             candidates: vec![],
+            disclosure_context_type: "schema:Thing".to_string(),
         };
         let state = BlockState::AwaitingApproval { plan };
         let json = serde_json::to_string(&state).unwrap();

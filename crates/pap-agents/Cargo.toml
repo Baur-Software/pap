@@ -8,8 +8,10 @@ description = "Shared PAP agent implementations — reusable across Papillon, Ch
 [features]
 # Enable on-device inference via Candle (default on for native builds).
 # Disable for WASM targets where candle-core does not compile.
-default = ["candle"]
+default = ["candle", "semantic"]
 candle = ["dep:candle-core", "dep:candle-transformers", "dep:tokenizers"]
+# Enable ordvec-backed semantic agent index (requires candle for embeddings).
+semantic = ["candle", "dep:ordvec", "dep:candle-nn"]
 
 [dependencies]
 pap-did = { workspace = true }
@@ -33,8 +35,11 @@ thiserror = { workspace = true }
 
 # On-device inference (feature-gated so WASM builds can opt out)
 candle-core = { workspace = true, optional = true }
+candle-nn = { version = "0.10", optional = true }
 candle-transformers = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
+# Ordinal-quantized vector index for semantic agent retrieval
+ordvec = { workspace = true, optional = true }
 
 [build-dependencies]
 toml = { workspace = true }

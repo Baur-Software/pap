@@ -37,38 +37,79 @@ pub(crate) fn map_label_to_action(label: &str) -> (&'static str, &'static str) {
 /// Fast path: bare HTTP/HTTPS URLs are routed deterministically to Web Page Reader.
 /// All other prompts trigger a silent PAP handshake with a discovered
 /// `schema:AnalyzeAction` agent (HuggingFace NLU or on-device LLM classifier).
-/// Returns `(action_type, preferred_agent, effective_query)` as owned strings.
 ///
-/// Falls back to `("schema:AskAction", "", raw_text)` when no NLU agent is
-/// registered, the handshake fails, or confidence is below the configured threshold.
+/// Returns `(action_type, preferred_agent, effective_query, disclosure_context_type)`.
+///
+/// `disclosure_context_type` is the schema.org type that scopes the SD-JWT disclosure
+/// set in Phase 2 of the PAP handshake — e.g. `schema:ExchangeRateSpecification` for
+/// currency queries, `schema:GeoCoordinates` for location queries. Derived from the
+/// ontology index hit when available; falls back to the resolved agent's `object_types[0]`
+/// or `schema:Thing` when neither source has data.
 pub(crate) async fn classify_intent(
     app: &AppHandle,
     state: &State<'_, AppState>,
     block_id: &str,
     text: &str,
-) -> (String, String, String) {
+) -> (String, String, String, String) {
     // Level 1: deterministic fast path — bare HTTP/HTTPS URLs → Web Page Reader
     let (action, preferred, query) = papillon_shared::intent::detect_intent(text);
     if action != "schema:AnalyzeAction" {
-        return (action.to_owned(), preferred.to_owned(), query);
+        // URL reads operate on WebPage objects — no personal data context.
+        return (action.to_owned(), preferred.to_owned(), query, "schema:WebPage".to_owned());
     }
 
-    // Level 2: BM25 semantic index — ~50µs scoring, no network, no spinner needed.
-    // Built from the current canvas's agent DB so it reflects approved agents.
-    // agent_name is a hint only; downstream resolve_agent applies disclosure
-    // scoring so no agent is forced without proper permission evaluation.
-    // Falls through to Level 3 when confidence < INTENT_CONFIDENCE_THRESHOLD or catalog is empty.
+    // Level 2: BM25 token index — ~5µs cache read, no DB access, no spinner.
+    // The IntentIndex is pre-built at startup and invalidated on agent mutations
+    // via AppState::rebuild_intent_index(). Load the full agent list only when
+    // the semantic index (Level 2.5) or context-type derivation needs it.
+    let bm25_match = {
+        let cache = state
+            .intent_index_cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        cache.classify(text, INTENT_CONFIDENCE_THRESHOLD)
+    };
+
+    // Load agents lazily — only needed for context-type derivation or the semantic path.
+    let agents = std::sync::OnceLock::new();
+    let load_agents = || {
+        agents.get_or_init(|| {
+            state.db.load_all_agents().unwrap_or_else(|e| {
+                eprintln!("[classify_intent] agent catalog unavailable: {e}");
+                vec![]
+            })
+        })
+    };
+
+    if let Some(m) = bm25_match {
+        let preferred_agent = m.agent_name.unwrap_or_default();
+        let ctx = load_agents()
+            .iter()
+            .find(|a| a.name == preferred_agent)
+            .and_then(|a| a.object_types.first().cloned())
+            .unwrap_or_else(|| "schema:Thing".to_owned());
+        return (m.action, preferred_agent, m.cleaned_query, ctx);
+    }
+
+    // Level 2.5: ordvec semantic index — ~5ms, no network.
+    // Prefers ontology mode (schema-ontology.tvrq seeded from schema.org) over
+    // descriptor mode (embed agent descriptors on startup). Falls through
+    // gracefully to Level 3 when neither model file set is present on disk.
+    #[cfg(feature = "semantic-index")]
     {
-        let agents = state.db.load_all_agents().unwrap_or_else(|e| {
-            eprintln!("[classify_intent] agent catalog unavailable, skipping BM25: {e}");
-            vec![]
-        });
-        let intent_index = pap_agents::IntentIndex::new(&agents);
-        if let Some(m) = intent_index.classify(text, INTENT_CONFIDENCE_THRESHOLD) {
-            // Empty string means "no forced agent" — resolve_agent selects
-            // the best candidate by disclosure scope and profile history.
-            let preferred_agent = m.agent_name.unwrap_or_default();
-            return (m.action, preferred_agent, m.cleaned_query);
+        let catalog = load_agents();
+        let sem_idx = pap_agents::SemanticIndex::from_ontology(catalog, None)
+            .or_else(|| pap_agents::SemanticIndex::build(catalog, None));
+        if let Some(idx) = sem_idx {
+            let hits = idx.search(text, 1);
+            if let Some(top) = hits.into_iter().next() {
+                let ctx = catalog
+                    .iter()
+                    .find(|a| a.name == top.agent_name)
+                    .and_then(|a| a.object_types.first().cloned())
+                    .unwrap_or_else(|| "schema:Thing".to_owned());
+                return (top.action, top.agent_name, text.to_owned(), ctx);
+            }
         }
     }
 
@@ -108,6 +149,7 @@ pub(crate) async fn classify_intent(
                 "schema:SearchAction".to_owned(),
                 "DuckDuckGo Search".to_owned(),
                 text.to_owned(),
+                "schema:Thing".to_owned(),
             )
         };
     }
@@ -140,6 +182,8 @@ pub(crate) async fn classify_intent(
         principal_kp: &principal_kp,
         requires_disclosure: &resolved.requires_disclosure,
         returns: &resolved.returns,
+        // NLU classification discloses only the query text, not personal data.
+        disclosure_context_type: "schema:Text",
         extra_disclosures: std::collections::HashMap::new(),
         on_phase: Box::new(|_, _| {}),
         on_fail: Box::new(|_, _| {}),
@@ -183,9 +227,16 @@ pub(crate) async fn classify_intent(
     }
 
     let (action_type, preferred_agent) = map_label_to_action(label);
+    // NLU path: look up context type from matched agent's object_types.
+    let ctx = load_agents()
+        .iter()
+        .find(|a| a.name == preferred_agent)
+        .and_then(|a| a.object_types.first().cloned())
+        .unwrap_or_else(|| "schema:Thing".to_owned());
     (
         action_type.to_owned(),
         preferred_agent.to_owned(),
         effective_query,
+        ctx,
     )
 }

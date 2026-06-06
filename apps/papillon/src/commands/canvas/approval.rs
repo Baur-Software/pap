@@ -31,7 +31,8 @@ pub async fn canvas_plan_prompt(
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
     // Classify intent once — result is reused for plan-building and handshake.
-    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
+    let (action_type, preferred, query, disclosure_ctx) =
+        classify_intent(&app, &state, &block_id, &text).await;
 
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
     if action_type == "schema:DatasetAction" {
@@ -86,6 +87,7 @@ pub async fn canvas_plan_prompt(
         approval_request_id: approval_request_id.clone(),
         ttl_hours: mandate_ttl_hours as u32,
         candidates,
+        disclosure_context_type: disclosure_ctx.clone(),
     };
 
     // Extract owned primary identity strings before any await points to avoid
@@ -123,6 +125,7 @@ pub async fn canvas_plan_prompt(
                 &action_type,
                 &preferred,
                 &query,
+                &disclosure_ctx,
             )
             .await?;
         maybe_auto_generate_template(&state, &schema_type, &content);
@@ -224,6 +227,7 @@ pub async fn canvas_plan_prompt(
                 &action_type,
                 &candidate.name,
                 &query,
+                &disclosure_ctx,
                 filled_values.clone(),
             )
             .await

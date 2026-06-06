@@ -49,6 +49,7 @@ pub(crate) async fn process_prompt(
     action_type: &str,
     preferred: &str,
     query: &str,
+    disclosure_context_type: &str,
 ) -> Result<(String, serde_json::Value, bool, String, Option<String>), PapillonError> {
     process_prompt_inner(
         app,
@@ -58,6 +59,7 @@ pub(crate) async fn process_prompt(
         action_type,
         preferred,
         query,
+        disclosure_context_type,
         &[],
         0,
         std::collections::HashMap::new(),
@@ -78,6 +80,7 @@ pub(crate) async fn process_prompt_with_extras(
     action_type: &str,
     preferred: &str,
     query: &str,
+    disclosure_context_type: &str,
     extra_disclosures: std::collections::HashMap<String, String>,
 ) -> Result<(String, serde_json::Value, bool, String, Option<String>), PapillonError> {
     process_prompt_inner(
@@ -88,6 +91,7 @@ pub(crate) async fn process_prompt_with_extras(
         action_type,
         preferred,
         query,
+        disclosure_context_type,
         &[],
         0,
         extra_disclosures,
@@ -111,6 +115,7 @@ pub(crate) fn process_prompt_inner<'a>(
     action_type: &'a str,
     preferred: &'a str,
     query: &'a str,
+    disclosure_context_type: &'a str,
     exclude_agents: &'a [String],
     retry_count: u8,
     extra_disclosures: std::collections::HashMap<String, String>,
@@ -215,6 +220,7 @@ pub(crate) fn process_prompt_inner<'a>(
             principal_kp: &principal_kp,
             requires_disclosure: &resolved.requires_disclosure,
             returns: &resolved.returns,
+            disclosure_context_type,
             extra_disclosures,
             on_phase,
             on_fail,
@@ -269,6 +275,7 @@ pub(crate) fn process_prompt_inner<'a>(
                     action_type,
                     preferred,
                     query,
+                    disclosure_context_type,
                     &new_exclude,
                     retry_count + 1,
                     std::collections::HashMap::new(), // reflection doesn't carry filled values

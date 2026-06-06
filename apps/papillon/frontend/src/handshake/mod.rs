@@ -679,6 +679,8 @@ mod tests {
             published_to: vec![],
             live: true,
             category: "general".to_string(),
+            execution_target: Default::default(),
+            lifecycle: Default::default(),
         }
     }
 

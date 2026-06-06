@@ -33,6 +33,8 @@ pub mod registry;
 pub mod selection;
 pub mod session_store;
 mod simple;
+#[cfg(feature = "semantic")]
+pub mod semantic_index;
 
 #[cfg(target_arch = "wasm32")]
 pub use catalog::default_catalog;
@@ -45,6 +47,8 @@ pub use dynamic_handler::DynamicAgentHandler;
 pub use executor::{AgentExecutor, AgentMeta};
 pub use group_chat::GroupChatRoom;
 pub use intent_index::{IntentIndex, IntentMatch};
+#[cfg(feature = "semantic")]
+pub use semantic_index::{SemanticIndex, SemanticMatch};
 #[cfg(feature = "candle")]
 pub use llm::BuiltInLlmClient;
 pub use llm::ExternalLlmClient;

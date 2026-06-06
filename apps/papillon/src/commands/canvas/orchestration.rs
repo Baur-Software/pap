@@ -21,7 +21,8 @@ pub async fn canvas_prompt(
 ) -> Result<serde_json::Value, PapillonError> {
     // Classify intent via federation (NLU agent or LLM classifier).
     // HTTP URLs are still routed deterministically inside classify_intent.
-    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
+    let (action_type, preferred, query, disclosure_ctx) =
+        classify_intent(&app, &state, &block_id, &text).await;
 
     // Early-exit for dataset discovery — routes to multi-agent fan-out coordinator
     if action_type == "schema:DatasetAction" {
@@ -39,6 +40,7 @@ pub async fn canvas_prompt(
         &action_type,
         &preferred,
         &query,
+        &disclosure_ctx,
     )
     .await?;
 
@@ -85,7 +87,8 @@ pub async fn canvas_reshape(
     block_id: String,
     text: String,
 ) -> Result<serde_json::Value, PapillonError> {
-    let (action_type, preferred, query) = classify_intent(&app, &state, &block_id, &text).await;
+    let (action_type, preferred, query, disclosure_ctx) =
+        classify_intent(&app, &state, &block_id, &text).await;
     let (schema_type, content, preference_guided, agent_did, retention_warning) = process_prompt(
         &app,
         &state,
@@ -94,6 +97,7 @@ pub async fn canvas_reshape(
         &action_type,
         &preferred,
         &query,
+        &disclosure_ctx,
     )
     .await?;
 

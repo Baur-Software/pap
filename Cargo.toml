@@ -37,6 +37,7 @@ members = [
     "examples/selective-disclosure-decay",
     "examples/intent-routing",
     "examples/bluefield-loopback",
+    "examples/seed-ontology",
 ]
 
 [workspace.package]
@@ -96,6 +97,8 @@ hex = "0.4"
 candle-core = "0.10"
 candle-transformers = "0.10"
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+ordvec = "0.3"
+csv = "1"
 getrandom = { version = "0.2", default-features = false }
 zeroize = { version = "1", features = ["derive"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }

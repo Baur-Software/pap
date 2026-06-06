@@ -1,0 +1,24 @@
+[package]
+name = "seed-ontology"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Seed the schema.org ontology into an ordvec index for semantic intent routing"
+
+[[bin]]
+name = "seed-ontology"
+path = "src/main.rs"
+
+[dependencies]
+pap-agents = { workspace = true, features = ["semantic"] }
+candle-core = { workspace = true }
+candle-nn = { version = "0.10" }
+candle-transformers = { workspace = true }
+tokenizers = { workspace = true }
+ordvec = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+serde_json = { workspace = true }
+csv = { workspace = true }
+
+[lints]
+workspace = true

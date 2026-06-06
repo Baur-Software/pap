@@ -108,6 +108,8 @@ async fn run_pipeline_node(
         principal_kp: &principal_kp,
         requires_disclosure: &resolved.requires_disclosure,
         returns: &resolved.returns,
+        // Pipeline steps disclose to the agent's object domain.
+        disclosure_context_type: resolved.returns.first().map(String::as_str).unwrap_or("schema:Thing"),
         extra_disclosures: std::collections::HashMap::new(),
         on_phase,
         on_fail,

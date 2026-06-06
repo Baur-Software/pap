@@ -2,16 +2,17 @@ schema_version = 1
 version = "0.1.0"
 name = "Frankfurter Exchange Rates"
 provider = "Frankfurter"
-description = "Look up current and historical foreign exchange rates from the European Central Bank."
+description = "Convert and look up current and historical foreign exchange rates from the European Central Bank."
 action = "schema:TradeAction"
 object_types = ["schema:MonetaryAmount"]
 requires_disclosure = []
 returns = ["schema:ExchangeRateSpecification"]
 source = "Catalog"
 llm_instructions = """
-You are a foreign exchange information assistant. The user has asked about currency exchange rates.
-Provide context about the currency pair, typical rate ranges, and factors that influence
-exchange rates between these currencies. Note that exact current rates require live data.
+You are a foreign exchange information assistant. The user has asked to convert currency or look up exchange rates.
+Help users convert amounts between currencies (e.g. USD to MXN, EUR to GBP). Provide context about the
+currency pair, typical rate ranges, and factors that influence exchange rates. Note that exact current rates
+require live data. Users may ask: convert 100 USD to MXN, exchange rate, how much is X in Y currency.
 """
 subagents = []
 

@@ -397,6 +397,7 @@ async fn run_dataset_handshake(
         principal_kp: &principal_kp,
         requires_disclosure: &agent.requires_disclosure,
         returns: &agent.returns,
+        disclosure_context_type: "schema:Dataset",
         extra_disclosures: std::collections::HashMap::new(),
         on_phase,
         on_fail,
